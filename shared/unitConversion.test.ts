@@ -315,6 +315,11 @@ describe("AI write unit normalization", () => {
     expect(normalizeParsedDistance(164, "ft", { distanceUnit: "km" })).toBe(50);
   });
 
+  it("treats omitted or unknown parsed distance units as meters", () => {
+    expect(normalizeParsedDistance(5000, undefined, { distanceUnit: "miles" })).toBe(16404);
+    expect(normalizeParsedDistance(5000, "yards", { distanceUnit: "miles" })).toBe(16404);
+  });
+
   it("normalizes explicit AI-authored text units for the user's preferences", () => {
     expect(normalizeWorkoutTextUnits("Back squat 3x5 at 75kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
       "Back squat 3x5 at 165 lbs",
@@ -325,6 +330,16 @@ describe("AI write unit normalization", () => {
     expect(normalizeWorkoutTextUnits("Bench 165 lb and run 1 mile", { weightUnit: "kg", distanceUnit: "km" })).toBe(
       "Bench 75 kg and run 1.61 km",
     );
+  });
+
+  it("does not convert bare m when it is likely minute shorthand", () => {
+    expect(normalizeWorkoutTextUnits("10m AMRAP", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("10m AMRAP");
+    expect(normalizeWorkoutTextUnits("30m easy run", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("30m easy run");
+    expect(normalizeWorkoutTextUnits("AMRAP 10m", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("AMRAP 10m");
+  });
+
+  it("still converts bare m when it is likely distance text", () => {
+    expect(normalizeWorkoutTextUnits("100m run", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("328 ft run");
   });
 });
 

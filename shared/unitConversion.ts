@@ -258,7 +258,7 @@ export function normalizeParsedDistance(
   preferences: UnitPreferences,
 ): number {
   const targetUnit = getStoredDistanceUnit(preferences.distanceUnit);
-  const parsedSourceUnit = standardizeParsedDistanceUnit(sourceUnit) ?? targetUnit;
+  const parsedSourceUnit = standardizeParsedDistanceUnit(sourceUnit) ?? "m";
   const meters = parsedDistanceToMeters(value, parsedSourceUnit);
   return roundStoredDistance(metersToStoredDistance(meters, targetUnit));
 }
@@ -323,6 +323,30 @@ const TEXT_DISTANCE_UNITS = [
   "mi",
   "ft",
   "m",
+] as const;
+
+const MINUTE_SHORTHAND_CONTEXT = [
+  "amrap",
+  "bike",
+  "conditioning",
+  "cooldown",
+  "easy",
+  "emom",
+  "jog",
+  "recovery",
+  "ride",
+  "row",
+  "run",
+  "ski",
+  "steady",
+  "tempo",
+  "walk",
+  "warmup",
+  "workout",
+  "z1",
+  "z2",
+  "z3",
+  "zone",
 ] as const;
 
 interface NumberToken {
@@ -399,6 +423,36 @@ function matchTextUnit(text: string, lowerText: string, start: number): TextUnit
   );
 }
 
+function readNextWord(lowerText: string, start: number): string | null {
+  let index = skipWhitespace(lowerText, start);
+  const wordStart = index;
+  while (isWordChar(lowerText[index])) index += 1;
+  return index > wordStart ? lowerText.slice(wordStart, index) : null;
+}
+
+function readPreviousWord(lowerText: string, start: number): string | null {
+  let index = start - 1;
+  while (index >= 0 && isWhitespace(lowerText[index])) index -= 1;
+  const wordEnd = index + 1;
+  while (index >= 0 && isWordChar(lowerText[index])) index -= 1;
+  return wordEnd > index + 1 ? lowerText.slice(index + 1, wordEnd) : null;
+}
+
+function isMinuteContext(word: string | null): boolean {
+  return word != null && MINUTE_SHORTHAND_CONTEXT.includes(word as typeof MINUTE_SHORTHAND_CONTEXT[number]);
+}
+
+function isLikelyMinuteShorthand(
+  value: number,
+  sourceUnit: ParsedDistanceUnit,
+  lowerText: string,
+  numberStart: number,
+  unitEnd: number,
+): boolean {
+  if (sourceUnit !== "m" || value > 60) return false;
+  return isMinuteContext(readNextWord(lowerText, unitEnd)) || isMinuteContext(readPreviousWord(lowerText, numberStart));
+}
+
 export function normalizeWorkoutTextUnits(
   text: string | null | undefined,
   preferences: UnitPreferences,
@@ -438,7 +492,13 @@ export function normalizeWorkoutTextUnits(
       const previousChar = index > 0 ? text[index - 1] : "";
       const sourceUnit = standardizeParsedDistanceUnit(unitMatch.rawUnit);
       const currentPreference = sourceUnit === "km" || sourceUnit === "m" ? "km" : "miles";
-      if (previousChar !== "/" && previousChar !== ":" && sourceUnit && currentPreference !== targetDistanceUnit) {
+      if (
+        previousChar !== "/" &&
+        previousChar !== ":" &&
+        sourceUnit &&
+        !isLikelyMinuteShorthand(numberToken.value, sourceUnit, lowerText, index, unitMatch.end) &&
+        currentPreference !== targetDistanceUnit
+      ) {
         replacement = formatWorkoutDistance(numberToken.value, sourceUnit, targetDistanceUnit);
       }
     }
