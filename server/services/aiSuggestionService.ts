@@ -1,4 +1,5 @@
 import type { UpdatePlanDay } from "@shared/schema";
+import { normalizeWorkoutTextUnits } from "@shared/unitConversion";
 import type { Logger } from "pino";
 
 import { db } from "../db";
@@ -213,7 +214,7 @@ export async function generateTimelineAiSuggestions(
   }
 
   const suggestionQuery = upcomingWorkouts
-    .map((w) => buildWorkoutSearchText(w, { weightUnit: user?.weightUnit || "kg" }))
+    .map((w) => buildWorkoutSearchText(w, { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" }))
     .join("; ");
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
@@ -326,7 +327,7 @@ export async function applyTimelineAiSuggestion(
     try {
       const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
         input,
-        user?.weightUnit || "kg",
+        { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
         userId,
       );
 
@@ -354,7 +355,11 @@ export async function applyTimelineAiSuggestion(
   }
 
   const textUpdates: UpdatePlanDay = { ...aiMetadata };
-  textUpdates[input.targetField] = buildTextUpdateValue(day, input);
+  const textUpdateValue = buildTextUpdateValue(day, input);
+  textUpdates[input.targetField] = normalizeWorkoutTextUnits(
+    textUpdateValue,
+    { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+  ) ?? textUpdateValue;
   await storage.plans.updatePlanDay(input.workoutId, textUpdates, userId);
 
   return { applied: true, structured: false };

@@ -103,7 +103,7 @@ describe("applyTimelineAiSuggestion", () => {
     dbMockState.insertValues.mockResolvedValue(undefined);
     dbMockState.selectWhere.mockResolvedValue([{ maxSortOrder: 2 }]);
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue(mockPlanDay() as never);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lb" } as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lb", distanceUnit: "miles" } as never);
     vi.mocked(storage.aiUsage.getDailyTotalCents).mockResolvedValue(0);
     vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([
       { id: "set-1", planDayId: "day-1", workoutLogId: null, exerciseName: "back_squat" },
@@ -139,7 +139,7 @@ describe("applyTimelineAiSuggestion", () => {
     expect(result).toEqual({ applied: true, structured: true });
     expect(parseExercisesFromText).toHaveBeenCalledWith(
       "Back squat 2x5 at 205 lb",
-      "lb",
+      { weightUnit: "lb", distanceUnit: "miles" },
       undefined,
       "user-1",
     );

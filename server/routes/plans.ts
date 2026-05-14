@@ -405,7 +405,7 @@ protectedPost(
     if (!planDay) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const referencePatch: { mainWorkout?: string; accessory?: string | null } = {};
     const parseTarget: { id: string; mainWorkout?: string | null; accessory?: string | null } = {
       id: planDay.id,
@@ -422,7 +422,7 @@ protectedPost(
     }
     void incrementStructuredExerciseCounter("plan_day", "voice", "parse_text_attempted").catch(() => undefined);
     try {
-      const result = await reparsePlanDay(parseTarget, weightUnit);
+      const result = await reparsePlanDay(parseTarget, unitPreferences);
       if (result && Object.keys(referencePatch).length > 0) {
         await storage.plans.updatePlanDay(planDay.id, referencePatch, userId);
       }
@@ -450,11 +450,11 @@ protectedPost(
     if (!planDay) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
-    const weightUnit = user?.weightUnit || "kg";
+    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
     const customNames = customExercises.map((e) => e.name);
     void incrementStructuredExerciseCounter("plan_day", "photo", "parse_photo_attempted").catch(() => undefined);
     try {
-      const result = await reparsePlanDayFromImage(planDay, req.body, weightUnit, userId, customNames);
+      const result = await reparsePlanDayFromImage(planDay, req.body, unitPreferences, userId, customNames);
       return sendParseWriteThroughResponse(res, "plan_day", "photo", result);
     } catch (error: unknown) {
       return sendPlanDayReparseError(req, res, error, userId, "photo");

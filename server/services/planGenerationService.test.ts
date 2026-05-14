@@ -26,6 +26,9 @@ const mocks = vi.hoisted(() => {
       getTrainingPlan: vi.fn(),
       schedulePlan: vi.fn(),
     },
+    users: {
+      getUser: vi.fn(),
+    },
   };
 });
 
@@ -53,6 +56,7 @@ vi.mock("../logger", () => ({
 vi.mock("../storage", () => ({
   storage: {
     plans: mocks.plans,
+    users: mocks.users,
   },
 }));
 
@@ -179,6 +183,7 @@ describe("generatePlan", () => {
     mocks.retryWithBackoff.mockImplementation((fn: () => Promise<unknown>) => fn());
     mocks.trackUsageFromResponse.mockReturnValue(undefined);
     mocks.plans.schedulePlan.mockResolvedValue(true);
+    mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
   });
 
   it("splits an 8-week request into four two-week chunks and persists days in order", async () => {
@@ -261,6 +266,51 @@ describe("generatePlan", () => {
         sortOrder: 1,
       }),
     ]);
+  });
+
+  it("normalizes AI-generated text and structured rows to the user's units", async () => {
+    mocks.users.getUser.mockResolvedValue({ weightUnit: "lbs", distanceUnit: "miles" });
+    const generatedDays = makeGeneratedWeek(1, {
+      mainWorkout: "Back squat 1x5 at 75kg then run 5km",
+      exercises: [
+        {
+          exerciseName: "back_squat",
+          category: "strength",
+          sets: [
+            { setNumber: 1, reps: 5, weight: 75, weightUnit: "kg" },
+          ],
+        },
+        {
+          exerciseName: "easy_run",
+          category: "running",
+          sets: [
+            { setNumber: 1, distance: 5, distanceUnit: "km", time: 30 },
+          ],
+        },
+      ],
+    });
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
+
+    await generatePlan(baseInput, "user-1");
+
+    expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Weight: lbs");
+    expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Distance preference: miles");
+    expect(mocks.plans.createPlanDays).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dayName: "Monday",
+          mainWorkout: "Back squat 1x5 at 165 lbs then run 3.11 mi",
+        }),
+      ]),
+      mocks.tx,
+    );
+    expect(mocks.insertValues).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ exerciseName: "back_squat", weight: 165 }),
+        expect.objectContaining({ exerciseName: "easy_run", distance: 16404 }),
+      ]),
+    );
   });
 
   it("accepts rest days with empty exercise arrays", async () => {

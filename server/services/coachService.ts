@@ -1,4 +1,5 @@
 import { type CoachNoteInputs, type InsertExerciseSet, type PlanDay } from "@shared/schema";
+import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -62,7 +63,7 @@ function shouldUseStructuredWrite(suggestion: WorkoutSuggestion, entry: Upcoming
 async function prepareSuggestion(
   suggestion: WorkoutSuggestion,
   upcomingWorkouts: UpcomingWorkout[],
-  weightUnit: string,
+  unitPreferences: UnitPreferences,
   userId: string,
 ): Promise<PreparedSuggestion> {
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
@@ -71,7 +72,7 @@ async function prepareSuggestion(
   }
 
   try {
-    const structuredSetRows = await parseStructuredPlanDaySuggestionRows(suggestion, weightUnit, userId);
+    const structuredSetRows = await parseStructuredPlanDaySuggestionRows(suggestion, unitPreferences, userId);
     if (structuredSetRows.length === 0) return { suggestion };
     return {
       suggestion,
@@ -172,6 +173,7 @@ async function applySuggestion(
   userId: string,
   aiSource: "rag" | "legacy" | null | undefined,
   inputsUsed: CoachNoteInputs,
+  unitPreferences: UnitPreferences,
   tx: DbExecutor,
 ): Promise<boolean> {
   const { suggestion } = prepared;
@@ -183,7 +185,7 @@ async function applySuggestion(
 
   // Let errors propagate so the enclosing transaction rolls back — we want
   // all-or-nothing semantics for the auto-coach apply loop (C2).
-  const updateValue = buildUpdateValue(suggestion, entry);
+  const updateValue = normalizeWorkoutTextUnits(buildUpdateValue(suggestion, entry), unitPreferences);
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
     {
@@ -230,9 +232,9 @@ async function applyReviewNote(
 async function getCoachingMaterialsString(
   userId: string,
   upcomingWorkouts: UpcomingWorkout[],
-  weightUnit?: string,
+  unitPreferences: UnitPreferences,
 ): Promise<{ text: string | undefined; source: "rag" | "legacy" | null }> {
-  const query = upcomingWorkouts.map(w => buildWorkoutSearchText(w, { weightUnit })).join("; ");
+  const query = upcomingWorkouts.map(w => buildWorkoutSearchText(w, unitPreferences)).join("; ");
   return retrieveCoachingText(userId, query);
 }
 
@@ -294,7 +296,8 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       return { adjusted: 0 };
     }
 
-    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts, user.weightUnit || "kg");
+    const unitPreferences = { weightUnit: user.weightUnit || "kg", distanceUnit: user.distanceUnit || "km" };
+    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts, unitPreferences);
     const inputsUsed = buildCoachNoteInputs(
       trainingContext,
       coachingContext.source === "rag",
@@ -313,7 +316,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     );
     const suggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
     const preparedSuggestions = await Promise.all(
-      suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, user.weightUnit || "kg", userId)),
+      suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, unitPreferences, userId)),
     );
 
     // For any upcoming day the coach did NOT modify, request a short review
@@ -373,7 +376,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // appends re-read sortOrder after any earlier insert in this transaction.
       for (const s of preparedSuggestions) {
         modResults.push(
-          await applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, tx),
+          await applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, unitPreferences, tx),
         );
       }
       const noteResults = await Promise.all(
@@ -484,7 +487,10 @@ export async function regenerateCoachNoteForPlanDay(
     })),
   };
 
-  const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], trainingContext.weightUnit);
+  const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], {
+    weightUnit: trainingContext.weightUnit,
+    distanceUnit: trainingContext.distanceUnit,
+  });
   const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
   const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, [workoutInput]);
   const inputsUsed = buildCoachNoteInputs(

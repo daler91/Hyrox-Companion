@@ -70,7 +70,7 @@ vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.
 // -- Helpers ------------------------------------------------------------------
 
 function mockEnabledUser() {
-  vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: false } as never);
+  vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: false, weightUnit: "kg", distanceUnit: "km" } as never);
   vi.mocked(storage.users.updateIsAutoCoaching).mockResolvedValue(undefined);
 }
 
@@ -244,7 +244,12 @@ describe("coachService", () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-      expect(parseExercisesFromText).toHaveBeenCalledWith("Back squat 3x5 at 105kg", "kg", undefined, "user-1");
+      expect(parseExercisesFromText).toHaveBeenCalledWith(
+        "Back squat 3x5 at 105kg",
+        { weightUnit: "kg", distanceUnit: "km" },
+        undefined,
+        "user-1",
+      );
       expect(dbMockState.deleteWhere).toHaveBeenCalled();
       expect(dbMockState.insertValues).toHaveBeenCalledWith(
         expect.arrayContaining([

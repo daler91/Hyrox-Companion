@@ -1,5 +1,12 @@
 export type WeightUnit = "kg" | "lbs";
 export type DistanceUnit = "km" | "miles";
+export type StoredDistanceUnit = "m" | "ft";
+export type ParsedDistanceUnit = StoredDistanceUnit | DistanceUnit;
+
+export interface UnitPreferences {
+  readonly weightUnit?: string | null;
+  readonly distanceUnit?: string | null;
+}
 
 /**
  * 🛡️ Sentinel: unit-storage invariant (S5).
@@ -28,6 +35,8 @@ export type DistanceUnit = "km" | "miles";
 const KG_TO_LBS = 2.20462;
 const KM_TO_MILES = 0.621371;
 const M_TO_FT = 3.28084;
+const FEET_PER_MILE = 5280;
+const METERS_PER_MILE = 1609.34;
 
 export const WEIGHT_UNIT_ALIASES: Record<string, WeightUnit> = {
   kg: "kg",
@@ -52,6 +61,26 @@ export const DISTANCE_UNIT_ALIASES: Record<string, DistanceUnit> = {
   miles: "miles",
 };
 
+const PARSED_DISTANCE_UNIT_ALIASES: Record<string, ParsedDistanceUnit> = {
+  m: "m",
+  meter: "m",
+  meters: "m",
+  metre: "m",
+  metres: "m",
+  ft: "ft",
+  foot: "ft",
+  feet: "ft",
+  km: "km",
+  kms: "km",
+  kilometer: "km",
+  kilometers: "km",
+  kilometre: "km",
+  kilometres: "km",
+  mi: "miles",
+  mile: "miles",
+  miles: "miles",
+};
+
 export function standardizeWeightUnit(unit: string | undefined | null): WeightUnit {
   if (!unit) return "kg";
   const normalized = unit.toLowerCase().trim();
@@ -64,6 +93,15 @@ export function standardizeDistanceUnit(unit: string | undefined | null): Distan
   return DISTANCE_UNIT_ALIASES[normalized] || "km";
 }
 
+export function standardizeParsedDistanceUnit(unit: string | undefined | null): ParsedDistanceUnit | null {
+  if (!unit) return null;
+  const normalized = unit.toLowerCase().trim();
+  return PARSED_DISTANCE_UNIT_ALIASES[normalized] ?? null;
+}
+
+export function getStoredDistanceUnit(distanceUnit: string | undefined | null): StoredDistanceUnit {
+  return standardizeDistanceUnit(distanceUnit) === "miles" ? "ft" : "m";
+}
 
 export function convertWeight(value: number, from: string, to: string): number {
   const standardFrom = standardizeWeightUnit(from);
@@ -176,4 +214,301 @@ export function userWeightToKg(value: number, weightUnit: string): number {
     return value / KG_TO_LBS;
   }
   return value;
+}
+
+function roundToNearestHalf(value: number): number {
+  return Math.round(value * 2) / 2;
+}
+
+export function roundStoredWeight(value: number, weightUnit: string): number {
+  if (!Number.isFinite(value)) return value;
+  return standardizeWeightUnit(weightUnit) === "lbs"
+    ? Math.round(value)
+    : roundToNearestHalf(value);
+}
+
+export function roundStoredDistance(value: number): number {
+  return Number.isFinite(value) ? Math.round(value) : value;
+}
+
+export function normalizeParsedWeight(
+  value: number,
+  sourceUnit: string | undefined | null,
+  preferences: UnitPreferences,
+): number {
+  const targetUnit = standardizeWeightUnit(preferences.weightUnit);
+  const fromUnit = standardizeWeightUnit(sourceUnit ?? targetUnit);
+  return roundStoredWeight(convertWeight(value, fromUnit, targetUnit), targetUnit);
+}
+
+function parsedDistanceToMeters(value: number, sourceUnit: ParsedDistanceUnit): number {
+  if (sourceUnit === "m") return value;
+  if (sourceUnit === "ft") return value / M_TO_FT;
+  if (sourceUnit === "km") return value * 1000;
+  return value * METERS_PER_MILE;
+}
+
+function metersToStoredDistance(meters: number, targetUnit: StoredDistanceUnit): number {
+  return targetUnit === "ft" ? meters * M_TO_FT : meters;
+}
+
+export function normalizeParsedDistance(
+  value: number,
+  sourceUnit: string | undefined | null,
+  preferences: UnitPreferences,
+): number {
+  const targetUnit = getStoredDistanceUnit(preferences.distanceUnit);
+  const parsedSourceUnit = standardizeParsedDistanceUnit(sourceUnit) ?? "m";
+  const meters = parsedDistanceToMeters(value, parsedSourceUnit);
+  return roundStoredDistance(metersToStoredDistance(meters, targetUnit));
+}
+
+function formatCompactNumber(value: number, decimals: number): string {
+  return String(Number(value.toFixed(decimals)));
+}
+
+function formatWorkoutWeight(value: number, targetUnit: WeightUnit): string {
+  const rounded = roundStoredWeight(value, targetUnit);
+  return `${formatCompactNumber(rounded, targetUnit === "lbs" ? 0 : 1)} ${targetUnit}`;
+}
+
+function distanceToMeters(value: number, unit: ParsedDistanceUnit): number {
+  return parsedDistanceToMeters(value, unit);
+}
+
+function formatWorkoutDistance(value: number, sourceUnit: ParsedDistanceUnit, distanceUnit: DistanceUnit): string {
+  const meters = distanceToMeters(value, sourceUnit);
+  if (distanceUnit === "km") {
+    if (Math.abs(meters) >= 1000) {
+      return `${formatCompactNumber(meters / 1000, 2)} km`;
+    }
+    return `${formatCompactNumber(roundStoredDistance(meters), 0)} m`;
+  }
+
+  const feet = meters * M_TO_FT;
+  if (Math.abs(feet) >= FEET_PER_MILE / 4) {
+    return `${formatCompactNumber(feet / FEET_PER_MILE, 2)} mi`;
+  }
+  return `${formatCompactNumber(roundStoredDistance(feet), 0)} ft`;
+}
+
+const TEXT_WEIGHT_UNITS = [
+  "kilograms",
+  "kilogram",
+  "pounds",
+  "pound",
+  "kilos",
+  "kilo",
+  "kgs",
+  "lbs",
+  "kg",
+  "lb",
+] as const;
+
+const TEXT_DISTANCE_UNITS = [
+  "kilometers",
+  "kilometres",
+  "kilometer",
+  "kilometre",
+  "meters",
+  "metres",
+  "miles",
+  "meter",
+  "metre",
+  "mile",
+  "feet",
+  "foot",
+  "kms",
+  "km",
+  "mi",
+  "ft",
+  "m",
+] as const;
+
+const MINUTE_SHORTHAND_CONTEXT = [
+  "amrap",
+  "bike",
+  "conditioning",
+  "cooldown",
+  "easy",
+  "emom",
+  "jog",
+  "recovery",
+  "ride",
+  "row",
+  "run",
+  "ski",
+  "steady",
+  "tempo",
+  "walk",
+  "warmup",
+  "workout",
+  "z1",
+  "z2",
+  "z3",
+  "zone",
+] as const;
+
+interface NumberToken {
+  readonly value: number;
+  readonly end: number;
+}
+
+interface TextUnitMatch {
+  readonly type: "weight" | "distance";
+  readonly rawUnit: string;
+  readonly end: number;
+}
+
+function isDigit(char: string | undefined): boolean {
+  return char != null && char >= "0" && char <= "9";
+}
+
+function isWhitespace(char: string | undefined): boolean {
+  return char === " " || char === "\t" || char === "\n" || char === "\r" || char === "\f" || char === "\v";
+}
+
+function isWordChar(char: string | undefined): boolean {
+  if (char == null) return false;
+  return (
+    (char >= "a" && char <= "z") ||
+    (char >= "A" && char <= "Z") ||
+    (char >= "0" && char <= "9") ||
+    char === "_"
+  );
+}
+
+function parseNumberToken(text: string, start: number): NumberToken | null {
+  let index = start;
+  if (text[index] === "-") {
+    if (!isDigit(text[index + 1])) return null;
+    index += 1;
+  }
+  if (!isDigit(text[index])) return null;
+  while (isDigit(text[index])) index += 1;
+  if (text[index] === "." && isDigit(text[index + 1])) {
+    index += 1;
+    while (isDigit(text[index])) index += 1;
+  }
+  const value = Number.parseFloat(text.slice(start, index));
+  return Number.isFinite(value) ? { value, end: index } : null;
+}
+
+function skipWhitespace(text: string, start: number): number {
+  let index = start;
+  while (isWhitespace(text[index])) index += 1;
+  return index;
+}
+
+function matchUnitFromList(
+  text: string,
+  lowerText: string,
+  start: number,
+  units: readonly string[],
+  type: TextUnitMatch["type"],
+): TextUnitMatch | null {
+  for (const unit of units) {
+    if (!lowerText.startsWith(unit, start)) continue;
+    const end = start + unit.length;
+    if (isWordChar(text[end])) continue;
+    return { type, rawUnit: text.slice(start, end), end };
+  }
+  return null;
+}
+
+function matchTextUnit(text: string, lowerText: string, start: number): TextUnitMatch | null {
+  return (
+    matchUnitFromList(text, lowerText, start, TEXT_WEIGHT_UNITS, "weight") ??
+    matchUnitFromList(text, lowerText, start, TEXT_DISTANCE_UNITS, "distance")
+  );
+}
+
+function readNextWord(lowerText: string, start: number): string | null {
+  let index = skipWhitespace(lowerText, start);
+  const wordStart = index;
+  while (isWordChar(lowerText[index])) index += 1;
+  return index > wordStart ? lowerText.slice(wordStart, index) : null;
+}
+
+function readPreviousWord(lowerText: string, start: number): string | null {
+  let index = start - 1;
+  while (index >= 0 && isWhitespace(lowerText[index])) index -= 1;
+  const wordEnd = index + 1;
+  while (index >= 0 && isWordChar(lowerText[index])) index -= 1;
+  return wordEnd > index + 1 ? lowerText.slice(index + 1, wordEnd) : null;
+}
+
+function isMinuteContext(word: string | null): boolean {
+  return word != null && MINUTE_SHORTHAND_CONTEXT.includes(word as typeof MINUTE_SHORTHAND_CONTEXT[number]);
+}
+
+function isLikelyMinuteShorthand(
+  value: number,
+  sourceUnit: ParsedDistanceUnit,
+  lowerText: string,
+  numberStart: number,
+  unitEnd: number,
+): boolean {
+  if (sourceUnit !== "m" || value > 60) return false;
+  return isMinuteContext(readNextWord(lowerText, unitEnd)) || isMinuteContext(readPreviousWord(lowerText, numberStart));
+}
+
+export function normalizeWorkoutTextUnits(
+  text: string | null | undefined,
+  preferences: UnitPreferences,
+): string | null | undefined {
+  if (text == null || text.length === 0) return text;
+  const targetWeightUnit = standardizeWeightUnit(preferences.weightUnit);
+  const targetDistanceUnit = standardizeDistanceUnit(preferences.distanceUnit);
+  const lowerText = text.toLowerCase();
+  let result = "";
+  let cursor = 0;
+  let index = 0;
+
+  while (index < text.length) {
+    const numberToken = parseNumberToken(text, index);
+    if (!numberToken) {
+      index += 1;
+      continue;
+    }
+
+    const unitStart = skipWhitespace(text, numberToken.end);
+    const unitMatch = matchTextUnit(text, lowerText, unitStart);
+    if (!unitMatch) {
+      index = numberToken.end;
+      continue;
+    }
+
+    let replacement: string | null = null;
+    if (unitMatch.type === "weight") {
+      const sourceUnit = standardizeWeightUnit(unitMatch.rawUnit);
+      if (sourceUnit !== targetWeightUnit) {
+        replacement = formatWorkoutWeight(
+          convertWeight(numberToken.value, sourceUnit, targetWeightUnit),
+          targetWeightUnit,
+        );
+      }
+    } else {
+      const previousChar = index > 0 ? text[index - 1] : "";
+      const sourceUnit = standardizeParsedDistanceUnit(unitMatch.rawUnit);
+      const currentPreference = sourceUnit === "km" || sourceUnit === "m" ? "km" : "miles";
+      if (
+        previousChar !== "/" &&
+        previousChar !== ":" &&
+        sourceUnit &&
+        !isLikelyMinuteShorthand(numberToken.value, sourceUnit, lowerText, index, unitMatch.end) &&
+        currentPreference !== targetDistanceUnit
+      ) {
+        replacement = formatWorkoutDistance(numberToken.value, sourceUnit, targetDistanceUnit);
+      }
+    }
+
+    if (replacement) {
+      result += text.slice(cursor, index) + replacement;
+      cursor = unitMatch.end;
+    }
+    index = unitMatch.end;
+  }
+
+  return result + text.slice(cursor);
 }

@@ -90,8 +90,11 @@ function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"
   return "\nExercise performance stats:\n" + Object.entries(stats).map(([ex, s]) => formatExerciseStatLine(ex, s)).join("\n") + "\n";
 }
 
-function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], weightUnit?: string): string {
-  const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, { weightUnit });
+function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], trainingContext: TrainingContext): string {
+  const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
+    weightUnit: trainingContext.weightUnit,
+    distanceUnit: trainingContext.distanceUnit,
+  });
   const workoutDetails = exerciseSummary ? `Exercises: ${exerciseSummary}` : workout.mainWorkout;
   let line = `- ${workout.date}: ${workout.focus} - ${workoutDetails}`;
   const meta: string[] = [];
@@ -102,13 +105,17 @@ function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], weig
   return line;
 }
 
-function formatRecentWorkouts(workouts: TrainingContext["recentWorkouts"], weightUnit?: string): string {
+function formatRecentWorkouts(trainingContext: TrainingContext): string {
+  const workouts = trainingContext.recentWorkouts;
   if (workouts.length === 0) return "";
-  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map((workout) => formatRecentWorkout(workout, weightUnit)).join("\n") + "\n";
+  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map((workout) => formatRecentWorkout(workout, trainingContext)).join("\n") + "\n";
 }
 
-function formatUpcomingWorkout(workout: UpcomingWorkout, weightUnit?: string): string {
-  const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, { weightUnit });
+function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: TrainingContext): string {
+  const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
+    weightUnit: trainingContext.weightUnit,
+    distanceUnit: trainingContext.distanceUnit,
+  });
   if (exerciseSummary) {
     return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Exercises: ${exerciseSummary}`;
   }
@@ -220,7 +227,7 @@ function buildPromptDataSections(
     ...header,
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
     formatPerformanceStats(trainingContext.structuredExerciseStats),
-    formatRecentWorkouts(trainingContext.recentWorkouts, trainingContext.weightUnit),
+    formatRecentWorkouts(trainingContext),
   ];
 
   if (trainingContext.coachingInsights) {
@@ -229,7 +236,7 @@ function buildPromptDataSections(
 
   sections.push(
     `--- UPCOMING WORKOUTS ---`,
-    upcomingWorkouts.map((workout) => formatUpcomingWorkout(workout, trainingContext.weightUnit)).join("\n"),
+    upcomingWorkouts.map((workout) => formatUpcomingWorkout(workout, trainingContext)).join("\n"),
     ...(coachingMaterials ? [coachingMaterials] : []),
   );
 

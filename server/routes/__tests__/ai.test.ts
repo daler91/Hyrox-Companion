@@ -116,7 +116,7 @@ describe("POST /api/parse-exercises", () => {
 
   it("should successfully parse exercises and return them", async () => {
 
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs", aiCoachEnabled: true });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lbs", distanceUnit: "miles", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
 
     const mockParsedExercises = [
@@ -132,7 +132,12 @@ describe("POST /api/parse-exercises", () => {
     expect(response.body).toEqual(mockParsedExercises);
     expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
     expect(storage.users.getCustomExercises).toHaveBeenCalledWith("test_user_id");
-    expect(parseExercisesFromText).toHaveBeenCalledWith("Bench press 135x10", "lbs", ["Custom Squat"], "test_user_id");
+    expect(parseExercisesFromText).toHaveBeenCalledWith(
+      "Bench press 135x10",
+      { weightUnit: "lbs", distanceUnit: "miles" },
+      ["Custom Squat"],
+      "test_user_id",
+    );
   });
 
   it("should parse structured workout blocks without changing the legacy parse contract", async () => {
@@ -156,7 +161,12 @@ describe("POST /api/parse-exercises", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.structureBlocks[0]).toMatchObject({ formatType: "amrap", timeCapMinutes: 10 });
-    expect(parseWorkoutStructureFromText).toHaveBeenCalledWith("10 min AMRAP row and burpees", "kg", [], "test_user_id");
+    expect(parseWorkoutStructureFromText).toHaveBeenCalledWith(
+      "10 min AMRAP row and burpees",
+      { weightUnit: "kg", distanceUnit: "km" },
+      [],
+      "test_user_id",
+    );
   });
 
   it("should return 400 if text is missing", async () => {
@@ -271,6 +281,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
       imageBase64: validPayload.imageBase64,
       mimeType: validPayload.mimeType,
       weightUnit: "kg",
+      distanceUnit: "km",
       customExerciseNames: ["Custom Squat"],
       userId: "test_user_id",
     });

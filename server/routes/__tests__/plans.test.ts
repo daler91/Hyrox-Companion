@@ -211,7 +211,7 @@ describe("plan-day exercise routes", () => {
       mainWorkout: "old text",
       accessory: "old accessory",
     } as never);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lb" } as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lb", distanceUnit: "miles" } as never);
     vi.mocked(reparsePlanDay).mockResolvedValue({
       exercises: [{ exerciseName: "back_squat" }],
       saved: true,
@@ -228,7 +228,7 @@ describe("plan-day exercise routes", () => {
     expect(response.status).toBe(200);
     expect(reparsePlanDay).toHaveBeenCalledWith(
       expect.objectContaining({ id: "day-1", mainWorkout: "new text", accessory: null }),
-      "lb",
+      { weightUnit: "lb", distanceUnit: "miles" },
     );
     expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
       "day-1",
