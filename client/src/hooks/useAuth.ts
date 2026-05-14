@@ -103,6 +103,7 @@ function useClerkAuthImpl() {
     } as User : undefined),
     isLoading: !isLoaded || (isSignedIn && isDbLoading),
     isAuthenticated: !!isSignedIn,
+    isAppUserLoaded: !!dbUser,
   };
 }
 
@@ -121,6 +122,7 @@ function useTestAuthImpl() {
     user: dbUser,
     isLoading,
     isAuthenticated: !!dbUser,
+    isAppUserLoaded: !!dbUser,
   };
 }
 

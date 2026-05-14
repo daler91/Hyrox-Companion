@@ -24,6 +24,11 @@ import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
 import { logger } from "../logger";
 
+function isUsersEmailUniqueViolation(error: unknown): boolean {
+  const pgError = error as { code?: string; constraint?: string };
+  return pgError.code === "23505" && pgError.constraint === "users_email_unique";
+}
+
 export class UserStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -36,7 +41,7 @@ export class UserStorage {
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  private async upsertUserRow(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
       .values(userData)
@@ -49,6 +54,22 @@ export class UserStorage {
       })
       .returning();
     return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    try {
+      return await this.upsertUserRow(userData);
+    } catch (error) {
+      if (userData.email && isUsersEmailUniqueViolation(error)) {
+        const { email: _email, ...userDataWithoutEmail } = userData;
+        logger.warn(
+          { err: error, userId: userData.id },
+          "User email already exists; retrying user upsert without email",
+        );
+        return await this.upsertUserRow(userDataWithoutEmail);
+      }
+      throw error;
+    }
   }
 
   async updateUserPreferences(

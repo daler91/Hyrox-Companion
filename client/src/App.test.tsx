@@ -29,7 +29,7 @@ vi.mock("@/components/ui/sidebar", () => ({
   SidebarTrigger: () => <button data-testid="button-sidebar-toggle" />,
 }));
 
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ isAuthenticated: true, isLoading: false }) }));
+vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ isAuthenticated: true, isLoading: false, isAppUserLoaded: true }) }));
 vi.mock("@/hooks/useEmailCheck", () => ({ useEmailCheck: vi.fn() }));
 vi.mock("@/hooks/useNavigationBreadcrumb", () => ({ useNavigationBreadcrumb: vi.fn() }));
 vi.mock("@/hooks/useOfflineDropNotifier", () => ({ useOfflineDropNotifier: vi.fn() }));

@@ -1,4 +1,5 @@
 import { clerkClient,clerkMiddleware, getAuth } from "@clerk/express";
+import type { UpsertUser } from "@shared/schema";
 import type { Express, RequestHandler } from "express";
 
 import { EXTERNAL_API_TIMEOUT_MS } from "./constants";
@@ -41,6 +42,11 @@ function isDevBypassEnabled(): boolean {
 
 function hasClerkKeys(): boolean {
   return !!(env.CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY);
+}
+
+function isUsersEmailUniqueViolation(error: unknown): boolean {
+  const pgError = error as { code?: string; constraint?: string };
+  return pgError.code === "23505" && pgError.constraint === "users_email_unique";
 }
 
 async function ensureDevUserExists(): Promise<void> {
@@ -131,21 +137,50 @@ async function ensureUserExists(clerkUserId: string): Promise<void> {
 
   const existing = await storage.users.getUser(clerkUserId);
   if (!existing) {
+    await storage.users.upsertUser({ id: clerkUserId });
+    await hydrateClerkProfile(clerkUserId);
+  }
+
+  userSeenCache.set(clerkUserId, now);
+}
+
+async function upsertClerkProfile(userData: UpsertUser): Promise<void> {
+  try {
+    await storage.users.upsertUser(userData);
+  } catch (error) {
+    if (userData.email && isUsersEmailUniqueViolation(error)) {
+      const { email: _email, ...userDataWithoutEmail } = userData;
+      logger.warn(
+        { err: error, userId: userData.id },
+        "Clerk profile email already belongs to another user; syncing profile without email",
+      );
+      await storage.users.upsertUser(userDataWithoutEmail);
+      return;
+    }
+    throw error;
+  }
+}
+
+async function hydrateClerkProfile(clerkUserId: string): Promise<void> {
+  try {
     const clerkUser = await withTimeout(
       clerkClient.users.getUser(clerkUserId),
       EXTERNAL_API_TIMEOUT_MS,
       "clerkClient.users.getUser",
     );
-    const email = clerkUser.emailAddresses?.[0]?.emailAddress || null;
+    const email = clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses?.[0]?.emailAddress ?? null;
 
-    await storage.users.upsertUser({
+    await upsertClerkProfile({
       id: clerkUserId,
       email,
       firstName: clerkUser.firstName,
       lastName: clerkUser.lastName,
       profileImageUrl: clerkUser.imageUrl,
     });
+  } catch (error) {
+    logger.warn(
+      { err: error, userId: clerkUserId },
+      "Clerk profile sync failed after user provisioning; continuing with minimal user row",
+    );
   }
-
-  userSeenCache.set(clerkUserId, now);
 }

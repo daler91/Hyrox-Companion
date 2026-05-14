@@ -285,7 +285,7 @@ export default function Timeline() {
     combine,
     selectedPlanId,
     setSelectedPlanId,
-  } = useTimelineState({ aiCoachEnabled });
+  } = useTimelineState({ aiCoachEnabled, isAuthUserLoaded });
 
   const {
     plans,

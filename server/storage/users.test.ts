@@ -19,6 +19,14 @@ vi.mock('../db', () => ({
   },
 }));
 
+vi.mock('../logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 vi.mock('drizzle-orm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('drizzle-orm')>();
   return {
@@ -143,6 +151,45 @@ describe('UserStorage', () => {
         expect(result.accessToken).toBe('raw-access');
         expect(result.refreshToken).toBe('raw-refresh');
       });
+    });
+  });
+
+  describe('upsertUser', () => {
+    it('retries without email when the email unique constraint is hit', async () => {
+      const duplicateEmailError = Object.assign(new Error('duplicate email'), {
+        code: '23505',
+        constraint: 'users_email_unique',
+      });
+      const savedUser = { id: 'user-1', email: null, firstName: 'Test' };
+
+      const firstReturningMock = vi.fn().mockRejectedValue(duplicateEmailError);
+      const firstOnConflictMock = vi.fn().mockReturnValue({ returning: firstReturningMock });
+      const firstValuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: firstOnConflictMock });
+
+      const secondReturningMock = vi.fn().mockResolvedValue([savedUser]);
+      const secondOnConflictMock = vi.fn().mockReturnValue({ returning: secondReturningMock });
+      const secondValuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: secondOnConflictMock });
+
+      vi.mocked(db.insert)
+        .mockReturnValueOnce({ values: firstValuesMock } as never)
+        .mockReturnValueOnce({ values: secondValuesMock } as never);
+
+      const result = await userStorage.upsertUser({
+        id: 'user-1',
+        email: 'test@example.com',
+        firstName: 'Test',
+      });
+
+      expect(result).toEqual(savedUser);
+      expect(firstValuesMock).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'user-1',
+        email: 'test@example.com',
+      }));
+      expect(secondValuesMock).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'user-1',
+        firstName: 'Test',
+      }));
+      expect(secondValuesMock.mock.calls[0][0]).not.toHaveProperty('email');
     });
   });
 });

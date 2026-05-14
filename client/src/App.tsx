@@ -92,8 +92,8 @@ function getStoredSidebarOpen(): boolean {
 }
 
 function AuthenticatedLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
-  useEmailCheck(isAuthenticated);
+  const { isAuthenticated, isLoading, isAppUserLoaded } = useAuth();
+  useEmailCheck(isAuthenticated, isAppUserLoaded);
   useOfflineDropNotifier();
 
   if (isLoading) {

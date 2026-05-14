@@ -26,11 +26,11 @@ export function timelineStateReducer(state: TimelineUiState, event: TimelineEven
   }
 }
 
-export function useTimelineState(options?: { aiCoachEnabled?: boolean }) {
+export function useTimelineState(options?: { aiCoachEnabled?: boolean; isAuthUserLoaded?: boolean }) {
   const [uiState, dispatch] = useReducer(timelineStateReducer, { selectedPlanId: null });
   const selectedPlanId = uiState.selectedPlanId;
 
-  const data = useTimelineData(selectedPlanId);
+  const data = useTimelineData(selectedPlanId, options?.isAuthUserLoaded);
   const filters = useTimelineFilters(data.timelineData, data.annotations);
 
   const planImport = usePlanImport({
