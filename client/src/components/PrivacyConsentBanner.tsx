@@ -1,8 +1,9 @@
 import { X } from "lucide-react";
-import { useEffect,useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
+import { useHasBlockingModalLayer } from "@/components/ui/modal-layer";
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
 const CONSENT_CHANGED_EVENT = "fitai:privacy-consent-changed";
@@ -39,6 +40,7 @@ function recordConsent(): void {
  * is persisted in localStorage.
  */
 export function PrivacyConsentBanner() {
+  const hasBlockingModalLayer = useHasBlockingModalLayer();
   // Lazy initializer reads localStorage once on mount rather than triggering
   // a cascading setState inside useEffect. hasStoredConsent() already guards
   // against missing window / denied storage.
@@ -64,7 +66,7 @@ export function PrivacyConsentBanner() {
     };
   }, []);
 
-  if (!visible) return null;
+  if (!visible || hasBlockingModalLayer) return null;
 
   const dismiss = () => {
     recordConsent();
@@ -78,8 +80,8 @@ export function PrivacyConsentBanner() {
     >
       <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 text-sm md:flex-row md:items-center md:justify-between">
         <p className="text-muted-foreground">
-          We use Sentry for error tracking (PII scrubbed), and you can opt into
-          Strava, Garmin, and Google Gemini coaching — each is off by default.{" "}
+          We use Sentry for error tracking (PII scrubbed), and you can opt into Strava, Garmin, and
+          Google Gemini coaching — each is off by default.{" "}
           <Link to="/privacy" className="underline hover:text-foreground">
             Read our privacy policy
           </Link>
