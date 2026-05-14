@@ -12,11 +12,15 @@ export function useTimelinePageController(selectedPlanId: string | null, annotat
   const { moveEntry, isMoving } = useMoveTimelineEntry(selectedPlanId);
 
   const annotationsByDate = useMemo(() => {
-    return annotations.reduce<Record<string, TimelineAnnotation[]>>((acc, annotation) => {
+    // ⚡ Bolt Performance Optimization:
+    // Replaced array.reduce() with a single-pass for...of loop to eliminate the
+    // overhead of reduce callbacks, improving aggregation performance for large timelines.
+    const acc: Record<string, TimelineAnnotation[]> = {};
+    for (const annotation of annotations) {
       if (!acc[annotation.startDate]) acc[annotation.startDate] = [];
       acc[annotation.startDate].push(annotation);
-      return acc;
-    }, {});
+    }
+    return acc;
   }, [annotations]);
 
   const deleteAnnotationMutation = useMutation({
