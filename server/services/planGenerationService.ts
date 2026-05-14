@@ -7,6 +7,7 @@ import {
   type ParsedExercise,
   type TrainingPlanWithDays,
 } from "@shared/schema";
+import pLimit from "p-limit";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -16,6 +17,10 @@ import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
+
+const PLAN_GENERATION_CHUNK_WEEKS = 2;
+const PLAN_GENERATION_CHUNK_CONCURRENCY = 3;
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 // Structured exercises the model must include for non-rest generated days.
 const generatedExerciseSchema = z.object({
@@ -43,9 +48,33 @@ type GeneratedDay = z.infer<typeof generatedDaySchema> & {
 };
 type GeneratedExercise = z.infer<typeof generatedExerciseSchema>;
 
-function buildGenerationPrompt(input: GeneratePlanInput): string {
+interface WeekRange {
+  readonly startWeek: number;
+  readonly endWeek: number;
+}
+
+function buildWeekRanges(totalWeeks: number): WeekRange[] {
+  const ranges: WeekRange[] = [];
+  for (let startWeek = 1; startWeek <= totalWeeks; startWeek += PLAN_GENERATION_CHUNK_WEEKS) {
+    ranges.push({
+      startWeek,
+      endWeek: Math.min(totalWeeks, startWeek + PLAN_GENERATION_CHUNK_WEEKS - 1),
+    });
+  }
+  return ranges;
+}
+
+function formatWeekRange(range: WeekRange): string {
+  return range.startWeek === range.endWeek
+    ? `week ${range.startWeek}`
+    : `weeks ${range.startWeek}-${range.endWeek}`;
+}
+
+function buildGenerationPrompt(input: GeneratePlanInput, range: WeekRange): string {
+  const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
-    `Generate a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
+    `Generate ${formatWeekRange(range)} of a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
+    `This is one chunk of a larger plan. Return ONLY ${formatWeekRange(range)} and use weekNumber values ${range.startWeek} through ${range.endWeek}.`,
     ``,
     `ATHLETE PROFILE:`,
     `- Goal: ${input.goal}`,
@@ -74,8 +103,9 @@ function buildGenerationPrompt(input: GeneratePlanInput): string {
   const restDaysPerWeek = 7 - input.daysPerWeek;
   lines.push(
     ``,
-    `Generate ${input.totalWeeks * 7} day entries (${input.daysPerWeek} training + ${restDaysPerWeek} rest per week).`,
-    `Return the complete JSON array for ALL weeks.`,
+    `Generate ${weeksInChunk * 7} day entries for ${formatWeekRange(range)} (${input.daysPerWeek} training + ${restDaysPerWeek} rest per week).`,
+    `Each week in this chunk MUST include all seven dayName values exactly once.`,
+    `Return the complete JSON array for ONLY ${formatWeekRange(range)}.`,
   );
 
   return lines.join("\n");
@@ -216,6 +246,50 @@ function assertTableFirstGeneratedDays(days: GeneratedDay[]): void {
   }
 }
 
+function validateAndOrderGeneratedDays(days: GeneratedDay[], totalWeeks: number): GeneratedDay[] {
+  const daysByWeek = new Map<number, Map<(typeof DAY_NAMES)[number], GeneratedDay>>();
+  const invalidWeeks: number[] = [];
+  const duplicates: string[] = [];
+
+  for (const day of days) {
+    if (day.weekNumber < 1 || day.weekNumber > totalWeeks) {
+      invalidWeeks.push(day.weekNumber);
+      continue;
+    }
+    const weekDays = daysByWeek.get(day.weekNumber) ?? new Map<(typeof DAY_NAMES)[number], GeneratedDay>();
+    if (weekDays.has(day.dayName)) {
+      duplicates.push(`${day.weekNumber} ${day.dayName}`);
+    }
+    weekDays.set(day.dayName, day);
+    daysByWeek.set(day.weekNumber, weekDays);
+  }
+
+  const missingDays: string[] = [];
+  for (let weekNumber = 1; weekNumber <= totalWeeks; weekNumber++) {
+    const weekDays = daysByWeek.get(weekNumber);
+    for (const dayName of DAY_NAMES) {
+      if (!weekDays?.has(dayName)) {
+        missingDays.push(`${weekNumber} ${dayName}`);
+      }
+    }
+  }
+
+  if (invalidWeeks.length > 0 || duplicates.length > 0 || missingDays.length > 0) {
+    throw new AppError(
+      ErrorCode.AI_ERROR,
+      "AI generated incomplete plan coverage. Please try again.",
+      502,
+      { invalidWeeks, duplicates, missingDays },
+    );
+  }
+
+  return Array.from({ length: totalWeeks }, (_, index) => index + 1)
+    .flatMap((weekNumber) => {
+      const weekDays = daysByWeek.get(weekNumber);
+      return DAY_NAMES.map((dayName) => weekDays!.get(dayName)!);
+    });
+}
+
 function calculateStartDate(raceDate: string, totalWeeks: number): string {
   const race = new Date(raceDate);
   const start = new Date(race);
@@ -230,16 +304,13 @@ function calculateStartDate(raceDate: string, totalWeeks: number): string {
   return start.toISOString().split("T")[0];
 }
 
-export async function generatePlan(
+async function generatePlanChunk(
   input: GeneratePlanInput,
   userId: string,
-): Promise<TrainingPlanWithDays> {
-  const prompt = buildGenerationPrompt(input);
-
-  logger.info(
-    { userId, totalWeeks: input.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
-    "[planGen] Generating AI training plan",
-  );
+  range: WeekRange,
+): Promise<GeneratedDay[]> {
+  const prompt = buildGenerationPrompt(input, range);
+  const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
 
   const response = await retryWithBackoff(
     () =>
@@ -252,19 +323,39 @@ export async function generatePlan(
         },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       }),
-    "planGeneration",
+    label,
   );
 
   trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "plan_generation", response);
 
   const text = response.text || "[]";
-  const days = parseAndValidateDays(text);
+  return parseAndValidateDays(text);
+}
 
+async function generatePlanDays(input: GeneratePlanInput, userId: string): Promise<GeneratedDay[]> {
+  const ranges = buildWeekRanges(input.totalWeeks);
+  const limit = pLimit(PLAN_GENERATION_CHUNK_CONCURRENCY);
+  const dayChunks = await Promise.all(
+    ranges.map((range) => limit(() => generatePlanChunk(input, userId, range))),
+  );
+  const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {
     throw new AppError(ErrorCode.AI_ERROR, "AI generated no valid plan days", 502);
   }
-
   assertTableFirstGeneratedDays(days);
+  return days;
+}
+
+export async function generatePlan(
+  input: GeneratePlanInput,
+  userId: string,
+): Promise<TrainingPlanWithDays> {
+  logger.info(
+    { userId, totalWeeks: input.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
+    "[planGen] Generating AI training plan",
+  );
+
+  const days = await generatePlanDays(input, userId);
 
   // Plan, plan days, and their structured exercise sets are written inside
   // a single transaction so a failure in any step rolls the whole plan back.

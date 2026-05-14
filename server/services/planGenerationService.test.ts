@@ -1,4 +1,4 @@
-import type { PlanDay } from "@shared/schema";
+import type { GeneratePlanInput, PlanDay } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay, createMockTrainingPlan, createMockTrainingPlanWithDays } from "../../test/factories";
@@ -56,24 +56,117 @@ vi.mock("../storage", () => ({
   },
 }));
 
-const baseInput = {
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+type DayName = (typeof DAY_NAMES)[number];
+
+type GeneratedDayLike = {
+  weekNumber: number;
+  dayName: DayName;
+  focus: string;
+  mainWorkout: string;
+  accessory: string | null;
+  notes: string | null;
+  exercises?: unknown[];
+};
+
+const baseInput: GeneratePlanInput = {
   goal: "Hyrox race prep",
   totalWeeks: 1,
   daysPerWeek: 2,
   experienceLevel: "intermediate",
-} as const;
+};
 
-function mockAiDays(days: unknown[]): void {
-  mocks.generateContent.mockResolvedValue({ text: JSON.stringify(days) });
+function makeExerciseDay(
+  weekNumber: number,
+  dayName: DayName = "Monday",
+  overrides: Partial<GeneratedDayLike> = {},
+): GeneratedDayLike {
+  return {
+    weekNumber,
+    dayName,
+    focus: "Strength",
+    mainWorkout: "Back squat 2x5 at 100kg",
+    accessory: null,
+    notes: null,
+    exercises: [
+      {
+        exerciseName: "back_squat",
+        category: "strength",
+        sets: [
+          { setNumber: 1, reps: 5, weight: 100 },
+        ],
+      },
+    ],
+    ...overrides,
+  };
 }
 
-function setupPlanStorage(createdDays: PlanDay[]): void {
-  const plan = createMockTrainingPlan({ id: "plan-1", userId: "user-1", goal: baseInput.goal, totalWeeks: 1 });
+function makeRestDay(
+  weekNumber: number,
+  dayName: DayName,
+  overrides: Partial<GeneratedDayLike> = {},
+): GeneratedDayLike {
+  return {
+    weekNumber,
+    dayName,
+    focus: "Rest",
+    mainWorkout: "Complete rest",
+    accessory: null,
+    notes: null,
+    exercises: [],
+    ...overrides,
+  };
+}
+
+function makeGeneratedWeek(
+  weekNumber: number,
+  exerciseOverrides: Partial<GeneratedDayLike> = {},
+): GeneratedDayLike[] {
+  return DAY_NAMES.map((dayName) =>
+    dayName === "Monday"
+      ? makeExerciseDay(weekNumber, dayName, exerciseOverrides)
+      : makeRestDay(weekNumber, dayName),
+  );
+}
+
+function makeGeneratedWeeks(startWeek: number, endWeek: number): GeneratedDayLike[] {
+  return Array.from({ length: endWeek - startWeek + 1 }, (_, index) => startWeek + index)
+    .flatMap((weekNumber) => makeGeneratedWeek(weekNumber));
+}
+
+function createPlanDaysFromGenerated(days: GeneratedDayLike[]): PlanDay[] {
+  return days.map((day) =>
+    createMockPlanDay({
+      id: `day-${day.weekNumber}-${day.dayName}`,
+      planId: "plan-1",
+      weekNumber: day.weekNumber,
+      dayName: day.dayName,
+      focus: day.focus,
+      mainWorkout: day.mainWorkout,
+      accessory: day.accessory,
+      notes: day.notes,
+    }),
+  );
+}
+
+function mockAiChunks(...chunks: GeneratedDayLike[][]): void {
+  for (const days of chunks) {
+    mocks.generateContent.mockResolvedValueOnce({ text: JSON.stringify(days) });
+  }
+}
+
+function setupPlanStorage(input: GeneratePlanInput, createdDays: PlanDay[]): void {
+  const plan = createMockTrainingPlan({ id: "plan-1", userId: "user-1", goal: input.goal, totalWeeks: input.totalWeeks });
   mocks.plans.createTrainingPlan.mockResolvedValue(plan);
   mocks.plans.createPlanDays.mockResolvedValue(createdDays);
   mocks.plans.getTrainingPlan.mockResolvedValue(
     createMockTrainingPlanWithDays({ id: "plan-1", userId: "user-1", days: createdDays }),
   );
+}
+
+function getPromptText(call: unknown[]): string {
+  const request = call[0] as { contents: Array<{ parts: Array<{ text: string }> }> };
+  return request.contents[0].parts[0].text;
 }
 
 describe("generatePlan", () => {
@@ -88,51 +181,69 @@ describe("generatePlan", () => {
     mocks.plans.schedulePlan.mockResolvedValue(true);
   });
 
-  it("persists generated plan notes and plan-day exercise rows", async () => {
-    const createdDays = [
-      createMockPlanDay({ id: "day-1", planId: "plan-1", dayName: "Monday", focus: "Strength" }),
-      createMockPlanDay({ id: "day-2", planId: "plan-1", dayName: "Tuesday", focus: "Rest", mainWorkout: "Complete rest" }),
-    ];
-    setupPlanStorage(createdDays);
-    mockAiDays([
-      {
-        weekNumber: 1,
-        dayName: "Monday",
-        focus: "Strength",
-        mainWorkout: "Back squat 2x5 at 100kg",
-        accessory: null,
-        notes: "Keep bracing tight",
-        exercises: [
-          {
-            exerciseName: "back_squat",
-            category: "strength",
-            sets: [
-              { setNumber: 1, reps: 5, weight: 100, notes: "Smooth and controlled" },
-              { setNumber: 2, reps: 5, weight: 100, notes: "No grind reps" },
-            ],
-          },
-        ],
-      },
-      {
-        weekNumber: 1,
-        dayName: "Tuesday",
-        focus: "Rest",
-        mainWorkout: "Complete rest",
-        accessory: null,
-        notes: "Light walk only",
-        exercises: [],
-      },
+  it("splits an 8-week request into four two-week chunks and persists days in order", async () => {
+    const input = { ...baseInput, totalWeeks: 8 } as const;
+    const sortedDays = makeGeneratedWeeks(1, 8);
+    setupPlanStorage(input, createPlanDaysFromGenerated(sortedDays));
+    mockAiChunks(
+      [...makeGeneratedWeek(2), ...makeGeneratedWeek(1)],
+      [...makeGeneratedWeek(4), ...makeGeneratedWeek(3)],
+      [...makeGeneratedWeek(6), ...makeGeneratedWeek(5)],
+      [...makeGeneratedWeek(8), ...makeGeneratedWeek(7)],
+    );
+
+    await generatePlan(input, "user-1");
+
+    expect(mocks.generateContent).toHaveBeenCalledTimes(4);
+    expect(mocks.retryWithBackoff.mock.calls.map((call) => call[1])).toEqual([
+      "planGeneration:w1-2",
+      "planGeneration:w3-4",
+      "planGeneration:w5-6",
+      "planGeneration:w7-8",
     ]);
+    expect(mocks.generateContent.mock.calls.map(getPromptText).map((text) => text.match(/weeks? \d(?:-\d)?/)?.[0])).toEqual([
+      "weeks 1-2",
+      "weeks 3-4",
+      "weeks 5-6",
+      "weeks 7-8",
+    ]);
+    expect(mocks.plans.createPlanDays.mock.calls[0][0].map((day: PlanDay) => `${day.weekNumber}-${day.dayName}`)).toEqual(
+      sortedDays.map((day) => `${day.weekNumber}-${day.dayName}`),
+    );
+  });
+
+  it("persists generated plan notes and plan-day exercise rows", async () => {
+    const generatedDays = makeGeneratedWeek(1, {
+      notes: "Keep bracing tight",
+      exercises: [
+        {
+          exerciseName: "back_squat",
+          category: "strength",
+          sets: [
+            { setNumber: 1, reps: 5, weight: 100, notes: "Smooth and controlled" },
+            { setNumber: 2, reps: 5, weight: 100, notes: "No grind reps" },
+          ],
+        },
+      ],
+    });
+    generatedDays[1] = makeRestDay(1, "Tuesday", { notes: "Light walk only" });
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
 
     await generatePlan(baseInput, "user-1");
 
     expect(mocks.plans.createPlanDays).toHaveBeenCalledWith([
       expect.objectContaining({ dayName: "Monday", notes: "Keep bracing tight", aiSource: "generated" }),
       expect.objectContaining({ dayName: "Tuesday", notes: "Light walk only", aiSource: "generated" }),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
     ], mocks.tx);
     expect(mocks.insertValues).toHaveBeenCalledWith([
       expect.objectContaining({
-        planDayId: "day-1",
+        planDayId: "day-1-Monday",
         workoutLogId: null,
         exerciseName: "back_squat",
         reps: 5,
@@ -141,7 +252,7 @@ describe("generatePlan", () => {
         sortOrder: 0,
       }),
       expect.objectContaining({
-        planDayId: "day-1",
+        planDayId: "day-1-Monday",
         workoutLogId: null,
         exerciseName: "back_squat",
         reps: 5,
@@ -153,43 +264,37 @@ describe("generatePlan", () => {
   });
 
   it("accepts rest days with empty exercise arrays", async () => {
-    const createdDays = [
-      createMockPlanDay({ id: "day-rest", planId: "plan-1", dayName: "Sunday", focus: "Rest", mainWorkout: "Complete rest" }),
-    ];
-    setupPlanStorage(createdDays);
-    mockAiDays([
-      {
-        weekNumber: 1,
-        dayName: "Sunday",
-        focus: "Rest",
-        mainWorkout: "Complete rest",
-        accessory: null,
-        notes: "Hydrate",
-        exercises: [],
-      },
-    ]);
+    const generatedDays = DAY_NAMES.map((dayName) => makeRestDay(1, dayName, { notes: dayName === "Sunday" ? "Hydrate" : null }));
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
 
     await expect(generatePlan(baseInput, "user-1")).resolves.toEqual(
       expect.objectContaining({ id: "plan-1" }),
     );
 
     expect(mocks.tx.insert).not.toHaveBeenCalled();
-    expect(mocks.plans.createPlanDays).toHaveBeenCalledWith([
-      expect.objectContaining({ dayName: "Sunday", notes: "Hydrate" }),
-    ], mocks.tx);
+    expect(mocks.plans.createPlanDays).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ dayName: "Sunday", notes: "Hydrate" })]),
+      mocks.tx,
+    );
+  });
+
+  it("rejects incomplete chunk coverage before creating a plan", async () => {
+    const input = { ...baseInput, totalWeeks: 2 } as const;
+    mockAiChunks(makeGeneratedWeek(1));
+
+    await expect(generatePlan(input, "user-1")).rejects.toMatchObject({
+      code: ErrorCode.AI_ERROR,
+      status: 502,
+    });
+
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
   });
 
   it("rejects non-rest days missing exercise-table rows before creating a plan", async () => {
-    mockAiDays([
-      {
-        weekNumber: 1,
-        dayName: "Monday",
-        focus: "Strength",
-        mainWorkout: "Back squat 3x5",
-        accessory: null,
-        notes: null,
-      },
-    ]);
+    const generatedDays = makeGeneratedWeek(1, { exercises: undefined });
+    mockAiChunks(generatedDays);
 
     await expect(generatePlan(baseInput, "user-1")).rejects.toMatchObject({
       code: ErrorCode.AI_ERROR,
@@ -201,24 +306,26 @@ describe("generatePlan", () => {
   });
 
   it("rejects non-rest days when all generated exercise rows are invalid", async () => {
-    mockAiDays([
-      {
-        weekNumber: 1,
-        dayName: "Monday",
-        focus: "Strength",
-        mainWorkout: "Back squat 3x5",
-        accessory: null,
-        notes: null,
-        exercises: [
-          { exerciseName: "back_squat", category: "strength", sets: [] },
-        ],
-      },
-    ]);
+    const generatedDays = makeGeneratedWeek(1, {
+      exercises: [
+        { exerciseName: "back_squat", category: "strength", sets: [] },
+      ],
+    });
+    mockAiChunks(generatedDays);
 
     await expect(generatePlan(baseInput, "user-1")).rejects.toMatchObject({
       code: ErrorCode.AI_ERROR,
       status: 502,
     });
+
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
+  });
+
+  it("does not create a partial plan when a chunk provider call times out", async () => {
+    mocks.generateContent.mockRejectedValue(new Error("AI call timed out after 90000ms (planGeneration:w1-1)"));
+
+    await expect(generatePlan(baseInput, "user-1")).rejects.toThrow("timed out");
 
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
