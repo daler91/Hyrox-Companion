@@ -36,7 +36,7 @@ export function classifyAiError(err: unknown): { code: ErrorCode; status: number
   if (/invalid|bad.?request|400|unsupported/.test(lower)) {
     return { code: ErrorCode.AI_INVALID_INPUT, status: 400, message: "AI rejected the request as invalid — try rephrasing." };
   }
-  if (/unavailable|502|503|504|deadline|timeout/.test(lower)) {
+  if (/unavailable|502|503|504|deadline|timeout|timed.?out/.test(lower)) {
     return { code: ErrorCode.AI_UNAVAILABLE, status: 503, message: "AI service temporarily unavailable." };
   }
   return { code: ErrorCode.AI_ERROR, status: 502, message: "Failed to get response from AI coach" };

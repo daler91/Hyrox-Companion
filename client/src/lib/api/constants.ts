@@ -1,4 +1,5 @@
 export const IMAGE_REPARSE_TIMEOUT_MS = 60_000;
+export const PLAN_GENERATION_TIMEOUT_MS = 150_000;
 
 /**
  * Keep image-based parsing request behavior aligned across workouts and plans.
@@ -6,6 +7,15 @@ export const IMAGE_REPARSE_TIMEOUT_MS = 60_000;
  */
 export const IMAGE_REPARSE_REQUEST_OPTIONS = Object.freeze({
   timeoutMs: IMAGE_REPARSE_TIMEOUT_MS,
+});
+
+/**
+ * AI plan generation runs high-thinking model calls server-side with a
+ * 120s request budget, so the browser must wait longer than the generic
+ * 15s API default.
+ */
+export const PLAN_GENERATION_REQUEST_OPTIONS = Object.freeze({
+  timeoutMs: PLAN_GENERATION_TIMEOUT_MS,
 });
 
 /**
