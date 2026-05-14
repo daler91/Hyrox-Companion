@@ -1,6 +1,7 @@
 import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useCallback, useState } from "react";
 
+import { isTimelineEntryBulkDeletable } from "./workout-actions/bulkDelete";
 import { useWorkoutActionMutations } from "./workout-actions/useWorkoutActionMutations";
 
 
@@ -12,6 +13,7 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     logWorkoutMutation,
     deleteWorkoutMutation,
     deletePlanDayMutation,
+    bulkDeleteWorkoutMutation,
   } = useWorkoutActionMutations(selectedPlanId);
 
   const handleMarkComplete = useCallback(
@@ -63,6 +65,15 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     [deleteWorkoutMutation, deletePlanDayMutation],
   );
 
+  const handleBulkDelete = useCallback(
+    (entries: TimelineEntry[]) => {
+      const deletableEntries = entries.filter(isTimelineEntryBulkDeletable);
+      if (deletableEntries.length === 0) return;
+      bulkDeleteWorkoutMutation.mutate(deletableEntries);
+    },
+    [bulkDeleteWorkoutMutation],
+  );
+
   return {
     skipConfirmEntry,
     setSkipConfirmEntry,
@@ -71,9 +82,11 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     confirmSkip,
     handleChangeStatus,
     handleDelete,
+    handleBulkDelete,
     updateStatusMutation,
     logWorkoutMutation,
     deleteWorkoutMutation,
     deletePlanDayMutation,
+    bulkDeleteWorkoutMutation,
   };
 }

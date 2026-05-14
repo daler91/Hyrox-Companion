@@ -4,6 +4,7 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
 import { useApiMutation } from "../useApiMutation";
+import { buildBulkDeleteWorkoutTargets } from "./bulkDelete";
 import { buildOptimisticTimelineHandlers } from "./optimisticTimeline";
 import type {
   LogWorkoutVariables,
@@ -162,10 +163,43 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
     ...deletePlanDayHandlers,
   });
 
+  const bulkDeleteWorkoutHandlers = buildOptimisticTimelineHandlers<TimelineEntry[]>(
+    selectedPlanId,
+    (old, entries) => {
+      const entryIds = new Set(entries.map((entry) => entry.id));
+      const { workoutLogIds, planDayIds } = buildBulkDeleteWorkoutTargets(entries);
+      const workoutLogIdSet = new Set(workoutLogIds);
+      const planDayIdSet = new Set(planDayIds);
+
+      return old.filter(
+        (entry) =>
+          !entryIds.has(entry.id) &&
+          !(entry.workoutLogId && workoutLogIdSet.has(entry.workoutLogId)) &&
+          !(entry.planDayId && planDayIdSet.has(entry.planDayId)),
+      );
+    },
+  );
+  const bulkDeleteWorkoutMutation = useApiMutation({
+    mutationFn: (entries: TimelineEntry[]) => api.workouts.bulkDelete(buildBulkDeleteWorkoutTargets(entries)),
+    invalidateQueries: [
+      QUERY_KEYS.timeline,
+      QUERY_KEYS.workouts,
+      QUERY_KEYS.plans,
+      QUERY_KEYS.personalRecords,
+      QUERY_KEYS.exerciseAnalytics,
+    ],
+    successToast: (data) => ({
+      title: data.deletedCount === 1 ? "Workout removed" : `${data.deletedCount} workouts removed`,
+    }),
+    errorToast: "Failed to delete workouts",
+    ...bulkDeleteWorkoutHandlers,
+  });
+
   return {
     updateStatusMutation,
     logWorkoutMutation,
     deleteWorkoutMutation,
     deletePlanDayMutation,
+    bulkDeleteWorkoutMutation,
   };
 }

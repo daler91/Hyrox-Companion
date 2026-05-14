@@ -19,6 +19,7 @@ import { FeatureErrorBoundaryWrapper } from "@/components/FeatureErrorBoundaryWr
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
   AnnotationsDialog,
+  BulkDeleteControls,
   CoachReviewingIndicator,
   CombineWorkoutsDialog,
   FloatingActionButton,
@@ -43,6 +44,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { useBulkDeleteSelection } from "@/pages/timeline/useBulkDeleteSelection";
 import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRouting";
 import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
 import { useTimelinePageController } from "@/pages/timeline/useTimelinePageController";
@@ -102,6 +104,9 @@ interface TimelineContentProps {
   isAnnotationDeleting: boolean;
   onMoveEntry: (entry: TimelineEntry, newDate: string) => void;
   isMovingEntry: boolean;
+  isBulkSelectMode: boolean;
+  selectedBulkEntryKeys: ReadonlySet<string>;
+  onBulkSelectToggle: (entry: TimelineEntry) => void;
 }
 
 function TimelineContent({
@@ -138,6 +143,9 @@ function TimelineContent({
   isAnnotationDeleting,
   onMoveEntry,
   isMovingEntry,
+  isBulkSelectMode,
+  selectedBulkEntryKeys,
+  onBulkSelectToggle,
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
@@ -235,6 +243,9 @@ function TimelineContent({
                   isAnnotationDeleting={isAnnotationDeleting}
                   onMoveEntry={onMoveEntry}
                   isMovingEntry={isMovingEntry}
+                  isBulkSelectMode={isBulkSelectMode}
+                  selectedBulkEntryKeys={selectedBulkEntryKeys}
+                  onBulkSelectToggle={onBulkSelectToggle}
                 />
               </div>
             );
@@ -337,6 +348,7 @@ export default function Timeline() {
     handleDelete,
     confirmSkip,
     logWorkoutMutation,
+    bulkDeleteWorkoutMutation,
   } = workoutActions;
   const {
     combiningEntry,
@@ -406,6 +418,27 @@ export default function Timeline() {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
 
+  const {
+    bulkDeleteMode,
+    bulkDeleteConfirmOpen,
+    setBulkDeleteConfirmOpen,
+    bulkDeletableEntries,
+    selectedBulkEntries,
+    selectedBulkEntryKeys,
+    clearBulkSelection,
+    finishBulkDelete,
+    handleBulkDeleteModeChange,
+    handleBulkSelectAll,
+    handleBulkSelectToggle,
+  } = useBulkDeleteSelection(allVisibleGroups);
+
+  const handleBulkDeleteConfirm = useCallback(() => {
+    if (selectedBulkEntries.length === 0) return;
+    bulkDeleteWorkoutMutation.mutate(selectedBulkEntries, {
+      onSuccess: finishBulkDelete,
+    });
+  }, [bulkDeleteWorkoutMutation, finishBulkDelete, selectedBulkEntries]);
+
   // Require a small activation distance on pointer drag so clicking the
   // drag handle to open a tooltip / focus it doesn't accidentally pick
   // the card up. The DnD only engages after the user moves >6px, which
@@ -470,7 +503,11 @@ export default function Timeline() {
       <div className="flex h-full">
         <div ref={scrollRef} className="flex-1 overflow-auto p-4 md:p-8 relative">
           <div className="max-w-5xl mx-auto space-y-6">
-            <TimelineHeader />
+            <TimelineHeader
+              canBulkDelete={bulkDeletableEntries.length > 0}
+              bulkDeleteMode={bulkDeleteMode}
+              onBulkDeleteModeChange={handleBulkDeleteModeChange}
+            />
 
             <CoachReviewingIndicator isActive={isAutoCoaching} />
 
@@ -488,6 +525,20 @@ export default function Timeline() {
               onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
               isUpdatingGoal={updatePlanGoalMutation.isPending}
               onScheduleClick={(planId) => setSchedulingPlanId(planId)}
+            />
+
+            <BulkDeleteControls
+              enabled={bulkDeleteMode}
+              selectedCount={selectedBulkEntries.length}
+              visibleCount={bulkDeletableEntries.length}
+              isPending={bulkDeleteWorkoutMutation.isPending}
+              confirmOpen={bulkDeleteConfirmOpen}
+              onConfirmOpenChange={setBulkDeleteConfirmOpen}
+              onSelectAll={handleBulkSelectAll}
+              onClear={clearBulkSelection}
+              onCancel={() => handleBulkDeleteModeChange(false)}
+              onDelete={() => setBulkDeleteConfirmOpen(true)}
+              onConfirmDelete={handleBulkDeleteConfirm}
             />
 
             <TimelineTodayIndicator
@@ -532,6 +583,9 @@ export default function Timeline() {
                 isAnnotationDeleting={isAnnotationDeleting}
                 onMoveEntry={moveEntry}
                 isMovingEntry={isMoving}
+                isBulkSelectMode={bulkDeleteMode}
+                selectedBulkEntryKeys={selectedBulkEntryKeys}
+                onBulkSelectToggle={handleBulkSelectToggle}
               />
             </DndContext>
 
@@ -540,7 +594,8 @@ export default function Timeline() {
               !logEntry &&
               !reviewEntry &&
               !skippedEntry &&
-              !adhocOpen && (
+              !adhocOpen &&
+              !bulkDeleteMode && (
                 <FloatingActionButton
                   coachPanelOpen={coachOpen}
                   onCoachToggle={() => handleCoachToggle(!coachOpen)}

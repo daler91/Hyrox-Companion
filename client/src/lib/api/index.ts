@@ -11,7 +11,7 @@ export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
 export type { GarminStatus, GarminSyncResponse, StravaStatus, StravaSyncResponse, UserPreferences } from "./user";
 export { auth, email, garmin, preferences, strava } from "./user";
-export type { BatchReparseResponse, ReparseWorkoutTextPayload, WorkoutHistoryStats, WorkoutReferenceTextPayload } from "./workouts";
+export type { BatchReparseResponse, BulkDeleteWorkoutsPayload, BulkDeleteWorkoutsResponse, ReparseWorkoutTextPayload, WorkoutHistoryStats, WorkoutReferenceTextPayload } from "./workouts";
 export { workouts } from "./workouts";
 
 // ---------------------------------------------------------------------------
