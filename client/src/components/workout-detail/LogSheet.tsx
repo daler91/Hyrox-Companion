@@ -382,6 +382,7 @@ export function LogSheet({
       title={title}
       description={formatScheduledDate(entry.date)}
       contentClassName={coachChatOpen ? "sm:max-w-5xl" : "sm:max-w-2xl"}
+      mobileFullHeight={coachPanel.coachPanelOpen}
       testId={`log-sheet-${entry.id}`}
     >
       <WorkoutCoachLayout

@@ -767,16 +767,13 @@ export default function Timeline() {
               skippedEntry ||
               adhocOpen
                 ? "hidden"
-                : "fixed inset-x-0 bottom-0 z-50 h-[70vh]"
+                : "fixed inset-0 z-50 h-[100dvh]"
             }
           >
             <div
               data-testid="coach-panel-mobile-sheet"
-              className="relative h-full bg-background shadow-2xl rounded-t-2xl border-t border-x"
+              className="relative h-full bg-background shadow-2xl"
             >
-              <div className="flex items-center justify-center pt-2" aria-hidden="true">
-                <div className="h-1 w-10 rounded-full bg-muted-foreground/40" />
-              </div>
               <FeatureErrorBoundaryWrapper featureName="Coach">
                 <CoachPanel
                   isOpen={coachOpen}

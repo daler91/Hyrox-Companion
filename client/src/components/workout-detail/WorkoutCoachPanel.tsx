@@ -6,8 +6,11 @@ import { MobileCoachToggle } from "./MobileCoachToggle";
 
 const SPLIT_WORKOUT_COACH_LAYOUT =
   "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
+const MOBILE_WORKOUT_COACH_LAYOUT = "flex min-h-0 flex-1 flex-col";
 const STACKED_WORKOUT_COACH_LAYOUT = "space-y-4";
-const MOBILE_COACH_CHAT_AREA = "max-h-none flex-1";
+const MOBILE_COACH_CARD =
+  "min-h-0 flex-1 self-stretch overflow-hidden rounded-none border-0 bg-background";
+const MOBILE_COACH_CHAT_AREA = "min-h-0 max-h-none flex-1";
 
 interface WorkoutCoachPanelStateArgs {
   readonly coachChatOpen: boolean;
@@ -55,7 +58,7 @@ export function getWorkoutCoachPanelState({
     chatHidden: showingMobileDetailsWithChat,
     coachPanelOpen,
     detailsHidden: coachPanelOpen,
-    layoutClassName: coachChatOpen && !isMobile ? SPLIT_WORKOUT_COACH_LAYOUT : STACKED_WORKOUT_COACH_LAYOUT,
+    layoutClassName: getWorkoutCoachLayoutClassName({ coachChatOpen, coachPanelOpen, isMobile }),
     returnButtonVisible: showingMobileDetailsWithChat,
   };
 }
@@ -103,10 +106,25 @@ export function WorkoutCoachChatPanel({
       onBack={getCoachBackHandler(panelState.coachPanelOpen, onShowWorkoutDetails, onCloseCoachChat)}
       backButtonText={panelState.coachPanelOpen ? "Workout details" : undefined}
       chatAreaClassName={panelState.coachPanelOpen ? MOBILE_COACH_CHAT_AREA : undefined}
+      className={panelState.coachPanelOpen ? MOBILE_COACH_CARD : undefined}
       isHidden={panelState.chatHidden}
       isPanelView={panelState.coachPanelOpen}
     />
   );
+}
+
+function getWorkoutCoachLayoutClassName({
+  coachChatOpen,
+  coachPanelOpen,
+  isMobile,
+}: {
+  readonly coachChatOpen: boolean;
+  readonly coachPanelOpen: boolean;
+  readonly isMobile: boolean;
+}): string {
+  if (coachPanelOpen) return MOBILE_WORKOUT_COACH_LAYOUT;
+  if (coachChatOpen && !isMobile) return SPLIT_WORKOUT_COACH_LAYOUT;
+  return STACKED_WORKOUT_COACH_LAYOUT;
 }
 
 function getCoachBackHandler(

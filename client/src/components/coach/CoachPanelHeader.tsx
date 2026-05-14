@@ -30,11 +30,17 @@ export function CoachPanelHeader({
 
   return (
     <TooltipProvider>
-      <div className="flex items-center justify-between gap-2 p-3 border-b flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">AI Coach</span>
-          <Badge variant="secondary" data-testid="badge-active-style">Active style: {activeStyleLabel}</Badge>
+      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b p-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+          <span className="shrink-0 text-sm font-semibold">AI Coach</span>
+          <Badge
+            variant="secondary"
+            className="min-w-0 truncate"
+            data-testid="badge-active-style"
+          >
+            Active style: {activeStyleLabel}
+          </Badge>
         </div>
         <div className="flex items-center gap-1">
           {canClearHistory && (
