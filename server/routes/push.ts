@@ -12,7 +12,10 @@ import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder
 const router = Router();
 
 const subscribeSchema = z.object({
-  endpoint: z.url(),
+  // 🛡️ Sentinel: Enforce HTTPS to prevent SSRF against internal/local services
+  endpoint: z.string().url().refine((url) => url.startsWith("https://"), {
+    message: "Push endpoint must be an HTTPS URL",
+  }),
   keys: z.object({
     p256dh: z.string().min(1),
     auth: z.string().min(1),
@@ -38,7 +41,7 @@ protectedPost(router, "/api/v1/push/subscribe", { limiter: rateLimiter("push", 1
   res.json({ success: true });
 });
 
-protectedDelete(router, "/api/v1/push/unsubscribe", { limiter: rateLimiter("push", 10), middleware: [validateBody(z.object({ endpoint: z.url() }))] }, async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/push/unsubscribe", { limiter: rateLimiter("push", 10), middleware: [validateBody(z.object({ endpoint: z.string().url().refine((url) => url.startsWith("https://"), { message: "Push endpoint must be an HTTPS URL" }) }))] }, async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
   const { endpoint } = req.body as { endpoint: string };
   await storage.push.removeSubscription(userId, endpoint);
