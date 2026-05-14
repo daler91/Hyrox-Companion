@@ -111,6 +111,38 @@ function sendPlanDayReparseError(
   });
 }
 
+function sendPlanGenerationError(
+  req: ExpressRequest,
+  res: Response,
+  error: unknown,
+  userId: string,
+): Response {
+  if (error instanceof AppError) {
+    reqLogger(req).error({ err: error, userId, code: error.code }, "Failed to generate AI training plan");
+    return res.status(error.status).json({ error: error.message, code: error.code });
+  }
+
+  if (hasStatusAndCode(error) && !isLikelyAiProviderFailure(error)) {
+    reqLogger(req).error({ err: error, userId, code: error.code }, "Failed to generate AI training plan with structured non-AI error");
+    return res.status(error.status).json({
+      error: error.message ?? "Failed to generate training plan. Please try again.",
+      code: error.code,
+    });
+  }
+
+  if (isLikelyAiProviderFailure(error)) {
+    const classified = classifyAiError(error);
+    reqLogger(req).error({ err: error, userId, code: classified.code }, "Failed to generate AI training plan");
+    return res.status(classified.status).json({
+      error: classified.message,
+      code: classified.code,
+    });
+  }
+
+  reqLogger(req).error({ err: error, userId }, "Failed to generate AI training plan");
+  return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });
+}
+
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
   updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),
 });
@@ -168,8 +200,7 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
       const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);
       res.json(fullPlan);
     } catch (error: unknown) {
-      reqLogger(req).error({ err: error }, "Failed to generate AI training plan");
-      return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });
+      return sendPlanGenerationError(req, res, error, userId);
     }
   });
 

@@ -17,8 +17,7 @@ import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "
 import { storage } from "../storage";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
-// Structured exercises the model may include per plan day. Optional so we
-// degrade gracefully when the model returns the old free-text-only shape.
+// Structured exercises the model must include for non-rest generated days.
 const generatedExerciseSchema = z.object({
   exerciseName: z.string().min(1),
   category: z.string(),
@@ -134,14 +133,14 @@ function normalizeGeneratedExercise(raw: GeneratedExercise): ParsedExercise {
       ...(s.weight != null && { weight: s.weight }),
       ...(s.distance != null && { distance: s.distance }),
       ...(s.time != null && { time: s.time }),
+      ...(s.notes != null && { notes: sanitizeLabel(s.notes) }),
     })),
   };
 }
 
-// Validate the optional exercises array on a raw day. Individual malformed
-// exercises are dropped with a warning; the returned array is empty if none
-// validate or if the field was absent. Returning null signals "no structured
-// exercises", so the day still renders from its free-text fields.
+// Validate the exercises array on a raw day. Individual malformed exercises
+// are dropped with a warning; the caller decides whether an empty result is
+// valid for this day.
 function validateDayExercises(rawDay: Record<string, unknown> | null | undefined): GeneratedExercise[] | null {
   const raw = rawDay?.exercises;
   if (!Array.isArray(raw)) return null;
@@ -197,6 +196,26 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
   return validated;
 }
 
+function isGeneratedRestDay(day: Pick<GeneratedDay, "focus" | "mainWorkout">): boolean {
+  return day.focus.trim().toLowerCase() === "rest" ||
+    day.mainWorkout.trim().toLowerCase() === "complete rest";
+}
+
+function assertTableFirstGeneratedDays(days: GeneratedDay[]): void {
+  const missingExerciseDays = days
+    .filter((day) => !isGeneratedRestDay(day) && (!day.exercises || day.exercises.length === 0))
+    .map((day) => `${day.weekNumber} ${day.dayName}`);
+
+  if (missingExerciseDays.length > 0) {
+    throw new AppError(
+      ErrorCode.AI_ERROR,
+      "AI generated one or more training days without exercise-table rows. Please try again.",
+      502,
+      { missingExerciseDays },
+    );
+  }
+}
+
 function calculateStartDate(raceDate: string, totalWeeks: number): string {
   const race = new Date(raceDate);
   const start = new Date(race);
@@ -244,6 +263,8 @@ export async function generatePlan(
   if (days.length === 0) {
     throw new AppError(ErrorCode.AI_ERROR, "AI generated no valid plan days", 502);
   }
+
+  assertTableFirstGeneratedDays(days);
 
   // Plan, plan days, and their structured exercise sets are written inside
   // a single transaction so a failure in any step rolls the whole plan back.
@@ -295,15 +316,8 @@ export async function generatePlan(
       if (!day.exercises || day.exercises.length === 0) continue;
       const pd = createdPlanDays[i];
       const normalised = day.exercises.map(normalizeGeneratedExercise);
-      try {
-        allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
-        dwe++;
-      } catch (err) {
-        logger.warn(
-          { err, planDayId: pd.id },
-          "[planGen] Failed to expand generated exercises into set rows",
-        );
-      }
+      allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
+      dwe++;
     }
 
     if (allSetRows.length > 0) {

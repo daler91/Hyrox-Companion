@@ -24,6 +24,10 @@ vi.mock("../../middleware/aibudget", () => ({
   aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
+vi.mock("../../services/planGenerationService", () => ({
+  generatePlan: vi.fn(),
+}));
+
 // Mock the storage functions
 vi.mock("../../storage", () => ({
   storage: {
@@ -70,6 +74,12 @@ vi.mock("../../services/workoutService", () => ({
 }));
 
 const emptyPlanDayRowsResponse = { exerciseSets: [], structureBlocks: [] };
+const generatePlanPayload = {
+  goal: "Hyrox race prep",
+  totalWeeks: 8,
+  daysPerWeek: 5,
+  experienceLevel: "intermediate",
+};
 
 function mockEmptyPlanDayRows() {
   vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
@@ -145,6 +155,32 @@ describe("DELETE /api/v1/plans/:id", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "Training plan not found", code: "NOT_FOUND" });
+  });
+});
+
+describe("POST /api/v1/plans/generate", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("returns a classified AI error when generation times out upstream", async () => {
+    const { generatePlan } = await import("../../services/planGenerationService");
+    vi.mocked(generatePlan).mockRejectedValue(new Error("AI call timed out after 90000ms (planGeneration)"));
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      error: "AI service temporarily unavailable.",
+      code: "AI_UNAVAILABLE",
+    });
   });
 });
 
