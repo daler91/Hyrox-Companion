@@ -102,6 +102,7 @@ vi.mock("@/hooks/useTimelineState", () => ({
       handleDelete: vi.fn(),
       confirmSkip: vi.fn(),
       logWorkoutMutation: { isPending: false },
+      bulkDeleteWorkoutMutation: { isPending: false, mutate: vi.fn() },
     },
     combine: {
       combiningEntry: null,
@@ -139,6 +140,7 @@ vi.mock("@/components/timeline", () => ({
   ImportPreviewDialog: () => <div />,
   SchedulePlanDialog: () => <div />,
   SkipConfirmDialog: () => <div />,
+  BulkDeleteControls: () => <div />,
 }));
 
 vi.mock("@/components/workout-detail/LogSheet", () => ({

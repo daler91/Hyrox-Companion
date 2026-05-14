@@ -18,6 +18,11 @@ import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
+import {
+  BULK_DELETE_WORKOUTS_NOT_FOUND,
+  bulkDeleteWorkouts,
+  isBulkDeleteWorkoutsNotFoundError,
+} from "../../services/bulkDeleteWorkouts";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
@@ -197,39 +202,15 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     const workoutLogIds = uniqueIds(body.workoutLogIds);
     const planDayIds = uniqueIds(body.planDayIds);
 
-    const [workoutTargets, planDayTargets] = await Promise.all([
-      Promise.all(workoutLogIds.map((id) => storage.workouts.getWorkoutLog(id, userId))),
-      Promise.all(planDayIds.map((id) => storage.plans.getPlanDay(id, userId))),
-    ]);
-
-    if (workoutTargets.some((target) => !target) || planDayTargets.some((target) => !target)) {
-      return sendNotFound(res, "One or more workouts were not found");
-    }
-
-    const deletedWorkoutLogIds: string[] = [];
-    for (const id of workoutLogIds) {
-      const deleted = await storage.workouts.deleteWorkoutLog(id, userId);
-      if (!deleted) {
-        return sendNotFound(res, "One or more workouts were not found");
+    try {
+      const result = await bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds });
+      res.json(result);
+    } catch (error) {
+      if (isBulkDeleteWorkoutsNotFoundError(error)) {
+        return sendNotFound(res, BULK_DELETE_WORKOUTS_NOT_FOUND);
       }
-      deletedWorkoutLogIds.push(id);
+      throw error;
     }
-
-    const deletedPlanDayIds: string[] = [];
-    for (const id of planDayIds) {
-      const deleted = await storage.plans.deletePlanDay(id, userId);
-      if (!deleted) {
-        return sendNotFound(res, "One or more workouts were not found");
-      }
-      deletedPlanDayIds.push(id);
-    }
-
-    res.json({
-      success: true,
-      deletedWorkoutLogIds,
-      deletedPlanDayIds,
-      deletedCount: deletedWorkoutLogIds.length + deletedPlanDayIds.length,
-    });
   });
 
   protectedPost(router, "/api/v1/workouts/combine", { limiter: rateLimiter("workout", 10), middleware: [validateBody(combineWorkoutsSchema)] }, async (req: Request, res: Response) => {

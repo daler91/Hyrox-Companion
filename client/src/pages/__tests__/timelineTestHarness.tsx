@@ -73,6 +73,7 @@ vi.mock("@/components/timeline", () => ({
   ImportPreviewDialog: () => <div />,
   CoachReviewingIndicator: () => <div />,
   AnnotationsDialog: () => <div />,
+  BulkDeleteControls: () => <div />,
 }));
 vi.mock("@/components/workout-detail/LogSheet", () => ({ LogSheet: (props: { entry: TimelineEntry | null }) => harnessState.logSheetImpl(props) }));
 vi.mock("@/components/workout-detail/PreviewSheet", () => ({ PreviewSheet: () => null }));
@@ -118,6 +119,7 @@ export function buildTimelineStatePayload(entries: TimelineEntry[] = [buildTimel
     workoutActions: {
       skipConfirmEntry: null, setSkipConfirmEntry: vi.fn(), handleMarkComplete: vi.fn(), handleChangeStatus: vi.fn(),
       handleDelete: vi.fn(), confirmSkip: vi.fn(), logWorkoutMutation: { isPending: false },
+      bulkDeleteWorkoutMutation: { isPending: false, mutate: vi.fn() },
     },
     combine: {
       combiningEntry: null, setCombiningEntry: vi.fn(), combineSecondEntry: null, setCombineSecondEntry: vi.fn(),
