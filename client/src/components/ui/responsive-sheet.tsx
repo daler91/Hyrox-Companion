@@ -63,7 +63,9 @@ export function ResponsiveSheet({
             <SheetTitle>{title}</SheetTitle>
             {description ? <SheetDescription>{description}</SheetDescription> : null}
           </SheetHeader>
-          <div className={mobileFullHeight ? "min-h-0 flex-1" : "mt-4"}>{children}</div>
+          <div className={mobileFullHeight ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "mt-4"}>
+            {children}
+          </div>
         </SheetContent>
       </Sheet>
     );
