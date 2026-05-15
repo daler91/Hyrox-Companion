@@ -4,20 +4,25 @@
 
 ## Overview
 
-The Hyrox Companion integrates Google's Gemini API for three core AI capabilities: workout parsing, coaching chat, and training plan generation. A Retrieval-Augmented Generation (RAG) pipeline enriches AI responses with user-uploaded coaching materials stored as vector embeddings in pgvector.
+The Hyrox Companion routes text AI through a modular provider layer for workout parsing, coaching chat, suggestions, review notes, coach insights, and training plan generation. Gemini remains the default text provider, while Anthropic and OpenAI-compatible providers can be selected by environment variables. A Retrieval-Augmented Generation (RAG) pipeline enriches AI responses with user-uploaded coaching materials stored as Gemini-generated vector embeddings in pgvector.
 
-**AI consent gate.** Every outbound Gemini call — workout parsing, chat (regular + streaming), auto-coach, suggestions, plan generation — is gated on `user.aiCoachEnabled` (defaults `false` for new users). When the flag is `false`, the coach service short-circuits (`triggerAutoCoach` returns `{ adjusted: 0 }` at `server/services/coachService.ts:82`) and the chat/parsing routes refuse to compose a prompt. The UI hides or disables the AI features until the user flips the toggle in Settings → Preferences, and flipping it back to `false` stops new Gemini requests immediately.
+**AI consent gate.** Every outbound AI request for workout parsing, chat (regular + streaming), auto-coach, suggestions, plan generation, embeddings, and image parsing is gated on `user.aiCoachEnabled` (defaults `false` for new users). When the flag is `false`, the coach service short-circuits (`triggerAutoCoach` returns `{ adjusted: 0 }` at `server/services/coachService.ts:82`) and the chat/parsing routes refuse to compose a prompt. The UI hides or disables the AI features until the user flips the toggle in Settings -> Preferences, and flipping it back to `false` stops new AI requests immediately.
 
 **Key dependencies:**
-- `@google/genai` -- Google Gemini API client
+- `@google/genai` -- Google Gemini API client for the default text provider, embeddings, and image parsing
+- Native `fetch` -- Anthropic and OpenAI-compatible text provider adapters
 - pgvector -- PostgreSQL vector extension for semantic search
 - Zod -- Structured output validation
+
+Provider selection is operator-only in this release. Set `AI_TEXT_PROVIDER`
+to `gemini`, `anthropic`, or `openai-compatible`; RAG embeddings and
+photo-to-workout parsing still require `GEMINI_API_KEY`.
 
 ---
 
 ## Table of Contents
 
-- [Gemini Client](#gemini-client)
+- [Text Provider Layer and Gemini Client](#text-provider-layer-and-gemini-client)
 - [Workout Parsing](#workout-parsing)
 - [AI Coach Chat](#ai-coach-chat)
 - [Auto-Coach Pipeline](#auto-coach-pipeline)
@@ -30,11 +35,12 @@ The Hyrox Companion integrates Google's Gemini API for three core AI capabilitie
 
 ---
 
-## Gemini Client
+## Text Provider Layer and Gemini Client
 
-**File:** `server/gemini/client.ts`
+**Files:** `server/ai/providers/*`, `server/gemini/client.ts`
 
-The shared Gemini client provides:
+The text provider layer exposes a canonical interface for `generateText`,
+`generateJsonText`, and `streamText`. The shared Gemini client still provides:
 
 - **Singleton client:** `getAiClient()` lazily initializes a `GoogleGenAI` instance using `GEMINI_API_KEY`.
 - **Models:**
@@ -66,7 +72,7 @@ Transforms free-text or voice input into structured exercise data.
    - `PARSE_EXERCISES_PROMPT` system instruction
    - Unit awareness (kg/lbs based on user preference, with conversion rules)
    - Custom exercise names (if any saved by the user)
-3. Gemini returns JSON with `responseMimeType: "application/json"`
+3. The selected text provider returns JSON through the provider facade's JSON mode
 4. Response is validated with `parsedExerciseSchema` (Zod)
 5. Exercises are post-processed:
    - Known exercises get 95% confidence; unknown get 50%
@@ -107,11 +113,11 @@ See also: [API Reference -- AI Routes](api-reference.md#ai-and-chat-routes)
 
 ### Regular Chat
 
-`chatWithCoach()` sends the full conversation history to Gemini and returns a complete response. Uses `ThinkingLevel.HIGH` for deeper reasoning.
+`chatWithCoach()` sends the full conversation history to the configured text provider and returns a complete response. Gemini remains the default; non-Gemini providers are selected through `AI_TEXT_PROVIDER`.
 
 ### Streaming Chat
 
-`streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. It accepts an optional `AbortSignal` parameter, allowing the caller to cancel Gemini generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
+`streamChatWithCoach()` is an `AsyncGenerator<string>` that yields text chunks. It accepts an optional `AbortSignal` parameter, allowing the caller to cancel provider generation mid-stream. The route handler (`POST /api/v1/chat/stream`) serves these as Server-Sent Events:
 
 ```
 data: {"ragInfo": {"source": "rag", "chunkCount": 3}}   // First event
@@ -120,7 +126,7 @@ data: {"text": " training data, I recommend..."}
 data: {"done": true}                                      // Stream complete
 ```
 
-The server propagates an `AbortSignal` to the Gemini API when the SSE client disconnects. This cancels in-flight token generation immediately, preventing unnecessary API costs and compute waste. The signal is constructed from the request's `close` event and passed through the entire streaming pipeline.
+The server propagates an `AbortSignal` to the provider adapter when the SSE client disconnects. This cancels in-flight token generation promptly where the upstream API supports aborts. The signal is constructed from the request's `close` event and passed through the streaming pipeline.
 
 ### Complete Streaming Example
 
@@ -138,9 +144,9 @@ data: {"text":" reducing your squat volume this week."}
 data: {"done":true}
 ```
 
-Each SSE event is separated by a double newline (`\n\n`). The first event always carries `ragInfo` metadata so the client knows which retrieval method was used. Subsequent events stream text chunks as they arrive from Gemini's `generateContentStream`. The final event carries `{"done":true}` to signal stream completion.
+Each SSE event is separated by a double newline (`\n\n`). The first event always carries `ragInfo` metadata so the client knows which retrieval method was used. Subsequent events stream text chunks as they arrive from the selected provider. The final event carries `{"done":true}` to signal stream completion.
 
-On the client side, text chunks are buffered and rendered via `requestAnimationFrame` to avoid layout thrashing during rapid chunk delivery. On the server side, the route handler propagates an `AbortSignal` to cancel the Gemini stream when the client disconnects, preventing unnecessary token generation and API costs.
+On the client side, text chunks are buffered and rendered via `requestAnimationFrame` to avoid layout thrashing during rapid chunk delivery. On the server side, the route handler propagates an `AbortSignal` to cancel the provider stream when the client disconnects, preventing unnecessary token generation and API costs where supported.
 
 ### Chat History
 
@@ -290,7 +296,7 @@ See also: [Database -- documentChunks table](database.md#schema-tables)
 
 **File:** `server/services/planGenerationService.ts`
 
-Generates structured multi-week training plans via Gemini.
+Generates structured multi-week training plans via the configured text provider.
 
 ### Input (GeneratePlanInput)
 
@@ -309,7 +315,7 @@ Generates structured multi-week training plans via Gemini.
 ### Flow
 
 1. `buildGenerationPrompt()` creates a structured prompt from the input.
-2. Gemini generates JSON with `responseMimeType: "application/json"` and `ThinkingLevel.HIGH`.
+2. The provider facade requests JSON output with the configured reasoning model/effort.
 3. Response is parsed and validated against `generatedDaySchema` (Zod). Invalid days are dropped with a warning.
 4. All AI-generated text is HTML-sanitized.
 5. A `TrainingPlan` record is created with associated `PlanDay` records.
@@ -527,9 +533,9 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 
 ## Security
 
-- **Consent gate:** `user.aiCoachEnabled` must be `true` before any Gemini call runs on the user's behalf. See [Overview](#overview).
-- **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to Gemini.
-- **Output validation:** `validateAiOutput()` checks Gemini responses for safety.
+- **Consent gate:** `user.aiCoachEnabled` must be `true` before any AI provider call runs on the user's behalf. See [Overview](#overview).
+- **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to the selected text provider.
+- **Output validation:** `validateAiOutput()` checks AI text responses for safety.
 - **HTML sanitization:** `sanitizeHtml()` strips HTML from all AI-generated content before database storage.
 - **Content length limits:** Chat messages max 1,000 chars (request) / 50,000 chars (storage). Coaching materials max 1,500,000 chars.
 - **RAG injection prevention:** Retrieved chunks are wrapped in `<coaching_data>` tags with instructions to treat content as data only.
@@ -542,7 +548,13 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_API_KEY` | (required for AI) | Google Gemini API key |
+| `AI_TEXT_PROVIDER` | `gemini` | Text provider for chat, text parsing, suggestions, notes, insights, and plan generation |
+| `AI_TEXT_MODEL` | provider-specific | Generic text model override for non-Gemini providers |
+| `AI_TEXT_FAST_MODEL` | Gemini: `GEMINI_MODEL` | Fast parser model override |
+| `AI_TEXT_REASONING_MODEL` | Gemini: `GEMINI_SUGGESTIONS_MODEL` | Coaching/planning model override |
+| `AI_TEXT_REASONING_EFFORT` | `high` | Reasoning effort hint where supported |
+| `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | `openai` | OpenAI-compatible profile for base URL and key lookup |
+| `GEMINI_API_KEY` | required for Gemini text, RAG, image parse | Google Gemini API key |
 | `VECTOR_DATABASE_URL` | Falls back to `DATABASE_URL` | Separate pgvector database connection |
 | `RAG_CHUNK_SIZE` | 600 | Characters per document chunk |
 | `RAG_CHUNK_OVERLAP` | 100 | Character overlap between adjacent chunks |
@@ -555,7 +567,7 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 |------|---------|
 | `server/gemini/client.ts` | Gemini client, retry logic, embedding generation |
 | `server/gemini/exerciseParser.ts` | Free-text to structured exercise parsing |
-| `server/gemini/chatService.ts` | Chat and streaming chat with Gemini |
+| `server/gemini/chatService.ts` | Chat and streaming chat through the text provider facade |
 | `server/gemini/suggestionService.ts` | Workout suggestion generation |
 | `server/gemini/types.ts` | TrainingContext type definition |
 | `server/services/aiContextService.ts` | Shared context builder for AI endpoints |

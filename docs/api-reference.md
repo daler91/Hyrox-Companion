@@ -349,7 +349,7 @@ List workouts that have no parsed exercise sets (candidates for reparsing).
 
 ### POST /api/v1/workouts/:id/reparse
 
-Re-parse a single workout's text into structured exercise sets using Gemini AI.
+Re-parse a single workout's text into structured exercise sets using the configured text AI provider.
 
 - **Auth:** Required
 - **Rate limit:** `reparse` category, 5/min
@@ -426,7 +426,7 @@ Create the built-in sample Hyrox training plan.
 
 ### POST /api/v1/plans/generate
 
-Generate a custom training plan using Gemini AI.
+Generate a custom training plan using the configured text AI provider.
 
 - **Auth:** Required
 - **Rate limit:** `planGenerate` category, 3/min
@@ -628,7 +628,7 @@ Calculate weekly training summaries, category totals, station coverage, and week
 
 ### POST /api/v1/parse-exercises
 
-Parse free-text or voice input into structured exercise data using Gemini AI.
+Parse free-text or voice input into structured exercise data using the configured text AI provider.
 
 - **Auth:** Required
 - **Rate limit:** `parse` category, 5/min
@@ -860,7 +860,7 @@ Update user preferences.
 - **Validation:** `updateUserPreferencesSchema`
 - **Response:** Updated preferences object
 - **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` gate the individual categories and take effect only when the master is on. All three default to `false` at the database level for new users (GDPR-compliant opt-in).
-- **AI consent semantics:** `aiCoachEnabled` gates every outbound call to Google Gemini (workout parsing, chat, auto-coach). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new Gemini requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
+- **AI consent semantics:** `aiCoachEnabled` gates every outbound AI provider call (workout parsing, chat, auto-coach, embeddings, and image parsing). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new AI requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
 
 ---
 

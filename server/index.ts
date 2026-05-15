@@ -79,7 +79,7 @@ declare module "http" {
 }
 
 // Skip compression for Server-Sent Events — compression's internal gzip
-// buffer holds chunks indefinitely on slow producers (e.g. Gemini with
+// buffer holds chunks indefinitely on slow producers (e.g. reasoning AI with
 // thinkingLevel HIGH), breaking streaming. See expressjs/compression
 // README "Handling Server-Sent Events with Compression and Flush".
 app.use(

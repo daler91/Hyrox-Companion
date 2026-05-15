@@ -120,7 +120,7 @@ User preferences and account management. Organized into sections:
 - **ProfileSection** -- Displays user name and avatar.
 - **StravaSection** -- Connect/disconnect Strava, view sync status. Handles OAuth callback query parameters (`?strava=connected` or `?strava=error`).
 - **GarminSection** -- Email/password credential form for the Garmin Connect link, status/last-sync badge, and a manual "Sync now" button. Surfaces the `lastError` banner when a prior sync left the connection in a broken state and disables sync buttons when the global 429 circuit breaker is tripped.
-- **PreferencesSection** -- Weight unit (kg/lb), distance unit (km/mi), weekly workout goal. Email toggles are now split: a master `emailNotifications` switch plus nested per-type toggles for the weekly summary and the missed-workout reminder (the nested pair is disabled and grayed out when the master is off). The AI-coach toggle is the **consent gate** for all Gemini calls — it defaults off for new users, and the AI features in the app are hidden or disabled until the user flips it on.
+- **PreferencesSection** -- Weight unit (kg/lb), distance unit (km/mi), weekly workout goal. Email toggles are now split: a master `emailNotifications` switch plus nested per-type toggles for the weekly summary and the missed-workout reminder (the nested pair is disabled and grayed out when the master is off). The AI-coach toggle is the **consent gate** for AI provider calls -- it defaults off for new users, and the AI features in the app are hidden or disabled until the user flips it on.
 - **CoachingSection** -- AI coaching configuration and materials management.
 - **DataToolsSection** -- Data export and account deletion. The "Delete account" flow confirms with a hold-to-delete button, then calls `DELETE /api/v1/account` and hard-redirects to the landing page after Clerk sign-out.
 
@@ -128,7 +128,7 @@ Changes are tracked locally and saved via a single "Save Settings" button.
 
 ### Privacy (`client/src/pages/Privacy.tsx`)
 
-First-party privacy policy page. Lists each third-party processor the app sends data to (Clerk for auth, Google Gemini for AI features when `aiCoachEnabled`, Strava for activity sync when connected, Garmin for activity sync when connected, Resend for email when `emailNotifications`, Sentry for error telemetry) with a plain-language description of what data each receives. The Landing page footer and the Settings page both link here. The route is accessible while signed out so prospective users can read it before sign-up.
+First-party privacy policy page. Lists each third-party processor the app sends data to (Clerk for auth, the configured AI provider for AI features when `aiCoachEnabled`, Strava for activity sync when connected, Garmin for activity sync when connected, Resend for email when `emailNotifications`, Sentry for error telemetry) with a plain-language description of what data each receives. The Landing page footer and the Settings page both link here. The route is accessible while signed out so prospective users can read it before sign-up.
 
 ### Landing (`client/src/pages/Landing.tsx`)
 

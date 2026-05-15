@@ -1,7 +1,7 @@
 import { logger } from "../logger";
 
 /**
- * Minimal circuit breaker for outbound Gemini calls.
+ * Minimal circuit breaker for outbound AI provider calls.
  *
  * Rationale (CODEBASE_AUDIT.md §5): retryWithBackoff already survives
  * transient failures, but during a prolonged provider outage every caller
@@ -29,7 +29,7 @@ let probeInFlight = false;
 
 export class CircuitBreakerOpenError extends Error {
   constructor() {
-    super("Gemini temporarily unavailable (circuit breaker open)");
+    super("AI provider temporarily unavailable (circuit breaker open)");
     this.name = "CircuitBreakerOpenError";
   }
 }
@@ -40,7 +40,7 @@ export function assertBreakerClosed(): void {
     if (Date.now() - openedAt >= COOLDOWN_MS && !probeInFlight) {
       state = "half-open";
       probeInFlight = true;
-      logger.info("[gemini] circuit breaker → half-open (probe)");
+      logger.info("[ai] circuit breaker -> half-open (probe)");
       return;
     }
     throw new CircuitBreakerOpenError();
@@ -50,7 +50,7 @@ export function assertBreakerClosed(): void {
 /** Called after a successful request. */
 export function recordBreakerSuccess(): void {
   if (state !== "closed") {
-    logger.info({ prevState: state }, "[gemini] circuit breaker → closed");
+    logger.info({ prevState: state }, "[ai] circuit breaker -> closed");
   }
   state = "closed";
   consecutiveFailures = 0;
@@ -63,7 +63,7 @@ export function recordBreakerFailure(): void {
     state = "open";
     openedAt = Date.now();
     probeInFlight = false;
-    logger.warn("[gemini] circuit breaker → open (probe failed)");
+    logger.warn("[ai] circuit breaker -> open (probe failed)");
     return;
   }
   consecutiveFailures++;
@@ -72,7 +72,7 @@ export function recordBreakerFailure(): void {
     openedAt = Date.now();
     logger.warn(
       { consecutiveFailures },
-      "[gemini] circuit breaker → open (threshold reached)",
+      "[ai] circuit breaker -> open (threshold reached)",
     );
   }
 }

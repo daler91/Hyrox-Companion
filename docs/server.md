@@ -293,7 +293,15 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `SENTRY_DSN` | No | Sentry error tracking DSN |
 | `RESEND_API_KEY` | No | Resend email delivery API key (email disabled if unset) |
 | `RESEND_FROM_EMAIL` | No | Sender address for outbound emails |
-| `GEMINI_API_KEY` | No | Google Gemini API key for AI features |
+| `AI_TEXT_PROVIDER` | No | Text AI provider (`gemini`, `anthropic`, or `openai-compatible`; default `gemini`) |
+| `AI_TEXT_MODEL` | No | Default text model override for the configured provider |
+| `AI_TEXT_FAST_MODEL` | No | Fast text model override for parsing-style calls |
+| `AI_TEXT_REASONING_MODEL` | No | Reasoning text model override for coaching and plan generation |
+| `AI_TEXT_REASONING_EFFORT` | No | Reasoning effort hint (`none`, `low`, `medium`, `high`; default `high`) |
+| `AI_TEXT_API_KEY` | No | Generic API key for non-Gemini text providers |
+| `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | No | OpenAI-compatible profile (`openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, or `custom`) |
+| `AI_TEXT_BASE_URL` | No | Base URL for OpenAI-compatible providers |
+| `GEMINI_API_KEY` | No | Gemini key for the Gemini text provider, RAG embeddings, and image parsing |
 | `CRON_SECRET` | No | Secret for authenticating external cron triggers |
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |

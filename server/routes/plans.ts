@@ -386,9 +386,9 @@ protectedDelete(
 );
 
 // Parse the plan day's mainWorkout/accessory free text into structured
-// exercise_sets via Gemini. Replaces the plan day's existing prescribed
+// exercise_sets via the configured text provider. Replaces the plan day's existing prescribed
 // rows so repeated Parse presses don't accumulate duplicates. Guarded by
-// aiBudgetCheck because each call is a Gemini roundtrip.
+// aiBudgetCheck because each call is an AI provider roundtrip.
 protectedPost(
   router,
   "/api/v1/plans/days/:dayId/reparse",
@@ -465,7 +465,7 @@ protectedPost(
 // Manual coach-note refresh for a planned day. Triggered from the workout
 // detail dialog after an athlete edits the prescribed exercises so the
 // static `ai_rationale` doesn't go stale. Guarded by aiBudgetCheck because
-// it burns a Gemini call per invocation; the service itself enforces a
+// it burns an AI provider call per invocation; the service itself enforces a
 // 30-second cooldown to prevent Refresh-mashing. Low per-IP/user rate
 // limit stacks on top of that.
 protectedPost(

@@ -1,4 +1,3 @@
-import { ThinkingLevel } from "@google/genai";
 import {
   exerciseSets,
   exerciseSetSchema,
@@ -11,9 +10,9 @@ import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, 
 import pLimit from "p-limit";
 import { z } from "zod";
 
+import { generateJsonText } from "../ai/providers";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
-import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../gemini/client";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
@@ -340,21 +339,14 @@ async function generatePlanChunk(
   const prompt = buildGenerationPrompt(input, range, unitPreferences);
   const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
 
-  const response = await retryWithBackoff(
-    () =>
-      getAiClient().models.generateContent({
-        model: GEMINI_SUGGESTIONS_MODEL,
-        config: {
-          systemInstruction: PLAN_GENERATION_PROMPT,
-          responseMimeType: "application/json",
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      }),
+  const response = await generateJsonText({
+    systemInstruction: PLAN_GENERATION_PROMPT,
+    messages: [{ role: "user", content: prompt }],
+    modelRole: "reasoning",
     label,
-  );
-
-  trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "plan_generation", response);
+    feature: "plan_generation",
+    userId,
+  });
 
   const text = response.text || "[]";
   return parseAndValidateDays(text);
@@ -424,7 +416,7 @@ export async function generatePlan(
 
     // Expand structured exercises under each plan day. We pair generated
     // days with persisted plan days positionally rather than by
-    // (weekNumber, dayName) because Gemini can (rarely) return duplicate
+    // (weekNumber, dayName) because providers can (rarely) return duplicate
     // day entries in a week, which would collide in a map and silently
     // attach one day's prescribed sets to another's plan_day row.
     // createPlanDays preserves input order via RETURNING, so index mapping

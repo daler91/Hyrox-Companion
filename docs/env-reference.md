@@ -16,7 +16,7 @@ You only need three variables to start the server locally:
 | `ENCRYPTION_KEY` | 32+ char hex string. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `CSRF_SECRET` | Production only. Must differ from `ENCRYPTION_KEY`. Same generator as above. |
 
-Everything else is optional and gates a specific feature (Clerk auth, Gemini parsing, Strava sync, Resend email, Web Push, Sentry, etc.).
+Everything else is optional and gates a specific feature (Clerk auth, AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
 
 ---
 
@@ -24,7 +24,7 @@ Everything else is optional and gates a specific feature (Clerk auth, Gemini par
 
 - [Core & Security](#core--security)
 - [Authentication (Clerk)](#authentication-clerk)
-- [AI (Google Gemini)](#ai-google-gemini)
+- [AI (Text Providers, Gemini Embeddings, Gemini Vision)](#ai-text-providers-gemini-embeddings-gemini-vision)
 - [Integrations](#integrations)
 - [Web Push (VAPID)](#web-push-vapid)
 - [Error Tracking (Sentry)](#error-tracking-sentry)
@@ -66,15 +66,25 @@ Clerk is optional. When unset, you can run with `ALLOW_DEV_AUTH_BYPASS=true` for
 
 ---
 
-## AI (Google Gemini)
+## AI (Text Providers, Gemini Embeddings, Gemini Vision)
 
-Get a free key at [aistudio.google.com](https://aistudio.google.com/). When `GEMINI_API_KEY` is unset, every AI feature (parsing, coaching, auto-coach, chat streaming, photo-to-workout) degrades gracefully.
+Text AI defaults to Gemini for backwards compatibility. Operators can route chat, text parsing, coach suggestions, review notes, coach insights, and plan generation through Anthropic or an OpenAI-compatible provider by changing environment variables. RAG embeddings and photo-to-workout parsing remain pinned to Gemini in this release.
 
 | Variable | Req? | Default | Used by |
 |---|---|---|---|
-| `GEMINI_API_KEY` | Optional | — | All `@google/genai` calls. |
-| `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Default fast/cheap parsing model (free-text workout parse). |
-| `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Stronger model for auto-coach plan suggestions. |
+| `AI_TEXT_PROVIDER` | Optional | `gemini` | Text provider: `gemini`, `anthropic`, or `openai-compatible`. |
+| `AI_TEXT_MODEL` | Optional | - | Generic text model override for non-Gemini providers. |
+| `AI_TEXT_FAST_MODEL` | Optional | provider default | Fast parser model override. Gemini fallback: `GEMINI_MODEL`. |
+| `AI_TEXT_REASONING_MODEL` | Optional | provider default | Coaching/planning model override. Gemini fallback: `GEMINI_SUGGESTIONS_MODEL`. |
+| `AI_TEXT_REASONING_EFFORT` | Optional | `high` | Reasoning effort hint: `none`, `low`, `medium`, `high`. Applied only where supported. |
+| `AI_TEXT_API_KEY` | Optional | - | Generic key fallback for Anthropic or OpenAI-compatible providers. |
+| `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | Optional | `openai` | OpenAI-compatible profile: `openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, or `custom`. |
+| `AI_TEXT_BASE_URL` | Optional | profile default | Base URL override for OpenAI-compatible providers. Required for `custom`. |
+| `OPENAI_API_KEY` / `XAI_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` / `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` | Optional | - | Profile-specific OpenAI-compatible API keys. |
+| `ANTHROPIC_API_KEY` | Optional | - | Anthropic Messages API key. |
+| `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, and photo-to-workout parsing. |
+| `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Legacy Gemini fast text model. |
+| `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Legacy Gemini reasoning text model. |
 | `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`). |
 | `RAG_CHUNK_SIZE` | Optional | `600` | Characters per chunk during coaching-material embedding. |
 | `RAG_CHUNK_OVERLAP` | Optional | `100` | Character overlap between adjacent chunks. |
@@ -164,4 +174,4 @@ Variables exposed to browser code must start with `VITE_` — Vite statically in
 | `MODE` | Vite built-in | `development` \| `production` — used as Sentry environment tag. |
 | `DEV` / `PROD` | Vite built-ins | Boolean guards used by `isDevPreview`, `RagDebugBadge`, etc. |
 
-Do not put any server-only secret (including `CLERK_SECRET_KEY`, `GEMINI_API_KEY`, `RESEND_API_KEY`, or the VAPID private key) behind a `VITE_` prefix — it would leak into the public JS bundle.
+Do not put any server-only secret (including `CLERK_SECRET_KEY`, `GEMINI_API_KEY`, `AI_TEXT_API_KEY`, provider API keys, `RESEND_API_KEY`, or the VAPID private key) behind a `VITE_` prefix — it would leak into the public JS bundle.

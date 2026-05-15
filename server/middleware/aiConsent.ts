@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
-// Privacy gate for every route that forwards user data to Google Gemini.
+// Privacy gate for every route that forwards user data to an AI provider.
 // The README and schema default establish AI processing as opt-in: new
 // users land with `aiCoachEnabled = false` and must flip the toggle in
 // Settings/Onboarding before any workout, chat, or image payload is

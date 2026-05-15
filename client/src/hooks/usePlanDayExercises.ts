@@ -166,7 +166,7 @@ export function usePlanDayExercises(planDayId: string | null) {
   });
   const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, addSet, deleteSet, isSaving, lastSavedAt } = exerciseSetOps;
 
-  // Plan-day Parse: POST /reparse → Gemini parses mainWorkout/accessory into
+  // Plan-day Parse: POST /reparse -> the AI provider parses mainWorkout/accessory into
   // structured rows, replacing this day's prescription. React Query's server
   // state is refreshed via an explicit query invalidation rather than
   // reconciling in-hand because the response shape (`exercises[]`) is the

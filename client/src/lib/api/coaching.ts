@@ -63,8 +63,8 @@ export const chat = {
 
   getCoachInsights: () =>
     typedRequest<CoachInsightsResponse>("POST", "/api/v1/coach-insights", {}, {
-      // Coach Insights builds full training + RAG context and uses
-      // high-thinking Gemini generation; matches the timeline-suggestions
+      // Coach Insights builds full training + RAG context and uses a
+      // reasoning AI model; matches the timeline-suggestions
       // budget so it doesn't time out before the first token.
       timeoutMs: 90_000,
     }),

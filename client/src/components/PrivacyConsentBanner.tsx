@@ -81,7 +81,7 @@ export function PrivacyConsentBanner() {
       <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 text-sm md:flex-row md:items-center md:justify-between">
         <p className="text-muted-foreground">
           We use Sentry for error tracking (PII scrubbed), and you can opt into Strava, Garmin, and
-          Google Gemini coaching — each is off by default.{" "}
+          AI coaching, each off by default.{" "}
           <Link to="/privacy" className="underline hover:text-foreground">
             Read our privacy policy
           </Link>

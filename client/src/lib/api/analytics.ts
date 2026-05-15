@@ -46,8 +46,8 @@ export const timeline = {
 
   getSuggestions: () =>
     typedRequest<{ suggestions: Suggestion[]; ragInfo?: RagInfo }>("POST", "/api/v1/timeline/ai-suggestions", {}, {
-      // Suggestions build full training + RAG context and use high-thinking
-      // Gemini generation; responses often exceed the default 15s timeout.
+      // Suggestions build full training + RAG context and use a reasoning
+      // AI model; responses often exceed the default 15s timeout.
       timeoutMs: 90_000,
     }),
 

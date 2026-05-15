@@ -120,7 +120,7 @@ protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middle
 // Belt-and-suspenders ceiling for SSE stream duration. Both caps fire
 // via controller.abort() so the existing drain/finally path runs cleanly:
 //   - SSE_MAX_DURATION_MS: hard wall-clock cap, applies even when the JWT
-//     has hours of headroom (prevents runaway Gemini generation on a
+//     has hours of headroom (prevents runaway AI generation on a
 //     pathologically slow prompt).
 //   - JWT `exp` minus a small margin: aborts before the Clerk session
 //     actually expires so responses can't persist against a
@@ -171,7 +171,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    // Bridge Express req-close → AbortController so upstream Gemini
+    // Bridge Express req-close -> AbortController so upstream provider
     // generation is torn down promptly on client disconnect
     // (CODEBASE_AUDIT.md §3). The same controller is registered with
     // the SSE registry so graceful shutdown can abort every in-flight

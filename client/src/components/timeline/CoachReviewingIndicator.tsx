@@ -8,7 +8,7 @@ interface CoachReviewingIndicatorProps {
 /**
  * Persistent status banner that surfaces the background auto-coach work.
  * The `isAutoCoaching` flag is polled via useAuth every 2s and can stay
- * true for up to 5 minutes while Gemini evaluates a completed workout
+ * true for up to 5 minutes while the AI provider evaluates a completed workout
  * and adjusts upcoming sessions. Without this banner, users had no
  * visible signal that anything was happening in the background.
  */

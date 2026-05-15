@@ -2,7 +2,7 @@
 
 # Architecture Guide
 
-This document describes the high-level architecture of the Hyrox Companion (fitai.coach) project -- a full-stack TypeScript monorepo combining a React frontend, an Express API server, PostgreSQL with pgvector, Google Gemini AI, Clerk authentication, Strava and Garmin Connect activity sync, and a GDPR-compliant opt-in consent model for every outbound data flow.
+This document describes the high-level architecture of the Hyrox Companion (fitai.coach) project -- a full-stack TypeScript monorepo combining a React frontend, an Express API server, PostgreSQL with pgvector, a modular text AI provider layer, Gemini embeddings and vision parsing, Clerk authentication, Strava and Garmin Connect activity sync, and a GDPR-compliant opt-in consent model for every outbound data flow.
 
 ---
 
@@ -13,7 +13,7 @@ The repository is organized into three top-level source directories that share a
 ```
 Hyrox-Companion/
   client/          React SPA (Vite, wouter, TanStack Query, Clerk React SDK)
-  server/          Express API (Clerk Express SDK, Drizzle ORM, pg-boss, Gemini)
+  server/          Express API (Clerk Express SDK, Drizzle ORM, pg-boss, AI providers)
   shared/          Code shared between client and server (schema, OpenAPI, types)
 ```
 
@@ -31,7 +31,8 @@ graph TD
 
     SERVER -- "Drizzle ORM" --> PG["PostgreSQL"]
     SERVER -- "pgvector queries" --> PGVEC["PostgreSQL + pgvector"]
-    SERVER -- "Gemini API (gated on aiCoachEnabled)" --> GEMINI["Google Gemini"]
+    SERVER -- "Text AI provider (gated on aiCoachEnabled)" --> AITEXT["Gemini / Anthropic / OpenAI-compatible"]
+    SERVER -- "Embeddings + image parsing" --> GEMINI["Google Gemini"]
     SERVER -- "JWT verification" --> CLERK["Clerk"]
     SERVER -- "OAuth + webhooks" --> STRAVA["Strava API"]
     SERVER -- "Reverse-engineered SSO" --> GARMIN["Garmin Connect"]
@@ -352,7 +353,8 @@ graph TD
     end
 
     subgraph External
-        GEMINI["Google Gemini API"]
+        AITEXT["Text AI Provider"]
+        GEMINI["Google Gemini API\n(embeddings + vision)"]
         CLERK["Clerk Auth"]
         STRAVA_API["Strava API"]
     end
@@ -365,6 +367,7 @@ graph TD
     R_WORKOUTS --> S_COACH
     R_WORKOUTS --> STORAGE
     R_AI --> S_AI_CTX
+    R_AI --> AITEXT
     R_AI --> GEMINI
     R_COACHING --> S_RAG
     R_COACHING --> STORAGE
@@ -378,7 +381,7 @@ graph TD
 
     S_COACH --> S_AI
     S_COACH --> S_RAG
-    S_COACH --> GEMINI
+    S_COACH --> AITEXT
     S_COACH --> STORAGE
 
     S_AI_CTX --> S_AI
@@ -393,6 +396,7 @@ graph TD
     R_WORKOUTS --> QUEUE
     QUEUE --> S_COACH
 
+    style AITEXT fill:#111827,color:#fff
     style GEMINI fill:#4285f4,color:#fff
     style CLERK fill:#6c47ff,color:#fff
     style STRAVA_API fill:#fc4c02,color:#fff
