@@ -72,7 +72,7 @@ describe("openai-compatible text provider", () => {
   });
 
   it("parses streamed SSE deltas", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
       "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n" +
       "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n" +
       "data: [DONE]\n\n",
@@ -87,6 +87,10 @@ describe("openai-compatible text provider", () => {
 
     const chunks = await collectTextChunks(provider.streamText(baseRequest));
     expect(chunks).toEqual(["Hel", "lo"]);
+    expect(requestJsonBody(fetchSpy.mock.calls[0][1])).toMatchObject({
+      stream: true,
+      stream_options: { include_usage: true },
+    });
   });
 
   it("fails clearly when no compatible API key is configured", async () => {

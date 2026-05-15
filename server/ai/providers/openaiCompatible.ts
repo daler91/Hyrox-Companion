@@ -73,6 +73,7 @@ function requestBody(request: ResolvedTextAiRequest, options: OpenAiCompatibleAd
     model: request.model,
     messages: openAiMessages(request.systemInstruction, request.messages),
     stream,
+    ...(stream ? { stream_options: { include_usage: true } } : {}),
     ...(request.json ? { response_format: { type: "json_object" } } : {}),
     ...(options.supportsReasoningEffort && reasoningEffort !== "none" ? { reasoning_effort: reasoningEffort } : {}),
   };
