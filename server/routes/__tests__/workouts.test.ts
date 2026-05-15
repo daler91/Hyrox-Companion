@@ -108,22 +108,22 @@ describe("Workouts Routes", () => {
       import("../../services/exportService"),
     ]);
 
-    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([{ id: "workout-1", userId: "test_user_id", date: "2026-01-02", notes: "steady" }] as never);
-    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "workout-1", userId: "test_user_id", mainWorkout: "Engine" } as never);
-    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([] as never);
-    vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([] as never);
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([{ id: "workout-1", userId: "test_user_id", date: "2026-01-02", notes: "steady" }]);
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "workout-1", userId: "test_user_id", mainWorkout: "Engine" });
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([]);
+    vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([]);
     vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue(true);
-    vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" } as never);
+    vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" });
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" });
     vi.mocked(storage.plans.deletePlanDay).mockResolvedValue(true);
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }] as never);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "kg" } as never);
-    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([] as never);
+    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }]);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "kg" });
+    vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
 
-    vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" } as never);
-    vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" } as never);
-    vi.mocked(reparseWorkout).mockResolvedValue({ exercises: [{ exerciseName: "row" }], setCount: 1 } as never);
-    vi.mocked(updateWorkoutStructureBlockScore).mockResolvedValue([{ id: "block-1", sectionType: "main", formatType: "amrap", timeCapMinutes: 10, score: { type: "amrap", rounds: 4 }, steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }] }] as never);
+    vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" });
+    vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" });
+    vi.mocked(reparseWorkout).mockResolvedValue({ exercises: [{ exerciseName: "row" }], setCount: 1 });
+    vi.mocked(updateWorkoutStructureBlockScore).mockResolvedValue([{ id: "block-1", sectionType: "main", formatType: "amrap", timeCapMinutes: 10, score: { type: "amrap", rounds: 4 }, steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }] }]);
 
     const { bulkDeleteWorkouts } = await import("../../services/bulkDeleteWorkouts");
     vi.mocked(bulkDeleteWorkouts).mockResolvedValue({
@@ -134,7 +134,7 @@ describe("Workouts Routes", () => {
     });
 
     vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
-    vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] } as never);
+    vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] });
   });
 
   it("keeps endpoint contract parity for CRUD/reparse/timeline/export", async () => {
@@ -209,7 +209,7 @@ describe("Workouts Routes", () => {
   it("preserves shared error contract for key regression paths", async () => {
     const { storage } = await import("../../storage");
     vi.mocked(storage.workouts.listWorkoutLogs).mockRejectedValueOnce(new Error("db down"));
-    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValueOnce(null as never);
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValueOnce(null);
 
     const listResponse = await request(app).get("/api/v1/workouts");
     expect(listResponse.status).toBe(500);
@@ -227,10 +227,10 @@ describe("Workouts Routes", () => {
       id: "workout-legacy-mixed",
       userId: "test_user_id",
       mainWorkout: "Back squat 5x5 @ 100kg",
-    } as never);
+    });
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValueOnce([
       { id: "set-1", workoutLogId: "workout-legacy-mixed", exerciseName: "Back Squat", reps: 5, weight: "110", setNumber: 1, sortOrder: 0 },
-    ] as never);
+    ]);
 
     const response = await request(app).get("/api/v1/workouts/workout-legacy-mixed");
 
@@ -246,7 +246,7 @@ describe("Workouts Routes", () => {
       import("../../services/workoutUseCases"),
       import("../../services/workoutService"),
     ]);
-    vi.mocked(updateWorkoutUseCase).mockResolvedValueOnce({ id: "workout-1", notes: "edited text" } as never);
+    vi.mocked(updateWorkoutUseCase).mockResolvedValueOnce({ id: "workout-1", notes: "edited text" });
 
     const patchResponse = await request(app).patch("/api/v1/workouts/workout-1").send({ mainWorkout: "edited legacy text" });
     expect(patchResponse.status).toBe(422);
@@ -265,7 +265,7 @@ describe("Workouts Routes", () => {
     ]);
 
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog)
-      .mockResolvedValueOnce([] as never);
+      .mockResolvedValueOnce([]);
 
     const response = await request(app).get("/api/v1/workouts/workout-1");
 
@@ -325,8 +325,8 @@ describe("Workouts Routes", () => {
 
   it("accepts text/photo parse when rows are persisted (write-through)", async () => {
     const { reparseWorkout, reparseWorkoutFromImage } = await import("../../services/workoutService");
-    vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2, saved: true, rejectedCount: 0, rejectionReasons: [] } as never);
-    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({ exercises: [{ exerciseName: "wall ball" }], setCount: 1, saved: true, rejectedCount: 0, rejectionReasons: [] } as never);
+    vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2, saved: true, rejectedCount: 0, rejectionReasons: [] });
+    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({ exercises: [{ exerciseName: "wall ball" }], setCount: 1, saved: true, rejectedCount: 0, rejectionReasons: [] });
 
     const textRes = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(textRes.status).toBe(200);
@@ -364,7 +364,7 @@ describe("Workouts Routes", () => {
       saved: true,
       rejectedCount: 2,
       rejectionReasons: ["schema_validation_failed"],
-    } as never);
+    });
 
     const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(response.status).toBe(200);
@@ -375,7 +375,7 @@ describe("Workouts Routes", () => {
 
   it("returns 422 when all parse rows are invalid", async () => {
     const { reparseWorkout } = await import("../../services/workoutService");
-    vi.mocked(reparseWorkout).mockResolvedValueOnce(null as never);
+    vi.mocked(reparseWorkout).mockResolvedValueOnce(null);
 
     const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(response.status).toBe(422);
@@ -388,7 +388,7 @@ describe("Workouts Routes", () => {
       import("../../storage"),
       import("../../services/workoutService"),
     ]);
-    vi.mocked(reparseWorkout).mockResolvedValueOnce(null as never);
+    vi.mocked(reparseWorkout).mockResolvedValueOnce(null);
 
     const response = await request(app)
       .post("/api/v1/workouts/workout-1/reparse")

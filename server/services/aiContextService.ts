@@ -7,6 +7,8 @@ import { buildCoachingMaterialsSection, buildRetrievedChunksSection, type Coachi
 import { buildTrainingContext } from "./ai";
 import { retrieveCoachingContext } from "./ragRetrieval";
 
+type AIContextLogger = Pick<Logger, "warn" | "error">;
+
 export interface AIContext {
   trainingContext: TrainingContext;
   coachingMaterials?: CoachingMaterialInput[];
@@ -21,7 +23,7 @@ export interface AIContext {
 export async function buildAIContext(
   userId: string,
   query: string,
-  log: Logger = rootLogger,
+  log: AIContextLogger = rootLogger,
 ): Promise<AIContext> {
   const [trainingContext, coachingContext] = await Promise.all([
     buildTrainingContext(userId),

@@ -84,7 +84,7 @@ vi.mock("./workoutService", () => ({
 
 vi.mock("../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
-const testLog = { warn: vi.fn() } as never;
+const testLog = { error: vi.fn(), warn: vi.fn() };
 
 function mockPlanDay(overrides: Record<string, unknown> = {}) {
   return {
@@ -102,13 +102,13 @@ describe("applyTimelineAiSuggestion", () => {
     dbMockState.deleteWhere.mockResolvedValue(undefined);
     dbMockState.insertValues.mockResolvedValue(undefined);
     dbMockState.selectWhere.mockResolvedValue([{ maxSortOrder: 2 }]);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(mockPlanDay() as never);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lb", distanceUnit: "miles" } as never);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(mockPlanDay());
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "lb", distanceUnit: "miles" });
     vi.mocked(storage.aiUsage.getDailyTotalCents).mockResolvedValue(0);
     vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([
       { id: "set-1", planDayId: "day-1", workoutLogId: null, exerciseName: "back_squat" },
-    ] as never);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
   });
 
   it("writes structured rows when applying a suggestion to a table-backed day", async () => {
@@ -121,7 +121,7 @@ describe("applyTimelineAiSuggestion", () => {
           { reps: 5, weight: 205 },
         ],
       },
-    ] as never);
+    ]);
 
     const result = await applyTimelineAiSuggestion(
       "user-1",
@@ -159,7 +159,7 @@ describe("applyTimelineAiSuggestion", () => {
   });
 
   it("falls back to text updates when the day is not table-backed", async () => {
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
     vi.mocked(storage.aiUsage.getDailyTotalCents).mockResolvedValue(200);
 
     const result = await applyTimelineAiSuggestion(
@@ -190,7 +190,7 @@ describe("applyTimelineAiSuggestion", () => {
   });
 
   it("leaves table-backed days unchanged when structured parsing returns no rows", async () => {
-    vi.mocked(parseExercisesFromText).mockResolvedValue([] as never);
+    vi.mocked(parseExercisesFromText).mockResolvedValue([]);
 
     const result = await applyTimelineAiSuggestion(
       "user-1",
@@ -257,16 +257,16 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
         notes: "chest pain during warmup",
         exerciseSets: [],
       },
-    ] as never);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ trainingStyleId: null, weightUnit: "kg" } as never);
+    ]);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ trainingStyleId: null, weightUnit: "kg" });
     vi.mocked(buildAIContext).mockResolvedValue({
       trainingContext: {
         totalWorkouts: 0, completedWorkouts: 0, plannedWorkouts: 0, missedWorkouts: 0, skippedWorkouts: 0, completionRate: 0, currentStreak: 0, recentWorkouts: [], exerciseBreakdown: {},
       },
       ragInfo: { source: "none" },
-    } as never);
+    });
     vi.mocked(extractCoachingMaterialsText).mockReturnValue(undefined);
-    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([] as never);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
   });
 
   it("returns a surfaced safety suggestion when forced alert exists and model suggestions are empty", async () => {

@@ -66,7 +66,7 @@ describe("PATCH /api/v1/preferences", () => {
       mafAge: null,
       mafConsistency: null,
       mafTrend: null,
-    } as never);
+    });
     vi.mocked(storage.users.updateUserPreferences).mockResolvedValue({
       weightUnit: "kg",
       distanceUnit: "km",
@@ -87,7 +87,7 @@ describe("PATCH /api/v1/preferences", () => {
       mafHrDataAvailable: null,
       mafHr: null,
       mafBaselineTestScheduledAt: null,
-    } as never);
+    });
   });
 
 
