@@ -208,7 +208,9 @@ describe("ExerciseTable drag handle", () => {
     expect(onUpdateSet).not.toHaveBeenCalled();
   });
 
-  it("shows a read-only block assignment badge for linked exercise rows", () => {
+  it("allows linked exercise rows to move or clear their block assignment", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
     const structureBlocks: StructureBlockInput[] = [{
       id: "block-emom",
       sectionType: "main",
@@ -229,14 +231,58 @@ describe("ExerciseTable drag handle", () => {
         workoutId="log-1"
         exerciseSets={sets}
         weightUnit="kg"
-        onUpdateSet={vi.fn()}
+        onUpdateSet={onUpdateSet}
         onAddSet={vi.fn()}
         onDeleteSet={vi.fn()}
         structureBlocks={structureBlocks}
       />,
     );
 
-    expect(screen.getByTestId("exercise-row-block-assignment")).toHaveTextContent(/EMOM 1.*min 2/);
-    expect(screen.queryByRole("combobox", { name: /Block assignment for Back Squat/i })).not.toBeInTheDocument();
+    const assignmentBadge = screen.getByTestId("exercise-row-block-assignment");
+    expect(assignmentBadge).toHaveTextContent(/EMOM 1.*min 2/);
+
+    await user.click(assignmentBadge);
+    await user.click(screen.getByRole("menuitemradio", { name: /EMOM 1.*min 1/i }));
+
+    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+
+    onUpdateSet.mockClear();
+    await user.click(screen.getByTestId("exercise-row-block-assignment"));
+    await user.click(screen.getByRole("menuitemradio", { name: /No block assignment/i }));
+
+    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
+      blockId: null,
+      stepNumber: null,
+      intervalMinute: null,
+      cycleNumber: null,
+      stepRole: null,
+      groupId: null,
+    });
+    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
+      blockId: null,
+      stepNumber: null,
+      intervalMinute: null,
+      cycleNumber: null,
+      stepRole: null,
+      groupId: null,
+    });
+
+    await user.click(screen.getByTestId("exercise-row-actions"));
+    expect(screen.getByRole("menuitem", { name: /Block assignment/i })).toBeInTheDocument();
   });
 });
