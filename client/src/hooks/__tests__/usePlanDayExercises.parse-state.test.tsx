@@ -64,7 +64,7 @@ describe("usePlanDayExercises parse state scoping", () => {
     });
 
     useApiMutationMock.mockImplementation((cfg: { onMutate?: (...args: unknown[]) => unknown; onError?: (...args: unknown[]) => void }) => {
-      mutationConfigs.push(cfg as unknown as Record<string, unknown>);
+      mutationConfigs.push(cfg);
       return ({
       mutate: (...args: unknown[]) => {
         const context = cfg.onMutate?.(...args);
@@ -77,7 +77,7 @@ describe("usePlanDayExercises parse state scoping", () => {
 
   it("clears parseFailed when plan day id changes to another empty day", () => {
     const { result, rerender } = renderHook(({ id }) => usePlanDayExercises(id), {
-      initialProps: { id: "day-1" as string | null },
+      initialProps: { id: "day-1" },
     });
 
     act(() => {

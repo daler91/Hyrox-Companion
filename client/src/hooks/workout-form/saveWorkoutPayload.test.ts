@@ -237,16 +237,17 @@ describe("buildWorkoutSavePayload", () => {
   });
 
   it("converts legacy emom exercise rows before persisting payload", () => {
+    const legacyExercise: StructuredExercise = {
+      exerciseName: "emom",
+      category: "conditioning",
+      sets: [{ setNumber: 1, time: 12 }],
+    };
     const result = buildWorkoutSavePayload({
       ...baseInput,
       title: "Legacy",
       exerciseBlocks: ["block-1"],
       exerciseData: {
-        "block-1": {
-          exerciseName: "emom",
-          category: "conditioning",
-          sets: [{ setNumber: 1, time: 12 }],
-        } as StructuredExercise,
+        "block-1": legacyExercise,
       },
     });
 

@@ -57,8 +57,11 @@ export const fieldMeta: Record<FieldKey, FieldSpec> = {
 };
 
 function withLegacyLabel(getLabel: (context: FieldContext) => string): LabelResolver {
-  return ((contextOrWeightUnit: FieldContext | string, distanceUnit?: string) =>
-    getLabel(normalizeLabelContext(contextOrWeightUnit, distanceUnit))) as LabelResolver;
+  const resolveLabel: LabelResolver = (
+    contextOrWeightUnit: FieldContext | string,
+    distanceUnit?: string,
+  ) => getLabel(normalizeLabelContext(contextOrWeightUnit, distanceUnit));
+  return resolveLabel;
 }
 
 // ⚡ Bolt: Cache array references to guarantee referential stability during re-renders.

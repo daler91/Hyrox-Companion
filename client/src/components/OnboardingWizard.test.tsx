@@ -92,9 +92,9 @@ describe("OnboardingWizard Error Handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
-      json: () => Promise.resolve({ success: true }),
-    } as Response);
+    vi.mocked(queryClientLib.apiRequest).mockImplementation(async () =>
+      new Response(JSON.stringify({ success: true })),
+    );
     vi.mocked(useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<
       typeof useToast
     >);

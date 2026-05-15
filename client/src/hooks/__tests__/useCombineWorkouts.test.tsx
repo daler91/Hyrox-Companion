@@ -31,7 +31,9 @@ describe("useCombineWorkouts", () => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockClear().mockResolvedValue(undefined);
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({ json: vi.fn().mockResolvedValue({ id: "new" }) } as unknown as Response);
+    vi.mocked(queryClientLib.apiRequest).mockResolvedValue(
+      new Response(JSON.stringify({ id: "new" })),
+    );
   });
   afterEach(() => { vi.clearAllMocks(); });
 

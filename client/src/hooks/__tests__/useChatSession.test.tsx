@@ -53,10 +53,9 @@ describe('useChatSession', () => {
     vi.mocked(queryClient.queryClient.invalidateQueries).mockResolvedValue(undefined);
     globalThis.fetch = vi.fn();
     // Default apiRequest mock to return a simple response to avoid 'json' of undefined errors
-    vi.mocked(queryClient.apiRequest).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({})
-    } as Response);
+    vi.mocked(queryClient.apiRequest).mockImplementation(async () =>
+      new Response(JSON.stringify({})),
+    );
 
     // Reset crypto mock
     Object.defineProperty(globalThis.window, 'crypto', {
@@ -79,9 +78,9 @@ describe('useChatSession', () => {
 
   it('should handle successful non-streaming chat', async () => {
     const mockResponse = { response: 'Hello from assistant' };
-    vi.mocked(queryClient.apiRequest).mockResolvedValue({
-      json: () => Promise.resolve(mockResponse)
-    } as Response);
+    vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
+      new Response(JSON.stringify(url === '/api/v1/chat' ? mockResponse : {})),
+    );
 
     const { result } = renderHook(() => useChatSession({ useStreaming: false }), { wrapper });
 
@@ -144,10 +143,11 @@ describe('useChatSession', () => {
       }
     });
 
-    vi.mocked(queryClient.apiRequest).mockResolvedValue({
-      ok: true,
-      body: mockStream,
-    } as unknown as Response);
+    vi.mocked(queryClient.apiRequest).mockImplementation(async (_method, url) =>
+      url === '/api/v1/chat/stream'
+        ? new Response(mockStream)
+        : new Response(JSON.stringify({})),
+    );
 
     const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
 

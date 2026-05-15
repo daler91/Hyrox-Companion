@@ -105,7 +105,7 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
     (old, variables) =>
       old.map((entry) =>
         entry.planDayId === variables.planDayId
-          ? { ...entry, status: "completed" as WorkoutStatus }
+          ? { ...entry, status: "completed" }
           : entry,
       ),
   );

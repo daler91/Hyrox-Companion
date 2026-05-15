@@ -73,7 +73,9 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     canBulkSelect,
     onBulkSelectToggle,
   });
-  const adherenceBadge = getVisibleAdherenceBadge(showAdherenceInsights, entry);
+  const adherenceBadge = showAdherenceInsights
+    ? getAdherenceBadge(entry.compliancePct ?? null)
+    : null;
   const isTargetedByCoach = isTimelineEntryTargetedByCoach(isAutoCoaching, isPlanned, entry);
 
   // We only allow moving entries that have a stable anchor — either a plan
@@ -248,13 +250,6 @@ function canToggleBulkSelection({
   "isBulkSelectMode" | "canBulkSelect" | "onBulkSelectToggle"
 >): boolean {
   return Boolean(isBulkSelectMode && canBulkSelect && onBulkSelectToggle);
-}
-
-function getVisibleAdherenceBadge(
-  showAdherenceInsights: boolean,
-  entry: TimelineWorkoutEntry,
-): ReturnType<typeof getAdherenceBadge> {
-  return showAdherenceInsights ? getAdherenceBadge(entry.compliancePct ?? null) : null;
 }
 
 function isTimelineEntryTargetedByCoach(

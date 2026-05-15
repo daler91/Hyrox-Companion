@@ -53,12 +53,12 @@ export function ResponsiveSheet({
           )}
           data-testid={testId}
         >
-          {!mobileFullHeight ? (
+          {mobileFullHeight ? null : (
             <div
               className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/40"
               aria-hidden="true"
             />
-          ) : null}
+          )}
           <SheetHeader className={cn("shrink-0 text-left", mobileFullHeight && "sr-only")}>
             <SheetTitle>{title}</SheetTitle>
             {description ? <SheetDescription>{description}</SheetDescription> : null}
