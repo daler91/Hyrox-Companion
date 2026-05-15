@@ -201,6 +201,9 @@ describe("StructureBlocksEditor", () => {
     fireEvent.click(screen.getByTestId("structure-block-add-linked-row"));
 
     expect(onAddSet).toHaveBeenCalledWith(expect.objectContaining({
+      exerciseName: "back_squat",
+      customLabel: null,
+      category: "strength",
       blockId: "block-emom",
       stepNumber: 1,
       stepRole: "work",

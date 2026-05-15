@@ -1,4 +1,4 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet, type StructureBlockInput, type StructureBlockScore } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseSet, normalizeExerciseName, type StructureBlockInput, type StructureBlockScore } from "@shared/schema";
 import { Link2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -182,10 +182,11 @@ function addPayloadForStep(
 ): AddExerciseSetPayload {
   const rawName = typeof step.exerciseName === "string" ? step.exerciseName.trim() : "";
   const hasNamedExercise = rawName.length > 0 && rawName !== UNASSIGNED_WORK_STEP_LABEL;
-  const knownDefinition = hasNamedExercise ? EXERCISE_DEFINITIONS[rawName as ExerciseName] : undefined;
+  const normalizedName = hasNamedExercise ? normalizeExerciseName(rawName) : null;
+  const knownDefinition = normalizedName ? EXERCISE_DEFINITIONS[normalizedName] : undefined;
   const fallbackLabel = hasNamedExercise ? rawName : `${formatBlockType(block.formatType)} step ${step.stepNumber}`;
   return {
-    exerciseName: knownDefinition ? rawName : "custom",
+    exerciseName: normalizedName ?? "custom",
     customLabel: knownDefinition ? null : fallbackLabel,
     category: step.category ?? knownDefinition?.category ?? "conditioning",
     setNumber: 1,
