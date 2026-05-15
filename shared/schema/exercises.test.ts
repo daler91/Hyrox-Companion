@@ -2,6 +2,109 @@ import { describe, expect, it } from "vitest";
 
 import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "./exercises";
 
+const requestedExpandedExerciseKeys = [
+  "air_squat",
+  "overhead_squat",
+  "zercher_squat",
+  "pistol_squat",
+  "split_squat",
+  "cossack_squat",
+  "belt_squat",
+  "stiff_leg_deadlift",
+  "rack_pull",
+  "deficit_deadlift",
+  "floor_press",
+  "smith_machine_bench_press",
+  "dumbbell_pullover",
+  "landmine_press",
+  "upright_row",
+  "pendlay_row",
+  "machine_row",
+  "landmine_row",
+  "assisted_dip",
+  "ring_dip",
+  "handstand_push_up",
+  "pike_push_up",
+  "nordic_hamstring_curl",
+  "glute_ham_raise",
+  "cable_pull_through",
+  "seated_calf_raise",
+  "standing_calf_raise",
+  "tibialis_raise",
+  "clean",
+  "power_clean",
+  "hang_clean",
+  "clean_and_jerk",
+  "jerk",
+  "split_jerk",
+  "snatch",
+  "power_snatch",
+  "hang_snatch",
+  "turkish_get_up",
+  "kettlebell_clean",
+  "kettlebell_snatch",
+  "kettlebell_press",
+  "devil_press",
+  "side_plank",
+  "ab_wheel_rollout",
+  "pallof_press",
+  "bird_dog",
+  "reverse_crunch",
+  "bicycle_crunch",
+  "lying_leg_raise",
+  "toes_to_bar",
+  "v_up",
+  "hollow_hold",
+  "flutter_kicks",
+  "walking",
+  "incline_walk",
+  "hiking",
+  "rucking",
+  "cycling",
+  "bike_erg",
+  "elliptical",
+  "stair_climber",
+  "swimming",
+  "sprints",
+  "bear_crawl",
+  "crab_walk",
+  "jumping_jacks",
+  "high_knees",
+  "butt_kicks",
+  "suitcase_carry",
+  "overhead_carry",
+  "front_rack_carry",
+  "yoke_carry",
+  "sandbag_carry",
+  "sandbag_clean",
+  "sandbag_to_shoulder",
+  "tire_flip",
+  "rope_climb",
+  "box_step_over",
+  "dumbbell_thruster",
+  "kettlebell_thruster",
+  "concentration_curl",
+  "incline_dumbbell_curl",
+  "reverse_curl",
+  "wrist_curl",
+  "reverse_wrist_curl",
+  "bench_dip",
+  "triceps_kickback",
+  "rope_triceps_pushdown",
+  "machine_lateral_raise",
+  "reverse_pec_deck",
+  "cable_rear_delt_fly",
+  "band_pull_apart",
+  "single_arm_cable_row",
+  "high_row_machine",
+  "pullover_machine",
+  "sissy_squat",
+  "pendulum_squat",
+  "donkey_kick",
+  "frog_pump",
+  "clamshell",
+] as const;
+
 describe("exercise catalog", () => {
   it("includes common gym movements", () => {
     expect(EXERCISE_DEFINITIONS.leg_press.label).toBe("Leg Press");
@@ -17,6 +120,21 @@ describe("exercise catalog", () => {
     expect(EXERCISE_DEFINITIONS.trap_bar_deadlift.label).toBe("Trap Bar Deadlift");
     expect(EXERCISE_DEFINITIONS.hip_abduction_machine.label).toBe("Hip Abduction Machine");
     expect(EXERCISE_DEFINITIONS.russian_twist.label).toBe("Russian Twist");
+  });
+
+  it("includes the requested expanded exercise set", () => {
+    for (const exerciseKey of requestedExpandedExerciseKeys) {
+      expect(EXERCISE_DEFINITIONS[exerciseKey]).toBeDefined();
+    }
+
+    expect(EXERCISE_DEFINITIONS.air_squat.label).toBe("Air Squat");
+    expect(EXERCISE_DEFINITIONS.clean_and_jerk.label).toBe("Clean and Jerk");
+    expect(EXERCISE_DEFINITIONS.bike_erg.label).toBe("BikeErg");
+    expect(EXERCISE_DEFINITIONS.suitcase_carry.label).toBe("Suitcase Carry");
+    expect(EXERCISE_DEFINITIONS.rope_climb.label).toBe("Rope Climb");
+    expect(EXERCISE_DEFINITIONS.ab_wheel_rollout.label).toBe("Ab Wheel Rollout");
+    expect(EXERCISE_DEFINITIONS.bench_dip.label).toBe("Bench Dip");
+    expect(EXERCISE_DEFINITIONS.clamshell.label).toBe("Clamshell");
   });
 });
 
@@ -40,6 +158,13 @@ describe("normalizeExerciseName", () => {
     expect(normalizeExerciseName("Trap Bar DL")).toBe("trap_bar_deadlift");
     expect(normalizeExerciseName("Skullcrushers")).toBe("skull_crusher");
     expect(normalizeExerciseName("Russian Twists")).toBe("russian_twist");
+    expect(normalizeExerciseName("BikeErg")).toBe("bike_erg");
+    expect(normalizeExerciseName("HSPU")).toBe("handstand_push_up");
+    expect(normalizeExerciseName("TGU")).toBe("turkish_get_up");
+    expect(normalizeExerciseName("Clean & Jerk")).toBe("clean_and_jerk");
+    expect(normalizeExerciseName("Toes-to-Bar")).toBe("toes_to_bar");
+    expect(normalizeExerciseName("KB Thruster")).toBe("kettlebell_thruster");
+    expect(normalizeExerciseName("Ab Rollouts")).toBe("ab_wheel_rollout");
     expect(normalizeExerciseName("EMOM")).toBe("emom");
     expect(normalizeExerciseName("amrap")).toBe("amrap");
   });
