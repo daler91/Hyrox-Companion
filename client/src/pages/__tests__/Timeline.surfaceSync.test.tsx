@@ -1,8 +1,10 @@
 import type { TimelineEntry } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
 
 import Timeline from "../Timeline";
 
@@ -10,10 +12,19 @@ const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
 const timelineMocks = vi.hoisted(() => ({ setCoachOpen: vi.fn() }));
 const apiMocks = vi.hoisted(() => ({ updatePreferences: vi.fn() }));
 const viewportState = vi.hoisted(() => ({ isMobile: false }));
+const dataMocks = vi.hoisted(() => ({ scrollToToday: vi.fn() }));
+const virtualizerMocks = vi.hoisted(() => ({
+  getVirtualItems: vi.fn(() => [{ key: "0", index: 0, start: 0 }]),
+  measureElement: vi.fn(),
+  scrollToIndex: vi.fn(),
+}));
 
 const setOpenWorkoutId = vi.fn();
 let openWorkoutId: string | null = null;
 let timelineData: TimelineEntry[] = [];
+let visiblePastGroups: Array<[string, TimelineEntry[]]> = [];
+let visibleFutureGroups: Array<[string, TimelineEntry[]]> = [];
+let timelineLoading = false;
 let logSheetMounts = 0;
 
 vi.mock("@/hooks/useOpenWorkoutId", () => ({
@@ -31,6 +42,18 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/hooks/useMoveTimelineEntry", () => ({
   useMoveTimelineEntry: () => ({ moveEntry: vi.fn(), isMoving: false }),
 }));
+vi.mock("@tanstack/react-virtual", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-virtual")>();
+  return {
+    ...actual,
+    useVirtualizer: () => ({
+      getTotalSize: () => 300,
+      getVirtualItems: virtualizerMocks.getVirtualItems,
+      measureElement: virtualizerMocks.measureElement,
+      scrollToIndex: virtualizerMocks.scrollToIndex,
+    }),
+  };
+});
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -52,11 +75,11 @@ vi.mock("@/hooks/useTimelineState", () => ({
       plansLoading: false,
       personalRecords: [],
       timelineData,
-      timelineLoading: false,
+      timelineLoading,
       annotations: [],
       isNewUser: false,
       todayRef: { current: null },
-      scrollToToday: vi.fn(),
+      scrollToToday: dataMocks.scrollToToday,
     },
     filters: {
       filterStatus: "all",
@@ -65,10 +88,10 @@ vi.mock("@/hooks/useTimelineState", () => ({
       setShowAllPast: vi.fn(),
       showAllFuture: true,
       setShowAllFuture: vi.fn(),
-      pastGroups: [],
-      futureGroups: [],
-      visiblePastGroups: [["2026-01-01", timelineData]],
-      visibleFutureGroups: [],
+      pastGroups: visiblePastGroups,
+      futureGroups: visibleFutureGroups,
+      visiblePastGroups,
+      visibleFutureGroups,
       hiddenPastCount: 0,
       hiddenFutureCount: 0,
     },
@@ -256,6 +279,17 @@ function makeEntry(overrides: Partial<TimelineEntry>): TimelineEntry {
   } as TimelineEntry;
 }
 
+function setVisibleTimelineGroups({
+  past = [],
+  future = [],
+}: {
+  readonly past?: Array<[string, TimelineEntry[]]>;
+  readonly future?: Array<[string, TimelineEntry[]]>;
+}) {
+  visiblePastGroups = past;
+  visibleFutureGroups = future;
+}
+
 function renderTimeline(queryClient = new QueryClient()) {
   queryClient.setQueryDefaults(["/api/v1/preferences"], {
     queryFn: async () => ({ weightUnit: "kg", distanceUnit: "km" }),
@@ -280,6 +314,7 @@ function renderFuturePreview({
   authState.aiCoachEnabled = aiCoachEnabled;
   viewportState.isMobile = isMobile;
   timelineData = [makeEntry({ date: "2099-01-01" })];
+  setVisibleTimelineGroups({ future: [["2099-01-01", timelineData]] });
 
   renderTimeline(queryClient);
 
@@ -320,11 +355,22 @@ describe("Timeline surface sync", () => {
     openWorkoutId = "pd1";
     logSheetMounts = 0;
     timelineData = [makeEntry({})];
+    setVisibleTimelineGroups({ past: [["2026-01-01", timelineData]] });
+    timelineLoading = false;
     authState.aiCoachEnabled = true;
     viewportState.isMobile = false;
     timelineMocks.setCoachOpen.mockReset();
     apiMocks.updatePreferences.mockReset();
     apiMocks.updatePreferences.mockResolvedValue({});
+    dataMocks.scrollToToday.mockReset();
+    virtualizerMocks.getVirtualItems.mockReset();
+    virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0 }]);
+    virtualizerMocks.measureElement.mockReset();
+    virtualizerMocks.scrollToIndex.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("keeps sheet identity stable across refetch/state transitions", () => {
@@ -422,5 +468,53 @@ describe("Timeline surface sync", () => {
 
     expectMobileCoachPanelOpen();
     expectGlobalCoachRemainsClosed();
+  });
+
+  it("scrolls to today through the virtualizer when the today row is not mounted", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+    viewportState.isMobile = true;
+    openWorkoutId = null;
+
+    const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
+    const todayEntry = makeEntry({ id: "today", date: "2026-05-15", planDayId: "today-day" });
+    timelineData = [pastEntry, todayEntry];
+    setVisibleTimelineGroups({
+      past: [["2026-05-14", [pastEntry]]],
+      future: [["2026-05-15", [todayEntry]]],
+    });
+    virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0 }]);
+
+    renderTimeline();
+
+    act(() => {
+      vi.advanceTimersByTime(SCROLL_TO_TODAY_DELAY_MS);
+    });
+
+    expect(virtualizerMocks.scrollToIndex).toHaveBeenCalledWith(1, {
+      align: "center",
+      behavior: "smooth",
+    });
+    expect(dataMocks.scrollToToday).not.toHaveBeenCalled();
+  });
+
+  it("does not force-scroll when today is absent from the visible timeline groups", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+    viewportState.isMobile = true;
+    openWorkoutId = null;
+
+    const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
+    timelineData = [pastEntry];
+    setVisibleTimelineGroups({ past: [["2026-05-14", [pastEntry]]] });
+
+    renderTimeline();
+
+    act(() => {
+      vi.advanceTimersByTime(SCROLL_TO_TODAY_DELAY_MS);
+    });
+
+    expect(virtualizerMocks.scrollToIndex).not.toHaveBeenCalled();
+    expect(dataMocks.scrollToToday).not.toHaveBeenCalled();
   });
 });

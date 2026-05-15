@@ -11,7 +11,7 @@ import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { format, isToday, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AIConsentDialog } from "@/components/coach/AIConsentDialog";
 import { CoachPanel } from "@/components/CoachPanel";
@@ -40,6 +40,7 @@ import { LogSheet } from "@/components/workout-detail/LogSheet";
 import { PreviewSheet } from "@/components/workout-detail/PreviewSheet";
 import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
+import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
@@ -362,6 +363,7 @@ export default function Timeline() {
     combineWorkoutsMutation,
   } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const initialTodayScrollKeyRef = useRef<string | null>(null);
   const {
     previewEntry,
     setPreviewEntry,
@@ -488,6 +490,28 @@ export default function Timeline() {
 
     rowVirtualizer.scrollToIndex(todayIndex, { align: "start", behavior: "smooth" });
   }, [allVisibleGroups, rowVirtualizer, scrollToToday]);
+
+  useEffect(() => {
+    if (timelineLoading) return undefined;
+
+    const scrollKey = selectedPlanId ?? "all-plans";
+    if (initialTodayScrollKeyRef.current === scrollKey) return undefined;
+
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const todayIndex = allVisibleGroups.findIndex(([dateGroupStr]) => dateGroupStr === todayStr);
+
+    if (todayIndex < 0) {
+      initialTodayScrollKeyRef.current = scrollKey;
+      return undefined;
+    }
+
+    const timerId = setTimeout(() => {
+      rowVirtualizer.scrollToIndex(todayIndex, { align: "center", behavior: "smooth" });
+      initialTodayScrollKeyRef.current = scrollKey;
+    }, SCROLL_TO_TODAY_DELAY_MS);
+
+    return () => clearTimeout(timerId);
+  }, [allVisibleGroups, rowVirtualizer, selectedPlanId, timelineLoading]);
 
   return (
     <>

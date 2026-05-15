@@ -1,10 +1,8 @@
 import type { PersonalRecord,TimelineAnnotation, TimelineEntry, TrainingPlan } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback,useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
-
-import { SCROLL_TO_TODAY_DELAY_MS } from "./constants";
 
 export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded = true) {
   const todayRef = useRef<HTMLDivElement>(null);
@@ -40,15 +38,6 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
   });
 
   const timelineLoading = !isAuthUserLoaded || isLoading;
-
-  useEffect(() => {
-    if (!timelineLoading && todayRef.current) {
-      const timerId = setTimeout(() => {
-        todayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, SCROLL_TO_TODAY_DELAY_MS);
-      return () => clearTimeout(timerId);
-    }
-  }, [timelineLoading]);
 
   const isNewUser = isAuthUserLoaded && !plansLoading && !timelineLoading && plans.length === 0 && timelineData.length === 0;
 
