@@ -1,9 +1,15 @@
 import type { StructureBlockInput } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { makeExerciseSet as makeSet } from "@/test/factories/exerciseSetFactory";
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
+
 import { StructureBlocksEditor } from "./StructureBlocksEditor";
+
+installRadixPointerMocks();
 
 function Harness({ initial = [] as StructureBlockInput[], showScoreControls = false }) {
   const [value, setValue] = useState<StructureBlockInput[]>(initial);
@@ -73,6 +79,163 @@ describe("StructureBlocksEditor", () => {
       formatType: "rounds",
       roundCount: 3,
     });
+  });
+
+  it("renders block-first previews for AMRAP and rounds blocks", () => {
+    render(
+      <Harness
+        initial={[
+          {
+            id: "block-amrap",
+            sectionType: "main",
+            formatType: "amrap",
+            timeCapMinutes: 12,
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+          },
+          {
+            id: "block-rounds",
+            sectionType: "main",
+            formatType: "rounds",
+            roundCount: 4,
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Wall Balls" }],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/Repeat 1 step until 12 min cap/i)).toBeInTheDocument();
+    expect(screen.getByText(/Complete 4 rounds of 1 step/i)).toBeInTheDocument();
+  });
+
+  it("assigns an unlinked exercise row from the block card", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
+    render(
+      <StructureBlocksEditor
+        value={[{
+          id: "block-emom",
+          sectionType: "main",
+          formatType: "emom",
+          durationMinutes: 10,
+          steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Unassigned exercise" }],
+        }]}
+        onChange={vi.fn()}
+        exerciseSets={[
+          makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 }),
+          makeSet({ id: "set-2", setNumber: 2, sortOrder: 1 }),
+        ]}
+        onUpdateSet={onUpdateSet}
+      />,
+    );
+
+    expect(screen.getByTestId("structure-block-missing-link")).toHaveTextContent("No exercise row linked.");
+    await user.click(screen.getByRole("combobox", { name: /Assign row to Min 1/i }));
+    await user.click(await screen.findByRole("option", { name: /Back Squat/i }));
+
+    expect(onUpdateSet).toHaveBeenCalledTimes(2);
+    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+  });
+
+  it("keeps step link actions available after one row is already linked", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
+    const onAddSet = vi.fn();
+    render(
+      <StructureBlocksEditor
+        value={[{
+          id: "block-emom",
+          sectionType: "main",
+          formatType: "emom",
+          durationMinutes: 10,
+          steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Back Squat" }],
+        }]}
+        onChange={vi.fn()}
+        exerciseSets={[
+          makeSet({ id: "linked-1", sortOrder: 0, blockId: "block-emom", stepNumber: 1, intervalMinute: 1 }),
+          makeSet({
+            id: "extra-1",
+            exerciseName: "wall_balls",
+            category: "functional",
+            sortOrder: 1,
+            blockId: null,
+            stepNumber: null,
+            intervalMinute: null,
+          }),
+        ]}
+        onUpdateSet={onUpdateSet}
+        onAddSet={onAddSet}
+      />,
+    );
+
+    expect(screen.getByTestId("structure-block-linked-row")).toHaveTextContent(/Back Squat/i);
+    expect(screen.queryByTestId("structure-block-missing-link")).not.toBeInTheDocument();
+    expect(screen.getByTestId("structure-block-add-linked-row")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox", { name: /Assign row to Min 1/i }));
+    await user.click(await screen.findByRole("option", { name: /Wall Balls/i }));
+
+    expect(onUpdateSet).toHaveBeenCalledWith("extra-1", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+
+    fireEvent.click(screen.getByTestId("structure-block-add-linked-row"));
+
+    expect(onAddSet).toHaveBeenCalledWith(expect.objectContaining({
+      exerciseName: "back_squat",
+      customLabel: null,
+      category: "strength",
+      blockId: "block-emom",
+      stepNumber: 1,
+      stepRole: "work",
+    }));
+  });
+
+  it("adds a linked row from an empty block step", () => {
+    const onAddSet = vi.fn();
+    render(
+      <StructureBlocksEditor
+        value={[{
+          id: "block-rounds",
+          sectionType: "main",
+          formatType: "rounds",
+          roundCount: 3,
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+        }]}
+        onChange={vi.fn()}
+        onAddSet={onAddSet}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("structure-block-add-linked-row"));
+
+    expect(onAddSet).toHaveBeenCalledWith(expect.objectContaining({
+      exerciseName: "custom",
+      customLabel: "Rounds step 1",
+      category: "conditioning",
+      blockId: "block-rounds",
+      stepNumber: 1,
+      stepRole: "work",
+    }));
   });
 
   it("hydrates score controls for logged AMRAP blocks", () => {

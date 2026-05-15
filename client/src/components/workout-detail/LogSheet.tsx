@@ -107,6 +107,15 @@ function PlannedPrescription({
       <PlanRationale rationale={entry.aiRationale} />
 
       <div className="space-y-3">
+        <StructureBlocksEditor
+          value={planSets.structureBlocks}
+          onChange={(next) => planSets.updateStructure.mutate(next)}
+          exerciseSets={planSets.exerciseSets}
+          onUpdateSet={planSets.patchSetDebounced}
+          onAddSet={planSets.addSet.mutate}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+        />
         <ExerciseTable
           workoutId={entry.planDayId!}
           exerciseSets={planSets.exerciseSets}
@@ -123,10 +132,6 @@ function PlannedPrescription({
           defaultExpanded
           hasUnparsedText={hasUnparsedText}
           structureBlocks={planSets.structureBlocks}
-        />
-        <StructureBlocksEditor
-          value={planSets.structureBlocks}
-          onChange={(next) => planSets.updateStructure.mutate(next)}
         />
         <ParseFailureAlert
           entryId={entry.id}

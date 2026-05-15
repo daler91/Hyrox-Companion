@@ -39,14 +39,25 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise,groupExerciseSets } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
+import {
+  assignmentPatchForValue,
+  assignmentValueForGroup,
+  type BlockAssignmentOption,
+  buildBlockAssignmentOptions,
+  UNASSIGNED_BLOCK_VALUE,
+} from "@/lib/workoutStructureAssignments";
 
 import { type SaveState, SaveStatePill } from "./SaveStatePill";
 
@@ -81,18 +92,6 @@ interface ExerciseTableProps {
   readonly onOpenConversionHelper?: () => void;
   readonly structureBlocks?: StructureBlockInput[];
 }
-
-interface BlockAssignmentOption {
-  readonly value: string;
-  readonly label: string;
-  readonly blockId: string;
-  readonly stepNumber: number;
-  readonly intervalMinute: number | null;
-  readonly stepRole: string | null;
-  readonly groupId: string | null;
-}
-
-const UNASSIGNED_BLOCK_VALUE = "none";
 
 export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
   const next = new Set(expanded);
@@ -609,112 +608,74 @@ function DragHandle({
   );
 }
 
-function isAssignableBlock(block: StructureBlockInput): boolean {
-  return block.formatType === "emom" || block.formatType === "amrap" || block.formatType === "rounds";
+interface BlockAssignmentPickerProps {
+  readonly value: string;
+  readonly options: readonly BlockAssignmentOption[];
+  readonly onAssign: (value: string) => void;
 }
 
-function isAssignableStep(step: StructureBlockInput["steps"][number]): boolean {
-  return (step.stepType ?? "work") === "work";
-}
-
-function blockStepValue(blockId: string, stepNumber: number): string {
-  return `${blockId}:${stepNumber}`;
-}
-
-function blockLabel(block: StructureBlockInput, blockIndex: number): string {
-  const type = block.formatType.toUpperCase();
-  return `${type} ${blockIndex + 1}`;
-}
-
-function stepLabel(block: StructureBlockInput, step: StructureBlockInput["steps"][number], blockIndex: number): string {
-  const prefix = blockLabel(block, blockIndex);
-  if (block.formatType === "emom") {
-    return `${prefix} · min ${step.minuteIndex ?? step.stepNumber}`;
-  }
-  return `${prefix} · step ${step.stepNumber}`;
-}
-
-function buildBlockAssignmentOptions(blocks: readonly StructureBlockInput[]): BlockAssignmentOption[] {
-  const options: BlockAssignmentOption[] = [];
-  blocks.forEach((block, blockIndex) => {
-    if (!block.id || !isAssignableBlock(block)) return;
-    for (const step of block.steps) {
-      if (!isAssignableStep(step)) continue;
-      options.push({
-        value: blockStepValue(block.id, step.stepNumber),
-        label: stepLabel(block, step, blockIndex),
-        blockId: block.id,
-        stepNumber: step.stepNumber,
-        intervalMinute: step.minuteIndex ?? null,
-        stepRole: step.stepRole ?? step.stepType ?? "work",
-        groupId: step.groupId ?? null,
-      });
-    }
-  });
-  return options;
-}
-
-function assignmentValueForGroup(group: GroupedExercise, options: readonly BlockAssignmentOption[]): string {
-  const first = group.sets[0];
-  if (!first?.blockId || first.stepNumber == null) return UNASSIGNED_BLOCK_VALUE;
-  const value = blockStepValue(first.blockId, first.stepNumber);
-  return options.some((option) => option.value === value) ? value : UNASSIGNED_BLOCK_VALUE;
-}
-
-function assignmentPatchForValue(
-  value: string,
-  options: readonly BlockAssignmentOption[],
-): PatchExerciseSetPayload {
-  if (value === UNASSIGNED_BLOCK_VALUE) {
-    return {
-      blockId: null,
-      stepNumber: null,
-      intervalMinute: null,
-      cycleNumber: null,
-      stepRole: null,
-      groupId: null,
-    };
-  }
-  const option = options.find((candidate) => candidate.value === value);
-  if (!option) return {};
-  return {
-    blockId: option.blockId,
-    stepNumber: option.stepNumber,
-    intervalMinute: option.intervalMinute,
-    cycleNumber: null,
-    stepRole: option.stepRole,
-    groupId: option.groupId,
-  };
-}
-
-function BlockAssignmentSelect({
-  group,
+function BlockAssignmentPickerItems({
+  value,
   options,
   onAssign,
-}: Readonly<{
-  group: GroupedExercise;
-  options: readonly BlockAssignmentOption[];
-  onAssign: (value: string) => void;
-}>) {
+}: Readonly<BlockAssignmentPickerProps>) {
+  return (
+    <DropdownMenuRadioGroup value={value} onValueChange={onAssign}>
+      <DropdownMenuRadioItem value={UNASSIGNED_BLOCK_VALUE}>
+        No block assignment
+      </DropdownMenuRadioItem>
+      <DropdownMenuSeparator />
+      {options.map((option) => (
+        <DropdownMenuRadioItem key={option.value} value={option.value}>
+          {option.label}
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
+  );
+}
+
+function BlockAssignmentBadge({
+  label,
+  value,
+  options,
+  onAssign,
+}: Readonly<BlockAssignmentPickerProps & { readonly label: string }>) {
+  if (options.length === 0 || value === UNASSIGNED_BLOCK_VALUE) return null;
+  const option = options.find((candidate) => candidate.value === value);
+  if (!option) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="hidden max-w-[9rem] shrink-0 truncate rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:inline-block"
+          title={option.label}
+          aria-label={`Block assignment for ${label}: ${option.label}`}
+          data-testid="exercise-row-block-assignment"
+        >
+          {option.label}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-72 min-w-56 overflow-y-auto">
+        <BlockAssignmentPickerItems value={value} options={options} onAssign={onAssign} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function BlockAssignmentAction({
+  value,
+  options,
+  onAssign,
+}: Readonly<BlockAssignmentPickerProps>) {
   if (options.length === 0) return null;
   return (
-    <Select value={assignmentValueForGroup(group, options)} onValueChange={onAssign}>
-      <SelectTrigger
-        className="h-8 w-[132px] shrink-0 text-xs"
-        aria-label={`Block assignment for ${getExerciseLabel(group.exerciseName, group.customLabel)}`}
-        data-testid="exercise-row-block-assignment"
-      >
-        <SelectValue placeholder="No block" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={UNASSIGNED_BLOCK_VALUE}>No block</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>Block assignment</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-72 min-w-56 overflow-y-auto">
+        <BlockAssignmentPickerItems value={value} options={options} onAssign={onAssign} />
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 
@@ -773,11 +734,11 @@ const GroupRow = memo(function GroupRow({
     }
     setChangeExerciseOpen(false);
   };
-  const handleAssignBlock = (value: string) => {
+  const blockAssignmentValue = assignmentValueForGroup(group, blockAssignmentOptions);
+  const handleAssignBlock = useCallback((value: string) => {
     const patch = assignmentPatchForValue(value, blockAssignmentOptions);
-    for (const s of group.sets) onUpdateSet(s.id, patch);
-  };
-
+    for (const set of group.sets) onUpdateSet(set.id, patch);
+  }, [blockAssignmentOptions, group.sets, onUpdateSet]);
   const prescription = formatPrescription({
     setCount,
     metricValue: metric.value,
@@ -834,8 +795,9 @@ const GroupRow = memo(function GroupRow({
           >
             {label}
           </span>
-          <BlockAssignmentSelect
-            group={group}
+          <BlockAssignmentBadge
+            label={label}
+            value={blockAssignmentValue}
             options={blockAssignmentOptions}
             onAssign={handleAssignBlock}
           />
@@ -868,6 +830,11 @@ const GroupRow = memo(function GroupRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {changeExerciseItem}
+              <BlockAssignmentAction
+                value={blockAssignmentValue}
+                options={blockAssignmentOptions}
+                onAssign={handleAssignBlock}
+              />
               <DropdownMenuSeparator />
               {deleteItem}
             </DropdownMenuContent>

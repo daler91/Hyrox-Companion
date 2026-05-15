@@ -1,13 +1,18 @@
-import type { ExerciseSet, TimelineEntry } from "@shared/schema";
+import type { TimelineEntry } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ReviewSurface } from "../ReviewSurface";
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
+
+installRadixPointerMocks();
 
 vi.mock("@/hooks/useWorkoutDetail", () => ({
   useWorkoutDetail: (workoutId: string | null) => mockUseWorkoutDetail(workoutId),
@@ -37,23 +42,7 @@ vi.mock("../AthleteNoteInput", () => ({
   AthleteNoteInput: () => <textarea aria-label="Athlete note" />,
 }));
 
-const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
-const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
-const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
-const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-
-beforeAll(() => {
-  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-  HTMLElement.prototype.setPointerCapture = vi.fn();
-  HTMLElement.prototype.releasePointerCapture = vi.fn();
-  HTMLElement.prototype.scrollIntoView = vi.fn();
-});
-
 afterAll(() => {
-  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
-  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
-  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
-  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
   vi.unstubAllGlobals();
 });
 
@@ -73,41 +62,6 @@ function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
     structureBlocks: [],
     ...overrides,
   } as TimelineEntry;
-}
-
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1",
-    workoutLogId: "workout-1",
-    planDayId: null,
-    exerciseName: "back_squat",
-    customLabel: null,
-    category: "strength",
-    setNumber: 1,
-    reps: 8,
-    weight: 95,
-    distance: null,
-    time: null,
-    plannedReps: 8,
-    plannedWeight: 100,
-    plannedDistance: null,
-    plannedTime: null,
-    blockId: null,
-    stepNumber: null,
-    intervalMinute: null,
-    cycleNumber: null,
-    stepRole: null,
-    groupId: null,
-    intensity: null,
-    load: null,
-    repMode: null,
-    tempo: null,
-    standards: null,
-    notes: null,
-    confidence: 95,
-    sortOrder: 0,
-    ...overrides,
-  };
 }
 
 function makeWorkout(overrides: Record<string, unknown> = {}) {
@@ -157,7 +111,14 @@ describe("ReviewSurface", () => {
   it("surfaces planned differences when adherence guidance is enabled", () => {
     mockUseWorkoutDetail.mockReturnValue(
       makeDetail({
-        workout: makeWorkout({ exerciseSets: [makeSet()] }),
+        workout: makeWorkout({
+          exerciseSets: [makeExerciseSet({
+            workoutLogId: "workout-1",
+            weight: 95,
+            plannedReps: 8,
+            plannedWeight: 100,
+          })],
+        }),
       }),
     );
 

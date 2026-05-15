@@ -1,63 +1,14 @@
 import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { makeExerciseSet as makeSet } from "@/test/factories/exerciseSetFactory";
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ExerciseTable } from "../ExerciseTable";
 
-const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
-const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
-const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
-const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-
-beforeAll(() => {
-  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-  HTMLElement.prototype.setPointerCapture = vi.fn();
-  HTMLElement.prototype.releasePointerCapture = vi.fn();
-  HTMLElement.prototype.scrollIntoView = vi.fn();
-});
-
-afterAll(() => {
-  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
-  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
-  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
-  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
-});
-
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1",
-    workoutLogId: "log-1",
-    planDayId: null,
-    exerciseName: "back_squat",
-    customLabel: null,
-    category: "strength",
-    setNumber: 1,
-    reps: 8,
-    weight: 60,
-    distance: null,
-    time: null,
-    plannedReps: null,
-    plannedWeight: null,
-    plannedDistance: null,
-    plannedTime: null,
-    blockId: null,
-    stepNumber: null,
-    intervalMinute: null,
-    cycleNumber: null,
-    stepRole: null,
-    groupId: null,
-    intensity: null,
-    load: null,
-    repMode: null,
-    tempo: null,
-    standards: null,
-    notes: null,
-    confidence: 95,
-    sortOrder: 0,
-    ...overrides,
-  };
-}
+installRadixPointerMocks();
 
 // One reorder = many PATCHes (one per moved set). We assert the payloads
 // shape rather than invoking the @dnd-kit keyboard sensor directly — the
@@ -257,7 +208,7 @@ describe("ExerciseTable drag handle", () => {
     expect(onUpdateSet).not.toHaveBeenCalled();
   });
 
-  it("fans block assignment metadata across every set in the exercise row", async () => {
+  it("allows linked exercise rows to move or clear their block assignment", async () => {
     const user = userEvent.setup();
     const onUpdateSet = vi.fn();
     const structureBlocks: StructureBlockInput[] = [{
@@ -271,8 +222,8 @@ describe("ExerciseTable drag handle", () => {
       ],
     }];
     const sets: ExerciseSet[] = [
-      makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 }),
-      makeSet({ id: "set-2", setNumber: 2, sortOrder: 1 }),
+      makeSet({ id: "set-1", setNumber: 1, sortOrder: 0, blockId: "block-emom", stepNumber: 2, intervalMinute: 2 }),
+      makeSet({ id: "set-2", setNumber: 2, sortOrder: 1, blockId: "block-emom", stepNumber: 2, intervalMinute: 2 }),
     ];
 
     render(
@@ -287,25 +238,51 @@ describe("ExerciseTable drag handle", () => {
       />,
     );
 
-    await user.click(screen.getByRole("combobox", { name: /Block assignment for Back Squat/i }));
-    await user.click(await screen.findByRole("option", { name: /min 2/i }));
+    const assignmentBadge = screen.getByTestId("exercise-row-block-assignment");
+    expect(assignmentBadge).toHaveTextContent(/EMOM 1.*min 2/);
 
-    expect(onUpdateSet).toHaveBeenCalledTimes(2);
+    await user.click(assignmentBadge);
+    await user.click(screen.getByRole("menuitemradio", { name: /EMOM 1.*min 1/i }));
+
     expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
       blockId: "block-emom",
-      stepNumber: 2,
-      intervalMinute: 2,
+      stepNumber: 1,
+      intervalMinute: 1,
       cycleNumber: null,
       stepRole: "work",
       groupId: null,
     });
     expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
       blockId: "block-emom",
-      stepNumber: 2,
-      intervalMinute: 2,
+      stepNumber: 1,
+      intervalMinute: 1,
       cycleNumber: null,
       stepRole: "work",
       groupId: null,
     });
+
+    onUpdateSet.mockClear();
+    await user.click(screen.getByTestId("exercise-row-block-assignment"));
+    await user.click(screen.getByRole("menuitemradio", { name: /No block assignment/i }));
+
+    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
+      blockId: null,
+      stepNumber: null,
+      intervalMinute: null,
+      cycleNumber: null,
+      stepRole: null,
+      groupId: null,
+    });
+    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
+      blockId: null,
+      stepNumber: null,
+      intervalMinute: null,
+      cycleNumber: null,
+      stepRole: null,
+      groupId: null,
+    });
+
+    await user.click(screen.getByTestId("exercise-row-actions"));
+    expect(screen.getByRole("menuitem", { name: /Block assignment/i })).toBeInTheDocument();
   });
 });
