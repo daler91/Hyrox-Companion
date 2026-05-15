@@ -155,7 +155,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
   const blockTypeOptions = blockTypeOptionsFor(value.blockType);
 
   return (
-    <div className="space-y-3 mb-4 rounded-md border p-3">
+    <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2">
         <div>
           <Label className="text-xs">Format</Label>
@@ -308,8 +308,8 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
       </div>
 
       {showScoreControls && (value.blockType === "emom" || value.blockType === "amrap" || value.blockType === "rounds") && (
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="text-xs font-medium text-muted-foreground">Block result</div>
+        <div className="space-y-2 rounded-md border border-primary/25 bg-primary/5 p-3" data-testid="structure-block-result">
+          <div className="text-xs font-medium uppercase tracking-wide text-primary">Result</div>
           {value.blockType === "emom" && (
             <div className="grid gap-2 md:grid-cols-3">
               <Button
@@ -322,6 +322,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <Input
                 type="number"
                 min={0}
+                aria-label="Completed minutes"
                 placeholder="Completed min"
                 value={value.score?.type === "emom" ? value.score.completedMinutes ?? "" : ""}
                 onChange={(e) => updateScore(mergeEmomScore(value.score, { completedMinutes: e.target.value ? Number(e.target.value) : null }))}
@@ -329,6 +330,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <Input
                 type="number"
                 min={0}
+                aria-label="Missed reps"
                 placeholder="Missed reps"
                 value={value.score?.type === "emom" ? value.score.missedReps ?? "" : ""}
                 onChange={(e) => updateScore(mergeEmomScore(value.score, { missedReps: e.target.value ? Number(e.target.value) : null }))}
@@ -340,6 +342,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <Input
                 type="number"
                 min={0}
+                aria-label="AMRAP rounds"
                 placeholder="Rounds"
                 value={value.score?.type === "amrap" ? value.score.rounds : ""}
                 onChange={(e) => updateScore(mergeAmrapScore(value.score, { rounds: Number(e.target.value) || 0 }))}
@@ -347,6 +350,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <Input
                 type="number"
                 min={0}
+                aria-label="AMRAP extra reps"
                 placeholder="Extra reps"
                 value={value.score?.type === "amrap" ? value.score.reps ?? "" : ""}
                 onChange={(e) => updateScore(mergeAmrapScore(value.score, { reps: e.target.value ? Number(e.target.value) : null }))}
@@ -358,6 +362,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <Input
                 type="number"
                 min={0}
+                aria-label="Completed rounds"
                 placeholder="Completed rounds"
                 value={value.score?.type === "rounds" ? value.score.completedRounds : ""}
                 onChange={(e) => updateScore(mergeRoundsScore(value.score, { completedRounds: Number(e.target.value) || 0 }))}
@@ -365,6 +370,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
               <Input
                 type="number"
                 min={0}
+                aria-label="Elapsed time in seconds"
                 placeholder="Elapsed seconds"
                 value={value.score?.type === "rounds" ? value.score.elapsedSeconds ?? "" : ""}
                 onChange={(e) => updateScore(mergeRoundsScore(value.score, { elapsedSeconds: e.target.value ? Number(e.target.value) : null }))}
@@ -372,6 +378,7 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
             </div>
           )}
           <Input
+            aria-label="Result notes"
             placeholder="Result notes"
             value={value.score?.notes ?? ""}
             onChange={(e) => {

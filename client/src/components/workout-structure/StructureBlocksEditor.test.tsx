@@ -1,9 +1,29 @@
-import type { StructureBlockInput } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { StructureBlocksEditor } from "./StructureBlocksEditor";
+
+const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
+const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
+beforeAll(() => {
+  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  HTMLElement.prototype.releasePointerCapture = vi.fn();
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+afterAll(() => {
+  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
+  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
+  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
+  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+});
 
 function Harness({ initial = [] as StructureBlockInput[], showScoreControls = false }) {
   const [value, setValue] = useState<StructureBlockInput[]>(initial);
@@ -17,6 +37,41 @@ function Harness({ initial = [] as StructureBlockInput[], showScoreControls = fa
 
 const readSnapshot = (): StructureBlockInput[] =>
   JSON.parse(screen.getByTestId("harness-snapshot").textContent || "[]");
+
+function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
+  return {
+    id: "set-1",
+    workoutLogId: "log-1",
+    planDayId: null,
+    exerciseName: "back_squat",
+    customLabel: null,
+    category: "strength",
+    setNumber: 1,
+    reps: 8,
+    weight: 60,
+    distance: null,
+    time: null,
+    plannedReps: null,
+    plannedWeight: null,
+    plannedDistance: null,
+    plannedTime: null,
+    blockId: null,
+    stepNumber: null,
+    intervalMinute: null,
+    cycleNumber: null,
+    stepRole: null,
+    groupId: null,
+    intensity: null,
+    load: null,
+    repMode: null,
+    tempo: null,
+    standards: null,
+    notes: null,
+    confidence: 95,
+    sortOrder: 0,
+    ...overrides,
+  };
+}
 
 describe("StructureBlocksEditor", () => {
   it("collapses the format picker behind a single add affordance when empty", () => {
@@ -73,6 +128,104 @@ describe("StructureBlocksEditor", () => {
       formatType: "rounds",
       roundCount: 3,
     });
+  });
+
+  it("renders block-first previews for AMRAP and rounds blocks", () => {
+    render(
+      <Harness
+        initial={[
+          {
+            id: "block-amrap",
+            sectionType: "main",
+            formatType: "amrap",
+            timeCapMinutes: 12,
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+          },
+          {
+            id: "block-rounds",
+            sectionType: "main",
+            formatType: "rounds",
+            roundCount: 4,
+            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Wall Balls" }],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/Repeat 1 step until 12 min cap/i)).toBeInTheDocument();
+    expect(screen.getByText(/Complete 4 rounds of 1 step/i)).toBeInTheDocument();
+  });
+
+  it("assigns an unlinked exercise row from the block card", async () => {
+    const user = userEvent.setup();
+    const onUpdateSet = vi.fn();
+    render(
+      <StructureBlocksEditor
+        value={[{
+          id: "block-emom",
+          sectionType: "main",
+          formatType: "emom",
+          durationMinutes: 10,
+          steps: [{ stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Unassigned exercise" }],
+        }]}
+        onChange={vi.fn()}
+        exerciseSets={[
+          makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 }),
+          makeSet({ id: "set-2", setNumber: 2, sortOrder: 1 }),
+        ]}
+        onUpdateSet={onUpdateSet}
+      />,
+    );
+
+    expect(screen.getByTestId("structure-block-missing-link")).toHaveTextContent("No exercise row linked.");
+    await user.click(screen.getByRole("combobox", { name: /Assign row to Min 1/i }));
+    await user.click(await screen.findByRole("option", { name: /Back Squat/i }));
+
+    expect(onUpdateSet).toHaveBeenCalledTimes(2);
+    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
+      blockId: "block-emom",
+      stepNumber: 1,
+      intervalMinute: 1,
+      cycleNumber: null,
+      stepRole: "work",
+      groupId: null,
+    });
+  });
+
+  it("adds a linked row from an empty block step", () => {
+    const onAddSet = vi.fn();
+    render(
+      <StructureBlocksEditor
+        value={[{
+          id: "block-rounds",
+          sectionType: "main",
+          formatType: "rounds",
+          roundCount: 3,
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Unassigned exercise" }],
+        }]}
+        onChange={vi.fn()}
+        onAddSet={onAddSet}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("structure-block-add-linked-row"));
+
+    expect(onAddSet).toHaveBeenCalledWith(expect.objectContaining({
+      exerciseName: "custom",
+      customLabel: "Rounds step 1",
+      category: "conditioning",
+      blockId: "block-rounds",
+      stepNumber: 1,
+      stepRole: "work",
+    }));
   });
 
   it("hydrates score controls for logged AMRAP blocks", () => {

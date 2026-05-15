@@ -402,6 +402,17 @@ function ReviewActualsSection({
 
   return (
     <div className="space-y-3">
+      <StructureBlocksEditor
+        value={structureBlocks}
+        onChange={(next) => detail.updateStructure.mutate(next)}
+        exerciseSets={exerciseSets}
+        onUpdateSet={detail.patchSetDebounced}
+        onAddSet={detail.addSet.mutate}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        showScoreControls
+        onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
+      />
       <ExerciseTable
         workoutId={workoutLogId}
         exerciseSets={exerciseSets}
@@ -419,12 +430,6 @@ function ReviewActualsSection({
         defaultExpanded
         showPlannedDiffs={showPlannedDiffs}
         structureBlocks={structureBlocks}
-      />
-      <StructureBlocksEditor
-        value={structureBlocks}
-        onChange={(next) => detail.updateStructure.mutate(next)}
-        showScoreControls
-        onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
       />
       <PrescriptionEditor
         entryId={entry.id}

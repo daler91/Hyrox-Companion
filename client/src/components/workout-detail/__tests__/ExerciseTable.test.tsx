@@ -257,9 +257,7 @@ describe("ExerciseTable drag handle", () => {
     expect(onUpdateSet).not.toHaveBeenCalled();
   });
 
-  it("fans block assignment metadata across every set in the exercise row", async () => {
-    const user = userEvent.setup();
-    const onUpdateSet = vi.fn();
+  it("shows a read-only block assignment badge for linked exercise rows", () => {
     const structureBlocks: StructureBlockInput[] = [{
       id: "block-emom",
       sectionType: "main",
@@ -271,8 +269,8 @@ describe("ExerciseTable drag handle", () => {
       ],
     }];
     const sets: ExerciseSet[] = [
-      makeSet({ id: "set-1", setNumber: 1, sortOrder: 0 }),
-      makeSet({ id: "set-2", setNumber: 2, sortOrder: 1 }),
+      makeSet({ id: "set-1", setNumber: 1, sortOrder: 0, blockId: "block-emom", stepNumber: 2, intervalMinute: 2 }),
+      makeSet({ id: "set-2", setNumber: 2, sortOrder: 1, blockId: "block-emom", stepNumber: 2, intervalMinute: 2 }),
     ];
 
     render(
@@ -280,32 +278,14 @@ describe("ExerciseTable drag handle", () => {
         workoutId="log-1"
         exerciseSets={sets}
         weightUnit="kg"
-        onUpdateSet={onUpdateSet}
+        onUpdateSet={vi.fn()}
         onAddSet={vi.fn()}
         onDeleteSet={vi.fn()}
         structureBlocks={structureBlocks}
       />,
     );
 
-    await user.click(screen.getByRole("combobox", { name: /Block assignment for Back Squat/i }));
-    await user.click(await screen.findByRole("option", { name: /min 2/i }));
-
-    expect(onUpdateSet).toHaveBeenCalledTimes(2);
-    expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
-      blockId: "block-emom",
-      stepNumber: 2,
-      intervalMinute: 2,
-      cycleNumber: null,
-      stepRole: "work",
-      groupId: null,
-    });
-    expect(onUpdateSet).toHaveBeenNthCalledWith(2, "set-2", {
-      blockId: "block-emom",
-      stepNumber: 2,
-      intervalMinute: 2,
-      cycleNumber: null,
-      stepRole: "work",
-      groupId: null,
-    });
+    expect(screen.getByTestId("exercise-row-block-assignment")).toHaveTextContent(/EMOM 1.*min 2/);
+    expect(screen.queryByRole("combobox", { name: /Block assignment for Back Squat/i })).not.toBeInTheDocument();
   });
 });

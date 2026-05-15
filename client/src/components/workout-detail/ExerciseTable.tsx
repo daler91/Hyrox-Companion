@@ -42,13 +42,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise,groupExerciseSets } from "@/lib/exerciseUtils";
 import { cn } from "@/lib/utils";
+import { UNASSIGNED_BLOCK_VALUE } from "@/lib/workoutStructureAssignments";
 
 import { type SaveState, SaveStatePill } from "./SaveStatePill";
+
+interface BlockAssignmentOption {
+  readonly value: string;
+  readonly label: string;
+  readonly blockId: string;
+  readonly stepNumber: number;
+  readonly intervalMinute: number | null;
+  readonly stepRole: string | null;
+  readonly groupId: string | null;
+}
 
 interface ExerciseTableProps {
   readonly workoutId: string;
@@ -81,18 +91,6 @@ interface ExerciseTableProps {
   readonly onOpenConversionHelper?: () => void;
   readonly structureBlocks?: StructureBlockInput[];
 }
-
-interface BlockAssignmentOption {
-  readonly value: string;
-  readonly label: string;
-  readonly blockId: string;
-  readonly stepNumber: number;
-  readonly intervalMinute: number | null;
-  readonly stepRole: string | null;
-  readonly groupId: string | null;
-}
-
-const UNASSIGNED_BLOCK_VALUE = "none";
 
 export function toggleExerciseRow(expanded: ReadonlySet<string>, rowKey: string): Set<string> {
   const next = new Set(expanded);
@@ -661,60 +659,26 @@ function assignmentValueForGroup(group: GroupedExercise, options: readonly Block
   return options.some((option) => option.value === value) ? value : UNASSIGNED_BLOCK_VALUE;
 }
 
-function assignmentPatchForValue(
-  value: string,
-  options: readonly BlockAssignmentOption[],
-): PatchExerciseSetPayload {
-  if (value === UNASSIGNED_BLOCK_VALUE) {
-    return {
-      blockId: null,
-      stepNumber: null,
-      intervalMinute: null,
-      cycleNumber: null,
-      stepRole: null,
-      groupId: null,
-    };
-  }
-  const option = options.find((candidate) => candidate.value === value);
-  if (!option) return {};
-  return {
-    blockId: option.blockId,
-    stepNumber: option.stepNumber,
-    intervalMinute: option.intervalMinute,
-    cycleNumber: null,
-    stepRole: option.stepRole,
-    groupId: option.groupId,
-  };
-}
-
-function BlockAssignmentSelect({
+function BlockAssignmentBadge({
   group,
   options,
-  onAssign,
 }: Readonly<{
   group: GroupedExercise;
   options: readonly BlockAssignmentOption[];
-  onAssign: (value: string) => void;
 }>) {
   if (options.length === 0) return null;
+  const value = assignmentValueForGroup(group, options);
+  if (value === UNASSIGNED_BLOCK_VALUE) return null;
+  const option = options.find((candidate) => candidate.value === value);
+  if (!option) return null;
   return (
-    <Select value={assignmentValueForGroup(group, options)} onValueChange={onAssign}>
-      <SelectTrigger
-        className="h-8 w-[132px] shrink-0 text-xs"
-        aria-label={`Block assignment for ${getExerciseLabel(group.exerciseName, group.customLabel)}`}
-        data-testid="exercise-row-block-assignment"
-      >
-        <SelectValue placeholder="No block" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={UNASSIGNED_BLOCK_VALUE}>No block</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <span
+      className="hidden max-w-[9rem] shrink-0 truncate rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary sm:inline-block"
+      title={option.label}
+      data-testid="exercise-row-block-assignment"
+    >
+      {option.label}
+    </span>
   );
 }
 
@@ -773,11 +737,6 @@ const GroupRow = memo(function GroupRow({
     }
     setChangeExerciseOpen(false);
   };
-  const handleAssignBlock = (value: string) => {
-    const patch = assignmentPatchForValue(value, blockAssignmentOptions);
-    for (const s of group.sets) onUpdateSet(s.id, patch);
-  };
-
   const prescription = formatPrescription({
     setCount,
     metricValue: metric.value,
@@ -834,10 +793,9 @@ const GroupRow = memo(function GroupRow({
           >
             {label}
           </span>
-          <BlockAssignmentSelect
+          <BlockAssignmentBadge
             group={group}
             options={blockAssignmentOptions}
-            onAssign={handleAssignBlock}
           />
           <Button
             type="button"
