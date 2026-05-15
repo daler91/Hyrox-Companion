@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterAll,beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import TimelineFilters from "../timeline-filters";
 
@@ -9,25 +11,7 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
   GeneratePlanDialog: () => null,
 }));
 
-// Mock pointer capture and scrollIntoView for Radix UI components in JSDOM
-const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
-const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
-const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
-const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-
-beforeAll(() => {
-  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-  HTMLElement.prototype.setPointerCapture = vi.fn();
-  HTMLElement.prototype.releasePointerCapture = vi.fn();
-  HTMLElement.prototype.scrollIntoView = vi.fn();
-});
-
-afterAll(() => {
-  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
-  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
-  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
-  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
-});
+installRadixPointerMocks();
 
 describe("TimelineFilters", () => {
   const defaultProps = {

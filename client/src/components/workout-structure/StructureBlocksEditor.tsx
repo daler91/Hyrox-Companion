@@ -22,6 +22,14 @@ interface DraftBlock {
   readonly config: WorkoutStructureConfig;
 }
 
+type StructureStep = StructureBlockInput["steps"][number];
+type AssignGroupHandler = (
+  group: GroupedExercise,
+  block: StructureBlockInput,
+  step: StructureStep,
+) => void;
+type AddLinkedRowHandler = (block: StructureBlockInput, step: StructureStep) => void;
+
 interface Props {
   readonly value?: StructureBlockInput[];
   readonly onChange: (next: StructureBlockInput[]) => void;
@@ -34,28 +42,30 @@ interface Props {
   readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
 }
 
-interface StructureBlockCardProps {
+interface BlockContextProps {
   readonly block: StructureBlockInput;
-  readonly config: WorkoutStructureConfig;
-  readonly index: number;
   readonly groups: readonly GroupedExercise[];
   readonly unassignedGroups: readonly GroupedExercise[];
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
+  readonly onAssignGroup?: AssignGroupHandler;
+  readonly onAddLinkedRow?: AddLinkedRowHandler;
+}
+
+interface StructureBlockCardProps extends BlockContextProps {
+  readonly config: WorkoutStructureConfig;
+  readonly index: number;
   readonly showScoreControls: boolean;
   readonly onChange: (next: WorkoutStructureConfig) => void;
   readonly onRemove: () => void;
-  readonly onAssignGroup?: (
-    group: GroupedExercise,
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-  readonly onAddLinkedRow?: (
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
   readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
 }
+
+interface BlockStepContextProps extends BlockContextProps {
+  readonly step: StructureStep;
+}
+
+type MissingLinkActionsProps = Omit<BlockStepContextProps, "groups">;
 
 const generateId = () => crypto.randomUUID();
 const EMPTY_STRUCTURE_BLOCKS: readonly StructureBlockInput[] = [];
@@ -103,7 +113,7 @@ function blockFromDraft(draft: DraftBlock, idx: number): StructureBlockInput {
 }
 
 function draftsToValue(drafts: readonly DraftBlock[]): StructureBlockInput[] {
-  return drafts.map(blockFromDraft);
+  return drafts.map((draft, idx) => blockFromDraft(draft, idx));
 }
 
 function formatBlockType(type: StructureBlockInput["formatType"]): string {
@@ -132,7 +142,7 @@ function configStepWithTarget(step: WorkoutStep): string {
   return step.target ? `${label} - ${step.target}` : label;
 }
 
-function stepTargetText(step: StructureBlockInput["steps"][number]): string | null {
+function stepTargetText(step: StructureStep): string | null {
   const targets = step.targets as Record<string, unknown> | null | undefined;
   if (!targets) return null;
   const instructions = targets.instructions;
@@ -146,7 +156,7 @@ function stepTargetText(step: StructureBlockInput["steps"][number]): string | nu
   return null;
 }
 
-function stepDisplayName(step: StructureBlockInput["steps"][number]): string {
+function stepDisplayName(step: StructureStep): string {
   const type = step.stepType ?? "work";
   if (type === "rest") return "Rest";
   if (type === "transition") return "Transition";
@@ -155,7 +165,7 @@ function stepDisplayName(step: StructureBlockInput["steps"][number]): string {
     : "Unassigned work";
 }
 
-function stepPrefix(block: StructureBlockInput, step: StructureBlockInput["steps"][number]): string {
+function stepPrefix(block: StructureBlockInput, step: StructureStep): string {
   if (block.formatType === "emom") return `Min ${step.minuteIndex ?? step.stepNumber}`;
   return `Step ${step.stepNumber}`;
 }
@@ -166,7 +176,7 @@ function groupOptionValue(group: GroupedExercise): string {
 
 function addPayloadForStep(
   block: StructureBlockInput,
-  step: StructureBlockInput["steps"][number],
+  step: StructureStep,
 ): AddExerciseSetPayload {
   const rawName = typeof step.exerciseName === "string" ? step.exerciseName.trim() : "";
   const hasNamedExercise = rawName.length > 0 && rawName !== UNASSIGNED_WORK_STEP_LABEL;
@@ -264,7 +274,7 @@ export function StructureBlocksEditor({
   );
 
   const handleAssignGroup = useCallback(
-    (group: GroupedExercise, block: StructureBlockInput, step: StructureBlockInput["steps"][number]) => {
+    (group: GroupedExercise, block: StructureBlockInput, step: StructureStep) => {
       if (!onUpdateSet) return;
       const patch = assignmentPatchForStep(block, step);
       for (const set of group.sets) onUpdateSet(set.id, patch);
@@ -273,7 +283,7 @@ export function StructureBlocksEditor({
   );
 
   const handleAddLinkedRow = useCallback(
-    (block: StructureBlockInput, step: StructureBlockInput["steps"][number]) => {
+    (block: StructureBlockInput, step: StructureStep) => {
       onAddSet?.(addPayloadForStep(block, step));
     },
     [onAddSet],
@@ -439,25 +449,33 @@ function BlockPreview({ config }: { readonly config: WorkoutStructureConfig }) {
   }
   if (config.blockType === "amrap") {
     return (
-      <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs" data-testid="structure-block-preview">
-        <p className="font-medium text-foreground">
-          Repeat {config.steps.length} step{config.steps.length === 1 ? "" : "s"} until {config.timeCapMinutes ?? "the"} min cap.
-        </p>
-        <p className="mt-1 truncate text-muted-foreground">{config.steps.map(configStepWithTarget).join(" -> ")}</p>
-      </div>
+      <StepSequencePreview
+        summary={`Repeat ${config.steps.length} step${config.steps.length === 1 ? "" : "s"} until ${config.timeCapMinutes ?? "the"} min cap.`}
+        steps={config.steps}
+      />
     );
   }
   if (config.blockType === "rounds") {
     return (
-      <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs" data-testid="structure-block-preview">
-        <p className="font-medium text-foreground">
-          Complete {config.roundCount ?? "the prescribed"} round{config.roundCount === 1 ? "" : "s"} of {config.steps.length} step{config.steps.length === 1 ? "" : "s"}.
-        </p>
-        <p className="mt-1 truncate text-muted-foreground">{config.steps.map(configStepWithTarget).join(" -> ")}</p>
-      </div>
+      <StepSequencePreview
+        summary={`Complete ${config.roundCount ?? "the prescribed"} round${config.roundCount === 1 ? "" : "s"} of ${config.steps.length} step${config.steps.length === 1 ? "" : "s"}.`}
+        steps={config.steps}
+      />
     );
   }
   return null;
+}
+
+function StepSequencePreview({
+  summary,
+  steps,
+}: Readonly<{ summary: string; steps: readonly WorkoutStep[] }>) {
+  return (
+    <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs" data-testid="structure-block-preview">
+      <p className="font-medium text-foreground">{summary}</p>
+      <p className="mt-1 truncate text-muted-foreground">{steps.map(configStepWithTarget).join(" -> ")}</p>
+    </div>
+  );
 }
 
 function EmomBlockPreview({ config }: { readonly config: WorkoutStructureConfig }) {
@@ -501,22 +519,7 @@ function BlockStepLinks({
   distanceUnit,
   onAssignGroup,
   onAddLinkedRow,
-}: Readonly<{
-  block: StructureBlockInput;
-  groups: readonly GroupedExercise[];
-  unassignedGroups: readonly GroupedExercise[];
-  weightUnit: "kg" | "lb";
-  distanceUnit: "km" | "miles";
-  onAssignGroup?: (
-    group: GroupedExercise,
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-  onAddLinkedRow?: (
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-}>) {
+}: Readonly<BlockContextProps>) {
   return (
     <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3" data-testid="structure-block-linked-rows">
       <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -551,25 +554,10 @@ function BlockStepLinkRow({
   distanceUnit,
   onAssignGroup,
   onAddLinkedRow,
-}: Readonly<{
-  block: StructureBlockInput;
-  step: StructureBlockInput["steps"][number];
-  groups: readonly GroupedExercise[];
-  unassignedGroups: readonly GroupedExercise[];
-  weightUnit: "kg" | "lb";
-  distanceUnit: "km" | "miles";
-  onAssignGroup?: (
-    group: GroupedExercise,
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-  onAddLinkedRow?: (
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-}>) {
-  const linkedGroups = block.id
-    ? groups.filter((group) => groupMatchesBlockStep(group, block.id!, step.stepNumber))
+}: Readonly<BlockStepContextProps>) {
+  const blockId = block.id;
+  const linkedGroups = blockId
+    ? groups.filter((group) => groupMatchesBlockStep(group, blockId, step.stepNumber))
     : [];
   const isWorkStep = (step.stepType ?? "work") === "work";
   const target = stepTargetText(step);
@@ -625,22 +613,7 @@ function MissingLinkActions({
   distanceUnit,
   onAssignGroup,
   onAddLinkedRow,
-}: Readonly<{
-  block: StructureBlockInput;
-  step: StructureBlockInput["steps"][number];
-  unassignedGroups: readonly GroupedExercise[];
-  weightUnit: "kg" | "lb";
-  distanceUnit: "km" | "miles";
-  onAssignGroup?: (
-    group: GroupedExercise,
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-  onAddLinkedRow?: (
-    block: StructureBlockInput,
-    step: StructureBlockInput["steps"][number],
-  ) => void;
-}>) {
+}: Readonly<MissingLinkActionsProps>) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-amber-300 bg-amber-500/10 px-2 py-2 text-xs">
       <span className="font-medium text-amber-800 dark:text-amber-200" data-testid="structure-block-missing-link">

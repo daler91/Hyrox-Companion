@@ -1,16 +1,8 @@
-import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it, vi } from "vitest";
 
-import { dispatchSortOrderMutations, toggleExerciseRow } from "../ExerciseTable";
+import { makeExerciseSet as makeSet } from "@/test/factories/exerciseSetFactory";
 
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1", workoutLogId: "log-1", planDayId: null, exerciseName: "back_squat", customLabel: null,
-    category: "strength", setNumber: 1, reps: 8, weight: 60, distance: null, time: null,
-    plannedReps: null, plannedWeight: null, plannedDistance: null, plannedTime: null, notes: null,
-    confidence: 90, sortOrder: 0, ...overrides,
-  };
-}
+import { dispatchSortOrderMutations, toggleExerciseRow } from "../ExerciseTable";
 
 describe("ExerciseTable state units", () => {
   it("toggles row expansion without mutating input set", () => {

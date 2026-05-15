@@ -1,63 +1,14 @@
 import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { makeExerciseSet as makeSet } from "@/test/factories/exerciseSetFactory";
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ExerciseTable } from "../ExerciseTable";
 
-const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
-const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
-const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
-const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-
-beforeAll(() => {
-  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-  HTMLElement.prototype.setPointerCapture = vi.fn();
-  HTMLElement.prototype.releasePointerCapture = vi.fn();
-  HTMLElement.prototype.scrollIntoView = vi.fn();
-});
-
-afterAll(() => {
-  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
-  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
-  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
-  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
-});
-
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1",
-    workoutLogId: "log-1",
-    planDayId: null,
-    exerciseName: "back_squat",
-    customLabel: null,
-    category: "strength",
-    setNumber: 1,
-    reps: 8,
-    weight: 60,
-    distance: null,
-    time: null,
-    plannedReps: null,
-    plannedWeight: null,
-    plannedDistance: null,
-    plannedTime: null,
-    blockId: null,
-    stepNumber: null,
-    intervalMinute: null,
-    cycleNumber: null,
-    stepRole: null,
-    groupId: null,
-    intensity: null,
-    load: null,
-    repMode: null,
-    tempo: null,
-    standards: null,
-    notes: null,
-    confidence: 95,
-    sortOrder: 0,
-    ...overrides,
-  };
-}
+installRadixPointerMocks();
 
 // One reorder = many PATCHes (one per moved set). We assert the payloads
 // shape rather than invoking the @dnd-kit keyboard sensor directly — the

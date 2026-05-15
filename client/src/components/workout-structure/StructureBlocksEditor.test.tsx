@@ -1,29 +1,15 @@
-import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
+import type { StructureBlockInput } from "@shared/schema";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { makeExerciseSet as makeSet } from "@/test/factories/exerciseSetFactory";
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { StructureBlocksEditor } from "./StructureBlocksEditor";
 
-const originalHasPointerCapture = HTMLElement.prototype.hasPointerCapture;
-const originalSetPointerCapture = HTMLElement.prototype.setPointerCapture;
-const originalReleasePointerCapture = HTMLElement.prototype.releasePointerCapture;
-const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-
-beforeAll(() => {
-  HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-  HTMLElement.prototype.setPointerCapture = vi.fn();
-  HTMLElement.prototype.releasePointerCapture = vi.fn();
-  HTMLElement.prototype.scrollIntoView = vi.fn();
-});
-
-afterAll(() => {
-  HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture;
-  HTMLElement.prototype.setPointerCapture = originalSetPointerCapture;
-  HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture;
-  HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
-});
+installRadixPointerMocks();
 
 function Harness({ initial = [] as StructureBlockInput[], showScoreControls = false }) {
   const [value, setValue] = useState<StructureBlockInput[]>(initial);
@@ -37,41 +23,6 @@ function Harness({ initial = [] as StructureBlockInput[], showScoreControls = fa
 
 const readSnapshot = (): StructureBlockInput[] =>
   JSON.parse(screen.getByTestId("harness-snapshot").textContent || "[]");
-
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1",
-    workoutLogId: "log-1",
-    planDayId: null,
-    exerciseName: "back_squat",
-    customLabel: null,
-    category: "strength",
-    setNumber: 1,
-    reps: 8,
-    weight: 60,
-    distance: null,
-    time: null,
-    plannedReps: null,
-    plannedWeight: null,
-    plannedDistance: null,
-    plannedTime: null,
-    blockId: null,
-    stepNumber: null,
-    intervalMinute: null,
-    cycleNumber: null,
-    stepRole: null,
-    groupId: null,
-    intensity: null,
-    load: null,
-    repMode: null,
-    tempo: null,
-    standards: null,
-    notes: null,
-    confidence: 95,
-    sortOrder: 0,
-    ...overrides,
-  };
-}
 
 describe("StructureBlocksEditor", () => {
   it("collapses the format picker behind a single add affordance when empty", () => {
