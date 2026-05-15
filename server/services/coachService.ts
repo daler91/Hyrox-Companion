@@ -329,13 +329,26 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // not in the upcoming slate) would otherwise be dropped in both the
     // modification pass AND the review-note pass, leaving that day with
     // no note at all (C-NOTE-1).
-    const modifiedIds = new Set(
-      suggestions
-        .filter(s => suggestionWillApply(s, upcomingWorkouts))
-        .map(s => s.workoutId),
-    );
-    const unchangedWorkouts = upcomingWorkouts.filter(w => !modifiedIds.has(w.id));
-    const unchangedIds = new Set(unchangedWorkouts.map(w => w.id));
+    // ⚡ Bolt Performance Optimization:
+    // Replaced chained .filter().map() with a single for...of loop to avoid intermediate array allocations.
+    const modifiedIds = new Set<string>();
+    for (const s of suggestions) {
+      if (suggestionWillApply(s, upcomingWorkouts)) {
+        modifiedIds.add(s.workoutId);
+      }
+    }
+
+    // ⚡ Bolt Performance Optimization:
+    // Replaced chained .filter() and .map() with a single for...of loop to avoid intermediate array allocations.
+    const unchangedWorkouts: typeof upcomingWorkouts = [];
+    const unchangedIds = new Set<string>();
+    for (const w of upcomingWorkouts) {
+      if (!modifiedIds.has(w.id)) {
+        unchangedWorkouts.push(w);
+        unchangedIds.add(w.id);
+      }
+    }
+
     const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
     let rawReviewNotes: Array<{ workoutId: string; note: string }> = [];
     if (unchangedWorkouts.length > 0) {
@@ -357,15 +370,15 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // a modified day would overwrite its aiSource/aiRationale and mislabel
     // it as unchanged. Dedupe on workoutId so the last write doesn't clobber
     // a legitimate note either.
-    const reviewNotes = Array.from(
-      rawReviewNotes
-        .filter(n => unchangedIds.has(n.workoutId))
-        .reduce<Map<string, typeof rawReviewNotes[number]>>((acc, n) => {
-          acc.set(n.workoutId, n);
-          return acc;
-        }, new Map())
-        .values(),
-    );
+    // ⚡ Bolt Performance Optimization:
+    // Replaced chained .filter().reduce() with a single for...of loop to avoid intermediate array allocations.
+    const deduplicatedNotes = new Map<string, typeof rawReviewNotes[number]>();
+    for (const n of rawReviewNotes) {
+      if (unchangedIds.has(n.workoutId)) {
+        deduplicatedNotes.set(n.workoutId, n);
+      }
+    }
+    const reviewNotes = Array.from(deduplicatedNotes.values());
 
     // Apply all modifications and review notes atomically: a failure mid-loop
     // rolls back every earlier apply so the plan never ends up partially
@@ -384,9 +397,17 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
           applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx),
         ),
       );
+
+      // ⚡ Bolt Performance Optimization:
+      // Replaced .filter(Boolean).length with a single loop to avoid intermediate array allocations.
+      let adjustedCount = 0;
+      let notedCount = 0;
+      for (const res of modResults) if (res) adjustedCount++;
+      for (const res of noteResults) if (res) notedCount++;
+
       return {
-        adjusted: modResults.filter(Boolean).length,
-        noted: noteResults.filter(Boolean).length,
+        adjusted: adjustedCount,
+        noted: notedCount,
       };
     });
 
