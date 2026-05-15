@@ -12,8 +12,8 @@ import {
   isUnassignedGroup,
 } from "@/lib/workoutStructureAssignments";
 
-import { buildEmomPreview } from "./emomPreview";
 import { configToStructureBlock, structureBlockToConfig } from "./configToStructureBlocks";
+import { buildEmomPreview } from "./emomPreview";
 import { UNASSIGNED_WORK_STEP_LABEL, type WorkoutStep, type WorkoutStructureConfig } from "./types";
 import { WorkoutStructureEditor } from "./WorkoutStructureEditor";
 
@@ -65,7 +65,9 @@ interface BlockStepContextProps extends BlockContextProps {
   readonly step: StructureStep;
 }
 
-type MissingLinkActionsProps = Omit<BlockStepContextProps, "groups">;
+type StepLinkActionsProps = Omit<BlockStepContextProps, "groups"> & {
+  readonly hasLinkedRows: boolean;
+};
 
 const generateId = () => crypto.randomUUID();
 const EMPTY_STRUCTURE_BLOCKS: readonly StructureBlockInput[] = [];
@@ -590,10 +592,11 @@ function BlockStepLinkRow({
         </div>
       ) : null}
 
-      {isWorkStep && linkedGroups.length === 0 ? (
-        <MissingLinkActions
+      {isWorkStep ? (
+        <StepLinkActions
           block={block}
           step={step}
+          hasLinkedRows={linkedGroups.length > 0}
           unassignedGroups={unassignedGroups}
           weightUnit={weightUnit}
           distanceUnit={distanceUnit}
@@ -605,20 +608,32 @@ function BlockStepLinkRow({
   );
 }
 
-function MissingLinkActions({
+function StepLinkActions({
   block,
   step,
+  hasLinkedRows,
   unassignedGroups,
   weightUnit,
   distanceUnit,
   onAssignGroup,
   onAddLinkedRow,
-}: Readonly<MissingLinkActionsProps>) {
+}: Readonly<StepLinkActionsProps>) {
+  const showMissingState = !hasLinkedRows;
+  const hasAssignAction = Boolean(onAssignGroup && unassignedGroups.length > 0);
+  const hasAddAction = Boolean(onAddLinkedRow);
+  if (!showMissingState && !hasAssignAction && !hasAddAction) return null;
+
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-amber-300 bg-amber-500/10 px-2 py-2 text-xs">
-      <span className="font-medium text-amber-800 dark:text-amber-200" data-testid="structure-block-missing-link">
-        No exercise row linked.
-      </span>
+    <div className={`mt-2 flex flex-wrap items-center gap-2 rounded-md px-2 py-2 text-xs ${
+      showMissingState
+        ? "border border-dashed border-amber-300 bg-amber-500/10"
+        : "border border-border bg-muted/30"
+    }`}>
+      {showMissingState ? (
+        <span className="font-medium text-amber-800 dark:text-amber-200" data-testid="structure-block-missing-link">
+          No exercise row linked.
+        </span>
+      ) : null}
       {onAssignGroup && unassignedGroups.length > 0 ? (
         <AssignGroupSelect
           groups={unassignedGroups}
