@@ -25,7 +25,7 @@ export function mockJsonResponse(body: unknown): Response {
 export function requestJsonBody(init: RequestInit | undefined): unknown {
   const body = init?.body;
   if (typeof body !== "string") {
-    throw new Error("Expected JSON request body to be a string");
+    throw new TypeError("Expected JSON request body to be a string");
   }
   return JSON.parse(body) as unknown;
 }
