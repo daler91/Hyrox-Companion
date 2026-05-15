@@ -1,4 +1,4 @@
-import { useReducer } from "react";
+import { useReducer, useRef } from "react";
 
 import { useCombineWorkouts } from "./useCombineWorkouts";
 import { useOnboarding } from "./useOnboarding";
@@ -15,7 +15,10 @@ type TimelineEvent =
   | { type: "plan.selected"; planId: string | null }
   | { type: "plan.scheduled"; planId: string };
 
-export function timelineStateReducer(state: TimelineUiState, event: TimelineEvent): TimelineUiState {
+export function timelineStateReducer(
+  state: TimelineUiState,
+  event: TimelineEvent,
+): TimelineUiState {
   switch (event.type) {
     case "plan.selected":
       return { ...state, selectedPlanId: event.planId };
@@ -26,18 +29,25 @@ export function timelineStateReducer(state: TimelineUiState, event: TimelineEven
   }
 }
 
-export function useTimelineState(options?: { aiCoachEnabled?: boolean; isAuthUserLoaded?: boolean }) {
+export function useTimelineState(options?: {
+  aiCoachEnabled?: boolean;
+  isAuthUserLoaded?: boolean;
+}) {
   const [uiState, dispatch] = useReducer(timelineStateReducer, { selectedPlanId: null });
   const selectedPlanId = uiState.selectedPlanId;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const data = useTimelineData(selectedPlanId, options?.isAuthUserLoaded);
   const filters = useTimelineFilters(data.timelineData, data.annotations);
 
+  const onboarding = useOnboarding(data.isNewUser, fileInputRef, options?.aiCoachEnabled);
+
   const planImport = usePlanImport({
+    fileInputRef,
+    onPlanImported: onboarding.handlePlanImported,
     onPlanScheduled: (planId) => dispatch({ type: "plan.scheduled", planId }),
   });
 
-  const onboarding = useOnboarding(data.isNewUser, planImport.fileInputRef, options?.aiCoachEnabled);
   const workoutActions = useWorkoutActions(selectedPlanId);
   const combine = useCombineWorkouts();
 

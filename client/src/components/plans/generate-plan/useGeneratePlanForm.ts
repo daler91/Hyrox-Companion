@@ -57,6 +57,12 @@ export interface GeneratePlanFormValues {
   readonly injuries: string;
 }
 
+export interface GeneratePlanFormOptions {
+  readonly initialGoal?: string;
+  readonly initialStartDate?: string;
+  readonly requireStartDate?: boolean;
+}
+
 export function calculateSuggestedStartDate(race: string, weeks: number): string {
   const raceD = new Date(race);
   const start = new Date(raceD);
@@ -72,11 +78,16 @@ export function calculateSuggestedStartDate(race: string, weeks: number): string
 }
 
 export function getGeneratePlanFormValidation(
-  values: Pick<GeneratePlanFormValues, "goal" | "daysPerWeek" | "restDays">,
+  values: Pick<GeneratePlanFormValues, "goal" | "daysPerWeek" | "restDays"> &
+    Partial<Pick<GeneratePlanFormValues, "startDate">>,
+  options: Pick<GeneratePlanFormOptions, "requireStartDate"> = {},
 ) {
   const requiredRestDays = 7 - values.daysPerWeek;
   const canProceedStep0 = values.goal.trim().length > 0;
-  const canProceedStep1 = values.daysPerWeek === 7 || values.restDays.length === requiredRestDays;
+  const hasRequiredStartDate = !options.requireStartDate || (values.startDate ?? "").length > 0;
+  const hasRequiredRestDays =
+    values.daysPerWeek === 7 || values.restDays.length === requiredRestDays;
+  const canProceedStep1 = hasRequiredRestDays && hasRequiredStartDate;
   return {
     requiredRestDays,
     canProceedStep0,
@@ -101,26 +112,29 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
   };
 }
 
-export function useGeneratePlanForm() {
+export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
+  const initialGoal = options.initialGoal ?? "";
+  const initialStartDate = options.initialStartDate ?? "";
+  const isStartDateRequired = options.requireStartDate === true;
   const [step, setStep] = useState<GeneratePlanStep>(0);
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(initialGoal);
   const [totalWeeks, setTotalWeeks] = useState(DEFAULT_WEEKS);
   const [daysPerWeek, setDaysPerWeek] = useState(DEFAULT_DAYS_PER_WEEK);
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>("intermediate");
   const [raceDate, setRaceDate] = useState("");
-  const [startDate, setStartDate] = useState("");
+  const [startDate, setStartDate] = useState(initialStartDate);
   const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [injuries, setInjuries] = useState("");
 
   const resetForm = () => {
     setStep(0);
-    setGoal("");
+    setGoal(initialGoal);
     setTotalWeeks(DEFAULT_WEEKS);
     setDaysPerWeek(DEFAULT_DAYS_PER_WEEK);
     setExperienceLevel("intermediate");
     setRaceDate("");
-    setStartDate("");
+    setStartDate(initialStartDate);
     setRestDays(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
     setFocusAreas([]);
     setInjuries("");
@@ -162,7 +176,9 @@ export function useGeneratePlanForm() {
     focusAreas,
     injuries,
   };
-  const validation = getGeneratePlanFormValidation(values);
+  const validation = getGeneratePlanFormValidation(values, {
+    requireStartDate: isStartDateRequired,
+  });
 
   return {
     step,
@@ -182,6 +198,7 @@ export function useGeneratePlanForm() {
     injuries,
     setInjuries,
     resetForm,
+    isStartDateRequired,
     toggleFocus,
     toggleRestDay,
     handleDaysPerWeekChange,

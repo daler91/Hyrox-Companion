@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { type RefObject, useCallback, useEffect, useState } from "react";
 
+import { markOnboardingComplete, ONBOARDING_COMPLETE_STORAGE_KEY } from "@/hooks/onboardingStorage";
 import { queryClient } from "@/lib/queryClient";
 
 import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
@@ -25,21 +26,22 @@ function clearOnboardingForceParam(): void {
 
 export function useOnboarding(
   isNewUser: boolean,
-  fileInputRef: React.RefObject<HTMLInputElement>,
+  fileInputRef: RefObject<HTMLInputElement>,
   aiCoachEnabled = true,
 ) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingTriggered, setOnboardingTriggered] = useState(false);
+  const [pendingImportCompletion, setPendingImportCompletion] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [hasAutoOpenedCoach, setHasAutoOpenedCoach] = useState(false);
 
   useEffect(() => {
     if (onboardingTriggered) return;
     const forcedByUrl = hasOnboardingForceParam();
-    const isFirstTime = isNewUser && !localStorage.getItem("fitai-onboarding-complete");
+    const isFirstTime = isNewUser && !localStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY);
     if (forcedByUrl || isFirstTime) {
       if (forcedByUrl) {
-        localStorage.removeItem("fitai-onboarding-complete");
+        localStorage.removeItem(ONBOARDING_COMPLETE_STORAGE_KEY);
         clearOnboardingForceParam();
       }
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -65,10 +67,13 @@ export function useOnboarding(
   const handleOnboardingComplete = useCallback(
     (choice: OnboardingCompletionChoice) => {
       setShowOnboarding(false);
-      if (choice === "import" && fileInputRef.current) {
-        setTimeout(() => {
-          fileInputRef.current?.click();
-        }, IMPORT_INPUT_DELAY_MS);
+      if (choice === "import") {
+        setPendingImportCompletion(true);
+        if (fileInputRef.current) {
+          setTimeout(() => {
+            fileInputRef.current?.click();
+          }, IMPORT_INPUT_DELAY_MS);
+        }
       } else if (choice === "sample" || choice === "generated") {
         queryClient.invalidateQueries({ queryKey: ["/api/v1/plans"] }).catch(() => {});
         queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline"] }).catch(() => {});
@@ -77,10 +82,18 @@ export function useOnboarding(
     [fileInputRef],
   );
 
+  const handlePlanImported = useCallback(() => {
+    if (!pendingImportCompletion) return;
+    markOnboardingComplete();
+    setPendingImportCompletion(false);
+  }, [pendingImportCompletion]);
+
   return {
     showOnboarding,
     coachOpen,
     setCoachOpen,
     handleOnboardingComplete,
+    handlePlanImported,
+    pendingImportCompletion,
   };
 }
