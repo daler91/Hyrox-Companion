@@ -50,7 +50,7 @@ export function assertBreakerClosed(): void {
 /** Called after a successful request. */
 export function recordBreakerSuccess(): void {
   if (state !== "closed") {
-    logger.info({ prevState: state }, "[ai] circuit breaker -> closed");
+    logger.info("[ai] circuit breaker closed");
   }
   state = "closed";
   consecutiveFailures = 0;

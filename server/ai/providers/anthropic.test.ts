@@ -1,29 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAnthropicTextProvider } from "./anthropic";
-import type { ResolvedTextAiRequest } from "./types";
+import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 
 vi.mock("../../gemini/client", () => ({
   retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
   withTimeout: <T>(promise: Promise<T>) => promise,
 }));
 
-const baseRequest: ResolvedTextAiRequest = {
+const baseRequest = makeProviderRequest({
   providerId: "anthropic",
   model: "claude-sonnet-4-5",
-  modelRole: "reasoning",
-  label: "unit",
-  feature: "chat",
-  systemInstruction: "System rules",
-  messages: [{ role: "user", content: "Hello" }],
-};
-
-function mockJsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+});
 
 describe("anthropic text provider", () => {
   beforeEach(() => {
@@ -51,7 +39,7 @@ describe("anthropic text provider", () => {
       "x-api-key": "anthropic-key",
       "anthropic-version": "2023-06-01",
     });
-    expect(JSON.parse(String(init?.body))).toMatchObject({
+    expect(requestJsonBody(init)).toMatchObject({
       model: "claude-sonnet-4-5",
       stream: false,
       system: expect.stringContaining("Return only valid JSON"),
@@ -69,11 +57,7 @@ describe("anthropic text provider", () => {
     ));
 
     const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
-    const chunks: string[] = [];
-    for await (const chunk of provider.streamText(baseRequest)) {
-      if (chunk.text) chunks.push(chunk.text);
-    }
-
+    const chunks = await collectTextChunks(provider.streamText(baseRequest));
     expect(chunks).toEqual(["Hel", "lo"]);
   });
 

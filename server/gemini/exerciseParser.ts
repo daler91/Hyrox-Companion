@@ -725,7 +725,7 @@ async function callTextProviderParse(
   });
 
   if (!response.text || response.text.length === 0) {
-    logger.error({ response }, "[ai] exercise-parse returned empty response");
+    logger.error("[ai] exercise-parse returned empty response");
     throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for exercise parsing", 502);
   }
   return validateAiOutput(response.text);
@@ -734,8 +734,8 @@ async function callTextProviderParse(
 function parseRawResponse(responseText: string): unknown {
   try {
     return JSON.parse(responseText);
-  } catch (parseErr) {
-    logger.error({ err: parseErr, responseLength: responseText.length }, "[ai] exercise-parse JSON.parse failed.");
+  } catch {
+    logger.error("[ai] exercise-parse JSON.parse failed.");
     throw new AppError(ErrorCode.AI_ERROR, "AI returned invalid JSON for exercise parsing", 502);
   }
 }
@@ -815,10 +815,10 @@ export async function parseExercisesFromText(
     if (validated.length === 0) {
       const fallbackValidated = validateRows(heuristicFallbackRowsFromText(text));
       if (fallbackValidated.length > 0) {
-        logger.warn({ rawExerciseCount: normalized.exercises.length, fallbackCount: fallbackValidated.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[ai] exercise-parse recovered rows with heuristic fallback");
+        logger.warn("[ai] exercise-parse recovered rows with heuristic fallback");
         return fallbackValidated.map((ex) => mapValidatedExercise(ex, text, units));
       }
-      logger.warn({ rawExerciseCount: normalized.exercises.length, rawTopLevelType: Array.isArray(raw) ? "array" : typeof raw }, "[ai] exercise-parse no valid rows after validation");
+      logger.warn("[ai] exercise-parse no valid rows after validation");
       return [];
     }
 
@@ -842,7 +842,7 @@ export async function parseExercisesFromText(
     if (error instanceof AppError) {
       throw error;
     }
-    logger.error({ err: error }, "[ai] exercise-parse error:");
+    logger.error("[ai] exercise-parse error");
     throw new AppError(ErrorCode.AI_ERROR, "Failed to parse exercises from text", 502);
   }
 }

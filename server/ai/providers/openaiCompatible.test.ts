@@ -1,29 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
-import type { ResolvedTextAiRequest } from "./types";
+import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 
 vi.mock("../../gemini/client", () => ({
   retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
   withTimeout: <T>(promise: Promise<T>) => promise,
 }));
 
-const baseRequest: ResolvedTextAiRequest = {
+const baseRequest = makeProviderRequest({
   providerId: "openai-compatible",
   model: "grok-4.3",
-  modelRole: "reasoning",
-  label: "unit",
-  feature: "chat",
-  systemInstruction: "System rules",
-  messages: [{ role: "user", content: "Hello" }],
-};
-
-function mockJsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+});
 
 describe("openai-compatible text provider", () => {
   beforeEach(() => {
@@ -54,7 +42,7 @@ describe("openai-compatible text provider", () => {
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://api.x.ai/v1/chat/completions");
     expect(init?.headers).toMatchObject({ Authorization: "Bearer test-key" });
-    expect(JSON.parse(String(init?.body))).toMatchObject({
+    expect(requestJsonBody(init)).toMatchObject({
       model: "grok-4.3",
       response_format: { type: "json_object" },
       reasoning_effort: "high",
@@ -79,7 +67,7 @@ describe("openai-compatible text provider", () => {
     expect(provider.capabilities.reasoningEffort).toBe(false);
     await provider.generateText({ ...baseRequest, reasoningEffort: "high" });
 
-    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).not.toHaveProperty("reasoning_effort");
+    expect(requestJsonBody(fetchSpy.mock.calls[0][1])).not.toHaveProperty("reasoning_effort");
     expect(fetchSpy.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
   });
 
@@ -97,11 +85,7 @@ describe("openai-compatible text provider", () => {
       supportsReasoningEffort: true,
     });
 
-    const chunks: string[] = [];
-    for await (const chunk of provider.streamText(baseRequest)) {
-      if (chunk.text) chunks.push(chunk.text);
-    }
-
+    const chunks = await collectTextChunks(provider.streamText(baseRequest));
     expect(chunks).toEqual(["Hel", "lo"]);
   });
 

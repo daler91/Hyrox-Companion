@@ -1,12 +1,11 @@
-import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
-import { retryWithBackoff, withTimeout } from "../../gemini/client";
+import { retryWithBackoff } from "../../gemini/client";
+import { readJsonPayload, streamSseTextChunks, trimTrailingSlashes } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiMessage,
   TextAiOpenAiCompatibleProfile,
   TextAiProvider,
   TextAiResponse,
-  TextAiStreamChunk,
   TextAiUsage,
 } from "./types";
 
@@ -31,7 +30,7 @@ function requireAdapterConfig(options: OpenAiCompatibleAdapterOptions): { apiKey
   if (!options.baseUrl) {
     throw new Error("AI_TEXT_BASE_URL is required for custom openai-compatible AI text provider");
   }
-  const baseUrl = options.baseUrl.replace(/\/+$/, "");
+  const baseUrl = trimTrailingSlashes(options.baseUrl);
   return { apiKey: options.apiKey, url: `${baseUrl}/chat/completions` };
 }
 
@@ -112,21 +111,6 @@ async function postJson(
   return response;
 }
 
-function parseSseDataBlocks(buffer: string): { events: string[]; remainder: string } {
-  const blocks = buffer.split("\n\n");
-  const remainder = blocks.pop() ?? "";
-  const events = blocks
-    .map((block) =>
-      block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart())
-        .join("\n"),
-    )
-    .filter(Boolean);
-  return { events, remainder };
-}
-
 function streamTextFromPayload(payload: unknown): { text?: string; usage?: TextAiUsage } {
   const choices = (payload as { choices?: unknown[] } | undefined)?.choices;
   const first = choices?.[0] as { delta?: { content?: unknown }; text?: unknown } | undefined;
@@ -151,7 +135,7 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
         () => postJson(request, options, false),
         request.label,
       );
-      const payload = await response.json();
+      const payload = await readJsonPayload(response);
       return {
         text: parseOpenAiTextResponse(payload),
         model: request.model,
@@ -159,37 +143,11 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
       };
     },
 
-    async *streamText(request): AsyncGenerator<TextAiStreamChunk> {
-      const response = await withTimeout(
-        postJson(request, options, true),
-        AI_REQUEST_TIMEOUT_MS,
-        request.label,
-      );
-      const reader = response.body?.getReader();
-      if (!reader) return;
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-      try {
-        while (true) {
-          if (request.signal?.aborted) return;
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parsed = parseSseDataBlocks(buffer);
-          buffer = parsed.remainder;
-          for (const event of parsed.events) {
-            if (event === "[DONE]") return;
-            const payload = JSON.parse(event) as unknown;
-            const chunk = streamTextFromPayload(payload);
-            if (chunk.text || chunk.usage) {
-              yield { ...chunk, model: request.model };
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
+    async *streamText(request) {
+      yield* streamSseTextChunks(request, postJson(request, options, true), (event) => {
+        if (event === "[DONE]") return { done: true };
+        return streamTextFromPayload(JSON.parse(event) as unknown);
+      });
     },
   };
 }

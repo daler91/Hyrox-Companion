@@ -1,10 +1,9 @@
-import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
-import { retryWithBackoff, withTimeout } from "../../gemini/client";
+import { retryWithBackoff } from "../../gemini/client";
+import { readJsonPayload, streamSseTextChunks } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiProvider,
   TextAiResponse,
-  TextAiStreamChunk,
   TextAiUsage,
 } from "./types";
 
@@ -91,21 +90,6 @@ async function postAnthropic(
   return response;
 }
 
-function parseSseDataBlocks(buffer: string): { events: string[]; remainder: string } {
-  const blocks = buffer.split("\n\n");
-  const remainder = blocks.pop() ?? "";
-  const events = blocks
-    .map((block) =>
-      block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trimStart())
-        .join("\n"),
-    )
-    .filter(Boolean);
-  return { events, remainder };
-}
-
 function streamChunkFromAnthropicEvent(payload: unknown): { text?: string; usage?: TextAiUsage } {
   const record = payload as {
     type?: string;
@@ -133,7 +117,7 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
         () => postAnthropic(request, options, false),
         request.label,
       );
-      const payload = await response.json();
+      const payload = await readJsonPayload(response);
       return {
         text: anthropicText(payload),
         model: request.model,
@@ -141,36 +125,10 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
       };
     },
 
-    async *streamText(request): AsyncGenerator<TextAiStreamChunk> {
-      const response = await withTimeout(
-        postAnthropic(request, options, true),
-        AI_REQUEST_TIMEOUT_MS,
-        request.label,
+    async *streamText(request) {
+      yield* streamSseTextChunks(request, postAnthropic(request, options, true), (event) =>
+        streamChunkFromAnthropicEvent(JSON.parse(event) as unknown),
       );
-      const reader = response.body?.getReader();
-      if (!reader) return;
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      try {
-        while (true) {
-          if (request.signal?.aborted) return;
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parsed = parseSseDataBlocks(buffer);
-          buffer = parsed.remainder;
-          for (const event of parsed.events) {
-            const payload = JSON.parse(event) as unknown;
-            const chunk = streamChunkFromAnthropicEvent(payload);
-            if (chunk.text || chunk.usage) {
-              yield { ...chunk, model: request.model };
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
     },
   };
 }

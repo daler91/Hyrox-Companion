@@ -46,7 +46,7 @@ export async function chatWithCoach(
     return validateAiOutput(textOutput);
   } catch (error) {
     const classified = classifyAiError(error);
-    logger.error({ err: error, code: classified.code }, "AI provider error:");
+    logger.error("AI provider request failed");
     throw new AppError(classified.code, classified.message, classified.status);
   }
 }
@@ -75,7 +75,7 @@ export async function* streamChatWithCoach(
     }
   } catch (error) {
     const classified = classifyAiError(error);
-    logger.error({ err: error, code: classified.code }, "AI provider streaming error:");
+    logger.error("AI provider streaming request failed");
     throw new AppError(classified.code, classified.message, classified.status);
   }
 }
