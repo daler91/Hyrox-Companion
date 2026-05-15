@@ -54,9 +54,10 @@ describe("Log Workout Page", () => {
     cy.wait("@parseExercises");
 
     cy.getBySel("structure-blocks-editor").should("exist");
+    cy.getBySel("structure-blocks-add-toggle").click();
     cy.getBySel("structure-blocks-add-emom").click();
 
     cy.getBySel("structure-block-0").should("exist");
-    cy.getBySel("structure-block-0").contains(/EMOM is configured as a block/i);
+    cy.getBySel("structure-block-0").contains(/Block 1.*EMOM/i);
   });
 });
