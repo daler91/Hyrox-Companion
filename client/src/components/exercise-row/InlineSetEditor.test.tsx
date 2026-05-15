@@ -168,4 +168,63 @@ describe("InlineSetEditor field commit flow", () => {
     expect(onUpdateSet).toHaveBeenCalledWith("set-1", { distance: 16368 });
   });
 
+  it("does not rewrite rounded mile displays on blur without edits", () => {
+    const onUpdateSet = vi.fn();
+    render(
+      <InlineSetEditor
+        sets={[{
+          ...baseSet,
+          exerciseName: "easy_run",
+          category: "running",
+          reps: null,
+          weight: null,
+          distance: 15845,
+        }]}
+        exerciseName="easy_run"
+        customLabel={null}
+        category="running"
+        weightUnit="lbs"
+        distanceUnit="miles"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByTestId("input-distance-set-1");
+    expect(input).toHaveValue(3);
+
+    fireEvent.blur(input);
+
+    expect(onUpdateSet).not.toHaveBeenCalled();
+  });
+
+  it("shows planned distance diffs when stored values round to the same display value", () => {
+    render(
+      <InlineSetEditor
+        sets={[{
+          ...baseSet,
+          exerciseName: "easy_run",
+          category: "running",
+          reps: null,
+          weight: null,
+          distance: 15840,
+          plannedDistance: 15845,
+        }]}
+        exerciseName="easy_run"
+        customLabel={null}
+        category="running"
+        weightUnit="lbs"
+        distanceUnit="miles"
+        onUpdateSet={vi.fn()}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+        showPlannedDiffs
+      />,
+    );
+
+    expect(screen.getByTestId("input-distance-set-1")).toHaveValue(3);
+    expect(screen.getByTestId("planned-distance-set-1")).toHaveTextContent("planned 3 mi");
+  });
+
 });

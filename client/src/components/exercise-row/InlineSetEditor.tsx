@@ -307,8 +307,8 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const displayUnit = getFieldDisplayUnit(field, current, planned, distanceUnit);
   const currentDisplay = getFieldDisplayValue(current, field, distanceUnit);
   const plannedDisplay = getFieldDisplayValue(planned ?? undefined, field, distanceUnit);
-  const hasPlannedValue = showPlannedDiffs && plannedDisplay !== undefined;
-  const showPlannedDiff = hasPlannedValue && plannedDisplay !== currentDisplay;
+  const hasPlannedValue = showPlannedDiffs && planned != null;
+  const showPlannedDiff = hasPlannedValue && planned !== current;
   const plannedText = planned == null ? "" : formatPlannedValue(planned, field, weightUnit, distanceUnit);
 
   const [draft, setDraft] = useState<string>(() => formatInitial(currentDisplay));
@@ -341,6 +341,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   if (shouldUseExternal) inputValue = formatInitial(currentDisplay);
 
   const commitDraft = () => {
+    if (!isDirty) return;
     const parsed = parseDraft(draft);
     if (parsed == null || !Number.isNaN(parsed)) {
       const next = parsed ?? undefined;
