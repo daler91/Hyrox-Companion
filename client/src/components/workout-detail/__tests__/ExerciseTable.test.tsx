@@ -165,6 +165,37 @@ describe("ExerciseTable drag handle", () => {
     expect(screen.getByTestId("planned-weight-set-diff")).toHaveTextContent("planned 100 kg");
   });
 
+  it("renders dynamic distance units in collapsed prescriptions and planned diffs", () => {
+    const sets: ExerciseSet[] = [
+      makeSet({
+        id: "set-distance",
+        exerciseName: "easy_run",
+        category: "running",
+        reps: null,
+        weight: null,
+        distance: 15840,
+        plannedDistance: 16404,
+      }),
+    ];
+
+    render(
+      <ExerciseTable
+        workoutId="log-1"
+        exerciseSets={sets}
+        weightUnit="lb"
+        distanceUnit="miles"
+        onUpdateSet={vi.fn()}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+        readableSummary
+        showPlannedDiffs
+      />,
+    );
+
+    expect(screen.getByLabelText("Edit Easy Run: 1 set of 3 mi")).toBeInTheDocument();
+    expect(screen.getByTestId("exercise-row-planned-diff")).toHaveTextContent("planned 5000 m");
+  });
+
   it("sends a sortOrder PATCH only for rows whose index changed", () => {
     // This mirrors the reorder math in `handleDragEnd`: moving group
     // index 2 → 0 renumbers the flat set sequence 0..N-1 and only

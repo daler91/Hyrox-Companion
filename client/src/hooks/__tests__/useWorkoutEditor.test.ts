@@ -120,7 +120,7 @@ describe('generateSummary', () => {
       }
     ];
 
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Rowing: 1000m, 4.5min');
+    expect(generateSummary(exercises, 'kg', 'km')).toBe('Rowing: 1000 m, 4.5min');
   });
 
   it('should convert distance labels correctly (mi -> ft)', () => {
@@ -134,7 +134,7 @@ describe('generateSummary', () => {
       }
     ];
 
-    expect(generateSummary(exercises, 'lbs', 'mi')).toBe('Sled Push: 50ft');
+    expect(generateSummary(exercises, 'lbs', 'mi')).toBe('Sled Push: 50 ft');
   });
 
   it('should convert distance labels correctly (km -> m)', () => {
@@ -148,7 +148,7 @@ describe('generateSummary', () => {
       }
     ];
 
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Sled Push: 50m');
+    expect(generateSummary(exercises, 'kg', 'km')).toBe('Sled Push: 50 m');
   });
 
   it('should format custom exercises with and without labels', () => {
@@ -191,7 +191,7 @@ describe('generateSummary', () => {
       }
     ];
 
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('SkiErg: 1000m; Wall Balls: 20 reps, 14kg');
+    expect(generateSummary(exercises, 'kg', 'km')).toBe('SkiErg: 1000 m; Wall Balls: 20 reps, 14kg');
   });
 
   it('should format multiple sets with only reps but no weight correctly', () => {
@@ -220,7 +220,7 @@ describe('generateSummary', () => {
         ]
        }
     ];
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Easy Run: 2 sets, 5000m');
+    expect(generateSummary(exercises, 'kg', 'km')).toBe('Easy Run: 2 sets, 5000 m');
   });
 });
 

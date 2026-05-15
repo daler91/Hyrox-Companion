@@ -1,4 +1,5 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
+import { displayDistanceToStored, getWorkoutDistanceDisplay, type WorkoutDistanceDisplayUnit } from "@shared/unitConversion";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -159,12 +160,20 @@ function HeaderRow({ fields, weightUnit, distanceUnit, colTemplate }: HeaderRowP
     >
       <span className="text-center">#</span>
       {fields.map((field) => (
-        <span key={field}>{getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" })}</span>
+        <span key={field}>{getHeaderLabel(field, weightUnit, distanceUnit)}</span>
       ))}
       <span className="sr-only">Note</span>
       <span className="sr-only">Remove</span>
     </div>
   );
+}
+
+function getHeaderLabel(field: FieldKey, weightUnit: string, distanceUnit: string): string {
+  if (field === "distance") return "Distance";
+  return getFieldLabel(field, {
+    weightUnit: weightUnit as "kg" | "lbs",
+    distanceUnit: distanceUnit as "km" | "miles",
+  });
 }
 
 interface CustomLabelFieldProps {
@@ -290,19 +299,25 @@ interface FieldInputProps {
 }
 
 const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate, showPlannedDiffs }: FieldInputProps) {
-  const label = getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" });
+  const label = field === "distance"
+    ? "Distance"
+    : getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" });
   const current = set[field] ?? undefined;
   const planned = getPlannedValue(set, field);
-  const hasPlannedValue = showPlannedDiffs && typeof planned === "number";
+  const displayUnit = getFieldDisplayUnit(field, current, planned, distanceUnit);
+  const currentDisplay = getFieldDisplayValue(current, field, distanceUnit);
+  const plannedDisplay = getFieldDisplayValue(planned ?? undefined, field, distanceUnit);
+  const hasPlannedValue = showPlannedDiffs && planned != null;
   const showPlannedDiff = hasPlannedValue && planned !== current;
+  const plannedText = planned == null ? "" : formatPlannedValue(planned, field, weightUnit, distanceUnit);
 
-  const [draft, setDraft] = useState<string>(() => formatInitial(current));
-  const [lastCommitted, setLastCommitted] = useState<number | undefined>(current);
-  const [committedDraft, setCommittedDraft] = useState<string>(() => formatInitial(current));
+  const [draft, setDraft] = useState<string>(() => formatInitial(currentDisplay));
+  const [lastCommitted, setLastCommitted] = useState<number | undefined>(currentDisplay);
+  const [committedDraft, setCommittedDraft] = useState<string>(() => formatInitial(currentDisplay));
   const [pendingCommit, setPendingCommit] = useState<number | undefined>(undefined);
   const [isDirty, setIsDirty] = useState(false);
   const [suppressTransientEmpty, setSuppressTransientEmpty] = useState(false);
-  const [commitBaseValue, setCommitBaseValue] = useState<number | undefined>(current);
+  const [commitBaseValue, setCommitBaseValue] = useState<number | undefined>(currentDisplay);
 
   const hasPending = pendingCommit !== undefined;
 
@@ -315,56 +330,68 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   }, [suppressTransientEmpty]);
 
   const shouldIgnoreTransientEmpty =
-    hasPending && suppressTransientEmpty && (current == null || formatInitial(current) === "");
-  const commitMatched = hasPending && current === pendingCommit;
-  const externalNewerWhilePending = hasPending && current !== pendingCommit && current !== commitBaseValue;
-  const externalNewerAndNotPending = !hasPending && current !== lastCommitted;
+    hasPending && suppressTransientEmpty && (currentDisplay == null || formatInitial(currentDisplay) === "");
+  const commitMatched = hasPending && currentDisplay === pendingCommit;
+  const externalNewerWhilePending = hasPending && currentDisplay !== pendingCommit && currentDisplay !== commitBaseValue;
+  const externalNewerAndNotPending = !hasPending && currentDisplay !== lastCommitted;
   const shouldUseExternal = !isDirty && !shouldIgnoreTransientEmpty
     && (commitMatched || externalNewerWhilePending || externalNewerAndNotPending);
   let inputValue = committedDraft;
   if (isDirty) inputValue = draft;
-  if (shouldUseExternal) inputValue = formatInitial(current);
+  if (shouldUseExternal) inputValue = formatInitial(currentDisplay);
 
-  const commitDraft = useCallback(() => {
+  const commitDraft = () => {
+    if (!isDirty) return;
     const parsed = parseDraft(draft);
     if (parsed == null || !Number.isNaN(parsed)) {
       const next = parsed ?? undefined;
       const nextDraft = formatInitial(next);
+      const storedNext = getStoredFieldValue(next, field, displayUnit, distanceUnit);
       setLastCommitted(next);
       setCommittedDraft(nextDraft);
       setDraft(nextDraft);
       setPendingCommit(next);
       setCommitBaseValue(lastCommitted);
       setSuppressTransientEmpty(nextDraft.trim() !== "");
-      if (next !== lastCommitted) {
-        onUpdate({ [field]: next ?? null } as PatchExerciseSetPayload);
+      if (storedNext !== current) {
+        onUpdate({ [field]: storedNext ?? null });
       }
     }
     setIsDirty(false);
-  }, [draft, field, lastCommitted, onUpdate]);
+  };
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <Input
-        type="number"
-        inputMode="decimal"
-        value={inputValue}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          setIsDirty(true);
-        }}
-        onBlur={commitDraft}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            commitDraft();
-            e.currentTarget.blur();
-          }
-        }}
-        placeholder={hasPlannedValue ? String(planned) : "--"}
-        className="h-10 text-center text-sm tabular-nums"
-        aria-label={`${label} for set ${set.setNumber}`}
-        data-testid={`input-${field}-${set.id}`}
-      />
+      <div className="relative">
+        <Input
+          type="number"
+          inputMode="decimal"
+          value={inputValue}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setIsDirty(true);
+          }}
+          onBlur={commitDraft}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              commitDraft();
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder={hasPlannedValue ? formatInitial(plannedDisplay) : "--"}
+          className={cn("h-10 text-center text-sm tabular-nums", displayUnit && "pr-9")}
+          aria-label={`${label} for set ${set.setNumber}`}
+          data-testid={`input-${field}-${set.id}`}
+        />
+        {displayUnit && (
+          <span
+            className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] font-medium text-muted-foreground"
+            data-testid={`unit-${field}-${set.id}`}
+          >
+            {displayUnit}
+          </span>
+        )}
+      </div>
       {showPlannedDiff && (
         <span
           className={cn(
@@ -373,7 +400,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
           )}
           data-testid={`planned-${field}-${set.id}`}
         >
-          planned {formatPlannedValue(planned, field, weightUnit, distanceUnit)}
+          planned {plannedText}
         </span>
       )}
     </div>
@@ -417,6 +444,49 @@ function formatInitial(v: number | null | undefined): string {
   return String(v);
 }
 
+function getDefaultDistanceDisplayUnit(distanceUnit: string): WorkoutDistanceDisplayUnit {
+  return distanceUnit === "miles" || distanceUnit === "mi" ? "ft" : "m";
+}
+
+function getFieldDisplayUnit(
+  field: FieldKey,
+  current: number | undefined,
+  planned: number | null | undefined,
+  distanceUnit: string,
+): WorkoutDistanceDisplayUnit | undefined {
+  if (field !== "distance") return undefined;
+  const value = current ?? planned ?? undefined;
+  return value == null
+    ? getDefaultDistanceDisplayUnit(distanceUnit)
+    : getWorkoutDistanceDisplay(value, distanceUnit).unit;
+}
+
+function getFieldDisplayValue(
+  value: number | undefined,
+  field: FieldKey,
+  distanceUnit: string,
+): number | undefined {
+  if (value == null) return undefined;
+  return field === "distance"
+    ? getWorkoutDistanceDisplay(value, distanceUnit).value
+    : value;
+}
+
+function getStoredFieldValue(
+  value: number | undefined,
+  field: FieldKey,
+  displayUnit: WorkoutDistanceDisplayUnit | undefined,
+  distanceUnit: string,
+): number | undefined {
+  if (value == null) return undefined;
+  if (field !== "distance") return value;
+  return displayDistanceToStored(
+    value,
+    displayUnit ?? getDefaultDistanceDisplayUnit(distanceUnit),
+    distanceUnit,
+  );
+}
+
 const EXTERNAL_RECONCILIATION_GRACE_MS = 800;
 
 function parseDraft(raw: string): number | null {
@@ -445,7 +515,7 @@ function formatPlannedValue(
   distanceUnit: string,
 ): string {
   if (field === "weight") return `${value} ${weightUnit}`;
-  if (field === "distance") return `${value} ${distanceUnit === "km" ? "m" : "ft"}`;
+  if (field === "distance") return getWorkoutDistanceDisplay(value, distanceUnit).text;
   if (field === "time") return `${value} min`;
   return `${value} reps`;
 }

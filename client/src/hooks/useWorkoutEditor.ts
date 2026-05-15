@@ -1,6 +1,7 @@
 import { type DragEndEvent,KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName, type ParsedExercise, type StructureBlockInput } from "@shared/schema";
+import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
 import { useMutation } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 import { useCallback,useEffect, useRef, useState } from "react";
@@ -75,7 +76,7 @@ function areSetsUniform(sets: NonNullable<StructuredExercise["sets"]>): boolean 
   return true;
 }
 
-function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distLabel: string): string {
+function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distanceUnit: string): string {
   const def = EXERCISE_DEFINITIONS[ex.exerciseName];
   const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
   const sets = ex.sets || [];
@@ -97,24 +98,23 @@ function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distL
   }
 
   if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-  if (firstSet.distance) parts.push(`${firstSet.distance}${distLabel}`);
+  if (firstSet.distance) parts.push(getWorkoutDistanceDisplay(firstSet.distance, distanceUnit).text);
   if (firstSet.time) parts.push(`${firstSet.time}min`);
 
   return `${name}: ${parts.join(", ") || "completed"}`;
 }
 
 export function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
-  const distLabel = distanceUnit === "km" ? "m" : "ft";
   const hasStructuredHints = exercises.some((ex) => (ex.sets || []).some((set) => Boolean(set.notes)));
   if (!hasStructuredHints) {
     const summaries: string[] = [];
-    for (const ex of exercises) summaries.push(formatExerciseSummary(ex, weightUnit, distLabel));
+    for (const ex of exercises) summaries.push(formatExerciseSummary(ex, weightUnit, distanceUnit));
     return summaries.join("; ");
   }
 
   const blocks: string[] = [];
   for (const ex of exercises) {
-    const headline = formatExerciseSummary(ex, weightUnit, distLabel);
+    const headline = formatExerciseSummary(ex, weightUnit, distanceUnit);
     const steps = (ex.sets || []).map((set, idx) => {
       const stepLabel = `S${idx + 1}`;
       if (!set.notes) return stepLabel;

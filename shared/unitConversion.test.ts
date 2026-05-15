@@ -3,6 +3,7 @@ import { describe, expect,it } from "vitest";
 import {
   convertDistance,
   convertWeight,
+  displayDistanceToStored,
   type DistanceUnit,
   formatDistance,
   formatElevation,
@@ -10,6 +11,7 @@ import {
   formatSpeed,
   formatWeight,
   getStoredDistanceUnit,
+  getWorkoutDistanceDisplay,
   kgToUserWeight,
   metersToUserDistance,
   normalizeParsedDistance,
@@ -325,7 +327,7 @@ describe("AI write unit normalization", () => {
       "Back squat 3x5 at 165 lbs",
     );
     expect(normalizeWorkoutTextUnits("Run 5km then sled push 50m", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
-      "Run 3.11 mi then sled push 164 ft",
+      "Run 5000 m then sled push 164 ft",
     );
     expect(normalizeWorkoutTextUnits("Bench 165 lb and run 1 mile", { weightUnit: "kg", distanceUnit: "km" })).toBe(
       "Bench 75 kg and run 1.61 km",
@@ -340,6 +342,51 @@ describe("AI write unit normalization", () => {
 
   it("still converts bare m when it is likely distance text", () => {
     expect(normalizeWorkoutTextUnits("100m run", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("328 ft run");
+  });
+});
+
+describe("getWorkoutDistanceDisplay", () => {
+  it("promotes long non-metric feet distances to miles", () => {
+    expect(getWorkoutDistanceDisplay(15840, "miles")).toEqual({
+      value: 3,
+      unit: "mi",
+      text: "3 mi",
+    });
+  });
+
+  it("keeps clean whole-kilometer targets in meters for miles users", () => {
+    expect(getWorkoutDistanceDisplay(16404, "miles")).toEqual({
+      value: 5000,
+      unit: "m",
+      text: "5000 m",
+    });
+    expect(getWorkoutDistanceDisplay(3281, "miles")).toEqual({
+      value: 1000,
+      unit: "m",
+      text: "1000 m",
+    });
+  });
+
+  it("keeps short non-kilometer distances in feet for miles users", () => {
+    expect(getWorkoutDistanceDisplay(164, "miles")).toEqual({
+      value: 164,
+      unit: "ft",
+      text: "164 ft",
+    });
+  });
+
+  it("keeps stored meters as meters for km users", () => {
+    expect(getWorkoutDistanceDisplay(5000, "km")).toEqual({
+      value: 5000,
+      unit: "m",
+      text: "5000 m",
+    });
+  });
+
+  it("converts display edits back to the stored distance unit", () => {
+    expect(displayDistanceToStored(3, "mi", "miles")).toBe(15840);
+    expect(displayDistanceToStored(5000, "m", "miles")).toBe(16404);
+    expect(displayDistanceToStored(5000, "m", "km")).toBe(5000);
   });
 });
 

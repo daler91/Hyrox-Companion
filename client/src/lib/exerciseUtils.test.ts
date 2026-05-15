@@ -123,7 +123,7 @@ describe("formatExerciseSummary", () => {
       ]),
       weightUnit: "kg",
       distanceUnit: "km",
-      expected: "running 5000m 25min",
+      expected: "running 5000 m 25min",
     },
     {
       desc: "formats distance and time for miles unit",
@@ -132,7 +132,7 @@ describe("formatExerciseSummary", () => {
       ]),
       weightUnit: "lbs",
       distanceUnit: "miles",
-      expected: "running 16404ft 25min",
+      expected: "running 5000 m 25min",
     },
   ])("$desc", ({ group, weightUnit, distanceUnit, expected }) => {
     expect(formatExerciseSummary(group, weightUnit, distanceUnit)).toBe(
