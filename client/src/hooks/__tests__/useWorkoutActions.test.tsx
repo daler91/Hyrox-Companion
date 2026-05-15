@@ -37,34 +37,33 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 function mockLoggedWorkoutResponse(overrides: Record<string, unknown> = {}) {
-  vi.mocked(queryClientLib.apiRequest).mockResolvedValueOnce({
-    json: () =>
-      Promise.resolve({
-        id: 'logged-pd-1',
-        date: '2024-01-01',
-        focus: 'strength',
-        mainWorkout: 'lift',
-        accessory: null,
-        notes: null,
-        duration: null,
-        rpe: null,
-        planDayId: 'pd-1',
-        planId: 'test-plan-id',
-        source: 'manual',
-        calories: null,
-        distanceMeters: null,
-        elevationGain: null,
-        avgHeartrate: null,
-        maxHeartrate: null,
-        avgSpeed: null,
-        maxSpeed: null,
-        avgCadence: null,
-        avgWatts: null,
-        sufferScore: null,
-        exerciseSets: [],
-        ...overrides,
-      }),
-  } as Response);
+  vi.mocked(queryClientLib.apiRequest).mockResolvedValueOnce(
+    new Response(JSON.stringify({
+      id: 'logged-pd-1',
+      date: '2024-01-01',
+      focus: 'strength',
+      mainWorkout: 'lift',
+      accessory: null,
+      notes: null,
+      duration: null,
+      rpe: null,
+      planDayId: 'pd-1',
+      planId: 'test-plan-id',
+      source: 'manual',
+      calories: null,
+      distanceMeters: null,
+      elevationGain: null,
+      avgHeartrate: null,
+      maxHeartrate: null,
+      avgSpeed: null,
+      maxSpeed: null,
+      avgCadence: null,
+      avgWatts: null,
+      sufferScore: null,
+      exerciseSets: [],
+      ...overrides,
+    })),
+  );
 }
 
 
@@ -80,9 +79,9 @@ describe('useWorkoutActions', () => {
     globalThis.window.history.replaceState(null, '', '/');
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
-      json: () => Promise.resolve({ success: true }),
-    } as Response);
+    vi.mocked(queryClientLib.apiRequest).mockImplementation(async () =>
+      new Response(JSON.stringify({ success: true })),
+    );
   });
 
   afterEach(() => {

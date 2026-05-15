@@ -5,6 +5,7 @@ import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks
 import * as wouter from 'wouter';
 
+import type { StructuredExercise } from '@/components/ExerciseInput';
 import * as toastHook from '@/hooks/use-toast';
 import * as voiceInputHook from '@/hooks/useVoiceInput';
 import * as workoutEditorHook from '@/hooks/useWorkoutEditor';
@@ -62,6 +63,39 @@ interface ExpectFailedSaveToastArgs {
   readonly mockNavigate: (path: string) => void;
 }
 
+type ExercisePayload = ReturnType<typeof workoutEditorHook.exerciseToPayload>;
+
+function createExercisePayload(
+  exerciseName: ExercisePayload["exerciseName"],
+  set: Partial<ExercisePayload["sets"][number]>,
+): ExercisePayload {
+  return {
+    exerciseName,
+    customLabel: undefined,
+    category: "",
+    confidence: undefined,
+    sets: [{
+      setNumber: 1,
+      reps: undefined,
+      weight: undefined,
+      distance: undefined,
+      time: undefined,
+      plannedReps: undefined,
+      plannedWeight: undefined,
+      plannedDistance: undefined,
+      plannedTime: undefined,
+      blockId: undefined,
+      stepNumber: undefined,
+      intervalMinute: undefined,
+      cycleNumber: undefined,
+      stepRole: undefined,
+      groupId: undefined,
+      notes: undefined,
+      ...set,
+    }],
+  };
+}
+
 async function expectFailedSaveToast({
   error,
   expectedToast,
@@ -110,9 +144,9 @@ describe('useWorkoutForm', () => {
 
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<typeof toastHook.useToast>);
     vi.mocked(wouter.useLocation).mockReturnValue(['/current', mockNavigate]);
-    vi.mocked(queryClientLib.apiRequest).mockResolvedValue({
-      json: () => Promise.resolve({ success: true }),
-    } as Response);
+    vi.mocked(queryClientLib.apiRequest).mockImplementation(async () =>
+      new Response(JSON.stringify({ success: true })),
+    );
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
 
     // Mock useVoiceInput returns
@@ -391,23 +425,26 @@ describe('useWorkoutForm', () => {
     });
 
     it('saves successfully in Builder Mode', async () => {
-      const mockExercise = { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] };
+      const mockExercise: StructuredExercise = {
+        exerciseName: 'back_squat',
+        category: 'strength',
+        sets: [{ setNumber: 1, reps: 10, weight: 100 }],
+      };
       const mockExerciseData = {
         'block-1': mockExercise,
       };
 
       vi.mocked(workoutEditorHook.generateSummary).mockReturnValue('Squat: 10 reps, 100kg');
-      vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue({
-        exerciseName: 'squat',
-        sets: [{ reps: 10, weight: 100 }],
-      } as unknown as ReturnType<typeof workoutEditorHook.exerciseToPayload>);
+      vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue(
+        createExercisePayload('back_squat', { reps: 10, weight: 100 }),
+      );
 
       const props = {
         ...defaultProps,
         useTextMode: false,
         exerciseBlocks: ['block-1', 'invalid-block'], // 'invalid-block' is missing from data
-        exerciseData: mockExerciseData as unknown as typeof defaultProps.exerciseData,
-      } as unknown as typeof defaultProps;
+        exerciseData: mockExerciseData,
+      };
 
       const { result } = renderFormHook(props);
 
@@ -434,24 +471,30 @@ describe('useWorkoutForm', () => {
           notes: 'Heavy lifts',
           rpe: null,
           exercises: [
-            { exerciseName: 'squat', sets: [{ reps: 10, weight: 100 }] }
+            expect.objectContaining({
+              exerciseName: 'back_squat',
+              sets: [expect.objectContaining({ setNumber: 1, reps: 10, weight: 100 })],
+            }),
           ],
         }, expect.any(AbortSignal));
       });
     });
 
     it('allows save when structured rows are present with free text', async () => {
-      const mockExercise = { exerciseName: 'run', sets: [{ reps: 1, duration: 20 }] };
-      vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue({
-        exerciseName: 'run',
-        sets: [{ reps: 1, duration: 20 }],
-      } as unknown as ReturnType<typeof workoutEditorHook.exerciseToPayload>);
+      const mockExercise: StructuredExercise = {
+        exerciseName: 'easy_run',
+        category: 'running',
+        sets: [{ setNumber: 1, reps: 1, time: 20 }],
+      };
+      vi.mocked(workoutEditorHook.exerciseToPayload).mockReturnValue(
+        createExercisePayload('easy_run', { reps: 1, time: 20 }),
+      );
 
       const { result } = renderFormHook({
         ...defaultProps,
         useTextMode: false,
         exerciseBlocks: ['block-1'],
-        exerciseData: { 'block-1': mockExercise } as unknown as typeof defaultProps.exerciseData,
+        exerciseData: { 'block-1': mockExercise },
       });
 
       act(() => {
@@ -470,7 +513,12 @@ describe('useWorkoutForm', () => {
           expect.objectContaining({
             title: 'Structured + text',
             mainWorkout: 'Use this as main workout text',
-            exercises: [{ exerciseName: 'run', sets: [{ reps: 1, duration: 20 }] }],
+            exercises: [
+              expect.objectContaining({
+                exerciseName: 'easy_run',
+                sets: [expect.objectContaining({ setNumber: 1, reps: 1, time: 20 })],
+              }),
+            ],
           }),
           expect.any(AbortSignal),
         );

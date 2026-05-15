@@ -378,31 +378,31 @@ describe('mergeParsedWithEdits', () => {
     const existingBlocks = ['back_squat__1', 'back_squat__2', 'rowing__3'];
     const existingData: Record<string, StructuredExercise> = {
       back_squat__1: {
-        exerciseName: 'back_squat' as never,
+        exerciseName: 'back_squat',
         category: 'strength',
         sets: [{ setNumber: 1, reps: 5, weight: 100 }],
         hasUserEdits: true,
       },
       back_squat__2: {
-        exerciseName: 'back_squat' as never,
+        exerciseName: 'back_squat',
         category: 'strength',
         sets: [{ setNumber: 1, reps: 3, weight: 120 }],
         hasUserEdits: true,
       },
       // Unedited block — the parse result should replace it.
       rowing__3: {
-        exerciseName: 'rowing' as never,
+        exerciseName: 'rowing',
         category: 'functional',
         sets: [{ setNumber: 1, distance: 500 }],
       },
     };
 
-    const parsed = [
+    const parsed: Parameters<typeof mergeParsedWithEdits>[0] = [
       // Parser saw a single back_squat; the two edited duplicates stay put.
       { exerciseName: 'back_squat', category: 'strength', sets: [{ setNumber: 1, reps: 5, weight: 80 }] },
       // New exercise the user didn't have — should be appended.
       { exerciseName: 'bench_press', category: 'strength', sets: [{ setNumber: 1, reps: 5, weight: 60 }] },
-    ] as unknown as Parameters<typeof mergeParsedWithEdits>[0];
+    ];
 
     const { newBlocks, newData } = mergeParsedWithEdits(parsed, counterRef, existingBlocks, existingData);
 
@@ -427,20 +427,20 @@ describe('mergeParsedWithEdits', () => {
     const existingBlocks = ['emom__1'];
     const existingData: Record<string, StructuredExercise> = {
       emom__1: {
-        exerciseName: 'emom' as never,
+        exerciseName: 'emom',
         category: 'conditioning',
         sets: [{ setNumber: 1, time: 12 }],
         hasUserEdits: true,
       },
     };
 
-    const parsed = [
+    const parsed: Parameters<typeof mergeParsedWithEdits>[0] = [
       {
         exerciseName: 'EMOM',
         category: 'conditioning',
         sets: [{ setNumber: 1, time: 12 }],
       },
-    ] as unknown as Parameters<typeof mergeParsedWithEdits>[0];
+    ];
 
     const { newBlocks } = mergeParsedWithEdits(parsed, counterRef, existingBlocks, existingData);
 
@@ -457,7 +457,7 @@ describe('useWorkoutEditor initialExerciseData', () => {
     // structured rows the user had already built.
     const initialData: Record<string, StructuredExercise> = {
       back_squat__1: {
-        exerciseName: 'back_squat' as never,
+        exerciseName: 'back_squat',
         category: 'strength',
         sets: [{ setNumber: 1, reps: 5, weight: 100 }],
         // NB: no hasUserEdits — the draft pre-dates the field.
@@ -476,7 +476,7 @@ describe('useWorkoutEditor initialExerciseData', () => {
     const { result } = renderHook(() => useWorkoutEditor(), { wrapper: createQueryWrapper() });
 
     act(() => {
-      result.current.addExercise('emom' as never);
+      result.current.addExercise('emom');
     });
 
     const blockId = result.current.exerciseBlocks[0];
@@ -553,7 +553,7 @@ describe('useWorkoutEditor resetEditor', () => {
 
     // Adding a new back-squat should produce __4, not __1 (collision).
     act(() => {
-      result.current.addExercise('back_squat' as never);
+      result.current.addExercise('back_squat');
     });
 
     const allBlocks = result.current.exerciseBlocks;
@@ -579,7 +579,7 @@ describe('useWorkoutEditor resetEditor', () => {
     });
 
     act(() => {
-      result.current.addExercise('back_squat' as never);
+      result.current.addExercise('back_squat');
     });
 
     const newBlock = result.current.exerciseBlocks.find((b) => b !== 'back-squat__2');
