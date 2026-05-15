@@ -526,6 +526,65 @@ function isLikelyMinuteShorthand(
   return isMinuteContext(readNextWord(lowerText, unitEnd)) || isMinuteContext(readPreviousWord(lowerText, numberStart));
 }
 
+function getWeightTextReplacement(
+  value: number,
+  rawUnit: string,
+  targetWeightUnit: WeightUnit,
+): string | null {
+  const sourceUnit = standardizeWeightUnit(rawUnit);
+  if (sourceUnit === targetWeightUnit) return null;
+  return formatWorkoutWeight(convertWeight(value, sourceUnit, targetWeightUnit), targetWeightUnit);
+}
+
+function getDistancePreference(sourceUnit: ParsedDistanceUnit): DistanceUnit {
+  return sourceUnit === "km" || sourceUnit === "m" ? "km" : "miles";
+}
+
+function isPaceOrRatioUnit(previousChar: string): boolean {
+  return previousChar === "/" || previousChar === ":";
+}
+
+function getDistanceTextReplacement(
+  text: string,
+  lowerText: string,
+  numberStart: number,
+  numberToken: NumberToken,
+  unitMatch: TextUnitMatch,
+  targetDistanceUnit: DistanceUnit,
+): string | null {
+  const sourceUnit = standardizeParsedDistanceUnit(unitMatch.rawUnit);
+  if (!sourceUnit) return null;
+  const previousChar = numberStart > 0 ? text[numberStart - 1] : "";
+  if (isPaceOrRatioUnit(previousChar)) return null;
+  if (isLikelyMinuteShorthand(numberToken.value, sourceUnit, lowerText, numberStart, unitMatch.end)) {
+    return null;
+  }
+  if (getDistancePreference(sourceUnit) === targetDistanceUnit) return null;
+  return formatWorkoutDistance(numberToken.value, sourceUnit, targetDistanceUnit);
+}
+
+function getTextUnitReplacement(
+  text: string,
+  lowerText: string,
+  numberStart: number,
+  numberToken: NumberToken,
+  unitMatch: TextUnitMatch,
+  targetWeightUnit: WeightUnit,
+  targetDistanceUnit: DistanceUnit,
+): string | null {
+  if (unitMatch.type === "weight") {
+    return getWeightTextReplacement(numberToken.value, unitMatch.rawUnit, targetWeightUnit);
+  }
+  return getDistanceTextReplacement(
+    text,
+    lowerText,
+    numberStart,
+    numberToken,
+    unitMatch,
+    targetDistanceUnit,
+  );
+}
+
 export function normalizeWorkoutTextUnits(
   text: string | null | undefined,
   preferences: UnitPreferences,
@@ -552,31 +611,17 @@ export function normalizeWorkoutTextUnits(
       continue;
     }
 
-    let replacement: string | null = null;
-    if (unitMatch.type === "weight") {
-      const sourceUnit = standardizeWeightUnit(unitMatch.rawUnit);
-      if (sourceUnit !== targetWeightUnit) {
-        replacement = formatWorkoutWeight(
-          convertWeight(numberToken.value, sourceUnit, targetWeightUnit),
-          targetWeightUnit,
-        );
-      }
-    } else {
-      const previousChar = index > 0 ? text[index - 1] : "";
-      const sourceUnit = standardizeParsedDistanceUnit(unitMatch.rawUnit);
-      const currentPreference = sourceUnit === "km" || sourceUnit === "m" ? "km" : "miles";
-      if (
-        previousChar !== "/" &&
-        previousChar !== ":" &&
-        sourceUnit &&
-        !isLikelyMinuteShorthand(numberToken.value, sourceUnit, lowerText, index, unitMatch.end) &&
-        currentPreference !== targetDistanceUnit
-      ) {
-        replacement = formatWorkoutDistance(numberToken.value, sourceUnit, targetDistanceUnit);
-      }
-    }
+    const replacement = getTextUnitReplacement(
+      text,
+      lowerText,
+      index,
+      numberToken,
+      unitMatch,
+      targetWeightUnit,
+      targetDistanceUnit,
+    );
 
-    if (replacement) {
+    if (replacement != null) {
       result += text.slice(cursor, index) + replacement;
       cursor = unitMatch.end;
     }

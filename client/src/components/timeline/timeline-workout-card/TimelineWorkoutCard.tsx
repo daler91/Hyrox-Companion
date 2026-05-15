@@ -1,4 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
+import type { DistanceUnit } from "@shared/unitConversion";
 import { addDays, format } from "date-fns";
 import {
   BookOpen,
@@ -37,6 +38,8 @@ import type { TimelineWorkoutCardProps } from "./types";
 import { getCardClasses, getStatusBadge } from "./utils";
 import { WorkoutStravaStats } from "./WorkoutStravaStats";
 
+type TimelineWorkoutEntry = TimelineWorkoutCardProps["entry"];
+
 const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   entry,
   onMarkComplete,
@@ -60,14 +63,14 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const isBeingCombined = combiningEntryId === entry.id;
   const isSameDate = combiningEntryDate === entry.date;
   const canBeCombinedWith = isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate;
-  const isPlanned = entry.status === "planned" && entry.planDayId;
+  const isPlanned = entry.status === "planned" && Boolean(entry.planDayId);
   const canToggleBulkSelect = Boolean(isBulkSelectMode && canBulkSelect && onBulkSelectToggle);
   const adherenceBadge = showAdherenceInsights
     ? getAdherenceBadge(entry.compliancePct ?? null)
     : null;
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const isTargetedByCoach = isAutoCoaching && isPlanned && entry.date >= todayStr;
+  const isTargetedByCoach = Boolean(isAutoCoaching && isPlanned && entry.date >= todayStr);
 
   // We only allow moving entries that have a stable anchor — either a plan
   // day (reschedule prescription) or a workout log (change date). Ad-hoc
@@ -85,35 +88,24 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     data: { entry },
   });
 
-  const handleCardClick = (_e: React.MouseEvent) => {
-    if (isBulkSelectMode) {
-      if (canToggleBulkSelect) {
-        onBulkSelectToggle?.(entry);
-      }
-      return;
-    }
-    if (canBeCombinedWith) {
-      onCombineSelect?.(entry);
-    } else {
-      onClick(entry);
-    }
+  const handleCardActivation = () => {
+    activateTimelineCard({
+      entry,
+      isBulkSelectMode,
+      canToggleBulkSelect,
+      canBeCombinedWith,
+      onBulkSelectToggle,
+      onCombineSelect,
+      onClick,
+    });
   };
 
+  const handleCardClick = (_e: React.MouseEvent) => handleCardActivation();
+
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      if (isBulkSelectMode) {
-        if (canToggleBulkSelect) {
-          onBulkSelectToggle?.(entry);
-        }
-        return;
-      }
-      if (canBeCombinedWith) {
-        onCombineSelect?.(entry);
-      } else {
-        onClick(entry);
-      }
-    }
+    if (!isCardActivationKey(e.key)) return;
+    e.preventDefault();
+    handleCardActivation();
   };
 
   const handleCompleteClick = (e: React.MouseEvent) => {
@@ -133,8 +125,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   // and grouping on every re-render (e.g. when expanding panels or scrolling),
   // which is an O(n log n) operation when sortOrder exists.
   const groupedExercises = useMemo(() => {
-    if (!entry.exerciseSets || entry.exerciseSets.length === 0) return [];
-    return groupExerciseSets(entry.exerciseSets);
+    return groupTimelineExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
   const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status);
@@ -170,25 +161,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
       // Label uses only the visible focus + status badge text (date sits in
       // the parent date-group heading) so the accessible name matches what
       // the user can read on screen — WCAG 2.5.3 Label in Name.
-      aria-label={
-        isBulkSelectMode
-          ? `${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}, ${entry.status}`
-          : `${entry.focus || "Workout"}, ${entry.status}`
-      }
+      aria-label={getCardAriaLabel(entry, isBulkSelectMode, isBulkSelected)}
       aria-checked={isBulkSelectMode && canBulkSelect ? Boolean(isBulkSelected) : undefined}
       aria-disabled={isBulkSelectMode && !canBulkSelect ? true : undefined}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
-      {isTargetedByCoach && (
-        <Badge
-          variant="outline"
-          className="absolute -top-3 -right-3 z-30 border-primary border-2 text-primary bg-background shadow-lg shadow-primary/30 animate-pulse px-3 py-1 text-xs font-bold"
-          data-testid={`badge-ai-coach-${entry.id}`}
-        >
-          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          AI Modifying
-        </Badge>
-      )}
+      <FloatingAiCoachBadge entryId={entry.id} isTargetedByCoach={isTargetedByCoach} />
       <CardContent className="p-4 relative">
         {canMove && (
           <MoveEntryMenu
@@ -203,149 +181,31 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
           />
         )}
         <div className="flex items-start gap-3">
-          {isBulkSelectMode && (
-            <button
-              type="button"
-              className={cn(
-                "shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md border text-muted-foreground transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                canBulkSelect && "hover:bg-destructive/10 hover:text-destructive",
-                isBulkSelected && "border-destructive bg-destructive/10 text-destructive",
-              )}
-              onClick={handleBulkSelectClick}
-              disabled={!canToggleBulkSelect}
-              aria-label={`${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}`}
-              data-testid={`button-bulk-select-${entry.id}`}
-            >
-              {isBulkSelected ? <CheckCircle2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
-            </button>
-          )}
-
-          {!isBulkSelectMode && isPlanned && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-touch"
-                    variant="ghost"
-                    className="shrink-0 mt-0.5 text-muted-foreground hover:text-success md:h-9 md:w-9"
-                    onClick={handleCompleteClick}
-                    data-testid={`button-complete-${entry.id}`}
-                    aria-label={`Mark ${entry.focus} as complete`}
-                  >
-                    <Circle className="h-5 w-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Mark {entry.focus} as complete</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {entry.status === "completed" && (
-            <div className="shrink-0 mt-0.5 text-success">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-          )}
+          <TimelineCardLeadingAction
+            entry={entry}
+            isBulkSelectMode={isBulkSelectMode}
+            isPlanned={Boolean(isPlanned)}
+            canBulkSelect={canBulkSelect}
+            canToggleBulkSelect={canToggleBulkSelect}
+            isBulkSelected={Boolean(isBulkSelected)}
+            onBulkSelectClick={handleBulkSelectClick}
+            onCompleteClick={handleCompleteClick}
+          />
 
           <div className="flex-1 min-w-0">
-            <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
-              {getStatusBadge(entry.status)}
-              {isTargetedByCoach && (
-                <Badge
-                  variant="outline"
-                  className="border-primary text-primary bg-primary/5 animate-pulse"
-                  data-testid={`badge-ai-coach-${entry.id}`}
-                >
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  AI Modifying
-                </Badge>
-              )}
-              {entry.source === "strava" && (
-                <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
-                  <StravaIcon className="h-3 w-3 mr-1" />
-                  Strava
-                </Badge>
-              )}
-              {entry.planName && (
-                <Badge
-                  variant="outline"
-                  className="text-muted-foreground"
-                  data-testid={`badge-plan-${entry.id}`}
-                >
-                  <BookOpen className="h-3 w-3 mr-1" />
-                  {entry.planName}
-                </Badge>
-              )}
-              {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
-              {adherenceBadge && (
-                <Badge
-                  variant="outline"
-                  className={adherenceBadge.className}
-                  data-testid={`badge-adherence-${entry.id}`}
-                >
-                  {adherenceBadge.label}
-                </Badge>
-              )}
-              {entry.aiSource === "rag" && (
-                <Badge
-                  variant="outline"
-                  className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]"
-                >
-                  <Database className="h-2.5 w-2.5 mr-1" />
-                  RAG
-                </Badge>
-              )}
-              {entry.aiSource === "legacy" && (
-                <Badge
-                  variant="outline"
-                  className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]"
-                >
-                  <FileText className="h-2.5 w-2.5 mr-1" />
-                  Legacy
-                </Badge>
-              )}
-              <span className="font-medium">{entry.focus}</span>
-            </div>
-            {entry.exerciseSets && entry.exerciseSets.length > 0 ? (
-              <ExerciseChips
-                entryId={entry.id}
-                groupedExercises={groupedExercises}
-                workoutLogId={entry.workoutLogId ?? undefined}
-                personalRecords={personalRecords}
-                weightLabel={weightLabel}
-                distanceUnit={distanceUnit}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground mb-1">{entry.mainWorkout}</p>
-            )}
-            {entry.accessory && (
-              <p className="text-sm text-muted-foreground/70 mb-1">{entry.accessory}</p>
-            )}
-            {entry.notes && (
-              <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>
-            )}
-            {(entry.duration || entry.rpe) && entry.source !== "strava" && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {[
-                  entry.duration ? `Duration: ${entry.duration} min` : null,
-                  entry.rpe ? `RPE: ${entry.rpe}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" | ")}
-              </p>
-            )}
-            <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
-            {entry.aiRationale && (
-              <CoachNote
-                entryId={entry.id}
-                rationale={entry.aiRationale}
-                source={entry.aiSource ?? null}
-                updatedAt={entry.aiNoteUpdatedAt}
-                inputsUsed={entry.aiInputsUsed}
-              />
-            )}
+            <TimelineCardHeader
+              entry={entry}
+              canMove={Boolean(canMove)}
+              isTargetedByCoach={Boolean(isTargetedByCoach)}
+              adherenceBadge={adherenceBadge}
+            />
+            <TimelineCardWorkoutBody
+              entry={entry}
+              groupedExercises={groupedExercises}
+              personalRecords={personalRecords}
+              weightLabel={weightLabel}
+              distanceUnit={distanceUnit}
+            />
           </div>
         </div>
       </CardContent>
@@ -358,6 +218,277 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 // parent timeline component state changes (unless their specific entry/props change).
 // This reduces unnecessary re-renders in a potentially long list.
 export default TimelineWorkoutCard;
+
+interface CardActivationOptions {
+  readonly entry: TimelineWorkoutEntry;
+  readonly isBulkSelectMode: boolean | undefined;
+  readonly canToggleBulkSelect: boolean;
+  readonly canBeCombinedWith: boolean | undefined;
+  readonly onBulkSelectToggle: TimelineWorkoutCardProps["onBulkSelectToggle"];
+  readonly onCombineSelect: TimelineWorkoutCardProps["onCombineSelect"];
+  readonly onClick: TimelineWorkoutCardProps["onClick"];
+}
+
+function activateTimelineCard({
+  entry,
+  isBulkSelectMode,
+  canToggleBulkSelect,
+  canBeCombinedWith,
+  onBulkSelectToggle,
+  onCombineSelect,
+  onClick,
+}: CardActivationOptions) {
+  if (isBulkSelectMode) {
+    if (canToggleBulkSelect) onBulkSelectToggle?.(entry);
+    return;
+  }
+  if (canBeCombinedWith) {
+    onCombineSelect?.(entry);
+    return;
+  }
+  onClick(entry);
+}
+
+function isCardActivationKey(key: string): boolean {
+  return key === "Enter" || key === " ";
+}
+
+function groupTimelineExerciseSets(exerciseSets: TimelineWorkoutEntry["exerciseSets"]) {
+  return exerciseSets?.length ? groupExerciseSets(exerciseSets) : [];
+}
+
+function getCardAriaLabel(entry: TimelineWorkoutEntry, isBulkSelectMode: boolean | undefined, isBulkSelected: boolean | undefined): string {
+  const focus = entry.focus || "Workout";
+  if (!isBulkSelectMode) return `${focus}, ${entry.status}`;
+  return `${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}, ${entry.status}`;
+}
+
+function FloatingAiCoachBadge({
+  entryId,
+  isTargetedByCoach,
+}: Readonly<{ entryId: string; isTargetedByCoach: boolean }>) {
+  if (!isTargetedByCoach) return null;
+  return (
+    <Badge
+      variant="outline"
+      className="absolute -top-3 -right-3 z-30 border-primary border-2 text-primary bg-background shadow-lg shadow-primary/30 animate-pulse px-3 py-1 text-xs font-bold"
+      data-testid={`badge-ai-coach-${entryId}`}
+    >
+      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+      AI Modifying
+    </Badge>
+  );
+}
+
+interface TimelineCardLeadingActionProps {
+  readonly entry: TimelineWorkoutEntry;
+  readonly isBulkSelectMode: boolean | undefined;
+  readonly isPlanned: boolean;
+  readonly canBulkSelect: boolean | undefined;
+  readonly canToggleBulkSelect: boolean;
+  readonly isBulkSelected: boolean;
+  readonly onBulkSelectClick: (e: React.MouseEvent) => void;
+  readonly onCompleteClick: (e: React.MouseEvent) => void;
+}
+
+function TimelineCardLeadingAction({
+  entry,
+  isBulkSelectMode,
+  isPlanned,
+  canBulkSelect,
+  canToggleBulkSelect,
+  isBulkSelected,
+  onBulkSelectClick,
+  onCompleteClick,
+}: Readonly<TimelineCardLeadingActionProps>) {
+  if (isBulkSelectMode) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          "shrink-0 mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-md border text-muted-foreground transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          canBulkSelect && "hover:bg-destructive/10 hover:text-destructive",
+          isBulkSelected && "border-destructive bg-destructive/10 text-destructive",
+        )}
+        onClick={onBulkSelectClick}
+        disabled={!canToggleBulkSelect}
+        aria-label={`${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}`}
+        data-testid={`button-bulk-select-${entry.id}`}
+      >
+        {isBulkSelected ? <CheckCircle2 className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+      </button>
+    );
+  }
+
+  if (isPlanned) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon-touch"
+              variant="ghost"
+              className="shrink-0 mt-0.5 text-muted-foreground hover:text-success md:h-9 md:w-9"
+              onClick={onCompleteClick}
+              data-testid={`button-complete-${entry.id}`}
+              aria-label={`Mark ${entry.focus} as complete`}
+            >
+              <Circle className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Mark {entry.focus} as complete</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  if (entry.status !== "completed") return null;
+  return (
+    <div className="shrink-0 mt-0.5 text-success">
+      <CheckCircle2 className="h-5 w-5" />
+    </div>
+  );
+}
+
+interface TimelineCardHeaderProps {
+  readonly entry: TimelineWorkoutEntry;
+  readonly canMove: boolean;
+  readonly isTargetedByCoach: boolean;
+  readonly adherenceBadge: ReturnType<typeof getAdherenceBadge>;
+}
+
+function TimelineCardHeader({
+  entry,
+  canMove,
+  isTargetedByCoach,
+  adherenceBadge,
+}: Readonly<TimelineCardHeaderProps>) {
+  return (
+    <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
+      {getStatusBadge(entry.status)}
+      {isTargetedByCoach && (
+        <Badge
+          variant="outline"
+          className="border-primary text-primary bg-primary/5 animate-pulse"
+          data-testid={`badge-ai-coach-${entry.id}`}
+        >
+          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+          AI Modifying
+        </Badge>
+      )}
+      {entry.source === "strava" && (
+        <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
+          <StravaIcon className="h-3 w-3 mr-1" />
+          Strava
+        </Badge>
+      )}
+      {entry.planName && (
+        <Badge
+          variant="outline"
+          className="text-muted-foreground"
+          data-testid={`badge-plan-${entry.id}`}
+        >
+          <BookOpen className="h-3 w-3 mr-1" />
+          {entry.planName}
+        </Badge>
+      )}
+      {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
+      {adherenceBadge && (
+        <Badge
+          variant="outline"
+          className={adherenceBadge.className}
+          data-testid={`badge-adherence-${entry.id}`}
+        >
+          {adherenceBadge.label}
+        </Badge>
+      )}
+      {entry.aiSource === "rag" && (
+        <Badge
+          variant="outline"
+          className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]"
+        >
+          <Database className="h-2.5 w-2.5 mr-1" />
+          RAG
+        </Badge>
+      )}
+      {entry.aiSource === "legacy" && (
+        <Badge
+          variant="outline"
+          className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]"
+        >
+          <FileText className="h-2.5 w-2.5 mr-1" />
+          Legacy
+        </Badge>
+      )}
+      <span className="font-medium">{entry.focus}</span>
+    </div>
+  );
+}
+
+interface TimelineCardWorkoutBodyProps {
+  readonly entry: TimelineWorkoutEntry;
+  readonly groupedExercises: ReturnType<typeof groupExerciseSets>;
+  readonly personalRecords: TimelineWorkoutCardProps["personalRecords"];
+  readonly weightLabel: string;
+  readonly distanceUnit: DistanceUnit;
+}
+
+function TimelineCardWorkoutBody({
+  entry,
+  groupedExercises,
+  personalRecords,
+  weightLabel,
+  distanceUnit,
+}: Readonly<TimelineCardWorkoutBodyProps>) {
+  const metricsText = getWorkoutMetricsText(entry);
+  const hasExerciseSets = Boolean(entry.exerciseSets?.length);
+
+  return (
+    <>
+      {hasExerciseSets ? (
+        <ExerciseChips
+          entryId={entry.id}
+          groupedExercises={groupedExercises}
+          workoutLogId={entry.workoutLogId ?? undefined}
+          personalRecords={personalRecords}
+          weightLabel={weightLabel}
+          distanceUnit={distanceUnit}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground mb-1">{entry.mainWorkout}</p>
+      )}
+      {entry.accessory && (
+        <p className="text-sm text-muted-foreground/70 mb-1">{entry.accessory}</p>
+      )}
+      {entry.notes && (
+        <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>
+      )}
+      {metricsText && <p className="text-xs text-muted-foreground mt-1">{metricsText}</p>}
+      <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
+      {entry.aiRationale && (
+        <CoachNote
+          entryId={entry.id}
+          rationale={entry.aiRationale}
+          source={entry.aiSource ?? null}
+          updatedAt={entry.aiNoteUpdatedAt}
+          inputsUsed={entry.aiInputsUsed}
+        />
+      )}
+    </>
+  );
+}
+
+function getWorkoutMetricsText(entry: TimelineWorkoutEntry): string | null {
+  if (entry.source === "strava") return null;
+  const metrics = [
+    entry.duration ? `Duration: ${entry.duration} min` : null,
+    entry.rpe ? `RPE: ${entry.rpe}` : null,
+  ].filter(Boolean);
+  return metrics.length > 0 ? metrics.join(" | ") : null;
+}
 
 function getAdherenceBadge(
   compliancePct: number | null,
