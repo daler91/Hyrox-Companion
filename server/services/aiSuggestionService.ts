@@ -170,7 +170,8 @@ async function getStructuredApplyBlocker(
 
 /**
  * Fetches the user's upcoming planned workouts, builds RAG context, asks
- * Gemini for coaching suggestions, and shapes them for the client.
+ * the configured text provider for coaching suggestions, and shapes them
+ * for the client.
  *
  * Extracted from routes/ai.ts (CODEBASE_AUDIT.md §1) so the route handler
  * stays thin and the orchestration — multiple storage calls + context

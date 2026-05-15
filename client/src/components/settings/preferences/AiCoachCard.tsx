@@ -17,7 +17,7 @@ export function AiCoachCard({ aiCoachEnabled, onAiCoachEnabledChange }: AiCoachC
           <BrainCircuit className="h-5 w-5 text-primary" />
           AI Coach
         </CardTitle>
-        <CardDescription>Intelligent workout adjustments powered by Gemini</CardDescription>
+        <CardDescription>Intelligent workout adjustments powered by the configured AI provider</CardDescription>
       </CardHeader>
       <CardContent>
         <PreferenceSwitchRow

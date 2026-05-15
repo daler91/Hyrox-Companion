@@ -18,7 +18,7 @@ export const EXTERNAL_API_TIMEOUT_MS = 15_000;
 
 /**
  * Hard timeout budget for a single AI request (including all retries).
- * Gemini 2.5 Pro with thinking mode on complex prompts routinely takes
+ * Reasoning-model calls on complex prompts routinely take
  * 30-60 seconds. The coach runs in a background pg-boss job so there is
  * no user-facing response waiting on it — prefer giving the model
  * enough time to finish over failing fast. Previous 30s budget was
@@ -29,7 +29,7 @@ export const AI_REQUEST_TIMEOUT_MS = 120_000;
 
 /**
  * Timeout for a single AI API call attempt. Matched to the upper end of
- * observed Gemini 2.5 Pro latency with `ThinkingLevel.HIGH`.
+ * observed reasoning-model latency on coaching prompts.
  */
 export const AI_CALL_TIMEOUT_MS = 90_000;
 

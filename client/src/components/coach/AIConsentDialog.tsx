@@ -29,8 +29,8 @@ export function AIConsentDialog({ open, onAccept, onDecline }: AIConsentDialogPr
           <AlertDialogDescription asChild>
             <div className="space-y-3 text-sm text-muted-foreground">
               <p>
-                The AI Coach uses Google Gemini to analyze your training and provide personalized
-                coaching. To do this, the following data is sent to Google for processing:
+                The AI Coach uses the configured AI provider to analyze your training and provide
+                personalized coaching. To do this, the following data is sent for processing:
               </p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Your recent workout history (exercises, sets, reps, weights)</li>
@@ -41,8 +41,8 @@ export function AIConsentDialog({ open, onAccept, onDecline }: AIConsentDialogPr
               <div className="flex items-start gap-2 rounded-md bg-muted p-3">
                 <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <p className="text-xs">
-                  Your data is used solely to generate coaching responses and is not used to train
-                  AI models. You can disable the AI Coach at any time in Settings.
+                  Your data is used solely by this app to generate coaching responses. You can
+                  disable the AI Coach at any time in Settings.
                 </p>
               </div>
               <p className="text-xs">

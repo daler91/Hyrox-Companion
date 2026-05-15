@@ -1,10 +1,9 @@
-import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 
+import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
 import { formatExerciseSetsForPrompt, type PromptExerciseSet } from "../prompts/exerciseSetFormatter";
-import { GEMINI_SUGGESTIONS_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "./client";
 import type { TrainingContext } from "./types";
 
 export interface SuggestionPromptOptions {
@@ -350,23 +349,16 @@ export async function generateReviewNotes(
       promptOptions,
     );
 
-    const response = await retryWithBackoff(
-      () =>
-        getAiClient().models.generateContent({
-          model: GEMINI_SUGGESTIONS_MODEL,
-          config: {
-            systemInstruction: [REVIEW_NOTES_SYSTEM_PROMPT, promptOptions?.systemInstructionAppendix]
-              .filter(Boolean)
-              .join("\n\n"),
-            responseMimeType: "application/json",
-            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        }),
-      "review-notes",
-    );
-
-    if (userId) trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "review-notes", response);
+    const response = await generateJsonText({
+      systemInstruction: [REVIEW_NOTES_SYSTEM_PROMPT, promptOptions?.systemInstructionAppendix]
+        .filter(Boolean)
+        .join("\n\n"),
+      messages: [{ role: "user", content: prompt }],
+      modelRole: "reasoning",
+      label: "review-notes",
+      feature: "review-notes",
+      userId,
+    });
 
     return parseAndValidateReviewNotes(response.text || "[]");
   } catch (error) {
@@ -390,23 +382,16 @@ export async function generateWorkoutSuggestions(
 
     const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials, promptOptions);
 
-    const response = await retryWithBackoff(
-      () =>
-        getAiClient().models.generateContent({
-          model: GEMINI_SUGGESTIONS_MODEL,
-          config: {
-            systemInstruction: [SUGGESTIONS_PROMPT, promptOptions?.systemInstructionAppendix]
-              .filter(Boolean)
-              .join("\n\n"),
-            responseMimeType: "application/json",
-            thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-          },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-        }),
-      "suggestions",
-    );
-
-    if (userId) trackUsageFromResponse(userId, GEMINI_SUGGESTIONS_MODEL, "suggestions", response);
+    const response = await generateJsonText({
+      systemInstruction: [SUGGESTIONS_PROMPT, promptOptions?.systemInstructionAppendix]
+        .filter(Boolean)
+        .join("\n\n"),
+      messages: [{ role: "user", content: prompt }],
+      modelRole: "reasoning",
+      label: "suggestions",
+      feature: "suggestions",
+      userId,
+    });
 
     const text = response.text || "[]";
 

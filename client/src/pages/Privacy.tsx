@@ -80,7 +80,7 @@ export default function Privacy() {
                 <td>Email, name, profile image</td>
               </tr>
               <tr>
-                <td>Google Gemini</td>
+                <td>Configured AI provider</td>
                 <td>AI coaching (opt-in only)</td>
                 <td>Workout history, chat messages, training context</td>
               </tr>
@@ -110,10 +110,10 @@ export default function Privacy() {
           <h2>4. AI Coach Data Processing</h2>
           <p>
             When you enable the AI Coach, your workout history, training plan details, performance
-            metrics, and chat messages are sent to Google Gemini to generate personalized coaching
-            responses. This data is used solely for generating responses and is not used to train AI
-            models. You must explicitly opt in before any data is sent, and you can disable the AI
-            Coach at any time in Settings.
+            metrics, and chat messages are sent to the configured AI provider to generate
+            personalized coaching responses. This data is used by this app solely for generating
+            responses. You must explicitly opt in before any data is sent, and you can disable the
+            AI Coach at any time in Settings.
           </p>
 
           <h2>5. Garmin Integration</h2>

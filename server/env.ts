@@ -27,6 +27,21 @@ const envSchema = z.object({
   SENTRY_DSN: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().optional(),
+  AI_TEXT_PROVIDER: z.enum(["gemini", "anthropic", "openai-compatible"]).default("gemini"),
+  AI_TEXT_MODEL: z.string().optional(),
+  AI_TEXT_FAST_MODEL: z.string().optional(),
+  AI_TEXT_REASONING_MODEL: z.string().optional(),
+  AI_TEXT_REASONING_EFFORT: z.enum(["none", "low", "medium", "high"]).default("high"),
+  AI_TEXT_BASE_URL: z.url().optional(),
+  AI_TEXT_API_KEY: z.string().optional(),
+  AI_TEXT_OPENAI_COMPATIBLE_PROFILE: z.enum(["openai", "xai", "groq", "together", "openrouter", "deepseek", "custom"]).default("openai"),
+  OPENAI_API_KEY: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  XAI_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  TOGETHER_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  DEEPSEEK_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   CRON_SECRET: z.string().optional(),
   STRAVA_CLIENT_ID: z.string().optional(),
@@ -52,9 +67,9 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_EMAIL: z.email().optional(),
   // Runtime kill-switch for all AI routes (chat, parsing, plan generation,
-  // RAG, coach suggestions). Lets operators disable Gemini traffic without
-  // redeploying or rotating GEMINI_API_KEY. Defaults to "true" so existing
-  // deployments behave the same.
+  // RAG, coach suggestions). Lets operators disable AI provider traffic
+  // without redeploying or rotating provider keys. Defaults to "true" so
+  // existing deployments behave the same.
   AI_FEATURES_ENABLED: z.enum(["true", "false"]).default("true"),
   STRUCTURED_BLOCKS_ENABLED: z.enum(["true", "false"]).default("true"),
   STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY: z.enum(["true", "false"]).default("false"),

@@ -99,7 +99,7 @@ export async function retryWithBackoff<T>(
       if (error instanceof CircuitBreakerOpenError) throw error;
       const delay = shouldRetry(error, attempt, maxRetries, baseDelayMs, deadline);
       if (delay === false) break;
-      logger.warn({ err: error }, `[gemini] ${label} attempt ${attempt + 1} failed (retrying in ${delay}ms)`);
+      logger.warn("[ai] provider request failed; retry scheduled");
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -214,7 +214,7 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 }
 
 // ---------------------------------------------------------------------------
-// Usage tracking helpers — fire-and-forget recording after Gemini calls
+// Usage tracking helpers — fire-and-forget recording after Gemini SDK calls
 // ---------------------------------------------------------------------------
 
 /**

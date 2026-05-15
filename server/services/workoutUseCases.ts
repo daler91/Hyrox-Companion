@@ -1,7 +1,7 @@
 import { type exercisesPayloadSchema, type InsertWorkoutLog, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type UpdateWorkoutLog, type updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
-import { env } from "../env";
+import { isTextAiProviderConfigured } from "../ai/providers";
 import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
@@ -24,13 +24,13 @@ export async function createWorkout(input: {
   const { exercises, structureBlocks, ...workoutData } = input.payload;
   let structured = exercises as ParsedExercise[] | undefined;
   const hasStructureBlocks = Array.isArray(structureBlocks);
-  // Skip the legacy Gemini reparse when the workout is backed by a plan day:
+  // Skip the legacy AI reparse when the workout is backed by a plan day:
   // createWorkoutInTx.copyPrescribedSetsIntoLog will seed the new log from the
   // plan day's already-persisted (possibly edited) exercise rows. Re-parsing
   // here would supply fresh rows that win over the copy path and overwrite
   // the athlete's pre-log edits.
   const canCopyFromPlanDay = !!workoutData.planDayId;
-  if ((!structured || structured.length === 0) && !hasStructureBlocks && !canCopyFromPlanDay && env.GEMINI_API_KEY) {
+  if ((!structured || structured.length === 0) && !hasStructureBlocks && !canCopyFromPlanDay && isTextAiProviderConfigured()) {
     logger.warn({ context: "workout-structure", event: "legacy_only_parse_fallback_create", userId: input.userId }, "Missing structure-editor payload on create; using legacy parse fallback.");
     const textToParse = [workoutData.mainWorkout, workoutData.accessory].filter(Boolean).join("\n").trim();
     if (textToParse) {
@@ -63,7 +63,7 @@ export async function updateWorkoutUseCase(input: {
   const { exercises, structureBlocks, ...updateData } = input.payload;
   const structured = exercises as ParsedExercise[] | undefined;
   // PATCHes that omit `exercises` / `structureBlocks` preserve existing rows.
-  // The old legacy-parse fallback re-parsed mainWorkout via Gemini and replaced
+  // The old legacy-parse fallback re-parsed mainWorkout via AI and replaced
   // them, silently destroying edits whenever a text-only field was patched.
 
   const updateLint = lintWorkoutStructure(structureBlocks, structured);

@@ -498,7 +498,7 @@ export function useWorkoutSensors(setExerciseBlocks: React.Dispatch<React.SetSta
 
 const AUTO_PARSE_DEBOUNCE_MS = 1200;
 const AUTO_PARSE_MIN_CHARS = 8;
-// Cheap gate so the auto-parse pipeline doesn't burn Gemini calls on
+// Cheap gate so the auto-parse pipeline doesn't burn AI provider calls on
 // free-form notes like "felt great". Needs at least one digit or an
 // `x`/`×` (set-count separator) before we even consider parsing.
 const AUTO_PARSE_SIGNAL_RE = /\d|[xX×]/;

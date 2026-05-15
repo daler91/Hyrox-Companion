@@ -29,11 +29,11 @@ import { storage } from "../storage";
 import { prescribedSetToLogRow } from "../storage/shared";
 import { incrementStructuredExerciseCounter } from "./structuredExerciseHealth";
 
-// ⚡ Perf: cap concurrent Gemini parse calls per chunk to protect the
+// Perf: cap concurrent AI parse calls per chunk to protect the
 // quota & circuit breaker (CODEBASE_REVIEW_2026-04-12.md #12). Prior code
 // chunked at 5 but fired all 5 in parallel; p-limit(3) makes the cap
 // explicit and decouples it from chunk size.
-const GEMINI_PARSE_CONCURRENCY = 3;
+const AI_PARSE_CONCURRENCY = 3;
 
 // Drizzle transaction type — any method chain valid on `db` is also valid on `tx`.
 type WorkoutTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -481,7 +481,7 @@ export async function autoHydrateExerciseSetsFromTextIfNeeded(
   return lockPromise;
 }
 
-// Parse the target's free text with Gemini and REPLACE its structured
+// Parse the target's free text with the configured text provider and REPLACE its structured
 // exerciseSets. Returns null when the combined text is empty or produced
 // zero exercises. The replace semantics match every reparse call site so a
 // repeated Parse press never doubles up rows.
@@ -537,12 +537,12 @@ export function reparseWorkout(
 
 /**
  * Plan-day equivalent of reparseWorkout: parse the plan day's mainWorkout +
- * accessory free text via Gemini and REPLACE the day's prescribed
+ * accessory free text via the configured text provider and REPLACE the day's prescribed
  * exerciseSets with the structured rows. Used by the Parse button in the
  * workout detail dialog on planned entries so the athlete can type a
  * workout description and get a structured, editable prescription back.
  *
- * Returns null when the combined free text is empty or Gemini produces
+ * Returns null when the combined free text is empty or the provider produces
  * zero exercises. The replace semantics match the workout-log path so
  * repeated Parse presses don't accumulate duplicate rows.
  */
@@ -1531,7 +1531,7 @@ export async function updateWorkoutStructureBlockScore(
 // the recent-history window the coach reasons over shifts — rerun the coach so
 // upcoming plan-day rationales stay consistent with what was actually done
 // and when. Coalesced per-user with the same 60s singleton window used on
-// workout create / plan-day reschedule so bursts of edits don't spam Gemini.
+// workout create / plan-day reschedule so bursts of edits don't spam AI.
 function maybeEnqueueAutoCoachOnDateChange(
   userId: string,
   previousDate: string | null | undefined,
@@ -1561,9 +1561,9 @@ export async function processBatchChunk(
   let failed = 0;
 
   // Parse workouts concurrently in chunks to optimize AI service usage,
-  // bounded by p-limit so Gemini never sees more than
-  // GEMINI_PARSE_CONCURRENCY in-flight calls regardless of chunk size.
-  const limit = pLimit(GEMINI_PARSE_CONCURRENCY);
+  // bounded by p-limit so the provider never sees more than
+  // AI_PARSE_CONCURRENCY in-flight calls regardless of chunk size.
+  const limit = pLimit(AI_PARSE_CONCURRENCY);
   const chunkResults = await Promise.allSettled(
     chunk.map((workout) => limit(() => prepareParsedWorkout(workout, unitPreferences))),
   );
@@ -1610,7 +1610,7 @@ export async function batchReparseWorkouts(
   let totalFailed = 0;
 
   // Process workouts concurrently in chunks to improve performance
-  // while preventing overload of the Gemini AI service and database
+  // while preventing overload of the AI provider and database
   const CONCURRENCY_LIMIT = 5;
   for (let i = 0; i < workouts.length; i += CONCURRENCY_LIMIT) {
     const chunk = workouts.slice(i, i + CONCURRENCY_LIMIT);

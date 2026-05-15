@@ -826,7 +826,7 @@ The workout creation flow orchestrates multiple related operations:
 3. Expand parsed exercises into `exerciseSets` rows (using `expandExercisesToSetRows()`)
 4. Upsert `customExercises` for any new custom exercise names
 
-These run as service-level orchestration (not a single DB transaction) because some steps involve external API calls (Gemini AI parsing). The exercise set replacement uses a proper transaction to avoid partial state where old sets are deleted but new ones fail to insert.
+These run as service-level orchestration (not a single DB transaction) because some steps involve external API calls (AI provider parsing). The exercise set replacement uses a proper transaction to avoid partial state where old sets are deleted but new ones fail to insert.
 
 **Custom exercise deduplication** uses a `Map` with "last-wins" strategy:
 

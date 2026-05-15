@@ -146,7 +146,7 @@ function buildCoachNoteInputs(
  * Predicate for whether a suggestion will actually apply to one of the
  * upcoming workouts. Kept separate from `applySuggestion` so the caller
  * can pre-compute which upcoming days are "modified" for review-note
- * routing; if we built the modified set from the raw Gemini output, a
+ * routing; if we built the modified set from the raw provider output, a
  * malformed suggestion would silently cause its day to be skipped in
  * both the modification pass and the review-note pass.
  */
@@ -353,7 +353,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       }
     }
     // Drop any review note whose workoutId isn't actually an unchanged day:
-    // Gemini occasionally hallucinates IDs, and a review-note write against
+    // AI providers occasionally hallucinate IDs, and a review-note write against
     // a modified day would overwrite its aiSource/aiRationale and mislabel
     // it as unchanged. Dedupe on workoutId so the last write doesn't clobber
     // a legitimate note either.
@@ -415,7 +415,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 }
 
 // Minimum gap between successive manual regenerations per plan day. Same
-// feature burns one Gemini call; without this a frustrated athlete mashing
+// feature burns one AI provider call; without this a frustrated athlete mashing
 // Refresh could rack up cost without the note meaningfully changing.
 const REGENERATE_COOLDOWN_MS = 30_000;
 

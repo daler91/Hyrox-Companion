@@ -17,7 +17,7 @@ export function aiBudgetCheck(
 ): void {
   // Operator-level kill switch. Runs before any DB work so flipping the
   // env flag immediately short-circuits AI traffic without touching
-  // storage, the AI budget, or Gemini.
+  // storage, the AI budget, or provider clients.
   if (env.AI_FEATURES_ENABLED === "false") {
     res.status(503).json({
       error: "AI features are temporarily disabled.",

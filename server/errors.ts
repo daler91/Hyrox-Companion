@@ -15,7 +15,7 @@ export enum ErrorCode {
 }
 
 /**
- * Classify a raw Gemini/google-genai SDK error into a more specific ErrorCode
+ * Classify a raw AI provider error into a more specific ErrorCode
  * plus the appropriate HTTP status and a user-facing message (S7). Falls back
  * to a generic AI_ERROR when the message doesn't match any known pattern.
  */

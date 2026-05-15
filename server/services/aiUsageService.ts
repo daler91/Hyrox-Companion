@@ -8,10 +8,14 @@ const MODEL_PRICING: Record<string, { inputPerM: number; outputPerM: number }> =
   "gemini-2.5-flash-lite": { inputPerM: 0.075, outputPerM: 0.3 },
   "gemini-3.1-pro-preview": { inputPerM: 1.25, outputPerM: 10 },
   "gemini-embedding-001":   { inputPerM: 0.01, outputPerM: 0 },
+  "grok-4.3": { inputPerM: 1.25, outputPerM: 2.5 },
+  "claude-sonnet-4-5": { inputPerM: 3, outputPerM: 15 },
+  "claude-sonnet-4.5": { inputPerM: 3, outputPerM: 15 },
+  "claude-4-sonnet": { inputPerM: 3, outputPerM: 15 },
 };
 
 // Fallback for unknown models — use the most expensive rate to be safe
-const DEFAULT_PRICING = { inputPerM: 1.25, outputPerM: 10 };
+const DEFAULT_PRICING = { inputPerM: 5, outputPerM: 25 };
 
 /** Daily AI spend hard cap in cents. */
 export const DAILY_LIMIT_CENTS = 200; // $2.00
@@ -35,7 +39,7 @@ export function estimateCostCents(
 }
 
 /**
- * Record AI usage after a Gemini call completes.
+ * Record AI usage after a provider call completes.
  */
 export async function recordAiUsage(
   userId: string,
