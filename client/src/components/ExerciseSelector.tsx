@@ -37,10 +37,6 @@ function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
-function compactSearchText(value: string): string {
-  return normalizeSearchText(value).replace(/\s/g, "");
-}
-
 const exerciseAliasesByName = Object.entries(EXERCISE_NAME_ALIASES).reduce<Partial<Record<ExerciseName, string[]>>>(
   (aliasesByName, [alias, exerciseName]) => {
     aliasesByName[exerciseName] = [...(aliasesByName[exerciseName] ?? []), alias, alias.replace(/_/g, " ")];
