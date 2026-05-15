@@ -60,22 +60,26 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const { distanceUnit, weightLabel, showAdherenceInsights } = useUnitPreferences();
   const [movePickerOpen, setMovePickerOpen] = useState(false);
 
-  const isBeingCombined = combiningEntryId === entry.id;
-  const isSameDate = combiningEntryDate === entry.date;
-  const canBeCombinedWith = isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate;
-  const isPlanned = entry.status === "planned" && Boolean(entry.planDayId);
-  const canToggleBulkSelect = Boolean(isBulkSelectMode && canBulkSelect && onBulkSelectToggle);
-  const adherenceBadge = showAdherenceInsights
-    ? getAdherenceBadge(entry.compliancePct ?? null)
-    : null;
-
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  const isTargetedByCoach = Boolean(isAutoCoaching && isPlanned && entry.date >= todayStr);
+  const { isBeingCombined, canBeCombinedWith } = getTimelineCardCombineState({
+    entry,
+    isCombining,
+    combiningEntryId,
+    combiningEntryDate,
+    isBulkSelectMode,
+  });
+  const isPlanned = isPlannedTimelineEntry(entry);
+  const canToggleBulkSelect = canToggleBulkSelection({
+    isBulkSelectMode,
+    canBulkSelect,
+    onBulkSelectToggle,
+  });
+  const adherenceBadge = getVisibleAdherenceBadge(showAdherenceInsights, entry);
+  const isTargetedByCoach = isTimelineEntryTargetedByCoach(isAutoCoaching, isPlanned, entry);
 
   // We only allow moving entries that have a stable anchor — either a plan
   // day (reschedule prescription) or a workout log (change date). Ad-hoc
   // rows without either (e.g. header placeholders) can't be moved.
-  const canMove = Boolean(onMove) && (entry.planDayId || entry.workoutLogId) && !isCombining && !isBulkSelectMode;
+  const canMove = canMoveTimelineEntry({ entry, onMove, isCombining, isBulkSelectMode });
 
   const {
     attributes: dragAttributes,
@@ -103,9 +107,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   const handleCardClick = (_e: React.MouseEvent) => handleCardActivation();
 
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
-    if (!isCardActivationKey(e.key)) return;
-    e.preventDefault();
-    handleCardActivation();
+    handleCardKeyActivation(e, handleCardActivation);
   };
 
   const handleCompleteClick = (e: React.MouseEvent) => {
@@ -114,10 +116,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   };
 
   const handleBulkSelectClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (canToggleBulkSelect) {
-      onBulkSelectToggle?.(entry);
-    }
+    handleBulkSelectActivation(e, entry, canToggleBulkSelect, onBulkSelectToggle);
   };
 
   // ⚡ Bolt Performance Optimization:
@@ -129,17 +128,11 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   }, [entry.exerciseSets]);
 
   const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status);
-  const aiCoachClasses = isTargetedByCoach
-    ? "border-primary/60 bg-primary/5 shadow-md shadow-primary/20 transition-all duration-700 relative"
-    : "";
-  const dragClasses = cn(
-    isDragging && "opacity-50 ring-2 ring-primary/60",
-    isMoving && "opacity-70",
-  );
+  const aiCoachClasses = getAiCoachCardClasses(isTargetedByCoach);
+  const dragClasses = getDragCardClasses(isDragging, isMoving);
 
   const handleMoveSelect = (newDate: string) => {
-    if (!onMove) return;
-    onMove(entry, newDate);
+    handleMoveSelectActivation(newDate, entry, onMove);
   };
 
   return (
@@ -218,6 +211,108 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
 // parent timeline component state changes (unless their specific entry/props change).
 // This reduces unnecessary re-renders in a potentially long list.
 export default TimelineWorkoutCard;
+
+interface TimelineCardCombineState {
+  readonly isBeingCombined: boolean;
+  readonly canBeCombinedWith: boolean;
+}
+
+function getTimelineCardCombineState({
+  entry,
+  isCombining,
+  combiningEntryId,
+  combiningEntryDate,
+  isBulkSelectMode,
+}: Pick<
+  TimelineWorkoutCardProps,
+  "entry" | "isCombining" | "combiningEntryId" | "combiningEntryDate" | "isBulkSelectMode"
+>): TimelineCardCombineState {
+  const isBeingCombined = combiningEntryId === entry.id;
+  const isSameDate = combiningEntryDate === entry.date;
+  return {
+    isBeingCombined,
+    canBeCombinedWith: Boolean(isCombining && !isBulkSelectMode && !isBeingCombined && isSameDate),
+  };
+}
+
+function isPlannedTimelineEntry(entry: TimelineWorkoutEntry): boolean {
+  return entry.status === "planned" && Boolean(entry.planDayId);
+}
+
+function canToggleBulkSelection({
+  isBulkSelectMode,
+  canBulkSelect,
+  onBulkSelectToggle,
+}: Pick<
+  TimelineWorkoutCardProps,
+  "isBulkSelectMode" | "canBulkSelect" | "onBulkSelectToggle"
+>): boolean {
+  return Boolean(isBulkSelectMode && canBulkSelect && onBulkSelectToggle);
+}
+
+function getVisibleAdherenceBadge(
+  showAdherenceInsights: boolean,
+  entry: TimelineWorkoutEntry,
+): ReturnType<typeof getAdherenceBadge> {
+  return showAdherenceInsights ? getAdherenceBadge(entry.compliancePct ?? null) : null;
+}
+
+function isTimelineEntryTargetedByCoach(
+  isAutoCoaching: boolean | undefined,
+  isPlanned: boolean,
+  entry: TimelineWorkoutEntry,
+): boolean {
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  return Boolean(isAutoCoaching && isPlanned && entry.date >= todayStr);
+}
+
+function canMoveTimelineEntry({
+  entry,
+  onMove,
+  isCombining,
+  isBulkSelectMode,
+}: Pick<TimelineWorkoutCardProps, "entry" | "onMove" | "isCombining" | "isBulkSelectMode">): boolean {
+  const hasMoveAnchor = Boolean(entry.planDayId || entry.workoutLogId);
+  return Boolean(onMove && hasMoveAnchor && !isCombining && !isBulkSelectMode);
+}
+
+function getAiCoachCardClasses(isTargetedByCoach: boolean): string {
+  return isTargetedByCoach
+    ? "border-primary/60 bg-primary/5 shadow-md shadow-primary/20 transition-all duration-700 relative"
+    : "";
+}
+
+function getDragCardClasses(isDragging: boolean, isMoving: boolean | undefined): string {
+  return cn(
+    isDragging && "opacity-50 ring-2 ring-primary/60",
+    isMoving && "opacity-70",
+  );
+}
+
+function handleCardKeyActivation(e: React.KeyboardEvent, onActivate: () => void) {
+  if (!isCardActivationKey(e.key)) return;
+  e.preventDefault();
+  onActivate();
+}
+
+function handleBulkSelectActivation(
+  e: React.MouseEvent,
+  entry: TimelineWorkoutEntry,
+  canToggleBulkSelect: boolean,
+  onBulkSelectToggle: TimelineWorkoutCardProps["onBulkSelectToggle"],
+) {
+  e.stopPropagation();
+  if (canToggleBulkSelect) onBulkSelectToggle?.(entry);
+}
+
+function handleMoveSelectActivation(
+  newDate: string,
+  entry: TimelineWorkoutEntry,
+  onMove: TimelineWorkoutCardProps["onMove"],
+) {
+  if (!onMove) return;
+  onMove(entry, newDate);
+}
 
 interface CardActivationOptions {
   readonly entry: TimelineWorkoutEntry;
