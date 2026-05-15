@@ -309,6 +309,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const plannedDisplay = getFieldDisplayValue(planned ?? undefined, field, distanceUnit);
   const hasPlannedValue = showPlannedDiffs && plannedDisplay !== undefined;
   const showPlannedDiff = hasPlannedValue && plannedDisplay !== currentDisplay;
+  const plannedText = planned == null ? "" : formatPlannedValue(planned, field, weightUnit, distanceUnit);
 
   const [draft, setDraft] = useState<string>(() => formatInitial(currentDisplay));
   const [lastCommitted, setLastCommitted] = useState<number | undefined>(currentDisplay);
@@ -352,7 +353,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       setCommitBaseValue(lastCommitted);
       setSuppressTransientEmpty(nextDraft.trim() !== "");
       if (storedNext !== current) {
-        onUpdate({ [field]: storedNext ?? null } as PatchExerciseSetPayload);
+        onUpdate({ [field]: storedNext ?? null });
       }
     }
     setIsDirty(false);
@@ -398,7 +399,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
           )}
           data-testid={`planned-${field}-${set.id}`}
         >
-          planned {planned != null ? formatPlannedValue(planned, field, weightUnit, distanceUnit) : ""}
+          planned {plannedText}
         </span>
       )}
     </div>
