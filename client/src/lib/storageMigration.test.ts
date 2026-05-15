@@ -21,12 +21,12 @@ describe("migrateLegacyKeys", () => {
       }),
       length: 0,
       key: vi.fn((index: number) => Object.keys(store)[index] || null),
-    } as unknown as Storage;
+    };
   });
 
   it("should return early if storage is falsy", () => {
-    expect(() => migrateLegacyKeys(null as unknown as Storage)).not.toThrow();
-    expect(() => migrateLegacyKeys(undefined as unknown as Storage)).not.toThrow();
+    expect(() => migrateLegacyKeys(null)).not.toThrow();
+    expect(() => migrateLegacyKeys()).not.toThrow();
   });
 
   it("should migrate old keys to new keys and remove old keys", () => {

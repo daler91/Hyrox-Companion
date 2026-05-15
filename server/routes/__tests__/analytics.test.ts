@@ -86,7 +86,7 @@ describe("Analytics Routes", () => {
     describe(`GET ${endpoint}`, () => {
       it("should return analytics for a user", async () => {
         vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
-          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 } as unknown as Awaited<ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>>[number]
+          { id: "set1", exerciseName: "Test", weight: "100", reps: 10 }
         ]);
 
         vi.mocked(mockMethod).mockReturnValue(expectedBody);
@@ -246,7 +246,7 @@ describe("Analytics Routes", () => {
 
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculateTrainingOverview).mockReturnValue(mockOverview as never);
+      vi.mocked(calculateTrainingOverview).mockReturnValue(mockOverview);
 
       const response = await request(app).get("/api/v1/training-overview");
 
@@ -262,17 +262,17 @@ describe("Analytics Routes", () => {
     it("treats exercise_sets as authoritative for mixed records (legacy text + sets)", async () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
         { id: "log-1", userId: "test_user_id", date: "2026-02-01", mainWorkout: "Legacy: row 3x500m" },
-      ] as never);
+      ]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
         { id: "set-1", workoutLogId: "log-1", exerciseName: "SkiErg", reps: null, distance: "1000", date: "2026-02-01" },
-      ] as never);
+      ]);
       vi.mocked(calculateTrainingOverview).mockReturnValue({
         weeklySummaries: [],
         workoutDates: ["2026-02-01"],
         categoryTotals: {},
         stationCoverage: [],
         currentStats: zeroStats,
-      } as never);
+      });
 
       const response = await request(app).get("/api/v1/training-overview");
       expect(response.status).toBe(200);
@@ -291,7 +291,7 @@ describe("Analytics Routes", () => {
         categoryTotals: {},
         stationCoverage: [],
         currentStats: zeroStats,
-      } as never);
+      });
 
       const response = await request(app).get("/api/v1/training-overview?from=2026-01-01&to=2026-03-31");
 
@@ -309,7 +309,7 @@ describe("Analytics Routes", () => {
         stationCoverage: [],
         currentStats: zeroStats,
         previousStats: zeroStats,
-      } as never);
+      });
 
       await request(app).get("/api/v1/training-overview?from=2026-02-01&to=2026-02-28");
 
@@ -332,7 +332,7 @@ describe("Analytics Routes", () => {
         categoryTotals: {},
         stationCoverage: [],
         currentStats: zeroStats,
-      } as never);
+      });
 
       await request(app).get("/api/v1/training-overview");
 

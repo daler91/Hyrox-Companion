@@ -18,6 +18,8 @@ import {
 } from "./structuredPlanDaySuggestion";
 import { resolveTrainingStyle } from "./training_styles";
 
+type TimelineSuggestionLogger = Pick<Logger, "warn" | "error">;
+
 export interface TimelineSuggestion {
   workoutId: string;
   date: string;
@@ -111,7 +113,7 @@ async function persistRecommendationTraceForSuggestions(
   userId: string,
   suggestions: TimelineSuggestion[],
   traceMetadata: RecommendationTraceMetadata,
-  log: Logger,
+  log: TimelineSuggestionLogger,
 ): Promise<void> {
   await Promise.all(suggestions.map(async (suggestion) => {
     try {
@@ -150,7 +152,7 @@ function buildUnappliedStructuredResult(
 
 async function getStructuredApplyBlocker(
   userId: string,
-  log: Logger,
+  log: TimelineSuggestionLogger,
 ): Promise<UnappliedTimelineSuggestionResult | null> {
   if (env.AI_FEATURES_ENABLED === "false") {
     return buildUnappliedStructuredResult("ai_disabled");
@@ -179,7 +181,7 @@ async function getStructuredApplyBlocker(
  */
 export async function generateTimelineAiSuggestions(
   userId: string,
-  log: Logger,
+  log: TimelineSuggestionLogger,
 ): Promise<TimelineSuggestionsResult> {
   const [plannedDays, user] = await Promise.all([
     storage.timeline.getUpcomingPlannedDays(userId, 5),
@@ -289,7 +291,7 @@ export async function generateTimelineAiSuggestions(
 export async function applyTimelineAiSuggestion(
   userId: string,
   input: ApplyTimelineSuggestionInput,
-  log: Logger = defaultLogger,
+  log: TimelineSuggestionLogger = defaultLogger,
 ): Promise<ApplyTimelineSuggestionResult | undefined> {
   const [day, user, existingExerciseSets] = await Promise.all([
     storage.plans.getPlanDay(input.workoutId, userId),

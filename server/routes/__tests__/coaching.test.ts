@@ -55,7 +55,7 @@ describe("Coaching materials routes", () => {
   describe("GET /api/v1/coaching-materials", () => {
     it("should list coaching materials", async () => {
       const materials = [{ id: "m1", title: "Guide", content: "content", type: "document", userId: "test_user_id" }];
-      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue(materials as unknown as MaterialList);
+      vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue(materials);
 
       const response = await request(app).get("/api/v1/coaching-materials");
 

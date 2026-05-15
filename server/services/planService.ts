@@ -60,21 +60,23 @@ function toStr(val: unknown): string {
   return "";
 }
 
+function readCSVField(record: unknown, field: string): string {
+  if (record === null || typeof record !== "object") return "";
+  return toStr(Reflect.get(record, field));
+}
+
 export function validateAndMapCSVRows(records: unknown[]): CSVRow[] {
   if (!Array.isArray(records)) return [];
 
-  return records.map((record) => {
-    const row = record as Record<string, unknown>;
-    return {
-      Week: toStr(row.Week),
-      Day: toStr(row.Day),
-      Focus: toStr(row.Focus),
-      "Main Workout": toStr(row["Main Workout"]),
-      "Accessory/Engine Work": toStr(row["Accessory/Engine Work"]),
-      Accessory: toStr(row["Accessory"]),
-      Notes: toStr(row.Notes),
-    } as CSVRow;
-  });
+  return records.map((record) => ({
+    Week: readCSVField(record, "Week"),
+    Day: readCSVField(record, "Day"),
+    Focus: readCSVField(record, "Focus"),
+    "Main Workout": readCSVField(record, "Main Workout"),
+    "Accessory/Engine Work": readCSVField(record, "Accessory/Engine Work"),
+    Accessory: readCSVField(record, "Accessory"),
+    Notes: readCSVField(record, "Notes"),
+  }));
 }
 
 function parseCSV(csvText: string): CSVRow[] {

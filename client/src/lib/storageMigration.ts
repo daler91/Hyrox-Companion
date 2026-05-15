@@ -6,7 +6,7 @@ const LEGACY_KEY_MAP: Record<string, string> = {
   "hyrox-privacy-consent-v1": "fitai-privacy-consent-v1",
 };
 
-export function migrateLegacyKeys(storage: Storage = globalThis.localStorage): void {
+export function migrateLegacyKeys(storage: Storage | null | undefined = globalThis.localStorage): void {
   if (!storage) return;
   for (const [oldKey, newKey] of Object.entries(LEGACY_KEY_MAP)) {
     try {

@@ -8,7 +8,7 @@ import { storage } from "../storage";
 import { retrieveRelevantChunks } from "./ragService";
 
 /** Minimal logger interface for request-scoped logging. */
-type Log = Pick<typeof logger, "warn" | "info" | "error">;
+type Log = Pick<typeof logger, "warn" | "error">;
 
 /**
  * Full RAG context result with diagnostic info (used by chat endpoints).

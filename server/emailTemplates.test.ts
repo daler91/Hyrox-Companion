@@ -57,7 +57,7 @@ describe("email generation", () => {
     });
 
     it("returns default URL when env.APP_URL is an empty string", () => {
-      env.APP_URL = "" as unknown as undefined;
+      env.APP_URL = "";
       expect(getAppUrl()).toBe("https://fitai.coach");
     });
   });

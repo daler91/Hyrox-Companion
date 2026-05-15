@@ -8,6 +8,12 @@ vi.mock('../queryClient', () => ({
   apiRequest: vi.fn(),
 }));
 
+function mockJsonResponse(data: unknown) {
+  const response = new Response(JSON.stringify(data));
+  const jsonSpy = vi.spyOn(response, 'json');
+  return { response, jsonSpy };
+}
+
 describe('api client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -16,26 +22,26 @@ describe('api client', () => {
   describe('typedRequest', () => {
     it('should call apiRequest with method and url when no data is provided', async () => {
       const mockData = { success: true };
-      const mockResponse = { json: vi.fn().mockResolvedValue(mockData) };
-      vi.mocked(apiRequest).mockResolvedValue(mockResponse as unknown as Response);
+      const { response, jsonSpy } = mockJsonResponse(mockData);
+      vi.mocked(apiRequest).mockResolvedValue(response);
 
       const result = await typedRequest('GET', '/api/test');
 
       expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test', undefined, expect.any(AbortSignal));
-      expect(mockResponse.json).toHaveBeenCalled();
+      expect(jsonSpy).toHaveBeenCalled();
       expect(result).toEqual(mockData);
     });
 
     it('should call apiRequest with method, url, and data when data is provided', async () => {
       const mockData = { id: 1 };
       const requestData = { name: 'Test' };
-      const mockResponse = { json: vi.fn().mockResolvedValue(mockData) };
-      vi.mocked(apiRequest).mockResolvedValue(mockResponse as unknown as Response);
+      const { response, jsonSpy } = mockJsonResponse(mockData);
+      vi.mocked(apiRequest).mockResolvedValue(response);
 
       const result = await typedRequest('POST', '/api/test', requestData);
 
       expect(apiRequest).toHaveBeenCalledWith('POST', '/api/test', requestData, expect.any(AbortSignal));
-      expect(mockResponse.json).toHaveBeenCalled();
+      expect(jsonSpy).toHaveBeenCalled();
       expect(result).toEqual(mockData);
     });
 
@@ -47,8 +53,8 @@ describe('api client', () => {
     });
 
     it('should respect custom timeout option', async () => {
-      const mockResponse = { json: vi.fn().mockResolvedValue({ ok: true }) };
-      vi.mocked(apiRequest).mockResolvedValue(mockResponse as unknown as Response);
+      const { response } = mockJsonResponse({ ok: true });
+      vi.mocked(apiRequest).mockResolvedValue(response);
 
       await typedRequest('GET', '/api/test', undefined, { timeoutMs: 5000 });
 

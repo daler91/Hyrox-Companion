@@ -30,7 +30,7 @@ describe("queryClient", () => {
       ...(options.text !== undefined && { text: vi.fn().mockResolvedValue(options.text) }),
       ...(options.json !== undefined && { json: vi.fn().mockResolvedValue(options.json) }),
     };
-    fetchMock.mockResolvedValue(mockResponse as unknown as Response);
+    fetchMock.mockResolvedValue(mockResponse);
     return mockResponse;
   }
 
@@ -41,9 +41,9 @@ describe("queryClient", () => {
       // Second call: the actual POST
       fetchMock.mockImplementation((url: string) => {
         if (typeof url === "string" && url === "/api/v1/csrf-token") {
-          return Promise.resolve({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ csrfToken: "tok-123" }) } as unknown as Response);
+          return Promise.resolve({ ok: true, status: 200, json: vi.fn().mockResolvedValue({ csrfToken: "tok-123" }) });
         }
-        return Promise.resolve(mockResponse as unknown as Response);
+        return Promise.resolve(mockResponse);
       });
 
       const res = await apiRequest("POST", "/api/test", { foo: "bar" });

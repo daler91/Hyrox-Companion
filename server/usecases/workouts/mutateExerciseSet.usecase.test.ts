@@ -12,8 +12,8 @@ describe("createMutateExerciseSetUseCase", () => {
     const useCase = createMutateExerciseSetUseCase(storage);
     const owner = { kind, ownerId: "owner-1" };
 
-    await useCase.updateSet(owner, "set-1", { reps: 5 } as never, "user-1");
-    await useCase.addSet(owner, { exerciseName: "Run", category: "conditioning" } as never, "user-1");
+    await useCase.updateSet(owner, "set-1", { reps: 5 }, "user-1");
+    await useCase.addSet(owner, { exerciseName: "Run", category: "conditioning" }, "user-1");
     await useCase.deleteSet(owner, "set-1", "user-1");
 
     expect(storage.updateSet).toHaveBeenNthCalledWith(1, owner, "set-1", { reps: 5 }, "user-1");

@@ -210,16 +210,16 @@ describe("plan-day exercise routes", () => {
       id: "day-1",
       mainWorkout: "old text",
       accessory: "old accessory",
-    } as never);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lb", distanceUnit: "miles" } as never);
+    });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lb", distanceUnit: "miles" });
     vi.mocked(reparsePlanDay).mockResolvedValue({
       exercises: [{ exerciseName: "back_squat" }],
       saved: true,
       setCount: 1,
       rejectedCount: 0,
       rejectionReasons: [],
-    } as never);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({ id: "day-1" } as never);
+    });
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({ id: "day-1" });
 
     const response = await request(app)
       .post("/api/v1/plans/days/day-1/reparse")

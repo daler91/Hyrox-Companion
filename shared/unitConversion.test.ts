@@ -4,7 +4,6 @@ import {
   convertDistance,
   convertWeight,
   displayDistanceToStored,
-  type DistanceUnit,
   formatDistance,
   formatElevation,
   formatPace,
@@ -218,7 +217,7 @@ describe("metersToUserDistance", () => {
   });
 
   it("converts meters to mi", () => {
-    expect(metersToUserDistance(1609.34, "mi" as unknown as DistanceUnit)).toBeCloseTo(1, 1);
+    expect(metersToUserDistance(1609.34, "mi")).toBeCloseTo(1, 1);
   });
 
   it("handles zero meters", () => {

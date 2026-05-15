@@ -59,7 +59,7 @@ describe("Timeline Annotations Routes", () => {
           updatedAt: new Date("2026-03-01T00:00:00Z"),
         },
       ];
-      vi.mocked(storage.timelineAnnotations.list).mockResolvedValue(mockAnnotations as never);
+      vi.mocked(storage.timelineAnnotations.list).mockResolvedValue(mockAnnotations);
 
       const response = await request(app).get("/api/v1/timeline-annotations");
 
@@ -81,7 +81,7 @@ describe("Timeline Annotations Routes", () => {
         note: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as never);
+      });
 
       const response = await request(app)
         .post("/api/v1/timeline-annotations")
@@ -133,7 +133,7 @@ describe("Timeline Annotations Routes", () => {
         note: "x".repeat(500),
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as never);
+      });
 
       const response = await request(app)
         .post("/api/v1/timeline-annotations")
@@ -178,12 +178,12 @@ describe("Timeline Annotations Routes", () => {
     };
 
     it("updates an existing annotation", async () => {
-      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation);
       vi.mocked(storage.timelineAnnotations.update).mockResolvedValue({
         ...existingAnnotation,
         endDate: "2026-03-14",
         note: "Extended recovery",
-      } as never);
+      });
 
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/a1")
@@ -223,7 +223,7 @@ describe("Timeline Annotations Routes", () => {
     // Regression tests for Codex P2 — single-field PATCHes must be
     // validated against the persisted row, not just against themselves.
     it("rejects a single-field endDate PATCH that moves it before the persisted startDate", async () => {
-      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation);
 
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/a1")
@@ -236,7 +236,7 @@ describe("Timeline Annotations Routes", () => {
     });
 
     it("rejects a single-field startDate PATCH that moves it after the persisted endDate", async () => {
-      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation);
 
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/a1")
@@ -249,11 +249,11 @@ describe("Timeline Annotations Routes", () => {
     });
 
     it("accepts a single-field endDate PATCH that keeps the merged range valid", async () => {
-      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation);
       vi.mocked(storage.timelineAnnotations.update).mockResolvedValue({
         ...existingAnnotation,
         endDate: "2026-03-10",
-      } as never);
+      });
 
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/a1")
@@ -266,11 +266,11 @@ describe("Timeline Annotations Routes", () => {
     });
 
     it("accepts a note-only PATCH without revalidating dates", async () => {
-      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation as never);
+      vi.mocked(storage.timelineAnnotations.findById).mockResolvedValue(existingAnnotation);
       vi.mocked(storage.timelineAnnotations.update).mockResolvedValue({
         ...existingAnnotation,
         note: "Updated note",
-      } as never);
+      });
 
       const response = await request(app)
         .patch("/api/v1/timeline-annotations/a1")

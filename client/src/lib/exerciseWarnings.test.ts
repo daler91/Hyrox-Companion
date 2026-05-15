@@ -102,14 +102,13 @@ describe("exerciseWarnings", () => {
 
     it("should default to conditioning category for custom exercises with no category, warning about reps", () => {
       const exercise: StructuredExercise = {
-        // Explicitly casting to StructuredExercise with missing category to test fallback
         exerciseName: "custom",
         category: "", // will fall back to conditioning
         customLabel: "Weird Exercise",
         sets: [
           { setNumber: 1, reps: undefined },
         ],
-      } as StructuredExercise;
+      };
 
       const warnings = getMissingFieldWarnings(exercise);
       expect(warnings).toContain("Weird Exercise is missing reps");

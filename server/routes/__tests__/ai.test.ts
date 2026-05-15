@@ -269,7 +269,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
     vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", aiCoachEnabled: true });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([{ name: "Custom Squat" }]);
     const parsed = [{ exerciseName: "back_squat", sets: [{ setNumber: 1, reps: 5 }] }];
-    vi.mocked(parseExercisesFromImage).mockResolvedValue(parsed as never);
+    vi.mocked(parseExercisesFromImage).mockResolvedValue(parsed);
 
     const response = await request(app)
       .post("/api/v1/parse-exercises-from-image")
@@ -660,7 +660,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
   });
 
   it("uses the user's weight unit when building the timeline suggestion RAG query", async () => {
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "lbs" } as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "lbs" });
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(3072);
     vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about heavier squats"]);
@@ -760,15 +760,15 @@ describe("POST /api/timeline/ai-suggestions/apply", () => {
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
     app = createTestApp(aiRouter);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "kg" } as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "kg" });
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
       id: "day-1",
       mainWorkout: "Old main",
       accessory: null,
       notes: null,
-    } as never);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([] as never);
-    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({} as never);
+    });
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
   });
 
   it("applies text-only suggestions without checking AI budget", async () => {

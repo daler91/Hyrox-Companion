@@ -147,7 +147,7 @@ describe("idempotencyMiddleware", () => {
 
     await idempotencyMiddleware(req, res, next);
 
-    expect(() => res.json(undefined as never)).not.toThrow();
+    expect(() => res.json(undefined)).not.toThrow();
 
     await new Promise((r) => setTimeout(r, 0));
     expect(mockStorage.idempotency.set).toHaveBeenCalledOnce();
