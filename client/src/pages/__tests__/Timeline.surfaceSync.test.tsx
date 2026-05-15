@@ -199,7 +199,7 @@ vi.mock("@/components/workout-detail/PreviewSheet", () => ({
     if (!entry) return null;
     return (
       <section data-testid="preview-sheet">
-        {!mobileCoachPanelOpen ? (
+        {mobileCoachPanelOpen ? null : (
           <div data-testid="preview-details">
             <button type="button" onClick={() => onEditWorkout?.(entry)} data-testid="preview-edit">
               Edit workout
@@ -217,7 +217,7 @@ vi.mock("@/components/workout-detail/PreviewSheet", () => ({
               </button>
             ) : null}
           </div>
-        ) : null}
+        )}
         {coachChatOpen ? (
           <div
             data-testid="embedded-chat"

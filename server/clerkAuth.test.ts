@@ -44,7 +44,7 @@ describe("isAuthenticated middleware", () => {
     next = vi.fn() as unknown as NextFunction;
     clearUserSeenCache();
     vi.clearAllMocks();
-    vi.mocked(storage.users.upsertUser).mockResolvedValue({ id: "test-user-id" } as never);
+    vi.mocked(storage.users.upsertUser).mockResolvedValue({ id: "test-user-id" });
   });
 
   afterEach(() => {
@@ -94,7 +94,7 @@ describe("isAuthenticated middleware", () => {
       firstName: "Test",
       lastName: "User",
       imageUrl: "https://example.com/avatar.png",
-    } as never);
+    });
 
     await isAuthenticated(req, res, next);
 
@@ -137,11 +137,11 @@ describe("isAuthenticated middleware", () => {
       firstName: "Test",
       lastName: "User",
       imageUrl: "https://example.com/avatar.png",
-    } as never);
+    });
     vi.mocked(storage.users.upsertUser)
-      .mockResolvedValueOnce({ id: "test-user-id" } as never)
+      .mockResolvedValueOnce({ id: "test-user-id" })
       .mockRejectedValueOnce(duplicateEmailError)
-      .mockResolvedValueOnce({ id: "test-user-id" } as never);
+      .mockResolvedValueOnce({ id: "test-user-id" });
 
     await isAuthenticated(req, res, next);
 
