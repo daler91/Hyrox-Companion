@@ -68,6 +68,10 @@ export function StructureBlocksEditor({ value, onChange, showScoreControls = fal
   const normalizedValue = normalizeValue(value);
   const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(normalizedValue));
   const [trackedValue, setTrackedValue] = useState(normalizedValue);
+  // Keep the format picker tucked away until the user opts in — most
+  // workouts are plain per-set tables and don't need a structured block,
+  // so three add buttons shouldn't greet every athlete by default.
+  const [addOpen, setAddOpen] = useState(false);
 
   // Re-hydrate drafts only when the external `value` reference changes AND
   // its serialized form differs from what our drafts would emit. This keeps
@@ -128,65 +132,87 @@ export function StructureBlocksEditor({ value, onChange, showScoreControls = fal
     [commit, drafts],
   );
 
+  const hasBlocks = drafts.length > 0;
+
   return (
     <div className="space-y-3" data-testid="structure-blocks-editor">
-      {drafts.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-          No structured blocks yet. Add an EMOM (or other format) below to record interval-based work.
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Structured blocks
+        </p>
+        <p className="text-xs text-muted-foreground">
+          EMOM, AMRAP, or fixed-round formats that don&apos;t fit the per-set table.
+        </p>
+      </div>
+
+      {hasBlocks
+        ? drafts.map((draft, idx) => (
+            <div key={draft.id} className="space-y-2" data-testid={`structure-block-${idx}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Block {idx + 1} · {draft.config.blockType.toUpperCase()}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemoveBlock(draft.id)}
+                  data-testid={`structure-block-remove-${idx}`}
+                >
+                  Remove
+                </Button>
+              </div>
+              <WorkoutStructureEditor
+                value={draft.config}
+                onChange={(next) => handleUpdateBlock(draft.id, next)}
+                showScoreControls={showScoreControls}
+                onScoreChange={onScoreChange ? (blockId, score) => handleUpdateScore(draft.id, blockId, score) : undefined}
+              />
+            </div>
+          ))
+        : null}
+
+      {hasBlocks || addOpen ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddEmom}
+            data-testid="structure-blocks-add-emom"
+          >
+            + EMOM
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddAmrap}
+            data-testid="structure-blocks-add-amrap"
+          >
+            + AMRAP
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddRounds}
+            data-testid="structure-blocks-add-rounds"
+          >
+            + Rounds
+          </Button>
         </div>
       ) : (
-        drafts.map((draft, idx) => (
-          <div key={draft.id} className="space-y-2" data-testid={`structure-block-${idx}`}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Block {idx + 1}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => handleRemoveBlock(draft.id)}
-                data-testid={`structure-block-remove-${idx}`}
-              >
-                Remove
-              </Button>
-            </div>
-            <WorkoutStructureEditor
-              value={draft.config}
-              onChange={(next) => handleUpdateBlock(draft.id, next)}
-              showScoreControls={showScoreControls}
-              onScoreChange={onScoreChange ? (blockId, score) => handleUpdateScore(draft.id, blockId, score) : undefined}
-            />
-          </div>
-        ))
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setAddOpen(true)}
+          data-testid="structure-blocks-add-toggle"
+        >
+          + Add structured block
+        </Button>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAddEmom}
-          data-testid="structure-blocks-add-emom"
-        >
-          + Add EMOM block
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAddAmrap}
-          data-testid="structure-blocks-add-amrap"
-        >
-          + Add AMRAP block
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleAddRounds}
-          data-testid="structure-blocks-add-rounds"
-        >
-          + Add Rounds block
-        </Button>
-      </div>
     </div>
   );
 }

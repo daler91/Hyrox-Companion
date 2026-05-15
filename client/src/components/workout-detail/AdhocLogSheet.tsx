@@ -414,9 +414,6 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         <Separator />
 
         <div className="space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Exercises
-          </p>
           <ExerciseTable
             workoutId={ADHOC_DRAFT_ID}
             exerciseSets={exerciseSets}

@@ -19,19 +19,21 @@ const readSnapshot = (): StructureBlockInput[] =>
   JSON.parse(screen.getByTestId("harness-snapshot").textContent || "[]");
 
 describe("StructureBlocksEditor", () => {
-  it("renders an empty-state hint when no blocks exist", () => {
+  it("collapses the format picker behind a single add affordance when empty", () => {
     render(<Harness />);
-    expect(screen.getByText(/No structured blocks yet/i)).toBeInTheDocument();
+    expect(screen.getByTestId("structure-blocks-add-toggle")).toBeInTheDocument();
+    expect(screen.queryByTestId("structure-blocks-add-emom")).not.toBeInTheDocument();
   });
 
   it("treats an omitted value as an empty block list", () => {
     render(<StructureBlocksEditor onChange={vi.fn()} />);
-    expect(screen.getByText(/No structured blocks yet/i)).toBeInTheDocument();
+    expect(screen.getByTestId("structure-blocks-add-toggle")).toBeInTheDocument();
   });
 
   it("adds an EMOM block via the add button and surfaces it in onChange", () => {
     render(<Harness />);
 
+    fireEvent.click(screen.getByTestId("structure-blocks-add-toggle"));
     fireEvent.click(screen.getByTestId("structure-blocks-add-emom"));
 
     const blocks = readSnapshot();
@@ -55,6 +57,7 @@ describe("StructureBlocksEditor", () => {
   it("adds AMRAP and rounds blocks via explicit add buttons", () => {
     render(<Harness />);
 
+    fireEvent.click(screen.getByTestId("structure-blocks-add-toggle"));
     fireEvent.click(screen.getByTestId("structure-blocks-add-amrap"));
     fireEvent.click(screen.getByTestId("structure-blocks-add-rounds"));
 
@@ -171,6 +174,27 @@ describe("StructureBlocksEditor", () => {
     });
   });
 
+  it("labels transition steps in the EMOM minute preview", () => {
+    render(
+      <Harness
+        initial={[{
+          sectionType: "main",
+          formatType: "emom",
+          durationMinutes: 1,
+          steps: [{
+            stepNumber: 1,
+            stepType: "transition",
+            minuteIndex: 1,
+            targets: { instructions: "Change stations" },
+          }],
+        }]}
+      />,
+    );
+
+    expect(screen.getByText("Transition · Change stations")).toBeInTheDocument();
+    expect(screen.queryByText("Work · Change stations")).not.toBeInTheDocument();
+  });
+
   it("removes a block when the remove button is clicked", () => {
     render(
       <Harness
@@ -210,7 +234,9 @@ describe("StructureBlocksEditor", () => {
     );
 
     expect(screen.getByTestId("structure-block-0")).toBeInTheDocument();
-    expect(screen.getByText("Box Jumps")).toBeInTheDocument();
+    // "Box Jumps" renders in both the step editor and the minute-by-minute
+    // EMOM preview, so assert presence rather than a single match.
+    expect(screen.getAllByText("Box Jumps").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("7")).toBeInTheDocument();
   });
 });

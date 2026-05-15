@@ -211,15 +211,7 @@ export function ConfirmStep({
             structureBlocks={structureBlocks}
           />
 
-          <div className="space-y-2">
-            <div>
-              <h3 className="text-sm font-medium">Structured blocks (EMOM, intervals, AMRAP…)</h3>
-              <p className="text-xs text-muted-foreground">
-                Use this for time-domain formats that don't fit into per-set rows.
-              </p>
-            </div>
-            <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
-          </div>
+          <StructureBlocksEditor value={structureBlocks} onChange={setStructureBlocks} />
 
           {freeText.trim().length > 0 && (
             <Collapsible open={isLegacyNoteOpen} onOpenChange={handleLegacyNoteOpenChange}>
