@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { format, startOfWeek } from "date-fns";
-import { useCallback,useRef, useState } from "react";
+import { type RefObject, useCallback, useRef, useState } from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import { useToast } from "@/hooks/use-toast";
@@ -8,24 +8,31 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
 interface UsePlanImportOptions {
+  fileInputRef?: RefObject<HTMLInputElement>;
+  onPlanImported?: (planId: string) => void;
   onPlanScheduled?: (planId: string) => void;
 }
 
-export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
+export function usePlanImport({
+  fileInputRef: externalFileInputRef,
+  onPlanImported,
+  onPlanScheduled,
+}: UsePlanImportOptions = {}) {
   const { toast } = useToast();
   const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
   const [schedulingPlanId, setSchedulingPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string>(
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
+    format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"),
   );
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const internalFileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = externalFileInputRef ?? internalFileInputRef;
 
   const importMutation = useMutation({
-    mutationFn: (data: { csvContent: string; fileName: string }) =>
-      api.plans.import(data),
+    mutationFn: (data: { csvContent: string; fileName: string }) => api.plans.import(data),
     onSuccess: (plan) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       setSchedulingPlanId(plan.id);
+      onPlanImported?.(plan.id);
       toast({ title: "Plan imported! Now set a start date." });
     },
     onError: () => {
@@ -75,7 +82,9 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
       api.plans.schedule(planId, sd),
     onSuccess: () => {
       const planIdToSelect = schedulingPlanId;
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/timeline", planIdToSelect] }).catch(() => {});
+      queryClient
+        .invalidateQueries({ queryKey: ["/api/v1/timeline", planIdToSelect] })
+        .catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       if (planIdToSelect) {
         onPlanScheduled?.(planIdToSelect);
@@ -89,52 +98,59 @@ export function usePlanImport({ onPlanScheduled }: UsePlanImportOptions = {}) {
   });
 
   const parseCSVForPreview = useCallback((csvContent: string) => {
-    const lines = csvContent.trim().split('\n');
+    const lines = csvContent.trim().split("\n");
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replaceAll(/['"]/g, ""));
-    const weekIdx = headers.findIndex(h => h.includes('week'));
-    const dayIdx = headers.findIndex(h => h.includes('day'));
-    const focusIdx = headers.findIndex(h => h.includes('focus') || h.includes('type'));
-    const workoutIdx = headers.findIndex(h => h.includes('workout') || h.includes('main'));
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replaceAll(/['"]/g, ""));
+    const weekIdx = headers.findIndex((h) => h.includes("week"));
+    const dayIdx = headers.findIndex((h) => h.includes("day"));
+    const focusIdx = headers.findIndex((h) => h.includes("focus") || h.includes("type"));
+    const workoutIdx = headers.findIndex((h) => h.includes("workout") || h.includes("main"));
 
-    const rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> = [];
+    const rows: Array<{ weekNumber: number; dayName: string; focus: string; mainWorkout: string }> =
+      [];
 
     for (let i = 1; i < Math.min(lines.length, 11); i++) {
-      const cols = lines[i].split(',').map(c => c.trim().replaceAll(/['"]/g, ""));
+      const cols = lines[i].split(",").map((c) => c.trim().replaceAll(/['"]/g, ""));
       if (cols.length >= 4) {
         rows.push({
-          weekNumber: Number.parseInt(cols[weekIdx] || '1', 10) || 1,
-          dayName: cols[dayIdx] || '',
-          focus: cols[focusIdx] || '',
-          mainWorkout: cols[workoutIdx] || '',
+          weekNumber: Number.parseInt(cols[weekIdx] || "1", 10) || 1,
+          dayName: cols[dayIdx] || "",
+          focus: cols[focusIdx] || "",
+          mainWorkout: cols[workoutIdx] || "",
         });
       }
     }
     return rows;
   }, []);
 
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    if (!file.name.endsWith(".csv")) {
-      toast({ title: "Please upload a CSV file", variant: "destructive" });
-      return;
-    }
+      if (!file.name.endsWith(".csv")) {
+        toast({ title: "Please upload a CSV file", variant: "destructive" });
+        return;
+      }
 
-    file.text().then((csvContent) => {
-      const previewRows = parseCSVForPreview(csvContent);
-      setCsvPreview({
-        fileName: file.name,
-        content: csvContent,
-        rows: previewRows,
-      });
-      event.target.value = "";
-    }).catch(() => {
-      toast({ title: "Failed to read file", variant: "destructive" });
-    });
-  }, [parseCSVForPreview, toast]);
+      file
+        .text()
+        .then((csvContent) => {
+          const previewRows = parseCSVForPreview(csvContent);
+          setCsvPreview({
+            fileName: file.name,
+            content: csvContent,
+            rows: previewRows,
+          });
+          event.target.value = "";
+        })
+        .catch(() => {
+          toast({ title: "Failed to read file", variant: "destructive" });
+        });
+    },
+    [parseCSVForPreview, toast],
+  );
 
   const confirmImport = useCallback(() => {
     if (!csvPreview) return;

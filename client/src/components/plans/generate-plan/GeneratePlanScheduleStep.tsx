@@ -38,6 +38,8 @@ interface GeneratePlanScheduleStepProps {
   readonly onRaceDateChange: (value: string) => void;
   readonly onBack: () => void;
   readonly onNext: () => void;
+  readonly canProceed: boolean;
+  readonly isStartDateRequired?: boolean;
 }
 
 export function GeneratePlanScheduleStep({
@@ -56,6 +58,8 @@ export function GeneratePlanScheduleStep({
   onRaceDateChange,
   onBack,
   onNext,
+  canProceed,
+  isStartDateRequired = false,
 }: GeneratePlanScheduleStepProps) {
   return (
     <div className="space-y-4">
@@ -136,7 +140,7 @@ export function GeneratePlanScheduleStep({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="startDate">Start Date</Label>
+          <Label htmlFor="startDate">Start Date{isStartDateRequired ? " (required)" : ""}</Label>
           <Input
             id="startDate"
             type="date"
@@ -154,7 +158,9 @@ export function GeneratePlanScheduleStep({
           />
         </div>
         <p className="col-span-2 text-xs text-muted-foreground -mt-2">
-          Both optional. Race date structures phases to peak on that day.
+          {isStartDateRequired
+            ? "Start date is required during onboarding so workouts can appear on your timeline."
+            : "Both optional. Race date structures phases to peak on that day."}
         </p>
       </div>
 
@@ -162,7 +168,7 @@ export function GeneratePlanScheduleStep({
         <Button variant="outline" onClick={onBack}>
           <ChevronLeft className="mr-1 h-4 w-4" /> Back
         </Button>
-        <Button onClick={onNext}>
+        <Button onClick={onNext} disabled={!canProceed}>
           Next <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>

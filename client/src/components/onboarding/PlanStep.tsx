@@ -10,10 +10,34 @@ interface PlanStepProps {
   readonly onSkip: () => void;
 }
 
-export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGeneratePlan, onSkip }: Readonly<PlanStepProps>) {
+export function PlanStep({
+  isPending,
+  onUseSamplePlan,
+  onImportPlan,
+  onGeneratePlan,
+  onSkip,
+}: Readonly<PlanStepProps>) {
   return (
     <div className="space-y-3">
       <Button
+        className="w-full justify-start h-auto py-4"
+        onClick={onGeneratePlan}
+        disabled={isPending}
+        data-testid="button-onboarding-generate-plan"
+      >
+        <div className="flex items-center gap-3 w-full">
+          <Wand2 className="h-5 w-5" />
+          <div className="text-left flex-1">
+            <div className="font-medium">Generate AI Plan (recommended)</div>
+            <div className="text-xs opacity-80 font-normal">
+              Personalized plan based on your goals, schedule, and experience
+            </div>
+          </div>
+        </div>
+      </Button>
+
+      <Button
+        variant="outline"
         className="w-full justify-start h-auto py-4"
         onClick={onUseSamplePlan}
         disabled={isPending}
@@ -26,27 +50,9 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGenerateP
             <Sparkles className="h-5 w-5" />
           )}
           <div className="text-left flex-1">
-            <div className="font-medium">Use 8-Week Fitness Plan (recommended)</div>
-            <div className="text-xs opacity-80 font-normal">
-              Structured program with running, strength, and functional exercises
-            </div>
-          </div>
-        </div>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="w-full justify-start h-auto py-4"
-        onClick={onGeneratePlan}
-        disabled={isPending}
-        data-testid="button-onboarding-generate-plan"
-      >
-        <div className="flex items-center gap-3 w-full">
-          <Wand2 className="h-5 w-5" />
-          <div className="text-left flex-1">
-            <div className="font-medium">Generate AI Plan</div>
+            <div className="font-medium">Use 8-Week Template</div>
             <div className="text-xs text-muted-foreground font-normal">
-              AI creates a personalized periodized plan based on your goals
+              Structured program with running, strength, and functional exercises
             </div>
           </div>
         </div>
@@ -68,6 +74,12 @@ export function PlanStep({ isPending, onUseSamplePlan, onImportPlan, onGenerateP
           </div>
         </div>
       </Button>
+
+      <div className="rounded-md border bg-muted/40 p-3 text-left text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Coaching Knowledge (RAG):</span> Later, add
+        training principles or reference docs in Settings so the coach can ground suggestions and
+        plan notes in sources you trust.
+      </div>
 
       <Button
         variant="ghost"

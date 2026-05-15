@@ -3,6 +3,8 @@ import { useMutation } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { useState } from "react";
 
+import { DEFAULT_ONBOARDING_GOAL_ID } from "@/components/onboarding/onboardingGoals";
+import { markOnboardingComplete } from "@/hooks/onboardingStorage";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -16,14 +18,12 @@ const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = {
   schedule: "plan",
 };
 
-const markComplete = () => localStorage.setItem("fitai-onboarding-complete", "true");
-
 export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
   const [step, setStep] = useState<OnboardingWizardStep>("welcome");
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
-  const [selectedGoal, setSelectedGoal] = useState("first");
+  const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
   const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
   const [mafAge, setMafAge] = useState("");
   const [mafInjuryIllnessMedication, setMafInjuryIllnessMedication] = useState(false);
@@ -34,8 +34,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
 
   const prefsMutation = useMutation({
-    mutationFn: (prefs: Record<string, unknown>) =>
-      api.preferences.update(prefs),
+    mutationFn: (prefs: Record<string, unknown>) => api.preferences.update(prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
@@ -62,7 +61,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         title: "Your training plan is ready!",
         description: "Workouts have been scheduled on your timeline.",
       });
-      markComplete();
+      markOnboardingComplete();
       onComplete("sample");
     },
     onError: () => toast({ title: "Failed to schedule plan", variant: "destructive" }),
@@ -144,14 +143,30 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     }
   };
 
+  const guardUnscheduledSamplePlan = () => {
+    if (!createdPlanId) return false;
+    setStep("schedule");
+    toast({
+      title: "Set a start date to finish onboarding",
+      description:
+        "Your template plan has been created. Pick a start date before closing onboarding.",
+    });
+    return true;
+  };
+
   const handleSkip = () => {
-    markComplete();
+    if (guardUnscheduledSamplePlan()) return;
+    markOnboardingComplete();
     onComplete("skip");
   };
 
   const handleImportPlan = () => {
-    markComplete();
     onComplete("import");
+  };
+
+  const handleDismissAttempt = () => {
+    if (guardUnscheduledSamplePlan()) return;
+    handleSkip();
   };
 
   const handleBack = () => {
@@ -176,7 +191,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const handleGeneratedPlan = () => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
-    markComplete();
+    markOnboardingComplete();
     onComplete("generated");
   };
 
@@ -210,6 +225,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     handleNext,
     handleSkip,
     handleImportPlan,
+    handleDismissAttempt,
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,

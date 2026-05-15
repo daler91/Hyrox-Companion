@@ -1,6 +1,8 @@
+import { format } from "date-fns";
 import { useState } from "react";
 
 import { GoalStep } from "@/components/onboarding/GoalStep";
+import { getOnboardingGoalLabel } from "@/components/onboarding/onboardingGoals";
 import { OnboardingWizardFooter } from "@/components/onboarding/OnboardingWizardFooter";
 import { OnboardingWizardFrame } from "@/components/onboarding/OnboardingWizardFrame";
 import { PlanStep } from "@/components/onboarding/PlanStep";
@@ -61,6 +63,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     handleNext,
     handleSkip,
     handleImportPlan,
+    handleDismissAttempt,
     handleBack,
     handleStartTraining,
     handleUseSamplePlan,
@@ -74,7 +77,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
   // frame to avoid accidental dismissal mid-wizard.
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      handleSkip();
+      handleDismissAttempt();
     }
   };
 
@@ -108,7 +111,24 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           onDistanceUnitChange={setDistanceUnit}
         />
       )}
-      {step === "goal" && <GoalStep selectedGoal={selectedGoal} onGoalChange={setSelectedGoal} trainingStyleId={trainingStyleId} onTrainingStyleChange={setTrainingStyleId} mafAge={mafAge} onMafAgeChange={setMafAge} mafInjuryIllnessMedication={mafInjuryIllnessMedication} onMafInjuryIllnessMedicationChange={setMafInjuryIllnessMedication} mafConsistency={mafConsistency} onMafConsistencyChange={setMafConsistency} mafTrend={mafTrend} onMafTrendChange={setMafTrend} mafHrDataAvailable={mafHrDataAvailable} onMafHrDataAvailableChange={setMafHrDataAvailable} />}
+      {step === "goal" && (
+        <GoalStep
+          selectedGoal={selectedGoal}
+          onGoalChange={setSelectedGoal}
+          trainingStyleId={trainingStyleId}
+          onTrainingStyleChange={setTrainingStyleId}
+          mafAge={mafAge}
+          onMafAgeChange={setMafAge}
+          mafInjuryIllnessMedication={mafInjuryIllnessMedication}
+          onMafInjuryIllnessMedicationChange={setMafInjuryIllnessMedication}
+          mafConsistency={mafConsistency}
+          onMafConsistencyChange={setMafConsistency}
+          mafTrend={mafTrend}
+          onMafTrendChange={setMafTrend}
+          mafHrDataAvailable={mafHrDataAvailable}
+          onMafHrDataAvailableChange={setMafHrDataAvailable}
+        />
+      )}
       {step === "plan" && (
         <>
           <PlanStep
@@ -119,6 +139,9 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
             onSkip={handleSkip}
           />
           <GeneratePlanDialog
+            mode="onboarding"
+            initialGoal={getOnboardingGoalLabel(selectedGoal)}
+            initialStartDate={format(startDate, "yyyy-MM-dd")}
             open={showGenerateDialog}
             onOpenChange={setShowGenerateDialog}
             onGenerated={handleGeneratedPlan}

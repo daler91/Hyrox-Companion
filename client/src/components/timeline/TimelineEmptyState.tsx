@@ -63,13 +63,14 @@ function WelcomeEmptyState({
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold mb-2">
-          Welcome to fitai.coach
-        </h2>
+        <h2 className="text-2xl font-bold mb-2">Welcome to fitai.coach</h2>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Your AI-powered fitness coaching companion.
-          Track workouts, follow structured plans, and get personalized
-          coaching for any goal.
+          Your AI-powered fitness coaching companion. Track workouts, follow structured plans, and
+          get personalized coaching for any goal.
+        </p>
+        <p className="text-xs text-muted-foreground max-w-md mx-auto mt-3">
+          Add Coaching Knowledge in Settings when you are ready, and the coach can use your training
+          principles or reference docs in future recommendations.
         </p>
       </div>
 
@@ -80,7 +81,7 @@ function WelcomeEmptyState({
           data-testid="button-generate-ai-plan"
         >
           <Wand2 className="h-4 w-4 mr-2" />
-          Generate AI Plan
+          Generate AI Plan (recommended)
         </Button>
         <Button
           size="lg"
@@ -94,13 +95,10 @@ function WelcomeEmptyState({
           ) : (
             <Sparkles className="h-4 w-4 mr-2" />
           )}
-          Use 8-Week Plan
+          Use 8-Week Template
         </Button>
         <div>
-          <Label
-            htmlFor="csv-upload-empty"
-            className="cursor-pointer"
-          >
+          <Label htmlFor="csv-upload-empty" className="cursor-pointer">
             <Button
               size="lg"
               variant="outline"
@@ -131,20 +129,13 @@ function WelcomeEmptyState({
 
       <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
         <Link href="/log">
-          <Button
-            variant="ghost"
-            data-testid="button-log-workout-empty"
-          >
+          <Button variant="ghost" data-testid="button-log-workout-empty">
             <Dumbbell className="h-4 w-4 mr-2" />
             Or just log a workout
           </Button>
         </Link>
         {onLogNote ? (
-          <Button
-            variant="ghost"
-            onClick={onLogNote}
-            data-testid="button-log-note-empty"
-          >
+          <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
             <StickyNote className="h-4 w-4 mr-2" />
             Log a note
           </Button>
@@ -155,10 +146,7 @@ function WelcomeEmptyState({
         Not sure where to start? Ask our AI Coach for training recommendations.
       </p>
 
-      <GeneratePlanDialog
-        open={showGenerateDialog}
-        onOpenChange={setShowGenerateDialog}
-      />
+      <GeneratePlanDialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog} />
     </div>
   );
 }
@@ -178,12 +166,9 @@ function ReadyEmptyState({
     <div className="text-center space-y-4">
       <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
       <div>
-        <h3 className="font-semibold mb-2">
-          Ready to Start Training
-        </h3>
+        <h3 className="font-semibold mb-2">Ready to Start Training</h3>
         <p className="text-muted-foreground text-sm max-w-md mx-auto">
-          Set a start date for your plan to schedule workouts on your
-          calendar.
+          Set a start date for your plan to schedule workouts on your calendar.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-2 justify-center">
@@ -195,11 +180,7 @@ function ReadyEmptyState({
           Set Start Date
         </Button>
         {onLogNote ? (
-          <Button
-            variant="ghost"
-            onClick={onLogNote}
-            data-testid="button-log-note-empty"
-          >
+          <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
             <StickyNote className="h-4 w-4 mr-2" />
             Log a note
           </Button>
@@ -224,12 +205,9 @@ function NoWorkoutsEmptyState({
     <div className="text-center space-y-4">
       <Calendar className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
       <div>
-        <h3 className="font-semibold mb-2">
-          No {filterStatus} workouts
-        </h3>
+        <h3 className="font-semibold mb-2">No {filterStatus} workouts</h3>
         <p className="text-muted-foreground text-sm">
-          Try adjusting your filter or complete more workouts to see
-          them here.
+          Try adjusting your filter or complete more workouts to see them here.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-2 justify-center">
@@ -241,11 +219,7 @@ function NoWorkoutsEmptyState({
           Show All
         </Button>
         {onLogNote ? (
-          <Button
-            variant="ghost"
-            onClick={onLogNote}
-            data-testid="button-log-note-empty"
-          >
+          <Button variant="ghost" onClick={onLogNote} data-testid="button-log-note-empty">
             <StickyNote className="h-4 w-4 mr-2" />
             Log a note
           </Button>
@@ -267,6 +241,8 @@ export default function TimelineEmptyState({
   onLogNote,
 }: Readonly<TimelineEmptyStateProps>) {
   let emptyStateContent = null;
+  const planIdForScheduling =
+    selectedPlanId ?? plans.find((plan) => !plan.startDate)?.id ?? plans[0]?.id ?? null;
 
   if (filterStatus === "all" && !selectedPlanId && plans.length === 0) {
     emptyStateContent = (
@@ -277,10 +253,10 @@ export default function TimelineEmptyState({
         onLogNote={onLogNote}
       />
     );
-  } else if (filterStatus === "all" && selectedPlanId) {
+  } else if (filterStatus === "all" && planIdForScheduling) {
     emptyStateContent = (
       <ReadyEmptyState
-        selectedPlanId={selectedPlanId}
+        selectedPlanId={planIdForScheduling}
         setSchedulingPlanId={setSchedulingPlanId}
         onLogNote={onLogNote}
       />
@@ -297,9 +273,7 @@ export default function TimelineEmptyState({
 
   return (
     <Card className="overflow-visible">
-      <CardContent className="p-8 md:p-12">
-        {emptyStateContent}
-      </CardContent>
+      <CardContent className="p-8 md:p-12">{emptyStateContent}</CardContent>
     </Card>
   );
 }

@@ -19,16 +19,34 @@ interface GeneratePlanDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly onGenerated?: (plan: TrainingPlanWithDays) => void;
+  readonly mode?: "default" | "onboarding";
+  readonly initialGoal?: string;
+  readonly initialStartDate?: string;
 }
 
-function getDescription(step: number): string {
+function getDescription(step: number, mode: GeneratePlanDialogProps["mode"]): string {
   if (step === 0) return "What's your training goal?";
+  if (step === 1 && mode === "onboarding") {
+    return "Set your plan duration, schedule, and experience level.";
+  }
   if (step === 1) return "Set your plan duration and experience level.";
   return "Optional: focus areas and additional details.";
 }
 
-export function GeneratePlanDialog({ open, onOpenChange, onGenerated }: GeneratePlanDialogProps) {
-  const form = useGeneratePlanForm();
+export function GeneratePlanDialog({
+  open,
+  onOpenChange,
+  onGenerated,
+  mode = "default",
+  initialGoal,
+  initialStartDate,
+}: GeneratePlanDialogProps) {
+  const isOnboarding = mode === "onboarding";
+  const form = useGeneratePlanForm({
+    initialGoal,
+    initialStartDate,
+    requireStartDate: isOnboarding,
+  });
   const generatePlan = useGeneratePlan();
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -54,7 +72,7 @@ export function GeneratePlanDialog({ open, onOpenChange, onGenerated }: Generate
             <Sparkles className="h-5 w-5" />
             Generate AI Training Plan
           </DialogTitle>
-          <DialogDescription>{getDescription(form.step)}</DialogDescription>
+          <DialogDescription>{getDescription(form.step, mode)}</DialogDescription>
         </DialogHeader>
 
         {form.step === 0 && (
@@ -83,6 +101,8 @@ export function GeneratePlanDialog({ open, onOpenChange, onGenerated }: Generate
             onRaceDateChange={form.handleRaceDateChange}
             onBack={() => form.setStep(0)}
             onNext={() => form.setStep(2)}
+            canProceed={form.canProceedStep1}
+            isStartDateRequired={form.isStartDateRequired}
           />
         )}
 

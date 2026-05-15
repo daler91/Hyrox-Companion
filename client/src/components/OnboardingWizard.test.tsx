@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { addDays, format } from "date-fns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useToast } from "@/hooks/use-toast";
@@ -26,24 +27,48 @@ vi.mock("@/components/onboarding/UnitsStep", () => ({
   ),
 }));
 vi.mock("@/components/onboarding/GoalStep", () => ({
-  GoalStep: () => <div data-testid="goal-step">GoalStep</div>,
+  GoalStep: ({
+    selectedGoal,
+    onGoalChange,
+  }: {
+    selectedGoal: string;
+    onGoalChange: (goal: string) => void;
+  }) => (
+    <div data-testid="goal-step">
+      <div data-testid="text-selected-goal">{selectedGoal}</div>
+      <button type="button" onClick={() => onGoalChange("endurance")}>
+        Choose endurance
+      </button>
+    </div>
+  ),
 }));
 vi.mock("@/components/plans/GeneratePlanDialog", () => ({
   GeneratePlanDialog: ({
     open,
     onGenerated,
+    mode,
+    initialGoal,
+    initialStartDate,
   }: {
     open: boolean;
     onGenerated?: (plan: unknown) => void;
+    mode?: string;
+    initialGoal?: string;
+    initialStartDate?: string;
   }) =>
     open ? (
-      <button
-        type="button"
-        data-testid="button-mock-generated-plan"
-        onClick={() => onGenerated?.({ id: "generated-plan" })}
-      >
-        Finish generated plan
-      </button>
+      <div>
+        <div data-testid="text-generate-mode">{mode}</div>
+        <div data-testid="text-generate-goal">{initialGoal}</div>
+        <div data-testid="text-generate-start-date">{initialStartDate}</div>
+        <button
+          type="button"
+          data-testid="button-mock-generated-plan"
+          onClick={() => onGenerated?.({ id: "generated-plan" })}
+        >
+          Finish generated plan
+        </button>
+      </div>
     ) : null,
 }));
 
@@ -136,5 +161,45 @@ describe("OnboardingWizard Error Handling", () => {
       expect(mockOnComplete).toHaveBeenCalledWith("generated");
     });
     expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+  });
+
+  it("recommends AI generation before the template plan and explains Coaching Knowledge", async () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Continue"));
+
+    const generateButton = await screen.findByTestId("button-onboarding-generate-plan");
+    const sampleButton = await screen.findByTestId("button-onboarding-sample-plan");
+
+    expect(generateButton).toHaveTextContent("Generate AI Plan (recommended)");
+    expect(sampleButton).toHaveTextContent("Use 8-Week Template");
+    expect(sampleButton).not.toHaveTextContent("recommended");
+    expect(
+      generateButton.compareDocumentPosition(sampleButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText(/Coaching Knowledge \(RAG\)/i)).toBeInTheDocument();
+  });
+
+  it("passes the selected onboarding goal and start date into AI plan generation", async () => {
+    renderComponent();
+
+    fireEvent.click(screen.getByText("Get Started"));
+    await screen.findByTestId("units-step");
+    fireEvent.click(screen.getByText("Continue"));
+    await screen.findByTestId("goal-step");
+    fireEvent.click(screen.getByText("Choose endurance"));
+    fireEvent.click(screen.getByText("Continue"));
+
+    fireEvent.click(await screen.findByTestId("button-onboarding-generate-plan"));
+
+    expect(await screen.findByTestId("text-generate-mode")).toHaveTextContent("onboarding");
+    expect(screen.getByTestId("text-generate-goal")).toHaveTextContent("Improve endurance");
+    expect(screen.getByTestId("text-generate-start-date")).toHaveTextContent(
+      format(addDays(new Date(), 1), "yyyy-MM-dd"),
+    );
   });
 });

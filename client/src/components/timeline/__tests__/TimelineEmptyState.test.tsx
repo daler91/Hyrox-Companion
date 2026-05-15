@@ -32,6 +32,7 @@ interface RenderProps {
   readonly selectedPlanId?: string | null;
   readonly plans?: TrainingPlan[];
   readonly onLogNote?: () => void;
+  readonly setSchedulingPlanId?: (id: string) => void;
 }
 
 function renderEmptyState({
@@ -39,6 +40,7 @@ function renderEmptyState({
   selectedPlanId = null,
   plans = [],
   onLogNote,
+  setSchedulingPlanId = vi.fn(),
 }: RenderProps = {}) {
   // The welcome variant eagerly mounts GeneratePlanDialog, which uses
   // react-query hooks internally — so this test needs a provider.
@@ -54,7 +56,7 @@ function renderEmptyState({
         samplePlanMutation={{ mutate: vi.fn(), isPending: false }}
         importMutation={{ isPending: false }}
         handleFileUpload={vi.fn()}
-        setSchedulingPlanId={vi.fn()}
+        setSchedulingPlanId={setSchedulingPlanId}
         setFilterStatus={vi.fn()}
         onLogNote={onLogNote}
       />
@@ -80,6 +82,15 @@ describe("TimelineEmptyState", () => {
       renderEmptyState();
       expect(screen.queryByTestId("button-log-note-empty")).toBeNull();
     });
+
+    it("labels AI plan generation as the recommended first action", () => {
+      renderEmptyState();
+
+      expect(screen.getByTestId("button-generate-ai-plan")).toHaveTextContent(
+        "Generate AI Plan (recommended)",
+      );
+      expect(screen.getByText(/Add Coaching Knowledge in Settings/i)).toBeInTheDocument();
+    });
   });
 
   describe("ready variant (has plan, no scheduled workouts)", () => {
@@ -99,6 +110,21 @@ describe("TimelineEmptyState", () => {
       const user = userEvent.setup();
       await user.click(button);
       expect(onLogNote).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows Set Start Date when plans exist but no plan is selected", async () => {
+      const setSchedulingPlanId = vi.fn();
+      renderEmptyState({
+        filterStatus: "all",
+        selectedPlanId: null,
+        plans: [makePlan({ id: "plan-1", name: "Imported Plan" })],
+        setSchedulingPlanId,
+      });
+
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId("button-set-start-date"));
+
+      expect(setSchedulingPlanId).toHaveBeenCalledWith("plan-1");
     });
   });
 
