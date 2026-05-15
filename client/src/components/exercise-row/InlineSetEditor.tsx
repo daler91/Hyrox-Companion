@@ -339,7 +339,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   if (isDirty) inputValue = draft;
   if (shouldUseExternal) inputValue = formatInitial(currentDisplay);
 
-  const commitDraft = useCallback(() => {
+  const commitDraft = () => {
     const parsed = parseDraft(draft);
     if (parsed == null || !Number.isNaN(parsed)) {
       const next = parsed ?? undefined;
@@ -356,7 +356,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       }
     }
     setIsDirty(false);
-  }, [current, displayUnit, distanceUnit, draft, field, lastCommitted, onUpdate]);
+  };
 
   return (
     <div className="flex min-w-0 flex-col gap-1">

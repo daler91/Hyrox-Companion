@@ -3,8 +3,8 @@ import { describe, expect,it } from "vitest";
 import {
   convertDistance,
   convertWeight,
-  type DistanceUnit,
   displayDistanceToStored,
+  type DistanceUnit,
   formatDistance,
   formatElevation,
   formatPace,
