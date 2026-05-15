@@ -93,7 +93,7 @@
     "tailwind-merge": "^2.6.1",
     "tailwindcss-animate": "^1.0.7",
     "web-push": "^3.6.7",
-    "workbox-window": "^7.4.0",
+    "workbox-window": "^7.4.1",
     "wouter": "^3.9.0",
     "zod": "^4.4.3"
   },

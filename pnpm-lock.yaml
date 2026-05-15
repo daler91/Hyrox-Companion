@@ -226,8 +226,8 @@ importers:
         specifier: ^3.6.7
         version: 3.6.7
       workbox-window:
-        specifier: ^7.4.0
-        version: 7.4.0
+        specifier: ^7.4.1
+        version: 7.4.1
       wouter:
         specifier: ^3.9.0
         version: 3.9.0(react@18.3.1)
@@ -361,7 +361,7 @@ importers:
         version: 6.4.2(@types/node@25.6.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3)
       vite-plugin-pwa:
         specifier: ^1.2.0
-        version: 1.2.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.0)
+        version: 1.2.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.1)
       vitest:
         specifier: ^3.0.5
         version: 3.2.4(@types/debug@4.1.13)(@types/node@25.6.2)(jiti@2.6.1)(jsdom@28.1.0(@noble/hashes@1.8.0))(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3)
@@ -5942,8 +5942,8 @@ packages:
     resolution: {integrity: sha512-qMCMfhY040cVHT43K9BFygqYbUPFZKHOg7K73mtTWJRb8pyP3fzf4Ixd5SzdEJQ6MRUg/WBnOLxghZtKKurENQ==}
     engines: {node: '>=10'}
 
-  smob@1.6.1:
-    resolution: {integrity: sha512-KAkBqZl3c2GvNgNhcoyJae1aKldDW0LO279wF9bk1PnluRTETKBq0WyzRXxEhoQLk56yHaOY4JCBEKDuJIET5g==}
+  smob@1.6.2:
+    resolution: {integrity: sha512-RQsvleCbF8cVHEv+xuDGaA4pOizFqJ0GgjtMSRo6oP8pnN7WsigHgVGey6aILRBKv4W2YOMHLqbKdnB6hpB9fw==}
     engines: {node: '>=20.0.0'}
 
   sonic-boom@4.2.1:
@@ -6610,6 +6610,9 @@ packages:
   workbox-core@7.4.0:
     resolution: {integrity: sha512-6BMfd8tYEnN4baG4emG9U0hdXM4gGuDU3ectXuVHnj71vwxTFI7WOpQJC4siTOlVtGqCUtj0ZQNsrvi6kZZTAQ==}
 
+  workbox-core@7.4.1:
+    resolution: {integrity: sha512-DT+vu46eh/2vRsSHTY4Xmc32Z1rr9PRlQUXr1Dx30ZuXRWwOsvZgGgcwxcasubQLQmbTNYZjv44LkBAQ4tT5tQ==}
+
   workbox-expiration@7.4.0:
     resolution: {integrity: sha512-V50p4BxYhtA80eOvulu8xVfPBgZbkxJ1Jr8UUn0rvqjGhLDqKNtfrDfjJKnLz2U8fO2xGQJTx/SKXNTzHOjnHw==}
 
@@ -6642,6 +6645,9 @@ packages:
 
   workbox-window@7.4.0:
     resolution: {integrity: sha512-/bIYdBLAVsNR3v7gYGaV4pQW3M3kEPx5E8vDxGvxo6khTrGtSSCS7QiFKv9ogzBgZiy0OXLP9zO28U/1nF1mfw==}
+
+  workbox-window@7.4.1:
+    resolution: {integrity: sha512-notZDH2u8VXaqyuD7xaqIfEFi6SRM4SUSd7ewe9PDsVqADuepxX2ZMY3uvuZGxzY5ZOsGC/vD3A/3smFtJt4/A==}
 
   wouter@3.9.0:
     resolution: {integrity: sha512-sF/od/PIgqEQBQcrN7a2x3MX6MQE6nW0ygCfy9hQuUkuB28wEZuu/6M5GyqkrrEu9M6jxdkgE12yDFsQMKos4Q==}
@@ -8829,7 +8835,7 @@ snapshots:
   '@rollup/plugin-terser@0.4.4(rollup@2.80.0)':
     dependencies:
       serialize-javascript: 7.0.5
-      smob: 1.6.1
+      smob: 1.6.2
       terser: 5.47.1
     optionalDependencies:
       rollup: 2.80.0
@@ -12918,7 +12924,7 @@ snapshots:
       astral-regex: 2.0.0
       is-fullwidth-code-point: 3.0.0
 
-  smob@1.6.1: {}
+  smob@1.6.2: {}
 
   sonic-boom@4.2.1:
     dependencies:
@@ -13476,14 +13482,14 @@ snapshots:
       - tsx
       - yaml
 
-  vite-plugin-pwa@1.2.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.0):
+  vite-plugin-pwa@1.2.0(vite@6.4.2(@types/node@25.6.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3))(workbox-build@7.4.0(@types/babel__core@7.20.5))(workbox-window@7.4.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       pretty-bytes: 6.1.1
       tinyglobby: 0.2.15
       vite: 6.4.2(@types/node@25.6.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3)
       workbox-build: 7.4.0(@types/babel__core@7.20.5)
-      workbox-window: 7.4.0
+      workbox-window: 7.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -13693,6 +13699,8 @@ snapshots:
 
   workbox-core@7.4.0: {}
 
+  workbox-core@7.4.1: {}
+
   workbox-expiration@7.4.0:
     dependencies:
       idb: 7.1.1
@@ -13747,6 +13755,11 @@ snapshots:
     dependencies:
       '@types/trusted-types': 2.0.7
       workbox-core: 7.4.0
+
+  workbox-window@7.4.1:
+    dependencies:
+      '@types/trusted-types': 2.0.7
+      workbox-core: 7.4.1
 
   wouter@3.9.0(react@18.3.1):
     dependencies:
