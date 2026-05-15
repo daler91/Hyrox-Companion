@@ -201,12 +201,13 @@ interface ParseFailureAlertProps {
 function ParseFailureAlert({ entryId, visible, retryParse }: ParseFailureAlertProps) {
   if (!visible) return null;
   return (
-    <div
-      className="rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-      role="status"
+    <output
+      className="block rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-900"
       data-testid={`log-parse-failed-${entryId}`}
     >
-      <p>Parse did not create exercise rows. You can still log this workout text-only.</p>
+      <span className="block">
+        Parse did not create exercise rows. You can still log this workout text-only.
+      </span>
       {retryParse ? (
         <Button
           type="button"
@@ -218,7 +219,7 @@ function ParseFailureAlert({ entryId, visible, retryParse }: ParseFailureAlertPr
           Retry parse
         </Button>
       ) : null}
-    </div>
+    </output>
   );
 }
 
