@@ -8,16 +8,16 @@ vi.mock('../queryClient', () => ({
   apiRequest: vi.fn(),
 }));
 
+function mockJsonResponse(data: unknown) {
+  const response = new Response(JSON.stringify(data));
+  const jsonSpy = vi.spyOn(response, 'json');
+  return { response, jsonSpy };
+}
+
 describe('api client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  function mockJsonResponse(data: unknown) {
-    const response = new Response(JSON.stringify(data));
-    const jsonSpy = vi.spyOn(response, 'json');
-    return { response, jsonSpy };
-  }
 
   describe('typedRequest', () => {
     it('should call apiRequest with method and url when no data is provided', async () => {

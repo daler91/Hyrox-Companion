@@ -26,7 +26,7 @@ describe("migrateLegacyKeys", () => {
 
   it("should return early if storage is falsy", () => {
     expect(() => migrateLegacyKeys(null)).not.toThrow();
-    expect(() => migrateLegacyKeys(undefined)).not.toThrow();
+    expect(() => migrateLegacyKeys()).not.toThrow();
   });
 
   it("should migrate old keys to new keys and remove old keys", () => {
