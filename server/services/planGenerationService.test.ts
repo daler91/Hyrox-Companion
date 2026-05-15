@@ -300,7 +300,7 @@ describe("generatePlan", () => {
       expect.arrayContaining([
         expect.objectContaining({
           dayName: "Monday",
-          mainWorkout: "Back squat 1x5 at 165 lbs then run 3.11 mi",
+          mainWorkout: "Back squat 1x5 at 165 lbs then run 5000 m",
         }),
       ]),
       mocks.tx,
