@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet, type StructureBlockInput } from "@shared/schema";
+import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
 import { ChevronDown, GripVertical, MoreVertical, Plus, Repeat, Sparkles, Trash2 } from "lucide-react";
 import { type CSSProperties,memo, useCallback, useMemo, useState } from "react";
 
@@ -54,10 +55,10 @@ interface ExerciseTableProps {
   readonly exerciseSets: ExerciseSet[];
   readonly weightUnit: "kg" | "lb";
   /**
-   * User's distance preference. Drives the primary-metric suffix on
-   * distance-based rows ("m" for km users, "ft" for miles users), mirroring
-   * the convention in `fieldMeta.ts`. Optional so existing callers don't
-   * break; defaults to "km".
+   * User's distance preference. Stored row values stay in the user's table
+   * storage unit, while display can promote larger feet values to miles or
+   * clean kilometer targets. Optional so existing callers don't break;
+   * defaults to "km".
    */
   readonly distanceUnit?: "km" | "miles";
   readonly onUpdateSet: (setId: string, data: PatchExerciseSetPayload) => void;
@@ -1001,7 +1002,7 @@ function formatPlannedFieldSummary(
   if (planned.value == null) return null;
   if (planned.varies) return `${field} varied`;
   if (field === "weight") return `${planned.value} ${weightUnit}`;
-  if (field === "distance") return `${planned.value} ${distanceUnit === "km" ? "m" : "ft"}`;
+  if (field === "distance") return getWorkoutDistanceDisplay(planned.value, distanceUnit).text;
   if (field === "time") return `${planned.value} min`;
   return `${planned.value} reps`;
 }
@@ -1070,13 +1071,10 @@ interface MetricMeta {
 // display metadata, and keeps `resolvePrimaryMetric` as a single
 // lookup. Static property keys (rather than computed template
 // literals) keep the indexing both type-safe and lint-clean.
-// Distance suffix is a function of the user's distanceUnit preference —
-// mirrors `fieldMeta.ts` so miles users see "ft" instead of "m".
 const METRIC_META: Readonly<Record<PrimaryField, MetricMeta>> = {
   reps: { label: "Reps", suffix: () => "reps", valueKey: "reps", variesKey: "repsVaries" },
   distance: {
     label: "Distance",
-    suffix: (du) => (du === "km" ? "m" : "ft"),
     valueKey: "distance",
     variesKey: "distanceVaries",
   },
@@ -1105,9 +1103,20 @@ function buildPrimaryMetric(
 ): PrimaryMetric {
   const field = pickMetricField(exerciseName, u);
   const meta = METRIC_META[field];
+  const value = u[meta.valueKey];
+  if (field === "distance" && value != null) {
+    const display = getWorkoutDistanceDisplay(value, distanceUnit);
+    return {
+      field,
+      value: display.value,
+      varies: u[meta.variesKey],
+      label: meta.label,
+      suffix: display.unit,
+    };
+  }
   return {
     field,
-    value: u[meta.valueKey],
+    value,
     varies: u[meta.variesKey],
     label: meta.label,
     suffix: meta.suffix?.(distanceUnit),

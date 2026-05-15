@@ -2,10 +2,17 @@ export type WeightUnit = "kg" | "lbs";
 export type DistanceUnit = "km" | "miles";
 export type StoredDistanceUnit = "m" | "ft";
 export type ParsedDistanceUnit = StoredDistanceUnit | DistanceUnit;
+export type WorkoutDistanceDisplayUnit = "m" | "ft" | "mi";
 
 export interface UnitPreferences {
   readonly weightUnit?: string | null;
   readonly distanceUnit?: string | null;
+}
+
+export interface WorkoutDistanceDisplay {
+  readonly value: number;
+  readonly unit: WorkoutDistanceDisplayUnit;
+  readonly text: string;
 }
 
 /**
@@ -37,6 +44,7 @@ const KM_TO_MILES = 0.621371;
 const M_TO_FT = 3.28084;
 const FEET_PER_MILE = 5280;
 const METERS_PER_MILE = 1609.34;
+const CLEAN_KILOMETER_TOLERANCE_METERS = 0.5;
 
 export const WEIGHT_UNIT_ALIASES: Record<string, WeightUnit> = {
   kg: "kg",
@@ -267,6 +275,74 @@ function formatCompactNumber(value: number, decimals: number): string {
   return String(Number(value.toFixed(decimals)));
 }
 
+function formatWorkoutDistanceDisplayText(value: number, unit: WorkoutDistanceDisplayUnit, decimals: number): string {
+  return `${formatCompactNumber(value, decimals)} ${unit}`;
+}
+
+function cleanWholeKilometerTarget(meters: number): number | null {
+  const sign = Math.sign(meters) || 1;
+  const absMeters = Math.abs(meters);
+  const target = Math.round(absMeters / 1000) * 1000;
+  if (target < 1000) return null;
+  return Math.abs(absMeters - target) <= CLEAN_KILOMETER_TOLERANCE_METERS
+    ? target * sign
+    : null;
+}
+
+export function getWorkoutDistanceDisplay(value: number, distanceUnit: string): WorkoutDistanceDisplay {
+  const standardUnit = standardizeDistanceUnit(distanceUnit);
+  if (standardUnit === "km") {
+    const meters = roundStoredDistance(value);
+    return {
+      value: meters,
+      unit: "m",
+      text: formatWorkoutDistanceDisplayText(meters, "m", 0),
+    };
+  }
+
+  const feet = value;
+  const metricTarget = cleanWholeKilometerTarget(feet / M_TO_FT);
+  if (metricTarget != null) {
+    return {
+      value: metricTarget,
+      unit: "m",
+      text: formatWorkoutDistanceDisplayText(metricTarget, "m", 0),
+    };
+  }
+
+  if (Math.abs(feet) >= FEET_PER_MILE) {
+    const miles = feet / FEET_PER_MILE;
+    return {
+      value: Number(formatCompactNumber(miles, 2)),
+      unit: "mi",
+      text: formatWorkoutDistanceDisplayText(miles, "mi", 2),
+    };
+  }
+
+  const roundedFeet = roundStoredDistance(feet);
+  return {
+    value: roundedFeet,
+    unit: "ft",
+    text: formatWorkoutDistanceDisplayText(roundedFeet, "ft", 0),
+  };
+}
+
+export function displayDistanceToStored(
+  value: number,
+  displayUnit: WorkoutDistanceDisplayUnit,
+  distanceUnit: string,
+): number {
+  let meters: number;
+  if (displayUnit === "mi") {
+    meters = value * METERS_PER_MILE;
+  } else if (displayUnit === "ft") {
+    meters = value / M_TO_FT;
+  } else {
+    meters = value;
+  }
+  return roundStoredDistance(metersToStoredDistance(meters, getStoredDistanceUnit(distanceUnit)));
+}
+
 function formatWorkoutWeight(value: number, targetUnit: WeightUnit): string {
   const rounded = roundStoredWeight(value, targetUnit);
   return `${formatCompactNumber(rounded, targetUnit === "lbs" ? 0 : 1)} ${targetUnit}`;
@@ -285,11 +361,8 @@ function formatWorkoutDistance(value: number, sourceUnit: ParsedDistanceUnit, di
     return `${formatCompactNumber(roundStoredDistance(meters), 0)} m`;
   }
 
-  const feet = meters * M_TO_FT;
-  if (Math.abs(feet) >= FEET_PER_MILE / 4) {
-    return `${formatCompactNumber(feet / FEET_PER_MILE, 2)} mi`;
-  }
-  return `${formatCompactNumber(roundStoredDistance(feet), 0)} ft`;
+  const feet = roundStoredDistance(metersToStoredDistance(meters, "ft"));
+  return getWorkoutDistanceDisplay(feet, distanceUnit).text;
 }
 
 const TEXT_WEIGHT_UNITS = [
