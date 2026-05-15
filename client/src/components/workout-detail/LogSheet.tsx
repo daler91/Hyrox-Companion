@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { ListChecks, MessageSquare, SkipForward, Sparkles } from "lucide-react";
+import { Check, ListChecks, MessageSquare, SkipForward, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
-import { SaveStatePill } from "./SaveStatePill";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { RpePrompt } from "./shared/RpePrompt";
@@ -106,18 +105,8 @@ function PlannedPrescription({
   return (
     <>
       <PlanRationale rationale={entry.aiRationale} />
-      <AccessoryNote accessory={entry.accessory} />
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Prescription
-          </p>
-          <SaveStatePill
-            state={{ isSaving: planSets.isSaving, lastSavedAt: planSets.lastSavedAt }}
-            testId={`log-edit-save-state-${entry.id}`}
-          />
-        </div>
         <ExerciseTable
           workoutId={entry.planDayId!}
           exerciseSets={planSets.exerciseSets}
@@ -177,18 +166,6 @@ function PlanRationale({ rationale }: { readonly rationale?: string | null }) {
       </summary>
       <p className="mt-2 text-sm text-foreground/80">{rationale}</p>
     </details>
-  );
-}
-
-function AccessoryNote({ accessory }: { readonly accessory: string | null }) {
-  if (!accessory) return null;
-  return (
-    <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Accessory
-      </p>
-      <p className="text-sm text-muted-foreground">{accessory}</p>
-    </div>
   );
 }
 
@@ -306,17 +283,36 @@ function LogCompletionControls({
 
 interface EditSecondaryActionsProps {
   readonly entry: TimelineEntry;
+  readonly onDone: () => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onAskCoach?: (entry: TimelineEntry) => void;
 }
 
-function EditSecondaryActions({ entry, onAskCoach, onSkip }: EditSecondaryActionsProps) {
-  if (!onAskCoach && !onSkip) return null;
-
+/**
+ * Edit-mode footer. Edits autosave per cell, but a planned-workout edit
+ * has no natural end state the way logging does — so a primary "Done"
+ * gives the user an affirmative way to close the sheet (and flush any
+ * debounced cell edits) instead of dismissing via the X.
+ */
+function EditSecondaryActions({ entry, onDone, onAskCoach, onSkip }: EditSecondaryActionsProps) {
   return (
     <>
       <Separator />
-      <SecondaryLogActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
+      <div className="space-y-2">
+        <Button
+          type="button"
+          className="w-full"
+          size="lg"
+          onClick={onDone}
+          data-testid={`edit-done-${entry.id}`}
+        >
+          <Check className="mr-2 h-4 w-4" />
+          Done
+        </Button>
+        {onAskCoach || onSkip ? (
+          <SecondaryLogActions entry={entry} onAskCoach={onAskCoach} onSkip={onSkip} />
+        ) : null}
+      </div>
     </>
   );
 }
@@ -364,6 +360,13 @@ export function LogSheet({
     // coordinator would be missing from the snapshot.
     await planSets.flushPendingSetPatches();
     onLogAsPlanned(entry, rpe);
+  };
+
+  const handleDone = async () => {
+    // Flush debounced cell edits before unmounting the plan-day hook so
+    // a row edit queued in the debounce coordinator isn't dropped.
+    await planSets.flushPendingSetPatches();
+    onClose();
   };
 
   const parseHelperVisible = isParseHelperVisible(entry, planSets);
@@ -417,7 +420,12 @@ export function LogSheet({
         )}
 
         {isEditMode ? (
-          <EditSecondaryActions entry={entry} onAskCoach={handleAskCoach} onSkip={onSkip} />
+          <EditSecondaryActions
+            entry={entry}
+            onDone={handleDone}
+            onAskCoach={handleAskCoach}
+            onSkip={onSkip}
+          />
         ) : (
           <LogCompletionControls
             entry={entry}

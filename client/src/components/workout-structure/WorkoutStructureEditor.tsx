@@ -1,19 +1,51 @@
 import type { StructureBlockScore } from "@shared/schema";
 
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { buildEmomPreview } from "./emomPreview";
-import { workoutStructureFeatureFlags } from "./featureFlags";
 import { type BlockType, type StepType, UNASSIGNED_WORK_STEP_LABEL, type WorkoutSection, type WorkoutStructureConfig } from "./types";
 
 const sections: WorkoutSection[] = ["warmup", "main", "accessory", "cooldown", "mobility"];
-const blockTypes: BlockType[] = ["steady", "emom", "rounds", "amrap", "interval", "for_time"];
+// Only the three formats with a dedicated configuration UI are offered.
+// A block loaded with any other formatType still displays (see
+// `blockTypeOptions`) so legacy data isn't silently dropped.
+const SUPPORTED_BLOCK_TYPES: BlockType[] = ["emom", "amrap", "rounds"];
+const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
+  emom: "EMOM",
+  amrap: "AMRAP",
+  rounds: "Rounds",
+  steady: "Steady",
+  interval: "Interval",
+  for_time: "For time",
+};
 const stepTypes: StepType[] = ["work", "rest", "transition"];
 const MAX_EMOM_DURATION_MINUTES = 240;
+
+function stepEditorHint(blockType: BlockType): string {
+  if (blockType === "emom") return "Each step fills one minute of the EMOM, in order.";
+  if (blockType === "amrap") return "List each movement in the round — they repeat until the time cap.";
+  if (blockType === "rounds") return "List the movements that repeat every round.";
+  return "Add the steps that make up this block.";
+}
+
+function blockTypeOptionsFor(current: BlockType): BlockType[] {
+  return SUPPORTED_BLOCK_TYPES.includes(current)
+    ? SUPPORTED_BLOCK_TYPES
+    : [current, ...SUPPORTED_BLOCK_TYPES];
+}
+
+function emomPatternLabel(alternating: boolean | undefined): string {
+  return alternating ? "Rotate steps each minute" : "Same step every minute";
+}
+
+function emomPatternHint(alternating: boolean | undefined): string {
+  return alternating
+    ? "Each minute advances to the next step, looping back to the first."
+    : "Every minute runs the first step. Turn on to rotate through multiple steps.";
+}
 
 interface Props {
   readonly value: WorkoutStructureConfig;
@@ -58,12 +90,16 @@ function EmomPreviewContent({ emomPreview }: { readonly emomPreview: EmomPreview
   return (
     <>
       <div className="mb-2 text-xs text-muted-foreground">
-        Pattern length: {emomPreview.patternLength} min · Cycle count: {emomPreview.cycleCount}
+        {emomPreview.patternLength}-step pattern · {emomPreview.cycleCount} cycle{emomPreview.cycleCount === 1 ? "" : "s"}
       </div>
       <ul className="space-y-1 text-xs">
-        {emomPreview.minutes.map(({ minute, cycle, step }) => (
-          <li key={`emom-minute-${minute}`} className={step.type === "rest" ? "font-medium text-amber-700" : undefined}>
-            Min {minute} (Cycle {cycle}): {step.type.toUpperCase()}{step.exercise ? ` · ${step.exercise}` : ""}{step.target ? ` · ${step.target}` : ""}
+        {emomPreview.minutes.map(({ minute, step }) => (
+          <li key={`emom-minute-${minute}`} className="flex gap-2">
+            <span className="w-12 shrink-0 font-mono text-muted-foreground">Min {minute}</span>
+            <span className={step.type === "rest" ? "font-medium text-amber-700" : undefined}>
+              {step.type === "rest" ? "Rest" : step.exercise || "Work"}
+              {step.target ? ` · ${step.target}` : ""}
+            </span>
           </li>
         ))}
       </ul>
@@ -100,17 +136,6 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
     ...value.steps,
     { id: crypto.randomUUID(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL },
   ]);
-  const enableEmomBlock = () => {
-    onChange({
-      ...value,
-      blockType: "emom",
-      emomDurationMinutes: value.emomDurationMinutes ?? 10,
-      emomAlternating: value.emomAlternating ?? false,
-      steps: value.steps.length > 0
-        ? value.steps
-        : [{ id: crypto.randomUUID(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL }],
-    });
-  };
   const updateScore = (score: StructureBlockScore | null) => {
     const next = { ...value, score };
     if (value.id && onScoreChange) {
@@ -121,10 +146,18 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
   };
 
   const emomPreview = buildEmomPreview(value);
+  const blockTypeOptions = blockTypeOptionsFor(value.blockType);
 
   return (
     <div className="space-y-3 mb-4 rounded-md border p-3">
       <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <Label className="text-xs">Format</Label>
+          <Select value={value.blockType} onValueChange={(v) => update("blockType", v as BlockType)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{blockTypeOptions.map((s) => <SelectItem key={s} value={s}>{BLOCK_TYPE_LABELS[s]}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
         <div>
           <Label className="text-xs">Section</Label>
           <Select value={value.section} onValueChange={(v) => update("section", v as WorkoutSection)}>
@@ -132,31 +165,42 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
             <SelectContent>{sections.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div>
-          <Label className="text-xs">Block type</Label>
-          <Select value={value.blockType} onValueChange={(v) => update("blockType", v as BlockType)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{blockTypes.map((s) => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
       </div>
 
       {value.blockType === "emom" && (
         <div className="space-y-2">
           <div className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-            EMOM is configured as a block, not a single exercise.
+            Every Minute On the Minute: each minute starts a step. Set the
+            total duration, then add the work/rest steps below.
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <Label className="text-xs">EMOM duration (min)</Label>
-            <Input type="number" min={1} max={MAX_EMOM_DURATION_MINUTES} value={value.emomDurationMinutes ?? ""} placeholder="Minutes" onChange={(e) => update("emomDurationMinutes", parseEmomDurationMinutes(e.target.value))} />
+            <div>
+              <Label className="text-xs">Duration (min)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={MAX_EMOM_DURATION_MINUTES}
+                value={value.emomDurationMinutes ?? ""}
+                placeholder="e.g. 10"
+                onChange={(e) => update("emomDurationMinutes", parseEmomDurationMinutes(e.target.value))}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Minute pattern</Label>
+              <Button
+                type="button"
+                className="w-full"
+                variant={value.emomAlternating ? "default" : "outline"}
+                aria-pressed={value.emomAlternating}
+                onClick={() => update("emomAlternating", !value.emomAlternating)}
+              >
+                {emomPatternLabel(value.emomAlternating)}
+              </Button>
+            </div>
           </div>
-          <Button type="button" variant={value.emomAlternating ? "default" : "outline"} onClick={() => update("emomAlternating", !value.emomAlternating)}>
-            Alternating steps
-          </Button>
-        </div>
+          <p className="text-xs text-muted-foreground">{emomPatternHint(value.emomAlternating)}</p>
           <div className="rounded border p-2">
-            <div className="mb-1 text-xs font-medium text-muted-foreground">Minute-step list</div>
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Minute-by-minute preview</div>
             <EmomPreviewContent emomPreview={emomPreview} />
           </div>
         </div>
@@ -199,19 +243,10 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
       )}
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label className="text-xs">Step editor</Label>
-          {value.blockType !== "emom" && (
-            <Button type="button" variant="secondary" size="sm" onClick={enableEmomBlock}>
-              Add Block → EMOM
-            </Button>
-          )}
+        <div>
+          <Label className="text-xs">Steps</Label>
+          <p className="text-xs text-muted-foreground">{stepEditorHint(value.blockType)}</p>
         </div>
-        {value.blockType !== "emom" && (
-          <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            Want an EMOM? Use <span className="font-medium text-foreground">Add Block → EMOM</span> to configure it as a block.
-          </div>
-        )}
         {value.steps.map((step, idx) => (
           <div key={step.id} className="grid grid-cols-12 gap-2 items-center rounded border p-2">
             <span className="col-span-1 text-xs text-muted-foreground">{idx + 1}</span>
@@ -248,17 +283,9 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
             </div>
           </div>
         ))}
-        <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm">+ Add Block</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={addWorkStep}>Work step</DropdownMenuItem>
-              <DropdownMenuItem disabled>EMOM is block-only</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addWorkStep}>
+          + Add step
+        </Button>
       </div>
 
       <div className="grid md:grid-cols-3 gap-2">
@@ -350,12 +377,6 @@ export function WorkoutStructureEditor({ value, onChange, showScoreControls = fa
           />
         </div>
       )}
-
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        {Object.entries(workoutStructureFeatureFlags).map(([k, enabled]) => (
-          <span key={k} className={`rounded border px-2 py-0.5 ${enabled ? "border-primary text-primary" : ""}`}>{k}: {enabled ? "on" : "off"}</span>
-        ))}
-      </div>
     </div>
   );
 }

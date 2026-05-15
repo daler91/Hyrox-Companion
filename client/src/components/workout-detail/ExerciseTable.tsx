@@ -294,30 +294,45 @@ export function ExerciseTable({
           hasUnparsedText={hasUnparsedText ?? false}
         />
       ) : (
-        <div className="divide-y divide-border rounded-lg border border-border">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+        <>
+          <div className="divide-y divide-border rounded-lg border border-border">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={rowKeys} strategy={verticalListSortingStrategy}>
+                <ExerciseRowRenderer
+                  groups={groups}
+                  rowKeys={rowKeys}
+                  expandedKeys={expandedKeys}
+                  weightUnit={weightUnit}
+                  distanceUnit={distanceUnit}
+                  onToggle={toggleExpanded}
+                  onUpdateSet={onUpdateSet}
+                  onAddSet={onAddSet}
+                  onDeleteSet={onDeleteSet}
+                  readableSummary={readableSummary}
+                  showPlannedDiffs={showPlannedDiffs}
+                  blockAssignmentOptions={blockAssignmentOptions}
+                />
+              </SortableContext>
+            </DndContext>
+          </div>
+          {/* Foot-of-list add so consecutive adds don't force a scroll
+              back to the header button. Mirrors InlineSetEditor's "Add set". */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 w-full text-muted-foreground"
+            onClick={() => setAddPickerOpen(true)}
+            data-testid="exercise-table-add-bottom"
           >
-            <SortableContext items={rowKeys} strategy={verticalListSortingStrategy}>
-              <ExerciseRowRenderer
-                groups={groups}
-                rowKeys={rowKeys}
-                expandedKeys={expandedKeys}
-                weightUnit={weightUnit}
-                distanceUnit={distanceUnit}
-                onToggle={toggleExpanded}
-                onUpdateSet={onUpdateSet}
-                onAddSet={onAddSet}
-                onDeleteSet={onDeleteSet}
-                readableSummary={readableSummary}
-                showPlannedDiffs={showPlannedDiffs}
-                blockAssignmentOptions={blockAssignmentOptions}
-              />
-            </SortableContext>
-          </DndContext>
-        </div>
+            <Plus className="mr-1 size-3.5" aria-hidden />
+            Add exercise
+          </Button>
+        </>
       )}
 
       <AddExerciseDialog

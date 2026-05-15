@@ -18,7 +18,6 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { AthleteNoteInput } from "./AthleteNoteInput";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
-import { SaveStatePill } from "./SaveStatePill";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import {
@@ -403,15 +402,6 @@ function ReviewActualsSection({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Logged exercises
-        </p>
-        <SaveStatePill
-          state={{ isSaving: detail.isSaving, lastSavedAt: detail.lastSavedAt }}
-          testId={`review-actuals-save-state-${entry.id}`}
-        />
-      </div>
       <ExerciseTable
         workoutId={workoutLogId}
         exerciseSets={exerciseSets}
