@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAnthropicTextProvider } from "./anthropic";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
+import type { TextAiStreamChunk } from "./types";
 
 vi.mock("../../gemini/client", () => ({
   retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
@@ -59,6 +60,27 @@ describe("anthropic text provider", () => {
     const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
     const chunks = await collectTextChunks(provider.streamText(baseRequest));
     expect(chunks).toEqual(["Hel", "lo"]);
+  });
+
+  it("preserves token totals across partial streaming usage events", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "event: message_start\n" +
+      "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":17,\"output_tokens\":1}}}\n\n" +
+      "event: content_block_delta\n" +
+      "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}\n\n" +
+      "event: message_delta\n" +
+      "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":5}}\n\n",
+      { status: 200 },
+    ));
+
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+    const chunks: TextAiStreamChunk[] = [];
+    for await (const chunk of provider.streamText(baseRequest)) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.map((chunk) => chunk.text).filter(Boolean)).toEqual(["Hi"]);
+    expect(chunks.at(-1)?.usage).toEqual({ inputTokens: 17, outputTokens: 5 });
   });
 
   it("fails clearly when no API key is configured", async () => {

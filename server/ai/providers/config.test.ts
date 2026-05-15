@@ -55,6 +55,17 @@ describe("text AI provider config", () => {
     });
 
     expect(() => config.resolveTextAiModel("anthropic", "fast")).toThrow("AI text model is not configured");
+    expect(config.configuredTextProviderHasApiKey()).toBe(false);
+  });
+
+  it("treats non-Gemini providers as ready only when a fast model can resolve", async () => {
+    const config = await loadConfigWithEnv({
+      AI_TEXT_PROVIDER: "anthropic",
+      AI_TEXT_FAST_MODEL: "claude-sonnet-4-5",
+      ANTHROPIC_API_KEY: "anthropic-key",
+    });
+
+    expect(config.configuredTextProviderHasApiKey()).toBe(true);
   });
 
   it("resolves xAI through the OpenAI-compatible profile defaults", async () => {
