@@ -213,6 +213,14 @@
     "  update transitive pnpm deps, so the override is required to clear the advisory.",
     "  Remove when @cypress/request drops the unused uuid dependency or pins >=14.0.0.",
     "",
+    "systeminformation 5.31.6: fixes GHSA (Linux command injection in networkInterfaces(),",
+    "  Dependabot issue #59). In systeminformation <=5.31.5, a NetworkManager connection",
+    "  profile name containing shell metacharacters could be interpolated into nmcli shell",
+    "  commands when networkInterfaces() runs. Pulled transitively by cypress 15.14.1.",
+    "  cypress is a devDependency only, so runtime is unaffected, but Dependabot cannot",
+    "  update transitive pnpm deps, so the override is required to clear the advisory.",
+    "  Remove when cypress ships a version that depends on systeminformation >=5.31.6.",
+    "",
     "postcss ^8.5.10: fixes GHSA (XSS via unescaped </style> in CSS stringify output,",
     "  Dependabot issue #44). In postcss <8.5.10, the stringifier did not escape '</style>'",
     "  sequences inside CSS values/comments, so attacker-controlled CSS embedded in an inline",
@@ -238,6 +246,7 @@
     "follow-redirects": "^1.16.0",
     "@xmldom/xmldom": "^0.8.13",
     "uuid": "^14.0.0",
+    "systeminformation": "5.31.6",
     "postcss": "^8.5.10"
   },
   "devDependencies": {
@@ -302,6 +311,7 @@
       "follow-redirects": "^1.16.0",
       "@xmldom/xmldom": "^0.8.13",
       "uuid": "^14.0.0",
+      "systeminformation": "5.31.6",
       "postcss": "^8.5.10"
     }
   },
