@@ -92,6 +92,12 @@ export function resolveTextAiModel(provider: TextAiProviderId, role: TextAiModel
 
 export function configuredTextProviderHasApiKey(): boolean {
   const config = getTextAiConfig();
+  try {
+    resolveTextAiModel(config.provider, "fast");
+  } catch {
+    return false;
+  }
+
   if (config.provider === "gemini") return Boolean(env.GEMINI_API_KEY);
   if (config.provider === "anthropic") return Boolean(config.anthropicApiKey);
   return Boolean(config.openAiCompatibleApiKey && config.openAiCompatibleBaseUrl);

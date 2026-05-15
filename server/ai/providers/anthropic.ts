@@ -31,14 +31,40 @@ function anthropicSystemInstruction(request: ResolvedTextAiRequest): string | un
   ].filter(Boolean).join("\n\n");
 }
 
-function usageFromAnthropic(value: unknown): TextAiUsage | undefined {
+interface AnthropicUsageFields {
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
+function usageFieldsFromAnthropic(value: unknown): AnthropicUsageFields | undefined {
   const usage =
     (value as { usage?: { input_tokens?: number; output_tokens?: number } } | undefined)?.usage
     ?? (value as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } } | undefined)?.message?.usage;
   if (!usage) return undefined;
+  const inputTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : undefined;
+  const outputTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : undefined;
+  if (inputTokens === undefined && outputTokens === undefined) return undefined;
+  return { inputTokens, outputTokens };
+}
+
+function usageFromAnthropic(value: unknown): TextAiUsage | undefined {
+  const usage = usageFieldsFromAnthropic(value);
+  if (!usage) return undefined;
   return {
-    inputTokens: usage.input_tokens ?? 0,
-    outputTokens: usage.output_tokens ?? 0,
+    inputTokens: usage.inputTokens ?? 0,
+    outputTokens: usage.outputTokens ?? 0,
+  };
+}
+
+function mergeAnthropicUsage(
+  previous: TextAiUsage | undefined,
+  value: unknown,
+): TextAiUsage | undefined {
+  const usage = usageFieldsFromAnthropic(value);
+  if (!usage) return undefined;
+  return {
+    inputTokens: usage.inputTokens ?? previous?.inputTokens ?? 0,
+    outputTokens: usage.outputTokens ?? previous?.outputTokens ?? 0,
   };
 }
 
@@ -90,17 +116,21 @@ async function postAnthropic(
   return response;
 }
 
-function streamChunkFromAnthropicEvent(payload: unknown): { text?: string; usage?: TextAiUsage } {
+function streamChunkFromAnthropicEvent(
+  payload: unknown,
+  previousUsage: TextAiUsage | undefined,
+): { text?: string; usage?: TextAiUsage } {
   const record = payload as {
     type?: string;
     delta?: { text?: unknown };
     usage?: { input_tokens?: number; output_tokens?: number };
     message?: { usage?: { input_tokens?: number; output_tokens?: number } };
   };
+  const usage = mergeAnthropicUsage(previousUsage, payload);
   if (record.type === "content_block_delta" && typeof record.delta?.text === "string") {
-    return { text: record.delta.text, usage: usageFromAnthropic(payload) };
+    return { text: record.delta.text, usage };
   }
-  return { usage: usageFromAnthropic(payload) };
+  return { usage };
 }
 
 export function createAnthropicTextProvider(options: AnthropicAdapterOptions): TextAiProvider {
@@ -126,9 +156,12 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
     },
 
     async *streamText(request) {
-      yield* streamSseTextChunks(request, postAnthropic(request, options, true), (event) =>
-        streamChunkFromAnthropicEvent(JSON.parse(event) as unknown),
-      );
+      let usage: TextAiUsage | undefined;
+      yield* streamSseTextChunks(request, postAnthropic(request, options, true), (event) => {
+        const chunk = streamChunkFromAnthropicEvent(JSON.parse(event) as unknown, usage);
+        if (chunk.usage) usage = chunk.usage;
+        return chunk;
+      });
     },
   };
 }
