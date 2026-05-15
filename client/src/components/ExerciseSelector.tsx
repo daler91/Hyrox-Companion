@@ -1,9 +1,10 @@
-import { EXERCISE_DEFINITIONS, type ExerciseCategory,type ExerciseName } from "@shared/schema";
-import { Plus } from "lucide-react";
+import { EXERCISE_DEFINITIONS, EXERCISE_NAME_ALIASES, type ExerciseCategory,type ExerciseName } from "@shared/schema";
+import { Plus, Search } from "lucide-react";
 import React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { exerciseIcons } from "@/lib/exerciseIcons";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
@@ -32,7 +33,41 @@ const exercisesByCategory = categoryOrder.map(cat => ({
     .filter(([name, def]) => def.category === cat && name !== "emom"),
 }));
 
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+const exerciseAliasesByName = Object.entries(EXERCISE_NAME_ALIASES).reduce<Partial<Record<ExerciseName, string[]>>>(
+  (aliasesByName, [alias, exerciseName]) => {
+    aliasesByName[exerciseName] = [...(aliasesByName[exerciseName] ?? []), alias, alias.replace(/_/g, " ")];
+    return aliasesByName;
+  },
+  {},
+);
+
+const exerciseSearchTokens = (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
+  .reduce<Record<ExerciseName, string[]>>((tokensByName, [name, def]) => {
+    const rawTokens = [name, name.replace(/_/g, " "), def.label, ...(exerciseAliasesByName[name] ?? [])];
+    const tokens = new Set<string>();
+
+    for (const rawToken of rawTokens) {
+      const normalized = normalizeSearchText(rawToken);
+      if (!normalized) continue;
+      tokens.add(normalized);
+      tokens.add(normalized.replace(/\s/g, ""));
+    }
+
+    tokensByName[name] = [...tokens];
+    return tokensByName;
+  }, {} as Record<ExerciseName, string[]>);
+
+function exerciseMatchesSearch(name: ExerciseName, searchTerm: string, compactSearchTerm: string): boolean {
+  if (!searchTerm) return true;
+  return exerciseSearchTokens[name].some((token) => token.includes(searchTerm) || token.includes(compactSearchTerm));
+}
+
 export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: Readonly<ExerciseSelectorProps>) {
+  const [searchQuery, setSearchQuery] = React.useState("");
   const selectedCounts = React.useMemo(() => {
     const counts: Partial<Record<ExerciseName, number>> = {};
     for (const name of selectedExercises) {
@@ -41,15 +76,47 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
     return counts;
   }, [selectedExercises]);
 
+  const filteredExercisesByCategory = React.useMemo(() => {
+    const searchTerm = normalizeSearchText(searchQuery);
+    const compactSearchTerm = searchTerm.replace(/\s/g, "");
+
+    return exercisesByCategory
+      .map(group => ({
+        ...group,
+        exercises: group.exercises.filter(([name]) => exerciseMatchesSearch(name, searchTerm, compactSearchTerm)),
+      }))
+      .filter(group => group.exercises.length > 0);
+  }, [searchQuery]);
+
   const countOf = (name: ExerciseName) => selectedCounts[name] || 0;
 
   return (
     <div className="space-y-4" data-testid="exercise-selector">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search exercises"
+          aria-label="Search exercises"
+          autoComplete="off"
+          className="pl-9"
+          data-testid="exercise-selector-search"
+        />
+      </div>
+
       <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground" data-testid="exercise-selector-emom-help">
         EMOM is configured as a block, not a single exercise.
       </div>
 
-      {exercisesByCategory.map(({ category, label, exercises }) => (
+      {filteredExercisesByCategory.length === 0 && (
+        <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground" data-testid="exercise-selector-empty">
+          No matching exercises
+        </div>
+      )}
+
+      {filteredExercisesByCategory.map(({ category, label, exercises }) => (
         <div key={category}>
           <p className="text-xs font-medium text-muted-foreground mb-2">{label}</p>
           <div className="flex flex-wrap gap-2">
