@@ -9,11 +9,7 @@ function Harness({ initial = [] as StructureBlockInput[], showScoreControls = fa
   const [value, setValue] = useState<StructureBlockInput[]>(initial);
   return (
     <>
-      <StructureBlocksEditor
-        value={value}
-        onChange={setValue}
-        showScoreControls={showScoreControls}
-      />
+      <StructureBlocksEditor value={value} onChange={setValue} showScoreControls={showScoreControls} />
       <pre data-testid="harness-snapshot">{JSON.stringify(value)}</pre>
     </>
   );
@@ -83,16 +79,14 @@ describe("StructureBlocksEditor", () => {
     render(
       <Harness
         showScoreControls
-        initial={[
-          {
-            id: "block-1",
-            sectionType: "main",
-            formatType: "amrap",
-            timeCapMinutes: 10,
-            score: { type: "amrap", rounds: 3, reps: 8 },
-            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
-          },
-        ]}
+        initial={[{
+          id: "block-1",
+          sectionType: "main",
+          formatType: "amrap",
+          timeCapMinutes: 10,
+          score: { type: "amrap", rounds: 3, reps: 8 },
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+        }]}
       />,
     );
 
@@ -104,22 +98,18 @@ describe("StructureBlocksEditor", () => {
     render(
       <Harness
         showScoreControls
-        initial={[
-          {
-            id: "block-1",
-            sectionType: "main",
-            formatType: "amrap",
-            timeCapMinutes: 10,
-            score: { type: "amrap", rounds: 3, reps: 8 },
-            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
-          },
-        ]}
+        initial={[{
+          id: "block-1",
+          sectionType: "main",
+          formatType: "amrap",
+          timeCapMinutes: 10,
+          score: { type: "amrap", rounds: 3, reps: 8 },
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+        }]}
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Result notes"), {
-      target: { value: "Strong finish" },
-    });
+    fireEvent.change(screen.getByPlaceholderText("Result notes"), { target: { value: "Strong finish" } });
 
     expect(readSnapshot()[0].score).toEqual({
       type: "amrap",
@@ -134,25 +124,21 @@ describe("StructureBlocksEditor", () => {
     const onScoreChange = vi.fn();
     render(
       <StructureBlocksEditor
-        value={[
-          {
-            id: "block-1",
-            sectionType: "main",
-            formatType: "amrap",
-            timeCapMinutes: 10,
-            score: { type: "amrap", rounds: 3, reps: 8 },
-            steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
-          },
-        ]}
+        value={[{
+          id: "block-1",
+          sectionType: "main",
+          formatType: "amrap",
+          timeCapMinutes: 10,
+          score: { type: "amrap", rounds: 3, reps: 8 },
+          steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Row" }],
+        }]}
         onChange={onChange}
         showScoreControls
         onScoreChange={onScoreChange}
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Result notes"), {
-      target: { value: "Strong finish" },
-    });
+    fireEvent.change(screen.getByPlaceholderText("Result notes"), { target: { value: "Strong finish" } });
 
     expect(onScoreChange).toHaveBeenCalledWith("block-1", {
       type: "amrap",
@@ -166,21 +152,15 @@ describe("StructureBlocksEditor", () => {
   it("round-trips transition step duration targets", () => {
     render(
       <Harness
-        initial={[
-          {
-            sectionType: "main",
-            formatType: "rounds",
-            roundCount: 3,
-            steps: [
-              { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
-              {
-                stepNumber: 2,
-                stepType: "transition",
-                targets: { instructions: "Change stations", durationSeconds: 30 },
-              },
-            ],
-          },
-        ]}
+        initial={[{
+          sectionType: "main",
+          formatType: "rounds",
+          roundCount: 3,
+          steps: [
+            { stepNumber: 1, stepType: "work", exerciseName: "Sled Push" },
+            { stepNumber: 2, stepType: "transition", targets: { instructions: "Change stations", durationSeconds: 30 } },
+          ],
+        }]}
       />,
     );
 
@@ -197,21 +177,17 @@ describe("StructureBlocksEditor", () => {
   it("labels transition steps in the EMOM minute preview", () => {
     render(
       <Harness
-        initial={[
-          {
-            sectionType: "main",
-            formatType: "emom",
-            durationMinutes: 1,
-            steps: [
-              {
-                stepNumber: 1,
-                stepType: "transition",
-                minuteIndex: 1,
-                targets: { instructions: "Change stations" },
-              },
-            ],
-          },
-        ]}
+        initial={[{
+          sectionType: "main",
+          formatType: "emom",
+          durationMinutes: 1,
+          steps: [{
+            stepNumber: 1,
+            stepType: "transition",
+            minuteIndex: 1,
+            targets: { instructions: "Change stations" },
+          }],
+        }]}
       />,
     );
 
