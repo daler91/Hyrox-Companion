@@ -20,13 +20,16 @@ export function trimTrailingSlashes(value: string): string {
   return value.slice(0, end);
 }
 
-function parseSseDataBlocks(buffer: string): { events: string[]; remainder: string } {
-  const blocks = buffer.split("\n\n");
-  const remainder = blocks.pop() ?? "";
+function parseSseDataBlocks(buffer: string, flush = false): { events: string[]; remainder: string } {
+  const blocks = buffer.replaceAll("\r\n", "\n").split("\n\n");
+  let remainder = blocks.pop() ?? "";
+  if (flush && remainder.trim().length > 0) {
+    blocks.push(remainder);
+    remainder = "";
+  }
   const events = blocks
     .map((block) =>
       block
-        .replaceAll("\r\n", "\n")
         .split("\n")
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trimStart())
@@ -51,9 +54,12 @@ export async function* streamSseTextChunks(
     while (true) {
       if (request.signal?.aborted) return;
       const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parsed = parseSseDataBlocks(buffer);
+      if (done) {
+        buffer += decoder.decode();
+      } else {
+        buffer += decoder.decode(value, { stream: true });
+      }
+      const parsed = parseSseDataBlocks(buffer, done);
       buffer = parsed.remainder;
       for (const event of parsed.events) {
         const chunk = parseEvent(event);
@@ -62,6 +68,7 @@ export async function* streamSseTextChunks(
           yield { text: chunk.text, usage: chunk.usage, model: request.model };
         }
       }
+      if (done) break;
     }
   } finally {
     reader.releaseLock();

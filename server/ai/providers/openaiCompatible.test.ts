@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
+import type { TextAiStreamChunk } from "./types";
 
 vi.mock("../../gemini/client", () => ({
   retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
@@ -91,6 +92,29 @@ describe("openai-compatible text provider", () => {
       stream: true,
       stream_options: { include_usage: true },
     });
+  });
+
+  it("handles CRLF-framed SSE and EOF-terminated usage events", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(
+      "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\r\n\r\n" +
+      "data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\r\n\r\n" +
+      "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}",
+      { status: 200 },
+    ));
+    const provider = createOpenAiCompatibleTextProvider({
+      apiKey: "test-key",
+      baseUrl: "https://api.x.ai/v1",
+      profile: "xai",
+      supportsReasoningEffort: true,
+    });
+
+    const chunks: TextAiStreamChunk[] = [];
+    for await (const chunk of provider.streamText(baseRequest)) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.map((chunk) => chunk.text).filter(Boolean)).toEqual(["Hel", "lo"]);
+    expect(chunks.at(-1)?.usage).toEqual({ inputTokens: 3, outputTokens: 2 });
   });
 
   it("fails clearly when no compatible API key is configured", async () => {
