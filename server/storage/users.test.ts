@@ -118,7 +118,7 @@ describe('UserStorage', () => {
 
     describe('upsertStravaConnection', () => {
       it('should encrypt tokens before inserting/updating', async () => {
-        const inputData = {
+        const inputData: InsertStravaConnection = {
           userId: 'user-1',
           stravaAthleteId: 'athlete-1',
           accessToken: 'raw-access',
@@ -136,7 +136,7 @@ describe('UserStorage', () => {
         const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
         vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-        const result = await userStorage.upsertStravaConnection(inputData as unknown as InsertStravaConnection);
+        const result = await userStorage.upsertStravaConnection(inputData);
 
         expect(crypto.encryptToken).toHaveBeenCalledWith('raw-access');
         expect(crypto.encryptToken).toHaveBeenCalledWith('raw-refresh');
@@ -171,8 +171,8 @@ describe('UserStorage', () => {
       const secondValuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: secondOnConflictMock });
 
       vi.mocked(db.insert)
-        .mockReturnValueOnce({ values: firstValuesMock } as never)
-        .mockReturnValueOnce({ values: secondValuesMock } as never);
+        .mockReturnValueOnce({ values: firstValuesMock })
+        .mockReturnValueOnce({ values: secondValuesMock });
 
       const result = await userStorage.upsertUser({
         id: 'user-1',

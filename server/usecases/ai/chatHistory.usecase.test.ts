@@ -9,7 +9,7 @@ describe("getChatHistoryUseCase", () => {
       getChatMessages: vi.fn().mockResolvedValue([{ id: "m-1", timestamp: ts }]),
     };
 
-    const result = await getChatHistoryUseCase(storage as never, { userId: "user-1", before: ts.toISOString(), beforeId: "m-2", limit: 10 });
+    const result = await getChatHistoryUseCase(storage, { userId: "user-1", before: ts.toISOString(), beforeId: "m-2", limit: 10 });
 
     expect(storage.getChatMessages).toHaveBeenCalled();
     expect(result.nextCursor).toEqual({ timestamp: ts.toISOString(), id: "m-1" });
