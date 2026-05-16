@@ -8,13 +8,10 @@ interface RpePromptProps {
 }
 
 /**
- * Optional-RPE picker shared by LogSheet and AdhocLogSheet. Both
- * surfaces show the same "How hard? (optional)" label above the
- * compact RpeSelector — this component owns that label so the two
- * paths stay visually identical without copy-pasting the markup.
- *
- * ReviewSurface uses a different label ("Effort") and a server-bound
- * onChange, so it intentionally renders its own block instead.
+ * Optional-RPE picker. Owns the "How hard? (optional)" label above the
+ * compact RpeSelector so every workout surface stays visually identical.
+ * Rendered through WorkoutEffortNotes, which pairs it with the note
+ * field on the log, ad-hoc, and review surfaces alike.
  */
 export function RpePrompt({ value, onChange }: RpePromptProps) {
   return (

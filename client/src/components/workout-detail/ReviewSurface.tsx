@@ -1,8 +1,7 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
-import { Gauge, MessageSquare, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { MessageSquare, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { RpeSelector } from "@/components/RpeSelector";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/WorkoutStravaStats";
 import { Button } from "@/components/ui/button";
@@ -15,11 +14,11 @@ import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { apiRequest } from "@/lib/queryClient";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
-import { AthleteNoteInput } from "./AthleteNoteInput";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import {
   getWorkoutCoachPanelState,
   WorkoutCoachChatPanel,
@@ -288,7 +287,6 @@ function ReviewDetailsColumn({
   return (
     <>
       <ReviewStravaSection entry={entry} distanceUnit={distanceUnit} isStrava={isStrava} />
-      <ReviewEffortSection isStrava={isStrava} rpe={rpe} onRpeChange={onRpeChange} />
       <ReviewActualsSection
         entry={entry}
         detail={detail}
@@ -300,7 +298,13 @@ function ReviewDetailsColumn({
         distanceUnit={distanceUnit}
         showPlannedDiffs={showPlannedDiffs}
       />
-      <ReviewNotesSection isStrava={isStrava} notes={notes} onSaveNote={onSaveNote} />
+      <ReviewEffortNotes
+        isStrava={isStrava}
+        rpe={rpe}
+        notes={notes}
+        onRpeChange={onRpeChange}
+        onSaveNote={onSaveNote}
+      />
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
       <CoachRationale rationale={entry.aiRationale} />
 
@@ -338,23 +342,40 @@ function ReviewStravaSection({ entry, distanceUnit, isStrava }: ReviewStravaSect
   );
 }
 
-interface ReviewEffortSectionProps {
+interface ReviewEffortNotesProps {
   readonly isStrava: boolean;
   readonly rpe: number | null;
+  readonly notes: string | null;
   readonly onRpeChange: (next: number | null) => void;
+  readonly onSaveNote: (next: string | null) => void;
 }
 
-function ReviewEffortSection({ isStrava, rpe, onRpeChange }: ReviewEffortSectionProps) {
+/**
+ * Effort + notes wrap-up for a logged workout. Sits below the actuals
+ * editor — the same position the block holds on LogSheet/AdhocLogSheet —
+ * so RPE and notes are found in one consistent place across the whole
+ * logging flow. Hidden for Strava sessions, which carry neither.
+ */
+function ReviewEffortNotes({
+  isStrava,
+  rpe,
+  notes,
+  onRpeChange,
+  onSaveNote,
+}: ReviewEffortNotesProps) {
   if (isStrava) return null;
 
   return (
-    <div>
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        <Gauge className="h-3.5 w-3.5" />
-        Effort
-      </p>
-      <RpeSelector value={rpe} onChange={onRpeChange} showLabel={false} compact />
-    </div>
+    <>
+      <Separator />
+      <WorkoutEffortNotes
+        rpe={rpe}
+        onRpeChange={onRpeChange}
+        note={notes}
+        onNoteChange={onSaveNote}
+        debounceNote
+      />
+    </>
   );
 }
 
@@ -439,10 +460,10 @@ function ReviewActualsSection({
         notes={null}
         showNotes={false}
         onSaveField={(field, value) => {
-          // Notes are owned by AthleteNoteInput below (writes
-          // through updateNote with optimistic patches); ignore
-          // any stray notes saves so we can't double-write to
-          // the same column.
+          // Notes are owned by the effort/notes block below (writes
+          // through updateNote with optimistic patches); ignore any
+          // stray notes saves so we can't double-write to the same
+          // column.
           if (field === "notes") return;
           const normalized = value.trim().length === 0 ? null : value;
           detail.updateReference.mutate(
@@ -458,25 +479,6 @@ function ReviewActualsSection({
         title="Workout description"
         compact
       />
-    </div>
-  );
-}
-
-interface ReviewNotesSectionProps {
-  readonly isStrava: boolean;
-  readonly notes: string | null;
-  readonly onSaveNote: (next: string | null) => void;
-}
-
-function ReviewNotesSection({ isStrava, notes, onSaveNote }: ReviewNotesSectionProps) {
-  if (isStrava) return null;
-
-  return (
-    <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Notes
-      </p>
-      <AthleteNoteInput value={notes} onSave={onSaveNote} mode="form" />
     </div>
   );
 }
@@ -585,7 +587,7 @@ function ReviewActionButtons({
           data-testid={`review-mark-planned-${entry.id}`}
         >
           <RotateCcw className="mr-2 h-4 w-4" />
-          Mark as planned
+          Reopen workout
         </Button>
       ) : null}
       {onDelete ? (
