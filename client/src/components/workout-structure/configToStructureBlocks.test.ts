@@ -8,9 +8,7 @@ describe("configToStructureBlock", () => {
     const config: WorkoutStructureConfig = {
       section: "main",
       blockType: "emom",
-      emomDurationMinutes: 12,
-      emomAlternating: false,
-      steps: [
+      emomDurationMinutes: 12,      steps: [
         { id: "a", type: "work", exercise: "Burpee Broad Jump", target: "10 reps" },
         { id: "b", type: "work", exercise: "Wall Balls", target: "12 reps" },
       ],
@@ -39,9 +37,7 @@ describe("configToStructureBlock", () => {
     const config: WorkoutStructureConfig = {
       section: "main",
       blockType: "emom",
-      emomDurationMinutes: 5,
-      emomAlternating: false,
-      steps: [{ id: "a", type: "work" }],
+      emomDurationMinutes: 5,      steps: [{ id: "a", type: "work" }],
     };
 
     const block = configToStructureBlock(config, { fallbackExerciseName: "Sandbag Lunges" });
@@ -53,9 +49,7 @@ describe("configToStructureBlock", () => {
     const config: WorkoutStructureConfig = {
       section: "main",
       blockType: "emom",
-      emomDurationMinutes: 4,
-      emomAlternating: false,
-      steps: [
+      emomDurationMinutes: 4,      steps: [
         { id: "a", type: "work", exercise: "Row" },
         { id: "b", type: "rest" },
       ],
@@ -70,9 +64,7 @@ describe("configToStructureBlock", () => {
   it("defaults durationMinutes to step count for EMOM when not provided", () => {
     const config: WorkoutStructureConfig = {
       section: "main",
-      blockType: "emom",
-      emomAlternating: false,
-      steps: [
+      blockType: "emom",      steps: [
         { id: "a", type: "work", exercise: "A" },
         { id: "b", type: "work", exercise: "B" },
         { id: "c", type: "work", exercise: "C" },
@@ -103,9 +95,7 @@ describe("structureBlockToConfig", () => {
     const original: WorkoutStructureConfig = {
       section: "main",
       blockType: "emom",
-      emomDurationMinutes: 8,
-      emomAlternating: false,
-      steps: [
+      emomDurationMinutes: 8,      steps: [
         { id: "a", type: "work", exercise: "Box Jumps" },
         { id: "b", type: "work", exercise: "Push-ups" },
       ],

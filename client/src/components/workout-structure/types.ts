@@ -22,7 +22,6 @@ export interface WorkoutStructureConfig {
   section: WorkoutSection;
   blockType: BlockType;
   emomDurationMinutes?: number;
-  emomAlternating?: boolean;
   roundCount?: number;
   timeCapMinutes?: number;
   steps: WorkoutStep[];

@@ -337,7 +337,7 @@ describe("StructureBlocksEditor", () => {
     });
   });
 
-  it("labels transition steps in the EMOM minute preview", () => {
+  it("labels transition steps as transitions in the EMOM minute preview", () => {
     render(
       <Harness
         initial={[{
@@ -354,8 +354,8 @@ describe("StructureBlocksEditor", () => {
       />,
     );
 
-    expect(screen.getByText("Transition · Change stations")).toBeInTheDocument();
-    expect(screen.queryByText("Work · Change stations")).not.toBeInTheDocument();
+    expect(screen.getByText("Min 1: Transition")).toBeInTheDocument();
+    expect(screen.queryByText("Min 1: Movement")).not.toBeInTheDocument();
   });
 
   it("removes a block when the remove button is clicked", () => {
