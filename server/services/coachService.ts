@@ -14,7 +14,16 @@ import { logger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
-import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
+import {
+  buildSignalsFromTrainingContext,
+  shouldSuppressRepeatedFatigueReduction,
+  withCoachModificationMetadata,
+} from "./aiModificationGuard";
+import {
+  analyzeSafetySignals,
+  applySafetyLayerToSuggestions,
+  buildSafetyReviewNote,
+} from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { retrieveCoachingText } from "./ragRetrieval";
 import {
@@ -27,19 +36,13 @@ import { resolveTrainingStyle } from "./training_styles";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getExistingFieldValue(
-  suggestion: WorkoutSuggestion,
-  entry: UpcomingWorkout,
-): string {
+function getExistingFieldValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.targetField === "mainWorkout") return entry.mainWorkout;
   if (suggestion.targetField === "accessory") return entry.accessory || "";
   return "";
 }
 
-function buildUpdateValue(
-  suggestion: WorkoutSuggestion,
-  entry: UpcomingWorkout,
-): string {
+function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.action !== "append") return suggestion.recommendation;
   const existing = getExistingFieldValue(suggestion, entry);
   return existing
@@ -56,7 +59,10 @@ function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
   return Boolean(entry?.exerciseDetails && entry.exerciseDetails.length > 0);
 }
 
-function shouldUseStructuredWrite(suggestion: WorkoutSuggestion, entry: UpcomingWorkout | undefined): boolean {
+function shouldUseStructuredWrite(
+  suggestion: WorkoutSuggestion,
+  entry: UpcomingWorkout | undefined,
+): boolean {
   return hasStructuredExercises(entry) && suggestion.targetField !== "notes";
 }
 
@@ -67,12 +73,19 @@ async function prepareSuggestion(
   userId: string,
 ): Promise<PreparedSuggestion> {
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId);
-  if (!suggestionWillApply(suggestion, upcomingWorkouts) || !shouldUseStructuredWrite(suggestion, entry)) {
+  if (
+    !suggestionWillApply(suggestion, upcomingWorkouts) ||
+    !shouldUseStructuredWrite(suggestion, entry)
+  ) {
     return { suggestion };
   }
 
   try {
-    const structuredSetRows = await parseStructuredPlanDaySuggestionRows(suggestion, unitPreferences, userId);
+    const structuredSetRows = await parseStructuredPlanDaySuggestionRows(
+      suggestion,
+      unitPreferences,
+      userId,
+    );
     if (structuredSetRows.length === 0) return { suggestion };
     return {
       suggestion,
@@ -97,7 +110,12 @@ async function applyStructuredSuggestion(
   const { suggestion, structuredSetRows } = prepared;
   if (!structuredSetRows || structuredSetRows.length === 0) return false;
 
-  await applyStructuredPlanDaySuggestionRows(suggestion.workoutId, suggestion.action, structuredSetRows, tx);
+  await applyStructuredPlanDaySuggestionRows(
+    suggestion.workoutId,
+    suggestion.action,
+    structuredSetRows,
+    tx,
+  );
 
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
@@ -131,13 +149,14 @@ function buildCoachNoteInputs(
     planPhase: insights?.planPhase?.phaseLabel,
     weeklyVolumeTrend: insights?.weeklyVolume?.trend,
     stationGaps: insights?.stationGaps
-      ?.filter(g => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
-      .map(g => g.station),
+      ?.filter((g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
+      .map((g) => g.station),
     progressionFlags: insights?.progressionFlags
-      ?.filter(f => f.flag === "plateau" || f.flag === "regressing")
-      .map(f => `${f.exercise}:${f.flag}`),
+      ?.filter((f) => f.flag === "plateau" || f.flag === "regressing")
+      .map((f) => `${f.exercise}:${f.flag}`),
     ragUsed,
     recentWorkoutCount: ctx.recentWorkouts?.length ?? 0,
+    completedWorkoutCount: ctx.completedWorkouts,
     planGoalPresent,
   };
 }
@@ -164,7 +183,7 @@ function suggestionWillApply(
   if (!suggestion.workoutId || !suggestion.recommendation || !suggestion.rationale) {
     return false;
   }
-  return upcomingWorkouts.some(w => w.id === suggestion.workoutId);
+  return upcomingWorkouts.some((w) => w.id === suggestion.workoutId);
 }
 
 async function applySuggestion(
@@ -185,7 +204,10 @@ async function applySuggestion(
 
   // Let errors propagate so the enclosing transaction rolls back — we want
   // all-or-nothing semantics for the auto-coach apply loop (C2).
-  const updateValue = normalizeWorkoutTextUnits(buildUpdateValue(suggestion, entry), unitPreferences);
+  const updateValue = normalizeWorkoutTextUnits(
+    buildUpdateValue(suggestion, entry),
+    unitPreferences,
+  );
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
     {
@@ -234,7 +256,7 @@ async function getCoachingMaterialsString(
   upcomingWorkouts: UpcomingWorkout[],
   unitPreferences: UnitPreferences,
 ): Promise<{ text: string | undefined; source: "rag" | "legacy" | null }> {
-  const query = upcomingWorkouts.map(w => buildWorkoutSearchText(w, unitPreferences)).join("; ");
+  const query = upcomingWorkouts.map((w) => buildWorkoutSearchText(w, unitPreferences)).join("; ");
   return retrieveCoachingText(userId, query);
 }
 
@@ -279,11 +301,20 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
         mainWorkout: w.mainWorkout,
         accessory: w.accessory || undefined,
         notes: w.notes || undefined,
-        ...(w.exerciseDetails && w.exerciseDetails.length > 0 ? { exerciseDetails: w.exerciseDetails } : {}),
+        aiSource: w.aiSource,
+        aiRationale: w.aiRationale,
+        aiNoteUpdatedAt: w.aiNoteUpdatedAt,
+        aiInputsUsed: w.aiInputsUsed,
+        ...(w.exerciseDetails && w.exerciseDetails.length > 0
+          ? { exerciseDetails: w.exerciseDetails }
+          : {}),
       }));
 
     const resolvedStyle = resolveTrainingStyle(user.trainingStyleId);
-    const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, upcomingWorkouts);
+    const stylePromptContext = resolvedStyle.strategy.buildPromptContext(
+      trainingContext,
+      upcomingWorkouts,
+    );
 
     if (upcomingWorkouts.length === 0) {
       // Legitimate no-op: user has no active plan or the plan has no future
@@ -296,8 +327,15 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       return { adjusted: 0 };
     }
 
-    const unitPreferences = { weightUnit: user.weightUnit || "kg", distanceUnit: user.distanceUnit || "km" };
-    const coachingContext = await getCoachingMaterialsString(userId, upcomingWorkouts, unitPreferences);
+    const unitPreferences = {
+      weightUnit: user.weightUnit || "kg",
+      distanceUnit: user.distanceUnit || "km",
+    };
+    const coachingContext = await getCoachingMaterialsString(
+      userId,
+      upcomingWorkouts,
+      unitPreferences,
+    );
     const inputsUsed = buildCoachNoteInputs(
       trainingContext,
       coachingContext.source === "rag",
@@ -314,7 +352,17 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       userId,
       stylePromptContext,
     );
-    const suggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
+    const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
+    const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
+    const coachSignals = buildSignalsFromTrainingContext(trainingContext);
+    const suggestions = safetyAdjustedSuggestions.filter(
+      (suggestion) =>
+        !shouldSuppressRepeatedFatigueReduction(
+          suggestion,
+          workoutMap.get(suggestion.workoutId),
+          coachSignals,
+        ),
+    );
     const preparedSuggestions = await Promise.all(
       suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, unitPreferences, userId)),
     );
@@ -353,7 +401,10 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     let rawReviewNotes: Array<{ workoutId: string; note: string }> = [];
     if (unchangedWorkouts.length > 0) {
       if (forcedSafetyNote) {
-        rawReviewNotes = unchangedWorkouts.map((w) => ({ workoutId: w.id, note: forcedSafetyNote }));
+        rawReviewNotes = unchangedWorkouts.map((w) => ({
+          workoutId: w.id,
+          note: forcedSafetyNote,
+        }));
       } else {
         rawReviewNotes = await generateReviewNotes(
           trainingContext,
@@ -372,7 +423,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // a legitimate note either.
     // ⚡ Bolt Performance Optimization:
     // Replaced chained .filter().reduce() with a single for...of loop to avoid intermediate array allocations.
-    const deduplicatedNotes = new Map<string, typeof rawReviewNotes[number]>();
+    const deduplicatedNotes = new Map<string, (typeof rawReviewNotes)[number]>();
     for (const n of rawReviewNotes) {
       if (unchangedIds.has(n.workoutId)) {
         deduplicatedNotes.set(n.workoutId, n);
@@ -388,14 +439,25 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // Keep duplicate suggestions for the same plan day ordered so structured
       // appends re-read sortOrder after any earlier insert in this transaction.
       for (const s of preparedSuggestions) {
+        const suggestionInputs = withCoachModificationMetadata(
+          inputsUsed,
+          s.suggestion,
+          coachSignals,
+        );
         modResults.push(
-          await applySuggestion(s, upcomingWorkouts, userId, coachingContext.source, inputsUsed, unitPreferences, tx),
+          await applySuggestion(
+            s,
+            upcomingWorkouts,
+            userId,
+            coachingContext.source,
+            suggestionInputs,
+            unitPreferences,
+            tx,
+          ),
         );
       }
       const noteResults = await Promise.all(
-        reviewNotes.map((n) =>
-          applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx),
-        ),
+        reviewNotes.map((n) => applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx)),
       );
 
       // ⚡ Bolt Performance Optimization:
@@ -427,10 +489,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     try {
       await storage.users.updateIsAutoCoaching(userId, false);
     } catch (resetErr) {
-      logger.error(
-        { err: resetErr, userId },
-        "[coach] Failed to reset isAutoCoaching flag",
-      );
+      logger.error({ err: resetErr, userId }, "[coach] Failed to reset isAutoCoaching flag");
     }
   }
 }
@@ -494,7 +553,7 @@ export async function regenerateCoachNoteForPlanDay(
     mainWorkout: day.mainWorkout,
     accessory: planDaySets && planDaySets.length > 0 ? undefined : day.accessory || undefined,
     notes: planDaySets && planDaySets.length > 0 ? undefined : day.notes || undefined,
-    exerciseDetails: (planDaySets ?? []).map(es => ({
+    exerciseDetails: (planDaySets ?? []).map((es) => ({
       exerciseName: es.exerciseName,
       customLabel: es.customLabel,
       category: es.category,
@@ -513,7 +572,9 @@ export async function regenerateCoachNoteForPlanDay(
     distanceUnit: trainingContext.distanceUnit,
   });
   const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
-  const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, [workoutInput]);
+  const stylePromptContext = resolvedStyle.strategy.buildPromptContext(trainingContext, [
+    workoutInput,
+  ]);
   const inputsUsed = buildCoachNoteInputs(
     trainingContext,
     coachingContext.source === "rag",
@@ -526,13 +587,13 @@ export async function regenerateCoachNoteForPlanDay(
   const notes = forcedSafetyNote
     ? [{ workoutId: day.id, note: forcedSafetyNote }]
     : await generateReviewNotes(
-    trainingContext,
-    [workoutInput],
-    activePlanGoal,
-    coachingContext.text,
-    userId,
-    stylePromptContext,
-  );
+        trainingContext,
+        [workoutInput],
+        activePlanGoal,
+        coachingContext.text,
+        userId,
+        stylePromptContext,
+      );
   const note = notes.find((n) => n.workoutId === day.id);
   if (!note?.note) {
     throw new AppError(

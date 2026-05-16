@@ -1,9 +1,13 @@
 import { z } from "zod";
 
+import type { CoachNoteInputs } from "@shared/schema";
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
-import { formatExerciseSetsForPrompt, type PromptExerciseSet } from "../prompts/exerciseSetFormatter";
+import {
+  formatExerciseSetsForPrompt,
+  type PromptExerciseSet,
+} from "../prompts/exerciseSetFormatter";
 import type { TrainingContext } from "./types";
 
 export interface SuggestionPromptOptions {
@@ -11,7 +15,6 @@ export interface SuggestionPromptOptions {
   promptSuffix?: string;
   systemInstructionAppendix?: string;
 }
-
 
 export interface UpcomingWorkout {
   id: string;
@@ -21,6 +24,10 @@ export interface UpcomingWorkout {
   accessory?: string;
   notes?: string;
   exerciseDetails?: PromptExerciseSet[];
+  aiSource?: "rag" | "legacy" | "review" | null;
+  aiRationale?: string | null;
+  aiNoteUpdatedAt?: string | Date | null;
+  aiInputsUsed?: CoachNoteInputs | null;
 }
 
 export type { WorkoutSuggestion } from "@shared/schema";
@@ -42,7 +49,10 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    logger.error({ err: parseErr, responseLength: text.length }, "[gemini] suggestions JSON.parse failed.");
+    logger.error(
+      { err: parseErr, responseLength: text.length },
+      "[gemini] suggestions JSON.parse failed.",
+    );
     return [];
   }
 
@@ -60,10 +70,13 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
         ...item,
         recommendation: item.recommendation.replaceAll("&", "and"),
         rationale: item.rationale.replaceAll("&", "and"),
-        workoutFocus: item.workoutFocus.replaceAll("&", "and")
+        workoutFocus: item.workoutFocus.replaceAll("&", "and"),
       });
     } else {
-      logger.warn({ issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) }, "[gemini] Dropping invalid suggestion:");
+      logger.warn(
+        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        "[gemini] Dropping invalid suggestion:",
+      );
     }
   }
   return validated;
@@ -72,10 +85,23 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
 function formatExerciseFrequency(breakdown: Record<string, number>): string {
   const entries = Object.entries(breakdown);
   if (entries.length === 0) return "";
-  return "\nExercise frequency:\n" + entries.map(([exercise, count]) => `- ${exercise}: ${count}x`).join("\n") + "\n";
+  return (
+    "\nExercise frequency:\n" +
+    entries.map(([exercise, count]) => `- ${exercise}: ${count}x`).join("\n") +
+    "\n"
+  );
 }
 
-function formatExerciseStatLine(exercise: string, stats: { count: number; maxWeight?: number; maxDistance?: number; bestTime?: number; avgReps?: number }): string {
+function formatExerciseStatLine(
+  exercise: string,
+  stats: {
+    count: number;
+    maxWeight?: number;
+    maxDistance?: number;
+    bestTime?: number;
+    avgReps?: number;
+  },
+): string {
   const parts = [`- ${exercise}: trained ${stats.count}x`];
   if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight}`);
   if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}m`);
@@ -86,10 +112,19 @@ function formatExerciseStatLine(exercise: string, stats: { count: number; maxWei
 
 function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"]): string {
   if (!stats || Object.keys(stats).length === 0) return "";
-  return "\nExercise performance stats:\n" + Object.entries(stats).map(([ex, s]) => formatExerciseStatLine(ex, s)).join("\n") + "\n";
+  return (
+    "\nExercise performance stats:\n" +
+    Object.entries(stats)
+      .map(([ex, s]) => formatExerciseStatLine(ex, s))
+      .join("\n") +
+    "\n"
+  );
 }
 
-function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], trainingContext: TrainingContext): string {
+function formatRecentWorkout(
+  workout: TrainingContext["recentWorkouts"][0],
+  trainingContext: TrainingContext,
+): string {
   const exerciseSummary = formatExerciseSetsForPrompt(workout.exerciseDetails, {
     weightUnit: trainingContext.weightUnit,
     distanceUnit: trainingContext.distanceUnit,
@@ -107,7 +142,39 @@ function formatRecentWorkout(workout: TrainingContext["recentWorkouts"][0], trai
 function formatRecentWorkouts(trainingContext: TrainingContext): string {
   const workouts = trainingContext.recentWorkouts;
   if (workouts.length === 0) return "";
-  return "\nRecent completed workouts:\n" + workouts.slice(0, 10).map((workout) => formatRecentWorkout(workout, trainingContext)).join("\n") + "\n";
+  return (
+    "\nRecent completed workouts:\n" +
+    workouts
+      .slice(0, 10)
+      .map((workout) => formatRecentWorkout(workout, trainingContext))
+      .join("\n") +
+    "\n"
+  );
+}
+
+function formatPriorAiContext(workout: UpcomingWorkout): string {
+  const prior: string[] = [];
+  if (workout.aiRationale?.trim()) {
+    prior.push(`Prior AI review: ${workout.aiRationale.trim()}`);
+  }
+
+  const lastModification = workout.aiInputsUsed?.lastModification;
+  if (lastModification) {
+    const details = [
+      `kind=${lastModification.kind}`,
+      lastModification.completedWorkoutCount != null
+        ? `completedWorkoutsAtEdit=${lastModification.completedWorkoutCount}`
+        : undefined,
+      lastModification.rpeTrend ? `rpeTrendAtEdit=${lastModification.rpeTrend}` : undefined,
+      lastModification.fatigueFlag != null
+        ? `fatigueFlagAtEdit=${lastModification.fatigueFlag}`
+        : undefined,
+      lastModification.reason ? `reason=${lastModification.reason}` : undefined,
+    ].filter(Boolean);
+    prior.push(`Last AI modification: ${details.join("; ")}`);
+  }
+
+  return prior.length > 0 ? `, ${prior.join(", ")}` : "";
 }
 
 function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: TrainingContext): string {
@@ -115,12 +182,14 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
     weightUnit: trainingContext.weightUnit,
     distanceUnit: trainingContext.distanceUnit,
   });
+  const priorAiContext = formatPriorAiContext(workout);
   if (exerciseSummary) {
-    return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Exercises: ${exerciseSummary}`;
+    return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Exercises: ${exerciseSummary}${priorAiContext}`;
   }
   let line = `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}`;
   if (workout.accessory) line += `, Accessory: ${workout.accessory}`;
   if (workout.notes) line += `, Notes: ${workout.notes}`;
+  line += priorAiContext;
   return line;
 }
 
@@ -133,23 +202,38 @@ function formatRpeTrend(insights: NonNullable<TrainingContext["coachingInsights"
   if (insights.avgRpeLast3 != null) rpeLine += ` (avg ${insights.avgRpeLast3} last 3 workouts`;
   if (insights.avgRpePrior3 != null) rpeLine += ` vs ${insights.avgRpePrior3} prior 3`;
   if (insights.avgRpeLast3 != null) rpeLine += `)`;
-  if (insights.fatigueFlag) rpeLine += `. FATIGUE FLAG ACTIVE — athlete needs volume reduction.`;
-  if (insights.undertrainingFlag) rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
+  if (insights.fatigueFlag)
+    rpeLine += `. FATIGUE FLAG ACTIVE - analyze the upcoming workout fit before reducing volume.`;
+  if (insights.undertrainingFlag)
+    rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
   return rpeLine;
 }
 
-function formatStationGapEntry(g: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"][0], severity: "critical" | "high"): string {
+function formatStationGapEntry(
+  g: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"][0],
+  severity: "critical" | "high",
+): string {
   if (severity === "critical") {
-    const label = g.daysSinceLastTrained === null ? "NEVER TRAINED" : `${g.daysSinceLastTrained} days`;
+    const label =
+      g.daysSinceLastTrained === null ? "NEVER TRAINED" : `${g.daysSinceLastTrained} days`;
     return `${g.station} (${label} — CRITICAL)`;
   }
   return `${g.station} (${g.daysSinceLastTrained} days — needs attention)`;
 }
 
-function formatStationGaps(stationGaps: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"]): string {
-  const criticalGaps = stationGaps.filter(g => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 14);
-  const highGaps = stationGaps.filter(g => g.daysSinceLastTrained != null && g.daysSinceLastTrained >= 10 && g.daysSinceLastTrained < 14);
-  const okCount = stationGaps.filter(g => g.daysSinceLastTrained != null && g.daysSinceLastTrained < 10).length;
+function formatStationGaps(
+  stationGaps: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"],
+): string {
+  const criticalGaps = stationGaps.filter(
+    (g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 14,
+  );
+  const highGaps = stationGaps.filter(
+    (g) =>
+      g.daysSinceLastTrained != null && g.daysSinceLastTrained >= 10 && g.daysSinceLastTrained < 14,
+  );
+  const okCount = stationGaps.filter(
+    (g) => g.daysSinceLastTrained != null && g.daysSinceLastTrained < 10,
+  ).length;
 
   const gapParts: string[] = [];
   for (const g of criticalGaps) gapParts.push(formatStationGapEntry(g, "critical"));
@@ -164,7 +248,10 @@ function formatStationGaps(stationGaps: NonNullable<TrainingContext["coachingIns
   return `EXERCISE GAPS: ${gapParts.join(", ")}`;
 }
 
-function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingInsights"]>, planGoal?: string): string {
+function formatCoachingAnalysis(
+  insights: NonNullable<TrainingContext["coachingInsights"]>,
+  planGoal?: string,
+): string {
   const lines: string[] = [
     `--- COACHING ANALYSIS ---`,
     formatRpeTrend(insights),
@@ -173,22 +260,27 @@ function formatCoachingAnalysis(insights: NonNullable<TrainingContext["coachingI
 
   if (insights.planPhase) {
     const p = insights.planPhase;
-    const remaining = p.remainingPhases.length > 0
-      ? ` Remaining phases: ${p.remainingPhases.map(phase => phase.toUpperCase()).join(" → ")}.`
-      : "";
-    lines.push(`PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.${remaining}`);
+    const remaining =
+      p.remainingPhases.length > 0
+        ? ` Remaining phases: ${p.remainingPhases.map((phase) => phase.toUpperCase()).join(" → ")}.`
+        : "";
+    lines.push(
+      `PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.${remaining}`,
+    );
   }
 
   if (insights.progressionFlags.length > 0) {
-    const flagLines = insights.progressionFlags.map(f =>
-      `${f.exercise}: ${f.flag.toUpperCase()} — ${f.detail}`
+    const flagLines = insights.progressionFlags.map(
+      (f) => `${f.exercise}: ${f.flag.toUpperCase()} — ${f.detail}`,
     );
     lines.push(`PROGRESSION:\n${flagLines.join("\n")}`);
   }
 
   if (insights.weeklyVolume) {
     const v = insights.weeklyVolume;
-    lines.push(`WEEKLY VOLUME: ${v.thisWeekCompleted}/${v.goal} goal this week (last week: ${v.lastWeekCompleted}/${v.goal}). Trend: ${v.trend}.`);
+    lines.push(
+      `WEEKLY VOLUME: ${v.thisWeekCompleted}/${v.goal} goal this week (last week: ${v.lastWeekCompleted}/${v.goal}). Trend: ${v.trend}.`,
+    );
   }
 
   if (planGoal) {
@@ -219,7 +311,9 @@ function buildPromptDataSections(
     `Completion rate: ${trainingContext.completionRate}%`,
     `Current streak: ${trainingContext.currentStreak} days`,
     `Completed workouts: ${trainingContext.completedWorkouts}`,
-    ...(trainingContext.weeklyGoal ? [`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`] : []),
+    ...(trainingContext.weeklyGoal
+      ? [`Weekly goal: ${trainingContext.weeklyGoal} workouts/week`]
+      : []),
   ];
 
   const sections = [
@@ -256,7 +350,7 @@ export function buildSuggestionsPrompt(
     coachingMaterials,
   );
   sections.push(
-    `Analyze the coaching analysis and athlete data above. Make modifications that actively improve this athlete's training. Return [] ONLY if the plan genuinely needs zero adjustments.`,
+    `Analyze the coaching analysis and athlete data above. Evaluate each future workout as currently written, including any prior AI review or modification context. Make modifications that actively improve this athlete's training. Return [] when the current plan already fits the athlete, including when a workout was already reduced for the same fatigue episode and no new completed workouts change the evidence.`,
     ...(promptOptions?.promptSuffix ? [promptOptions.promptSuffix] : []),
   );
   if (promptOptions?.promptPrefix) sections.unshift(promptOptions.promptPrefix);
@@ -306,7 +400,10 @@ export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
-    logger.error({ err: parseErr, responseLength: text.length }, "[gemini] review-notes JSON.parse failed.");
+    logger.error(
+      { err: parseErr, responseLength: text.length },
+      "[gemini] review-notes JSON.parse failed.",
+    );
     return [];
   }
   const rawArray = Array.isArray(raw) ? raw : [];
@@ -380,7 +477,13 @@ export async function generateWorkoutSuggestions(
       return [];
     }
 
-    const prompt = buildSuggestionsPrompt(trainingContext, upcomingWorkouts, planGoal, coachingMaterials, promptOptions);
+    const prompt = buildSuggestionsPrompt(
+      trainingContext,
+      upcomingWorkouts,
+      planGoal,
+      coachingMaterials,
+      promptOptions,
+    );
 
     const response = await generateJsonText({
       systemInstruction: [SUGGESTIONS_PROMPT, promptOptions?.systemInstructionAppendix]

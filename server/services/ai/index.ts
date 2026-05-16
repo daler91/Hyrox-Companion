@@ -2,14 +2,29 @@ import type { TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
-import { computeCurrentWeek,computeExerciseGaps, computePlanPhase, computeProgressionFlags, computeRpeTrend, computeWeeklyVolume } from "./coachingInsights";
+import {
+  computeCurrentWeek,
+  computeExerciseGaps,
+  computePlanPhase,
+  computeProgressionFlags,
+  computeRpeTrend,
+  computeWeeklyVolume,
+} from "./coachingInsights";
 import { decideTrainingState } from "./trainingDecisionEngine";
-import { calculateTrainingStats, collectRecentWorkouts, getExerciseBreakdown, getStructuredExerciseStats } from "./trainingStats";
+import {
+  calculateTrainingStats,
+  collectRecentWorkouts,
+  getExerciseBreakdown,
+  getStructuredExerciseStats,
+} from "./trainingStats";
 
 function mapTestTrendDirection(
   trend: ReturnType<typeof computeRpeTrend>["rpeTrend"],
 ): "declining" | "improving" | "flat" | "insufficient_data" {
-  const trendDirectionMap: Record<ReturnType<typeof computeRpeTrend>["rpeTrend"], "declining" | "improving" | "flat" | "insufficient_data"> = {
+  const trendDirectionMap: Record<
+    ReturnType<typeof computeRpeTrend>["rpeTrend"],
+    "declining" | "improving" | "flat" | "insufficient_data"
+  > = {
     rising: "declining",
     falling: "improving",
     stable: "flat",
@@ -27,7 +42,15 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     storage.timeline.getUpcomingPlannedDays(userId, 7),
   ]);
 
-  const { completedWorkouts, plannedWorkouts, missedWorkouts, skippedWorkouts, totalWorkouts, completionRate, completedDates } = calculateTrainingStats(timeline);
+  const {
+    completedWorkouts,
+    plannedWorkouts,
+    missedWorkouts,
+    skippedWorkouts,
+    totalWorkouts,
+    completionRate,
+    completedDates,
+  } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates);
   const recentWorkouts = collectRecentWorkouts(timeline);
@@ -36,7 +59,12 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   let activePlan: TrainingContext["activePlan"];
   if (activePlanRecord) {
     const currentWeek = computeCurrentWeek(activePlanRecord.startDate, activePlanRecord.totalWeeks);
-    activePlan = { name: activePlanRecord.name, totalWeeks: activePlanRecord.totalWeeks, currentWeek, goal: activePlanRecord.goal ?? undefined };
+    activePlan = {
+      name: activePlanRecord.name,
+      totalWeeks: activePlanRecord.totalWeeks,
+      currentWeek,
+      goal: activePlanRecord.goal ?? undefined,
+    };
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
@@ -92,22 +120,28 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     },
   };
 
-  logger.info({
-    context: "health-metrics",
-    event: "phase_state_evaluated",
-    userId,
-    phase: decisionTree.phase,
-    intensityPermitted: decisionTree.intensityPermitted,
-    rationaleCodes: decisionTree.rationaleCodes,
-  }, "Training phase decision evaluated");
-
-  if (!decisionTree.intensityPermitted && decisionTree.phase === "performance") {
-    logger.info({
+  logger.info(
+    {
       context: "health-metrics",
-      event: "strict_phase_intensity_blocked",
+      event: "phase_state_evaluated",
       userId,
       phase: decisionTree.phase,
-    }, "Intensity recommendation blocked in strict phase");
+      intensityPermitted: decisionTree.intensityPermitted,
+      rationaleCodes: decisionTree.rationaleCodes,
+    },
+    "Training phase decision evaluated",
+  );
+
+  if (!decisionTree.intensityPermitted && decisionTree.phase === "performance") {
+    logger.info(
+      {
+        context: "health-metrics",
+        event: "strict_phase_intensity_blocked",
+        userId,
+        phase: decisionTree.phase,
+      },
+      "Intensity recommendation blocked in strict phase",
+    );
   }
 
   return {
@@ -122,16 +156,20 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     recentWorkouts: recentWorkouts.slice(0, 10),
-    upcomingWorkouts: upcomingDays.map(d => ({
+    upcomingWorkouts: upcomingDays.map((d) => ({
       planDayId: d.planDayId,
       date: d.date,
       focus: d.focus,
       mainWorkout: d.mainWorkout,
       accessory: d.accessory,
       notes: d.notes,
+      aiSource: d.aiSource,
+      aiRationale: d.aiRationale,
+      aiNoteUpdatedAt: d.aiNoteUpdatedAt,
+      aiInputsUsed: d.aiInputsUsed,
       ...((d.exerciseSets?.length ?? 0) > 0
         ? {
-            exerciseDetails: d.exerciseSets!.map(es => ({
+            exerciseDetails: d.exerciseSets!.map((es) => ({
               exerciseName: es.exerciseName,
               customLabel: es.customLabel,
               category: es.category,

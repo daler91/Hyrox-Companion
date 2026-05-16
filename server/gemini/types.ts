@@ -1,3 +1,5 @@
+import type { CoachNoteInputs } from "@shared/schema";
+
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
 
 export interface TrainingContext {
@@ -29,6 +31,10 @@ export interface TrainingContext {
     accessory?: string | null;
     notes?: string | null;
     exerciseDetails?: PromptExerciseSet[];
+    aiSource?: "rag" | "legacy" | "review" | null;
+    aiRationale?: string | null;
+    aiNoteUpdatedAt?: string | Date | null;
+    aiInputsUsed?: CoachNoteInputs | null;
   }>;
   exerciseBreakdown: Record<string, number>;
   structuredExerciseStats?: Record<
@@ -77,7 +83,16 @@ export interface TrainingContext {
     }>;
     decisionTree?: {
       currentPhase: "reset_repair" | "aerobic_base" | "bridge" | "performance";
-      allowedWorkoutTypes: Array<"rest" | "mobility" | "easy_aerobic" | "skill_technique" | "strength" | "threshold" | "race_pace" | "hyrox_simulation">;
+      allowedWorkoutTypes: Array<
+        | "rest"
+        | "mobility"
+        | "easy_aerobic"
+        | "skill_technique"
+        | "strength"
+        | "threshold"
+        | "race_pace"
+        | "hyrox_simulation"
+      >;
       intensityPermitted: boolean;
       rationaleCodes: string[];
     };

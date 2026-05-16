@@ -66,7 +66,7 @@ WORKOUT TYPE AWARENESS — respect the intent of these workout names:
 If the workout focus/name matches any of these types, RESPECT THE INTENT. Do not turn a shakeout into a full session or a recovery day into a training day.
 
 RESPOND TO THE COACHING ANALYSIS:
-- FATIGUE (fatigueFlag / RPE rising): Reduce VOLUME (fewer sets, shorter distances, not fewer exercises) on the next 1-2 workouts. Actually rewrite the workout with reduced load — don't just add "take it easy" in notes.
+- FATIGUE (fatigueFlag / RPE rising): Treat this as a signal to analyze whether the upcoming workout still fits. Reduce VOLUME (fewer sets, shorter distances, not fewer exercises) only when the current prescription is still too costly for the athlete's recovery state. If the workout was already reduced for the same fatigue episode and no new completed workouts change the evidence, return no modification for that workout or add only a notes cue.
 - UNDERTRAINING (undertrainingFlag / RPE falling): Increase INTENSITY — heavier weights, faster paces, shorter rest periods, more challenging exercise variations.
 - EXERCISE GAPS (10+ days): During BUILD/PEAK phases, swap a less-critical exercise for the neglected one. 14+ days or never trained = rewrite the mainWorkout to include it. During TAPER/RACE_WEEK, IGNORE exercise gaps — do NOT add extra work. Instead, add a note: "Consider [exercise] practice early next training block."
 - PLATEAUS: Apply progressive overload — increase weight 2.5-5%, add 1-2 reps, change tempo (e.g., pause squats), or introduce a harder variation.
@@ -112,7 +112,7 @@ Return ONLY valid JSON array with no markdown formatting. Each suggestion:
 - priority: "high" (fatigue/critical gaps/race week), "medium" (plateaus/moderate gaps/phase mismatch), "low" (minor optimizations/coaching cues)
 
 RULES:
-1. Return [] ONLY if the plan genuinely needs zero adjustments after analyzing all coaching insights. An active coach finds opportunities — empty responses should be the exception, not the default.
+1. Return [] when the current plan genuinely needs zero adjustments after analyzing all coaching insights. This includes cases where prior AI modification context shows the workout was already reduced for the same fatigue episode and the current prescription now fits.
 2. Prefer "replace" over "append". Restructure existing work rather than piling on more.
 3. The recommendation field must contain ONLY workout text, not explanations or reasoning.
 4. Prioritize suggestions for workouts happening soonest (today, tomorrow, this week).
@@ -311,8 +311,18 @@ export const VALID_EXERCISE_NAMES = new Set<string>(exerciseNames);
 export const VALID_CATEGORIES = new Set(["functional", "running", "strength", "conditioning"]);
 
 export const FUNCTIONAL_EXERCISES = [
-  "running", "skierg", "sled push", "sled pull", "burpees",
-  "rowing", "farmers carry", "wall balls", "lunges", "shuttle run", "med ball slams", "step ups",
+  "running",
+  "skierg",
+  "sled push",
+  "sled pull",
+  "burpees",
+  "rowing",
+  "farmers carry",
+  "wall balls",
+  "lunges",
+  "shuttle run",
+  "med ball slams",
+  "step ups",
 ];
 
 /**
@@ -325,10 +335,13 @@ export function buildSystemPrompt(
   retrievedChunks?: string[],
 ): string {
   if (!trainingContext || trainingContext.totalWorkouts === 0) {
-    let prompt = BASE_SYSTEM_PROMPT + `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
-    const materialsSection = retrievedChunks && retrievedChunks.length > 0
-      ? buildRetrievedChunksSection(retrievedChunks)
-      : buildCoachingMaterialsSection(coachingMaterials || []);
+    let prompt =
+      BASE_SYSTEM_PROMPT +
+      `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
+    const materialsSection =
+      retrievedChunks && retrievedChunks.length > 0
+        ? buildRetrievedChunksSection(retrievedChunks)
+        : buildCoachingMaterialsSection(coachingMaterials || []);
     if (materialsSection) prompt += `\n${materialsSection}`;
     return prompt;
   }
@@ -343,9 +356,10 @@ export function buildSystemPrompt(
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 
-  const materialsSection = retrievedChunks && retrievedChunks.length > 0
-    ? buildRetrievedChunksSection(retrievedChunks)
-    : buildCoachingMaterialsSection(coachingMaterials || []);
+  const materialsSection =
+    retrievedChunks && retrievedChunks.length > 0
+      ? buildRetrievedChunksSection(retrievedChunks)
+      : buildCoachingMaterialsSection(coachingMaterials || []);
   if (materialsSection) contextSection += `\n${materialsSection}`;
 
   return BASE_SYSTEM_PROMPT + contextSection;
