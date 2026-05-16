@@ -17,9 +17,14 @@ const FAQS = [
       "After each workout you log, the AI reviews your recent volume, intensity, and plan progression, then suggests adjustments to upcoming sessions. You can accept, tweak, or dismiss any suggestion before it touches your plan.",
   },
   {
-    question: "Will my Strava activities sync automatically?",
+    question: "Do I have to type out every workout?",
     answer:
-      "Once you connect Strava from Settings, completed activities appear on your timeline with a Strava badge. Your Strava tokens are encrypted at rest and never shared with third parties.",
+      "No. Describe a session in plain text, dictate it with your voice, or snap a photo of a whiteboard or printed plan. The AI parses it into structured exercises, sets, reps, and loads for you to review before saving.",
+  },
+  {
+    question: "Will my Strava and Garmin activities sync?",
+    answer:
+      "Yes. Connect Strava or Garmin Connect from Settings and completed activities appear on your timeline with a source badge. Your Strava tokens and Garmin credentials are encrypted at rest and never shared with third parties.",
   },
   {
     question: "What happens if I go offline mid-workout?",

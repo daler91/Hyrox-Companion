@@ -18,9 +18,9 @@ export function HowItWorks() {
               <Calendar className="h-7 w-7 text-primary" />
               <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">1</span>
             </div>
-            <h3 className="font-semibold text-lg mb-2">Import Your Plan</h3>
+            <h3 className="font-semibold text-lg mb-2">Set Up Your Plan</h3>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Upload a CSV training plan or use our built-in fitness templates. Set a start date and your timeline is ready.
+              Generate a personalized AI plan from your goals, import a CSV, or start from a built-in 8-week template. Set a start date and your timeline is ready.
             </p>
           </div>
 
@@ -31,7 +31,7 @@ export function HowItWorks() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Train & Log</h3>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Complete your workouts and log the details — times, weights, RPE, notes. Or let Strava auto-import for you.
+              Complete your workouts and log them by text, voice, or photo — times, weights, RPE, notes. Or let Strava and Garmin auto-import for you.
             </p>
           </div>
 

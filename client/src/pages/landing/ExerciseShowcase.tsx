@@ -33,7 +33,7 @@ export function ExerciseShowcase() {
             Built for Every Training Style
           </h2>
           <p className="fade-up text-lg text-muted-foreground max-w-2xl mx-auto">
-            Track every exercise across functional, running, strength, and conditioning — with times and personal records.
+            Track 200+ exercises across functional, running, strength, and conditioning — each with the right fields for sets, reps, loads, distances, and times.
           </p>
         </div>
         <div className="fade-up">
@@ -80,7 +80,7 @@ export function ExerciseShowcase() {
             <div>
               <h3 className="font-semibold mb-1">Chat with Your Coach</h3>
               <p className="text-muted-foreground text-sm">
-                Ask questions about your training, get exercise tips, or discuss strategy with an AI that knows your data.
+                Ask questions about your training, get exercise tips, or discuss strategy with an AI that knows your history and the coaching materials you upload.
               </p>
             </div>
           </div>
