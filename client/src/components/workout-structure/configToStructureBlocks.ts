@@ -72,7 +72,6 @@ export function structureBlockToConfig(block: StructureBlockInput): WorkoutStruc
       block.formatType === "emom" ? block.durationMinutes ?? undefined : undefined,
     timeCapMinutes: block.formatType === "amrap" ? block.timeCapMinutes ?? block.durationMinutes ?? undefined : undefined,
     roundCount: block.formatType === "rounds" ? block.roundCount ?? block.rounds ?? undefined : undefined,
-    emomAlternating: false,
     steps,
     score: block.score ?? null,
   };
