@@ -398,6 +398,72 @@ describe("coachService", () => {
       );
     });
 
+    it("preserves same-run fatigue metadata when a later suggestion updates the same day", async () => {
+      mockBaseAutoCoachDeps([makeTimelineEntry()]);
+      vi.mocked(buildTrainingContext).mockResolvedValue({
+        totalWorkouts: 12,
+        completedWorkouts: 12,
+        plannedWorkouts: 1,
+        missedWorkouts: 0,
+        skippedWorkouts: 0,
+        completionRate: 100,
+        currentStreak: 4,
+        recentWorkouts: [],
+        upcomingWorkouts: [
+          {
+            planDayId: "day-1",
+            date: "2026-01-16",
+            focus: "Strength",
+            mainWorkout: "3x5 Squats",
+            accessory: null,
+            notes: null,
+          },
+        ],
+        exerciseBreakdown: {},
+        coachingInsights: {
+          rpeTrend: "rising",
+          fatigueFlag: true,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
+      });
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({
+          recommendation: "Back squat 2x5 lighter",
+          rationale: "Reduce volume because RPE and fatigue remain high.",
+        }),
+        makeSuggestion({
+          targetField: "accessory",
+          recommendation: "Sled push 4x20m",
+          rationale: "Sled Push has not been trained recently.",
+          priority: "medium",
+        }),
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 2 });
+      const updateCalls = vi
+        .mocked(storage.plans.updatePlanDay)
+        .mock.calls.filter(([workoutId]) => workoutId === "day-1");
+      expect(updateCalls).toHaveLength(2);
+
+      const secondInputs = updateCalls[1][1].aiInputsUsed;
+      expect(secondInputs).toEqual(
+        expect.objectContaining({
+          lastModification: expect.objectContaining({
+            kind: "workload_adjustment",
+            reason: "Sled Push has not been trained recently.",
+          }),
+          lastFatigueReduction: expect.objectContaining({
+            kind: "fatigue_volume_reduction",
+            completedWorkoutCount: 12,
+            prescriptionFingerprint: textWorkoutFingerprint("Back squat 2x5 lighter"),
+          }),
+        }),
+      );
+    });
+
     it("uses RAG when chunks are available and dimensions match", async () => {
       mockBaseAutoCoachDeps();
       vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);

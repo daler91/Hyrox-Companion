@@ -58,6 +58,11 @@ interface PreparedSuggestion {
   readonly structuredSetRows?: InsertExerciseSet[];
 }
 
+interface AppliedSuggestionResult {
+  readonly applied: boolean;
+  readonly inputsUsed?: CoachNoteInputs;
+}
+
 function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
   return Boolean(entry?.exerciseDetails && entry.exerciseDetails.length > 0);
 }
@@ -111,9 +116,11 @@ async function applyStructuredSuggestion(
   inputsUsed: CoachNoteInputs,
   coachSignals: CoachModificationSignals,
   tx: DbExecutor,
-): Promise<boolean> {
+): Promise<AppliedSuggestionResult> {
   const { suggestion, structuredSetRows } = prepared;
-  if (!structuredSetRows || structuredSetRows.length === 0) return false;
+  if (!structuredSetRows || structuredSetRows.length === 0) {
+    return { applied: false };
+  }
   const resultingWorkout = buildStructuredResultingWorkout(
     entry,
     suggestion.action,
@@ -144,7 +151,7 @@ async function applyStructuredSuggestion(
     userId,
     tx,
   );
-  return true;
+  return { applied: true, inputsUsed: suggestionInputs };
 }
 
 /**
@@ -211,9 +218,11 @@ async function applySuggestion(
   coachSignals: CoachModificationSignals,
   unitPreferences: UnitPreferences,
   tx: DbExecutor,
-): Promise<boolean> {
+): Promise<AppliedSuggestionResult> {
   const { suggestion } = prepared;
-  if (!suggestionWillApply(suggestion, upcomingWorkouts)) return false;
+  if (!suggestionWillApply(suggestion, upcomingWorkouts)) {
+    return { applied: false };
+  }
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
   if (prepared.structuredSetRows && prepared.structuredSetRows.length > 0) {
     return applyStructuredSuggestion(
@@ -249,7 +258,7 @@ async function applySuggestion(
     userId,
     tx,
   );
-  return true;
+  return { applied: true, inputsUsed: suggestionInputs };
 }
 
 async function applyReviewNote(
@@ -464,22 +473,26 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // rolls back every earlier apply so the plan never ends up partially
     // mutated (C2).
     const { adjusted, noted } = await db.transaction(async (tx) => {
-      const modResults: boolean[] = [];
+      const modResults: AppliedSuggestionResult[] = [];
+      const inputsByWorkoutId = new Map<string, CoachNoteInputs>();
       // Keep duplicate suggestions for the same plan day ordered so structured
       // appends re-read sortOrder after any earlier insert in this transaction.
       for (const s of preparedSuggestions) {
-        modResults.push(
-          await applySuggestion(
-            s,
-            upcomingWorkouts,
-            userId,
-            coachingContext.source,
-            inputsUsed,
-            coachSignals,
-            unitPreferences,
-            tx,
-          ),
+        const currentInputs = inputsByWorkoutId.get(s.suggestion.workoutId) ?? inputsUsed;
+        const result = await applySuggestion(
+          s,
+          upcomingWorkouts,
+          userId,
+          coachingContext.source,
+          currentInputs,
+          coachSignals,
+          unitPreferences,
+          tx,
         );
+        modResults.push(result);
+        if (result.applied && result.inputsUsed) {
+          inputsByWorkoutId.set(s.suggestion.workoutId, result.inputsUsed);
+        }
       }
       const noteResults = await Promise.all(
         reviewNotes.map((n) => applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx)),
@@ -489,7 +502,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // Replaced .filter(Boolean).length with a single loop to avoid intermediate array allocations.
       let adjustedCount = 0;
       let notedCount = 0;
-      for (const res of modResults) if (res) adjustedCount++;
+      for (const res of modResults) if (res.applied) adjustedCount++;
       for (const res of noteResults) if (res) notedCount++;
 
       return {
