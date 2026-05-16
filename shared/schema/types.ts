@@ -65,11 +65,13 @@ export const updateUserPreferencesSchema = z.object({
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
 
 // Training plan types and schemas
-export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
-  id: true,
-}).extend({
-  goal: z.string().max(500).nullable().optional(),
-});
+export const insertTrainingPlanSchema = createInsertSchema(trainingPlans)
+  .omit({
+    id: true,
+  })
+  .extend({
+    goal: z.string().max(500).nullable().optional(),
+  });
 
 export const updateTrainingPlanGoalSchema = z.object({
   goal: z.string().max(500).nullable(),
@@ -80,11 +82,13 @@ export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
 export type TrainingPlan = typeof trainingPlans.$inferSelect;
 
 // Plan day types and schemas
-export const insertPlanDaySchema = createInsertSchema(planDays).omit({
-  id: true,
-}).extend({
-  status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
-});
+export const insertPlanDaySchema = createInsertSchema(planDays)
+  .omit({
+    id: true,
+  })
+  .extend({
+    status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
+  });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
   planId: true,
@@ -93,6 +97,25 @@ export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
 export type InsertPlanDay = z.infer<typeof insertPlanDaySchema>;
 export type UpdatePlanDay = z.infer<typeof updatePlanDaySchema>;
 export type PlanDay = typeof planDays.$inferSelect;
+
+export const coachModificationKindSchema = z.enum([
+  "fatigue_volume_reduction",
+  "workload_adjustment",
+]);
+
+const coachModificationMetadataSchema = z.object({
+  kind: coachModificationKindSchema,
+  reason: z.string().max(400).optional(),
+  at: z.string().optional(),
+  completedWorkoutCount: z.number().int().nonnegative().optional(),
+  fatigueFlag: z.boolean().optional(),
+  rpeTrend: z.enum(["rising", "stable", "falling", "insufficient_data"]).optional(),
+  prescriptionFingerprint: z.string().optional(),
+});
+
+const coachFatigueReductionMetadataSchema = coachModificationMetadataSchema.extend({
+  kind: z.literal("fatigue_volume_reduction"),
+});
 
 /**
  * Compact audit of which inputs drove the coach's note for a plan day.
@@ -108,14 +131,19 @@ export const coachNoteInputsSchema = z.object({
   progressionFlags: z.array(z.string()).optional(),
   ragUsed: z.boolean().optional(),
   recentWorkoutCount: z.number().int().nonnegative().optional(),
+  completedWorkoutCount: z.number().int().nonnegative().optional(),
   planGoalPresent: z.boolean().optional(),
-  recommendationTrace: z.object({
-    trainingStyleId: z.string(),
-    phase: z.string(),
-    strategyRuleVersion: z.string(),
-    promptBundleVersion: z.string(),
-    rationaleCodes: z.array(z.string()).optional(),
-  }).optional(),
+  recommendationTrace: z
+    .object({
+      trainingStyleId: z.string(),
+      phase: z.string(),
+      strategyRuleVersion: z.string(),
+      promptBundleVersion: z.string(),
+      rationaleCodes: z.array(z.string()).optional(),
+    })
+    .optional(),
+  lastModification: coachModificationMetadataSchema.optional(),
+  lastFatigueReduction: coachFatigueReductionMetadataSchema.optional(),
 });
 export type CoachNoteInputs = z.infer<typeof coachNoteInputsSchema>;
 
@@ -148,30 +176,39 @@ export type GarminConnection = typeof garminConnections.$inferSelect;
 // Strava/Garmin activities that straddle midnight in the user's timezone
 // still land, while preventing users from logging genuinely future workouts
 // (which otherwise skew Week-over-Week deltas and completion stats).
-const workoutDateNotFuture = z
-  .string()
-  .refine((d) => {
+const workoutDateNotFuture = z.string().refine(
+  (d) => {
     const target = new Date(`${d}T00:00:00Z`).getTime();
     if (Number.isNaN(target)) return false;
     return target <= Date.now() + 24 * 60 * 60 * 1000;
-  }, { message: "Workout date cannot be in the future" });
+  },
+  { message: "Workout date cannot be in the future" },
+);
 
-export const insertWorkoutLogSchema = createInsertSchema(workoutLogs).omit({
-  id: true,
-  userId: true,
-  prescribedMainWorkout: true,
-  prescribedAccessory: true,
-  prescribedNotes: true,
-  plannedSetCount: true,
-  actualSetCount: true,
-  matchedSetCount: true,
-  addedSetCount: true,
-  removedSetCount: true,
-  compliancePct: true,
-}).extend({
-  date: workoutDateNotFuture,
-  rpe: z.number().int().min(1, "RPE must be at least 1").max(10, "RPE must be at most 10").optional().nullable(),
-});
+export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
+  .omit({
+    id: true,
+    userId: true,
+    prescribedMainWorkout: true,
+    prescribedAccessory: true,
+    prescribedNotes: true,
+    plannedSetCount: true,
+    actualSetCount: true,
+    matchedSetCount: true,
+    addedSetCount: true,
+    removedSetCount: true,
+    compliancePct: true,
+  })
+  .extend({
+    date: workoutDateNotFuture,
+    rpe: z
+      .number()
+      .int()
+      .min(1, "RPE must be at least 1")
+      .max(10, "RPE must be at most 10")
+      .optional()
+      .nullable(),
+  });
 
 export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
   prescribedMainWorkout: z.string().optional().nullable(),
@@ -235,13 +272,19 @@ export type TimelineEntry = {
 };
 
 // Custom exercise types and schemas
-export const insertCustomExerciseSchema = createInsertSchema(customExercises).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
-  category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
-});
+export const insertCustomExerciseSchema = createInsertSchema(customExercises)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Name is required")
+      .max(100, "Name must be 100 characters or less"),
+    category: z.string().trim().max(50, "Category must be 50 characters or less").optional(),
+  });
 
 export type InsertCustomExercise = z.infer<typeof insertCustomExerciseSchema>;
 export type CustomExercise = typeof customExercises.$inferSelect;
@@ -256,20 +299,35 @@ export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
 // Request Validation Schemas
-export const dateStringSchema = z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
+export const dateStringSchema = z
+  .string()
+  .max(10)
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
 
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1, "Message content cannot be empty").max(50000, "Message must be 50000 characters or less"),
+  content: z
+    .string()
+    .min(1, "Message content cannot be empty")
+    .max(50000, "Message must be 50000 characters or less"),
 });
 
 export const chatRequestSchema = z.object({
-  message: z.string().min(1, "Message is required").max(1000, "Message must be 1000 characters or less"),
-  history: z.array(chatMessageSchema).optional().default([]).transform((h) => h.slice(-20)),
+  message: z
+    .string()
+    .min(1, "Message is required")
+    .max(1000, "Message must be 1000 characters or less"),
+  history: z
+    .array(chatMessageSchema)
+    .optional()
+    .default([])
+    .transform((h) => h.slice(-20)),
 });
 
 export const parseExercisesRequestSchema = z.object({
-  text: z.string().trim()
+  text: z
+    .string()
+    .trim()
     .min(1, "Text is required")
     .max(2000, "Text must be 2000 characters or less"),
 });
@@ -286,14 +344,18 @@ export const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"
 export type AllowedImageMimeType = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
 export const parseExercisesFromImageRequestSchema = z.object({
   mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
-  imageBase64: z.string()
+  imageBase64: z
+    .string()
     .min(1, "Image is required")
     .max(10 * 1024 * 1024, "Image must be 10MB or less"),
 });
 export type ParseExercisesFromImageRequest = z.infer<typeof parseExercisesFromImageRequestSchema>;
 
 export const importPlanRequestSchema = z.object({
-  csvContent: z.string().min(1, "CSV content is required").max(100000, "CSV content must be 100,000 characters or less"),
+  csvContent: z
+    .string()
+    .min(1, "CSV content is required")
+    .max(100000, "CSV content must be 100,000 characters or less"),
   fileName: z.string().max(255, "File name must be 255 characters or less").optional(),
   planName: z.string().max(255, "Plan name must be 255 characters or less").optional(),
 });
@@ -327,139 +389,185 @@ function hasExactlyOne(a: unknown, b: unknown): boolean {
   return (a == null) !== (b == null);
 }
 
-function withBlockStepPairing<T extends { blockId?: string | null; stepNumber?: number | null }>(schema: z.ZodType<T>) {
+function withBlockStepPairing<T extends { blockId?: string | null; stepNumber?: number | null }>(
+  schema: z.ZodType<T>,
+) {
+  return schema.refine((value) => !hasExactlyOne(value.blockId, value.stepNumber), {
+    message: "blockId and stepNumber must be provided together (or both omitted).",
+    path: ["stepNumber"],
+  });
+}
+
+function withPatchBlockStepPresencePairing<T extends Record<string, unknown>>(
+  schema: z.ZodType<T>,
+) {
   return schema.refine(
-    (value) => !hasExactlyOne(value.blockId, value.stepNumber),
+    (value) => {
+      const hasBlockId = Object.hasOwn(value, "blockId");
+      const hasStepNumber = Object.hasOwn(value, "stepNumber");
+      return hasBlockId === hasStepNumber;
+    },
     {
-      message: "blockId and stepNumber must be provided together (or both omitted).",
+      message: "PATCH updates must include both blockId and stepNumber together.",
       path: ["stepNumber"],
     },
   );
 }
 
-function withPatchBlockStepPresencePairing<T extends Record<string, unknown>>(schema: z.ZodType<T>) {
-  return schema.refine((value) => {
-    const hasBlockId = Object.hasOwn(value, "blockId");
-    const hasStepNumber = Object.hasOwn(value, "stepNumber");
-    return hasBlockId === hasStepNumber;
-  }, {
-    message: "PATCH updates must include both blockId and stepNumber together.",
-    path: ["stepNumber"],
-  });
-}
+export const exerciseSetSchema = withBlockStepPairing(
+  z
+    .object({
+      setNumber: z.number().min(1).max(100).optional().nullable(),
+      reps: z.number().min(0).max(10_000).optional().nullable(),
+      weight: z.number().min(0).max(2_000).optional().nullable(),
+      distance: z.number().min(0).max(1_000_000).optional().nullable(),
+      time: z.number().min(0).max(86_400).optional().nullable(),
+      // Planned (prescribed) values, captured at log creation. Optional so
+      // ad-hoc logs without a prescription can simply omit them. Same numeric
+      // bounds as the actual fields to keep validation symmetric.
+      plannedReps: z.number().min(0).max(10_000).optional().nullable(),
+      plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
+      plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+      plannedTime: z.number().min(0).max(86_400).optional().nullable(),
+      ...setStructureMetadataFieldsOptional,
+      notes: z.string().max(1000).optional().nullable(),
+    })
+    .strip(),
+);
 
-export const exerciseSetSchema = withBlockStepPairing(z.object({
-  setNumber: z.number().min(1).max(100).optional().nullable(),
-  reps: z.number().min(0).max(10_000).optional().nullable(),
-  weight: z.number().min(0).max(2_000).optional().nullable(),
-  distance: z.number().min(0).max(1_000_000).optional().nullable(),
-  time: z.number().min(0).max(86_400).optional().nullable(),
-  // Planned (prescribed) values, captured at log creation. Optional so
-  // ad-hoc logs without a prescription can simply omit them. Same numeric
-  // bounds as the actual fields to keep validation symmetric.
-  plannedReps: z.number().min(0).max(10_000).optional().nullable(),
-  plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
-  plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-  plannedTime: z.number().min(0).max(86_400).optional().nullable(),
-  ...setStructureMetadataFieldsOptional,
-  notes: z.string().max(1000).optional().nullable(),
-}).strip());
-
-export const incomingExerciseSchema = withBlockStepPairing(z.object({
-  exerciseName: z.string().min(1).max(255),
-  customLabel: z.string().max(255).optional().nullable(),
-  category: z.string().max(50).optional().nullable(),
-  numSets: z.number().min(1).max(50).optional().nullable(),
-  reps: z.number().min(1).max(10_000).optional().nullable(),
-  weight: z.number().min(0).max(2_000).optional().nullable(),
-  distance: z.number().min(0).max(1_000_000).optional().nullable(),
-  time: z.number().min(0).max(86_400).optional().nullable(),
-  plannedReps: z.number().min(0).max(10_000).optional().nullable(),
-  plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
-  plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-  plannedTime: z.number().min(0).max(86_400).optional().nullable(),
-  ...setStructureMetadataFieldsOptional,
-  confidence: z.number().min(0).max(100).optional().nullable(),
-  notes: z.string().max(1000).optional().nullable(),
-  sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
-}).strip());
+export const incomingExerciseSchema = withBlockStepPairing(
+  z
+    .object({
+      exerciseName: z.string().min(1).max(255),
+      customLabel: z.string().max(255).optional().nullable(),
+      category: z.string().max(50).optional().nullable(),
+      numSets: z.number().min(1).max(50).optional().nullable(),
+      reps: z.number().min(1).max(10_000).optional().nullable(),
+      weight: z.number().min(0).max(2_000).optional().nullable(),
+      distance: z.number().min(0).max(1_000_000).optional().nullable(),
+      time: z.number().min(0).max(86_400).optional().nullable(),
+      plannedReps: z.number().min(0).max(10_000).optional().nullable(),
+      plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
+      plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+      plannedTime: z.number().min(0).max(86_400).optional().nullable(),
+      ...setStructureMetadataFieldsOptional,
+      confidence: z.number().min(0).max(100).optional().nullable(),
+      notes: z.string().max(1000).optional().nullable(),
+      sets: z.array(exerciseSetSchema).max(50).optional().nullable(),
+    })
+    .strip(),
+);
 
 export const exercisesPayloadSchema = z.array(incomingExerciseSchema).max(200);
 
-
-export const sectionTypeSchema = z.enum(["warmup", "activation", "main", "accessory", "cooldown", "mobility"]);
-export const formatTypeSchema = z.enum(["steady", "emom", "amrap", "rounds", "interval", "for_time", "quality"]);
+export const sectionTypeSchema = z.enum([
+  "warmup",
+  "activation",
+  "main",
+  "accessory",
+  "cooldown",
+  "mobility",
+]);
+export const formatTypeSchema = z.enum([
+  "steady",
+  "emom",
+  "amrap",
+  "rounds",
+  "interval",
+  "for_time",
+  "quality",
+]);
 export const structureStepTypeSchema = z.enum(["work", "rest", "transition"]);
 
-const structureStepTargetsSchema = z.object({
-  targetReps: z.number().int().min(0).max(10_000).optional().nullable(),
-  targetTime: z.number().min(0).max(86_400).optional().nullable(),
-  targetDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-  targetWeight: z.number().min(0).max(2_000).optional().nullable(),
-  reps: z.number().int().min(0).max(10_000).optional().nullable(),
-  time: z.number().min(0).max(86_400).optional().nullable(),
-  distance: z.number().min(0).max(1_000_000).optional().nullable(),
-  weight: z.number().min(0).max(2_000).optional().nullable(),
-}).passthrough().optional().nullable();
-const structureStepSchema = z.object({
-  stepNumber: z.number().int().min(1).max(10_000),
-  minuteIndex: z.number().int().min(1).max(10_000).optional().nullable(),
-  stepType: structureStepTypeSchema.default("work"),
-  exerciseName: z.string().min(1).max(255).optional().nullable(),
-  category: z.string().max(255).optional().nullable(),
-  customLabel: z.string().max(255).optional().nullable(),
-  stepRole: z.string().max(50).optional().nullable(),
-  intensity: z.record(z.string(), z.unknown()).optional().nullable(),
-  loadMode: z.string().max(50).optional().nullable(),
-  unilateralMode: z.string().max(50).optional().nullable(),
-  tempo: z.record(z.string(), z.unknown()).optional().nullable(),
-  constraintTags: z.array(z.string().min(1).max(50)).max(20).optional().nullable(),
-  groupId: z.string().max(255).optional().nullable(),
-  groupMeta: z.record(z.string(), z.unknown()).optional().nullable(),
-  targets: structureStepTargetsSchema,
-}).strip().superRefine((step, ctx) => {
-  if (step.stepType === "rest") {
-    const hasExercise = step.exerciseName != null || step.customLabel != null;
-    const t = step.targets ?? {};
-    const hasTargets = [
-      t.targetReps,
-      t.targetTime,
-      t.targetDistance,
-      t.targetWeight,
-      t.reps,
-      t.time,
-      t.distance,
-      t.weight,
-    ].some((v) => v != null);
-    if (hasExercise || hasTargets) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rest steps cannot include exercise or performance targets." });
+const structureStepTargetsSchema = z
+  .object({
+    targetReps: z.number().int().min(0).max(10_000).optional().nullable(),
+    targetTime: z.number().min(0).max(86_400).optional().nullable(),
+    targetDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+    targetWeight: z.number().min(0).max(2_000).optional().nullable(),
+    reps: z.number().int().min(0).max(10_000).optional().nullable(),
+    time: z.number().min(0).max(86_400).optional().nullable(),
+    distance: z.number().min(0).max(1_000_000).optional().nullable(),
+    weight: z.number().min(0).max(2_000).optional().nullable(),
+  })
+  .passthrough()
+  .optional()
+  .nullable();
+const structureStepSchema = z
+  .object({
+    stepNumber: z.number().int().min(1).max(10_000),
+    minuteIndex: z.number().int().min(1).max(10_000).optional().nullable(),
+    stepType: structureStepTypeSchema.default("work"),
+    exerciseName: z.string().min(1).max(255).optional().nullable(),
+    category: z.string().max(255).optional().nullable(),
+    customLabel: z.string().max(255).optional().nullable(),
+    stepRole: z.string().max(50).optional().nullable(),
+    intensity: z.record(z.string(), z.unknown()).optional().nullable(),
+    loadMode: z.string().max(50).optional().nullable(),
+    unilateralMode: z.string().max(50).optional().nullable(),
+    tempo: z.record(z.string(), z.unknown()).optional().nullable(),
+    constraintTags: z.array(z.string().min(1).max(50)).max(20).optional().nullable(),
+    groupId: z.string().max(255).optional().nullable(),
+    groupMeta: z.record(z.string(), z.unknown()).optional().nullable(),
+    targets: structureStepTargetsSchema,
+  })
+  .strip()
+  .superRefine((step, ctx) => {
+    if (step.stepType === "rest") {
+      const hasExercise = step.exerciseName != null || step.customLabel != null;
+      const t = step.targets ?? {};
+      const hasTargets = [
+        t.targetReps,
+        t.targetTime,
+        t.targetDistance,
+        t.targetWeight,
+        t.reps,
+        t.time,
+        t.distance,
+        t.weight,
+      ].some((v) => v != null);
+      if (hasExercise || hasTargets) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Rest steps cannot include exercise or performance targets.",
+        });
+      }
     }
-  }
-  if (step.stepType === "work" && !step.exerciseName?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Work steps require exerciseName.", path: ["exerciseName"] });
-  }
-});
+    if (step.stepType === "work" && !step.exerciseName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Work steps require exerciseName.",
+        path: ["exerciseName"],
+      });
+    }
+  });
 
 export const structureBlockScoreSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("emom"),
-    completed: z.boolean(),
-    completedMinutes: z.number().int().min(0).max(1_440).optional().nullable(),
-    missedReps: z.number().int().min(0).max(10_000).optional().nullable(),
-    notes: z.string().max(1000).optional().nullable(),
-  }).strip(),
-  z.object({
-    type: z.literal("amrap"),
-    rounds: z.number().int().min(0).max(10_000),
-    reps: z.number().int().min(0).max(10_000).optional().nullable(),
-    notes: z.string().max(1000).optional().nullable(),
-  }).strip(),
-  z.object({
-    type: z.literal("rounds"),
-    completedRounds: z.number().int().min(0).max(10_000),
-    elapsedSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
-    notes: z.string().max(1000).optional().nullable(),
-  }).strip(),
+  z
+    .object({
+      type: z.literal("emom"),
+      completed: z.boolean(),
+      completedMinutes: z.number().int().min(0).max(1_440).optional().nullable(),
+      missedReps: z.number().int().min(0).max(10_000).optional().nullable(),
+      notes: z.string().max(1000).optional().nullable(),
+    })
+    .strip(),
+  z
+    .object({
+      type: z.literal("amrap"),
+      rounds: z.number().int().min(0).max(10_000),
+      reps: z.number().int().min(0).max(10_000).optional().nullable(),
+      notes: z.string().max(1000).optional().nullable(),
+    })
+    .strip(),
+  z
+    .object({
+      type: z.literal("rounds"),
+      completedRounds: z.number().int().min(0).max(10_000),
+      elapsedSeconds: z.number().int().min(0).max(86_400).optional().nullable(),
+      notes: z.string().max(1000).optional().nullable(),
+    })
+    .strip(),
 ]);
 export type StructureBlockScore = z.infer<typeof structureBlockScoreSchema>;
 
@@ -488,44 +596,88 @@ type StructureBlockValidator = (block: StructureBlockDraft, ctx: z.RefinementCtx
 function validateEmomBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType !== "emom") return;
   if (!block.durationMinutes) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require durationMinutes.", path: ["durationMinutes"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "EMOM blocks require durationMinutes.",
+      path: ["durationMinutes"],
+    });
   }
   if (block.steps.length < 1) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM blocks require at least one step.", path: ["steps"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "EMOM blocks require at least one step.",
+      path: ["steps"],
+    });
   }
   const minuteIndices = block.steps.map((s) => s.minuteIndex).filter((m): m is number => m != null);
   if (minuteIndices.length !== block.steps.length) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "EMOM steps require minuteIndex.", path: ["steps"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "EMOM steps require minuteIndex.",
+      path: ["steps"],
+    });
   }
   if (minuteIndices.length !== new Set(minuteIndices).size) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Duplicate minuteIndex values are not allowed in EMOM patterns.", path: ["steps"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Duplicate minuteIndex values are not allowed in EMOM patterns.",
+      path: ["steps"],
+    });
   }
 }
 
 function validateAmrapBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "amrap" && block.roundCount != null) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks cannot define fixed roundCount.", path: ["roundCount"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "AMRAP blocks cannot define fixed roundCount.",
+      path: ["roundCount"],
+    });
   }
-  if (block.formatType === "amrap" && !block.timeCapMinutes && !block.durationSeconds && !block.durationMinutes) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "AMRAP blocks require a time cap or duration.", path: ["timeCapMinutes"] });
+  if (
+    block.formatType === "amrap" &&
+    !block.timeCapMinutes &&
+    !block.durationSeconds &&
+    !block.durationMinutes
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "AMRAP blocks require a time cap or duration.",
+      path: ["timeCapMinutes"],
+    });
   }
 }
 
 function validateRoundsBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "rounds" && block.roundCount == null && block.rounds == null) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rounds blocks require roundCount.", path: ["roundCount"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Rounds blocks require roundCount.",
+      path: ["roundCount"],
+    });
   }
 }
 
 function validateTimedBlock(block: StructureBlockDraft, ctx: z.RefinementCtx): void {
   if (block.formatType === "for_time" && !block.timeCapMinutes && !block.durationSeconds) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "for_time blocks must define timeCapMinutes.", path: ["timeCapMinutes"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "for_time blocks must define timeCapMinutes.",
+      path: ["timeCapMinutes"],
+    });
   }
   if (block.roundCount != null && block.durationMinutes != null && block.formatType === "steady") {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "steady blocks cannot define both roundCount and durationMinutes." });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "steady blocks cannot define both roundCount and durationMinutes.",
+    });
   }
   if (block.score && block.score.type !== block.formatType) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Block score type must match the block format.", path: ["score"] });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Block score type must match the block format.",
+      path: ["score"],
+    });
   }
 }
 
@@ -568,47 +720,62 @@ const measurableSetFields = {
 
 export type ExerciseSetOwner =
   | {
-    ownerType: "workout-log";
-    workoutLogId: string;
-    planDayId?: null;
-  }
+      ownerType: "workout-log";
+      workoutLogId: string;
+      planDayId?: null;
+    }
   | {
-    ownerType: "plan-day";
-    planDayId: string;
-    workoutLogId?: null;
-  };
+      ownerType: "plan-day";
+      planDayId: string;
+      workoutLogId?: null;
+    };
 
 // Request bodies for the set-level CRUD routes. Shared between the
 // workout-log routes (server/routes/workouts.ts) and the plan-day routes
 // (server/routes/plans.ts) so a single numeric-bounds contract covers
 // both paths — one schema, one Sonar-visible definition.
-const disallowLegacyEmomRowName = <T extends z.ZodType<{ exerciseName?: unknown }>>(schema: T) => schema.refine((value) => {
-  const candidate = value.exerciseName;
-  if (typeof candidate !== "string") return true;
-  return candidate.trim().toLowerCase() !== "emom";
-}, {
-  message: "exerciseName 'emom' is not allowed for row payloads. Use structured interval blocks instead.",
-  path: ["exerciseName"],
-});
+const disallowLegacyEmomRowName = <T extends z.ZodType<{ exerciseName?: unknown }>>(schema: T) =>
+  schema.refine(
+    (value) => {
+      const candidate = value.exerciseName;
+      if (typeof candidate !== "string") return true;
+      return candidate.trim().toLowerCase() !== "emom";
+    },
+    {
+      message:
+        "exerciseName 'emom' is not allowed for row payloads. Use structured interval blocks instead.",
+      path: ["exerciseName"],
+    },
+  );
 
-export const patchExerciseSetBodySchema = disallowLegacyEmomRowName(withPatchBlockStepPresencePairing(withBlockStepPairing(z.object({
-  exerciseName: z.string().min(1).max(255).optional(),
-  customLabel: z.string().max(255).nullable().optional(),
-  category: z.string().max(50).optional(),
-  setNumber: z.number().int().min(1).max(100).optional(),
-  ...measurableSetFields,
-  sortOrder: z.number().int().nullable().optional(),
-}))));
+export const patchExerciseSetBodySchema = disallowLegacyEmomRowName(
+  withPatchBlockStepPresencePairing(
+    withBlockStepPairing(
+      z.object({
+        exerciseName: z.string().min(1).max(255).optional(),
+        customLabel: z.string().max(255).nullable().optional(),
+        category: z.string().max(50).optional(),
+        setNumber: z.number().int().min(1).max(100).optional(),
+        ...measurableSetFields,
+        sortOrder: z.number().int().nullable().optional(),
+      }),
+    ),
+  ),
+);
 export type PatchExerciseSetBody = z.infer<typeof patchExerciseSetBodySchema>;
 
-export const addExerciseSetBodySchema = disallowLegacyEmomRowName(withBlockStepPairing(z.object({
-  exerciseName: z.string().min(1).max(255),
-  customLabel: z.string().max(255).nullable().optional(),
-  category: z.string().max(50),
-  setNumber: z.number().int().min(1).max(100).default(1),
-  ...measurableSetFields,
-  confidence: z.number().int().min(0).max(100).nullable().optional(),
-})));
+export const addExerciseSetBodySchema = disallowLegacyEmomRowName(
+  withBlockStepPairing(
+    z.object({
+      exerciseName: z.string().min(1).max(255),
+      customLabel: z.string().max(255).nullable().optional(),
+      category: z.string().max(50),
+      setNumber: z.number().int().min(1).max(100).default(1),
+      ...measurableSetFields,
+      confidence: z.number().int().min(0).max(100).nullable().optional(),
+    }),
+  ),
+);
 export type AddExerciseSetBody = z.infer<typeof addExerciseSetBodySchema>;
 
 export interface ParsedExercise extends ParsedExerciseSetStructureMetadata {
@@ -645,17 +812,17 @@ interface ParsedExerciseSetStructureMetadata {
 }
 
 type ParsedExerciseSet = ParsedExerciseSetStructureMetadata & {
-    setNumber: number;
-    reps?: number;
-    weight?: number;
-    distance?: number;
-    time?: number;
-    plannedReps?: number;
-    plannedWeight?: number;
-    plannedDistance?: number;
-    plannedTime?: number;
-    notes?: string;
-  };
+  setNumber: number;
+  reps?: number;
+  weight?: number;
+  distance?: number;
+  time?: number;
+  plannedReps?: number;
+  plannedWeight?: number;
+  plannedDistance?: number;
+  plannedTime?: number;
+  notes?: string;
+};
 
 export interface PersonalRecordValue {
   value: number;
@@ -673,15 +840,25 @@ export interface PersonalRecord {
 }
 
 // Coaching material types and schemas
-export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  title: z.string().trim().min(1, "Title is required").max(255, "Title must be 255 characters or less"),
-  content: z.string().trim().min(1, "Content is required").max(1500000, "Content must be 1,500,000 characters or less"),
-  type: z.enum(["principles", "document"]),
-});
+export const insertCoachingMaterialSchema = createInsertSchema(coachingMaterials)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    title: z
+      .string()
+      .trim()
+      .min(1, "Title is required")
+      .max(255, "Title must be 255 characters or less"),
+    content: z
+      .string()
+      .trim()
+      .min(1, "Content is required")
+      .max(1500000, "Content must be 1,500,000 characters or less"),
+    type: z.enum(["principles", "document"]),
+  });
 
 export type InsertCoachingMaterial = z.infer<typeof insertCoachingMaterialSchema>;
 export type CoachingMaterial = typeof coachingMaterials.$inferSelect;
@@ -698,9 +875,9 @@ export const generatePlanInputSchema = z.object({
   experienceLevel: z.enum(["beginner", "intermediate", "advanced"]),
   raceDate: dateStringSchema.optional(),
   startDate: dateStringSchema.optional(),
-  restDays: z.array(
-    z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]),
-  ).optional(),
+  restDays: z
+    .array(z.enum(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]))
+    .optional(),
   focusAreas: z.array(z.string().max(100)).max(10).optional(),
   injuries: z.string().max(500).optional(),
 });
@@ -807,14 +984,20 @@ export type InsertTimelineAnnotation = z.infer<typeof insertTimelineAnnotationSc
 // are present.
 export const updateTimelineAnnotationSchema = z
   .object({
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    startDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     type: z.enum(["injury", "illness", "travel", "rest"]).optional(),
     note: z.string().max(500).nullable().optional(),
   })
-  .refine(
-    (data) => !(data.startDate && data.endDate) || data.endDate >= data.startDate,
-    { message: "endDate must be on or after startDate", path: ["endDate"] },
-  );
+  .refine((data) => !(data.startDate && data.endDate) || data.endDate >= data.startDate, {
+    message: "endDate must be on or after startDate",
+    path: ["endDate"],
+  });
 
 export type UpdateTimelineAnnotation = z.infer<typeof updateTimelineAnnotationSchema>;

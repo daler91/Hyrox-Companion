@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  createMockTrainingContext,
-  createMockUpcomingWorkout,
-} from "../../test/factories";
+import { createMockTrainingContext, createMockUpcomingWorkout } from "../../test/factories";
 import { buildSystemPrompt } from "../prompts";
 import { buildSuggestionsPrompt } from "./suggestionService";
 import type { TrainingContext } from "./types";
@@ -165,14 +162,52 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       },
     });
 
-    const prompt = buildSuggestionsPrompt(
-      ctx,
-      [createMockUpcomingWorkout()],
-      "goal",
-    );
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
 
     expect(prompt).toContain("RPE TREND: Insufficient data");
     expect(prompt).not.toContain("FATIGUE FLAG ACTIVE");
+  });
+
+  it("includes prior AI modification context and frames fatigue as workout-fit analysis", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext({
+        completedWorkouts: 12,
+        coachingInsights: {
+          rpeTrend: "rising",
+          avgRpeLast3: 8.4,
+          avgRpePrior3: 6.5,
+          fatigueFlag: true,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
+      }),
+      [
+        createMockUpcomingWorkout({
+          id: "already-reduced-day",
+          mainWorkout: "Back squat 3x5",
+          aiRationale: "Reduced from 5x5 because RPE was high.",
+          aiInputsUsed: {
+            lastModification: {
+              kind: "fatigue_volume_reduction",
+              completedWorkoutCount: 12,
+              fatigueFlag: true,
+              rpeTrend: "rising",
+              reason: "Reduced from 5x5 because RPE was high.",
+            },
+          },
+        }),
+      ],
+    );
+
+    expect(prompt).toContain(
+      "FATIGUE FLAG ACTIVE - analyze the upcoming workout fit before reducing volume.",
+    );
+    expect(prompt).toContain("Prior AI review: Reduced from 5x5 because RPE was high.");
+    expect(prompt).toContain("Last AI modification: kind=fatigue_volume_reduction");
+    expect(prompt).toContain("completedWorkoutsAtEdit=12");
+    expect(prompt).toContain("Return [] when the current plan already fits the athlete");
+    expect(prompt).not.toContain("athlete needs volume reduction");
   });
 
   it("omits planPhase/weeklyVolume/progression lines when not provided", () => {
@@ -190,10 +225,7 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       },
     });
 
-    const prompt = buildSuggestionsPrompt(
-      ctx,
-      [createMockUpcomingWorkout()],
-    );
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()]);
 
     expect(prompt).not.toContain("PLAN PHASE:");
     expect(prompt).not.toContain("WEEKLY VOLUME:");
@@ -211,36 +243,33 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
   });
 
   it("uses upcoming exercise-table rows instead of main/accessory/notes when rows exist", () => {
-    const prompt = buildSuggestionsPrompt(
-      createMockTrainingContext(),
-      [
-        createMockUpcomingWorkout({
-          id: "table-backed-day",
-          focus: "strength",
-          mainWorkout: "FINGERPRINT_FREE_MAIN",
-          accessory: "FINGERPRINT_FREE_ACCESSORY",
-          notes: "FINGERPRINT_PLAN_NOTES",
-          exerciseDetails: [
-            {
-              exerciseName: "back_squat",
-              category: "strength",
-              setNumber: 1,
-              reps: 8,
-              weight: 100,
-              sortOrder: 0,
-            },
-            {
-              exerciseName: "back_squat",
-              category: "strength",
-              setNumber: 2,
-              reps: 8,
-              weight: 100,
-              sortOrder: 1,
-            },
-          ],
-        }),
-      ],
-    );
+    const prompt = buildSuggestionsPrompt(createMockTrainingContext(), [
+      createMockUpcomingWorkout({
+        id: "table-backed-day",
+        focus: "strength",
+        mainWorkout: "FINGERPRINT_FREE_MAIN",
+        accessory: "FINGERPRINT_FREE_ACCESSORY",
+        notes: "FINGERPRINT_PLAN_NOTES",
+        exerciseDetails: [
+          {
+            exerciseName: "back_squat",
+            category: "strength",
+            setNumber: 1,
+            reps: 8,
+            weight: 100,
+            sortOrder: 0,
+          },
+          {
+            exerciseName: "back_squat",
+            category: "strength",
+            setNumber: 2,
+            reps: 8,
+            weight: 100,
+            sortOrder: 1,
+          },
+        ],
+      }),
+    ]);
 
     expect(prompt).toContain("ID: table-backed-day");
     expect(prompt).toContain("Exercises: Back Squat: 2 sets x 8 reps, 100 kg");
@@ -373,8 +402,6 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(idx("COACHING ANALYSIS")).toBeGreaterThan(idx("ATHLETE'S TRAINING DATA"));
     expect(idx("UPCOMING WORKOUTS")).toBeGreaterThan(idx("COACHING ANALYSIS"));
     expect(idx("FINGERPRINT_RAG_CHUNK")).toBeGreaterThan(idx("UPCOMING WORKOUTS"));
-    expect(idx("Analyze the coaching analysis")).toBeGreaterThan(
-      idx("FINGERPRINT_RAG_CHUNK"),
-    );
+    expect(idx("Analyze the coaching analysis")).toBeGreaterThan(idx("FINGERPRINT_RAG_CHUNK"));
   });
 });

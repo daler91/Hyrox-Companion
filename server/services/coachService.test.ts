@@ -1,8 +1,14 @@
-import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generateReviewNotes, generateWorkoutSuggestions, parseExercisesFromText } from "../gemini/index";
+import type { CoachNoteInputs } from "@shared/schema";
+import {
+  generateReviewNotes,
+  generateWorkoutSuggestions,
+  parseExercisesFromText,
+} from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
+import { buildWorkoutPrescriptionFingerprint } from "./aiModificationGuard";
 import { regenerateCoachNoteForPlanDay, triggerAutoCoach } from "./coachService";
 import { retrieveRelevantChunks } from "./ragService";
 
@@ -52,7 +58,7 @@ vi.mock("../storage", () => ({
 // so tests don't need a live Postgres to exercise the C2 atomic apply path.
 vi.mock("../db", () => ({
   db: {
-    transaction: vi.fn(<T,>(fn: (tx: unknown) => Promise<T>) => fn(dbMockState.tx as unknown)),
+    transaction: vi.fn(<T>(fn: (tx: unknown) => Promise<T>) => fn(dbMockState.tx as unknown)),
   },
 }));
 
@@ -64,18 +70,45 @@ vi.mock("../gemini/index", () => ({
   EMBEDDING_DIMENSIONS: 3072,
 }));
 vi.mock("./ragService", () => ({ retrieveRelevantChunks: vi.fn() }));
-vi.mock("../prompts", () => ({ buildCoachingMaterialsSection: vi.fn().mockReturnValue(""), buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]"), FUNCTIONAL_EXERCISES: ["skierg", "sled_push", "sled_pull", "burpee_broad_jump", "rowing", "farmers_carry", "sandbag_lunges", "wall_balls"] }));
+vi.mock("../prompts", () => ({
+  buildCoachingMaterialsSection: vi.fn().mockReturnValue(""),
+  buildRetrievedChunksSection: vi.fn().mockReturnValue("[RAG chunks]"),
+  FUNCTIONAL_EXERCISES: [
+    "skierg",
+    "sled_push",
+    "sled_pull",
+    "burpee_broad_jump",
+    "rowing",
+    "farmers_carry",
+    "sandbag_lunges",
+    "wall_balls",
+  ],
+}));
 vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 // -- Helpers ------------------------------------------------------------------
 
 function mockEnabledUser() {
-  vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, isAutoCoaching: false, weightUnit: "kg", distanceUnit: "km" });
+  vi.mocked(storage.users.getUser).mockResolvedValue({
+    aiCoachEnabled: true,
+    isAutoCoaching: false,
+    weightUnit: "kg",
+    distanceUnit: "km",
+  });
   vi.mocked(storage.users.updateIsAutoCoaching).mockResolvedValue(undefined);
 }
 
 function makeTimelineEntry(overrides: Record<string, unknown> = {}) {
-  return { status: "planned", date: "2026-01-16", planDayId: "day-1", focus: "Strength", mainWorkout: "3x5 Squats", accessory: null, notes: null, ...overrides };
+  return {
+    status: "planned",
+    date: "2026-01-16",
+    planDayId: "day-1",
+    focus: "Strength",
+    mainWorkout: "3x5 Squats",
+    accessory: null,
+    notes: null,
+    ...overrides,
+  };
 }
 
 function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimelineEntry()]) {
@@ -91,19 +124,44 @@ function mockBaseAutoCoachDeps(timeline: Record<string, unknown>[] = [makeTimeli
       mainWorkout: e.mainWorkout as string,
       accessory: e.accessory as string | null,
       notes: e.notes as string | null,
+      aiSource: e.aiSource as "rag" | "legacy" | "review" | null | undefined,
+      aiRationale: e.aiRationale as string | null | undefined,
+      aiNoteUpdatedAt: e.aiNoteUpdatedAt as string | Date | null | undefined,
+      aiInputsUsed: e.aiInputsUsed as CoachNoteInputs | null | undefined,
       ...(Array.isArray(e.exerciseDetails) ? { exerciseDetails: e.exerciseDetails } : {}),
     }));
-  vi.mocked(buildTrainingContext).mockResolvedValue({ upcomingWorkouts });
+  vi.mocked(buildTrainingContext).mockResolvedValue({
+    totalWorkouts: 0,
+    completedWorkouts: 0,
+    plannedWorkouts: upcomingWorkouts.length,
+    missedWorkouts: 0,
+    skippedWorkouts: 0,
+    completionRate: 0,
+    currentStreak: 0,
+    recentWorkouts: [],
+    upcomingWorkouts,
+    exerciseBreakdown: {},
+  });
   vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
   vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 }
 
 function makeSuggestion(overrides: Record<string, unknown> = {}) {
   return {
-    workoutId: "day-1", workoutDate: "2026-01-16", workoutFocus: "Strength",
-    targetField: "mainWorkout", action: "replace", recommendation: "4x5 Squats @ 80%",
-    rationale: "Progressive overload", priority: "high", ...overrides,
+    workoutId: "day-1",
+    workoutDate: "2026-01-16",
+    workoutFocus: "Strength",
+    targetField: "mainWorkout",
+    action: "replace",
+    recommendation: "4x5 Squats @ 80%",
+    rationale: "Progressive overload",
+    priority: "high",
+    ...overrides,
   };
+}
+
+function textWorkoutFingerprint(mainWorkout: string) {
+  return buildWorkoutPrescriptionFingerprint({ mainWorkout });
 }
 
 // -- Tests --------------------------------------------------------------------
@@ -145,8 +203,19 @@ describe("coachService", () => {
     });
 
     it("applies suggestions and returns adjusted count", async () => {
-      mockBaseAutoCoachDeps([makeTimelineEntry(), makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17", focus: "Running", mainWorkout: "5km easy" })]);
-      vi.mocked(storage.plans.getActivePlan).mockResolvedValue({ id: "plan-1", goal: "Sub-90 Hyrox" });
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry(),
+        makeTimelineEntry({
+          planDayId: "day-2",
+          date: "2026-01-17",
+          focus: "Running",
+          mainWorkout: "5km easy",
+        }),
+      ]);
+      vi.mocked(storage.plans.getActivePlan).mockResolvedValue({
+        id: "plan-1",
+        goal: "Sub-90 Hyrox",
+      });
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion()]);
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
@@ -165,12 +234,244 @@ describe("coachService", () => {
       );
     });
 
+    it("suppresses repeat fatigue reductions when no new completed workouts exist", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          aiRationale: "Reduced volume because RPE was high.",
+          aiInputsUsed: {
+            lastFatigueReduction: {
+              kind: "fatigue_volume_reduction",
+              completedWorkoutCount: 12,
+              fatigueFlag: true,
+              rpeTrend: "rising",
+              reason: "Reduced volume because RPE was high.",
+              prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
+            },
+          },
+        }),
+      ]);
+      vi.mocked(buildTrainingContext).mockResolvedValue({
+        totalWorkouts: 12,
+        completedWorkouts: 12,
+        plannedWorkouts: 1,
+        missedWorkouts: 0,
+        skippedWorkouts: 0,
+        completionRate: 100,
+        currentStreak: 3,
+        recentWorkouts: [],
+        upcomingWorkouts: [
+          {
+            planDayId: "day-1",
+            date: "2026-01-16",
+            focus: "Strength",
+            mainWorkout: "3x5 Squats",
+            aiRationale: "Reduced volume because RPE was high.",
+            aiInputsUsed: {
+              lastFatigueReduction: {
+                kind: "fatigue_volume_reduction",
+                completedWorkoutCount: 12,
+                fatigueFlag: true,
+                rpeTrend: "rising",
+                reason: "Reduced volume because RPE was high.",
+                prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
+              },
+            },
+          },
+        ],
+        exerciseBreakdown: {},
+        coachingInsights: {
+          rpeTrend: "rising",
+          fatigueFlag: true,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
+      });
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({
+          recommendation: "Back squat 2x5 lighter",
+          rationale: "Reduce volume because RPE and fatigue remain high.",
+        }),
+      ]);
+      vi.mocked(generateReviewNotes).mockResolvedValue([
+        {
+          workoutId: "day-1",
+          note: "Already reduced for the current fatigue trend; keep this version.",
+        },
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          aiSource: "review",
+          aiRationale: "Already reduced for the current fatigue trend; keep this version.",
+        }),
+        "user-1",
+        expect.anything(),
+      );
+      expect(storage.plans.updatePlanDay).not.toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({ mainWorkout: "Back squat 2x5 lighter" }),
+        "user-1",
+        expect.anything(),
+      );
+    });
+
+    it("allows another fatigue reduction when new completed workouts change the evidence", async () => {
+      mockBaseAutoCoachDeps([
+        makeTimelineEntry({
+          aiInputsUsed: {
+            lastFatigueReduction: {
+              kind: "fatigue_volume_reduction",
+              completedWorkoutCount: 12,
+              fatigueFlag: true,
+              rpeTrend: "rising",
+              prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
+            },
+          },
+        }),
+      ]);
+      vi.mocked(buildTrainingContext).mockResolvedValue({
+        totalWorkouts: 13,
+        completedWorkouts: 13,
+        plannedWorkouts: 1,
+        missedWorkouts: 0,
+        skippedWorkouts: 0,
+        completionRate: 100,
+        currentStreak: 4,
+        recentWorkouts: [],
+        upcomingWorkouts: [
+          {
+            planDayId: "day-1",
+            date: "2026-01-16",
+            focus: "Strength",
+            mainWorkout: "3x5 Squats",
+            aiInputsUsed: {
+              lastFatigueReduction: {
+                kind: "fatigue_volume_reduction",
+                completedWorkoutCount: 12,
+                fatigueFlag: true,
+                rpeTrend: "rising",
+                prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
+              },
+            },
+          },
+        ],
+        exerciseBreakdown: {},
+        coachingInsights: {
+          rpeTrend: "rising",
+          fatigueFlag: true,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
+      });
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({
+          recommendation: "Back squat 2x5 lighter",
+          rationale: "Reduce volume because RPE and fatigue remain high.",
+        }),
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+      expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+        "day-1",
+        expect.objectContaining({
+          mainWorkout: "Back squat 2x5 lighter",
+          aiInputsUsed: expect.objectContaining({
+            lastModification: expect.objectContaining({
+              kind: "fatigue_volume_reduction",
+              completedWorkoutCount: 13,
+            }),
+            lastFatigueReduction: expect.objectContaining({
+              kind: "fatigue_volume_reduction",
+              completedWorkoutCount: 13,
+              prescriptionFingerprint: textWorkoutFingerprint("Back squat 2x5 lighter"),
+            }),
+          }),
+        }),
+        "user-1",
+        expect.anything(),
+      );
+    });
+
+    it("preserves same-run fatigue metadata when a later suggestion updates the same day", async () => {
+      mockBaseAutoCoachDeps([makeTimelineEntry()]);
+      vi.mocked(buildTrainingContext).mockResolvedValue({
+        totalWorkouts: 12,
+        completedWorkouts: 12,
+        plannedWorkouts: 1,
+        missedWorkouts: 0,
+        skippedWorkouts: 0,
+        completionRate: 100,
+        currentStreak: 4,
+        recentWorkouts: [],
+        upcomingWorkouts: [
+          {
+            planDayId: "day-1",
+            date: "2026-01-16",
+            focus: "Strength",
+            mainWorkout: "3x5 Squats",
+            accessory: null,
+            notes: null,
+          },
+        ],
+        exerciseBreakdown: {},
+        coachingInsights: {
+          rpeTrend: "rising",
+          fatigueFlag: true,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
+      });
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({
+          recommendation: "Back squat 2x5 lighter",
+          rationale: "Reduce volume because RPE and fatigue remain high.",
+        }),
+        makeSuggestion({
+          targetField: "accessory",
+          recommendation: "Sled push 4x20m",
+          rationale: "Sled Push has not been trained recently.",
+          priority: "medium",
+        }),
+      ]);
+      vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+      expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 2 });
+      const updateCalls = vi
+        .mocked(storage.plans.updatePlanDay)
+        .mock.calls.filter(([workoutId]) => workoutId === "day-1");
+      expect(updateCalls).toHaveLength(2);
+
+      const secondInputs = updateCalls[1][1].aiInputsUsed;
+      expect(secondInputs).toEqual(
+        expect.objectContaining({
+          lastModification: expect.objectContaining({
+            kind: "workload_adjustment",
+            reason: "Sled Push has not been trained recently.",
+          }),
+          lastFatigueReduction: expect.objectContaining({
+            kind: "fatigue_volume_reduction",
+            completedWorkoutCount: 12,
+            prescriptionFingerprint: textWorkoutFingerprint("Back squat 2x5 lighter"),
+          }),
+        }),
+      );
+    });
+
     it("uses RAG when chunks are available and dimensions match", async () => {
       mockBaseAutoCoachDeps();
       vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
       vi.mocked(storage.coaching.getStoredEmbeddingDimension).mockResolvedValue(3072);
       vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk 1", "chunk 2"]);
-      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion({ targetField: "notes", recommendation: "Focus on form", priority: "low" })]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ targetField: "notes", recommendation: "Focus on form", priority: "low" }),
+      ]);
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
@@ -201,7 +502,11 @@ describe("coachService", () => {
     it("handles append action by prefixing with [AI Coach]", async () => {
       mockBaseAutoCoachDeps([makeTimelineEntry({ accessory: "Leg Press" })]);
       vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
-        makeSuggestion({ targetField: "accessory", action: "append", recommendation: "Add 3x10 calf raises" }),
+        makeSuggestion({
+          targetField: "accessory",
+          action: "append",
+          recommendation: "Add 3x10 calf raises",
+        }),
       ]);
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
@@ -222,7 +527,14 @@ describe("coachService", () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({
           exerciseDetails: [
-            { exerciseName: "back_squat", category: "strength", setNumber: 1, reps: 5, weight: 100, sortOrder: 0 },
+            {
+              exerciseName: "back_squat",
+              category: "strength",
+              setNumber: 1,
+              reps: 5,
+              weight: 100,
+              sortOrder: 0,
+            },
           ],
         }),
       ]);
@@ -263,17 +575,29 @@ describe("coachService", () => {
           }),
         ]),
       );
-      const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<string, unknown>;
+      const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
       expect(updatePayload).not.toHaveProperty("mainWorkout");
       expect(updatePayload).not.toHaveProperty("accessory");
-      expect(updatePayload).toEqual(expect.objectContaining({ aiRationale: "Progressive overload" }));
+      expect(updatePayload).toEqual(
+        expect.objectContaining({ aiRationale: "Progressive overload" }),
+      );
     });
 
     it("appends parsed structured suggestions after existing plan-day rows", async () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({
           exerciseDetails: [
-            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+            {
+              exerciseName: "deadlift",
+              category: "strength",
+              setNumber: 1,
+              reps: 3,
+              weight: 140,
+              sortOrder: 0,
+            },
           ],
         }),
       ]);
@@ -306,16 +630,28 @@ describe("coachService", () => {
           expect.objectContaining({ exerciseName: "walking_lunges", sortOrder: 6 }),
         ]),
       );
-      const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<string, unknown>;
+      const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<
+        string,
+        unknown
+      >;
       expect(updatePayload).not.toHaveProperty("accessory");
-      expect(updatePayload).toEqual(expect.objectContaining({ aiRationale: "Progressive overload" }));
+      expect(updatePayload).toEqual(
+        expect.objectContaining({ aiRationale: "Progressive overload" }),
+      );
     });
 
     it("serializes duplicate structured appends so sort orders do not collide", async () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({
           exerciseDetails: [
-            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+            {
+              exerciseName: "deadlift",
+              category: "strength",
+              setNumber: 1,
+              reps: 3,
+              weight: 140,
+              sortOrder: 0,
+            },
           ],
         }),
       ]);
@@ -354,21 +690,26 @@ describe("coachService", () => {
       vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 2 });
-      expect(dbMockState.insertValues).toHaveBeenNthCalledWith(
-        1,
-        [expect.objectContaining({ exerciseName: "walking_lunges", sortOrder: 5 })],
-      );
-      expect(dbMockState.insertValues).toHaveBeenNthCalledWith(
-        2,
-        [expect.objectContaining({ exerciseName: "wall_balls", sortOrder: 6 })],
-      );
+      expect(dbMockState.insertValues).toHaveBeenNthCalledWith(1, [
+        expect.objectContaining({ exerciseName: "walking_lunges", sortOrder: 5 }),
+      ]);
+      expect(dbMockState.insertValues).toHaveBeenNthCalledWith(2, [
+        expect.objectContaining({ exerciseName: "wall_balls", sortOrder: 6 }),
+      ]);
     });
 
     it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({
           exerciseDetails: [
-            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+            {
+              exerciseName: "deadlift",
+              category: "strength",
+              setNumber: 1,
+              reps: 3,
+              weight: 140,
+              sortOrder: 0,
+            },
           ],
         }),
       ]);
@@ -395,7 +736,14 @@ describe("coachService", () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({
           exerciseDetails: [
-            { exerciseName: "deadlift", category: "strength", setNumber: 1, reps: 3, weight: 140, sortOrder: 0 },
+            {
+              exerciseName: "deadlift",
+              category: "strength",
+              setNumber: 1,
+              reps: 3,
+              weight: 140,
+              sortOrder: 0,
+            },
           ],
         }),
       ]);
@@ -443,7 +791,9 @@ describe("coachService", () => {
     it("resets isAutoCoaching flag when checkAiBudget throws", async () => {
       vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true });
       vi.mocked(storage.users.updateIsAutoCoaching).mockResolvedValue(undefined);
-      vi.mocked(storage.aiUsage.getDailyTotalCents).mockRejectedValueOnce(new Error("budget svc down"));
+      vi.mocked(storage.aiUsage.getDailyTotalCents).mockRejectedValueOnce(
+        new Error("budget svc down"),
+      );
 
       await expect(triggerAutoCoach("user-1")).rejects.toThrow("budget svc down");
       expect(storage.users.updateIsAutoCoaching).toHaveBeenCalledWith("user-1", false);
@@ -470,8 +820,8 @@ describe("coachService", () => {
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 0 });
       const calls = vi.mocked(storage.plans.updatePlanDay).mock.calls;
       const reviewIds = calls
-        .filter(c => (c[1] as { aiSource?: string }).aiSource === "review")
-        .map(c => c[0])
+        .filter((c) => (c[1] as { aiSource?: string }).aiSource === "review")
+        .map((c) => c[0])
         .sort();
       expect(reviewIds).toEqual(["day-1", "day-2"]);
     });
@@ -481,7 +831,9 @@ describe("coachService", () => {
         makeTimelineEntry({ planDayId: "day-1" }),
         makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
       ]);
-      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion({ workoutId: "day-1" })]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ workoutId: "day-1" }),
+      ]);
       vi.mocked(generateReviewNotes).mockResolvedValue([
         { workoutId: "day-1", note: "should be discarded — already modified" },
         { workoutId: "day-2", note: "legit — untouched day" },
@@ -491,7 +843,9 @@ describe("coachService", () => {
 
       expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
       const applyCalls = vi.mocked(storage.plans.updatePlanDay).mock.calls;
-      const reviewCalls = applyCalls.filter(c => (c[1] as { aiSource?: string }).aiSource === "review");
+      const reviewCalls = applyCalls.filter(
+        (c) => (c[1] as { aiSource?: string }).aiSource === "review",
+      );
       expect(reviewCalls).toHaveLength(1);
       expect(reviewCalls[0][0]).toBe("day-2");
     });
@@ -501,7 +855,9 @@ describe("coachService", () => {
         makeTimelineEntry({ planDayId: "day-1" }),
         makeTimelineEntry({ planDayId: "day-2", date: "2026-01-17" }),
       ]);
-      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeSuggestion({ workoutId: "day-1" })]);
+      vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+        makeSuggestion({ workoutId: "day-1" }),
+      ]);
       vi.mocked(generateReviewNotes).mockResolvedValue([
         { workoutId: "day-2", note: "On track — building-phase volume looks appropriate." },
       ]);
@@ -581,7 +937,13 @@ describe("coachService", () => {
       ]);
       vi.mocked(buildTrainingContext).mockResolvedValue({
         recentWorkouts: [],
-        coachingInsights: { rpeTrend: "stable", fatigueFlag: false, undertrainingFlag: false, stationGaps: [], progressionFlags: [] },
+        coachingInsights: {
+          rpeTrend: "stable",
+          fatigueFlag: false,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
       });
       vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
       vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);

@@ -1,4 +1,4 @@
-import type { UpdatePlanDay } from "@shared/schema";
+import type { CoachNoteInputs, ExerciseSet, UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits } from "@shared/unitConversion";
 import type { Logger } from "pino";
 
@@ -9,7 +9,20 @@ import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
-import { analyzeSafetySignals, applySafetyLayerToSuggestions, buildSafetyReviewNote } from "./aiSafety";
+import {
+  buildSignalsFromCoachInputs,
+  buildSignalsFromTrainingContext,
+  buildStructuredResultingWorkout,
+  buildTextResultingWorkout,
+  mapExerciseSetToPromptDetail,
+  shouldSuppressRepeatedFatigueReduction,
+  withCoachModificationMetadata,
+} from "./aiModificationGuard";
+import {
+  analyzeSafetySignals,
+  applySafetyLayerToSuggestions,
+  buildSafetyReviewNote,
+} from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
 import { sanitizeRagInfo } from "./ragRetrieval";
 import {
@@ -96,39 +109,104 @@ function buildTextUpdateValue(
     : `AI suggestion: ${input.recommendation}`;
 }
 
-function normalizeAiSource(source: ApplyTimelineSuggestionInput["aiSource"]): "rag" | "legacy" | null {
+type PlanDayPrescription = {
+  id?: string;
+  scheduledDate?: string | null;
+  focus?: string | null;
+  mainWorkout: string;
+  accessory?: string | null;
+  notes?: string | null;
+};
+
+function buildWorkoutFromPlanDay(
+  input: ApplyTimelineSuggestionInput,
+  day: PlanDayPrescription,
+  exerciseSets: ExerciseSet[],
+): UpcomingWorkout {
+  return {
+    id: input.workoutId,
+    date: day.scheduledDate ?? "",
+    focus: day.focus ?? "",
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory || undefined,
+    notes: day.notes || undefined,
+    exerciseDetails: exerciseSets.map(mapExerciseSetToPromptDetail),
+  };
+}
+
+function normalizeAiSource(
+  source: ApplyTimelineSuggestionInput["aiSource"],
+): "rag" | "legacy" | null {
   return source === "rag" || source === "legacy" ? source : null;
 }
 
 const STRATEGY_RULE_VERSION = "training-decision-engine@v1";
 const PROMPT_BUNDLE_VERSION = "timeline-suggestion@v1";
 
-function resolveTrainingPhaseLabel(trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"]): string {
-  return trainingContext.coachingInsights?.decisionTree?.currentPhase
-    ?? trainingContext.coachingInsights?.planPhase?.phaseLabel
-    ?? "unknown";
+function resolveTrainingPhaseLabel(
+  trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"],
+): string {
+  return (
+    trainingContext.coachingInsights?.decisionTree?.currentPhase ??
+    trainingContext.coachingInsights?.planPhase?.phaseLabel ??
+    "unknown"
+  );
+}
+
+function buildTimelineCoachInputs(
+  trainingContext: Awaited<ReturnType<typeof buildAIContext>>["trainingContext"],
+  traceMetadata: RecommendationTraceMetadata,
+  ragUsed: boolean,
+): CoachNoteInputs {
+  const insights = trainingContext.coachingInsights;
+  return {
+    rpeTrend: insights?.rpeTrend,
+    fatigueFlag: insights?.fatigueFlag,
+    planPhase: insights?.planPhase?.phaseLabel,
+    weeklyVolumeTrend: insights?.weeklyVolume?.trend,
+    stationGaps: insights?.stationGaps
+      ?.filter((g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
+      .map((g) => g.station),
+    progressionFlags: insights?.progressionFlags
+      ?.filter((f) => f.flag === "plateau" || f.flag === "regressing")
+      .map((f) => `${f.exercise}:${f.flag}`),
+    ragUsed,
+    recentWorkoutCount: trainingContext.recentWorkouts?.length ?? 0,
+    completedWorkoutCount: trainingContext.completedWorkouts,
+    planGoalPresent: Boolean(trainingContext.activePlan?.goal),
+    recommendationTrace: traceMetadata,
+  };
 }
 
 async function persistRecommendationTraceForSuggestions(
   userId: string,
   suggestions: TimelineSuggestion[],
-  traceMetadata: RecommendationTraceMetadata,
+  inputsUsed: CoachNoteInputs,
   log: TimelineSuggestionLogger,
 ): Promise<void> {
-  await Promise.all(suggestions.map(async (suggestion) => {
-    try {
-      const day = await storage.plans.getPlanDay(suggestion.workoutId, userId);
-      if (!day) return;
-      await storage.plans.updatePlanDay(suggestion.workoutId, {
-        aiInputsUsed: {
-          ...day.aiInputsUsed,
-          recommendationTrace: traceMetadata,
-        },
-      }, userId);
-    } catch (err) {
-      log.warn({ err, userId, workoutId: suggestion.workoutId }, "[timeline] Failed to persist recommendation trace metadata");
-    }
-  }));
+  await Promise.all(
+    suggestions.map(async (suggestion) => {
+      try {
+        const day = await storage.plans.getPlanDay(suggestion.workoutId, userId);
+        if (!day) return;
+        await storage.plans.updatePlanDay(
+          suggestion.workoutId,
+          {
+            aiInputsUsed: {
+              ...day.aiInputsUsed,
+              ...inputsUsed,
+            },
+          },
+          userId,
+        );
+      } catch (err) {
+        log.warn(
+          { err, userId, workoutId: suggestion.workoutId },
+          "[timeline] Failed to persist recommendation trace metadata",
+        );
+      }
+    }),
+  );
 }
 
 function buildUnappliedStructuredResult(
@@ -164,7 +242,10 @@ async function getStructuredApplyBlocker(
       return buildUnappliedStructuredResult("ai_budget_exceeded");
     }
   } catch (err) {
-    log.warn({ err, userId }, "[timeline] AI budget check failed before structured apply; allowing parse");
+    log.warn(
+      { err, userId },
+      "[timeline] AI budget check failed before structured apply; allowing parse",
+    );
   }
 
   return null;
@@ -194,9 +275,13 @@ export async function generateTimelineAiSuggestions(
     mainWorkout: d.mainWorkout,
     accessory: d.accessory || undefined,
     notes: d.notes || undefined,
+    aiSource: d.aiSource,
+    aiRationale: d.aiRationale,
+    aiNoteUpdatedAt: d.aiNoteUpdatedAt,
+    aiInputsUsed: d.aiInputsUsed,
     ...(d.exerciseSets && d.exerciseSets.length > 0
       ? {
-          exerciseDetails: d.exerciseSets.map(es => ({
+          exerciseDetails: d.exerciseSets.map((es) => ({
             exerciseName: es.exerciseName,
             customLabel: es.customLabel,
             category: es.category,
@@ -217,13 +302,21 @@ export async function generateTimelineAiSuggestions(
   }
 
   const suggestionQuery = upcomingWorkouts
-    .map((w) => buildWorkoutSearchText(w, { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" }))
+    .map((w) =>
+      buildWorkoutSearchText(w, {
+        weightUnit: user?.weightUnit || "kg",
+        distanceUnit: user?.distanceUnit || "km",
+      }),
+    )
     .join("; ");
   const aiContext = await buildAIContext(userId, suggestionQuery, log);
   const coachingMaterials = extractCoachingMaterialsText(aiContext);
 
   const resolvedStyle = resolveTrainingStyle(user?.trainingStyleId);
-  const stylePromptContext = resolvedStyle.strategy.buildPromptContext(aiContext.trainingContext, upcomingWorkouts);
+  const stylePromptContext = resolvedStyle.strategy.buildPromptContext(
+    aiContext.trainingContext,
+    upcomingWorkouts,
+  );
 
   const safetySignals = analyzeSafetySignals(aiContext.trainingContext, upcomingWorkouts);
 
@@ -238,7 +331,21 @@ export async function generateTimelineAiSuggestions(
 
   const safetyAdjustedSuggestions = applySafetyLayerToSuggestions(rawSuggestions, safetySignals);
   const workoutMap = new Map(upcomingWorkouts.map((w) => [w.id, w]));
-  const suggestions = resolvedStyle.strategy.prescribeNext({ suggestions: safetyAdjustedSuggestions, trainingContext: aiContext.trainingContext }).reduce<TimelineSuggestion[]>((acc, s) => {
+  const coachSignals = buildSignalsFromTrainingContext(aiContext.trainingContext);
+  const prescribedSuggestions = resolvedStyle.strategy.prescribeNext({
+    suggestions: safetyAdjustedSuggestions,
+    trainingContext: aiContext.trainingContext,
+  });
+  const repeatGuardedSuggestions = prescribedSuggestions.filter(
+    (suggestion) =>
+      !shouldSuppressRepeatedFatigueReduction(
+        suggestion,
+        workoutMap.get(suggestion.workoutId),
+        coachSignals,
+      ),
+  );
+  const suppressedRepeatCount = prescribedSuggestions.length - repeatGuardedSuggestions.length;
+  const suggestions = repeatGuardedSuggestions.reduce<TimelineSuggestion[]>((acc, s) => {
     const workout = workoutMap.get(s.workoutId);
     const mapped: TimelineSuggestion = {
       workoutId: s.workoutId,
@@ -261,30 +368,47 @@ export async function generateTimelineAiSuggestions(
     phase: resolveTrainingPhaseLabel(aiContext.trainingContext),
     strategyRuleVersion: STRATEGY_RULE_VERSION,
     promptBundleVersion: PROMPT_BUNDLE_VERSION,
-    rationaleCodes: aiContext.trainingContext.coachingInsights?.decisionTree?.rationaleCodes ?? undefined,
+    rationaleCodes:
+      aiContext.trainingContext.coachingInsights?.decisionTree?.rationaleCodes ?? undefined,
   };
+  const inputsUsed = buildTimelineCoachInputs(
+    aiContext.trainingContext,
+    traceMetadata,
+    Boolean(coachingMaterials),
+  );
 
   const forcedSafetyMessage = buildSafetyReviewNote(safetySignals);
-  const surfacedSuggestions = forcedSafetyMessage && suggestions.length === 0
-    ? [{
-        workoutId: upcomingWorkouts[0].id,
-        date: upcomingWorkouts[0].date,
-        focus: upcomingWorkouts[0].focus,
-        targetField: "notes" as const,
-        action: "append" as const,
-        recommendation: forcedSafetyMessage,
-        rationale: "Safety escalation triggered from symptom/medication screening.",
-        priority: "high" as const,
-      }]
-    : suggestions;
+  const surfacedSuggestions =
+    forcedSafetyMessage && suggestions.length === 0
+      ? [
+          {
+            workoutId: upcomingWorkouts[0].id,
+            date: upcomingWorkouts[0].date,
+            focus: upcomingWorkouts[0].focus,
+            targetField: "notes" as const,
+            action: "append" as const,
+            recommendation: forcedSafetyMessage,
+            rationale: "Safety escalation triggered from symptom/medication screening.",
+            priority: "high" as const,
+          },
+        ]
+      : suggestions;
 
-  await persistRecommendationTraceForSuggestions(userId, surfacedSuggestions, traceMetadata, log);
+  await persistRecommendationTraceForSuggestions(userId, surfacedSuggestions, inputsUsed, log);
 
   return {
     suggestions: surfacedSuggestions,
     ragInfo: sanitizeRagInfo(aiContext.ragInfo),
-    responseMetadata: Object.fromEntries(surfacedSuggestions.map((s) => [s.workoutId, traceMetadata])),
+    responseMetadata: Object.fromEntries(
+      surfacedSuggestions.map((s) => [s.workoutId, traceMetadata]),
+    ),
     ...(forcedSafetyMessage ? { message: forcedSafetyMessage } : {}),
+    ...(!forcedSafetyMessage && suppressedRepeatCount > 0 && surfacedSuggestions.length === 0
+      ? {
+          message:
+            "The upcoming workout already reflects the prior fatigue adjustment, so I left it unchanged.",
+        }
+      : {}),
   };
 }
 
@@ -310,17 +434,28 @@ export async function applyTimelineAiSuggestion(
     promptBundleVersion: PROMPT_BUNDLE_VERSION,
   };
 
-  const aiMetadata: UpdatePlanDay = {
-    aiSource: normalizeAiSource(input.aiSource),
-    aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
-    aiNoteUpdatedAt: new Date(),
-    aiInputsUsed: {
-      ...day.aiInputsUsed,
-      recommendationTrace: serverTrace,
-    },
+  const baseInputsUsed: CoachNoteInputs = {
+    ...day.aiInputsUsed,
+    recommendationTrace: serverTrace,
   };
 
-  const shouldWriteStructuredRows = existingExerciseSets.length > 0 && input.targetField !== "notes";
+  const buildAiMetadata = (resultingWorkout?: UpcomingWorkout): UpdatePlanDay => {
+    const aiInputsUsed = withCoachModificationMetadata(
+      baseInputsUsed,
+      input,
+      buildSignalsFromCoachInputs(baseInputsUsed),
+      resultingWorkout,
+    );
+    return {
+      aiSource: normalizeAiSource(input.aiSource),
+      aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed,
+    };
+  };
+
+  const shouldWriteStructuredRows =
+    existingExerciseSets.length > 0 && input.targetField !== "notes";
   if (shouldWriteStructuredRows) {
     const structuredApplyBlocker = await getStructuredApplyBlocker(userId, log);
     if (structuredApplyBlocker) {
@@ -335,6 +470,13 @@ export async function applyTimelineAiSuggestion(
       );
 
       if (structuredSetRows.length > 0) {
+        const aiMetadata = buildAiMetadata(
+          buildStructuredResultingWorkout(
+            buildWorkoutFromPlanDay(input, day, existingExerciseSets),
+            input.action,
+            structuredSetRows,
+          ),
+        );
         await db.transaction(async (tx) => {
           await applyStructuredPlanDaySuggestionRows(
             input.workoutId,
@@ -357,12 +499,22 @@ export async function applyTimelineAiSuggestion(
     }
   }
 
-  const textUpdates: UpdatePlanDay = { ...aiMetadata };
   const textUpdateValue = buildTextUpdateValue(day, input);
-  textUpdates[input.targetField] = normalizeWorkoutTextUnits(
-    textUpdateValue,
-    { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
-  ) ?? textUpdateValue;
+  const normalizedTextUpdate =
+    normalizeWorkoutTextUnits(textUpdateValue, {
+      weightUnit: user?.weightUnit || "kg",
+      distanceUnit: user?.distanceUnit || "km",
+    }) ?? textUpdateValue;
+  const textUpdates: UpdatePlanDay = {
+    ...buildAiMetadata(
+      buildTextResultingWorkout(
+        buildWorkoutFromPlanDay(input, day, []),
+        input.targetField,
+        normalizedTextUpdate,
+      ),
+    ),
+    [input.targetField]: normalizedTextUpdate,
+  };
   await storage.plans.updatePlanDay(input.workoutId, textUpdates, userId);
 
   return { applied: true, structured: false };

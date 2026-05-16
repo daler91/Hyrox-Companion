@@ -222,7 +222,6 @@ function hydrateTimelineStructureBlocks(
   }
 }
 
-
 export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
@@ -282,7 +281,11 @@ export class TimelineStorage {
     return (offset || 0) + limit * 3;
   }
 
-  private sortAndWindowEntries(entries: TimelineEntry[], limit?: number, offset?: number): TimelineEntry[] {
+  private sortAndWindowEntries(
+    entries: TimelineEntry[],
+    limit?: number,
+    offset?: number,
+  ): TimelineEntry[] {
     return sortAndWindowTimelineEntries(entries, limit, offset);
   }
 
@@ -392,6 +395,10 @@ export class TimelineStorage {
       mainWorkout: string;
       accessory: string | null;
       notes: string | null;
+      aiSource: TimelineEntry["aiSource"];
+      aiRationale: string | null;
+      aiNoteUpdatedAt: Date | null;
+      aiInputsUsed: PlanDay["aiInputsUsed"];
       exerciseSets?: ExerciseSet[];
       structureBlocks?: TimelineEntry["structureBlocks"];
     }>
@@ -422,6 +429,10 @@ export class TimelineStorage {
         mainWorkout: true,
         accessory: true,
         notes: true,
+        aiSource: true,
+        aiRationale: true,
+        aiNoteUpdatedAt: true,
+        aiInputsUsed: true,
         status: true,
       },
       orderBy: asc(planDays.scheduledDate),
@@ -441,6 +452,10 @@ export class TimelineStorage {
       mainWorkout: string;
       accessory: string | null;
       notes: string | null;
+      aiSource: TimelineEntry["aiSource"];
+      aiRationale: string | null;
+      aiNoteUpdatedAt: Date | null;
+      aiInputsUsed: PlanDay["aiInputsUsed"];
       exerciseSets: ExerciseSet[];
       structureBlocks: TimelineEntry["structureBlocks"];
     }> = [];
@@ -454,6 +469,10 @@ export class TimelineStorage {
           mainWorkout: r.mainWorkout || "",
           accessory: r.accessory,
           notes: r.notes,
+          aiSource: r.aiSource as TimelineEntry["aiSource"],
+          aiRationale: r.aiRationale,
+          aiNoteUpdatedAt: r.aiNoteUpdatedAt,
+          aiInputsUsed: r.aiInputsUsed,
           exerciseSets: setsByPlanDayId.get(r.id) ?? [],
           structureBlocks: blocksByPlanDayId.get(r.id) ?? [],
         });
