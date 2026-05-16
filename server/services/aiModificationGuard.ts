@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { CoachNoteInputs } from "@shared/schema";
 
 import type { TrainingContext, UpcomingWorkout } from "../gemini";
@@ -16,9 +18,18 @@ export interface CoachModificationSignals {
 export interface CoachModificationInput {
   readonly workoutId?: string;
   readonly targetField?: "mainWorkout" | "accessory" | "notes";
+  readonly action?: "replace" | "append";
   readonly recommendation?: string;
   readonly rationale?: string | null;
 }
+
+type CoachModificationMetadata = NonNullable<CoachNoteInputs["lastModification"]>;
+type CoachFatigueReductionMetadata = NonNullable<CoachNoteInputs["lastFatigueReduction"]>;
+
+type WorkoutPrescriptionInput = Pick<
+  UpcomingWorkout,
+  "mainWorkout" | "accessory" | "notes" | "exerciseDetails"
+>;
 
 const FATIGUE_TERMS = [
   "fatigue",
@@ -65,6 +76,58 @@ function buildSuggestionText(suggestion: CoachModificationInput): string {
   return `${suggestion.rationale ?? ""} ${suggestion.recommendation ?? ""}`;
 }
 
+function normalizeText(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized || null;
+}
+
+function normalizeExerciseDetails(workout: WorkoutPrescriptionInput) {
+  return (workout.exerciseDetails ?? [])
+    .map((exercise) => ({
+      exerciseName: normalizeText(exercise.exerciseName),
+      customLabel: normalizeText(exercise.customLabel),
+      category: normalizeText(exercise.category),
+      setNumber: exercise.setNumber ?? null,
+      reps: exercise.reps ?? null,
+      weight: exercise.weight ?? null,
+      distance: exercise.distance ?? null,
+      time: exercise.time ?? null,
+      notes: normalizeText(exercise.notes),
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+}
+
+export function buildWorkoutPrescriptionFingerprint(
+  workout: WorkoutPrescriptionInput | null | undefined,
+): string | undefined {
+  if (!workout) return undefined;
+
+  const payload = {
+    mainWorkout: normalizeText(workout.mainWorkout),
+    accessory: normalizeText(workout.accessory),
+    notes: normalizeText(workout.notes),
+    exerciseDetails: normalizeExerciseDetails(workout),
+  };
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function resolvePriorFatigueReduction(
+  inputsUsed: CoachNoteInputs | null | undefined,
+): CoachFatigueReductionMetadata | undefined {
+  if (inputsUsed?.lastFatigueReduction?.kind === "fatigue_volume_reduction") {
+    return inputsUsed.lastFatigueReduction;
+  }
+
+  if (inputsUsed?.lastModification?.kind === "fatigue_volume_reduction") {
+    return {
+      ...inputsUsed.lastModification,
+      kind: "fatigue_volume_reduction",
+    };
+  }
+
+  return undefined;
+}
+
 export function classifyCoachModification(
   suggestion: CoachModificationInput,
   signals: CoachModificationSignals,
@@ -93,15 +156,24 @@ export function shouldSuppressRepeatedFatigueReduction(
     return false;
   }
 
-  const lastModification = workout?.aiInputsUsed?.lastModification;
-  if (lastModification?.kind !== "fatigue_volume_reduction") {
+  const priorFatigueReduction = resolvePriorFatigueReduction(workout?.aiInputsUsed);
+  if (!priorFatigueReduction) {
     return false;
   }
 
   const currentCompletedWorkouts = signals.completedWorkouts ?? 0;
-  const completedAtLastModification = lastModification.completedWorkoutCount;
-  return (
-    completedAtLastModification == null || currentCompletedWorkouts <= completedAtLastModification
+  const completedAtLastModification = priorFatigueReduction.completedWorkoutCount;
+  if (
+    completedAtLastModification != null &&
+    currentCompletedWorkouts > completedAtLastModification
+  ) {
+    return false;
+  }
+
+  const currentFingerprint = buildWorkoutPrescriptionFingerprint(workout);
+  return Boolean(
+    priorFatigueReduction.prescriptionFingerprint &&
+    currentFingerprint === priorFatigueReduction.prescriptionFingerprint,
   );
 }
 
@@ -109,21 +181,29 @@ export function withCoachModificationMetadata(
   inputsUsed: CoachNoteInputs,
   suggestion: CoachModificationInput,
   signals: CoachModificationSignals,
+  resultingWorkout?: WorkoutPrescriptionInput,
 ): CoachNoteInputs {
   const kind = classifyCoachModification(suggestion, signals);
   if (!kind) return inputsUsed;
 
+  const modification: CoachModificationMetadata = {
+    kind,
+    reason: suggestion.rationale?.slice(0, 400) || undefined,
+    at: new Date().toISOString(),
+    completedWorkoutCount: signals.completedWorkouts,
+    fatigueFlag: signals.coachingInsights?.fatigueFlag,
+    rpeTrend: signals.coachingInsights?.rpeTrend,
+    prescriptionFingerprint: buildWorkoutPrescriptionFingerprint(resultingWorkout),
+  };
+
   return {
     ...inputsUsed,
     completedWorkoutCount: signals.completedWorkouts,
-    lastModification: {
-      kind,
-      reason: suggestion.rationale?.slice(0, 400) || undefined,
-      at: new Date().toISOString(),
-      completedWorkoutCount: signals.completedWorkouts,
-      fatigueFlag: signals.coachingInsights?.fatigueFlag,
-      rpeTrend: signals.coachingInsights?.rpeTrend,
-    },
+    lastModification: modification,
+    lastFatigueReduction:
+      kind === "fatigue_volume_reduction"
+        ? { ...modification, kind: "fatigue_volume_reduction" }
+        : (inputsUsed.lastFatigueReduction ?? resolvePriorFatigueReduction(inputsUsed)),
   };
 }
 
@@ -141,10 +221,18 @@ export function buildSignalsFromCoachInputs(
 ): CoachModificationSignals {
   return {
     completedWorkouts:
-      inputsUsed?.completedWorkoutCount ?? inputsUsed?.lastModification?.completedWorkoutCount,
+      inputsUsed?.completedWorkoutCount ??
+      inputsUsed?.lastModification?.completedWorkoutCount ??
+      inputsUsed?.lastFatigueReduction?.completedWorkoutCount,
     coachingInsights: {
-      fatigueFlag: inputsUsed?.fatigueFlag,
-      rpeTrend: inputsUsed?.rpeTrend,
+      fatigueFlag:
+        inputsUsed?.fatigueFlag ??
+        inputsUsed?.lastModification?.fatigueFlag ??
+        inputsUsed?.lastFatigueReduction?.fatigueFlag,
+      rpeTrend:
+        inputsUsed?.rpeTrend ??
+        inputsUsed?.lastModification?.rpeTrend ??
+        inputsUsed?.lastFatigueReduction?.rpeTrend,
     },
   };
 }

@@ -16,6 +16,7 @@ import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import {
   buildSignalsFromTrainingContext,
+  type CoachModificationSignals,
   shouldSuppressRepeatedFatigueReduction,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
@@ -53,6 +54,38 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
 interface PreparedSuggestion {
   readonly suggestion: WorkoutSuggestion;
   readonly structuredSetRows?: InsertExerciseSet[];
+}
+
+type ExerciseDetail = NonNullable<UpcomingWorkout["exerciseDetails"]>[number];
+
+function mapSetRowToExerciseDetail(row: InsertExerciseSet): ExerciseDetail {
+  return {
+    exerciseName: row.exerciseName,
+    customLabel: row.customLabel ?? null,
+    category: row.category,
+    setNumber: row.setNumber ?? null,
+    reps: row.reps ?? null,
+    weight: row.weight ?? null,
+    distance: row.distance ?? null,
+    time: row.time ?? null,
+    notes: row.notes ?? null,
+    sortOrder: row.sortOrder ?? null,
+  };
+}
+
+function buildStructuredResultingWorkout(
+  entry: UpcomingWorkout,
+  suggestion: WorkoutSuggestion,
+  structuredSetRows: InsertExerciseSet[],
+): UpcomingWorkout {
+  const structuredDetails = structuredSetRows.map(mapSetRowToExerciseDetail);
+  return {
+    ...entry,
+    exerciseDetails:
+      suggestion.action === "append"
+        ? [...(entry.exerciseDetails ?? []), ...structuredDetails]
+        : structuredDetails,
+  };
 }
 
 function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
@@ -102,13 +135,22 @@ async function prepareSuggestion(
 
 async function applyStructuredSuggestion(
   prepared: PreparedSuggestion,
+  entry: UpcomingWorkout,
   userId: string,
   aiSource: "rag" | "legacy" | null | undefined,
   inputsUsed: CoachNoteInputs,
+  coachSignals: CoachModificationSignals,
   tx: DbExecutor,
 ): Promise<boolean> {
   const { suggestion, structuredSetRows } = prepared;
   if (!structuredSetRows || structuredSetRows.length === 0) return false;
+  const resultingWorkout = buildStructuredResultingWorkout(entry, suggestion, structuredSetRows);
+  const suggestionInputs = withCoachModificationMetadata(
+    inputsUsed,
+    suggestion,
+    coachSignals,
+    resultingWorkout,
+  );
 
   await applyStructuredPlanDaySuggestionRows(
     suggestion.workoutId,
@@ -123,7 +165,7 @@ async function applyStructuredSuggestion(
       aiSource: aiSource ?? null,
       aiRationale: suggestion.rationale.slice(0, 400),
       aiNoteUpdatedAt: new Date(),
-      aiInputsUsed: inputsUsed,
+      aiInputsUsed: suggestionInputs,
     },
     userId,
     tx,
@@ -192,15 +234,24 @@ async function applySuggestion(
   userId: string,
   aiSource: "rag" | "legacy" | null | undefined,
   inputsUsed: CoachNoteInputs,
+  coachSignals: CoachModificationSignals,
   unitPreferences: UnitPreferences,
   tx: DbExecutor,
 ): Promise<boolean> {
   const { suggestion } = prepared;
   if (!suggestionWillApply(suggestion, upcomingWorkouts)) return false;
-  if (prepared.structuredSetRows && prepared.structuredSetRows.length > 0) {
-    return applyStructuredSuggestion(prepared, userId, aiSource, inputsUsed, tx);
-  }
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
+  if (prepared.structuredSetRows && prepared.structuredSetRows.length > 0) {
+    return applyStructuredSuggestion(
+      prepared,
+      entry,
+      userId,
+      aiSource,
+      inputsUsed,
+      coachSignals,
+      tx,
+    );
+  }
 
   // Let errors propagate so the enclosing transaction rolls back — we want
   // all-or-nothing semantics for the auto-coach apply loop (C2).
@@ -208,6 +259,10 @@ async function applySuggestion(
     buildUpdateValue(suggestion, entry),
     unitPreferences,
   );
+  const suggestionInputs = withCoachModificationMetadata(inputsUsed, suggestion, coachSignals, {
+    ...entry,
+    [suggestion.targetField]: updateValue,
+  });
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
     {
@@ -215,7 +270,7 @@ async function applySuggestion(
       aiSource: aiSource ?? null,
       aiRationale: suggestion.rationale.slice(0, 400),
       aiNoteUpdatedAt: new Date(),
-      aiInputsUsed: inputsUsed,
+      aiInputsUsed: suggestionInputs,
     },
     userId,
     tx,
@@ -439,18 +494,14 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       // Keep duplicate suggestions for the same plan day ordered so structured
       // appends re-read sortOrder after any earlier insert in this transaction.
       for (const s of preparedSuggestions) {
-        const suggestionInputs = withCoachModificationMetadata(
-          inputsUsed,
-          s.suggestion,
-          coachSignals,
-        );
         modResults.push(
           await applySuggestion(
             s,
             upcomingWorkouts,
             userId,
             coachingContext.source,
-            suggestionInputs,
+            inputsUsed,
+            coachSignals,
             unitPreferences,
             tx,
           ),

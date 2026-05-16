@@ -8,6 +8,7 @@ import {
 } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
+import { buildWorkoutPrescriptionFingerprint } from "./aiModificationGuard";
 import { regenerateCoachNoteForPlanDay, triggerAutoCoach } from "./coachService";
 import { retrieveRelevantChunks } from "./ragService";
 
@@ -159,6 +160,10 @@ function makeSuggestion(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function textWorkoutFingerprint(mainWorkout: string) {
+  return buildWorkoutPrescriptionFingerprint({ mainWorkout });
+}
+
 // -- Tests --------------------------------------------------------------------
 
 describe("coachService", () => {
@@ -234,12 +239,13 @@ describe("coachService", () => {
         makeTimelineEntry({
           aiRationale: "Reduced volume because RPE was high.",
           aiInputsUsed: {
-            lastModification: {
+            lastFatigueReduction: {
               kind: "fatigue_volume_reduction",
               completedWorkoutCount: 12,
               fatigueFlag: true,
               rpeTrend: "rising",
               reason: "Reduced volume because RPE was high.",
+              prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
             },
           },
         }),
@@ -261,12 +267,13 @@ describe("coachService", () => {
             mainWorkout: "3x5 Squats",
             aiRationale: "Reduced volume because RPE was high.",
             aiInputsUsed: {
-              lastModification: {
+              lastFatigueReduction: {
                 kind: "fatigue_volume_reduction",
                 completedWorkoutCount: 12,
                 fatigueFlag: true,
                 rpeTrend: "rising",
                 reason: "Reduced volume because RPE was high.",
+                prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
               },
             },
           },
@@ -316,11 +323,12 @@ describe("coachService", () => {
       mockBaseAutoCoachDeps([
         makeTimelineEntry({
           aiInputsUsed: {
-            lastModification: {
+            lastFatigueReduction: {
               kind: "fatigue_volume_reduction",
               completedWorkoutCount: 12,
               fatigueFlag: true,
               rpeTrend: "rising",
+              prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
             },
           },
         }),
@@ -341,11 +349,12 @@ describe("coachService", () => {
             focus: "Strength",
             mainWorkout: "3x5 Squats",
             aiInputsUsed: {
-              lastModification: {
+              lastFatigueReduction: {
                 kind: "fatigue_volume_reduction",
                 completedWorkoutCount: 12,
                 fatigueFlag: true,
                 rpeTrend: "rising",
+                prescriptionFingerprint: textWorkoutFingerprint("3x5 Squats"),
               },
             },
           },
@@ -376,6 +385,11 @@ describe("coachService", () => {
             lastModification: expect.objectContaining({
               kind: "fatigue_volume_reduction",
               completedWorkoutCount: 13,
+            }),
+            lastFatigueReduction: expect.objectContaining({
+              kind: "fatigue_volume_reduction",
+              completedWorkoutCount: 13,
+              prescriptionFingerprint: textWorkoutFingerprint("Back squat 2x5 lighter"),
             }),
           }),
         }),

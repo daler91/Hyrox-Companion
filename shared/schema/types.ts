@@ -103,6 +103,20 @@ export const coachModificationKindSchema = z.enum([
   "workload_adjustment",
 ]);
 
+const coachModificationMetadataSchema = z.object({
+  kind: coachModificationKindSchema,
+  reason: z.string().max(400).optional(),
+  at: z.string().optional(),
+  completedWorkoutCount: z.number().int().nonnegative().optional(),
+  fatigueFlag: z.boolean().optional(),
+  rpeTrend: z.enum(["rising", "stable", "falling", "insufficient_data"]).optional(),
+  prescriptionFingerprint: z.string().optional(),
+});
+
+const coachFatigueReductionMetadataSchema = coachModificationMetadataSchema.extend({
+  kind: z.literal("fatigue_volume_reduction"),
+});
+
 /**
  * Compact audit of which inputs drove the coach's note for a plan day.
  * Persisted as `plan_days.ai_inputs_used` (jsonb) and shown on the
@@ -128,16 +142,8 @@ export const coachNoteInputsSchema = z.object({
       rationaleCodes: z.array(z.string()).optional(),
     })
     .optional(),
-  lastModification: z
-    .object({
-      kind: coachModificationKindSchema,
-      reason: z.string().max(400).optional(),
-      at: z.string().optional(),
-      completedWorkoutCount: z.number().int().nonnegative().optional(),
-      fatigueFlag: z.boolean().optional(),
-      rpeTrend: z.enum(["rising", "stable", "falling", "insufficient_data"]).optional(),
-    })
-    .optional(),
+  lastModification: coachModificationMetadataSchema.optional(),
+  lastFatigueReduction: coachFatigueReductionMetadataSchema.optional(),
 });
 export type CoachNoteInputs = z.infer<typeof coachNoteInputsSchema>;
 

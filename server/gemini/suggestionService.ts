@@ -152,26 +152,45 @@ function formatRecentWorkouts(trainingContext: TrainingContext): string {
   );
 }
 
+function formatModificationContext(
+  label: string,
+  modification: NonNullable<UpcomingWorkout["aiInputsUsed"]>["lastModification"],
+): string | undefined {
+  if (!modification) return undefined;
+  const details = [
+    `kind=${modification.kind}`,
+    modification.completedWorkoutCount != null
+      ? `completedWorkoutsAtEdit=${modification.completedWorkoutCount}`
+      : undefined,
+    modification.rpeTrend ? `rpeTrendAtEdit=${modification.rpeTrend}` : undefined,
+    modification.fatigueFlag != null ? `fatigueFlagAtEdit=${modification.fatigueFlag}` : undefined,
+    modification.reason ? `reason=${modification.reason}` : undefined,
+  ].filter(Boolean);
+  return `${label}: ${details.join("; ")}`;
+}
+
 function formatPriorAiContext(workout: UpcomingWorkout): string {
   const prior: string[] = [];
   if (workout.aiRationale?.trim()) {
     prior.push(`Prior AI review: ${workout.aiRationale.trim()}`);
   }
 
-  const lastModification = workout.aiInputsUsed?.lastModification;
-  if (lastModification) {
-    const details = [
-      `kind=${lastModification.kind}`,
-      lastModification.completedWorkoutCount != null
-        ? `completedWorkoutsAtEdit=${lastModification.completedWorkoutCount}`
-        : undefined,
-      lastModification.rpeTrend ? `rpeTrendAtEdit=${lastModification.rpeTrend}` : undefined,
-      lastModification.fatigueFlag != null
-        ? `fatigueFlagAtEdit=${lastModification.fatigueFlag}`
-        : undefined,
-      lastModification.reason ? `reason=${lastModification.reason}` : undefined,
-    ].filter(Boolean);
-    prior.push(`Last AI modification: ${details.join("; ")}`);
+  const lastModificationContext = formatModificationContext(
+    "Last AI modification",
+    workout.aiInputsUsed?.lastModification,
+  );
+  if (lastModificationContext) prior.push(lastModificationContext);
+
+  const lastFatigueReductionContext = formatModificationContext(
+    "Last fatigue reduction",
+    workout.aiInputsUsed?.lastFatigueReduction,
+  );
+  if (
+    lastFatigueReductionContext &&
+    lastFatigueReductionContext !==
+      lastModificationContext?.replace("Last AI modification", "Last fatigue reduction")
+  ) {
+    prior.push(lastFatigueReductionContext);
   }
 
   return prior.length > 0 ? `, ${prior.join(", ")}` : "";

@@ -1,4 +1,9 @@
-import type { CoachNoteInputs, UpdatePlanDay } from "@shared/schema";
+import type {
+  CoachNoteInputs,
+  ExerciseSet,
+  InsertExerciseSet,
+  UpdatePlanDay,
+} from "@shared/schema";
 import { normalizeWorkoutTextUnits } from "@shared/unitConversion";
 import type { Logger } from "pino";
 
@@ -104,6 +109,76 @@ function buildTextUpdateValue(
   return existing
     ? `${existing}\n\nAI suggestion: ${input.recommendation}`
     : `AI suggestion: ${input.recommendation}`;
+}
+
+type PlanDayPrescription = {
+  id?: string;
+  scheduledDate?: string | null;
+  focus?: string | null;
+  mainWorkout: string;
+  accessory?: string | null;
+  notes?: string | null;
+};
+
+type ExerciseDetail = NonNullable<UpcomingWorkout["exerciseDetails"]>[number];
+
+function mapExerciseSetToPromptDetail(row: ExerciseSet | InsertExerciseSet): ExerciseDetail {
+  return {
+    exerciseName: row.exerciseName,
+    customLabel: row.customLabel ?? null,
+    category: row.category,
+    setNumber: row.setNumber ?? null,
+    reps: row.reps ?? null,
+    weight: row.weight ?? null,
+    distance: row.distance ?? null,
+    time: row.time ?? null,
+    notes: row.notes ?? null,
+    sortOrder: row.sortOrder ?? null,
+  };
+}
+
+function buildWorkoutFromPlanDay(
+  input: ApplyTimelineSuggestionInput,
+  day: PlanDayPrescription,
+  exerciseSets: Array<ExerciseSet | InsertExerciseSet>,
+): UpcomingWorkout {
+  return {
+    id: input.workoutId,
+    date: day.scheduledDate ?? "",
+    focus: day.focus ?? "",
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory || undefined,
+    notes: day.notes || undefined,
+    exerciseDetails: exerciseSets.map(mapExerciseSetToPromptDetail),
+  };
+}
+
+function buildStructuredResultingWorkout(
+  input: ApplyTimelineSuggestionInput,
+  day: PlanDayPrescription,
+  existingExerciseSets: ExerciseSet[],
+  structuredSetRows: InsertExerciseSet[],
+): UpcomingWorkout {
+  const currentWorkout = buildWorkoutFromPlanDay(input, day, existingExerciseSets);
+  const structuredDetails = structuredSetRows.map(mapExerciseSetToPromptDetail);
+  return {
+    ...currentWorkout,
+    exerciseDetails:
+      input.action === "append"
+        ? [...(currentWorkout.exerciseDetails ?? []), ...structuredDetails]
+        : structuredDetails,
+  };
+}
+
+function buildTextResultingWorkout(
+  input: ApplyTimelineSuggestionInput,
+  day: PlanDayPrescription,
+  updatedValue: string,
+): UpcomingWorkout {
+  return {
+    ...buildWorkoutFromPlanDay(input, day, []),
+    [input.targetField]: updatedValue,
+  };
 }
 
 function normalizeAiSource(
@@ -410,17 +485,20 @@ export async function applyTimelineAiSuggestion(
     ...day.aiInputsUsed,
     recommendationTrace: serverTrace,
   };
-  const aiInputsUsed = withCoachModificationMetadata(
-    baseInputsUsed,
-    input,
-    buildSignalsFromCoachInputs(baseInputsUsed),
-  );
 
-  const aiMetadata: UpdatePlanDay = {
-    aiSource: normalizeAiSource(input.aiSource),
-    aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
-    aiNoteUpdatedAt: new Date(),
-    aiInputsUsed,
+  const buildAiMetadata = (resultingWorkout?: UpcomingWorkout): UpdatePlanDay => {
+    const aiInputsUsed = withCoachModificationMetadata(
+      baseInputsUsed,
+      input,
+      buildSignalsFromCoachInputs(baseInputsUsed),
+      resultingWorkout,
+    );
+    return {
+      aiSource: normalizeAiSource(input.aiSource),
+      aiRationale: input.rationale ? input.rationale.slice(0, 400) : null,
+      aiNoteUpdatedAt: new Date(),
+      aiInputsUsed,
+    };
   };
 
   const shouldWriteStructuredRows =
@@ -439,6 +517,9 @@ export async function applyTimelineAiSuggestion(
       );
 
       if (structuredSetRows.length > 0) {
+        const aiMetadata = buildAiMetadata(
+          buildStructuredResultingWorkout(input, day, existingExerciseSets, structuredSetRows),
+        );
         await db.transaction(async (tx) => {
           await applyStructuredPlanDaySuggestionRows(
             input.workoutId,
@@ -461,13 +542,16 @@ export async function applyTimelineAiSuggestion(
     }
   }
 
-  const textUpdates: UpdatePlanDay = { ...aiMetadata };
   const textUpdateValue = buildTextUpdateValue(day, input);
-  textUpdates[input.targetField] =
+  const normalizedTextUpdate =
     normalizeWorkoutTextUnits(textUpdateValue, {
       weightUnit: user?.weightUnit || "kg",
       distanceUnit: user?.distanceUnit || "km",
     }) ?? textUpdateValue;
+  const textUpdates: UpdatePlanDay = {
+    ...buildAiMetadata(buildTextResultingWorkout(input, day, normalizedTextUpdate)),
+    [input.targetField]: normalizedTextUpdate,
+  };
   await storage.plans.updatePlanDay(input.workoutId, textUpdates, userId);
 
   return { applied: true, structured: false };

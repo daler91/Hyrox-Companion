@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generateWorkoutSuggestions, parseExercisesFromText } from "../gemini/index";
 import { storage } from "../storage";
+import { buildWorkoutPrescriptionFingerprint } from "./aiModificationGuard";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "./aiSuggestionService";
 
@@ -94,6 +95,14 @@ function mockPlanDay(overrides: Record<string, unknown> = {}) {
     notes: null,
     ...overrides,
   };
+}
+
+function textWorkoutFingerprint(
+  mainWorkout: string,
+  accessory?: string | null,
+  notes?: string | null,
+) {
+  return buildWorkoutPrescriptionFingerprint({ mainWorkout, accessory, notes });
 }
 
 describe("applyTimelineAiSuggestion", () => {
@@ -240,7 +249,68 @@ describe("applyTimelineAiSuggestion", () => {
             completedWorkoutCount: 12,
             fatigueFlag: true,
             rpeTrend: "rising",
+            prescriptionFingerprint: textWorkoutFingerprint(
+              "Back squat 2x5 lighter",
+              "Old accessory",
+            ),
           }),
+          lastFatigueReduction: expect.objectContaining({
+            kind: "fatigue_volume_reduction",
+            completedWorkoutCount: 12,
+            prescriptionFingerprint: textWorkoutFingerprint(
+              "Back squat 2x5 lighter",
+              "Old accessory",
+            ),
+          }),
+        }),
+      }),
+      "user-1",
+    );
+  });
+
+  it("preserves the fatigue-reduction marker when applying a non-fatigue workload suggestion", async () => {
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    const priorFatigueReduction = {
+      kind: "fatigue_volume_reduction" as const,
+      completedWorkoutCount: 12,
+      fatigueFlag: true,
+      rpeTrend: "rising" as const,
+      prescriptionFingerprint: textWorkoutFingerprint("Old main"),
+    };
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(
+      mockPlanDay({
+        aiInputsUsed: {
+          fatigueFlag: true,
+          rpeTrend: "rising",
+          completedWorkoutCount: 12,
+          lastFatigueReduction: priorFatigueReduction,
+        },
+      }),
+    );
+
+    const result = await applyTimelineAiSuggestion(
+      "user-1",
+      {
+        workoutId: "day-1",
+        targetField: "mainWorkout",
+        action: "replace",
+        recommendation: "Old main plus sled push 4x20m",
+        rationale: "Sled Push has not been trained recently.",
+        aiSource: "rag",
+      },
+      testLog,
+    );
+
+    expect(result).toEqual({ applied: true, structured: false });
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({
+        aiInputsUsed: expect.objectContaining({
+          lastModification: expect.objectContaining({
+            kind: "workload_adjustment",
+            reason: "Sled Push has not been trained recently.",
+          }),
+          lastFatigueReduction: priorFatigueReduction,
         }),
       }),
       "user-1",
@@ -366,12 +436,13 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
         aiRationale: "Reduced from 5x5 because RPE was high.",
         aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
         aiInputsUsed: {
-          lastModification: {
+          lastFatigueReduction: {
             kind: "fatigue_volume_reduction",
             completedWorkoutCount: 12,
             fatigueFlag: true,
             rpeTrend: "rising",
             reason: "Reduced from 5x5 because RPE was high.",
+            prescriptionFingerprint: textWorkoutFingerprint("Back squat 3x5"),
           },
         },
         exerciseSets: [],
@@ -417,6 +488,75 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
     expect(result.message).toMatch(/already reflects the prior fatigue adjustment/i);
   });
 
+  it("does not suppress fatigue reductions after the current workout prescription changes", async () => {
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+      {
+        planDayId: "day-1",
+        date: "2026-05-02",
+        focus: "strength",
+        mainWorkout: "Back squat 5x5",
+        accessory: null,
+        notes: null,
+        aiSource: "rag",
+        aiRationale: "Reduced from 5x5 because RPE was high.",
+        aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
+        aiInputsUsed: {
+          lastFatigueReduction: {
+            kind: "fatigue_volume_reduction",
+            completedWorkoutCount: 12,
+            fatigueFlag: true,
+            rpeTrend: "rising",
+            reason: "Reduced from 5x5 because RPE was high.",
+            prescriptionFingerprint: textWorkoutFingerprint("Back squat 3x5"),
+          },
+        },
+        exerciseSets: [],
+      },
+    ]);
+    vi.mocked(buildAIContext).mockResolvedValue({
+      trainingContext: {
+        totalWorkouts: 12,
+        completedWorkouts: 12,
+        plannedWorkouts: 1,
+        missedWorkouts: 0,
+        skippedWorkouts: 0,
+        completionRate: 100,
+        currentStreak: 4,
+        recentWorkouts: [],
+        exerciseBreakdown: {},
+        coachingInsights: {
+          rpeTrend: "rising",
+          fatigueFlag: true,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+        },
+      },
+      ragInfo: { source: "none" },
+    });
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      {
+        workoutId: "day-1",
+        workoutDate: "2026-05-02",
+        workoutFocus: "strength",
+        targetField: "mainWorkout",
+        action: "replace",
+        recommendation: "Back squat 3x5 again",
+        rationale: "Reduce volume because RPE and fatigue remain high.",
+        priority: "high",
+      },
+    ]);
+
+    const result = await generateTimelineAiSuggestions("user-1", testLog);
+
+    expect(result.suggestions).toEqual([
+      expect.objectContaining({
+        workoutId: "day-1",
+        recommendation: "Back squat 3x5 again",
+      }),
+    ]);
+  });
+
   it("still surfaces non-fatigue adjustments on a previously fatigue-reduced day", async () => {
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {
@@ -430,11 +570,12 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
         aiRationale: "Reduced from 5x5 because RPE was high.",
         aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
         aiInputsUsed: {
-          lastModification: {
+          lastFatigueReduction: {
             kind: "fatigue_volume_reduction",
             completedWorkoutCount: 12,
             fatigueFlag: true,
             rpeTrend: "rising",
+            prescriptionFingerprint: textWorkoutFingerprint("Back squat 3x5"),
           },
         },
         exerciseSets: [],
