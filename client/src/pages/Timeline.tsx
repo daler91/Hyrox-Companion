@@ -645,16 +645,14 @@ export default function Timeline() {
               entry={logEntry}
               onClose={closeWorkoutSurfaces}
               isLogging={logWorkoutMutation.isPending}
-              onLogAsPlanned={(entry, rpeOverride) => {
+              onLogAsPlanned={(entry, rpeOverride, noteOverride) => {
                 closeEmbeddedCoach();
                 setLogEntry(null);
-                // Only fan a fresh entry through when RPE actually
-                // changed so we don't churn the cache for a no-op.
-                if (rpeOverride === entry.rpe) {
-                  handleMarkComplete(entry);
-                } else {
-                  handleMarkComplete({ ...entry, rpe: rpeOverride ?? null });
-                }
+                handleMarkComplete({
+                  ...entry,
+                  rpe: rpeOverride ?? null,
+                  notes: noteOverride,
+                });
               }}
               onSkip={(entry) => {
                 closeEmbeddedCoach();

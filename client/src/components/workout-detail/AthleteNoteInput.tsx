@@ -14,6 +14,13 @@ interface AthleteNoteInputProps {
   readonly disabled?: boolean;
   readonly reviewFirst?: boolean;
   readonly mode?: AthleteNoteMode;
+  /**
+   * Fire onSave on every keystroke instead of debouncing. Local-state
+   * consumers (LogSheet / AdhocLogSheet) pass this so the note is current
+   * the instant the user taps the action button; server-bound consumers
+   * leave it off so a keystroke isn't a PATCH.
+   */
+  readonly immediate?: boolean;
 }
 
 /**
@@ -28,6 +35,7 @@ export function AthleteNoteInput({
   disabled,
   reviewFirst = false,
   mode = "review",
+  immediate = false,
 }: AthleteNoteInputProps) {
   const [draft, setDraft] = useState(value ?? "");
   const [isEditing, setIsEditing] = useState(!reviewFirst);
@@ -44,6 +52,14 @@ export function AthleteNoteInput({
     onSave(next.trim().length === 0 ? null : next);
   }, SAVE_DEBOUNCE_MS);
 
+  const persistDraft = (next: string) => {
+    if (immediate) {
+      onSave(next.trim().length === 0 ? null : next);
+    } else {
+      debouncedSave(next);
+    }
+  };
+
   if (mode === "form") {
     return (
       <section className="flex flex-col gap-2" data-testid="athlete-note-input" data-mode="form">
@@ -51,14 +67,14 @@ export function AthleteNoteInput({
           htmlFor="athlete-note-textarea"
           className="text-sm font-semibold text-foreground"
         >
-          Athlete note
+          Notes
         </label>
         <Textarea
           id="athlete-note-textarea"
           value={draft}
           onChange={(e) => {
             setDraft(e.target.value);
-            debouncedSave(e.target.value);
+            persistDraft(e.target.value);
           }}
           disabled={disabled}
           placeholder="How did it feel? Anything the coach should know?"
@@ -116,7 +132,7 @@ export function AthleteNoteInput({
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
-          debouncedSave(e.target.value);
+          persistDraft(e.target.value);
         }}
         onBlur={() => {
           if (reviewFirst) setIsEditing(false);

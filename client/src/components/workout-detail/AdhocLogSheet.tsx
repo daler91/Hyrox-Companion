@@ -19,7 +19,7 @@ import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 import { ExerciseTable } from "./ExerciseTable";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
-import { RpePrompt } from "./shared/RpePrompt";
+import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 
 interface AdhocLogSheetProps {
   readonly open: boolean;
@@ -430,6 +430,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
             mainWorkout={mainWorkout}
             accessory={accessory}
             notes={notes}
+            showNotes={false}
             onSaveField={(field, value) => {
               const next = value;
               if (field === "mainWorkout") setMainWorkout(next);
@@ -456,7 +457,12 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
 
         <Separator />
 
-        <RpePrompt value={rpe} onChange={setRpe} />
+        <WorkoutEffortNotes
+          rpe={rpe}
+          onRpeChange={setRpe}
+          note={notes}
+          onNoteChange={(next) => setNotes(next ?? "")}
+        />
 
         <div className="space-y-2">
           <Button

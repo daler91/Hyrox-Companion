@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { Check, ListChecks, MessageSquare, SkipForward, Sparkles } from "lucide-react";
+import { Check, MessageSquare, SkipForward, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
-import { RpePrompt } from "./shared/RpePrompt";
+import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import {
   getWorkoutCoachPanelState,
@@ -40,8 +40,12 @@ interface LogSheetBaseProps {
 type LogSheetModeProps =
   | {
       readonly mode?: "log";
-      /** Tier 1: log the workout exactly as prescribed, with an optional RPE override. */
-      readonly onLogAsPlanned: (entry: TimelineEntry, rpe: number | null) => void;
+      /** Complete the workout as prescribed, carrying an optional RPE + note. */
+      readonly onLogAsPlanned: (
+        entry: TimelineEntry,
+        rpe: number | null,
+        note: string | null,
+      ) => void;
       readonly isLogging?: boolean;
     }
   | {
@@ -56,22 +60,28 @@ type PlanDayExerciseState = ReturnType<typeof usePlanDayExercises>;
 type WorkoutWeightUnit = "kg" | "lb";
 type WorkoutDistanceUnit = "km" | "miles";
 
-function useEntryRpe(entry: TimelineEntry | null) {
+// Local draft for the completion form (RPE + note). Both are seeded from
+// the entry and reset when the sheet is reused for a different workout.
+// The note carries the entry's existing notes so prior content isn't
+// silently dropped when the workout is completed.
+function useEntryDraft(entry: TimelineEntry | null) {
   const [rpe, setRpe] = useState<number | null>(entry?.rpe ?? null);
+  const [note, setNote] = useState<string>(entry?.notes ?? "");
   const [lastEntryId, setLastEntryId] = useState<string | null>(entry?.id ?? null);
 
   if (entry && entry.id !== lastEntryId) {
     setLastEntryId(entry.id);
     setRpe(entry.rpe ?? null);
+    setNote(entry.notes ?? "");
   }
 
-  return { rpe, setRpe };
+  return { rpe, setRpe, note, setNote };
 }
 
 function getLogButtonLabel(isSaving: boolean, isLogging?: boolean): string {
   if (isSaving) return "Saving edits\u2026";
-  if (isLogging) return "Logging\u2026";
-  return "Log as planned";
+  if (isLogging) return "Completing\u2026";
+  return "Complete workout";
 }
 
 function hasText(value: string | null | undefined): boolean {
@@ -92,6 +102,13 @@ interface PlannedPrescriptionProps {
   readonly weightUnit: WorkoutWeightUnit;
   readonly distanceUnit: WorkoutDistanceUnit;
   readonly parseHelperVisible: boolean;
+  /**
+   * Show the coach-note field inside the prescription editor. Off in log
+   * mode, where the note lives in the prominent completion-form field
+   * instead; on in edit mode, where the prescription editor is the only
+   * place to revise the coach's note.
+   */
+  readonly showPrescriptionNotes: boolean;
 }
 
 function PlannedPrescription({
@@ -100,6 +117,7 @@ function PlannedPrescription({
   weightUnit,
   distanceUnit,
   parseHelperVisible,
+  showPrescriptionNotes,
 }: PlannedPrescriptionProps) {
   const hasUnparsedText = hasPrescriptionText(entry) && planSets.exerciseSets.length === 0;
   return (
@@ -144,6 +162,7 @@ function PlannedPrescription({
           mainWorkout={entry.mainWorkout}
           accessory={entry.accessory}
           notes={entry.notes}
+          showNotes={showPrescriptionNotes}
           onSaveField={(field, value) =>
             planSets.updatePrescription.mutate({
               [field]: value.trim().length === 0 ? null : value,
@@ -244,6 +263,8 @@ interface LogCompletionControlsProps {
   readonly entry: TimelineEntry;
   readonly rpe: number | null;
   readonly setRpe: (rpe: number | null) => void;
+  readonly note: string;
+  readonly setNote: (note: string) => void;
   readonly onLog: () => void;
   readonly isLogging?: boolean;
   readonly isSaving: boolean;
@@ -255,6 +276,8 @@ function LogCompletionControls({
   entry,
   rpe,
   setRpe,
+  note,
+  setNote,
   onLog,
   isLogging,
   isSaving,
@@ -265,7 +288,12 @@ function LogCompletionControls({
     <>
       <Separator />
 
-      <RpePrompt value={rpe} onChange={setRpe} />
+      <WorkoutEffortNotes
+        rpe={rpe}
+        onRpeChange={setRpe}
+        note={note}
+        onNoteChange={(next) => setNote(next ?? "")}
+      />
 
       <div className="space-y-2">
         <Button
@@ -276,7 +304,7 @@ function LogCompletionControls({
           disabled={isLogging || isSaving}
           data-testid={`log-as-planned-${entry.id}`}
         >
-          <ListChecks className="mr-2 h-4 w-4" />
+          <Check className="mr-2 h-4 w-4" />
           {getLogButtonLabel(isSaving, isLogging)}
         </Button>
 
@@ -351,7 +379,7 @@ export function LogSheet({
   const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
   const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
-  const { rpe, setRpe } = useEntryRpe(entry);
+  const { rpe, setRpe, note, setNote } = useEntryDraft(entry);
 
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
 
@@ -364,7 +392,7 @@ export function LogSheet({
     // the new workoutLog, so a row edit still queued in the debounce
     // coordinator would be missing from the snapshot.
     await planSets.flushPendingSetPatches();
-    onLogAsPlanned(entry, rpe);
+    onLogAsPlanned(entry, rpe, note.trim().length > 0 ? note : null);
   };
 
   const handleDone = async () => {
@@ -419,6 +447,7 @@ export function LogSheet({
             weightUnit={weightUnit}
             distanceUnit={distanceUnit}
             parseHelperVisible={parseHelperVisible}
+            showPrescriptionNotes={isEditMode}
           />
         ) : (
           <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
@@ -436,6 +465,8 @@ export function LogSheet({
             entry={entry}
             rpe={rpe}
             setRpe={setRpe}
+            note={note}
+            setNote={setNote}
             onLog={handleLog}
             isLogging={isLogging}
             isSaving={planSets.isSaving}

@@ -118,7 +118,22 @@ describe("LogSheet parse failures", () => {
 
     await user.click(screen.getByTestId("log-as-planned-entry-1"));
     await waitFor(() => {
-      expect(onLogAsPlanned).toHaveBeenCalledWith(baseEntry, null);
+      expect(onLogAsPlanned).toHaveBeenCalledWith(baseEntry, null, null);
+    });
+  });
+
+  it("carries the athlete note through when completing the workout", async () => {
+    const onLogAsPlanned = vi.fn();
+    mockPlanDayExerciseState();
+
+    render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={onLogAsPlanned} />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Notes"), "Felt strong");
+    await user.click(screen.getByTestId("log-as-planned-entry-1"));
+
+    await waitFor(() => {
+      expect(onLogAsPlanned).toHaveBeenCalledWith(baseEntry, null, "Felt strong");
     });
   });
 
@@ -158,6 +173,6 @@ describe("LogSheet parse failures", () => {
     render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={vi.fn()} />);
 
     expect(screen.getByText(/How hard/i)).toBeInTheDocument();
-    expect(screen.getByTestId("log-as-planned-entry-1")).toHaveTextContent("Log as planned");
+    expect(screen.getByTestId("log-as-planned-entry-1")).toHaveTextContent("Complete workout");
   });
 });
