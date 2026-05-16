@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { CoachNoteInputs } from "@shared/schema";
+import type { CoachNoteInputs, ExerciseSet, InsertExerciseSet } from "@shared/schema";
 
 import type { TrainingContext, UpcomingWorkout } from "../gemini";
 
@@ -30,6 +30,8 @@ type WorkoutPrescriptionInput = Pick<
   UpcomingWorkout,
   "mainWorkout" | "accessory" | "notes" | "exerciseDetails"
 >;
+type ExerciseDetail = NonNullable<UpcomingWorkout["exerciseDetails"]>[number];
+type WorkoutTextField = "mainWorkout" | "accessory" | "notes";
 
 const FATIGUE_TERMS = [
   "fatigue",
@@ -95,6 +97,47 @@ function normalizeExerciseDetails(workout: WorkoutPrescriptionInput) {
       notes: normalizeText(exercise.notes),
     }))
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+}
+
+export function mapExerciseSetToPromptDetail(row: ExerciseSet | InsertExerciseSet): ExerciseDetail {
+  return {
+    exerciseName: row.exerciseName,
+    customLabel: row.customLabel ?? null,
+    category: row.category,
+    setNumber: row.setNumber ?? null,
+    reps: row.reps ?? null,
+    weight: row.weight ?? null,
+    distance: row.distance ?? null,
+    time: row.time ?? null,
+    notes: row.notes ?? null,
+    sortOrder: row.sortOrder ?? null,
+  };
+}
+
+export function buildStructuredResultingWorkout(
+  entry: UpcomingWorkout,
+  action: "replace" | "append",
+  structuredRows: InsertExerciseSet[],
+): UpcomingWorkout {
+  const structuredDetails = structuredRows.map(mapExerciseSetToPromptDetail);
+  return {
+    ...entry,
+    exerciseDetails:
+      action === "append"
+        ? [...(entry.exerciseDetails ?? []), ...structuredDetails]
+        : structuredDetails,
+  };
+}
+
+export function buildTextResultingWorkout(
+  entry: UpcomingWorkout,
+  targetField: WorkoutTextField,
+  updatedValue: string,
+): UpcomingWorkout {
+  return {
+    ...entry,
+    [targetField]: updatedValue,
+  };
 }
 
 export function buildWorkoutPrescriptionFingerprint(

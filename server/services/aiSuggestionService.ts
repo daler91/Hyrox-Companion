@@ -1,9 +1,4 @@
-import type {
-  CoachNoteInputs,
-  ExerciseSet,
-  InsertExerciseSet,
-  UpdatePlanDay,
-} from "@shared/schema";
+import type { CoachNoteInputs, ExerciseSet, UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits } from "@shared/unitConversion";
 import type { Logger } from "pino";
 
@@ -17,6 +12,9 @@ import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService
 import {
   buildSignalsFromCoachInputs,
   buildSignalsFromTrainingContext,
+  buildStructuredResultingWorkout,
+  buildTextResultingWorkout,
+  mapExerciseSetToPromptDetail,
   shouldSuppressRepeatedFatigueReduction,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
@@ -120,27 +118,10 @@ type PlanDayPrescription = {
   notes?: string | null;
 };
 
-type ExerciseDetail = NonNullable<UpcomingWorkout["exerciseDetails"]>[number];
-
-function mapExerciseSetToPromptDetail(row: ExerciseSet | InsertExerciseSet): ExerciseDetail {
-  return {
-    exerciseName: row.exerciseName,
-    customLabel: row.customLabel ?? null,
-    category: row.category,
-    setNumber: row.setNumber ?? null,
-    reps: row.reps ?? null,
-    weight: row.weight ?? null,
-    distance: row.distance ?? null,
-    time: row.time ?? null,
-    notes: row.notes ?? null,
-    sortOrder: row.sortOrder ?? null,
-  };
-}
-
 function buildWorkoutFromPlanDay(
   input: ApplyTimelineSuggestionInput,
   day: PlanDayPrescription,
-  exerciseSets: Array<ExerciseSet | InsertExerciseSet>,
+  exerciseSets: ExerciseSet[],
 ): UpcomingWorkout {
   return {
     id: input.workoutId,
@@ -150,34 +131,6 @@ function buildWorkoutFromPlanDay(
     accessory: day.accessory || undefined,
     notes: day.notes || undefined,
     exerciseDetails: exerciseSets.map(mapExerciseSetToPromptDetail),
-  };
-}
-
-function buildStructuredResultingWorkout(
-  input: ApplyTimelineSuggestionInput,
-  day: PlanDayPrescription,
-  existingExerciseSets: ExerciseSet[],
-  structuredSetRows: InsertExerciseSet[],
-): UpcomingWorkout {
-  const currentWorkout = buildWorkoutFromPlanDay(input, day, existingExerciseSets);
-  const structuredDetails = structuredSetRows.map(mapExerciseSetToPromptDetail);
-  return {
-    ...currentWorkout,
-    exerciseDetails:
-      input.action === "append"
-        ? [...(currentWorkout.exerciseDetails ?? []), ...structuredDetails]
-        : structuredDetails,
-  };
-}
-
-function buildTextResultingWorkout(
-  input: ApplyTimelineSuggestionInput,
-  day: PlanDayPrescription,
-  updatedValue: string,
-): UpcomingWorkout {
-  return {
-    ...buildWorkoutFromPlanDay(input, day, []),
-    [input.targetField]: updatedValue,
   };
 }
 
@@ -518,7 +471,11 @@ export async function applyTimelineAiSuggestion(
 
       if (structuredSetRows.length > 0) {
         const aiMetadata = buildAiMetadata(
-          buildStructuredResultingWorkout(input, day, existingExerciseSets, structuredSetRows),
+          buildStructuredResultingWorkout(
+            buildWorkoutFromPlanDay(input, day, existingExerciseSets),
+            input.action,
+            structuredSetRows,
+          ),
         );
         await db.transaction(async (tx) => {
           await applyStructuredPlanDaySuggestionRows(
@@ -549,7 +506,13 @@ export async function applyTimelineAiSuggestion(
       distanceUnit: user?.distanceUnit || "km",
     }) ?? textUpdateValue;
   const textUpdates: UpdatePlanDay = {
-    ...buildAiMetadata(buildTextResultingWorkout(input, day, normalizedTextUpdate)),
+    ...buildAiMetadata(
+      buildTextResultingWorkout(
+        buildWorkoutFromPlanDay(input, day, []),
+        input.targetField,
+        normalizedTextUpdate,
+      ),
+    ),
     [input.targetField]: normalizedTextUpdate,
   };
   await storage.plans.updatePlanDay(input.workoutId, textUpdates, userId);

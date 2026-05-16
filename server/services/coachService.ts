@@ -16,6 +16,8 @@ import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 import {
   buildSignalsFromTrainingContext,
+  buildStructuredResultingWorkout,
+  buildTextResultingWorkout,
   type CoachModificationSignals,
   shouldSuppressRepeatedFatigueReduction,
   withCoachModificationMetadata,
@@ -54,38 +56,6 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
 interface PreparedSuggestion {
   readonly suggestion: WorkoutSuggestion;
   readonly structuredSetRows?: InsertExerciseSet[];
-}
-
-type ExerciseDetail = NonNullable<UpcomingWorkout["exerciseDetails"]>[number];
-
-function mapSetRowToExerciseDetail(row: InsertExerciseSet): ExerciseDetail {
-  return {
-    exerciseName: row.exerciseName,
-    customLabel: row.customLabel ?? null,
-    category: row.category,
-    setNumber: row.setNumber ?? null,
-    reps: row.reps ?? null,
-    weight: row.weight ?? null,
-    distance: row.distance ?? null,
-    time: row.time ?? null,
-    notes: row.notes ?? null,
-    sortOrder: row.sortOrder ?? null,
-  };
-}
-
-function buildStructuredResultingWorkout(
-  entry: UpcomingWorkout,
-  suggestion: WorkoutSuggestion,
-  structuredSetRows: InsertExerciseSet[],
-): UpcomingWorkout {
-  const structuredDetails = structuredSetRows.map(mapSetRowToExerciseDetail);
-  return {
-    ...entry,
-    exerciseDetails:
-      suggestion.action === "append"
-        ? [...(entry.exerciseDetails ?? []), ...structuredDetails]
-        : structuredDetails,
-  };
 }
 
 function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
@@ -144,7 +114,11 @@ async function applyStructuredSuggestion(
 ): Promise<boolean> {
   const { suggestion, structuredSetRows } = prepared;
   if (!structuredSetRows || structuredSetRows.length === 0) return false;
-  const resultingWorkout = buildStructuredResultingWorkout(entry, suggestion, structuredSetRows);
+  const resultingWorkout = buildStructuredResultingWorkout(
+    entry,
+    suggestion.action,
+    structuredSetRows,
+  );
   const suggestionInputs = withCoachModificationMetadata(
     inputsUsed,
     suggestion,
@@ -255,14 +229,14 @@ async function applySuggestion(
 
   // Let errors propagate so the enclosing transaction rolls back — we want
   // all-or-nothing semantics for the auto-coach apply loop (C2).
-  const updateValue = normalizeWorkoutTextUnits(
-    buildUpdateValue(suggestion, entry),
-    unitPreferences,
+  const rawUpdateValue = buildUpdateValue(suggestion, entry);
+  const updateValue = normalizeWorkoutTextUnits(rawUpdateValue, unitPreferences) ?? rawUpdateValue;
+  const suggestionInputs = withCoachModificationMetadata(
+    inputsUsed,
+    suggestion,
+    coachSignals,
+    buildTextResultingWorkout(entry, suggestion.targetField, updateValue),
   );
-  const suggestionInputs = withCoachModificationMetadata(inputsUsed, suggestion, coachSignals, {
-    ...entry,
-    [suggestion.targetField]: updateValue,
-  });
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
     {

@@ -105,6 +105,86 @@ function textWorkoutFingerprint(
   return buildWorkoutPrescriptionFingerprint({ mainWorkout, accessory, notes });
 }
 
+function makePlannedDay(overrides: Record<string, unknown> = {}) {
+  return {
+    planDayId: "day-1",
+    date: "2026-05-02",
+    focus: "strength",
+    mainWorkout: "Back squat 3x5",
+    accessory: null,
+    notes: null,
+    aiSource: null,
+    aiRationale: null,
+    aiNoteUpdatedAt: null,
+    aiInputsUsed: null,
+    exerciseSets: [],
+    ...overrides,
+  };
+}
+
+function makeCoachingInsights(overrides: Record<string, unknown> = {}) {
+  return {
+    rpeTrend: "rising",
+    fatigueFlag: true,
+    undertrainingFlag: false,
+    stationGaps: [],
+    progressionFlags: [],
+    ...overrides,
+  };
+}
+
+function makeTrainingContext(overrides: Record<string, unknown> = {}) {
+  return {
+    totalWorkouts: 12,
+    completedWorkouts: 12,
+    plannedWorkouts: 1,
+    missedWorkouts: 0,
+    skippedWorkouts: 0,
+    completionRate: 100,
+    currentStreak: 4,
+    recentWorkouts: [],
+    exerciseBreakdown: {},
+    coachingInsights: makeCoachingInsights(),
+    ...overrides,
+  };
+}
+
+function makeFatigueReduction(mainWorkout: string, overrides: Record<string, unknown> = {}) {
+  return {
+    kind: "fatigue_volume_reduction" as const,
+    completedWorkoutCount: 12,
+    fatigueFlag: true,
+    rpeTrend: "rising" as const,
+    prescriptionFingerprint: textWorkoutFingerprint(mainWorkout),
+    ...overrides,
+  };
+}
+
+function makeWorkoutSuggestion(overrides: Record<string, unknown> = {}) {
+  return {
+    workoutId: "day-1",
+    workoutDate: "2026-05-02",
+    workoutFocus: "strength",
+    targetField: "mainWorkout",
+    action: "replace",
+    recommendation: "Back squat 2x5 lighter",
+    rationale: "Reduce volume because RPE and fatigue remain high.",
+    priority: "high",
+    ...overrides,
+  };
+}
+
+function mockUpcomingDay(overrides: Record<string, unknown> = {}) {
+  vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([makePlannedDay(overrides)]);
+}
+
+function mockAIContext(overrides: Record<string, unknown> = {}) {
+  vi.mocked(buildAIContext).mockResolvedValue({
+    trainingContext: makeTrainingContext(overrides),
+    ragInfo: { source: "none" },
+  });
+}
+
 describe("applyTimelineAiSuggestion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -374,35 +454,15 @@ describe("applyTimelineAiSuggestion", () => {
 describe("generateTimelineAiSuggestions safety surfacing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
-      {
-        planDayId: "day-1",
-        date: "2026-05-02",
-        focus: "run",
-        mainWorkout: "easy run",
-        accessory: null,
-        notes: "chest pain during warmup",
-        aiSource: null,
-        aiRationale: null,
-        aiNoteUpdatedAt: null,
-        aiInputsUsed: null,
-        exerciseSets: [],
-      },
-    ]);
+    mockUpcomingDay({ focus: "run", mainWorkout: "easy run", notes: "chest pain during warmup" });
     vi.mocked(storage.users.getUser).mockResolvedValue({ trainingStyleId: null, weightUnit: "kg" });
-    vi.mocked(buildAIContext).mockResolvedValue({
-      trainingContext: {
-        totalWorkouts: 0,
-        completedWorkouts: 0,
-        plannedWorkouts: 0,
-        missedWorkouts: 0,
-        skippedWorkouts: 0,
-        completionRate: 0,
-        currentStreak: 0,
-        recentWorkouts: [],
-        exerciseBreakdown: {},
-      },
-      ragInfo: { source: "none" },
+    mockAIContext({
+      totalWorkouts: 0,
+      completedWorkouts: 0,
+      plannedWorkouts: 0,
+      completionRate: 0,
+      currentStreak: 0,
+      coachingInsights: undefined,
     });
     vi.mocked(extractCoachingMaterialsText).mockReturnValue(undefined);
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
@@ -424,63 +484,18 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
   });
 
   it("suppresses repeat fatigue reductions when the plan day already has the same fatigue adjustment", async () => {
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
-      {
-        planDayId: "day-1",
-        date: "2026-05-02",
-        focus: "strength",
-        mainWorkout: "Back squat 3x5",
-        accessory: null,
-        notes: null,
-        aiSource: "rag",
-        aiRationale: "Reduced from 5x5 because RPE was high.",
-        aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
-        aiInputsUsed: {
-          lastFatigueReduction: {
-            kind: "fatigue_volume_reduction",
-            completedWorkoutCount: 12,
-            fatigueFlag: true,
-            rpeTrend: "rising",
-            reason: "Reduced from 5x5 because RPE was high.",
-            prescriptionFingerprint: textWorkoutFingerprint("Back squat 3x5"),
-          },
-        },
-        exerciseSets: [],
+    mockUpcomingDay({
+      aiSource: "rag",
+      aiRationale: "Reduced from 5x5 because RPE was high.",
+      aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
+      aiInputsUsed: {
+        lastFatigueReduction: makeFatigueReduction("Back squat 3x5", {
+          reason: "Reduced from 5x5 because RPE was high.",
+        }),
       },
-    ]);
-    vi.mocked(buildAIContext).mockResolvedValue({
-      trainingContext: {
-        totalWorkouts: 12,
-        completedWorkouts: 12,
-        plannedWorkouts: 1,
-        missedWorkouts: 0,
-        skippedWorkouts: 0,
-        completionRate: 100,
-        currentStreak: 4,
-        recentWorkouts: [],
-        exerciseBreakdown: {},
-        coachingInsights: {
-          rpeTrend: "rising",
-          fatigueFlag: true,
-          undertrainingFlag: false,
-          stationGaps: [],
-          progressionFlags: [],
-        },
-      },
-      ragInfo: { source: "none" },
     });
-    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
-      {
-        workoutId: "day-1",
-        workoutDate: "2026-05-02",
-        workoutFocus: "strength",
-        targetField: "mainWorkout",
-        action: "replace",
-        recommendation: "Back squat 2x5 lighter",
-        rationale: "Reduce volume because RPE and fatigue remain high.",
-        priority: "high",
-      },
-    ]);
+    mockAIContext();
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([makeWorkoutSuggestion()]);
 
     const result = await generateTimelineAiSuggestions("user-1", testLog);
 
@@ -489,62 +504,22 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
   });
 
   it("does not suppress fatigue reductions after the current workout prescription changes", async () => {
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
-      {
-        planDayId: "day-1",
-        date: "2026-05-02",
-        focus: "strength",
-        mainWorkout: "Back squat 5x5",
-        accessory: null,
-        notes: null,
-        aiSource: "rag",
-        aiRationale: "Reduced from 5x5 because RPE was high.",
-        aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
-        aiInputsUsed: {
-          lastFatigueReduction: {
-            kind: "fatigue_volume_reduction",
-            completedWorkoutCount: 12,
-            fatigueFlag: true,
-            rpeTrend: "rising",
-            reason: "Reduced from 5x5 because RPE was high.",
-            prescriptionFingerprint: textWorkoutFingerprint("Back squat 3x5"),
-          },
-        },
-        exerciseSets: [],
+    mockUpcomingDay({
+      mainWorkout: "Back squat 5x5",
+      aiSource: "rag",
+      aiRationale: "Reduced from 5x5 because RPE was high.",
+      aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
+      aiInputsUsed: {
+        lastFatigueReduction: makeFatigueReduction("Back squat 3x5", {
+          reason: "Reduced from 5x5 because RPE was high.",
+        }),
       },
-    ]);
-    vi.mocked(buildAIContext).mockResolvedValue({
-      trainingContext: {
-        totalWorkouts: 12,
-        completedWorkouts: 12,
-        plannedWorkouts: 1,
-        missedWorkouts: 0,
-        skippedWorkouts: 0,
-        completionRate: 100,
-        currentStreak: 4,
-        recentWorkouts: [],
-        exerciseBreakdown: {},
-        coachingInsights: {
-          rpeTrend: "rising",
-          fatigueFlag: true,
-          undertrainingFlag: false,
-          stationGaps: [],
-          progressionFlags: [],
-        },
-      },
-      ragInfo: { source: "none" },
     });
+    mockAIContext();
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
-      {
-        workoutId: "day-1",
-        workoutDate: "2026-05-02",
-        workoutFocus: "strength",
-        targetField: "mainWorkout",
-        action: "replace",
+      makeWorkoutSuggestion({
         recommendation: "Back squat 3x5 again",
-        rationale: "Reduce volume because RPE and fatigue remain high.",
-        priority: "high",
-      },
+      }),
     ]);
 
     const result = await generateTimelineAiSuggestions("user-1", testLog);
@@ -558,61 +533,25 @@ describe("generateTimelineAiSuggestions safety surfacing", () => {
   });
 
   it("still surfaces non-fatigue adjustments on a previously fatigue-reduced day", async () => {
-    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
-      {
-        planDayId: "day-1",
-        date: "2026-05-02",
-        focus: "strength",
-        mainWorkout: "Back squat 3x5",
-        accessory: null,
-        notes: null,
-        aiSource: "rag",
-        aiRationale: "Reduced from 5x5 because RPE was high.",
-        aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
-        aiInputsUsed: {
-          lastFatigueReduction: {
-            kind: "fatigue_volume_reduction",
-            completedWorkoutCount: 12,
-            fatigueFlag: true,
-            rpeTrend: "rising",
-            prescriptionFingerprint: textWorkoutFingerprint("Back squat 3x5"),
-          },
-        },
-        exerciseSets: [],
+    mockUpcomingDay({
+      aiSource: "rag",
+      aiRationale: "Reduced from 5x5 because RPE was high.",
+      aiNoteUpdatedAt: new Date("2026-05-01T12:00:00Z"),
+      aiInputsUsed: {
+        lastFatigueReduction: makeFatigueReduction("Back squat 3x5"),
       },
-    ]);
-    vi.mocked(buildAIContext).mockResolvedValue({
-      trainingContext: {
-        totalWorkouts: 12,
-        completedWorkouts: 12,
-        plannedWorkouts: 1,
-        missedWorkouts: 0,
-        skippedWorkouts: 0,
-        completionRate: 100,
-        currentStreak: 4,
-        recentWorkouts: [],
-        exerciseBreakdown: {},
-        coachingInsights: {
-          rpeTrend: "rising",
-          fatigueFlag: true,
-          undertrainingFlag: false,
-          stationGaps: [{ station: "Sled Push", daysSinceLastTrained: 20 }],
-          progressionFlags: [],
-        },
-      },
-      ragInfo: { source: "none" },
+    });
+    mockAIContext({
+      coachingInsights: makeCoachingInsights({
+        stationGaps: [{ station: "Sled Push", daysSinceLastTrained: 20 }],
+      }),
     });
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
-      {
-        workoutId: "day-1",
-        workoutDate: "2026-05-02",
-        workoutFocus: "strength",
-        targetField: "mainWorkout",
-        action: "replace",
+      makeWorkoutSuggestion({
         recommendation: "Back squat 3x5 then sled push 4x20m",
         rationale: "Sled Push has not been trained in 20 days.",
         priority: "medium",
-      },
+      }),
     ]);
 
     const result = await generateTimelineAiSuggestions("user-1", testLog);
