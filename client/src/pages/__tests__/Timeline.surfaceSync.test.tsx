@@ -14,7 +14,7 @@ const apiMocks = vi.hoisted(() => ({ updatePreferences: vi.fn() }));
 const viewportState = vi.hoisted(() => ({ isMobile: false }));
 const dataMocks = vi.hoisted(() => ({ scrollToToday: vi.fn() }));
 const virtualizerMocks = vi.hoisted(() => ({
-  getVirtualItems: vi.fn(() => [{ key: "0", index: 0, start: 0 }]),
+  getVirtualItems: vi.fn(() => [{ key: "0", index: 0, start: 0, end: 300, size: 300 }]),
   measureElement: vi.fn(),
   scrollToIndex: vi.fn(),
 }));
@@ -365,7 +365,7 @@ describe("Timeline surface sync", () => {
     apiMocks.updatePreferences.mockResolvedValue({});
     dataMocks.scrollToToday.mockReset();
     virtualizerMocks.getVirtualItems.mockReset();
-    virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0 }]);
+    virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0, end: 300, size: 300 }]);
     virtualizerMocks.measureElement.mockReset();
     virtualizerMocks.scrollToIndex.mockReset();
   });
@@ -484,7 +484,7 @@ describe("Timeline surface sync", () => {
       past: [["2026-05-14", [pastEntry]]],
       future: [["2026-05-15", [todayEntry]]],
     });
-    virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0 }]);
+    virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0, end: 300, size: 300 }]);
 
     renderTimeline();
 

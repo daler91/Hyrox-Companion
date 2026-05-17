@@ -116,6 +116,17 @@ export function TimelineContent({
     );
   }
 
+  // Rows render in normal flow between spacer divs instead of being
+  // absolutely positioned in a getTotalSize()-tall box: getTotalSize()
+  // trails a row's real height for a frame after its content changes,
+  // which let the trailing "Show more" button overlap the last card.
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const topSpacerHeight = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const bottomSpacerHeight =
+    virtualRows.length > 0
+      ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+      : 0;
+
   return (
     <div className="space-y-4">
       {hiddenPastCount > 0 && (
@@ -142,57 +153,44 @@ export function TimelineContent({
         </Button>
       )}
 
-      <div style={{ position: "relative" }}>
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const [date, entries] = allVisibleGroups[virtualRow.index];
-            return (
-              <div
-                key={virtualRow.key}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-                ref={rowVirtualizer.measureElement}
-                data-index={virtualRow.index}
-              >
-                <TimelineDateGroup
-                  key={date}
-                  ref={isToday(parseISO(date)) ? todayRef : undefined}
-                  date={date}
-                  entries={entries}
-                  annotations={annotationsByDate[date]}
-                  onMarkComplete={handleMarkComplete}
-                  onClick={onCardClick}
-                  onCombineSelect={handleCombine}
-                  isCombining={!!combiningEntry}
-                  combiningEntryId={combiningEntry?.id || null}
-                  combiningEntryDate={combiningEntry?.date || null}
-                  personalRecords={personalRecords}
-                  isAutoCoaching={isAutoCoaching}
-                  onAddAnnotation={onAddAnnotation}
-                  onEditAnnotation={onEditAnnotation}
-                  onDeleteAnnotation={onDeleteAnnotation}
-                  isAnnotationDeleting={isAnnotationDeleting}
-                  onMoveEntry={onMoveEntry}
-                  isMovingEntry={isMovingEntry}
-                  isBulkSelectMode={isBulkSelectMode}
-                  selectedBulkEntryKeys={selectedBulkEntryKeys}
-                  onBulkSelectToggle={onBulkSelectToggle}
-                />
-              </div>
-            );
-          })}
-        </div>
+      <div>
+        <div style={{ height: `${topSpacerHeight}px` }} />
+        {virtualRows.map((virtualRow) => {
+          const [date, entries] = allVisibleGroups[virtualRow.index];
+          return (
+            <div
+              key={virtualRow.key}
+              ref={rowVirtualizer.measureElement}
+              data-index={virtualRow.index}
+            >
+              <TimelineDateGroup
+                key={date}
+                ref={isToday(parseISO(date)) ? todayRef : undefined}
+                date={date}
+                entries={entries}
+                annotations={annotationsByDate[date]}
+                onMarkComplete={handleMarkComplete}
+                onClick={onCardClick}
+                onCombineSelect={handleCombine}
+                isCombining={!!combiningEntry}
+                combiningEntryId={combiningEntry?.id || null}
+                combiningEntryDate={combiningEntry?.date || null}
+                personalRecords={personalRecords}
+                isAutoCoaching={isAutoCoaching}
+                onAddAnnotation={onAddAnnotation}
+                onEditAnnotation={onEditAnnotation}
+                onDeleteAnnotation={onDeleteAnnotation}
+                isAnnotationDeleting={isAnnotationDeleting}
+                onMoveEntry={onMoveEntry}
+                isMovingEntry={isMovingEntry}
+                isBulkSelectMode={isBulkSelectMode}
+                selectedBulkEntryKeys={selectedBulkEntryKeys}
+                onBulkSelectToggle={onBulkSelectToggle}
+              />
+            </div>
+          );
+        })}
+        <div style={{ height: `${bottomSpacerHeight}px` }} />
       </div>
 
       {hiddenFutureCount > 0 && (
