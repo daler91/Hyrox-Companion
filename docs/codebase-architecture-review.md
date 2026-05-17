@@ -2,6 +2,14 @@
 
 *Last Updated: May 3, 2026*
 
+> **Status note (May 17, 2026):** This document is a historical architecture
+> review snapshot. Several items below have been resolved or superseded by
+> follow-up work: Timeline and ExerciseTable were split into focused modules,
+> `workoutService`, shared schema types, the exercise parser, and coach-service
+> tests were decomposed, and rate limits/short-lived runtime cache state now use
+> PostgreSQL-backed shared tables with advisory-locked cron jobs. Use live source
+> inspection before treating any May 3 roadmap item as still open.
+
 ## Executive Summary
 The Hyrox Companion codebase is a well-structured, modern TypeScript application utilizing a React SPA frontend and an Express backend. It follows a clean architecture pattern with a clear separation between transport (Routes), orchestration (Services/Use-Cases), and data access (Storage). Key strengths include a unified schema via Drizzle ORM, robust idempotency enforcement, and a sophisticated RAG-based AI coaching pipeline. Primary areas for improvement involve completing the migration of business logic from routes to use-cases and addressing potential scalability bottlenecks in the analytics and timeline modules.
 
@@ -16,6 +24,12 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 - **Data Flow**: Frontend hooks invoke the typed API client $\rightarrow$ Express routes validate input $\rightarrow$ Service/Use-case layer orchestrates business logic and external AI calls $\rightarrow$ Storage layer executes Drizzle queries.
 
 ## Highest-Priority Findings
+
+The findings below were captured on May 3, 2026. After the May 2026 review-fix
+rounds, the current source of truth is the live codebase plus the living docs.
+The items that remain most likely to need follow-up are route/use-case
+extraction, analytics row capping, timeline SQL windowing, owner-aware exercise
+set mutation parity, and integration-module organization.
 
 ### 1. Incomplete Use-Case Extraction
 - **Priority**: P1
@@ -93,9 +107,12 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 
 ### 4. `client/src/pages/Timeline.tsx` surface orchestration split
 
+- **Status (May 17, 2026)**: Superseded by the Timeline shell split and
+  `client/src/pages/timeline/` component/hook modules. Re-open only if a fresh
+  lint or code review finds new Timeline-specific complexity.
 - File path: `client/src/pages/Timeline.tsx`
 - Code area: Timeline page interactions, dialogs/sheets, click routing, coach panel, plan selection, virtualization.
-- Problem: One page component owns many independent surfaces.
+- Problem at snapshot time: One page component owned many independent surfaces.
 - Why it matters: Timeline is central and already has focused regression tests; the current file size makes feature work and review slower.
 - Recommended refactor: Extract `useTimelineSurfaces`, `TimelineDialogs`, and click-routing helpers. Keep rendering shape stable and migrate one surface group per PR.
 - Tradeoffs: More component boundaries, but clearer ownership and easier tests.
@@ -103,9 +120,11 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 
 ### 5. `ExerciseTable.tsx` row/render/dnd decomposition
 
+- **Status (May 17, 2026)**: Superseded by the ExerciseTable decomposition into
+  `client/src/components/workout-detail/exercise-table/` modules.
 - File path: `client/src/components/workout-detail/ExerciseTable.tsx`
 - Code area: Structured table display/editing, planned diffs, dnd-kit behavior, row menus, add/edit flows.
-- Problem: DnD state, table rendering, domain metric calculations, and row editing live together.
+- Problem at snapshot time: DnD state, table rendering, domain metric calculations, and row editing lived together.
 - Why it matters: This component drives both completed and planned exercise tables, which are key to the AI coach and manual logging workflows.
 - Recommended refactor: Extract `useExerciseTableDnd`, `ExerciseTableRow`, `PlannedDiffSummary`, and pure metric helpers. Use existing `ExerciseTable.test.tsx` coverage as the safety net.
 - Tradeoffs: Component boundaries need to preserve keyboard and drag/drop behavior.
@@ -113,9 +132,12 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 
 ### 6. `server/services/workoutService.ts` orchestration split
 
+- **Status (May 17, 2026)**: Superseded by the workout service split under
+  `server/services/workoutService/`, with the top-level file retained as a
+  compatibility barrel.
 - File path: `server/services/workoutService.ts`
 - Code area: Workout creation, update, import/enrichment, exercise parsing, set mapping, coaching scheduling, transactions.
-- Problem: The file remains a large domain service at 742 lines and mixes several workflow types.
+- Problem at snapshot time: The file was a large domain service and mixed several workflow types.
 - Why it matters: Workout creation/update is high-traffic and interacts with AI coaching, plans, storage, and custom exercises.
 - Recommended refactor: Extract cohesive workflow modules such as `workoutCreationService`, `workoutUpdateService`, `workoutExerciseMapping`, and `workoutCoachingScheduler`. Keep `workoutUseCases.ts` as route-facing API.
 - Tradeoffs: Requires careful import direction and tests around transaction behavior.
@@ -143,6 +165,9 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 
 ### 9. Docs and contract-source refresh
 
+- **Status (May 17, 2026)**: Partially addressed by the targeted documentation
+  sync that updated client, integration, testing, and architecture docs. Continue
+  treating docs as a contract surface after meaningful route or workflow changes.
 - File path: `README.md`, `docs/client.md`, `docs/server.md`, `docs/testing.md`, `docs/api-reference.md`, `shared/openapi.ts`
 - Code area: Toolchain docs, route docs, testing docs, OpenAPI source.
 - Problem: Docs still contain older Vite/TypeScript/test-count references and old route descriptions (e.g., test counts in `docs/testing.md` may lag actuals).
@@ -153,9 +178,12 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 
 ### 10. Onboarding test stability before UI refactors
 
+- **Status (May 17, 2026)**: Historical note. Durable onboarding completion and
+  safe-storage handling were implemented after this snapshot; re-run current
+  focused onboarding tests before treating these exact failures as open.
 - File path: `client/src/components/OnboardingWizard.test.tsx`, `client/src/components/OnboardingWizard.tsx`
 - Code area: Onboarding flow tests.
-- Problem: The full Vitest run currently fails two tests in `OnboardingWizard.test.tsx`.
+- Problem: At the time of the May 3 snapshot, the full Vitest run failed two tests in `OnboardingWizard.test.tsx`.
 - Why it matters: Large UI refactors should not proceed with known failing tests in adjacent client flows.
 - Recommended refactor: Stabilize or repair the failing tests before broader client decomposition.
 - Tradeoffs: This is test-health work, not architecture, but it protects later changes.
@@ -170,9 +198,12 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 
 ## Testing Recommendations
 
-1. Stabilize the current Vitest failures before broad client refactors.
-   - Current failures: `client/src/components/OnboardingWizard.test.tsx:93` times out in `shows error toast when preferences mutation fails`; `client/src/components/OnboardingWizard.test.tsx:130` cannot find `Continue` in `completes onboarding when an AI plan is generated`.
-   - Why: Timeline and workout-detail refactors should not land on top of a red baseline.
+1. Re-run focused tests before assuming historical failures still exist.
+   - The OnboardingWizard failures listed in the May 3 snapshot were historical
+     baseline failures. Durable onboarding completion and related tests changed
+     after this review.
+   - Why: refactor planning should start from the current test baseline, not this
+     dated command output.
 
 2. Add owner-parity tests for structured exercise-set mutations.
    - Cover workout-log and plan-day owners with the same behavior table.
@@ -182,19 +213,19 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
    - Current test file: `server/routes/__tests__/protectedRouteBuilder.test.ts`.
    - Add cases for AI consent, AI budget, custom middleware ordering, validation failure, and async errors.
 
-4. Add Timeline surface tests before splitting `Timeline.tsx`.
-   - Existing tests such as `client/src/pages/__tests__/Timeline.clickLoop.test.tsx` and `Timeline.missed-routing.test.tsx` are good anchors.
-   - Add tests for future planned, today planned, completed, skipped, missed, URL workout ID, and sheet close behavior.
+4. Maintain Timeline surface coverage after the shell split.
+   - Existing tests such as `client/src/pages/__tests__/Timeline.clickLoop.test.tsx`, `Timeline.missed-routing.test.tsx`, `Timeline.surfaceSync.test.tsx`, and focused timeline component tests are the current anchors.
+   - Add new cases around future planned, today planned, completed, skipped, missed, URL workout ID, and sheet close behavior when those flows change.
 
-5. Add ExerciseTable extraction tests around pure behavior.
-   - Cover field resolution, planned-vs-actual diff rendering, row reorder calls, add/delete behavior, and keyboard/a11y affordances.
+5. Maintain ExerciseTable extraction tests around pure behavior.
+   - Cover field resolution, planned-vs-actual diff rendering, row reorder calls, add/delete behavior, and keyboard/a11y affordances as the extracted modules evolve.
 
 6. Add OpenAPI/route contract checks for documented high-traffic endpoints.
    - Start with workout create/update, plan-day set mutations, timeline list, and AI suggestion apply.
 
-7. Add operational tests for scheduler/limiter abstractions when introduced.
-   - For shared rate limiting, test that key construction and limit policy remain compatible.
-   - For cron locking, test that only one process would run a scheduled job when lock acquisition fails.
+7. Keep operational tests for scheduler/limiter abstractions current.
+   - Shared rate limiting and short-lived runtime state now use PostgreSQL-backed tables outside tests.
+   - Cron jobs are guarded by PostgreSQL advisory locks; tests should continue proving lock-key uniqueness, skip behavior, and release-on-throw.
 
 8. Keep integration and Cypress tests targeted.
    - Leverage the existing testing pyramid (Vitest unit, integration, and Cypress E2E specs) as outlined in `docs/testing.md`.
@@ -206,7 +237,7 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 ## Suggested Migration Roadmap
 1. **Quick Wins (Week 1)**: Normalize `custom-exercises` validation, await email job enqueues, and fix the Strava skipped-counter reported in `CODEBASE_AUDIT.md`.
 2. **Medium Refactors (Week 2-3)**: Complete the extraction of workout AI orchestration to `workoutUseCases.ts`. Refactor `plans.ts` to thin out route handlers.
-3. **Architectural Improvements (Week 4+)**: Implement persistent rate limiting and migrate the timeline to a SQL-based unified query.
+3. **Architectural Improvements (Week 4+)**: Monitor PostgreSQL-backed runtime state under production traffic and migrate the timeline to a SQL-based unified query. Add Redis only if write volume, latency, or hosting topology justifies another service.
 
 ## PR-by-PR Refactoring Plan
 1. **PR 1: Code Health - Core Wins**
@@ -218,11 +249,15 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 3. **PR 3: Refactor: Plan Management Services**
    - Goal: Thin out `server/routes/plans.ts` by moving business logic to `planService.ts`.
    - Files: `server/routes/plans.ts`, `server/services/planService.ts`.
-4. **PR 4: Performance: Persistent Rate Limiting**
-   - Goal: Transition `routeUtils.ts` to support Redis/External store for rate limiting.
-   - Files: `server/routeUtils.ts`, `server/env.ts`.
+4. **PR 4: Runtime State Follow-Up**
+   - Status: Superseded by PostgreSQL-backed rate limits/runtime cache and advisory-locked cron jobs.
+   - Next goal: monitor the shared runtime-state tables and add Redis only if real traffic shows Postgres is the wrong store.
+   - Files: `server/rateLimitStore.ts`, `server/sharedRuntimeState.ts`, `server/advisoryLock.ts`, `server/env.ts`.
 
 ## Commands Run
+
+These command notes are historical from the May 3 review pass and should not be
+read as current verification results.
 - `ls -F`: Passed.
 - `cat package.json README.md`: Passed.
 - `ls -R shared/schema server/routes server/services client/src/pages client/src/components`: Passed.
@@ -235,6 +270,9 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 *Note: During the latest review pass on May 3, 2026, no new terminal commands were executed due to cloud environment restrictions.*
 
 ## Limitations
+
+These limitations describe the May 3 review environment. They are retained for
+auditability, not as statements about the current local workspace.
 
 - `rg --files` could not run in this environment because `rg.exe` returned `Access is denied`; I used `git ls-files`, `git grep`, `Get-Content`, and `Select-String` instead.
 - One extension-count command partially failed on a path containing characters PowerShell treated as illegal; this did not block inspection because `git ls-files` and targeted file reads still worked.
