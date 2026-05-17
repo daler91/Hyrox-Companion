@@ -1,1 +1,2 @@
-export { batchReparseWorkouts, classifyWorkoutCompliance, summarizeSetAdherence } from "../workoutService";
+export { classifyWorkoutCompliance, summarizeSetAdherence } from "./adherence";
+export { batchReparseWorkouts, processBatchChunk } from "./reparse";
