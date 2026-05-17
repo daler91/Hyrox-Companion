@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generateWorkoutSuggestions, parseExercisesFromText } from "../gemini/index";
 import { storage } from "../storage";
-import { buildWorkoutPrescriptionFingerprint } from "./aiModificationGuard";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
+import { buildWorkoutPrescriptionFingerprint } from "./aiModificationGuard";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "./aiSuggestionService";
 
 const dbMockState = vi.hoisted(() => {

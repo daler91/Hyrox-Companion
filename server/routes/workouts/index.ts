@@ -3,8 +3,8 @@ import { Router } from "express";
 import { registerWorkoutAiRoutes } from "./workoutsAi.routes";
 import { registerWorkoutCrudRoutes } from "./workoutsCrud.routes";
 import { registerWorkoutExportRoutes } from "./workoutsExport.routes";
-import { registerWorkoutTimelineRoutes } from "./workoutsTimeline.routes";
 import { registerWorkoutMigrationRoutes } from "./workoutsMigration.routes";
+import { registerWorkoutTimelineRoutes } from "./workoutsTimeline.routes";
 
 const router = Router();
 
