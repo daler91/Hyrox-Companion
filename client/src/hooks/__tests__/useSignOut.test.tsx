@@ -24,7 +24,7 @@ describe("useSignOut", () => {
     const { result } = renderHook(() => useSignOut());
 
     act(() => {
-      void result.current();
+      result.current();
     });
 
     expect(localStorage.getItem("fitai-offline-queue")).toBeNull();

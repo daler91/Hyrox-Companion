@@ -20,18 +20,18 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
 
   return useMutation({
     mutationFn: async (workoutData: SaveWorkoutInput): Promise<SaveWorkoutResult> => {
-      const idempotencyKey = createOfflineMutationId();
-
       if (isBrowserOffline()) {
-        return queueWorkoutSave(workoutData, idempotencyKey);
+        return queueWorkoutSave(workoutData, createOfflineMutationId());
       }
 
+      const idempotencyKey = createOptionalIdempotencyKey();
+
       try {
-        await api.workouts.create(workoutData, { idempotencyKey });
+        await api.workouts.create(workoutData, createWorkoutOptions(idempotencyKey));
         return { status: "saved" };
       } catch (error) {
         if (isConnectivityFailure(error)) {
-          return queueWorkoutSave(workoutData, idempotencyKey);
+          return queueWorkoutSave(workoutData, idempotencyKey ?? createOfflineMutationId());
         }
         throw error;
       }
@@ -80,6 +80,19 @@ function queueWorkoutSave(workoutData: SaveWorkoutInput, id: string): SaveWorkou
   return { status: "queued", id };
 }
 
+function createWorkoutOptions(idempotencyKey: string | undefined): { idempotencyKey: string } | undefined {
+  return idempotencyKey ? { idempotencyKey } : undefined;
+}
+
+function createOptionalIdempotencyKey(): string | undefined {
+  try {
+    return createOfflineMutationId();
+  } catch (error) {
+    if (error instanceof TypeError) return undefined;
+    throw error;
+  }
+}
+
 function isBrowserOffline(): boolean {
   return globalThis.navigator !== undefined && globalThis.navigator.onLine === false;
 }
@@ -112,7 +125,9 @@ function extractApiErrorCode(error: unknown): string | null {
   const payloadCode = getCodeFromPayload(asRecord.payload);
   if (payloadCode) return payloadCode;
 
-  const responseDataCode = getCodeFromPayload(asRecord.response && typeof asRecord.response === "object" ? (asRecord.response as Record<string, unknown>).data : null);
+  const responseDataCode = getCodeFromPayload(
+    typeof asRecord.response === "object" ? (asRecord.response as Record<string, unknown> | null)?.data : null,
+  );
   if (responseDataCode) return responseDataCode;
 
   const message = asRecord.message;

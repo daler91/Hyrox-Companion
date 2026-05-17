@@ -124,7 +124,7 @@ export function createOfflineMutationId(): string {
   const crypto = globalThis.crypto;
 
   if (!crypto) {
-    throw new Error("Secure random values are unavailable for offline mutation IDs.");
+    throw new TypeError("Secure random values are unavailable for offline mutation IDs.");
   }
 
   if (typeof crypto.randomUUID === "function") {
@@ -132,7 +132,7 @@ export function createOfflineMutationId(): string {
   }
 
   if (typeof crypto.getRandomValues !== "function") {
-    throw new Error("Secure random values are unavailable for offline mutation IDs.");
+    throw new TypeError("Secure random values are unavailable for offline mutation IDs.");
   }
 
   const values = new Uint8Array(16);

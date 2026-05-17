@@ -102,6 +102,21 @@ describe("useSaveWorkoutMutation", () => {
     expect(mocks.navigate).toHaveBeenCalledWith("/");
   });
 
+  it("allows online direct saves when secure offline ids are unavailable", async () => {
+    mocks.createOfflineMutationId.mockImplementationOnce(() => {
+      throw new TypeError("Secure random values are unavailable for offline mutation IDs.");
+    });
+    const { result } = renderMutation();
+
+    await act(async () => {
+      await result.current.mutateAsync(workoutPayload);
+    });
+
+    expect(mocks.createWorkout).toHaveBeenCalledWith(workoutPayload, undefined);
+    expect(mocks.enqueueMutation).not.toHaveBeenCalled();
+    expect(mocks.invalidateWorkoutWriteQueries).toHaveBeenCalledOnce();
+  });
+
   it("queues without calling the API when the browser is offline", async () => {
     setOnline(false);
     const { result, onSaveSuccess } = renderMutation();
