@@ -23,6 +23,22 @@ export interface DroppedMutationInfo {
 export type OnMutationDroppedCallback = (info: DroppedMutationInfo) => void;
 
 const droppedCallbacks: OnMutationDroppedCallback[] = [];
+export const OFFLINE_QUEUE_CHANGE_EVENT = "offline-queue-change";
+export const OFFLINE_SYNC_COMPLETE_EVENT = "offline-sync-complete";
+
+interface EnqueueMutationOptions {
+  id?: string;
+}
+
+export interface OfflineQueueChangeDetail {
+  pendingCount: number;
+}
+
+export interface OfflineSyncCompleteDetail {
+  synced: number;
+  failed: number;
+  dropped: number;
+}
 
 /**
  * Register a callback that fires whenever a mutation is permanently dropped
@@ -44,6 +60,21 @@ function notifyDropped(info: DroppedMutationInfo) {
       // Never let a callback error break the queue
     }
   }
+}
+
+function dispatchWindowEvent<T>(name: string, detail: T) {
+  if (globalThis.window === undefined) return;
+  globalThis.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+function notifyQueueChanged() {
+  dispatchWindowEvent<OfflineQueueChangeDetail>(OFFLINE_QUEUE_CHANGE_EVENT, {
+    pendingCount: getPendingCount(),
+  });
+}
+
+function notifySyncComplete(detail: OfflineSyncCompleteDetail) {
+  dispatchWindowEvent<OfflineSyncCompleteDetail>(OFFLINE_SYNC_COMPLETE_EVENT, detail);
 }
 
 const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
@@ -86,10 +117,31 @@ function saveQueue(queue: PendingMutation[]) {
       localStorage.removeItem(STORAGE_KEY);
     }
   }
+  notifyQueueChanged();
 }
 
-export function enqueueMutation(method: string, url: string, body: unknown): string {
-  const id = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+export function createOfflineMutationId(): string {
+  const crypto = globalThis.crypto;
+
+  if (!crypto) {
+    throw new TypeError("Secure random values are unavailable for offline mutation IDs.");
+  }
+
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  if (typeof crypto.getRandomValues !== "function") {
+    throw new TypeError("Secure random values are unavailable for offline mutation IDs.");
+  }
+
+  const values = new Uint8Array(16);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+export function enqueueMutation(method: string, url: string, body: unknown, options?: EnqueueMutationOptions): string {
+  const id = options?.id ?? createOfflineMutationId();
   const queue = getQueue();
 
   // Evict oldest entries when queue is at capacity
@@ -114,6 +166,15 @@ export function enqueueMutation(method: string, url: string, body: unknown): str
 
 export function getPendingCount(): number {
   return getQueue().length;
+}
+
+export function clearOfflineQueue(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+  notifyQueueChanged();
 }
 
 export async function flushQueue(): Promise<{ synced: number; failed: number; dropped: number }> {
@@ -157,6 +218,9 @@ export async function flushQueue(): Promise<{ synced: number; failed: number; dr
   }
 
   saveQueue(remaining);
+  if (synced > 0 || dropped > 0) {
+    notifySyncComplete({ synced, failed, dropped });
+  }
   return { synced, failed, dropped };
 }
 
@@ -164,11 +228,6 @@ export async function flushQueue(): Promise<{ synced: number; failed: number; dr
 if (globalThis.window !== undefined) {
   globalThis.addEventListener("online", () => {
     void flushQueue()
-      .then(({ synced, dropped }) => {
-        if (synced > 0 || dropped > 0) {
-          globalThis.dispatchEvent(new CustomEvent("offline-sync-complete", { detail: { synced, dropped } }));
-        }
-      })
       .catch(() => {
         // Individual mutation failures are already handled inside flushQueue.
         // This catches unexpected errors (e.g. localStorage unavailable).

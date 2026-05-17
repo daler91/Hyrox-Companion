@@ -334,6 +334,7 @@ describe('useWorkoutForm', () => {
           '/api/v1/workouts',
           expect.objectContaining({ title: 'Workout', focus: 'Workout' }),
           expect.any(AbortSignal),
+          expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }),
         );
       });
     });
@@ -420,7 +421,7 @@ describe('useWorkoutForm', () => {
           mainWorkout: 'Ran 5k in 25 mins',
           notes: 'Felt great',
           rpe: null,
-        }, expect.any(AbortSignal));
+        }, expect.any(AbortSignal), expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }));
       });
     });
 
@@ -476,7 +477,7 @@ describe('useWorkoutForm', () => {
               sets: [expect.objectContaining({ setNumber: 1, reps: 10, weight: 100 })],
             }),
           ],
-        }, expect.any(AbortSignal));
+        }, expect.any(AbortSignal), expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }));
       });
     });
 
@@ -521,6 +522,7 @@ describe('useWorkoutForm', () => {
             ],
           }),
           expect.any(AbortSignal),
+          expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }),
         );
       });
     });
@@ -542,7 +544,7 @@ describe('useWorkoutForm', () => {
       await waitFor(() => {
         expect(queryClientLib.apiRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', expect.objectContaining({
           notes: null, // Should be normalized to null
-        }), expect.any(AbortSignal));
+        }), expect.any(AbortSignal), expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }));
       });
     });
   });
@@ -588,7 +590,7 @@ describe('useWorkoutForm', () => {
 
     it('triggers generic error toast on failed save', async () => {
       await expectFailedSaveToast({
-        error: new Error('Network Error'),
+        error: new Error('500: Internal Server Error'),
         expectedToast: {
           title: "Error",
           description: "Failed to save workout. Please try again.",
