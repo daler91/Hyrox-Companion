@@ -137,6 +137,7 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 - Standard `RateLimit-*` headers (RFC 6585)
 - Returns `429` with `Retry-After` header and `RATE_LIMITED` error code
 - Limiter instances are cached per `(category, maxRequests, windowMs)` tuple
+- Uses in-process `MemoryStore`; production is currently single-replica only (`APP_INSTANCE_COUNT=1`) until shared rate-limit storage is added
 - The SPA fallback route in `server/static.ts` has its own rate limiter (100 requests per 15 minutes)
 
 ### Body Size Limits
@@ -304,6 +305,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `GEMINI_API_KEY` | No | Gemini key for the Gemini text provider, RAG embeddings, and image parsing |
 | `CRON_SECRET` | No | Secret for authenticating external cron triggers |
 | `INTERNAL_ANALYTICS_SECRET` | No | Secret for authenticating internal analytics health endpoints |
+| `APP_INSTANCE_COUNT` | No | Declared app replica count (default `1`). Production refuses values above `1` until shared rate limits/caches are implemented. |
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
 | `STRAVA_STATE_SECRET` | No | Secret for signing Strava OAuth state tokens |
@@ -353,11 +355,19 @@ Failed jobs are re-thrown to let pg-boss handle retries.
 
 ### Cron Scheduling
 
-`server/cron.ts` uses `node-cron` to run a single scheduled task:
+`server/cron.ts` uses `node-cron` for in-process scheduled tasks. Each cron body is wrapped in a PostgreSQL advisory lock so duplicate schedulers skip work instead of running the same maintenance job twice.
 
-- **Schedule**: Daily at 09:00 UTC (`"0 9 * * *"`)
-- **Task**: `runEmailCronJob(storage)` -- checks users and sends scheduled emails
-- **Catch-up**: If the server starts after 09:00 UTC, a catch-up run is triggered after a 30-second delay. The email scheduler has built-in idempotency guards to prevent duplicate sends.
+| Job | Schedule | Lock |
+|---|---|---|
+| Email check | Daily at 09:00 UTC | `dailyEmail` |
+| Idempotency cleanup | Daily at 03:30 UTC | `idempotencyCleanup` |
+| AI usage cleanup | Daily at 04:00 UTC | `aiUsageCleanup` |
+| Stale auto-coach recovery | Every 10 minutes | `staleAutoCoaching` |
+| pg-boss queue-depth telemetry | Every 5 minutes | `queueDepthTelemetry` |
+| Structured exercise health rollup | Daily at 02:10 UTC | `structuredExerciseRollup` |
+| Startup email catch-up | 30 seconds after late startup | `startupEmailCatchUp` |
+
+The advisory locks are defensive, not a horizontal-scaling signal: `APP_INSTANCE_COUNT > 1` is still rejected in production because rate limits and hot caches remain process-local.
 
 ### Route Utilities
 

@@ -1,5 +1,7 @@
 import cron from "node-cron";
 
+import { withPgAdvisoryLock } from "./advisoryLock";
+import { pool } from "./db";
 import { runEmailCronJob } from "./emailScheduler";
 import { logger } from "./logger";
 import { queue } from "./queue";
@@ -18,6 +20,23 @@ let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null
 // run and well below user-perceived "stuck" thresholds (W5).
 const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
 
+export const CRON_LOCK_KEYS = {
+  dailyEmail: 42_010_001n,
+  idempotencyCleanup: 42_010_002n,
+  aiUsageCleanup: 42_010_003n,
+  staleAutoCoaching: 42_010_004n,
+  queueDepthTelemetry: 42_010_005n,
+  structuredExerciseRollup: 42_010_006n,
+  startupEmailCatchUp: 42_010_007n,
+} as const;
+
+export async function runCronJobWithLock<T>(
+  name: keyof typeof CRON_LOCK_KEYS,
+  run: () => Promise<T>,
+) {
+  return withPgAdvisoryLock(pool, { key: CRON_LOCK_KEYS[name], name }, run);
+}
+
 /** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
 export function startCron(storage: IStorage): void {
   if (task) {
@@ -29,16 +48,18 @@ export function startCron(storage: IStorage): void {
   task = cron.schedule(
     "0 9 * * *",
     async () => {
-      logger.info({ context: "cron" }, "Running scheduled email cron job");
-      try {
-        const result = await runEmailCronJob(storage);
-        logger.info(
-          { context: "cron", ...result },
-          `Email cron complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
-        );
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Email cron job failed");
-      }
+      await runCronJobWithLock("dailyEmail", async () => {
+        logger.info({ context: "cron" }, "Running scheduled email cron job");
+        try {
+          const result = await runEmailCronJob(storage);
+          logger.info(
+            { context: "cron", ...result },
+            `Email cron complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
+          );
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Email cron job failed");
+        }
+      });
     },
     { timezone: "Etc/UTC" },
   );
@@ -51,14 +72,16 @@ export function startCron(storage: IStorage): void {
   idempotencyCleanupTask = cron.schedule(
     "30 3 * * *",
     async () => {
-      try {
-        const deleted = await storage.idempotency.cleanupExpired();
-        if (deleted > 0) {
-          logger.info({ context: "cron", deleted }, `Idempotency cleanup: removed ${deleted} expired row(s)`);
+      await runCronJobWithLock("idempotencyCleanup", async () => {
+        try {
+          const deleted = await storage.idempotency.cleanupExpired();
+          if (deleted > 0) {
+            logger.info({ context: "cron", deleted }, `Idempotency cleanup: removed ${deleted} expired row(s)`);
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Idempotency cleanup failed");
         }
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Idempotency cleanup failed");
-      }
+      });
     },
     { timezone: "Etc/UTC" },
   );
@@ -68,14 +91,16 @@ export function startCron(storage: IStorage): void {
   aiUsageCleanupTask = cron.schedule(
     "0 4 * * *",
     async () => {
-      try {
-        const deleted = await storage.aiUsage.deleteExpiredLogs(7);
-        if (deleted > 0) {
-          logger.info({ context: "cron", deleted }, `AI usage cleanup: removed ${deleted} expired row(s)`);
+      await runCronJobWithLock("aiUsageCleanup", async () => {
+        try {
+          const deleted = await storage.aiUsage.deleteExpiredLogs(7);
+          if (deleted > 0) {
+            logger.info({ context: "cron", deleted }, `AI usage cleanup: removed ${deleted} expired row(s)`);
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "AI usage cleanup failed");
         }
-      } catch (err) {
-        logger.error({ context: "cron", err }, "AI usage cleanup failed");
-      }
+      });
     },
     { timezone: "Etc/UTC" },
   );
@@ -87,14 +112,16 @@ export function startCron(storage: IStorage): void {
   staleAutoCoachTask = cron.schedule(
     "*/10 * * * *",
     async () => {
-      try {
-        const reset = await storage.users.resetStaleAutoCoaching(STALE_AUTO_COACHING_THRESHOLD_MS);
-        if (reset > 0) {
-          logger.warn({ context: "cron", reset }, `Reset ${reset} orphaned isAutoCoaching flag(s)`);
+      await runCronJobWithLock("staleAutoCoaching", async () => {
+        try {
+          const reset = await storage.users.resetStaleAutoCoaching(STALE_AUTO_COACHING_THRESHOLD_MS);
+          if (reset > 0) {
+            logger.warn({ context: "cron", reset }, `Reset ${reset} orphaned isAutoCoaching flag(s)`);
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Stale isAutoCoaching recovery failed");
         }
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Stale isAutoCoaching recovery failed");
-      }
+      });
     },
     { timezone: "Etc/UTC" },
   );
@@ -111,29 +138,31 @@ export function startCron(storage: IStorage): void {
   queueDepthTask = cron.schedule(
     "*/5 * * * *",
     async () => {
-      try {
-        type QueueDepth = { name: string; queuedCount?: number; deferredCount?: number; activeCount?: number };
-        const queues: QueueDepth[] = await queue.getQueues();
-        for (const q of queues) {
-          const deferred = q.deferredCount ?? 0;
-          const active = q.activeCount ?? 0;
-          const queued = q.queuedCount ?? 0;
-          const backlogged = deferred > QUEUE_WARN_DEFERRED || active > QUEUE_WARN_ACTIVE;
-          const log = backlogged ? logger.warn.bind(logger) : logger.info.bind(logger);
-          log(
-            {
-              context: "queue-depth",
-              queue: q.name,
-              deferred,
-              active,
-              queued,
-            },
-            backlogged ? "pg-boss queue is backlogged" : "pg-boss queue depth",
-          );
+      await runCronJobWithLock("queueDepthTelemetry", async () => {
+        try {
+          type QueueDepth = { name: string; queuedCount?: number; deferredCount?: number; activeCount?: number };
+          const queues: QueueDepth[] = await queue.getQueues();
+          for (const q of queues) {
+            const deferred = q.deferredCount ?? 0;
+            const active = q.activeCount ?? 0;
+            const queued = q.queuedCount ?? 0;
+            const backlogged = deferred > QUEUE_WARN_DEFERRED || active > QUEUE_WARN_ACTIVE;
+            const log = backlogged ? logger.warn.bind(logger) : logger.info.bind(logger);
+            log(
+              {
+                context: "queue-depth",
+                queue: q.name,
+                deferred,
+                active,
+                queued,
+              },
+              backlogged ? "pg-boss queue is backlogged" : "pg-boss queue depth",
+            );
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Queue-depth telemetry failed");
         }
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Queue-depth telemetry failed");
-      }
+      });
     },
     { timezone: "Etc/UTC" },
   );
@@ -142,13 +171,15 @@ export function startCron(storage: IStorage): void {
   structuredExerciseRollupTask = cron.schedule(
     "10 2 * * *",
     async () => {
-      try {
-        const previousUtcDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        await runStructuredExerciseDailyRollup(previousUtcDay);
-        logger.info({ context: "cron", day: previousUtcDay }, "Structured exercise health rollup complete");
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Structured exercise health rollup failed");
-      }
+      await runCronJobWithLock("structuredExerciseRollup", async () => {
+        try {
+          const previousUtcDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          await runStructuredExerciseDailyRollup(previousUtcDay);
+          logger.info({ context: "cron", day: previousUtcDay }, "Structured exercise health rollup complete");
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Structured exercise health rollup failed");
+        }
+      });
     },
     { timezone: "UTC" },
   );
@@ -160,16 +191,18 @@ export function startCron(storage: IStorage): void {
   const currentHour = new Date().getUTCHours();
   if (currentHour >= 9) {
     const runCatchUp = async () => {
-      logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
-      try {
-        const result = await runEmailCronJob(storage);
-        logger.info(
-          { context: "cron", ...result },
-          `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
-        );
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Startup email catch-up failed");
-      }
+      await runCronJobWithLock("startupEmailCatchUp", async () => {
+        logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
+        try {
+          const result = await runEmailCronJob(storage);
+          logger.info(
+            { context: "cron", ...result },
+            `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
+          );
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Startup email catch-up failed");
+        }
+      });
     };
     setTimeout(() => void runCatchUp(), 30_000);
   }

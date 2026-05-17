@@ -452,7 +452,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. Currently there is a single cron job registered.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. Cron is safe for the current single-replica production topology; each job body is wrapped in a PostgreSQL advisory lock so duplicate schedulers skip work if a deployment is accidentally started twice. The app still rejects `APP_INSTANCE_COUNT > 1` in production because rate limits and hot caches are process-local.
 
 ### Registered Cron Jobs
 
@@ -462,6 +462,17 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 - **Timezone**: `Etc/UTC`
 - **Action**: Calls `runEmailCronJob(storage)` which handles both weekly summaries (Mondays only) and missed workout reminders (daily)
 - **Idempotency**: The email scheduler has built-in guards (`lastWeeklySummaryAt`, `lastMissedReminderAt`) that prevent duplicate sends even if the job runs multiple times
+- **Advisory lock**: `dailyEmail`
+
+#### Maintenance and Telemetry
+
+| Job | Schedule | Advisory lock |
+|---|---|---|
+| Idempotency cleanup | `30 3 * * *` UTC | `idempotencyCleanup` |
+| AI usage cleanup | `0 4 * * *` UTC | `aiUsageCleanup` |
+| Stale auto-coach recovery | `*/10 * * * *` UTC | `staleAutoCoaching` |
+| pg-boss queue-depth telemetry | `*/5 * * * *` UTC | `queueDepthTelemetry` |
+| Structured exercise health rollup | `10 2 * * *` UTC | `structuredExerciseRollup` |
 
 ### Startup Catch-Up
 
@@ -476,7 +487,7 @@ if (currentHour >= 9) {
 }
 ```
 
-This ensures emails are not missed due to server restarts. The idempotency guards prevent double-sending if the scheduled run already completed before the restart.
+This ensures emails are not missed due to server restarts. The startup catch-up uses its own advisory lock (`startupEmailCatchUp`), and the email scheduler's idempotency guards prevent double-sending if the scheduled run already completed before the restart.
 
 ### Lifecycle
 

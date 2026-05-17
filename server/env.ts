@@ -52,6 +52,7 @@ const envSchema = z.object({
   VECTOR_DATABASE_URL: z.url().optional(),
   ALLOWED_ORIGINS: z.string().optional(),
   ALLOW_DEV_AUTH_BYPASS: z.string().optional(),
+  APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
   LOG_LEVEL: z.string().default("info"),
   // Controls Express "trust proxy" setting. Hardcoding this to 1 is risky in
   // deployments where the number of trusted hops changes, because req.ip then
@@ -105,7 +106,10 @@ const envSchema = z.object({
     message: "❌ FATAL: pk_live_ Clerk keys detected but NODE_ENV is not 'production' — set NODE_ENV=production on this deploy",
     path: ["NODE_ENV"],
   },
-);
+).refine((data) => data.NODE_ENV !== "production" || data.APP_INSTANCE_COUNT === 1, {
+  message: "FATAL: APP_INSTANCE_COUNT > 1 is not supported yet. Rate limits, auth seen-cache, and embedding cache are still process-local.",
+  path: ["APP_INSTANCE_COUNT"],
+});
 
 const parsed = envSchema.safeParse(process.env);
 
@@ -118,3 +122,7 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+export function parseEnv(input: NodeJS.ProcessEnv) {
+  return envSchema.parse(input);
+}
