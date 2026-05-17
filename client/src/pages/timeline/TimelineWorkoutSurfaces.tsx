@@ -1,4 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
+import type { Dispatch, SetStateAction } from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import {
@@ -15,6 +16,9 @@ import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import type { useToast } from "@/hooks/use-toast";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { surfaceId } from "@/hooks/workout-actions/timelineEntry";
+
+import { useTimelineTitleMutation } from "./useTimelineTitleMutation";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type PlanImportState = TimelineState["planImport"];
@@ -33,15 +37,15 @@ interface TimelineWorkoutSurfacesProps {
   readonly setStartDate: PlanImportState["setStartDate"];
   readonly schedulePlanMutation: PlanImportState["schedulePlanMutation"];
   readonly previewEntry: TimelineEntry | null;
-  readonly setPreviewEntry: (entry: TimelineEntry | null) => void;
+  readonly setPreviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly futureEditEntry: TimelineEntry | null;
-  readonly setFutureEditEntry: (entry: TimelineEntry | null) => void;
+  readonly setFutureEditEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly logEntry: TimelineEntry | null;
-  readonly setLogEntry: (entry: TimelineEntry | null) => void;
+  readonly setLogEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly reviewEntry: TimelineEntry | null;
-  readonly setReviewEntry: (entry: TimelineEntry | null) => void;
+  readonly setReviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly skippedEntry: TimelineEntry | null;
-  readonly setSkippedEntry: (entry: TimelineEntry | null) => void;
+  readonly setSkippedEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly closeWorkoutSurfaces: () => void;
   readonly closeEmbeddedCoach: () => void;
   readonly openEmbeddedCoach: (entry: TimelineEntry, seedText?: string) => void;
@@ -84,6 +88,15 @@ function isMobileCoachPanelActive(
   mobileCoachPanelOpen: boolean,
 ): boolean {
   return Boolean(isMobile && mobileCoachPanelOpen && embeddedCoachEntryId === entry?.id);
+}
+
+function isSavingTitleForEntry(
+  isPending: boolean,
+  pendingEntry: TimelineEntry | undefined,
+  entry: TimelineEntry | null,
+): boolean {
+  if (!isPending || !pendingEntry || !entry) return false;
+  return surfaceId(pendingEntry) === surfaceId(entry);
 }
 
 export function TimelineWorkoutSurfaces({
@@ -140,6 +153,18 @@ export function TimelineWorkoutSurfaces({
   annotationInitialDate,
   setAnnotationInitialDate,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
+  const titleMutation = useTimelineTitleMutation({
+    setPreviewEntry,
+    setFutureEditEntry,
+    setLogEntry,
+    setReviewEntry,
+    setSkippedEntry,
+  });
+  const pendingTitleEntry = titleMutation.variables?.entry;
+  const handleRenameTitle = (entry: TimelineEntry, title: string) => {
+    titleMutation.mutate({ entry, title });
+  };
+
   return (
     <>
       <AdhocLogSheet open={adhocOpen} onClose={() => onAdhocOpenChange(false)} />
@@ -182,6 +207,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, logEntry)}
       />
 
       <LogSheet
@@ -201,6 +228,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, futureEditEntry)}
       />
 
       <SkippedSheet
@@ -215,6 +244,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, skippedEntry)}
         onUndoSkip={(entry) => {
           closeEmbeddedCoach();
           setSkippedEntry(null);
@@ -239,6 +270,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, reviewEntry)}
         onMarkPlanned={(entry) => {
           closeEmbeddedCoach();
           setReviewEntry(null);
@@ -262,6 +295,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, previewEntry)}
         onMove={() => {
           closeEmbeddedCoach();
           setPreviewEntry(null);

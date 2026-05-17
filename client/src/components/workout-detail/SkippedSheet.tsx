@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 
+import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
@@ -17,6 +18,8 @@ interface SkippedSheetProps extends WorkoutCoachSheetProps {
   /** Flip the entry's status back to "planned" so the user can log it. */
   readonly onUndoSkip?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
+  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
+  readonly isRenamingTitle?: boolean;
 }
 
 /**
@@ -34,6 +37,8 @@ export function SkippedSheet({
   onAskCoach,
   onUndoSkip,
   onDelete,
+  onRenameTitle,
+  isRenamingTitle = false,
   ...coachProps
 }: SkippedSheetProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -63,7 +68,17 @@ export function SkippedSheet({
       title={
         <span className="flex flex-wrap items-center gap-2">
           {getStatusBadge(entry.status)}
-          <span>{entry.focus || "Skipped workout"}</span>
+          <EditableWorkoutTitle
+            title={entry.focus}
+            fallbackTitle="Skipped workout"
+            onSave={
+              onRenameTitle && (entry.workoutLogId || entry.planDayId)
+                ? (title) => onRenameTitle(entry, title)
+                : undefined
+            }
+            isSaving={isRenamingTitle}
+            testIdPrefix={`workout-title-${entry.id}`}
+          />
         </span>
       }
       sheetTestId={`skipped-sheet-${entry.id}`}

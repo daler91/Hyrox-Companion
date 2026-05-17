@@ -27,7 +27,12 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 }));
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
-  ResponsiveSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
+    <div>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/RpeSelector", () => ({
@@ -161,5 +166,29 @@ describe("ReviewSurface", () => {
       prescribedMainWorkout: "Updated prescription",
       prescribedAccessory: "Accessory text",
     });
+  });
+
+  it("renames the workout title from the sheet header", async () => {
+    const user = userEvent.setup();
+    const onRenameTitle = vi.fn();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(
+      <ReviewSurface
+        entry={makeEntry()}
+        onClose={vi.fn()}
+        onRenameTitle={onRenameTitle}
+      />,
+    );
+
+    await user.click(screen.getByTestId("workout-title-entry-1-edit"));
+    await user.clear(screen.getByTestId("workout-title-entry-1-input"));
+    await user.type(screen.getByTestId("workout-title-entry-1-input"), "  Renamed strength  ");
+    await user.click(screen.getByTestId("workout-title-entry-1-save"));
+
+    expect(onRenameTitle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "entry-1" }),
+      "Renamed strength",
+    );
   });
 });

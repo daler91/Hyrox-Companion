@@ -14,6 +14,7 @@ import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { apiRequest } from "@/lib/queryClient";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
+import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
@@ -38,6 +39,8 @@ interface ReviewSurfaceProps {
   readonly onShowWorkoutDetails?: () => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
+  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
+  readonly isRenamingTitle?: boolean;
 }
 
 type MigrationReviewFlag = { status: string; reason: string | null } | null;
@@ -114,6 +117,8 @@ export function ReviewSurface({
   onShowWorkoutDetails,
   onMarkPlanned,
   onDelete,
+  onRenameTitle,
+  isRenamingTitle = false,
 }: ReviewSurfaceProps) {
   const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit, showAdherenceInsights } = useUnitPreferences();
@@ -134,6 +139,7 @@ export function ReviewSurface({
   // surface populated during the very first paint before
   // workoutQuery resolves.
   const workout = detail.workout;
+  const displayEntry = workout?.focus ? { ...entry, focus: workout.focus } : entry;
   const exerciseSets = workout?.exerciseSets ?? entry.exerciseSets ?? [];
   const structureBlocks = workout?.structureBlocks ?? entry.structureBlocks ?? [];
   const rpe = workout?.rpe ?? entry.rpe ?? null;
@@ -141,7 +147,7 @@ export function ReviewSurface({
 
   const isStrava = entry.source === "strava";
   const canEditActuals = !isStrava && !!workoutLogId;
-  const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, exerciseSets);
+  const currentCoachSeedText = buildWorkoutCoachSeedMessage(displayEntry, exerciseSets);
   const sheetContentClassName = getReviewSheetContentClassName(coachChatOpen);
   const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
@@ -180,7 +186,17 @@ export function ReviewSurface({
       title={
         <span className="flex flex-wrap items-center gap-2">
           {getStatusBadge(entry.status)}
-          <span>{entry.focus || "Workout"}</span>
+          <EditableWorkoutTitle
+            title={displayEntry.focus}
+            fallbackTitle="Workout"
+            onSave={
+              onRenameTitle && (displayEntry.workoutLogId || displayEntry.planDayId)
+                ? (title) => onRenameTitle(displayEntry, title)
+                : undefined
+            }
+            isSaving={isRenamingTitle}
+            testIdPrefix={`workout-title-${displayEntry.id}`}
+          />
         </span>
       }
       description={formatScheduledDate(entry.date)}
@@ -207,7 +223,7 @@ export function ReviewSurface({
         }
       >
         <ReviewDetailsColumn
-          entry={entry}
+          entry={displayEntry}
           detail={detail}
           workoutLogId={workoutLogId}
           exerciseSets={exerciseSets}

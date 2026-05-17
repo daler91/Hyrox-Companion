@@ -11,6 +11,7 @@ import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
+import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
@@ -35,6 +36,8 @@ interface LogSheetBaseProps {
   readonly onCloseCoachChat?: () => void;
   readonly onShowCoachPanel?: () => void;
   readonly onShowWorkoutDetails?: () => void;
+  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
+  readonly isRenamingTitle?: boolean;
 }
 
 type LogSheetModeProps =
@@ -373,6 +376,8 @@ export function LogSheet({
   onCloseCoachChat,
   onShowCoachPanel,
   onShowWorkoutDetails,
+  onRenameTitle,
+  isRenamingTitle = false,
   isLogging,
   mode = "log",
 }: LogSheetProps) {
@@ -404,7 +409,20 @@ export function LogSheet({
 
   const parseHelperVisible = isParseHelperVisible(entry, planSets);
   const isEditMode = mode === "edit";
-  const title = entry.focus || (isEditMode ? "Edit workout" : "Log workout");
+  const titleFallback = isEditMode ? "Edit workout" : "Log workout";
+  const title = (
+    <EditableWorkoutTitle
+      title={entry.focus}
+      fallbackTitle={titleFallback}
+      onSave={
+        onRenameTitle && (entry.workoutLogId || entry.planDayId)
+          ? (nextTitle) => onRenameTitle(entry, nextTitle)
+          : undefined
+      }
+      isSaving={isRenamingTitle}
+      testIdPrefix={`workout-title-${entry.id}`}
+    />
+  );
   const coachExerciseSets = entry.planDayId ? planSets.exerciseSets : (entry.exerciseSets ?? []);
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
   const handleAskCoach = onAskCoach

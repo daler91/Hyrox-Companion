@@ -1,6 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import { CalendarClock, MessageSquare, Pencil, SkipForward } from "lucide-react";
 
+import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
@@ -14,6 +15,8 @@ interface PreviewSheetProps extends WorkoutCoachSheetProps {
   readonly onMove?: (entry: TimelineEntry) => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onEditWorkout?: (entry: TimelineEntry) => void;
+  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
+  readonly isRenamingTitle?: boolean;
 }
 
 /**
@@ -29,6 +32,8 @@ export function PreviewSheet({
   onMove,
   onSkip,
   onEditWorkout,
+  onRenameTitle,
+  isRenamingTitle = false,
   ...coachProps
 }: PreviewSheetProps) {
   if (!entry) return null;
@@ -38,7 +43,19 @@ export function PreviewSheet({
       {...coachProps}
       entry={entry}
       onOpenChange={(open) => !open && onClose()}
-      title={entry.focus || "Upcoming workout"}
+      title={
+        <EditableWorkoutTitle
+          title={entry.focus}
+          fallbackTitle="Upcoming workout"
+          onSave={
+            onRenameTitle && (entry.workoutLogId || entry.planDayId)
+              ? (title) => onRenameTitle(entry, title)
+              : undefined
+          }
+          isSaving={isRenamingTitle}
+          testIdPrefix={`workout-title-${entry.id}`}
+        />
+      }
       sheetTestId={`preview-sheet-${entry.id}`}
       detailsTestId={`preview-details-${entry.id}`}
       returnTestId={`preview-return-to-coach-${entry.id}`}
