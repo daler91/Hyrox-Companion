@@ -452,7 +452,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. Cron is safe for the current single-replica production topology; each job body is wrapped in a PostgreSQL advisory lock so duplicate schedulers skip work if a deployment is accidentally started twice. The app still rejects `APP_INSTANCE_COUNT > 1` in production because rate limits and hot caches are process-local.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock, so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -470,6 +470,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 |---|---|---|
 | Idempotency cleanup | `30 3 * * *` UTC | `idempotencyCleanup` |
 | AI usage cleanup | `0 4 * * *` UTC | `aiUsageCleanup` |
+| Shared runtime state cleanup | `15 4 * * *` UTC | `sharedRuntimeCleanup` |
 | Stale auto-coach recovery | `*/10 * * * *` UTC | `staleAutoCoaching` |
 | pg-boss queue-depth telemetry | `*/5 * * * *` UTC | `queueDepthTelemetry` |
 | Structured exercise health rollup | `10 2 * * *` UTC | `structuredExerciseRollup` |

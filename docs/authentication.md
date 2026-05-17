@@ -215,7 +215,7 @@ The middleware chain for a typical protected route is:
 
 1. `clerkMiddleware()` (global, if Clerk keys are present) -- Parses the JWT and attaches auth data to the request.
 2. `isAuthenticated` (per-route) -- Validates that the request has a valid user identity and syncs the user to the database. Returns `401` if unauthenticated.
-3. `rateLimiter(category, max)` (per-route) -- Applies per-user rate limiting, keyed by `userId`.
+3. `rateLimiter(category, max)` (per-route) -- Applies per-user rate limiting, keyed by `userId` and backed by shared Postgres buckets outside tests.
 4. `asyncHandler(fn)` -- Wraps the route handler to catch async errors and forward them to Express error handling.
 
 Unauthenticated requests receive:
@@ -275,7 +275,7 @@ The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point
 
 4. **Delete the DB user row.** FK `ON DELETE CASCADE` removes every child row: workouts, sets, plans, plan days, chat messages, coaching materials and their embeddings, Strava and Garmin connections, custom exercises, push subscriptions, AI usage logs, idempotency keys, and timeline annotations.
 
-5. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab cannot re-provision the user within the TTL window.
+5. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
 
 Rate-limited to 3 per minute under the `accountDelete` category — enough to retry a transient failure, not enough to mass-delete.
 

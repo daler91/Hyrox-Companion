@@ -6,6 +6,7 @@ import { runEmailCronJob } from "./emailScheduler";
 import { logger } from "./logger";
 import { queue } from "./queue";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
+import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
@@ -14,6 +15,7 @@ let aiUsageCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let staleAutoCoachTask: ReturnType<typeof cron.schedule> | null = null;
 let queueDepthTask: ReturnType<typeof cron.schedule> | null = null;
 let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null;
+let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -28,6 +30,7 @@ export const CRON_LOCK_KEYS = {
   queueDepthTelemetry: 42_010_005n,
   structuredExerciseRollup: 42_010_006n,
   startupEmailCatchUp: 42_010_007n,
+  sharedRuntimeCleanup: 42_010_008n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -105,6 +108,25 @@ export function startCron(storage: IStorage): void {
     { timezone: "Etc/UTC" },
   );
   logger.info({ context: "cron" }, "AI usage cleanup scheduled: daily at 04:00 UTC");
+
+  sharedRuntimeCleanupTask = cron.schedule(
+    "15 4 * * *",
+    async () => {
+      await runCronJobWithLock("sharedRuntimeCleanup", async () => {
+        try {
+          const deleted = await cleanupExpiredSharedRuntimeState();
+          const totalDeleted = deleted.rateLimitBuckets + deleted.runtimeCache;
+          if (totalDeleted > 0) {
+            logger.info({ context: "cron", ...deleted }, "Shared runtime state cleanup complete");
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Shared runtime state cleanup failed");
+        }
+      });
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "Shared runtime state cleanup scheduled: daily at 04:15 UTC");
 
   // Recover orphaned isAutoCoaching flags every 10 minutes. Without this,
   // a worker crashing mid-job would leave users stuck seeing "AI Coach
@@ -233,5 +255,9 @@ export function stopCron(): void {
   if (structuredExerciseRollupTask) {
     const _stop = structuredExerciseRollupTask.stop();
     structuredExerciseRollupTask = null;
+  }
+  if (sharedRuntimeCleanupTask) {
+    const _stop = sharedRuntimeCleanupTask.stop();
+    sharedRuntimeCleanupTask = null;
   }
 }

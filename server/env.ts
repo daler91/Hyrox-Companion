@@ -106,10 +106,7 @@ const envSchema = z.object({
     message: "❌ FATAL: pk_live_ Clerk keys detected but NODE_ENV is not 'production' — set NODE_ENV=production on this deploy",
     path: ["NODE_ENV"],
   },
-).refine((data) => data.NODE_ENV !== "production" || data.APP_INSTANCE_COUNT === 1, {
-  message: "FATAL: APP_INSTANCE_COUNT > 1 is not supported yet. Rate limits, auth seen-cache, and embedding cache are still process-local.",
-  path: ["APP_INSTANCE_COUNT"],
-});
+);
 
 const parsed = envSchema.safeParse(process.env);
 

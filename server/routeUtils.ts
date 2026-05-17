@@ -2,8 +2,10 @@ import type { NextFunction,Request, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 
 import { DEFAULT_RATE_LIMIT_WINDOW_MS, MS_PER_DAY } from "./constants";
+import { env } from "./env";
 import { ErrorCode } from "./errors";
 import { logger } from "./logger";
+import { PostgresRateLimitStore } from "./rateLimitStore";
 import { toDateStr } from "./types";
 
 export const DEFAULT_WINDOW_MS = DEFAULT_RATE_LIMIT_WINDOW_MS;
@@ -14,11 +16,14 @@ interface AuthenticatedRequest extends Request {
 
 // One limiter instance per unique (category, maxRequests, windowMs) combination.
 // This preserves the per-category isolation of the previous Map-based design.
-//
-// Limitation: MemoryStore is memory-backed, resets on restart, and is per-instance.
-// This is acceptable for our single-instance Railway deployment.
-// If scaling to multiple instances, swap to `rate-limit-redis` for shared state.
 const limiterCache = new Map<string, ReturnType<typeof rateLimit>>();
+
+function createRateLimitStore(category: string, windowMs: number) {
+  if (env.NODE_ENV === "test") {
+    return new MemoryStore();
+  }
+  return new PostgresRateLimitStore(category, windowMs);
+}
 
 export function rateLimiter(
   category: string,
@@ -39,7 +44,8 @@ export function rateLimiter(
         rateLimit({
           windowMs,
           max: maxRequests,
-          store: new MemoryStore(), // Explicitly give each limiter its own store so caching clears reset state
+          store: createRateLimitStore(category, windowMs),
+          passOnStoreError: false,
           validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
           // Per-user key, namespaced by category so limits are independent per route group.
           // Explicit user:/ip: prefixes prevent collision between a userId that

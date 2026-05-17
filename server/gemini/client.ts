@@ -6,6 +6,7 @@ import { AI_CALL_TIMEOUT_MS,AI_REQUEST_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
 import { recordAiUsage } from "../services/aiUsageService";
+import { getRuntimeCache, hashRuntimeKey, setRuntimeCache } from "../sharedRuntimeState";
 import {
   assertBreakerClosed,
   CircuitBreakerOpenError,
@@ -134,10 +135,10 @@ const embeddingCache = new Map<string, EmbeddingCacheEntry>();
 
 function cacheKey(text: string): string {
   // Trim whitespace so leading/trailing padding doesn't partition the cache.
-  return text.trim();
+  return `embedding:${EMBEDDING_MODEL}:${hashRuntimeKey(text.trim())}`;
 }
 
-function readEmbeddingCache(key: string): number[] | undefined {
+function readLocalEmbeddingCache(key: string): number[] | undefined {
   const entry = embeddingCache.get(key);
   if (!entry) return undefined;
   if (entry.expiresAt <= Date.now()) {
@@ -150,6 +151,22 @@ function readEmbeddingCache(key: string): number[] | undefined {
   return entry.values;
 }
 
+async function readEmbeddingCache(key: string): Promise<number[] | undefined> {
+  const local = readLocalEmbeddingCache(key);
+  if (local) return local;
+
+  if (env.NODE_ENV === "test") return undefined;
+  try {
+    const shared = await getRuntimeCache<{ values: number[] }>(key);
+    if (!shared) return undefined;
+    writeEmbeddingCache(key, shared.values);
+    return shared.values;
+  } catch (err) {
+    logger.warn({ err }, "[ai] Failed to read shared embedding cache; calling provider");
+    return undefined;
+  }
+}
+
 function writeEmbeddingCache(key: string, values: number[]): void {
   embeddingCache.delete(key);
   embeddingCache.set(key, { values, expiresAt: Date.now() + EMBEDDING_CACHE_TTL_MS });
@@ -160,6 +177,12 @@ function writeEmbeddingCache(key: string, values: number[]): void {
     const firstKey = embeddingCache.keys().next().value;
     if (firstKey === undefined) break;
     embeddingCache.delete(firstKey);
+  }
+
+  if (env.NODE_ENV !== "test") {
+    void setRuntimeCache(key, { values }, EMBEDDING_CACHE_TTL_MS).catch((err: unknown) => {
+      logger.warn({ err }, "[ai] Failed to write shared embedding cache");
+    });
   }
 }
 
@@ -175,7 +198,7 @@ export function __resetEmbeddingCacheForTests(): void {
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const key = cacheKey(text);
-  const cached = readEmbeddingCache(key);
+  const cached = await readEmbeddingCache(key);
   if (cached) return cached;
 
   const response = await retryWithBackoff(

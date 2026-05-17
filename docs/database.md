@@ -426,6 +426,48 @@ Entries expire after 7 days. The `idempotencyMiddleware` checks this table befor
 
 ---
 
+### rate_limit_buckets
+
+Shared rate-limit counters for `server/routeUtils.ts`. Production and development route limiters store their buckets here so limits apply globally across app replicas.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `key` | text | Primary key |
+| `hit_count` | integer | Not null, default `0` |
+| `reset_at` | timestamp with time zone | Not null |
+| `updated_at` | timestamp with time zone | Not null, default `now()` |
+
+**Indexes:**
+- Primary key on `key`
+- `idx_rate_limit_buckets_reset_at` on (`reset_at`) -- for TTL cleanup
+
+Expired rows are pruned by the daily shared runtime cleanup cron job.
+
+---
+
+### server_runtime_cache
+
+Short-lived shared runtime cache for safe multi-instance operation. Keys are hashed before storage when they include user identifiers or prompt/query text.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `key` | text | Primary key |
+| `value` | jsonb | Not null |
+| `expires_at` | timestamp with time zone | Not null |
+| `updated_at` | timestamp with time zone | Not null, default `now()` |
+
+Current use cases:
+- Clerk auth seen-cache (`auth-seen:*`)
+- Gemini embedding cache (`embedding:*`)
+- RAG embedding-health probe (`rag-health:*`)
+- RAG retrieval cache (`rag:*`)
+
+**Indexes:**
+- Primary key on `key`
+- `idx_server_runtime_cache_expires_at` on (`expires_at`) -- for TTL cleanup
+
+---
+
 ## Drizzle Relations
 
 All tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
@@ -779,7 +821,7 @@ migrations/
     0028_snapshot.json
 ```
 
-- **SQL files**: Each migration contains the raw SQL statements (29 total).
+- **SQL files**: Each migration contains the raw SQL statements.
 - **`meta/_journal.json`**: Tracks migration ordering and versions.
 - **`meta/NNNN_snapshot.json`**: Full schema snapshots at each migration point.
 
@@ -792,6 +834,7 @@ Notable recent migrations:
 - `0019`: Creates the `idempotency_keys` table for server-side idempotency
 - `0027`: Adds coach-note columns to `plan_days` (`ai_rationale`, `ai_note_updated_at`, `ai_inputs_used`) so the auto-coach can persist prescriptive rationale per day.
 - `0028`: Adds `plan_day_id` FK on `exercise_sets`, allowing coach-prescribed exercises to be attached to a plan day before any workout is logged.
+- `0048`: Adds `rate_limit_buckets` and `server_runtime_cache` so rate limits and short-lived auth/AI/RAG caches are shared across app replicas.
 
 ### Startup Migration
 
@@ -880,7 +923,7 @@ for (const ex of exercises) {
 ## Performance Considerations
 
 **Coalesced Analytics Cache:**
-The analytics routes (`server/routes/analytics.ts`) use two in-memory promise caches — one for exercise sets (`getExerciseSetsCoalesced`) and one for workout logs (`getWorkoutLogsCoalesced`) — to prevent redundant DB queries. The cache entry stores the *pending* promise, so concurrent callers share the same in-flight query.
+The analytics routes (`server/routes/analytics.ts`) use two in-memory promise caches — one for exercise sets (`getExerciseSetsCoalesced`) and one for workout logs (`getWorkoutLogsCoalesced`) — to prevent redundant DB queries within a single process. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query.
 
 ```typescript
 // Multiple concurrent requests for the same user's analytics data

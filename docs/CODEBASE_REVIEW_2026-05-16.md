@@ -6,6 +6,17 @@ Review basis: `.claude/commands/review/all.md` plus the referenced review profil
 
 Scope: current checkout on `codex/prevent-repeat-ai-volume-reductions`, with a repo-wide review focused on security, business logic, UX and accessibility, performance, QA, DevOps and infrastructure, and privacy. No source files were changed during the review.
 
+## Status Update - 2026-05-17
+
+This report is now a historical baseline. The original critical findings, warnings, and suggestions have been addressed in follow-up implementation rounds:
+
+- AI consent enforcement, consent defaults, internal analytics authorization, AI budget fail-closed behavior, retention docs, and timeline rename test failures were fixed.
+- Offline workout-create replay, signout/account-deletion local-data cleanup, durable onboarding completion, safe storage helpers, and single-replica cron guardrails were added.
+- The large review-driven maintainability targets were decomposed: `ExerciseTable`, `Timeline`, `workoutService`, shared schema types, `exerciseParser`, and `coachService` tests.
+- The remaining follow-on scaling item has now been addressed with PostgreSQL-backed `rate_limit_buckets`, shared `server_runtime_cache`, and relaxed `APP_INSTANCE_COUNT > 1` production validation after migrations.
+
+The finding tables below are retained as the original May 16 review evidence, not as a current open-issues list.
+
 ## Executive Summary
 
 The codebase has solid foundations: mutation routes generally use shared protected-route helpers, CSRF/idempotency are centralized, production warnings call out per-instance rate limiting, and the focused route tests plus typecheck are green. The main risk is not framework hygiene; it is drift between stated privacy/consent guarantees and the routes that now call AI providers.

@@ -137,7 +137,7 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 - Standard `RateLimit-*` headers (RFC 6585)
 - Returns `429` with `Retry-After` header and `RATE_LIMITED` error code
 - Limiter instances are cached per `(category, maxRequests, windowMs)` tuple
-- Uses in-process `MemoryStore`; production is currently single-replica only (`APP_INSTANCE_COUNT=1`) until shared rate-limit storage is added
+- Uses PostgreSQL-backed `rate_limit_buckets` outside tests so limits are shared across app replicas
 - The SPA fallback route in `server/static.ts` has its own rate limiter (100 requests per 15 minutes)
 
 ### Body Size Limits
@@ -305,7 +305,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `GEMINI_API_KEY` | No | Gemini key for the Gemini text provider, RAG embeddings, and image parsing |
 | `CRON_SECRET` | No | Secret for authenticating external cron triggers |
 | `INTERNAL_ANALYTICS_SECRET` | No | Secret for authenticating internal analytics health endpoints |
-| `APP_INSTANCE_COUNT` | No | Declared app replica count (default `1`). Production refuses values above `1` until shared rate limits/caches are implemented. |
+| `APP_INSTANCE_COUNT` | No | Declared app replica count (default `1`). Values above `1` are supported after migrations because rate limits/cache state are shared through Postgres. |
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
 | `STRAVA_STATE_SECRET` | No | Secret for signing Strava OAuth state tokens |
@@ -362,12 +362,21 @@ Failed jobs are re-thrown to let pg-boss handle retries.
 | Email check | Daily at 09:00 UTC | `dailyEmail` |
 | Idempotency cleanup | Daily at 03:30 UTC | `idempotencyCleanup` |
 | AI usage cleanup | Daily at 04:00 UTC | `aiUsageCleanup` |
+| Shared runtime state cleanup | Daily at 04:15 UTC | `sharedRuntimeCleanup` |
 | Stale auto-coach recovery | Every 10 minutes | `staleAutoCoaching` |
 | pg-boss queue-depth telemetry | Every 5 minutes | `queueDepthTelemetry` |
 | Structured exercise health rollup | Daily at 02:10 UTC | `structuredExerciseRollup` |
 | Startup email catch-up | 30 seconds after late startup | `startupEmailCatchUp` |
 
-The advisory locks are defensive, not a horizontal-scaling signal: `APP_INSTANCE_COUNT > 1` is still rejected in production because rate limits and hot caches remain process-local.
+Cron jobs run in-process on each app replica, but each job body is wrapped in a PostgreSQL advisory lock so only one replica performs the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.
+
+### Shared Runtime State
+
+`server/sharedRuntimeState.ts` owns short-lived shared cache helpers backed by Postgres:
+
+- `rate_limit_buckets` stores per-category request counters and reset timestamps for `rateLimiter(...)`.
+- `server_runtime_cache` stores hashed short-lived keys for the Clerk auth seen-cache, Gemini embedding cache, RAG retrieval cache, and embedding health probe.
+- Expired rows are pruned daily by the `sharedRuntimeCleanup` cron job at 04:15 UTC.
 
 ### Route Utilities
 
