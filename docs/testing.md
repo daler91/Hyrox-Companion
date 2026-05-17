@@ -30,18 +30,20 @@ The project follows a testing pyramid with three layers:
 
 | Layer | Count | Location |
 |-------|-------|----------|
-| Unit tests (server) | ~48 files | `server/**/*.test.ts` |
-| Unit tests (client) | ~37 files | `client/src/**/*.test.{ts,tsx}` |
-| Unit tests (shared) | 2 files | `shared/*.test.ts` |
+| Unit/component/route tests (Vitest) | ~179 files | `client/src`, `server`, `shared`, and `test/` `*.test.{ts,tsx}` files |
 | Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
 | Smoke tests | ~25 cases | `test/` + `vitest.smoke.config.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
 | Cypress E2E specs | 12 files | `cypress/e2e/*.cy.ts` |
 
-Across Vitest, this works out to **~880 `it()` blocks spread across 89 test files**. Cypress contributes **~60 `it()` blocks across 12 specs**.
+The exact Vitest assertion count changes frequently as review-fix branches land.
+Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current file count.
+Cypress contributes **~60 `it()` blocks across 12 specs**.
 
 ### Coverage thresholds
 
-All four coverage metrics are enforced at **80%** via `@vitest/coverage-v8`:
+All four coverage metrics are configured at **80%** via `@vitest/coverage-v8`
+for explicit coverage runs. Normal CI currently runs `pnpm test` without
+coverage collection.
 
 - Lines: 80%
 - Functions: 80%
@@ -268,13 +270,16 @@ defaultCommandTimeout: 10000      // 10 seconds
 |-----------|---------------|
 | `cypress/e2e/analytics.cy.ts` | Analytics dashboard |
 | `cypress/e2e/api-validation.cy.ts` | API input validation |
+| `cypress/e2e/coach-chat.cy.ts` | Coach chat flow |
+| `cypress/e2e/emom-rollout-config.cy.ts` | EMOM rollout configuration |
 | `cypress/e2e/landing.cy.ts` | Landing/marketing page |
 | `cypress/e2e/log-workout.cy.ts` | Workout logging form |
 | `cypress/e2e/log-workout-submission.cy.ts` | Workout form submission |
 | `cypress/e2e/navigation.cy.ts` | Sidebar navigation, routing, 404 |
+| `cypress/e2e/onboarding.cy.ts` | Onboarding flow |
+| `cypress/e2e/plan-generation.cy.ts` | AI plan generation flow |
 | `cypress/e2e/settings.cy.ts` | Settings page |
 | `cypress/e2e/timeline.cy.ts` | Timeline view |
-| `cypress/e2e/timeline-workout-details.cy.ts` | Workout detail view from timeline |
 
 ### Support files
 
@@ -308,8 +313,8 @@ setupAuthIntercepts({
     distanceUnit: "miles",
     weeklyGoal: 3,
     emailNotifications: false,
-    emailWeeklySummary: true,
-    emailMissedReminder: true,
+    emailWeeklySummary: false,
+    emailMissedReminder: false,
   },
 });
 ```
@@ -373,13 +378,13 @@ pnpm exec vitest run --config vitest.smoke.config.ts
 
 ## CI/CD Test Workflows
 
-All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners and Node.js 22+ (via pnpm).
+All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners. Node-based workflows use Node.js 20 via pnpm.
 
 ### 1. Unit Tests (`test.yml`)
 
 - **Name:** Unit Tests
 - **Triggers:** Push to `main`, pull request (opened/synchronize/reopened)
-- **Steps:** Checkout, install pnpm + Node.js 22, `pnpm install`, `pnpm test`
+- **Steps:** Checkout, install pnpm + Node.js 20, `pnpm install`, `pnpm test`
 - **Environment:** Dummy values for `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL`, `ENCRYPTION_KEY`
 
 ### 2. Cypress Tests (`cypress.yml`)
@@ -414,11 +419,12 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Build
 - **Triggers:** Push to `main`, pull request
-- **Purpose:** Lint, type check, production build, and SonarCloud Automatic Analysis for code quality.
+- **Purpose:** ESLint, TypeScript, and OpenAPI snapshot drift checks. SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
 
 ### 6. Other workflows
 
-- **Trivy** (`trivy.yml`) -- Security vulnerability scanning
+- **DevSkim** (`devskim.yml`) -- Static security analysis
+- **Bearer** (`bearer.yml`) -- Static security and privacy analysis
 - **Dependency Review** (`dependency-review.yml`) -- Reviews dependency changes in PRs
 
 ---
@@ -462,7 +468,7 @@ To generate a coverage report, run:
 pnpm exec vitest run --coverage
 ```
 
-This uses `@vitest/coverage-v8` and enforces the 80% thresholds defined in `vitest.config.ts`. If any metric falls below 80%, the test run will fail.
+This uses `@vitest/coverage-v8` and enforces the 80% thresholds defined in `vitest.config.ts` for that coverage run. If any metric falls below 80%, the coverage command will fail.
 
 ### Running integration tests locally
 
@@ -525,7 +531,7 @@ coverage: {
 
 Run coverage locally: `pnpm exec vitest run --coverage`
 
-CI enforces thresholds in the test workflow -- the build fails if any metric drops below 80%.
+CI does not run coverage by default. Add an explicit coverage workflow or step before treating these thresholds as merge-gating.
 
 ---
 
@@ -572,6 +578,7 @@ project-root/
     gemini/
       chatService.test.ts            # AI chat service tests
       exerciseParser.test.ts         # AI exercise parser tests
+      exerciseParser.image.test.ts   # AI image parser tests
       suggestionService.test.ts      # AI suggestion tests
     routes/
       __tests__/                     # Route unit tests (mocked dependencies)
@@ -593,7 +600,8 @@ project-root/
       aiEval.test.ts                 # AI evaluation tests
       aiService.test.ts              # AI service tests
       analyticsService.test.ts       # Analytics calculations
-      coachService.test.ts           # Coaching service tests
+      coachService.*.test.ts         # Coaching service behavior groups
+      coachService.testSetup.ts      # Coaching service test harness
       exportService.test.ts          # CSV/JSON export tests
       planService.test.ts            # Training plan tests
       ragService.test.ts             # RAG service tests
@@ -645,13 +653,16 @@ project-root/
     e2e/                             # E2E spec files
       analytics.cy.ts
       api-validation.cy.ts
+      coach-chat.cy.ts
+      emom-rollout-config.cy.ts
       landing.cy.ts
       log-workout.cy.ts
       log-workout-submission.cy.ts
       navigation.cy.ts
+      onboarding.cy.ts
+      plan-generation.cy.ts
       settings.cy.ts
       timeline.cy.ts
-      timeline-workout-details.cy.ts
     support/
       commands.ts                    # Custom Cypress commands (getBySel)
       e2e.ts                         # Global hooks and Clerk intercepts

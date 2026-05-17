@@ -336,15 +336,14 @@ Emails are only sent to users who meet all of these conditions:
 1. `user.email` is set (non-null)
 2. `user.emailNotifications` (the master toggle) is `true`
 3. The per-type toggle for the specific email is `true`:
-   - Weekly summary: `user.emailWeeklySummary` (default `true`)
-   - Missed workout reminder: `user.emailMissedReminder` (default `true`)
+   - Weekly summary: `user.emailWeeklySummary` (default `false`)
+   - Missed workout reminder: `user.emailMissedReminder` (default `false`)
 
-The per-type toggles default to `true` so existing users maintain the
-pre-migration behavior (receiving both categories) without an explicit
-opt-in. Users can manage all three toggles from `/settings` — the
-per-type switches are nested under the master toggle and are disabled
-(grayed out) when the master is off. The email footer links back to
-the settings page.
+All three email toggles default to `false`, and legacy nullable values are
+serialized as `false` by the preferences API. Users must explicitly opt in
+from `/settings`; the per-type switches are nested under the master toggle
+and are disabled (grayed out) when the master is off. The email footer links
+back to the settings page.
 
 ### Email Sending Pipeline
 
@@ -513,9 +512,11 @@ Sentry provides centralized error tracking for both server and client. It is ent
 |---|---|---|
 | `SENTRY_DSN` | No | Server DSN. When absent, the `@sentry/node` init is skipped. |
 | `VITE_SENTRY_DSN` | No | Client DSN. When absent, `Sentry.init` on the client is skipped. |
-| `SENTRY_ENVIRONMENT` | No | Optional environment tag (e.g. `production`, `staging`). Defaults to `NODE_ENV`. |
 
-Because the app ships without a bundled DSN, local development does not report to Sentry unless the developer explicitly opts in by setting the variables.
+The server Sentry environment tag derives from `NODE_ENV`; the client tag derives
+from Vite's `MODE`. There is no separate `SENTRY_ENVIRONMENT` variable. Because
+the app ships without a bundled DSN, local development does not report to Sentry
+unless the developer explicitly opts in by setting the DSN variables.
 
 ### What Is Reported
 

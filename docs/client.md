@@ -5,8 +5,8 @@
 The fitai.coach frontend is a single-page application for AI-powered fitness training planning, logging, and analytics. It is built with:
 
 - **React 18** (via `react-dom/client` `createRoot`)
-- **Vite 5** as the build tool and dev server
-- **TypeScript 5.9**
+- **Vite 6** as the build tool and dev server
+- **TypeScript 6**
 - **Tailwind CSS 4** (using `@tailwindcss/vite` plugin)
 - **shadcn/ui** (New York style, Radix UI primitives)
 - **wouter** for client-side routing
@@ -86,10 +86,10 @@ The home page and primary view. Displays a chronological timeline of training pl
 - **Virtual scrolling** -- Uses `@tanstack/react-virtual` (`useVirtualizer`) to efficiently render large timeline lists.
 - **Timeline filtering** -- Filter by plan and by workout status (completed, planned, skipped). Collapsible past/future groups with "show more" buttons.
 - **Plan management** -- CSV import (`ImportPreviewDialog`), plan scheduling (`SchedulePlanDialog`), plan renaming, and goal setting.
-- **Workout actions** -- Mark complete, change status, skip with confirmation (`SkipConfirmDialog`), view/edit details (`WorkoutDetailDialog`), delete, and combine workouts (`CombineWorkoutsDialog`).
+- **Workout actions** -- Mark complete, change status, skip with confirmation (`SkipConfirmDialog`), open the sheet-based planned/logged/skipped workout surfaces, edit workout titles inline from sheet headers, delete, and combine workouts (`CombineWorkoutsDialog`).
 - **Floating action button** -- Toggles the coach panel.
 
-State management is centralized in the `useTimelineState` custom hook.
+State management is centralized in the `useTimelineState` custom hook, with `TimelineWorkoutSurfaces` wiring the log/review/preview/skipped workout sheets.
 
 ### Log Workout (`client/src/pages/LogWorkout.tsx`)
 
@@ -208,27 +208,29 @@ The largest component group, further subdivided:
 
 - **Top-level**: `TimelineHeader`, `TimelineSkeleton`, `TimelineEmptyState`, `TimelineDateGroup`, `FloatingActionButton`, `TimelineTodayIndicator` (jump-to-today pill; hidden when today is filtered out of the current view), `CoachReviewingIndicator`, `SuggestionsPanel`.
 - **Annotations**: `AnnotationsDialog`, `TimelineAnnotationCard`, `AnnotationTypeIcon` — inline annotation rows rendered as first-class log entries on the Timeline for injury / illness / travel / rest periods.
-- **Dialogs**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, `EditWorkoutDialog`, `ConfirmDialog`. (The workout detail dialog has graduated to its own top-level `workout-detail/` directory — see below.)
+- **Dialogs and surfaces**: `SchedulePlanDialog`, `SkipConfirmDialog`, `ImportPreviewDialog`, `ConfirmDialog`, and `TimelineWorkoutSurfaces`, which wires the workout-detail sheet surfaces from `workout-detail/`.
 - **`timeline-filters/`**: `TimelineFilters`, `PlanSelector`, `GoalDialog`, `csv-utils.ts`.
 - **`timeline-workout-card/`**: `TimelineWorkoutCard`, `ExerciseChips`, `WorkoutStravaStats`, utility and type files.
 - **`combine-workouts-dialog/`**: `CombineWorkoutsDialog`, `FieldSelector`, `WorkoutCard`, `CombinedResultSummary`.
 
 Barrel exports via `index.ts` files in each subdirectory.
 
-### `workout-detail/` -- Workout Detail Dialog (v2)
+### `workout-detail/` -- Workout Sheet Surfaces
 
-The workout detail dialog lives in its own top-level directory so it can be shared between Timeline, Log Workout, and Coach surfaces.
+Workout detail surfaces live in their own top-level directory so Timeline, Log Workout, and Coach flows can share the same sheet/header/table building blocks.
 
-- `WorkoutDetailDialogV2` -- Current implementation of the workout detail dialog (view + edit modes in one surface, with AI coach rail).
-- `WorkoutDetailHeaderV2` -- Dialog header (title, date, menu, close button).
+- `ReviewSurface` -- Completed/logged workout review surface, including inline title editing and embedded coach access.
+- `LogSheet` -- Planned or missed workout logging surface, plus future planned edit mode.
+- `PreviewSheet` -- Future planned workout preview surface.
+- `SkippedSheet` -- Skipped workout review, undo, and delete surface.
+- `AdhocLogSheet` -- Quick timeline entry surface for logging a new workout.
+- `ReadOnlyWorkoutDetailSheet` -- Shared responsive sheet shell for read-only workout detail surfaces.
+- `EditableWorkoutTitle` -- Inline sheet-header title editor backed by the existing `focus` field on workout logs or plan days.
 - `ExerciseTable` -- Responsive exercise + set table with per-row load/reps/time cells, dense mobile layout, readable exercise names.
 - `CoachPrescriptionCollapsible` -- Collapsible panel showing the coach's prescribed exercises for the day; integrates free-text parse + photo-parse entry points.
-- `CoachTakePanel` / `InDialogCoachChat` -- Inline AI coach rail for asking questions about the open workout.
+- `WorkoutCoachPanel`, `EmbeddedWorkoutCoachChat`, and `MobileCoachToggle` -- Embedded AI coach surfaces for asking questions about the open workout.
 - `AthleteNoteInput` -- Free-text note capture scoped to the workout.
-- `HistoryPanel` -- Previous completions of the same exercise for context.
-- `SaveStatePill` / `SaveWorkoutButton` -- Autosave indicator + explicit save button.
-- `WorkoutStatsRow` -- Summary row (duration, RPE, set totals) shown at the top of the dialog.
-- `useDialogParseControls` -- Hook that orchestrates text + photo parse state inside the dialog (preview URL lifecycle, dispatch-time entry-id guards to avoid stale callbacks, cancel-in-flight semantics when a photo starts while a text parse is mid-flight).
+- `SaveStatePill` -- Autosave indicator for structured table and note edits.
 
 ### `exercise-input/` -- Exercise Entry Widgets
 
@@ -276,7 +278,7 @@ Structured exercise entry surfaces shared across logging and detail:
 - `ChatInput` -- Chat text input.
 - `ExerciseSelector` -- Exercise picker.
 - `ExerciseInput` -- Individual exercise input fields.
-- `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in the workout detail dialog.
+- `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in workout detail surfaces.
 - `MetricCard` -- Reusable stat/metric card.
 - `PrivacyConsentBanner` -- AI-consent gate shown on first entry when `aiCoachEnabled` is `false`; opens the relevant Settings section on "Manage".
 - `RagDebugBadge` -- Dev-only indicator that surfaces which RAG chunks (if any) were injected into the last chat response; gated behind a dev flag.
@@ -290,9 +292,9 @@ Structured exercise entry surfaces shared across logging and detail:
 
 A user flow introduced in April 2026 that lets athletes snap a photo of a whiteboard / coach printout / phone screenshot and have Gemini extract exercises and sets.
 
-- **Entry points**: `ImageCaptureButton` mounted inside `WorkoutTextMode` (Log Workout) and inside `CoachPrescriptionCollapsible` (Workout Detail dialog, for re-parsing an existing workout against a new photo).
+- **Entry points**: `ImageCaptureButton` mounted inside `WorkoutTextMode` (Log Workout) and inside `CoachPrescriptionCollapsible` (workout detail surfaces, for re-parsing an existing workout against a new photo).
 - **Client-side compression**: `compressImage()` in `client/src/lib/image.ts` resizes the captured image to a max edge of 1600px and re-encodes as JPEG at quality 0.8 before base64 upload, keeping payloads OCR-ready while staying inside the Gemini request limit. Centralized `getImageMimeType()` ensures the same mime-type handling on both call sites.
-- **Orchestration hook**: `useDialogParseControls` (in `client/src/components/workout-detail/`) manages preview URL lifecycle (`URL.createObjectURL` is revoked on unmount via `useLayoutEffect`), cancels any in-flight text auto-parse when a photo capture starts, guards success callbacks against stale dispatches via a dispatch-time entry-id comparison, and preserves the current capture when a parse call resolves with an empty exercise list.
+- **Orchestration surface**: `shared/PrescriptionEditor` manages the text/photo parse controls for workout detail surfaces, including preview URL lifecycle, Retake/Parse confirmation, and clearing transient preview state after dispatch.
 - **Server endpoints**: `POST /api/v1/parse-exercises-from-image` (new workout) and `POST /api/v1/workouts/:id/reparse-from-image` (existing workout). Both accept `{ imageBase64, mimeType }` and are rate-limited under the AI category. See [API Reference](api-reference.md).
 
 ### Component Communication Patterns
@@ -316,7 +318,7 @@ flowchart TD
         TF[TimelineFilters]
         TDG[TimelineDateGroup]
         TWC[TimelineWorkoutCard]
-        WDD[WorkoutDetailDialog]
+        WDS[Workout Sheets]
         CP[CoachPanel]
     end
     
@@ -328,7 +330,7 @@ flowchart TD
     TL --> TF
     TL -->|grouped entries| TDG
     TDG --> TWC
-    TWC -->|click| WDD
+    TWC -->|click| WDS
     TL --> CP
 ```
 
@@ -441,7 +443,7 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
   - Caches `js`, `css`, `html`, `ico`, `png`, `svg`, `woff`, `woff2` files.
   - `cleanupOutdatedCaches: true` removes stale cache entries on update.
 - **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks.
-- **Offline indicator**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays a banner when the browser is offline.
+- **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, pending queued workout-create saves, and sync/drop feedback after replay attempts.
 
 ---
 
