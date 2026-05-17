@@ -7,6 +7,7 @@ vi.mock("./queryClient", () => ({
 }));
 
 import {
+  createOfflineMutationId,
   enqueueMutation,
   flushQueue,
   getPendingCount,
@@ -26,6 +27,19 @@ describe("offlineQueue", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  it("generates replay ids with browser crypto", () => {
+    const mathRandom = vi.spyOn(Math, "random");
+    try {
+      const id = createOfflineMutationId();
+
+      expect(id).toMatch(/^[\da-f-]{32,36}$/i);
+      expect(id).not.toMatch(/^\d+-/);
+      expect(mathRandom).not.toHaveBeenCalled();
+    } finally {
+      mathRandom.mockRestore();
+    }
   });
 
   it("uses a caller-provided id as the replay idempotency key", async () => {

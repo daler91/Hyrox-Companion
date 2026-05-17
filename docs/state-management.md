@@ -207,7 +207,7 @@ A localStorage-backed mutation queue used by workout logging creates. Other muta
 - **Max queue size:** 100 mutations (oldest evicted when full).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
 - **Max retries:** 5 per mutation -- dropped after exceeding.
-- **Idempotency:** Workout saves generate a unique ID (`timestamp-uuid`) before the first request, send it as `X-Idempotency-Key`, and reuse it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
+- **Idempotency:** Workout saves generate a crypto-backed unique ID before the first request, send it as `X-Idempotency-Key`, and reuse it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
 - **Privacy cleanup:** Signout and account deletion clear queued mutation bodies and user-scoped drafts from browser storage.
 
 ### API

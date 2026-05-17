@@ -121,8 +121,23 @@ function saveQueue(queue: PendingMutation[]) {
 }
 
 export function createOfflineMutationId(): string {
-  const randomPart = globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(36).slice(2, 10);
-  return `${Date.now()}-${randomPart}`;
+  const crypto = globalThis.crypto;
+
+  if (!crypto) {
+    throw new Error("Secure random values are unavailable for offline mutation IDs.");
+  }
+
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  if (typeof crypto.getRandomValues !== "function") {
+    throw new Error("Secure random values are unavailable for offline mutation IDs.");
+  }
+
+  const values = new Uint8Array(16);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 export function enqueueMutation(method: string, url: string, body: unknown, options?: EnqueueMutationOptions): string {
