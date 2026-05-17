@@ -1,6 +1,6 @@
+import type { CoachNoteInputs } from "@shared/schema";
 import { z } from "zod";
 
-import type { CoachNoteInputs } from "@shared/schema";
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";

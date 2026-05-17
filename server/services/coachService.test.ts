@@ -1,6 +1,6 @@
+import type { CoachNoteInputs } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CoachNoteInputs } from "@shared/schema";
 import {
   generateReviewNotes,
   generateWorkoutSuggestions,
