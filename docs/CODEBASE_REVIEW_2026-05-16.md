@@ -1,4 +1,4 @@
-# Code Review Report - Hyrox Companion
+# Code Review Report - Hyrox Companion (Resolved Historical Baseline)
 
 Generated: 2026-05-16 (America/Chicago)
 
@@ -15,9 +15,36 @@ This report is now a historical baseline. The original critical findings, warnin
 - The large review-driven maintainability targets were decomposed: `ExerciseTable`, `Timeline`, `workoutService`, shared schema types, `exerciseParser`, and `coachService` tests.
 - The remaining follow-on scaling item has now been addressed with PostgreSQL-backed `rate_limit_buckets`, shared `server_runtime_cache`, and relaxed `APP_INSTANCE_COUNT > 1` production validation after migrations.
 
+Redis note: the current multi-instance fix intentionally uses PostgreSQL because Postgres is already required by the app and by Railway deployments. No Redis service is currently required or expected in Railway. Redis can still be added later if runtime-state write volume, latency, or operational needs justify moving rate limits and hot caches off Postgres.
+
 The finding tables below are retained as the original May 16 review evidence, not as a current open-issues list.
 
-## Executive Summary
+## Resolution Matrix
+
+| ID | Original Area | Status | Resolution |
+| --- | --- | --- | --- |
+| C1 | AI consent enforcement | Resolved | Budgeted AI-provider routes now require AI consent, and route compliance coverage protects against drift. |
+| C2 | Consent preference defaults | Resolved | Nullable consent and email preference values now resolve to `false`, matching opt-in behavior. |
+| W1 | Internal analytics exposure | Resolved | Internal structured-exercise health analytics now require auth, rate limiting, and `INTERNAL_ANALYTICS_SECRET`. |
+| W2 | AI budget fail-open behavior | Resolved | AI budget check exceptions now fail closed with `AI_BUDGET_UNAVAILABLE`. |
+| W3 | Offline workout save trust | Resolved | Workout creation from the log flow now queues connectivity failures with replay-safe idempotency keys. |
+| W4 | User-scoped local data cleanup | Resolved | Signout and account deletion clear queued writes, drafts, onboarding fallback state, and related user-scoped keys. |
+| W5 | Horizontal scaling guardrails | Resolved | Rate limits and short-lived auth/AI/RAG cache state are shared through Postgres; cron jobs use advisory locks. Redis remains optional future infrastructure. |
+| W6 | Retention documentation drift | Resolved | Runtime and docs now align on 7-day idempotency/offline replay retention and current queue keys. |
+| W7 | Red timeline tests | Resolved | Timeline rename/query setup failures were repaired and the full test suite was restored. |
+| W8 | Browser-only onboarding completion | Resolved | Onboarding completion is now durable user state with safe local fallback behavior. |
+| S1 | Large module maintainability | Resolved | `ExerciseTable`, `Timeline`, `workoutService`, shared schema types, and `exerciseParser` were split into focused modules. |
+| S2 | Import-sort cleanup | Resolved | Review-driven import-sort warnings were cleaned up while touching nearby files. |
+| S3 | AI/privacy compliance tests | Resolved | Negative route/default tests now cover AI consent guard drift and null consent behavior. |
+| S4 | Safe storage access | Resolved | Onboarding and consent storage now use safe storage helpers that tolerate denied browser storage. |
+
+## Current Follow-Ups
+
+- Keep monitoring `rate_limit_buckets` and `server_runtime_cache` write volume after scaling `APP_INSTANCE_COUNT` above `1`. If those writes become noisy or latency-sensitive, add a Redis-backed runtime-state adapter and provision Railway Redis.
+- If Redis is added later, document `REDIS_URL`, add Railway setup notes, and keep Postgres as the safe default/fallback until Redis is fully verified.
+- Future codebase reviews should start from the current checkout and create a new report rather than editing the original May 16 findings.
+
+## Original Executive Summary (May 16)
 
 The codebase has solid foundations: mutation routes generally use shared protected-route helpers, CSRF/idempotency are centralized, production warnings call out per-instance rate limiting, and the focused route tests plus typecheck are green. The main risk is not framework hygiene; it is drift between stated privacy/consent guarantees and the routes that now call AI providers.
 
@@ -25,7 +52,7 @@ Two issues should be treated as release blockers. Several AI-provider paths are 
 
 There are also important warnings around operational hardening and user trust: an internal analytics endpoint is reachable by every authenticated user, the AI-budget guard fails open on storage errors, the offline queue is implemented but not wired to workout mutations despite product copy promising automatic sync, local workout drafts/offline bodies are left in browser storage after signout or account deletion, and the full test suite is currently red in timeline rename tests.
 
-## Verification
+## Original Verification (May 16)
 
 | Check | Result |
 | --- | --- |
@@ -35,14 +62,14 @@ There are also important warnings around operational hardening and user trust: a
 | `pnpm run lint` | Passed with 13 warnings, mostly max-lines/max-lines-per-function and import-sort warnings |
 | `pnpm test -- --reporter=dot` | Failed after about 131 seconds; two `TimelineFilters` rename tests are red |
 
-## Critical Findings
+## Original Critical Findings
 
 | ID | Severity | Area | Finding | Evidence | Fix |
 | --- | --- | --- | --- | --- | --- |
 | C1 | Critical | Security, Privacy | Several AI-provider routes bypass the explicit AI-consent gate. The consent middleware says it is the privacy gate for every route forwarding user data to an AI provider, but plan generation/reparse, workout reparse, and coaching-material embedding routes use `aiBudgetCheck` without `aiConsentCheck`. | Consent contract: `server/middleware/aiConsent.ts:12`, helper support: `server/routes/_helpers/protectedRouteBuilder.ts:57-58`. Missing consent on AI paths: `server/routes/plans.ts:197-200`, `server/routes/plans.ts:391-395`, `server/routes/plans.ts:441-457`, `server/routes/plans.ts:467-474`, `server/routes/workouts/workoutsAi.routes.ts:21-32`, `server/routes/workouts/workoutsAi.routes.ts:47-52`, `server/routes/workouts/workoutsAi.routes.ts:72`, `server/routes/coaching.ts:33-39`, `server/routes/coaching.ts:44-55`, `server/routes/coaching.ts:66`. Known good pattern exists in `server/routes/ai.ts:32`, `server/routes/ai.ts:47`, `server/routes/ai.ts:64`, `server/routes/ai.ts:83`, `server/routes/ai.ts:113`, `server/routes/ai.ts:165`, `server/routes/ai.ts:332`, and `server/routes/ai.ts:355`. | Add `aiConsentCheck` before `aiBudgetCheck`, or migrate these routes to `protectedPost(..., { aiConsent: true, aiBudget: true })` where possible. Add a compliance test that every route using `aiBudgetCheck`, every route queueing embeddings, and every route calling AI parsing/generation requires consent unless documented as non-user-data and explicitly exempted. |
 | C2 | Critical | Privacy, UX | Consent-bearing preferences default null values to enabled in the API and settings UI, contradicting schema defaults and README guarantees. Legacy rows or partially hydrated rows can display/save `aiCoachEnabled: true` and email notification opt-ins when the stored value is null. | Schema defaults are false: `shared/schema/tables.ts:36-42`. README says AI features are opt-in and new users default disabled: `README.md:31`, `README.md:72`. API serializer uses `?? true`: `server/routes/preferences.ts:63-67`. Settings initializes and hydrates toggles as true: `client/src/pages/Settings.tsx:120-124`, `client/src/pages/Settings.tsx:154-158`, `client/src/pages/Settings.tsx:229-233`. | Change consent/notification fallbacks to false unless the stored value is exactly true. Add API and settings tests for null DB values. Consider a one-time migration/backfill that sets null consent fields to false so production rows are explicit. |
 
-## Warnings
+## Original Warnings
 
 | ID | Severity | Area | Finding | Evidence | Fix |
 | --- | --- | --- | --- | --- | --- |
@@ -55,7 +82,7 @@ There are also important warnings around operational hardening and user trust: a
 | W7 | Medium | QA | The full test suite is not green. Timeline rename tests either time out or cannot find the rename submit button. There is also stderr noise about missing query functions in missed-routing tests. | `pnpm test -- --reporter=dot` failed in `client/src/components/timeline/__tests__/TimelineFilters.test.tsx:177` (`handles renaming a plan`) and `client/src/components/timeline/__tests__/TimelineFilters.test.tsx:208` (`button-rename-submit` not found). The run also emitted a missing queryFn error for `["/api/v1/preferences"]` in `Timeline.missed-routing.test.tsx`. | Fix the rename test/component interaction and add the missing preferences query test setup. Keep full-suite status visible before merging broad frontend changes. |
 | W8 | Medium | Business Logic, UX | Onboarding completion is browser-local only. A user can clear localStorage and re-enter first-run flows, and completion is not durable across devices. | The hook decides first-time state from localStorage: `client/src/hooks/useOnboarding.ts:41-45`. Completion/import flow sets local completion state without a server field: `client/src/hooks/useOnboarding.ts:67-89`. User schema has no onboarding-complete field in `shared/schema/tables.ts:24-59`. | Persist onboarding completion on the user or preferences row. Keep the URL-forced onboarding path as an explicit override for support/testing. |
 
-## Suggestions
+## Original Suggestions
 
 | ID | Priority | Area | Suggestion | Evidence | Fix |
 | --- | --- | --- | --- | --- | --- |
@@ -64,7 +91,7 @@ There are also important warnings around operational hardening and user trust: a
 | S3 | Medium | QA | Add negative compliance tests for consent defaults and AI route guard drift. | Existing focused route tests passed, and `server/routes/__tests__/protectedRouteBuilderCompliance.test.ts` indicates a route compliance test pattern already exists. Missing guard drift still appeared in routes that hand-build middleware arrays. | Add table-driven assertions over route registrations or exported route metadata: budgeted AI routes must include consent; preferences nulls must serialize false. |
 | S4 | Low | UX, Privacy | Use a safe localStorage wrapper consistently. Some paths already catch localStorage failures, but onboarding and consent banner paths call it directly. | Direct calls appear in `client/src/hooks/useOnboarding.ts:41-45`, `client/src/hooks/onboardingStorage.ts:4`, and `client/src/components/PrivacyConsentBanner.tsx:14-24`. More defensive code exists in the offline queue and draft hooks. | Centralize local storage access so private browsing/quota failures degrade without throwing during render/effects. |
 
-## Pass-by-Pass Detail
+## Original Pass-by-Pass Detail
 
 ### 1. Security Review
 
@@ -115,7 +142,7 @@ Privacy is the weakest current pass because consent defaults, AI route guards, l
 
 These are fixable, but they need to be treated as correctness issues, not copy polish. The privacy page and API behavior should describe the same retention and consent model users actually experience.
 
-## Score Summary
+## Original Score Summary
 
 | Pass | Score | Rationale |
 | --- | ---: | --- |
@@ -129,7 +156,7 @@ These are fixable, but they need to be treated as correctness issues, not copy p
 
 Overall: 6.3/10. The codebase is healthy enough to improve quickly, but consent/privacy fixes should be handled before shipping more AI-provider surfaces.
 
-## Recommended Fix Sequence
+## Original Recommended Fix Sequence
 
 1. Fix AI consent enforcement on plan, workout reparse, and coaching-material routes.
 2. Change null consent/preference serialization to false and add regression tests.
