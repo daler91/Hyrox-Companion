@@ -53,6 +53,12 @@ Everything else is optional and gates a specific feature (Clerk auth, AI provide
 
 ---
 
+### Runtime topology
+
+`APP_INSTANCE_COUNT` defaults to `1`. Production refuses values above `1` because rate limits, the Clerk seen-cache, and the Gemini embedding cache are still process-local. Cron bodies use PostgreSQL advisory locks as a defensive guard, but horizontal scaling still needs shared rate limiting/cache infrastructure.
+
+---
+
 ## Authentication (Clerk)
 
 Clerk is optional. When unset, you can run with `ALLOW_DEV_AUTH_BYPASS=true` for local development.
@@ -160,6 +166,7 @@ The Sentry `environment` tag is automatically derived from `NODE_ENV` on the ser
 | `NODE_ENV` | `development` | `development` \| `production` \| `test`. |
 | `PORT` | `5000` | HTTP listener port. |
 | `LOG_LEVEL` | `info` | Pino level: `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal`. |
+| `APP_INSTANCE_COUNT` | `1` | Declared app replica count. Production values above `1` are rejected until shared rate limits/caches are implemented. |
 | `ALLOW_DEV_AUTH_BYPASS` | — | Dev-only. See [Authentication (Clerk)](#authentication-clerk). |
 
 ---
