@@ -2,7 +2,15 @@ import express from "express";
 import request from "supertest";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chatWithCoach, generateWorkoutSuggestions,parseExercisesFromImage, parseExercisesFromText, parseWorkoutStructureFromText, streamChatWithCoach } from "../../gemini";
+import {
+  chatWithCoach,
+  generateWorkoutSuggestions,
+  parseExercisesFromImage,
+  parseExercisesFromText,
+  parseWorkoutStructureFromImage,
+  parseWorkoutStructureFromText,
+  streamChatWithCoach,
+} from "../../gemini";
 import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
 import { storage } from "../../storage";
@@ -95,6 +103,78 @@ vi.mock("../../prompts", async (importOriginal) => {
     ...actual,
     buildCoachingMaterialsSection: vi.fn().mockReturnValue(""),
   };
+});
+
+const aiConsentGuardCases = [
+  {
+    name: "text exercise parsing",
+    path: "/api/v1/parse-exercises",
+    body: { text: "Row 500m" },
+    blockedCall: parseExercisesFromText,
+  },
+  {
+    name: "text workout-structure parsing",
+    path: "/api/v1/parse-workout-structure",
+    body: { text: "10 min EMOM row and burpees" },
+    blockedCall: parseWorkoutStructureFromText,
+  },
+  {
+    name: "image exercise parsing",
+    path: "/api/v1/parse-exercises-from-image",
+    body: { imageBase64: "Zm9v", mimeType: "image/png" },
+    blockedCall: parseExercisesFromImage,
+  },
+  {
+    name: "image workout-structure parsing",
+    path: "/api/v1/parse-workout-structure-from-image",
+    body: { imageBase64: "Zm9v", mimeType: "image/png" },
+    blockedCall: parseWorkoutStructureFromImage,
+  },
+  {
+    name: "coach chat",
+    path: CHAT_ENDPOINT,
+    body: { message: "How should I pace this?", history: [] },
+    blockedCall: chatWithCoach,
+  },
+  {
+    name: "streaming coach chat",
+    path: CHAT_STREAM_ENDPOINT,
+    body: { message: "How should I pace this?", history: [] },
+    blockedCall: streamChatWithCoach,
+  },
+  {
+    name: "coach insights",
+    path: "/api/v1/coach-insights",
+    body: {},
+    blockedCall: chatWithCoach,
+  },
+  {
+    name: "timeline suggestions",
+    path: "/api/v1/timeline/ai-suggestions",
+    body: {},
+    blockedCall: generateWorkoutSuggestions,
+  },
+];
+
+describe("AI route consent compliance", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const routeUtils = await import("../../routeUtils");
+    routeUtils.clearRateLimitBuckets();
+    app = createTestApp(aiRouter);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: false });
+  });
+
+  it.each(aiConsentGuardCases)("blocks $name before budget or provider work", async ({ path, body, blockedCall }) => {
+    const response = await request(app).post(path).send(body);
+
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("AI_COACH_DISABLED");
+    expect(storage.aiUsage.getDailyTotalCents).not.toHaveBeenCalled();
+    expect(blockedCall).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/parse-exercises", () => {
