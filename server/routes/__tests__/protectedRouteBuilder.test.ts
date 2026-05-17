@@ -22,11 +22,21 @@ vi.mock("../../routeGuards", () => ({
 }));
 
 vi.mock("../../middleware/aiConsent", () => ({
-  aiConsentCheck: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  aiConsentCheck: (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (Array.isArray(res.locals.calls)) {
+      (res.locals.calls as string[]).push("aiConsent");
+    }
+    next();
+  },
 }));
 
 vi.mock("../../middleware/aibudget", () => ({
-  aiBudgetCheck: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
+  aiBudgetCheck: (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (Array.isArray(res.locals.calls)) {
+      (res.locals.calls as string[]).push("aiBudget");
+    }
+    next();
+  },
 }));
 
 describe("protectedRouteBuilder", () => {
@@ -34,6 +44,11 @@ describe("protectedRouteBuilder", () => {
     const app = express();
     const router = express.Router();
     const calls: string[] = [];
+
+    app.use((_req, res, next) => {
+      res.locals.calls = calls;
+      next();
+    });
 
     app.use((_req, res, next) => {
       res.locals.calls = calls;
@@ -110,6 +125,11 @@ describe("protectedRouteBuilder", () => {
     const router = express.Router();
     const calls: string[] = [];
 
+    app.use((_req, res, next) => {
+      res.locals.calls = calls;
+      next();
+    });
+
     protectedPost(router, "/probe", {
       limiter: (_req, _res, next) => { calls.push("limiter"); next(); },
       aiConsent: true,
@@ -124,7 +144,7 @@ describe("protectedRouteBuilder", () => {
     app.use(router);
     await request(app).post("/probe").send({}).expect(200);
 
-    expect(calls).toEqual(["limiter", "validation", "custom", "handler"]);
+    expect(calls).toEqual(["guard:auth", "guard:idempotency", "limiter", "aiConsent", "aiBudget", "validation", "custom", "handler"]);
   });
 
   it("allows opting out of auth and rate limiting", async () => {

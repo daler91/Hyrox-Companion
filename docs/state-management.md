@@ -203,11 +203,11 @@ A localStorage-backed mutation queue that ensures data isn't lost when the user 
 
 ### Design
 
-- **Queue storage:** `localStorage` under the key `hyrox-offline-queue`.
+- **Queue storage:** `localStorage` under the key `fitai-offline-queue`.
 - **Max queue size:** 100 mutations (oldest evicted when full).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
 - **Max retries:** 5 per mutation -- dropped after exceeding.
-- **Idempotency:** Each mutation gets a unique ID (`timestamp-uuid`), sent as `X-Idempotency-Key` header on replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 24-hour TTL. This provides end-to-end duplicate prevention: the client generates the key, and the server enforces it.
+- **Idempotency:** Each mutation gets a unique ID (`timestamp-uuid`), sent as `X-Idempotency-Key` header on replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL. This provides end-to-end duplicate prevention: the client generates the key, and the server enforces it.
 
 ### API
 

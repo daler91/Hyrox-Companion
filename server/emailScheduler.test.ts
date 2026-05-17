@@ -32,6 +32,8 @@ describe('runEmailCronJob', () => {
             id: 1,
             email: 'test@example.com',
             emailNotifications: true,
+            emailWeeklySummary: true,
+            emailMissedReminder: true,
             lastWeeklySummaryAt: null,
             lastMissedReminderAt: null,
           } as unknown as User,
@@ -64,6 +66,8 @@ describe('runEmailCronJob', () => {
         id: 1,
         email: 'user1@example.com',
         emailNotifications: true,
+        emailWeeklySummary: true,
+        emailMissedReminder: true,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
       } as unknown as User,
@@ -71,6 +75,8 @@ describe('runEmailCronJob', () => {
         id: 2,
         email: 'user2@example.com',
         emailNotifications: true,
+        emailWeeklySummary: true,
+        emailMissedReminder: true,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
       } as unknown as User,
@@ -161,6 +167,25 @@ describe('runEmailCronJob', () => {
         emailNotifications: true,
         emailWeeklySummary: false,
         emailMissedReminder: false,
+        lastWeeklySummaryAt: null,
+        lastMissedReminderAt: null,
+      } as unknown as User,
+    ]);
+
+    const result = await runEmailCronJob(mockStorage);
+
+    expect(result.usersChecked).toBe(1);
+    expect(result.emailsSent).toBe(0);
+  });
+
+  it('treats null per-type email flags as not opted in', async () => {
+    mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+      {
+        id: 'user-null-flags',
+        email: 'null-flags@example.com',
+        emailNotifications: true,
+        emailWeeklySummary: null,
+        emailMissedReminder: null,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
       } as unknown as User,

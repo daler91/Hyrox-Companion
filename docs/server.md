@@ -178,7 +178,7 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 
 - Applies to mutating methods only (POST/PUT/PATCH/DELETE)
 - Requests without the header pass through untouched
-- On first request with a given `(userId, key)` pair, the response is cached in the `idempotency_keys` table with a 24-hour TTL
+- On first request with a given `(userId, key)` pair, the response is cached in the `idempotency_keys` table with a 7-day TTL
 - On repeat requests with the same key, the cached response (status code + body) is returned without re-executing the handler
 - Key length is capped at 255 characters (returns 400 if exceeded)
 - Must be mounted after `isAuthenticated` so `getUserId()` can resolve the caller
@@ -303,6 +303,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `AI_TEXT_BASE_URL` | No | Base URL for OpenAI-compatible providers |
 | `GEMINI_API_KEY` | No | Gemini key for the Gemini text provider, RAG embeddings, and image parsing |
 | `CRON_SECRET` | No | Secret for authenticating external cron triggers |
+| `INTERNAL_ANALYTICS_SECRET` | No | Secret for authenticating internal analytics health endpoints |
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
 | `STRAVA_STATE_SECRET` | No | Secret for signing Strava OAuth state tokens |

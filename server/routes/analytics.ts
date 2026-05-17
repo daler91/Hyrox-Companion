@@ -1,12 +1,14 @@
-import type { WorkoutLog } from "@shared/schema";
-import { dateStringSchema } from "@shared/schema";
+import crypto from "node:crypto";
+
+import { dateStringSchema, type WorkoutLog } from "@shared/schema";
 import { sql } from "drizzle-orm";
-import { type Request as ExpressRequest, type Response,Router } from "express";
+import { type NextFunction, type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
 import { ANALYTICS_CACHE_TTL_MS } from "../constants";
 import { db } from "../db";
-import { asyncHandler,rateLimiter } from "../routeUtils";
+import { env } from "../env";
+import { asyncHandler, rateLimiter } from "../routeUtils";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -117,6 +119,23 @@ function parseDateParams(req: DateReq, res: Response): { from?: string; to?: str
   return { from, to };
 }
 
+function secretsMatch(provided: string | undefined, expected: string | undefined): boolean {
+  if (!provided || !expected) return false;
+  const providedHash = crypto.createHash("sha256").update(provided).digest();
+  const expectedHash = crypto.createHash("sha256").update(expected).digest();
+  return crypto.timingSafeEqual(providedHash, expectedHash);
+}
+
+function requireInternalAnalyticsSecret(req: ExpressRequest, res: Response, next: NextFunction): void {
+  const header = req.headers["x-internal-analytics-secret"];
+  const provided = Array.isArray(header) ? undefined : header;
+  if (!secretsMatch(provided, env.INTERNAL_ANALYTICS_SECRET)) {
+    res.status(401).json({ error: "Unauthorized", code: "UNAUTHORIZED" });
+    return;
+  }
+  next();
+}
+
 router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
     const dates = parseDateParams(req, res);
@@ -202,7 +221,7 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
   }));
 
 
-router.get("/api/v1/analytics/internal/structured-exercise-health", isAuthenticated, asyncHandler(async (_req, res) => {
+router.get("/api/v1/analytics/internal/structured-exercise-health", isAuthenticated, rateLimiter("internalAnalytics", 5), requireInternalAnalyticsSecret, asyncHandler(async (_req, res) => {
   const rollups = await db.execute<{ day: string; total_rows: number; structured_rows: number; legacy_only_rows: number; failed_hydration_backlog: number; legacy_only_pct: number }>(sql`
     select day, total_rows, structured_rows, legacy_only_rows, failed_hydration_backlog, legacy_only_pct
     from structured_exercise_health_daily_rollups

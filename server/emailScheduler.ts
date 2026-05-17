@@ -105,15 +105,10 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   return success;
 }
 
-/**
- * Per-type toggles default to `true` when null/undefined so existing users
- * who predate the migration keep receiving both categories without an
- * explicit opt-in. The master `emailNotifications` still gates everything.
- */
 function wantsEmail(user: User, kind: "weeklySummary" | "missedReminder"): boolean {
   if (!user.emailNotifications) return false;
-  if (kind === "weeklySummary") return user.emailWeeklySummary ?? true;
-  return user.emailMissedReminder ?? true;
+  if (kind === "weeklySummary") return user.emailWeeklySummary === true;
+  return user.emailMissedReminder === true;
 }
 
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {

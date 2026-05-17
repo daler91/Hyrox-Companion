@@ -144,5 +144,10 @@ export function renderTimelineWithState(overrides: Partial<HarnessState> = {}) {
   harnessState.moveTimelineEntryResult = overrides.moveTimelineEntryResult ?? { handleMoveEntry: vi.fn(), moveEntry: vi.fn(), isMovingEntry: false, isMoving: false };
 
   const queryClient = new QueryClient();
+  queryClient.setQueryDefaults(["/api/v1/preferences"], {
+    queryFn: async () => ({ weightUnit: "kg", distanceUnit: "km" }),
+    staleTime: Infinity,
+  });
+  queryClient.setQueryData(["/api/v1/preferences"], { weightUnit: "kg", distanceUnit: "km" });
   return render(<QueryClientProvider client={queryClient}><Timeline /></QueryClientProvider>);
 }

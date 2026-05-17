@@ -44,6 +44,7 @@ const envSchema = z.object({
   DEEPSEEK_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  INTERNAL_ANALYTICS_SECRET: z.string().optional(),
   STRAVA_CLIENT_ID: z.string().optional(),
   STRAVA_CLIENT_SECRET: z.string().optional(),
   STRAVA_STATE_SECRET: z.string().min(32).optional(),

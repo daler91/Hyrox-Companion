@@ -181,15 +181,15 @@ describe("TimelineFilters", () => {
     const renameBtn = screen.getByTestId("button-rename-plan");
     await user.click(renameBtn);
 
-    expect(screen.getByText("Rename Training Plan")).toBeInTheDocument();
+    expect(await screen.findByText("Rename Training Plan")).toBeInTheDocument();
 
-    const input = screen.getByTestId("input-rename-plan");
+    const input = await screen.findByTestId("input-rename-plan");
     expect(input).toHaveValue("Beginner Hyrox");
 
     await user.clear(input);
     await user.type(input, "Super Beginner Hyrox");
 
-    const submitBtn = screen.getByTestId("button-rename-submit");
+    const submitBtn = await screen.findByTestId("button-rename-submit");
     await user.click(submitBtn);
 
     expect(defaultProps.onRenamePlan).toHaveBeenCalledWith("plan-1", "Super Beginner Hyrox");
@@ -201,11 +201,11 @@ describe("TimelineFilters", () => {
 
     await user.click(screen.getByTestId("button-rename-plan"));
 
-    const input = screen.getByTestId("input-rename-plan");
+    const input = await screen.findByTestId("input-rename-plan");
     await user.clear(input);
     await user.type(input, "   "); // Just spaces
 
-    const submitBtn = screen.getByTestId("button-rename-submit");
+    const submitBtn = await screen.findByTestId("button-rename-submit");
     expect(submitBtn).toBeDisabled();
   });
 
@@ -217,7 +217,7 @@ describe("TimelineFilters", () => {
 
     rerender(<TimelineFilters {...defaultProps} isRenaming={true} />);
 
-    const submitBtn = screen.getByTestId("button-rename-submit");
+    const submitBtn = await screen.findByTestId("button-rename-submit");
     expect(submitBtn).toBeDisabled();
     expect(submitBtn.querySelector(".animate-spin")).toBeInTheDocument();
   });

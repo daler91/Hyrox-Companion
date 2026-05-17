@@ -19,6 +19,10 @@ vi.mock("../../types", () => ({
   getUserId: () => "test_user_id",
 }));
 
+vi.mock("../../middleware/aibudget", () => ({
+  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
 vi.mock("../../storage", () => ({
   storage: {
     coaching: {
@@ -26,6 +30,9 @@ vi.mock("../../storage", () => ({
       createCoachingMaterial: vi.fn(),
       updateCoachingMaterial: vi.fn(),
       deleteCoachingMaterial: vi.fn(),
+    },
+    users: {
+      getUser: vi.fn(),
     },
   },
 }));
@@ -49,6 +56,7 @@ describe("Coaching materials routes", () => {
     vi.clearAllMocks();
     const routeUtils = await import("../../routeUtils");
     routeUtils.clearRateLimitBuckets();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true });
     app = createTestApp(coachingRouter);
   });
 
@@ -79,6 +87,19 @@ describe("Coaching materials routes", () => {
       expect(response.status).toBe(201);
       expect(storage.coaching.createCoachingMaterial).toHaveBeenCalled();
       expect(sendJob).toHaveBeenCalledWith("embed-coaching-material", { materialId: createdMaterial.id, userId: "test_user_id" });
+    });
+
+    it("requires AI consent before creating material for embedding", async () => {
+      vi.mocked(storage.users.getUser).mockResolvedValueOnce({ id: "test_user_id", aiCoachEnabled: false });
+
+      const response = await request(app)
+        .post("/api/v1/coaching-materials")
+        .send(validBody);
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("AI_COACH_DISABLED");
+      expect(storage.coaching.createCoachingMaterial).not.toHaveBeenCalled();
+      expect(sendJob).not.toHaveBeenCalled();
     });
 
     it("should return 400 for invalid data", async () => {

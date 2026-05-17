@@ -51,10 +51,11 @@ export function aiBudgetCheck(
 
       next();
     } catch (err) {
-      // If budget check fails, allow the request through — don't block users
-      // due to a monitoring failure
-      logger.error({ err }, "AI budget check failed — allowing request");
-      next();
+      logger.error({ err }, "AI budget check failed; blocking provider request");
+      res.status(503).json({
+        error: "AI budget enforcement is temporarily unavailable.",
+        code: "AI_BUDGET_UNAVAILABLE",
+      });
     }
   };
   void run();

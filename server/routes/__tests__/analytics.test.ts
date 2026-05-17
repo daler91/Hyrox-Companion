@@ -1,10 +1,12 @@
 import express from "express";
 import request from "supertest";
-import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { db } from "../../db";
+import { env } from "../../env";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
 import { storage } from "../../storage";
-import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting,validDate } from "../analytics";
+import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting, validDate } from "../analytics";
 import { createTestApp } from "./testUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
@@ -27,6 +29,12 @@ vi.mock("../../storage", () => ({
       getAllExerciseSetsWithDates: vi.fn(),
       getWorkoutLogsByDateRange: vi.fn(),
     },
+  },
+}));
+
+vi.mock("../../db", () => ({
+  db: {
+    execute: vi.fn(),
   },
 }));
 
@@ -63,6 +71,7 @@ describe("Analytics Routes", () => {
   beforeEach(() => {
     clearRateLimitBuckets();
     vi.clearAllMocks();
+    env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
     _cacheForTesting.clear();
     _workoutLogCacheForTesting.clear();
     app = createTestApp(analyticsRouter);
@@ -343,5 +352,47 @@ describe("Analytics Routes", () => {
     });
 
     testInvalidDates("/api/v1/training-overview");
+  });
+
+  describe("GET /api/v1/analytics/internal/structured-exercise-health", () => {
+    it("returns 401 when the internal analytics secret is not configured", async () => {
+      env.INTERNAL_ANALYTICS_SECRET = undefined;
+
+      const response = await request(app)
+        .get("/api/v1/analytics/internal/structured-exercise-health")
+        .set("x-internal-analytics-secret", "internal-secret");
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: "Unauthorized", code: "UNAUTHORIZED" });
+      expect(db.execute).not.toHaveBeenCalled();
+    });
+
+    it("returns 401 when the internal analytics secret is missing or wrong", async () => {
+      const missing = await request(app).get("/api/v1/analytics/internal/structured-exercise-health");
+      const wrong = await request(app)
+        .get("/api/v1/analytics/internal/structured-exercise-health")
+        .set("x-internal-analytics-secret", "wrong-secret");
+
+      expect(missing.status).toBe(401);
+      expect(wrong.status).toBe(401);
+      expect(db.execute).not.toHaveBeenCalled();
+    });
+
+    it("returns structured exercise health data when the secret matches", async () => {
+      vi.mocked(db.execute)
+        .mockResolvedValueOnce({ rows: [{ day: "2026-05-16", total_rows: 10, structured_rows: 8, legacy_only_rows: 2, failed_hydration_backlog: 1, legacy_only_pct: 20 }] } as never)
+        .mockResolvedValueOnce({ rows: [{ day: "2026-05-16", owner_type: "workout", source: "manual", counter_name: "parse_text_succeeded", value: 3 }] } as never);
+
+      const response = await request(app)
+        .get("/api/v1/analytics/internal/structured-exercise-health")
+        .set("x-internal-analytics-secret", "internal-secret");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        rollups: [{ day: "2026-05-16", total_rows: 10, structured_rows: 8, legacy_only_rows: 2, failed_hydration_backlog: 1, legacy_only_pct: 20 }],
+        counters: [{ day: "2026-05-16", owner_type: "workout", source: "manual", counter_name: "parse_text_succeeded", value: 3 }],
+      });
+      expect(db.execute).toHaveBeenCalledTimes(2);
+    });
   });
 });

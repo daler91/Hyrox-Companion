@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
-import { aiBudgetCheck } from "../middleware/aibudget";
 import { sendJob } from "../queue";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { getRagStatus, reembedAllMaterials } from "../services/ragService";
@@ -30,7 +29,7 @@ router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (re
   }));
 
 const createMaterialSchema = insertCoachingMaterialSchema.omit({ userId: true });
-protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coaching", 10), middleware: [aiBudgetCheck, validateBody(createMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(createMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as CreateMaterialBody;
     const material = await storage.coaching.createCoachingMaterial({ ...body, userId });
@@ -41,7 +40,7 @@ protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coac
     res.status(201).json(material);
   });
 
-protectedPatch(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10), middleware: [validateBody(updateCoachingMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedPatch(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(updateCoachingMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as UpdateMaterialBody;
     const material = await storage.coaching.updateCoachingMaterial(req.params.id, body, userId);
@@ -63,7 +62,7 @@ router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, asyncHandle
     res.json(result);
   }));
 
-protectedPost(router, "/api/v1/coaching-materials/re-embed", { limiter: rateLimiter("coaching", 5), middleware: [aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/coaching-materials/re-embed", { limiter: rateLimiter("coaching", 5), aiConsent: true, aiBudget: true }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await reembedAllMaterials(userId);
     res.json(result);
