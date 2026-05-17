@@ -8,6 +8,19 @@ function getStorage(kind: StorageKind): Storage | undefined {
   }
 }
 
+export function canUseStorage(kind: StorageKind): boolean {
+  try {
+    const storage = getStorage(kind);
+    if (!storage) return false;
+    const testKey = "__fitai_storage_probe__";
+    storage.setItem(testKey, testKey);
+    storage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getStorageItem(kind: StorageKind, key: string): string | null {
   try {
     return getStorage(kind)?.getItem(key) ?? null;
@@ -33,6 +46,7 @@ export function removeStorageItem(kind: StorageKind, key: string): void {
 }
 
 export const safeLocalStorage = {
+  canUse: () => canUseStorage("localStorage"),
   getItem: (key: string) => getStorageItem("localStorage", key),
   setItem: (key: string, value: string) => setStorageItem("localStorage", key, value),
   removeItem: (key: string) => removeStorageItem("localStorage", key),

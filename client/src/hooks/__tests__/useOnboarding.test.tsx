@@ -24,7 +24,7 @@ describe("useOnboarding", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    window.history.replaceState(null, "", "/");
+    globalThis.history.replaceState(null, "", "/");
   });
 
   afterEach(() => {
@@ -121,7 +121,7 @@ describe("useOnboarding", () => {
   });
 
   it("opens onboarding for the forced URL override even when completion is durable", async () => {
-    window.history.replaceState(null, "", "/?onboarding=run");
+    globalThis.history.replaceState(null, "", "/?onboarding=run");
     const fileInputRef = { current: document.createElement("input") };
     const { result } = renderHook(() =>
       useOnboarding(false, fileInputRef, { onboardingCompleted: true }),
@@ -130,6 +130,6 @@ describe("useOnboarding", () => {
     await waitFor(() => {
       expect(result.current.showOnboarding).toBe(true);
     });
-    expect(window.location.search).toBe("");
+    expect(globalThis.location.search).toBe("");
   });
 });

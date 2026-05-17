@@ -12,6 +12,8 @@ describe("safeLocalStorage", () => {
   });
 
   it("gets, sets, and removes values when storage is available", () => {
+    expect(safeLocalStorage.canUse()).toBe(true);
+
     safeLocalStorage.setItem("fitai-test-key", "value");
 
     expect(safeLocalStorage.getItem("fitai-test-key")).toBe("value");
@@ -24,6 +26,7 @@ describe("safeLocalStorage", () => {
   it("returns null and ignores writes when storage is missing", () => {
     vi.stubGlobal("localStorage", undefined);
 
+    expect(safeLocalStorage.canUse()).toBe(false);
     expect(safeLocalStorage.getItem("fitai-test-key")).toBeNull();
     expect(() => safeLocalStorage.setItem("fitai-test-key", "value")).not.toThrow();
     expect(() => safeLocalStorage.removeItem("fitai-test-key")).not.toThrow();
@@ -43,6 +46,7 @@ describe("safeLocalStorage", () => {
     };
     vi.stubGlobal("localStorage", throwingStorage);
 
+    expect(safeLocalStorage.canUse()).toBe(false);
     expect(safeLocalStorage.getItem("fitai-test-key")).toBeNull();
     expect(() => safeLocalStorage.setItem("fitai-test-key", "value")).not.toThrow();
     expect(() => safeLocalStorage.removeItem("fitai-test-key")).not.toThrow();

@@ -22,6 +22,33 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+const samplePlan = {
+  id: "sample-plan",
+  userId: "user-1",
+  name: "Sample Plan",
+  sourceFileName: null,
+  totalWeeks: 8,
+  goal: null,
+  startDate: null,
+  endDate: null,
+};
+
+function mockSamplePlanCreation() {
+  vi.mocked(api.plans.createSample).mockResolvedValueOnce(samplePlan);
+}
+
+function renderOnboardingWizard(onComplete = vi.fn()) {
+  const queryClient = new QueryClient();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+
+  return {
+    ...renderHook(() => useOnboardingWizard(onComplete), { wrapper }),
+    onComplete,
+  };
+}
+
 describe("useOnboardingWizard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,11 +56,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("captures onboarding style and MAF payload when selecting maf_method", async () => {
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(vi.fn()), { wrapper });
+    const { result } = renderOnboardingWizard();
 
     await act(async () => {
       await result.current.handleNext();
@@ -67,22 +90,8 @@ describe("useOnboardingWizard", () => {
   });
 
   it("does not complete onboarding when dismissing after template plan creation before scheduling", async () => {
-    vi.mocked(api.plans.createSample).mockResolvedValueOnce({
-      id: "sample-plan",
-      userId: "user-1",
-      name: "Sample Plan",
-      sourceFileName: null,
-      totalWeeks: 8,
-      goal: null,
-      startDate: null,
-      endDate: null,
-    });
-    const onComplete = vi.fn();
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(onComplete), { wrapper });
+    mockSamplePlanCreation();
+    const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleUseSamplePlan();
@@ -102,12 +111,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("marks durable completion when skipping onboarding", () => {
-    const onComplete = vi.fn();
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(onComplete), { wrapper });
+    const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleSkip();
@@ -119,12 +123,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("marks durable completion when an AI plan is generated", () => {
-    const onComplete = vi.fn();
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(onComplete), { wrapper });
+    const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleGeneratedPlan();
@@ -136,23 +135,9 @@ describe("useOnboardingWizard", () => {
   });
 
   it("marks durable completion after scheduling a sample plan", async () => {
-    vi.mocked(api.plans.createSample).mockResolvedValueOnce({
-      id: "sample-plan",
-      userId: "user-1",
-      name: "Sample Plan",
-      sourceFileName: null,
-      totalWeeks: 8,
-      goal: null,
-      startDate: null,
-      endDate: null,
-    });
+    mockSamplePlanCreation();
     vi.mocked(api.plans.schedule).mockResolvedValueOnce(undefined);
-    const onComplete = vi.fn();
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(onComplete), { wrapper });
+    const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleUseSamplePlan();
