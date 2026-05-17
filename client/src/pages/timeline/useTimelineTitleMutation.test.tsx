@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
@@ -13,29 +13,39 @@ const apiMocks = vi.hoisted(() => ({
 
 const queryClientMocks = vi.hoisted(() => ({
   cancelQueries: vi.fn(),
-  getQueriesData: vi.fn(),
   getQueryData: vi.fn(),
   setQueriesData: vi.fn(),
   setQueryData: vi.fn(),
 }));
 
+type RenameVariables = { entry: TimelineEntry; title: string };
+type RenameContext = {
+  readonly targetKey: string | null;
+  readonly previousWorkoutFocus?: string | null;
+};
+type MutationConfig = {
+  mutationFn: (variables: RenameVariables) => Promise<unknown>;
+  onMutate: (variables: RenameVariables) => Promise<RenameContext>;
+  onError: (
+    error: Error,
+    variables: RenameVariables,
+    context: RenameContext | undefined,
+  ) => void;
+  onSettled: (
+    data: unknown,
+    error: Error | null,
+    variables: RenameVariables,
+    context: RenameContext | undefined,
+  ) => void;
+};
+
 const mutationHarness = vi.hoisted(() => ({
-  config: undefined as
-    | {
-        mutationFn: (variables: { entry: TimelineEntry; title: string }) => Promise<unknown>;
-        onMutate: (variables: { entry: TimelineEntry; title: string }) => Promise<unknown>;
-        onError: (
-          error: Error,
-          variables: { entry: TimelineEntry; title: string },
-          context: unknown,
-        ) => void;
-      }
-    | undefined,
+  config: undefined as MutationConfig | undefined,
 }));
 
 vi.mock("@/hooks/useApiMutation", () => ({
-  useApiMutation: (config: unknown) => {
-    mutationHarness.config = config as typeof mutationHarness.config;
+  useApiMutation: (config: MutationConfig) => {
+    mutationHarness.config = config;
     return { mutate: vi.fn(), isPending: false };
   },
 }));
@@ -93,9 +103,9 @@ function makeSetters(initialEntry: TimelineEntry = makeEntry()) {
 }
 
 function renderMutation(setters = makeSetters()) {
-  renderHook(() => useTimelineTitleMutation(setters));
+  const { result } = renderHook(() => useTimelineTitleMutation(setters));
   if (!mutationHarness.config) throw new Error("Expected useApiMutation config");
-  return { config: mutationHarness.config, setters };
+  return { config: mutationHarness.config, result, setters };
 }
 
 describe("useTimelineTitleMutation", () => {
@@ -105,7 +115,6 @@ describe("useTimelineTitleMutation", () => {
     apiMocks.workoutsUpdate.mockResolvedValue({});
     apiMocks.plansUpdateDayWithoutPlan.mockResolvedValue({});
     queryClientMocks.cancelQueries.mockResolvedValue(undefined);
-    queryClientMocks.getQueriesData.mockReturnValue([]);
     queryClientMocks.getQueryData.mockReturnValue(undefined);
   });
 
@@ -136,11 +145,12 @@ describe("useTimelineTitleMutation", () => {
     const other = makeEntry({ id: "entry-2", workoutLogId: "workout-2", planDayId: "day-2", focus: "Other" });
     const timeline = [entry, other];
     const workout = { id: "workout-1", focus: "Old title" };
-    queryClientMocks.getQueriesData.mockReturnValue([[[...QUERY_KEYS.timeline, null], timeline]]);
     queryClientMocks.getQueryData.mockReturnValue(workout);
     const { config, setters } = renderMutation(makeSetters(entry));
 
-    await config.onMutate({ entry, title: "New title" });
+    await act(async () => {
+      await config.onMutate({ entry, title: "New title" });
+    });
 
     expect(queryClientMocks.cancelQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.timeline });
     const timelineUpdater = queryClientMocks.setQueriesData.mock.calls[0]?.[1] as
@@ -157,24 +167,83 @@ describe("useTimelineTitleMutation", () => {
     expect(setters.getReviewEntry()?.focus).toBe("New title");
   });
 
-  it("rolls optimistic title updates back on error", async () => {
+  it("rolls back only entries still showing the failed optimistic title", async () => {
     const entry = makeEntry();
-    const timelineKey = [...QUERY_KEYS.timeline, null];
-    const timeline = [entry];
+    const other = makeEntry({
+      id: "entry-2",
+      workoutLogId: "workout-2",
+      planDayId: "day-2",
+      focus: "Other renamed",
+    });
     const workout = { id: "workout-1", focus: "Old title" };
-    queryClientMocks.getQueriesData.mockReturnValue([[timelineKey, timeline]]);
     queryClientMocks.getQueryData.mockReturnValue(workout);
     const { config, setters } = renderMutation(makeSetters(entry));
 
-    const context = await config.onMutate({ entry, title: "New title" });
+    let context: RenameContext | undefined;
+    await act(async () => {
+      context = await config.onMutate({ entry, title: "New title" });
+    });
+    queryClientMocks.setQueriesData.mockClear();
     queryClientMocks.setQueryData.mockClear();
-    config.onError(new Error("save failed"), { entry, title: "New title" }, context);
+    act(() => {
+      config.onError(new Error("save failed"), { entry, title: "New title" }, context);
+    });
 
-    expect(queryClientMocks.setQueryData).toHaveBeenCalledWith(timelineKey, timeline);
-    expect(queryClientMocks.setQueryData).toHaveBeenCalledWith(
-      QUERY_KEYS.workout("workout-1"),
-      workout,
-    );
+    const rollbackTimeline = queryClientMocks.setQueriesData.mock.calls[0]?.[1] as
+      | ((entries: TimelineEntry[]) => TimelineEntry[])
+      | undefined;
+    expect(rollbackTimeline?.([{ ...entry, focus: "New title" }, other])).toEqual([
+      entry,
+      other,
+    ]);
+    expect(rollbackTimeline?.([{ ...entry, focus: "Later title" }, other])).toEqual([
+      { ...entry, focus: "Later title" },
+      other,
+    ]);
+
+    const rollbackWorkout = queryClientMocks.setQueryData.mock.calls[0]?.[1] as
+      | ((current: typeof workout) => typeof workout)
+      | undefined;
+    expect(rollbackWorkout?.({ ...workout, focus: "New title" })).toEqual(workout);
+    expect(rollbackWorkout?.({ ...workout, focus: "Later title" })).toEqual({
+      ...workout,
+      focus: "Later title",
+    });
     expect(setters.getReviewEntry()?.focus).toBe("Old title");
+  });
+
+  it("tracks pending renames per entry while multiple saves are in flight", async () => {
+    const entryA = makeEntry();
+    const entryB = makeEntry({
+      id: "entry-2",
+      workoutLogId: "workout-2",
+      planDayId: "day-2",
+      focus: "Second old title",
+    });
+    const { config, result } = renderMutation();
+
+    let contextA: RenameContext | undefined;
+    let contextB: RenameContext | undefined;
+    await act(async () => {
+      contextA = await config.onMutate({ entry: entryA, title: "First new title" });
+      contextB = await config.onMutate({ entry: entryB, title: "Second new title" });
+    });
+
+    expect(result.current.isRenamingEntry(entryA)).toBe(true);
+    expect(result.current.isRenamingEntry(entryB)).toBe(true);
+
+    act(() => {
+      config.onSettled(undefined, null, { entry: entryA, title: "First new title" }, contextA);
+    });
+
+    expect(result.current.isRenamingEntry(entryA)).toBe(false);
+    expect(result.current.isRenamingEntry(entryB)).toBe(true);
+
+    act(() => {
+      config.onSettled(undefined, null, { entry: entryB, title: "Second new title" }, contextB);
+    });
+
+    expect(result.current.isRenamingEntry(entryA)).toBe(false);
+    expect(result.current.isRenamingEntry(entryB)).toBe(false);
   });
 });

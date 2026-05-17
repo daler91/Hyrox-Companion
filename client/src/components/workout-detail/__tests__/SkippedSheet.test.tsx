@@ -1,7 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, it, vi } from "vitest";
 
 import { SkippedSheet } from "../SkippedSheet";
 import {

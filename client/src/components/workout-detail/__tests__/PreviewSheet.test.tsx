@@ -97,7 +97,7 @@ describe("PreviewSheet", () => {
 
     render(
       <PreviewSheet
-        entry={{ ...baseEntry, planDayId: "day-1" } as TimelineEntry}
+        entry={{ ...baseEntry, planDayId: "day-1" }}
         onClose={vi.fn()}
         onRenameTitle={onRenameTitle}
       />,

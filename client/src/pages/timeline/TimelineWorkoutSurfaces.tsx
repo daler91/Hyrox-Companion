@@ -16,7 +16,6 @@ import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import type { useToast } from "@/hooks/use-toast";
 import { useTimelineState } from "@/hooks/useTimelineState";
-import { surfaceId } from "@/hooks/workout-actions/timelineEntry";
 
 import { useTimelineTitleMutation } from "./useTimelineTitleMutation";
 
@@ -90,15 +89,6 @@ function isMobileCoachPanelActive(
   return Boolean(isMobile && mobileCoachPanelOpen && embeddedCoachEntryId === entry?.id);
 }
 
-function isSavingTitleForEntry(
-  isPending: boolean,
-  pendingEntry: TimelineEntry | undefined,
-  entry: TimelineEntry | null,
-): boolean {
-  if (!isPending || !pendingEntry || !entry) return false;
-  return surfaceId(pendingEntry) === surfaceId(entry);
-}
-
 export function TimelineWorkoutSurfaces({
   isMobile,
   toast,
@@ -160,7 +150,6 @@ export function TimelineWorkoutSurfaces({
     setReviewEntry,
     setSkippedEntry,
   });
-  const pendingTitleEntry = titleMutation.variables?.entry;
   const handleRenameTitle = (entry: TimelineEntry, title: string) => {
     titleMutation.mutate({ entry, title });
   };
@@ -208,7 +197,7 @@ export function TimelineWorkoutSurfaces({
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
         onRenameTitle={handleRenameTitle}
-        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, logEntry)}
+        isRenamingTitle={titleMutation.isRenamingEntry(logEntry)}
       />
 
       <LogSheet
@@ -229,7 +218,7 @@ export function TimelineWorkoutSurfaces({
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
         onRenameTitle={handleRenameTitle}
-        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, futureEditEntry)}
+        isRenamingTitle={titleMutation.isRenamingEntry(futureEditEntry)}
       />
 
       <SkippedSheet
@@ -245,7 +234,7 @@ export function TimelineWorkoutSurfaces({
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
         onRenameTitle={handleRenameTitle}
-        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, skippedEntry)}
+        isRenamingTitle={titleMutation.isRenamingEntry(skippedEntry)}
         onUndoSkip={(entry) => {
           closeEmbeddedCoach();
           setSkippedEntry(null);
@@ -271,7 +260,7 @@ export function TimelineWorkoutSurfaces({
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
         onRenameTitle={handleRenameTitle}
-        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, reviewEntry)}
+        isRenamingTitle={titleMutation.isRenamingEntry(reviewEntry)}
         onMarkPlanned={(entry) => {
           closeEmbeddedCoach();
           setReviewEntry(null);
@@ -296,7 +285,7 @@ export function TimelineWorkoutSurfaces({
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
         onRenameTitle={handleRenameTitle}
-        isRenamingTitle={isSavingTitleForEntry(titleMutation.isPending, pendingTitleEntry, previewEntry)}
+        isRenamingTitle={titleMutation.isRenamingEntry(previewEntry)}
         onMove={() => {
           closeEmbeddedCoach();
           setPreviewEntry(null);
