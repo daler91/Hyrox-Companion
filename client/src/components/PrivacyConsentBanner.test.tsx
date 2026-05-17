@@ -130,4 +130,20 @@ describe("PrivacyConsentBanner", () => {
 
     expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
   });
+
+  it("does not write probe keys when handling storage events", () => {
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", storage);
+
+    render(<PrivacyConsentBanner />);
+
+    globalThis.dispatchEvent(new Event("storage"));
+
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(storage.removeItem).not.toHaveBeenCalled();
+  });
 });

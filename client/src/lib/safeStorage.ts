@@ -1,4 +1,7 @@
 type StorageKind = "localStorage" | "sessionStorage";
+type StorageReadResult =
+  | { ok: true; value: string | null }
+  | { ok: false; value: null };
 
 function getStorage(kind: StorageKind): Storage | undefined {
   try {
@@ -8,25 +11,19 @@ function getStorage(kind: StorageKind): Storage | undefined {
   }
 }
 
-export function canUseStorage(kind: StorageKind): boolean {
+export function tryGetStorageItem(kind: StorageKind, key: string): StorageReadResult {
+  const storage = getStorage(kind);
+  if (!storage) return { ok: false, value: null };
+
   try {
-    const storage = getStorage(kind);
-    if (!storage) return false;
-    const testKey = "__fitai_storage_probe__";
-    storage.setItem(testKey, testKey);
-    storage.removeItem(testKey);
-    return true;
+    return { ok: true, value: storage.getItem(key) };
   } catch {
-    return false;
+    return { ok: false, value: null };
   }
 }
 
 export function getStorageItem(kind: StorageKind, key: string): string | null {
-  try {
-    return getStorage(kind)?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
+  return tryGetStorageItem(kind, key).value;
 }
 
 export function setStorageItem(kind: StorageKind, key: string, value: string): void {
@@ -46,8 +43,8 @@ export function removeStorageItem(kind: StorageKind, key: string): void {
 }
 
 export const safeLocalStorage = {
-  canUse: () => canUseStorage("localStorage"),
   getItem: (key: string) => getStorageItem("localStorage", key),
+  tryGetItem: (key: string) => tryGetStorageItem("localStorage", key),
   setItem: (key: string, value: string) => setStorageItem("localStorage", key, value),
   removeItem: (key: string) => removeStorageItem("localStorage", key),
 } as const;

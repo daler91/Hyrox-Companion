@@ -11,8 +11,8 @@ const CONSENT_CHANGED_EVENT = "fitai:privacy-consent-changed";
 
 function hasStoredConsent(): boolean {
   if (globalThis.window === undefined) return true;
-  if (!safeLocalStorage.canUse()) return true;
-  return safeLocalStorage.getItem(CONSENT_STORAGE_KEY) !== null;
+  const consent = safeLocalStorage.tryGetItem(CONSENT_STORAGE_KEY);
+  return !consent.ok || consent.value !== null;
 }
 
 function recordConsent(): void {
