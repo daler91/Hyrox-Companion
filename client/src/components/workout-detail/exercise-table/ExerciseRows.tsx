@@ -349,7 +349,7 @@ const GroupRow = memo(function GroupRow({
               "min-w-0 flex-1 truncate font-medium",
               lowConfidence && "text-muted-foreground",
             )}
-            title={lowConfidence ? "Low-confidence parse - expand to review" : label}
+            title={lowConfidence ? "Low-confidence parse — expand to review" : label}
           >
             {label}
           </span>
