@@ -1,8 +1,4 @@
-import { extendZodWithOpenApi, OpenApiGeneratorV3,OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
-import { z } from "zod";
-
-// MUST extend Zod before importing any schemas that use it
-extendZodWithOpenApi(z);
+import { OpenApiGeneratorV3, OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 
 import {
   exerciseSetSchema,
@@ -13,6 +9,7 @@ import {
   updateUserPreferencesSchema,
   updateWorkoutLogSchema,
 } from "./schema";
+import { z } from "./schema/zod";
 
 export const registry = new OpenAPIRegistry();
 
