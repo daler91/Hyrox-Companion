@@ -330,6 +330,13 @@
       "when": 1778380000000,
       "tag": "0046_complex_workout_block_scores",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1779017989028,
+      "tag": "0047_last_magik",
+      "breakpoints": true
     }
   ]
 }

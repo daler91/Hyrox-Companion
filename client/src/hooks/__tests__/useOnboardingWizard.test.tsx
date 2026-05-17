@@ -22,6 +22,33 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+const samplePlan = {
+  id: "sample-plan",
+  userId: "user-1",
+  name: "Sample Plan",
+  sourceFileName: null,
+  totalWeeks: 8,
+  goal: null,
+  startDate: null,
+  endDate: null,
+};
+
+function mockSamplePlanCreation() {
+  vi.mocked(api.plans.createSample).mockResolvedValueOnce(samplePlan);
+}
+
+function renderOnboardingWizard(onComplete = vi.fn()) {
+  const queryClient = new QueryClient();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+
+  return {
+    ...renderHook(() => useOnboardingWizard(onComplete), { wrapper }),
+    onComplete,
+  };
+}
+
 describe("useOnboardingWizard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,11 +56,7 @@ describe("useOnboardingWizard", () => {
   });
 
   it("captures onboarding style and MAF payload when selecting maf_method", async () => {
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(vi.fn()), { wrapper });
+    const { result } = renderOnboardingWizard();
 
     await act(async () => {
       await result.current.handleNext();
@@ -67,22 +90,8 @@ describe("useOnboardingWizard", () => {
   });
 
   it("does not complete onboarding when dismissing after template plan creation before scheduling", async () => {
-    vi.mocked(api.plans.createSample).mockResolvedValueOnce({
-      id: "sample-plan",
-      userId: "user-1",
-      name: "Sample Plan",
-      sourceFileName: null,
-      totalWeeks: 8,
-      goal: null,
-      startDate: null,
-      endDate: null,
-    });
-    const onComplete = vi.fn();
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useOnboardingWizard(onComplete), { wrapper });
+    mockSamplePlanCreation();
+    const { onComplete, result } = renderOnboardingWizard();
 
     act(() => {
       result.current.handleUseSamplePlan();
@@ -99,5 +108,53 @@ describe("useOnboardingWizard", () => {
     expect(result.current.step).toBe("schedule");
     expect(onComplete).not.toHaveBeenCalled();
     expect(localStorage.getItem("fitai-onboarding-complete")).toBeNull();
+  });
+
+  it("marks durable completion when skipping onboarding", () => {
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleSkip();
+    });
+
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
+    expect(onComplete).toHaveBeenCalledWith("skip");
+  });
+
+  it("marks durable completion when an AI plan is generated", () => {
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleGeneratedPlan();
+    });
+
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
+    expect(onComplete).toHaveBeenCalledWith("generated");
+  });
+
+  it("marks durable completion after scheduling a sample plan", async () => {
+    mockSamplePlanCreation();
+    vi.mocked(api.plans.schedule).mockResolvedValueOnce(undefined);
+    const { onComplete, result } = renderOnboardingWizard();
+
+    act(() => {
+      result.current.handleUseSamplePlan();
+    });
+
+    await waitFor(() => {
+      expect(result.current.step).toBe("schedule");
+    });
+
+    act(() => {
+      result.current.handleStartTraining();
+    });
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledWith("sample");
+    });
+    expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
+    expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
   });
 });

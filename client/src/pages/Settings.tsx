@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToastAction } from "@/components/ui/toast";
+import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
@@ -571,7 +572,7 @@ export default function Settings() {
             variant="outline"
             data-testid="button-rerun-onboarding"
             onClick={() => {
-              localStorage.removeItem("fitai-onboarding-complete");
+              clearLocalOnboardingComplete();
               setLocation("/?onboarding=run");
             }}
           >

@@ -107,6 +107,7 @@ const EXAMPLE_PREFERENCES = {
   showAdherenceInsights: true,
   aiCoachEnabled: true,
   trainingStyleId: "balanced_default",
+  onboardingCompleted: true,
 };
 
 // Register base schemas as reusable components

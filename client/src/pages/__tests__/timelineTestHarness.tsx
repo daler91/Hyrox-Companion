@@ -32,6 +32,7 @@ vi.mock("@/hooks/useAuth", () => ({
   useIsAiCoachEnabled: () => true,
   useIsAuthUserLoaded: () => true,
   useIsAutoCoaching: () => false,
+  useIsOnboardingCompleted: () => false,
 }));
 vi.mock("@/hooks/useMoveTimelineEntry", () => ({ useMoveTimelineEntry: () => harnessState.moveTimelineEntryResult }));
 vi.mock("@/hooks/useOpenWorkoutId", () => ({

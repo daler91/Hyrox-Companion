@@ -4,9 +4,9 @@ import { addDays, format } from "date-fns";
 import { useState } from "react";
 
 import { DEFAULT_ONBOARDING_GOAL_ID } from "@/components/onboarding/onboardingGoals";
-import { markOnboardingComplete } from "@/hooks/onboardingStorage";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
 import { useToast } from "@/hooks/use-toast";
+import { useCompleteOnboarding } from "@/hooks/useCompleteOnboarding";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
@@ -20,6 +20,7 @@ const PREV: Partial<Record<OnboardingWizardStep, OnboardingWizardStep>> = {
 
 export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionChoice) => void) {
   const { toast } = useToast();
+  const completeOnboarding = useCompleteOnboarding();
   const [step, setStep] = useState<OnboardingWizardStep>("welcome");
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
@@ -61,7 +62,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
         title: "Your training plan is ready!",
         description: "Workouts have been scheduled on your timeline.",
       });
-      markOnboardingComplete();
+      completeOnboarding();
       onComplete("sample");
     },
     onError: () => toast({ title: "Failed to schedule plan", variant: "destructive" }),
@@ -156,7 +157,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
   const handleSkip = () => {
     if (guardUnscheduledSamplePlan()) return;
-    markOnboardingComplete();
+    completeOnboarding();
     onComplete("skip");
   };
 
@@ -191,7 +192,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const handleGeneratedPlan = () => {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
-    markOnboardingComplete();
+    completeOnboarding();
     onComplete("generated");
   };
 

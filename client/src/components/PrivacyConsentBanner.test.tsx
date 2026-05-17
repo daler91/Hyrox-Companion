@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AlertDialog,
@@ -65,6 +65,10 @@ describe("PrivacyConsentBanner", () => {
     localStorage.clear();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("shows the notice when consent has not been recorded", () => {
     render(<PrivacyConsentBanner />);
 
@@ -107,5 +111,39 @@ describe("PrivacyConsentBanner", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Privacy notice")).toBeInTheDocument();
     });
+  });
+
+  it("treats denied localStorage as acknowledged consent", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => {
+        throw new DOMException("Denied", "SecurityError");
+      }),
+      setItem: vi.fn(() => {
+        throw new DOMException("Denied", "SecurityError");
+      }),
+      removeItem: vi.fn(() => {
+        throw new DOMException("Denied", "SecurityError");
+      }),
+    });
+
+    render(<PrivacyConsentBanner />);
+
+    expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
+  });
+
+  it("does not write probe keys when handling storage events", () => {
+    const storage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", storage);
+
+    render(<PrivacyConsentBanner />);
+
+    globalThis.dispatchEvent(new Event("storage"));
+
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(storage.removeItem).not.toHaveBeenCalled();
   });
 });

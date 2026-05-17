@@ -848,7 +848,7 @@ Re-embed all coaching materials for the current user.
 Get the current user's preferences.
 
 - **Auth:** Required
-- **Response:** `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, aiCoachEnabled }`
+- **Response:** `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, aiCoachEnabled, onboardingCompleted }`
 
 ### PATCH /api/v1/preferences
 
@@ -856,11 +856,12 @@ Update user preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferences` category, 20/min
-- **Body:** Partial `{ weightUnit?: "kg" | "lbs", distanceUnit?: "km" | "miles", weeklyGoal?: 1-14, emailNotifications?: boolean, emailWeeklySummary?: boolean, emailMissedReminder?: boolean, aiCoachEnabled?: boolean }`
+- **Body:** Partial `{ weightUnit?: "kg" | "lbs", distanceUnit?: "km" | "miles", weeklyGoal?: 1-14, emailNotifications?: boolean, emailWeeklySummary?: boolean, emailMissedReminder?: boolean, aiCoachEnabled?: boolean, onboardingCompleted?: boolean }`
 - **Validation:** `updateUserPreferencesSchema`
 - **Response:** Updated preferences object
 - **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` gate the individual categories and take effect only when the master is on. All three default to `false` at the database level for new users (GDPR-compliant opt-in).
 - **AI consent semantics:** `aiCoachEnabled` gates every outbound AI provider call (workout parsing, chat, auto-coach, embeddings, and image parsing). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new AI requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
+- **Onboarding completion:** `onboardingCompleted` stores whether the welcome flow has finished across devices. It is app state, not a visible Settings preference.
 
 ---
 

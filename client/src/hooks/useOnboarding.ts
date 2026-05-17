@@ -1,6 +1,7 @@
-import { type RefObject, useCallback, useEffect, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
-import { markOnboardingComplete, ONBOARDING_COMPLETE_STORAGE_KEY } from "@/hooks/onboardingStorage";
+import { hasLocalOnboardingComplete } from "@/hooks/onboardingStorage";
+import { useCompleteOnboarding } from "@/hooks/useCompleteOnboarding";
 import { queryClient } from "@/lib/queryClient";
 
 import { COACH_AUTO_OPEN_DELAY_MS, IMPORT_INPUT_DELAY_MS, MOBILE_BREAKPOINT_PX } from "./constants";
@@ -27,28 +28,40 @@ function clearOnboardingForceParam(): void {
 export function useOnboarding(
   isNewUser: boolean,
   fileInputRef: RefObject<HTMLInputElement>,
-  aiCoachEnabled = true,
+  options: { aiCoachEnabled?: boolean; onboardingCompleted?: boolean; isAuthUserLoaded?: boolean } = {},
 ) {
+  const aiCoachEnabled = options.aiCoachEnabled ?? true;
+  const onboardingCompleted = options.onboardingCompleted ?? false;
+  const isAuthUserLoaded = options.isAuthUserLoaded ?? true;
+  const completeOnboarding = useCompleteOnboarding();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingTriggered, setOnboardingTriggered] = useState(false);
   const [pendingImportCompletion, setPendingImportCompletion] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [hasAutoOpenedCoach, setHasAutoOpenedCoach] = useState(false);
+  const syncedLocalCompletionRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthUserLoaded) return;
+    if (onboardingCompleted || syncedLocalCompletionRef.current) return;
+    if (!hasLocalOnboardingComplete()) return;
+    syncedLocalCompletionRef.current = true;
+    completeOnboarding();
+  }, [completeOnboarding, isAuthUserLoaded, onboardingCompleted]);
 
   useEffect(() => {
     if (onboardingTriggered) return;
     const forcedByUrl = hasOnboardingForceParam();
-    const isFirstTime = isNewUser && !localStorage.getItem(ONBOARDING_COMPLETE_STORAGE_KEY);
+    const isFirstTime = isNewUser && !onboardingCompleted && !hasLocalOnboardingComplete();
     if (forcedByUrl || isFirstTime) {
       if (forcedByUrl) {
-        localStorage.removeItem(ONBOARDING_COMPLETE_STORAGE_KEY);
         clearOnboardingForceParam();
       }
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setOnboardingTriggered(true);
       setShowOnboarding(true);
     }
-  }, [isNewUser, onboardingTriggered]);
+  }, [isNewUser, onboardingCompleted, onboardingTriggered]);
 
   useEffect(() => {
     if (!showOnboarding && onboardingTriggered && !hasAutoOpenedCoach) {
@@ -84,9 +97,9 @@ export function useOnboarding(
 
   const handlePlanImported = useCallback(() => {
     if (!pendingImportCompletion) return;
-    markOnboardingComplete();
+    completeOnboarding();
     setPendingImportCompletion(false);
-  }, [pendingImportCompletion]);
+  }, [completeOnboarding, pendingImportCompletion]);
 
   return {
     showOnboarding,
