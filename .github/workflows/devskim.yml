@@ -25,8 +25,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install DevSkim CLI
+        run: dotnet tool install --global Microsoft.CST.DevSkim.CLI --version 1.0.70
+
       - name: Run DevSkim scanner
-        uses: microsoft/DevSkim-Action@v1
+        run: |
+          "$HOME/.dotnet/tools/devskim" analyze \
+            --source-code "$GITHUB_WORKSPACE" \
+            --output-file "$GITHUB_WORKSPACE/devskim-results.sarif" \
+            --ignore-globs "**/.git/**,**/bin/**"
 
       - name: Upload DevSkim scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
