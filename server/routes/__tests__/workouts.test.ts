@@ -117,7 +117,7 @@ describe("Workouts Routes", () => {
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" });
     vi.mocked(storage.plans.deletePlanDay).mockResolvedValue(true);
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }]);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "kg" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "kg" });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
 
     vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" });
@@ -256,6 +256,20 @@ describe("Workouts Routes", () => {
     const reparseResponse = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(reparseResponse.status).toBe(200);
     expect(reparseWorkout).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires AI consent before reparsing workout text", async () => {
+    const [{ storage }, { reparseWorkout }] = await Promise.all([
+      import("../../storage"),
+      import("../../services/workoutService"),
+    ]);
+    vi.mocked(storage.users.getUser).mockResolvedValueOnce({ id: "test_user_id", aiCoachEnabled: false });
+
+    const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
+
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("AI_COACH_DISABLED");
+    expect(reparseWorkout).not.toHaveBeenCalled();
   });
 
   it("does not auto-hydrate text-only workout reads", async () => {

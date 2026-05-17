@@ -53,6 +53,41 @@ describe("GET /api/preferences", () => {
     expect(response.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
     expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
   });
+
+  it("serializes nullable opt-in preferences as false", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValueOnce({
+      weightUnit: null,
+      distanceUnit: null,
+      weeklyGoal: null,
+      emailNotifications: null,
+      emailWeeklySummary: null,
+      emailMissedReminder: null,
+      showAdherenceInsights: null,
+      aiCoachEnabled: null,
+      trainingStyleId: null,
+      trainingStylePreviousId: null,
+      trainingStyleChangedAt: null,
+      trainingStyleRecomputeNow: null,
+      mafAge: null,
+      mafInjuryIllnessMedication: null,
+      mafConsistency: null,
+      mafTrend: null,
+      mafHrDataAvailable: null,
+      mafHr: null,
+      mafBaselineTestScheduledAt: null,
+    });
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValueOnce(null);
+
+    const response = await request(app).get("/api/v1/preferences");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      emailNotifications: false,
+      emailWeeklySummary: false,
+      emailMissedReminder: false,
+      aiCoachEnabled: false,
+    });
+  });
 });
 
 describe("PATCH /api/v1/preferences", () => {

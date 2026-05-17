@@ -165,7 +165,21 @@ describe("POST /api/v1/plans/generate", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     clearRateLimitBuckets();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "kg", distanceUnit: "km" });
     app = createTestApp(plansRouter);
+  });
+
+  it("requires AI consent before generating a plan", async () => {
+    const { generatePlan } = await import("../../services/planGenerationService");
+    vi.mocked(storage.users.getUser).mockResolvedValueOnce({ id: "test_user_id", aiCoachEnabled: false });
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("AI_COACH_DISABLED");
+    expect(generatePlan).not.toHaveBeenCalled();
   });
 
   it("returns a classified AI error when generation times out upstream", async () => {
@@ -211,7 +225,7 @@ describe("plan-day exercise routes", () => {
       mainWorkout: "old text",
       accessory: "old accessory",
     });
-    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lb", distanceUnit: "miles" });
+    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "lb", distanceUnit: "miles" });
     vi.mocked(reparsePlanDay).mockResolvedValue({
       exercises: [{ exerciseName: "back_squat" }],
       saved: true,

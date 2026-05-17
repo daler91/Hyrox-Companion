@@ -72,11 +72,11 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
     weeklyGoal: String(preferences.weeklyGoal || 5),
-    emailNotifications: preferences.emailNotifications,
-    emailWeeklySummary: preferences.emailWeeklySummary ?? true,
-    emailMissedReminder: preferences.emailMissedReminder ?? true,
+    emailNotifications: preferences.emailNotifications ?? false,
+    emailWeeklySummary: preferences.emailWeeklySummary ?? false,
+    emailMissedReminder: preferences.emailMissedReminder ?? false,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
-    aiCoachEnabled: preferences.aiCoachEnabled ?? true,
+    aiCoachEnabled: preferences.aiCoachEnabled ?? false,
     trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
   };
 }
@@ -117,11 +117,11 @@ export default function Settings() {
   const [weightUnit, setWeightUnit] = useState("kg");
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [emailWeeklySummary, setEmailWeeklySummary] = useState(true);
-  const [emailMissedReminder, setEmailMissedReminder] = useState(true);
+  const [emailNotifications, setEmailNotifications] = useState(false);
+  const [emailWeeklySummary, setEmailWeeklySummary] = useState(false);
+  const [emailMissedReminder, setEmailMissedReminder] = useState(false);
   const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
-  const [aiCoachEnabled, setAiCoachEnabled] = useState(true);
+  const [aiCoachEnabled, setAiCoachEnabled] = useState(false);
   const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
   const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
@@ -151,11 +151,11 @@ export default function Settings() {
     weightUnit: "kg",
     distanceUnit: "km",
     weeklyGoal: "5",
-    emailNotifications: true,
-    emailWeeklySummary: true,
-    emailMissedReminder: true,
+    emailNotifications: false,
+    emailWeeklySummary: false,
+    emailMissedReminder: false,
     showAdherenceInsights: true,
-    aiCoachEnabled: true,
+    aiCoachEnabled: false,
     trainingStyleId: "balanced_default",
   });
   // Snapshot of the last server-committed values used as the baseline for
@@ -226,11 +226,11 @@ export default function Settings() {
       setWeightUnit(preferences.weightUnit || "kg");
       setDistanceUnit(preferences.distanceUnit || "km");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
-      setEmailNotifications(preferences.emailNotifications);
-      setEmailWeeklySummary(preferences.emailWeeklySummary ?? true);
-      setEmailMissedReminder(preferences.emailMissedReminder ?? true);
+      setEmailNotifications(preferences.emailNotifications ?? false);
+      setEmailWeeklySummary(preferences.emailWeeklySummary ?? false);
+      setEmailMissedReminder(preferences.emailMissedReminder ?? false);
       setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
-      setAiCoachEnabled(preferences.aiCoachEnabled ?? true);
+      setAiCoachEnabled(preferences.aiCoachEnabled ?? false);
       setTrainingStyleId(preferences.trainingStyleId ?? "balanced_default");
       // Seed the baseline snapshot on first load. After saves, onSuccess
       // keeps the baseline in sync with committed values.

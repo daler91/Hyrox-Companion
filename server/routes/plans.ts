@@ -5,7 +5,6 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
-import { aiBudgetCheck } from "../middleware/aibudget";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { generatePlan } from "../services/planGenerationService";
@@ -194,7 +193,7 @@ protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample
     res.json(fullPlan);
   });
 
-protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGenerate", 3), middleware: [aiBudgetCheck, validateBody(generatePlanInputSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGenerate", 3), aiConsent: true, aiBudget: true, validation: [validateBody(generatePlanInputSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     try {
       const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);
@@ -388,11 +387,11 @@ protectedDelete(
 // Parse the plan day's mainWorkout/accessory free text into structured
 // exercise_sets via the configured text provider. Replaces the plan day's existing prescribed
 // rows so repeated Parse presses don't accumulate duplicates. Guarded by
-// aiBudgetCheck because each call is an AI provider roundtrip.
+// AI consent and budget checks are required because each call is an AI provider roundtrip.
 protectedPost(
   router,
   "/api/v1/plans/days/:dayId/reparse",
-  { limiter: rateLimiter("planDayReparse", 5), middleware: [aiBudgetCheck, validateBody(planDayReparseBodySchema)] },
+  { limiter: rateLimiter("planDayReparse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(planDayReparseBodySchema)] },
   async (
     req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof planDayReparseBodySchema>>,
     res: Response,
@@ -439,7 +438,7 @@ protectedPost(
 protectedPost(
   router,
   "/api/v1/plans/days/:dayId/reparse-from-image",
-  { limiter: rateLimiter("planDayReparse", 5), middleware: [aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] },
+  { limiter: rateLimiter("planDayReparse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] },
   async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const [planDay, user, customExercises] = await Promise.all([
@@ -464,14 +463,14 @@ protectedPost(
 
 // Manual coach-note refresh for a planned day. Triggered from the workout
 // detail dialog after an athlete edits the prescribed exercises so the
-// static `ai_rationale` doesn't go stale. Guarded by aiBudgetCheck because
+// static `ai_rationale` doesn't go stale. Guarded by AI consent and budget checks because
 // it burns an AI provider call per invocation; the service itself enforces a
 // 30-second cooldown to prevent Refresh-mashing. Low per-IP/user rate
 // limit stacks on top of that.
 protectedPost(
   router,
   "/api/v1/plans/days/:dayId/coach-note/regenerate",
-  { limiter: rateLimiter("coachNoteRegenerate", 10), middleware: [aiBudgetCheck] },
+  { limiter: rateLimiter("coachNoteRegenerate", 10), aiConsent: true, aiBudget: true },
   async (req: ExpressRequest<{ dayId: string }>, res: Response) => {
     const userId = getUserId(req);
     const result = await regenerateCoachNoteForPlanDay(req.params.dayId, userId);

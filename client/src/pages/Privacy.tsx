@@ -140,7 +140,7 @@ export default function Privacy() {
               account.</li>
             <li>Chat messages are retained until you clear your chat history or delete your
               account.</li>
-            <li>Idempotency cache entries expire after 24 hours.</li>
+            <li>Idempotency cache entries expire after 7 days.</li>
             <li>AI usage logs are retained for 7 days.</li>
           </ul>
 

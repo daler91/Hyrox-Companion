@@ -116,6 +116,7 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
 | `CRON_SECRET` | Optional | — | `GET /api/v1/cron/emails` requires `x-cron-secret` to match (timing-safe compare). Used by external cron (Railway / GitHub Actions) to hit the endpoint instead of relying on the in-process node-cron. |
+| `INTERNAL_ANALYTICS_SECRET` | Optional | — | `GET /api/v1/analytics/internal/structured-exercise-health` requires `x-internal-analytics-secret` to match. Server-only; do not expose to Vite. |
 
 ### Garmin Connect
 

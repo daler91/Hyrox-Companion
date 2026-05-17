@@ -142,7 +142,7 @@ The returned token must be sent as the `x-csrf-token` header on all mutating req
 Mutating endpoints support the `X-Idempotency-Key` header for safe request replay.
 
 - **Header:** `X-Idempotency-Key` (optional, max 255 characters)
-- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE), the server caches the response for 24 hours keyed by `(userId, key)`. Repeat requests with the same key return the cached response without re-executing the handler.
+- **Behavior:** When present on a mutating request (POST/PUT/PATCH/DELETE), the server caches the response for 7 days keyed by `(userId, key)`. Repeat requests with the same key return the cached response without re-executing the handler.
 - **Use case:** The client's offline queue sends this header when replaying mutations that were queued while offline, preventing duplicate state changes.
 
 ---
@@ -883,6 +883,15 @@ External cron trigger endpoint for batch email processing across all users.
 - **Auth:** `x-cron-secret` header (timing-safe comparison with `CRON_SECRET` env var)
 - **No Clerk auth required**
 - **Response:** Cron job result summary
+
+---
+
+### GET /api/v1/analytics/internal/structured-exercise-health
+
+Internal structured exercise health rollup endpoint.
+
+- **Auth:** Clerk auth plus `x-internal-analytics-secret` header (timing-safe comparison with `INTERNAL_ANALYTICS_SECRET` env var)
+- **Response:** `{ rollups, counters }`
 
 ---
 

@@ -421,7 +421,7 @@ Server-side idempotency cache for mutating API requests. Uses a composite primar
 - Composite primary key on (`user_id`, `key`)
 - `idx_idempotency_keys_expires_at` on (`expires_at`) -- for TTL cleanup
 
-Entries expire after 24 hours. The `idempotencyMiddleware` checks this table before executing mutating handlers and caches responses for duplicate keys.
+Entries expire after 7 days. The `idempotencyMiddleware` checks this table before executing mutating handlers and caches responses for duplicate keys.
 
 ---
 

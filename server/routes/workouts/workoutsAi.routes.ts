@@ -3,7 +3,6 @@ import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../../clerkAuth";
-import { aiBudgetCheck } from "../../middleware/aibudget";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateParams } from "../../routeUtils";
 import { incrementStructuredExerciseCounter } from "../../services/structuredExerciseHealth";
 import { batchReparseWorkouts, reparseWorkout, reparseWorkoutFromImage } from "../../services/workoutService";
@@ -18,7 +17,7 @@ export function registerWorkoutAiRoutes(router: Router): void {
     const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
     res.json(workouts);
   }));
-  protectedPost(router, "/api/v1/workouts/:id/reparse", { limiter: rateLimiter("reparse", 5), middleware: [aiBudgetCheck, validateParams(reparseWorkoutParamsSchema), validateBody(reparseWorkoutRouteSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof reparseWorkoutRouteSchema>>, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/:id/reparse", { limiter: rateLimiter("reparse", 5), aiConsent: true, aiBudget: true, validation: [validateParams(reparseWorkoutParamsSchema), validateBody(reparseWorkoutRouteSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof reparseWorkoutRouteSchema>>, res: Response) => {
     const userId = getUserId(req);
     const workoutId = req.params.id;
     const [workout, user] = await Promise.all([storage.workouts.getWorkoutLog(workoutId, userId), storage.users.getUser(userId)]);
@@ -44,7 +43,7 @@ export function registerWorkoutAiRoutes(router: Router): void {
       rejectionReasons: result.rejectionReasons,
     });
   });
-  protectedPost(router, "/api/v1/workouts/:id/reparse-from-image", { limiter: rateLimiter("reparse", 5), middleware: [aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/:id/reparse-from-image", { limiter: rateLimiter("reparse", 5), aiConsent: true, aiBudget: true, validation: [validateBody(parseExercisesFromImageRequestSchema)] }, async (req: Request<{ id: string }, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const userId = getUserId(req);
     const [workout, user, customExercises] = await Promise.all([storage.workouts.getWorkoutLog(req.params.id, userId), storage.users.getUser(userId), storage.users.getCustomExercises(userId)]);
     if (!workout) return sendNotFound(res, "Workout not found");
@@ -69,7 +68,7 @@ export function registerWorkoutAiRoutes(router: Router): void {
       rejectionReasons: result.rejectionReasons,
     });
   });
-  protectedPost(router, "/api/v1/workouts/batch-reparse", { limiter: rateLimiter("batchReparse", 2), middleware: [aiBudgetCheck] }, async (req: Request, res: Response) => {
+  protectedPost(router, "/api/v1/workouts/batch-reparse", { limiter: rateLimiter("batchReparse", 2), aiConsent: true, aiBudget: true }, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { total, parsed, failed } = await batchReparseWorkouts(userId);
     res.json({ total, parsed, failed });
