@@ -116,6 +116,7 @@ Rate limits are applied per-user (keyed by Clerk userId) and namespaced by categ
 - **Strava routes:** 15-minute window
 - **Response on limit:** `429` with `Retry-After` header and `RATE_LIMITED` code
 - **Headers:** Standard `RateLimit-*` headers (RFC 6585)
+- **Storage:** PostgreSQL-backed `rate_limit_buckets`, shared across app replicas outside tests
 
 Implementation: `server/routeUtils.ts` — `rateLimiter(category, maxRequests, windowMs)`
 
@@ -213,7 +214,7 @@ Permanently delete the authenticated user's account and all associated data (GDP
   1. **Clerk identity is deleted first.** If Clerk returns HTTP 404, the identity is treated as already-deleted (idempotent retry); any other error aborts the request so the DB row is not orphaned. Without this ordering, `ensureUserExists` on the next authenticated request would silently re-provision the account.
   2. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
   3. **DB user row is deleted.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `document_chunks`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`.
-  4. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` prevents any in-flight session from triggering `ensureUserExists` within the 5-minute cache TTL.
+  4. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
 
 ---
 

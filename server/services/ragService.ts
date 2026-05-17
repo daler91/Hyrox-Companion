@@ -4,6 +4,7 @@ import pLimit from "p-limit";
 import { env } from "../env";
 import { EMBEDDING_DIMENSIONS,generateEmbedding, generateEmbeddings, trackEmbeddingUsage } from "../gemini/client";
 import { logger } from "../logger";
+import { deleteRuntimeCachePrefix, getRuntimeCache, hashRuntimeKey, setRuntimeCache } from "../sharedRuntimeState";
 import { storage } from "../storage";
 
 // Bound concurrent Gemini + DB writes during bulk re-embed so a large
@@ -22,6 +23,7 @@ const MAX_CHUNKS_PER_MATERIAL = 3000;
 // (CODEBASE_AUDIT.md §3).
 type EmbeddingHealth = { ok: boolean; dimension?: number; error?: string };
 const EMBEDDING_HEALTH_TTL_MS = 5 * 60_000;
+const EMBEDDING_HEALTH_CACHE_KEY = "rag-health:embedding";
 let cachedEmbeddingHealth: { value: EmbeddingHealth; at: number } | null = null;
 
 async function probeEmbeddingHealth(): Promise<EmbeddingHealth> {
@@ -37,8 +39,26 @@ async function getEmbeddingHealth(): Promise<EmbeddingHealth> {
   if (cachedEmbeddingHealth && Date.now() - cachedEmbeddingHealth.at < EMBEDDING_HEALTH_TTL_MS) {
     return cachedEmbeddingHealth.value;
   }
+
+  if (env.NODE_ENV !== "test") {
+    try {
+      const shared = await getRuntimeCache<EmbeddingHealth>(EMBEDDING_HEALTH_CACHE_KEY);
+      if (shared) {
+        cachedEmbeddingHealth = { value: shared, at: Date.now() };
+        return shared;
+      }
+    } catch (err) {
+      logger.warn({ err }, "[rag] Failed to read shared embedding health cache");
+    }
+  }
+
   const value = await probeEmbeddingHealth();
   cachedEmbeddingHealth = { value, at: Date.now() };
+  if (env.NODE_ENV !== "test") {
+    void setRuntimeCache(EMBEDDING_HEALTH_CACHE_KEY, value, EMBEDDING_HEALTH_TTL_MS).catch((err: unknown) => {
+      logger.warn({ err }, "[rag] Failed to write shared embedding health cache");
+    });
+  }
   return value;
 }
 
@@ -182,17 +202,31 @@ function setRagCache(key: string, chunks: string[]) {
 }
 
 function ragCacheKey(userId: string, query: string, topK: number): string {
-  return `${userId}::${topK}::${query}`;
+  return `${ragCachePrefix(userId)}${hashRuntimeKey(`${topK}::${query}`)}`;
+}
+
+function ragCachePrefix(userId: string): string {
+  return `rag:${hashRuntimeKey(userId)}:`;
 }
 
 export function clearRagCache(userId?: string): void {
   if (!userId) {
     ragCache.clear();
+    if (env.NODE_ENV !== "test") {
+      void deleteRuntimeCachePrefix("rag:").catch((err: unknown) => {
+        logger.warn({ err }, "[rag] Failed to clear shared retrieval cache");
+      });
+    }
     return;
   }
-  const prefix = `${userId}::`;
+  const prefix = ragCachePrefix(userId);
   for (const key of ragCache.keys()) {
     if (key.startsWith(prefix)) ragCache.delete(key);
+  }
+  if (env.NODE_ENV !== "test") {
+    void deleteRuntimeCachePrefix(prefix).catch((err: unknown) => {
+      logger.warn({ err, userId }, "[rag] Failed to clear shared retrieval cache");
+    });
   }
 }
 
@@ -212,6 +246,19 @@ export async function retrieveRelevantChunks(
     return cached.chunks;
   }
 
+  if (env.NODE_ENV !== "test") {
+    try {
+      const shared = await getRuntimeCache<{ chunks: string[] }>(key);
+      if (shared) {
+        setRagCache(key, shared.chunks);
+        logger.debug({ userId, topK, cacheHit: true, shared: true }, "[rag] Returning cached chunks");
+        return shared.chunks;
+      }
+    } catch (err) {
+      logger.warn({ err, userId, topK }, "[rag] Failed to read shared retrieval cache");
+    }
+  }
+
   const queryEmbedding = await generateEmbedding(query);
   trackEmbeddingUsage(userId, 1);
   logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
@@ -219,6 +266,11 @@ export async function retrieveRelevantChunks(
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
   const content = chunks.map((c) => c.content);
   setRagCache(key, content);
+  if (env.NODE_ENV !== "test") {
+    void setRuntimeCache(key, { chunks: content }, RAG_CACHE_TTL_MS).catch((err: unknown) => {
+      logger.warn({ err, userId, topK }, "[rag] Failed to write shared retrieval cache");
+    });
+  }
   return content;
 }
 

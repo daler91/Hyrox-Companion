@@ -5,6 +5,7 @@ import type { Express, RequestHandler } from "express";
 import { EXTERNAL_API_TIMEOUT_MS } from "./constants";
 import { env } from "./env";
 import { logger } from "./logger";
+import { deleteRuntimeCache, getRuntimeCache, runtimeCacheKey, setRuntimeCache } from "./sharedRuntimeState";
 import { storage } from "./storage";
 
 export const DEV_USER_ID = "dev-user";
@@ -120,20 +121,56 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 const userSeenCache = new Map<string, number>();
 const USER_SEEN_TTL_MS = 5 * 60_000; // 5 minutes
 
+function userSeenCacheKey(userId: string): string {
+  return runtimeCacheKey("auth-seen", userId);
+}
+
 // Exported for testing only — clears the user-seen cache so each test starts fresh.
 export function clearUserSeenCache() {
   userSeenCache.clear();
 }
 
 /** Evict a single user from the seen-cache (e.g. after account deletion). */
-export function evictUserFromSeenCache(userId: string) {
+export async function evictUserFromSeenCache(userId: string): Promise<void> {
   userSeenCache.delete(userId);
+  if (env.NODE_ENV !== "test") {
+    await deleteRuntimeCache(userSeenCacheKey(userId)).catch((err: unknown) => {
+      logger.warn({ err, userId }, "Failed to evict shared auth seen-cache entry");
+    });
+  }
+}
+
+async function hasUserBeenSeenRecently(userId: string, now: number): Promise<boolean> {
+  const seenAt = userSeenCache.get(userId);
+  if (seenAt && now - seenAt < USER_SEEN_TTL_MS) return true;
+
+  if (env.NODE_ENV !== "test") {
+    try {
+      const sharedSeen = await getRuntimeCache<{ seen: true }>(userSeenCacheKey(userId));
+      if (sharedSeen) {
+        userSeenCache.set(userId, now);
+        return true;
+      }
+    } catch (err) {
+      logger.warn({ err, userId }, "Failed to read shared auth seen-cache; falling back to storage lookup");
+    }
+  }
+
+  return false;
+}
+
+function rememberUserSeen(userId: string, now: number): void {
+  userSeenCache.set(userId, now);
+  if (env.NODE_ENV !== "test") {
+    void setRuntimeCache(userSeenCacheKey(userId), { seen: true }, USER_SEEN_TTL_MS).catch((err: unknown) => {
+      logger.warn({ err, userId }, "Failed to write shared auth seen-cache");
+    });
+  }
 }
 
 async function ensureUserExists(clerkUserId: string): Promise<void> {
   const now = Date.now();
-  const seenAt = userSeenCache.get(clerkUserId);
-  if (seenAt && now - seenAt < USER_SEEN_TTL_MS) return;
+  if (await hasUserBeenSeenRecently(clerkUserId, now)) return;
 
   const existing = await storage.users.getUser(clerkUserId);
   if (!existing) {
@@ -141,7 +178,7 @@ async function ensureUserExists(clerkUserId: string): Promise<void> {
     await hydrateClerkProfile(clerkUserId);
   }
 
-  userSeenCache.set(clerkUserId, now);
+  rememberUserSeen(clerkUserId, now);
 }
 
 async function upsertClerkProfile(userData: UpsertUser): Promise<void> {

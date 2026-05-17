@@ -73,7 +73,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
 
     // Step 4: Evict from the auth seen-cache so stale sessions can't
     // trigger ensureUserExists within the 5-minute TTL window.
-    evictUserFromSeenCache(userId);
+    await evictUserFromSeenCache(userId);
 
     res.json({ success: true });
   });

@@ -162,7 +162,7 @@ The Hyrox Companion codebase is a well-structured, modern TypeScript application
 - Priority: P1
 
 ## Scalability Concerns
-- **Rate Limiting**: Currently uses `MemoryStore`. While fine for single-instance, it won't scale to multiple server instances. Recommend swapping to Redis-backed store.
+- **Rate Limiting**: Now uses PostgreSQL-backed `rate_limit_buckets` outside tests, so per-user limits are shared across app replicas. Continue monitoring write volume if traffic grows enough to justify Redis.
 - **N+1 Queries**: Generally well-managed, but `attachExerciseSets` in `TimelineStorage` still performs two separate batch fetches. Could be optimized with a single join if the timeline was unified.
 
 ## Modularity and Boundary Issues

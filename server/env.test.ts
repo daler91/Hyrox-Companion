@@ -24,14 +24,14 @@ describe("env topology settings", () => {
     expect(() => parseEnv({ ...baseEnv, APP_INSTANCE_COUNT: "0" })).toThrow();
   });
 
-  it("rejects production multi-instance declarations", () => {
-    expect(() =>
-      parseEnv({
-        ...baseEnv,
-        APP_INSTANCE_COUNT: "2",
-        CSRF_SECRET: "e".repeat(64),
-        NODE_ENV: "production",
-      }),
-    ).toThrow(/process-local/);
+  it("accepts production multi-instance declarations", () => {
+    const env = parseEnv({
+      ...baseEnv,
+      APP_INSTANCE_COUNT: "2",
+      CSRF_SECRET: "e".repeat(64),
+      NODE_ENV: "production",
+    });
+
+    expect(env.APP_INSTANCE_COUNT).toBe(2);
   });
 });
