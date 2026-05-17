@@ -91,6 +91,29 @@ describe("PreviewSheet", () => {
     expect(onEditWorkout).toHaveBeenCalledWith(baseEntry);
   });
 
+  it("renames a future workout title from the sheet header", async () => {
+    const user = userEvent.setup();
+    const onRenameTitle = vi.fn();
+
+    render(
+      <PreviewSheet
+        entry={{ ...baseEntry, planDayId: "day-1" }}
+        onClose={vi.fn()}
+        onRenameTitle={onRenameTitle}
+      />,
+    );
+
+    await user.click(screen.getByTestId("workout-title-entry-1-edit"));
+    await user.clear(screen.getByTestId("workout-title-entry-1-input"));
+    await user.type(screen.getByTestId("workout-title-entry-1-input"), "  Future run  ");
+    await user.click(screen.getByTestId("workout-title-entry-1-save"));
+
+    expect(onRenameTitle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "entry-1" }),
+      "Future run",
+    );
+  });
+
   it("shows the mobile coach panel instead of workout details", async () => {
     const user = userEvent.setup();
     viewportState.isMobile = true;

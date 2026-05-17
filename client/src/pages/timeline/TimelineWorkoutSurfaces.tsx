@@ -1,4 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
+import type { Dispatch, SetStateAction } from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import {
@@ -15,6 +16,8 @@ import { ReviewSurface } from "@/components/workout-detail/ReviewSurface";
 import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import type { useToast } from "@/hooks/use-toast";
 import { useTimelineState } from "@/hooks/useTimelineState";
+
+import { useTimelineTitleMutation } from "./useTimelineTitleMutation";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
 type PlanImportState = TimelineState["planImport"];
@@ -33,15 +36,15 @@ interface TimelineWorkoutSurfacesProps {
   readonly setStartDate: PlanImportState["setStartDate"];
   readonly schedulePlanMutation: PlanImportState["schedulePlanMutation"];
   readonly previewEntry: TimelineEntry | null;
-  readonly setPreviewEntry: (entry: TimelineEntry | null) => void;
+  readonly setPreviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly futureEditEntry: TimelineEntry | null;
-  readonly setFutureEditEntry: (entry: TimelineEntry | null) => void;
+  readonly setFutureEditEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly logEntry: TimelineEntry | null;
-  readonly setLogEntry: (entry: TimelineEntry | null) => void;
+  readonly setLogEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly reviewEntry: TimelineEntry | null;
-  readonly setReviewEntry: (entry: TimelineEntry | null) => void;
+  readonly setReviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly skippedEntry: TimelineEntry | null;
-  readonly setSkippedEntry: (entry: TimelineEntry | null) => void;
+  readonly setSkippedEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
   readonly closeWorkoutSurfaces: () => void;
   readonly closeEmbeddedCoach: () => void;
   readonly openEmbeddedCoach: (entry: TimelineEntry, seedText?: string) => void;
@@ -140,6 +143,17 @@ export function TimelineWorkoutSurfaces({
   annotationInitialDate,
   setAnnotationInitialDate,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
+  const titleMutation = useTimelineTitleMutation({
+    setPreviewEntry,
+    setFutureEditEntry,
+    setLogEntry,
+    setReviewEntry,
+    setSkippedEntry,
+  });
+  const handleRenameTitle = (entry: TimelineEntry, title: string) => {
+    titleMutation.mutate({ entry, title });
+  };
+
   return (
     <>
       <AdhocLogSheet open={adhocOpen} onClose={() => onAdhocOpenChange(false)} />
@@ -182,6 +196,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={titleMutation.isRenamingEntry(logEntry)}
       />
 
       <LogSheet
@@ -201,6 +217,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={titleMutation.isRenamingEntry(futureEditEntry)}
       />
 
       <SkippedSheet
@@ -215,6 +233,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={titleMutation.isRenamingEntry(skippedEntry)}
         onUndoSkip={(entry) => {
           closeEmbeddedCoach();
           setSkippedEntry(null);
@@ -239,6 +259,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={titleMutation.isRenamingEntry(reviewEntry)}
         onMarkPlanned={(entry) => {
           closeEmbeddedCoach();
           setReviewEntry(null);
@@ -262,6 +284,8 @@ export function TimelineWorkoutSurfaces({
         onCloseCoachChat={onCloseCoachChat}
         onShowCoachPanel={onShowCoachPanel}
         onShowWorkoutDetails={onShowWorkoutDetails}
+        onRenameTitle={handleRenameTitle}
+        isRenamingTitle={titleMutation.isRenamingEntry(previewEntry)}
         onMove={() => {
           closeEmbeddedCoach();
           setPreviewEntry(null);

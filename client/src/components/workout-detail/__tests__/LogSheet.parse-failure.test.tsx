@@ -17,7 +17,12 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 }));
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
-  ResponsiveSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
+    <div>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
 }));
 
 const baseEntry = {
@@ -174,5 +179,30 @@ describe("LogSheet parse failures", () => {
 
     expect(screen.getByText(/How hard/i)).toBeInTheDocument();
     expect(screen.getByTestId("log-as-planned-entry-1")).toHaveTextContent("Complete workout");
+  });
+
+  it("renames a planned workout title from the sheet header", async () => {
+    const onRenameTitle = vi.fn();
+    mockPlanDayExerciseState();
+
+    render(
+      <LogSheet
+        entry={baseEntry}
+        onClose={vi.fn()}
+        onLogAsPlanned={vi.fn()}
+        onRenameTitle={onRenameTitle}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("workout-title-entry-1-edit"));
+    await user.clear(screen.getByTestId("workout-title-entry-1-input"));
+    await user.type(screen.getByTestId("workout-title-entry-1-input"), "  Strength updated  ");
+    await user.click(screen.getByTestId("workout-title-entry-1-save"));
+
+    expect(onRenameTitle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "entry-1" }),
+      "Strength updated",
+    );
   });
 });

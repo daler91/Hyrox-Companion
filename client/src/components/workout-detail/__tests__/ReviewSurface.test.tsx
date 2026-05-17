@@ -8,6 +8,10 @@ import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ReviewSurface } from "../ReviewSurface";
+import {
+  expectWorkoutTitleRename,
+  renameWorkoutTitleFromHeader,
+} from "./workoutTitleTestHelpers";
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
@@ -27,7 +31,12 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 }));
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
-  ResponsiveSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
+    <div>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/RpeSelector", () => ({
@@ -161,5 +170,22 @@ describe("ReviewSurface", () => {
       prescribedMainWorkout: "Updated prescription",
       prescribedAccessory: "Accessory text",
     });
+  });
+
+  it("renames the workout title from the sheet header", async () => {
+    const onRenameTitle = vi.fn();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(
+      <ReviewSurface
+        entry={makeEntry()}
+        onClose={vi.fn()}
+        onRenameTitle={onRenameTitle}
+      />,
+    );
+
+    await renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
+
+    expectWorkoutTitleRename(onRenameTitle, "entry-1", "Renamed strength");
   });
 });

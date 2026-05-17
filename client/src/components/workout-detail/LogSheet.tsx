@@ -11,6 +11,7 @@ import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
+import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
@@ -35,6 +36,8 @@ interface LogSheetBaseProps {
   readonly onCloseCoachChat?: () => void;
   readonly onShowCoachPanel?: () => void;
   readonly onShowWorkoutDetails?: () => void;
+  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
+  readonly isRenamingTitle?: boolean;
 }
 
 type LogSheetModeProps =
@@ -94,6 +97,39 @@ function hasPrescriptionText(entry: TimelineEntry): boolean {
 
 function isParseHelperVisible(entry: TimelineEntry, planSets: PlanDayExerciseState): boolean {
   return !!entry.planDayId && planSets.parseFailed && planSets.exerciseSets.length === 0;
+}
+
+function getTitleSaveHandler(
+  entry: TimelineEntry,
+  onRenameTitle?: (entry: TimelineEntry, title: string) => void,
+): ((title: string) => void) | undefined {
+  if (!onRenameTitle) return undefined;
+  if (!entry.workoutLogId && !entry.planDayId) return undefined;
+  return (nextTitle) => onRenameTitle(entry, nextTitle);
+}
+
+interface LogSheetTitleProps {
+  readonly entry: TimelineEntry;
+  readonly mode: "edit" | "log";
+  readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
+  readonly isRenamingTitle: boolean;
+}
+
+function LogSheetTitle({
+  entry,
+  mode,
+  onRenameTitle,
+  isRenamingTitle,
+}: LogSheetTitleProps) {
+  return (
+    <EditableWorkoutTitle
+      title={entry.focus}
+      fallbackTitle={mode === "edit" ? "Edit workout" : "Log workout"}
+      onSave={getTitleSaveHandler(entry, onRenameTitle)}
+      isSaving={isRenamingTitle}
+      testIdPrefix={`workout-title-${entry.id}`}
+    />
+  );
 }
 
 interface PlannedPrescriptionProps {
@@ -314,6 +350,37 @@ function LogCompletionControls({
   );
 }
 
+interface LogSheetPrescriptionContentProps {
+  readonly entry: TimelineEntry;
+  readonly planSets: PlanDayExerciseState;
+  readonly weightUnit: WorkoutWeightUnit;
+  readonly distanceUnit: WorkoutDistanceUnit;
+  readonly isEditMode: boolean;
+}
+
+function LogSheetPrescriptionContent({
+  entry,
+  planSets,
+  weightUnit,
+  distanceUnit,
+  isEditMode,
+}: LogSheetPrescriptionContentProps) {
+  if (!entry.planDayId) {
+    return <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />;
+  }
+
+  return (
+    <PlannedPrescription
+      entry={entry}
+      planSets={planSets}
+      weightUnit={weightUnit}
+      distanceUnit={distanceUnit}
+      parseHelperVisible={isParseHelperVisible(entry, planSets)}
+      showPrescriptionNotes={isEditMode}
+    />
+  );
+}
+
 interface EditSecondaryActionsProps {
   readonly entry: TimelineEntry;
   readonly onDone: () => void;
@@ -350,6 +417,75 @@ function EditSecondaryActions({ entry, onDone, onAskCoach, onSkip }: EditSeconda
   );
 }
 
+interface LogSheetFooterProps {
+  readonly entry: TimelineEntry;
+  readonly isEditMode: boolean;
+  readonly rpe: number | null;
+  readonly setRpe: (rpe: number | null) => void;
+  readonly note: string;
+  readonly setNote: (note: string) => void;
+  readonly onLog: () => void;
+  readonly onDone: () => void;
+  readonly isLogging?: boolean;
+  readonly isSaving: boolean;
+  readonly onSkip?: (entry: TimelineEntry) => void;
+  readonly onAskCoach?: (entry: TimelineEntry) => void;
+}
+
+function LogSheetFooter({
+  entry,
+  isEditMode,
+  rpe,
+  setRpe,
+  note,
+  setNote,
+  onLog,
+  onDone,
+  isLogging,
+  isSaving,
+  onSkip,
+  onAskCoach,
+}: LogSheetFooterProps) {
+  if (isEditMode) {
+    return (
+      <EditSecondaryActions
+        entry={entry}
+        onDone={onDone}
+        onAskCoach={onAskCoach}
+        onSkip={onSkip}
+      />
+    );
+  }
+
+  return (
+    <LogCompletionControls
+      entry={entry}
+      rpe={rpe}
+      setRpe={setRpe}
+      note={note}
+      setNote={setNote}
+      onLog={onLog}
+      isLogging={isLogging}
+      isSaving={isSaving}
+      onAskCoach={onAskCoach}
+      onSkip={onSkip}
+    />
+  );
+}
+
+function getCoachExerciseSets(entry: TimelineEntry, planSets: PlanDayExerciseState) {
+  if (entry.planDayId) return planSets.exerciseSets;
+  return entry.exerciseSets ?? [];
+}
+
+function getAskCoachHandler(
+  onAskCoach: LogSheetBaseProps["onAskCoach"],
+  currentCoachSeedText: string,
+) {
+  if (!onAskCoach) return undefined;
+  return (target: TimelineEntry) => onAskCoach(target, currentCoachSeedText);
+}
+
 /**
  * Sheet-native surface for planned cards. Single-tier:
  * the prescription editor is inline (no disclosure tap) so per-set
@@ -373,6 +509,8 @@ export function LogSheet({
   onCloseCoachChat,
   onShowCoachPanel,
   onShowWorkoutDetails,
+  onRenameTitle,
+  isRenamingTitle = false,
   isLogging,
   mode = "log",
 }: LogSheetProps) {
@@ -402,14 +540,18 @@ export function LogSheet({
     onClose();
   };
 
-  const parseHelperVisible = isParseHelperVisible(entry, planSets);
   const isEditMode = mode === "edit";
-  const title = entry.focus || (isEditMode ? "Edit workout" : "Log workout");
-  const coachExerciseSets = entry.planDayId ? planSets.exerciseSets : (entry.exerciseSets ?? []);
+  const title = (
+    <LogSheetTitle
+      entry={entry}
+      mode={mode}
+      onRenameTitle={onRenameTitle}
+      isRenamingTitle={isRenamingTitle}
+    />
+  );
+  const coachExerciseSets = getCoachExerciseSets(entry, planSets);
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
-  const handleAskCoach = onAskCoach
-    ? (target: TimelineEntry) => onAskCoach(target, currentCoachSeedText)
-    : undefined;
+  const handleAskCoach = getAskCoachHandler(onAskCoach, currentCoachSeedText);
   const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   return (
@@ -440,40 +582,28 @@ export function LogSheet({
           />
         }
       >
-        {entry.planDayId ? (
-          <PlannedPrescription
-            entry={entry}
-            planSets={planSets}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            parseHelperVisible={parseHelperVisible}
-            showPrescriptionNotes={isEditMode}
-          />
-        ) : (
-          <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />
-        )}
+        <LogSheetPrescriptionContent
+          entry={entry}
+          planSets={planSets}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          isEditMode={isEditMode}
+        />
 
-        {isEditMode ? (
-          <EditSecondaryActions
-            entry={entry}
-            onDone={handleDone}
-            onAskCoach={handleAskCoach}
-            onSkip={onSkip}
-          />
-        ) : (
-          <LogCompletionControls
-            entry={entry}
-            rpe={rpe}
-            setRpe={setRpe}
-            note={note}
-            setNote={setNote}
-            onLog={handleLog}
-            isLogging={isLogging}
-            isSaving={planSets.isSaving}
-            onAskCoach={handleAskCoach}
-            onSkip={onSkip}
-          />
-        )}
+        <LogSheetFooter
+          entry={entry}
+          isEditMode={isEditMode}
+          rpe={rpe}
+          setRpe={setRpe}
+          note={note}
+          setNote={setNote}
+          onLog={handleLog}
+          onDone={handleDone}
+          isLogging={isLogging}
+          isSaving={planSets.isSaving}
+          onAskCoach={handleAskCoach}
+          onSkip={onSkip}
+        />
       </WorkoutCoachLayout>
     </ResponsiveSheet>
   );
