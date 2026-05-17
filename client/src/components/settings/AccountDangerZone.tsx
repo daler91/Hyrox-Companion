@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { rawRequest } from "@/lib/api/client";
+import { clearUserLocalData } from "@/lib/userLocalData";
 
 function useDeleteAccount() {
   return useMutation({
@@ -33,6 +34,7 @@ export function AccountDangerZone() {
   const handleDelete = useCallback(() => {
     deleteMutation.mutate(undefined, {
       onSuccess: () => {
+        clearUserLocalData();
         toast({ title: "Account deleted", description: "Your account and all data have been permanently removed." });
         // Force a full page reload to clear all client state and trigger
         // Clerk sign-out (the session cookie is now invalid).

@@ -3,7 +3,14 @@ import { useEffect, useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { getPendingCount } from "@/lib/offlineQueue";
+import {
+  getPendingCount,
+  OFFLINE_QUEUE_CHANGE_EVENT,
+  OFFLINE_SYNC_COMPLETE_EVENT,
+  type OfflineQueueChangeDetail,
+  type OfflineSyncCompleteDetail,
+} from "@/lib/offlineQueue";
+import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
 
 const OFFLINE_POLL_INTERVAL_MS = 2000;
 const SYNC_SUCCESS_DISMISS_MS = 3500;
@@ -13,8 +20,9 @@ const SYNC_SUCCESS_DISMISS_MS = 3500;
  * user always knows where their in-flight data is. Three display states:
  *
  * - Offline + no queue: "You're offline"
- * - Offline + queued writes: "You're offline — N change(s) will sync"
- * - Online right after auto-sync: "Back online — N change(s) synced"
+ * - Offline + queued writes: "You're offline - N change(s) will sync"
+ * - Online + queued writes: "Sync pending"
+ * - Online right after auto-sync: "Back online - N change(s) synced"
  *   (auto-dismisses after ~3.5s)
  */
 export function OfflineIndicator() {
@@ -37,13 +45,25 @@ export function OfflineIndicator() {
   }, [isOnline]);
 
   useEffect(() => {
+    const handleQueueChange = (event: Event) => {
+      const detail = (event as CustomEvent<OfflineQueueChangeDetail>).detail;
+      setPendingCount(detail?.pendingCount ?? getPendingCount());
+    };
+
+    globalThis.addEventListener(OFFLINE_QUEUE_CHANGE_EVENT, handleQueueChange);
+    return () => {
+      globalThis.removeEventListener(OFFLINE_QUEUE_CHANGE_EVENT, handleQueueChange);
+    };
+  }, []);
+
+  useEffect(() => {
     // Track the pending dismiss timer in effect scope so back-to-back
     // sync events don't leave stale timers that clear recentlySynced
     // before the latest success badge has been shown for its full duration.
     let dismissTimerId: ReturnType<typeof setTimeout> | null = null;
 
     const handleSyncComplete = (event: Event) => {
-      const detail = (event as CustomEvent<{ synced: number; dropped: number }>).detail;
+      const detail = (event as CustomEvent<OfflineSyncCompleteDetail>).detail;
       if (!detail) return;
       if (detail.dropped > 0) {
         // Surface the drop explicitly so users aren't silently losing logged
@@ -56,8 +76,9 @@ export function OfflineIndicator() {
         });
       }
       if (detail.synced <= 0) return;
+      invalidateWorkoutWriteQueries();
       setRecentlySynced(detail.synced);
-      setPendingCount(0);
+      setPendingCount(getPendingCount());
       if (dismissTimerId !== null) {
         clearTimeout(dismissTimerId);
       }
@@ -67,12 +88,12 @@ export function OfflineIndicator() {
       }, SYNC_SUCCESS_DISMISS_MS);
     };
 
-    globalThis.addEventListener("offline-sync-complete", handleSyncComplete);
+    globalThis.addEventListener(OFFLINE_SYNC_COMPLETE_EVENT, handleSyncComplete);
     return () => {
       if (dismissTimerId !== null) {
         clearTimeout(dismissTimerId);
       }
-      globalThis.removeEventListener("offline-sync-complete", handleSyncComplete);
+      globalThis.removeEventListener(OFFLINE_SYNC_COMPLETE_EVENT, handleSyncComplete);
     };
   }, [toast]);
 
@@ -87,6 +108,22 @@ export function OfflineIndicator() {
         <CheckCircle2 className="h-4 w-4" />
         <span className="text-sm font-medium">
           Back online — {recentlySynced} change{recentlySynced === 1 ? "" : "s"} synced
+        </span>
+      </div>
+    );
+  }
+
+  if (isOnline && pendingCount > 0) {
+    return (
+      <div
+        className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-white shadow-lg"
+        role="status"
+        aria-live="polite"
+        data-testid="indicator-sync-pending"
+      >
+        <CloudUpload className="h-4 w-4" aria-hidden="true" />
+        <span className="text-sm font-medium">
+          Sync pending - {pendingCount} change{pendingCount === 1 ? "" : "s"} waiting
         </span>
       </div>
     );

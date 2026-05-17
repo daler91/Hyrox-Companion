@@ -2,25 +2,52 @@ import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 import { useToast } from "@/hooks/use-toast";
-import { api, QUERY_KEYS } from "@/lib/api";
-import { queryClient } from "@/lib/queryClient";
+import { api, isTimeoutLikeApiError } from "@/lib/api";
+import { createOfflineMutationId, enqueueMutation } from "@/lib/offlineQueue";
+import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
 
 import type { SaveWorkoutInput } from "./types";
+
+const WORKOUT_CREATE_URL = "/api/v1/workouts";
+
+type SaveWorkoutResult =
+  | { status: "saved" }
+  | { status: "queued"; id: string };
 
 export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   return useMutation({
-    mutationFn: (workoutData: SaveWorkoutInput) => api.workouts.create(workoutData),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-      // Paired with staleTime: Infinity on analytics queries.
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
+    mutationFn: async (workoutData: SaveWorkoutInput): Promise<SaveWorkoutResult> => {
+      const idempotencyKey = createOfflineMutationId();
+
+      if (isBrowserOffline()) {
+        return queueWorkoutSave(workoutData, idempotencyKey);
+      }
+
+      try {
+        await api.workouts.create(workoutData, { idempotencyKey });
+        return { status: "saved" };
+      } catch (error) {
+        if (isConnectivityFailure(error)) {
+          return queueWorkoutSave(workoutData, idempotencyKey);
+        }
+        throw error;
+      }
+    },
+    onSuccess: (result) => {
       onSaveSuccess?.();
+      if (result.status === "queued") {
+        toast({
+          title: "Workout queued",
+          description: "We'll sync it automatically when your connection is back.",
+        });
+        navigate("/");
+        return;
+      }
+
+      invalidateWorkoutWriteQueries();
       toast({
         title: "Workout logged",
         description: "Your workout has been saved successfully.",
@@ -48,6 +75,32 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
   });
 }
 
+function queueWorkoutSave(workoutData: SaveWorkoutInput, id: string): SaveWorkoutResult {
+  enqueueMutation("POST", WORKOUT_CREATE_URL, workoutData, { id });
+  return { status: "queued", id };
+}
+
+function isBrowserOffline(): boolean {
+  return globalThis.navigator !== undefined && globalThis.navigator.onLine === false;
+}
+
+function isConnectivityFailure(error: unknown): boolean {
+  if (isBrowserOffline() || isTimeoutLikeApiError(error)) return true;
+  if (error instanceof TypeError) return true;
+  if (error instanceof DOMException) {
+    return error.name === "AbortError" || error.name === "NetworkError" || error.name === "TimeoutError";
+  }
+  if (!(error instanceof Error)) return false;
+
+  const message = error.message.toLowerCase();
+  if (message.startsWith("failed to fetch csrf token")) return false;
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("load failed") ||
+    message.includes("network error") ||
+    message.includes("networkerror")
+  );
+}
 
 function extractApiErrorCode(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;

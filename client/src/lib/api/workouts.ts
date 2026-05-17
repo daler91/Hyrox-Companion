@@ -54,11 +54,28 @@ export interface WorkoutHistoryStats {
   blockAvgRpe: number | null;
 }
 
+interface CreateWorkoutOptions {
+  idempotencyKey?: string;
+}
+
+type CreateWorkoutPayload = Omit<InsertWorkoutLog, "userId"> & {
+  title?: string;
+  exercises?: ParsedExercise[];
+  structureBlocks?: StructureBlockInput[];
+};
+
 export const workouts = {
   // Server returns the bare WorkoutLog with `exerciseSets` embedded when
   // a `planDayId` is supplied (see workoutService.copyPrescribedSetsIntoLog).
-  create: (data: Omit<InsertWorkoutLog, "userId"> & { title?: string; exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
-    typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("POST", "/api/v1/workouts", data),
+  create: (data: CreateWorkoutPayload, options?: CreateWorkoutOptions) =>
+    options?.idempotencyKey
+      ? typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>(
+        "POST",
+        "/api/v1/workouts",
+        data,
+        { headers: { "X-Idempotency-Key": options.idempotencyKey } },
+      )
+      : typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
     let qs = "";

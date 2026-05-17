@@ -141,6 +141,8 @@ export default function Privacy() {
             <li>Chat messages are retained until you clear your chat history or delete your
               account.</li>
             <li>Idempotency cache entries expire after 7 days.</li>
+            <li>Offline workout-save queue entries stay on your device until they sync, expire,
+              are dropped after retry limits, or you sign out/delete your account.</li>
             <li>AI usage logs are retained for 7 days.</li>
           </ul>
 
@@ -154,7 +156,8 @@ export default function Privacy() {
             <li>
               <strong>Delete</strong> your account and all associated data via Settings. Deletion is
               permanent and cascades to all workout logs, plans, chat messages, and connected
-              service credentials.
+              service credentials. It also clears unsynced local workout saves and drafts on the
+              current device.
             </li>
             <li>
               <strong>Opt out</strong> of email notifications and AI coaching at any time in

@@ -199,7 +199,7 @@ flowchart TD
 
 **File:** `client/src/lib/offlineQueue.ts`
 
-A localStorage-backed mutation queue that ensures data isn't lost when the user is offline.
+A localStorage-backed mutation queue used by workout logging creates. Other mutations still use direct server requests unless they explicitly opt into this queue.
 
 ### Design
 
@@ -207,19 +207,21 @@ A localStorage-backed mutation queue that ensures data isn't lost when the user 
 - **Max queue size:** 100 mutations (oldest evicted when full).
 - **Max age:** 7 days -- stale mutations are dropped during flush.
 - **Max retries:** 5 per mutation -- dropped after exceeding.
-- **Idempotency:** Each mutation gets a unique ID (`timestamp-uuid`), sent as `X-Idempotency-Key` header on replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL. This provides end-to-end duplicate prevention: the client generates the key, and the server enforces it.
+- **Idempotency:** Workout saves generate a unique ID (`timestamp-uuid`) before the first request, send it as `X-Idempotency-Key`, and reuse it if the body is queued for replay. The server enforces idempotency via the `idempotencyMiddleware`, which caches responses in the `idempotency_keys` database table with a 7-day TTL.
+- **Privacy cleanup:** Signout and account deletion clear queued mutation bodies and user-scoped drafts from browser storage.
 
 ### API
 
 | Function | Description |
 |----------|-------------|
-| `enqueueMutation(method, url, body)` | Adds a mutation to the queue. Returns the mutation ID. |
+| `enqueueMutation(method, url, body, { id? })` | Adds a mutation to the queue. Returns the mutation ID. |
 | `getPendingCount()` | Returns the number of queued mutations. |
 | `flushQueue()` | Replays all pending mutations. Returns `{ synced, failed, dropped }`. |
+| `clearOfflineQueue()` | Removes queued mutation bodies from localStorage and notifies listeners. |
 
 ### Auto-flush
 
-When the browser fires the `online` event, `flushQueue()` runs automatically. On completion, it dispatches a `CustomEvent("offline-sync-complete")` for the UI to react.
+When the browser fires the `online` event, `flushQueue()` runs automatically. Queue writes dispatch `CustomEvent("offline-queue-change")`; successful or dropped replays dispatch `CustomEvent("offline-sync-complete")` for the UI to react.
 
 ### Error Handling
 
@@ -242,7 +244,7 @@ sequenceDiagram
         Hook->>Server: API request
         Server->>Hook: Response
     else Offline
-        Hook->>Queue: enqueueMutation(method, url, body)
+        Hook->>Queue: enqueueMutation(method, url, body, { id })
         Queue->>Storage: Save with unique ID + timestamp
         Queue->>User: Queued (offline indicator)
     end

@@ -24,7 +24,7 @@ const FAQS = [
   {
     question: "What happens if I go offline mid-workout?",
     answer:
-      "The app is a Progressive Web App with an offline queue. Workouts you log without a connection are held locally and sync automatically the moment you're back online — you'll see a Back online confirmation when it happens.",
+      "The app is a Progressive Web App with an offline queue for workout logging. If a workout save loses connection, it is held locally and syncs automatically when you're back online. Signing out or deleting your account clears unsynced local saves for privacy.",
   },
   {
     question: "Can I import my own training plan?",

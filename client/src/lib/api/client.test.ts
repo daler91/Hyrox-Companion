@@ -60,6 +60,15 @@ describe('api client', () => {
 
       expect(apiRequest).toHaveBeenCalledWith('GET', '/api/test', undefined, expect.any(AbortSignal));
     });
+
+    it('should pass through extra headers when provided', async () => {
+      const { response } = mockJsonResponse({ ok: true });
+      vi.mocked(apiRequest).mockResolvedValue(response);
+
+      await typedRequest('POST', '/api/test', { ok: true }, { headers: { "X-Test": "1" } });
+
+      expect(apiRequest).toHaveBeenCalledWith('POST', '/api/test', { ok: true }, expect.any(AbortSignal), { "X-Test": "1" });
+    });
   });
 
   describe('rawRequest', () => {

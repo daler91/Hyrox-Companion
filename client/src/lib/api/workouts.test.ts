@@ -19,6 +19,14 @@ describe('workouts API client', () => {
     expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', data);
   });
 
+  it('create() passes idempotency headers when provided', () => {
+    const data = { title: 'Test Workout', rawText: "I did something" } satisfies Parameters<typeof workouts.create>[0];
+    workouts.create(data, { idempotencyKey: "fixed-id" });
+    expect(typedRequest).toHaveBeenCalledWith('POST', '/api/v1/workouts', data, {
+      headers: { "X-Idempotency-Key": "fixed-id" },
+    });
+  });
+
   it('list() calls typedRequest with GET and empty query string when no params provided', () => {
     workouts.list();
     expect(typedRequest).toHaveBeenCalledWith('GET', '/api/v1/workouts');
