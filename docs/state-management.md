@@ -92,7 +92,7 @@ Each API domain has a dedicated module in `client/src/lib/api/`:
 | Plans | `plans.ts` | CRUD, `import()`, `sample()`, `generate()`, `schedule()`, `updateDay()`, `updateDayStatus()` |
 | Coaching | `coaching.ts` | Chat (`send()`, `sendStream()`, `saveMessage()`), materials CRUD, `getRagStatus()`, `reEmbed()` |
 | Analytics | `analytics.ts` | `getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` (returns `currentStats` + optional `previousStats` for week-over-week deltas), timeline, suggestions |
-| User | `user.ts` | `auth.getUser()`, `preferences.get/update()` (includes `emailNotifications`, `emailWeeklySummary`, `emailMissedReminder`, `aiCoachEnabled`), `strava.*`, `garmin.*` (`status/connect/disconnect/sync`), `email.check()`, `account.delete()` |
+| User | `user.ts` | `auth.getUser()`, `preferences.get/update()` (includes `emailNotifications`, `emailWeeklySummary`, `emailMissedReminder`, `aiCoachEnabled`, `onboardingCompleted`), `strava.*`, `garmin.*` (`status/connect/disconnect/sync`), `email.check()`, `account.delete()` |
 | Exercises | `exercises.ts` | `listCustom()`, `create()`, `getHistory()` |
 | Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `update()`, `delete()` for injury / illness / travel / rest bands |
 
@@ -157,7 +157,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 | Hook | File | Purpose |
 |------|------|---------|
 | `useTimelineFilters` | `useTimelineFilters.ts` | Filter state for timeline (plan selector, status filter, date range). |
-| `useOnboarding` | `useOnboarding.ts` | Tracks onboarding completion state. |
+| `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local legacy fallback. |
 | `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state (current step, form values, navigation). |
 | `useOnlineStatus` | `useOnlineStatus.ts` | Tracks `navigator.onLine` with event listeners. |
 | `useBlockCounts` | `useBlockCounts.ts` | Calculates exercise block statistics (total sets, exercises). |

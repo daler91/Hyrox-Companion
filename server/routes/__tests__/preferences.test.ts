@@ -68,6 +68,7 @@ describe("GET /api/preferences", () => {
       trainingStylePreviousId: null,
       trainingStyleChangedAt: null,
       trainingStyleRecomputeNow: null,
+      onboardingCompleted: null,
       mafAge: null,
       mafInjuryIllnessMedication: null,
       mafConsistency: null,
@@ -86,7 +87,39 @@ describe("GET /api/preferences", () => {
       emailWeeklySummary: false,
       emailMissedReminder: false,
       aiCoachEnabled: false,
+      onboardingCompleted: false,
     });
+  });
+
+  it("returns durable onboarding completion", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValueOnce({
+      weightUnit: "kg",
+      distanceUnit: "km",
+      weeklyGoal: 5,
+      emailNotifications: false,
+      emailWeeklySummary: false,
+      emailMissedReminder: false,
+      showAdherenceInsights: true,
+      aiCoachEnabled: false,
+      trainingStyleId: "balanced_default",
+      trainingStylePreviousId: null,
+      trainingStyleChangedAt: null,
+      trainingStyleRecomputeNow: false,
+      onboardingCompleted: true,
+      mafAge: null,
+      mafInjuryIllnessMedication: null,
+      mafConsistency: null,
+      mafTrend: null,
+      mafHrDataAvailable: null,
+      mafHr: null,
+      mafBaselineTestScheduledAt: null,
+    });
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValueOnce(null);
+
+    const response = await request(app).get("/api/v1/preferences");
+
+    expect(response.status).toBe(200);
+    expect(response.body.onboardingCompleted).toBe(true);
   });
 });
 
@@ -115,6 +148,7 @@ describe("PATCH /api/v1/preferences", () => {
       trainingStylePreviousId: null,
       trainingStyleChangedAt: null,
       trainingStyleRecomputeNow: false,
+      onboardingCompleted: true,
       mafAge: 39,
       mafInjuryIllnessMedication: false,
       mafConsistency: "moderate",
@@ -152,5 +186,21 @@ describe("PATCH /api/v1/preferences", () => {
   it("allows non-MAF style switch without MAF fields", async () => {
     const response = await request(app).patch("/api/v1/preferences").send({ trainingStyleId: "balanced_default" });
     expect(response.status).toBe(200);
+  });
+
+  it("persists onboarding completion when provided", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ onboardingCompleted: true });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", { onboardingCompleted: true });
+    expect(response.body.onboardingCompleted).toBe(true);
+  });
+
+  it("does not change onboarding completion when omitted", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ weeklyGoal: 6 });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", { weeklyGoal: 6 });
+    expect(response.body.onboardingCompleted).toBe(true);
   });
 });

@@ -138,7 +138,7 @@ export const useAuth = shouldBypassAuth ? useTestAuthImpl : useClerkAuthImpl;
  * the user query refetches every 2 seconds, but consumers of this
  * helper stay stable until the field flips.
  */
-function useAuthUserBoolean(field: "isAutoCoaching" | "aiCoachEnabled"): boolean {
+function useAuthUserBoolean(field: "isAutoCoaching" | "aiCoachEnabled" | "onboardingCompleted"): boolean {
   // We can't use `enabled: !!isSignedIn` here without re-reading the
   // Clerk hook, but every other useAuth call already gates the query;
   // this subscriber just rides on the existing cache entry. When the
@@ -157,6 +157,10 @@ export function useIsAutoCoaching(): boolean {
 
 export function useIsAiCoachEnabled(): boolean {
   return useAuthUserBoolean("aiCoachEnabled");
+}
+
+export function useIsOnboardingCompleted(): boolean {
+  return useAuthUserBoolean("onboardingCompleted");
 }
 
 /**

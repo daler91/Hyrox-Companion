@@ -40,6 +40,7 @@ User accounts and preferences.
 | `training_style_previous_id` | `text` | nullable |
 | `training_style_changed_at` | `timestamp with time zone` | nullable |
 | `training_style_recompute_now` | `boolean` | default `false` |
+| `onboarding_completed` | `boolean` | NOT NULL, default `false` |
 | `maf_age` | `integer` | nullable |
 | `maf_injury_illness_medication` | `boolean` | nullable |
 | `maf_consistency` | `text` | nullable |

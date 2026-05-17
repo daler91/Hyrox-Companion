@@ -1,10 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { api } from "@/lib/api";
 
 import Settings from "../Settings";
 
-vi.mock("wouter", () => ({ useLocation: () => ["/settings", vi.fn()], useSearch: () => "" }));
+const mocks = vi.hoisted(() => ({
+  setLocation: vi.fn(),
+}));
+
+vi.mock("wouter", () => ({ useLocation: () => ["/settings", mocks.setLocation], useSearch: () => "" }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { firstName: "Test" } }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/queryClient", () => ({ queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) } }));
@@ -29,6 +35,11 @@ function seedQuery<T>(qc: QueryClient, key: readonly string[], data: T) {
 }
 
 describe("Settings MAF style switch", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
   it("hydrates nullable opt-in preferences as off", async () => {
     const qc = new QueryClient();
     seedQuery(qc, ["preferences"], {
@@ -63,5 +74,23 @@ describe("Settings MAF style switch", () => {
 
     expect(await screen.findByText("Complete MAF setup")).toBeInTheDocument();
     expect(screen.getByTestId("maf-switch-blocked").textContent).toContain("Complete MAF setup to switch styles");
+  });
+
+  it("reruns onboarding through the forced URL without changing durable completion", async () => {
+    const qc = new QueryClient();
+    seedQuery(qc, ["preferences"], {
+      weightUnit: "kg", distanceUnit: "km", weeklyGoal: 5, emailNotifications: false, emailWeeklySummary: false, emailMissedReminder: false,
+      showAdherenceInsights: true, aiCoachEnabled: false, trainingStyleId: "balanced_default", onboardingCompleted: true,
+      mafAge: null, mafConsistency: null, mafTrend: null,
+    });
+    seedQuery(qc, ["strava"], null);
+    seedQuery(qc, ["garmin"], null);
+
+    render(<QueryClientProvider client={qc}><Settings /></QueryClientProvider>);
+
+    fireEvent.click(await screen.findByTestId("button-rerun-onboarding"));
+
+    expect(mocks.setLocation).toHaveBeenCalledWith("/?onboarding=run");
+    expect(api.preferences.update).not.toHaveBeenCalledWith({ onboardingCompleted: false });
   });
 });

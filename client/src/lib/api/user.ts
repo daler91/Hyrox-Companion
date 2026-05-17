@@ -35,6 +35,7 @@ export interface UserPreferences {
   trainingStylePreviousId?: string | null;
   trainingStyleChangedAt?: string | null;
   trainingStyleRecomputeNow?: boolean;
+  onboardingCompleted?: boolean;
   mafAge?: number | null;
   mafInjuryIllnessMedication?: boolean | null;
   mafConsistency?: "low" | "moderate" | "high" | null;

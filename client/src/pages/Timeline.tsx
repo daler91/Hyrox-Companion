@@ -43,7 +43,7 @@ import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching } from "@/hooks/useAuth";
+import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching, useIsOnboardingCompleted } from "@/hooks/useAuth";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { useBulkDeleteSelection } from "@/pages/timeline/useBulkDeleteSelection";
 import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRouting";
@@ -286,6 +286,7 @@ export default function Timeline() {
   const aiCoachEnabled = useIsAiCoachEnabled();
   const isAutoCoaching = useIsAutoCoaching();
   const isAuthUserLoaded = useIsAuthUserLoaded();
+  const onboardingCompleted = useIsOnboardingCompleted();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const {
@@ -297,7 +298,7 @@ export default function Timeline() {
     combine,
     selectedPlanId,
     setSelectedPlanId,
-  } = useTimelineState({ aiCoachEnabled, isAuthUserLoaded });
+  } = useTimelineState({ aiCoachEnabled, isAuthUserLoaded, onboardingCompleted });
 
   const {
     plans,

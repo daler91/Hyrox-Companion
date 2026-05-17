@@ -4,32 +4,22 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { useHasBlockingModalLayer } from "@/components/ui/modal-layer";
+import { safeLocalStorage } from "@/lib/safeStorage";
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
 const CONSENT_CHANGED_EVENT = "fitai:privacy-consent-changed";
 
 function hasStoredConsent(): boolean {
   if (globalThis.window === undefined) return true;
-  try {
-    return globalThis.localStorage.getItem(CONSENT_STORAGE_KEY) !== null;
-  } catch {
-    // Private-mode Safari / denied storage — treat as acknowledged so the
-    // banner doesn't loop forever for users who can't persist the dismissal.
-    return true;
-  }
+  return safeLocalStorage.getItem(CONSENT_STORAGE_KEY) !== null;
 }
 
 function recordConsent(): void {
-  try {
-    globalThis.localStorage.setItem(CONSENT_STORAGE_KEY, String(Date.now()));
-    // Notify same-tab listeners — the native `storage` event only fires
-    // across tabs, so we need a custom channel for our own listener below
-    // (and for tests that set the key imperatively after mount).
-    globalThis.window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
-  } catch {
-    // Storage unavailable; nothing to do — user will see the banner again
-    // next session but that's acceptable.
-  }
+  safeLocalStorage.setItem(CONSENT_STORAGE_KEY, String(Date.now()));
+  // Notify same-tab listeners — the native `storage` event only fires
+  // across tabs, so we need a custom channel for our own listener below
+  // (and for tests that set the key imperatively after mount).
+  globalThis.window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
 }
 
 /**

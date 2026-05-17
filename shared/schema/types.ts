@@ -53,6 +53,7 @@ export const updateUserPreferencesSchema = z.object({
   trainingStylePreviousId: z.string().max(100).nullable().optional(),
   trainingStyleChangedAt: z.coerce.date().nullable().optional(),
   trainingStyleRecomputeNow: z.boolean().optional(),
+  onboardingCompleted: z.boolean().optional(),
   mafAge: z.number().int().min(16).max(99).nullable().optional(),
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),

@@ -32,6 +32,7 @@ export function timelineStateReducer(
 export function useTimelineState(options?: {
   aiCoachEnabled?: boolean;
   isAuthUserLoaded?: boolean;
+  onboardingCompleted?: boolean;
 }) {
   const [uiState, dispatch] = useReducer(timelineStateReducer, { selectedPlanId: null });
   const selectedPlanId = uiState.selectedPlanId;
@@ -40,7 +41,11 @@ export function useTimelineState(options?: {
   const data = useTimelineData(selectedPlanId, options?.isAuthUserLoaded);
   const filters = useTimelineFilters(data.timelineData, data.annotations);
 
-  const onboarding = useOnboarding(data.isNewUser, fileInputRef, options?.aiCoachEnabled);
+  const onboarding = useOnboarding(data.isNewUser, fileInputRef, {
+    aiCoachEnabled: options?.aiCoachEnabled,
+    isAuthUserLoaded: options?.isAuthUserLoaded,
+    onboardingCompleted: options?.onboardingCompleted,
+  });
 
   const planImport = usePlanImport({
     fileInputRef,

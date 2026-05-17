@@ -44,6 +44,7 @@ export const users = pgTable("users", {
   trainingStylePreviousId: text("training_style_previous_id"),
   trainingStyleChangedAt: timestamp("training_style_changed_at", { withTimezone: true }),
   trainingStyleRecomputeNow: boolean("training_style_recompute_now").default(false),
+  onboardingCompleted: boolean("onboarding_completed").default(false).notNull(),
   mafAge: integer("maf_age"),
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
   mafConsistency: text("maf_consistency"),

@@ -48,6 +48,7 @@ function serializePreferences(user: {
   trainingStylePreviousId: string | null;
   trainingStyleChangedAt: Date | null;
   trainingStyleRecomputeNow: boolean | null;
+  onboardingCompleted: boolean | null;
   mafAge: number | null;
   mafInjuryIllnessMedication: boolean | null;
   mafConsistency: string | null;
@@ -69,6 +70,7 @@ function serializePreferences(user: {
     trainingStylePreviousId: user.trainingStylePreviousId ?? null,
     trainingStyleChangedAt: user.trainingStyleChangedAt ?? null,
     trainingStyleRecomputeNow: user.trainingStyleRecomputeNow ?? false,
+    onboardingCompleted: user.onboardingCompleted ?? false,
     mafAge: user.mafAge ?? null,
     mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
     mafConsistency: user.mafConsistency ?? null,

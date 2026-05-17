@@ -35,6 +35,7 @@ vi.mock("@/hooks/useAuth", () => ({
   useIsAiCoachEnabled: () => authState.aiCoachEnabled,
   useIsAuthUserLoaded: () => true,
   useIsAutoCoaching: () => false,
+  useIsOnboardingCompleted: () => false,
 }));
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => viewportState.isMobile }));
