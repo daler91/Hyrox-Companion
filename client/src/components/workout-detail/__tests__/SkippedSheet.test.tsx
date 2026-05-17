@@ -1,19 +1,16 @@
 import type { TimelineEntry } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SkippedSheet } from "../SkippedSheet";
+import {
+  expectWorkoutTitleRename,
+  renameWorkoutTitleFromHeader,
+} from "./workoutTitleTestHelpers";
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
-  ResponsiveSheet: ({
-    children,
-    title,
-  }: {
-    children: ReactNode;
-    title: ReactNode;
-  }) => (
+  ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
     <section>
       <h1>{title}</h1>
       {children}
@@ -47,7 +44,6 @@ const skippedEntry = {
 
 describe("SkippedSheet", () => {
   it("renames a skipped workout title from the sheet header", async () => {
-    const user = userEvent.setup();
     const onRenameTitle = vi.fn();
 
     render(
@@ -58,14 +54,8 @@ describe("SkippedSheet", () => {
       />,
     );
 
-    await user.click(screen.getByTestId("workout-title-entry-1-edit"));
-    await user.clear(screen.getByTestId("workout-title-entry-1-input"));
-    await user.type(screen.getByTestId("workout-title-entry-1-input"), "  Skipped engine  ");
-    await user.click(screen.getByTestId("workout-title-entry-1-save"));
+    await renameWorkoutTitleFromHeader("workout-title-entry-1", "  Skipped engine  ");
 
-    expect(onRenameTitle).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "entry-1" }),
-      "Skipped engine",
-    );
+    expectWorkoutTitleRename(onRenameTitle, "entry-1", "Skipped engine");
   });
 });

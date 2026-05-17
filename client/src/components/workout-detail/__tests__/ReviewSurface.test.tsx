@@ -8,6 +8,10 @@ import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ReviewSurface } from "../ReviewSurface";
+import {
+  expectWorkoutTitleRename,
+  renameWorkoutTitleFromHeader,
+} from "./workoutTitleTestHelpers";
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
@@ -169,7 +173,6 @@ describe("ReviewSurface", () => {
   });
 
   it("renames the workout title from the sheet header", async () => {
-    const user = userEvent.setup();
     const onRenameTitle = vi.fn();
     mockUseWorkoutDetail.mockReturnValue(makeDetail());
 
@@ -181,14 +184,8 @@ describe("ReviewSurface", () => {
       />,
     );
 
-    await user.click(screen.getByTestId("workout-title-entry-1-edit"));
-    await user.clear(screen.getByTestId("workout-title-entry-1-input"));
-    await user.type(screen.getByTestId("workout-title-entry-1-input"), "  Renamed strength  ");
-    await user.click(screen.getByTestId("workout-title-entry-1-save"));
+    await renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
 
-    expect(onRenameTitle).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "entry-1" }),
-      "Renamed strength",
-    );
+    expectWorkoutTitleRename(onRenameTitle, "entry-1", "Renamed strength");
   });
 });
