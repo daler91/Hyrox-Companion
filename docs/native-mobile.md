@@ -8,7 +8,7 @@ Capacitor is the recommended path for wrapping fitai.coach as a native mobile ap
 
 | Factor | Capacitor | React Native |
 |--------|-----------|--------------|
-| UI rewrite required | No — runs existing web app in WebView | Yes — all 27 shadcn/ui components need replacement |
+| UI rewrite required | No — runs existing web app in WebView | Yes — every shadcn/ui component needs replacement |
 | Estimated effort | 2-3 weeks (basic), 4-6 weeks (production) | 3-4 months |
 | Tailwind CSS | Works as-is | Requires NativeWind or custom mapping |
 | Radix UI / shadcn | Works as-is | Incompatible — needs React Native Paper or similar |
@@ -21,7 +21,7 @@ Capacitor is the recommended path for wrapping fitai.coach as a native mobile ap
 - **App Store / Play Store distribution** — installable from stores, not just PWA
 - **Native push notifications** (APNs + FCM) — more reliable than web push, especially on iOS
 - **HealthKit / Google Fit integration** — via `@capacitor-community/health-connect`
-- **Background app refresh** — for Strava sync and notification checks
+- **Background app refresh** — for Strava/Garmin sync and notification checks
 - **Native splash screen + app icon** — proper first-launch experience
 - **Haptic feedback** — for workout completion, PR celebrations
 - **Camera/Photos** — future progress photo feature

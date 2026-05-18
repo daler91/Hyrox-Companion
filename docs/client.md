@@ -93,23 +93,23 @@ State management is centralized in the `useTimelineState` custom hook, with `Tim
 
 ### Log Workout (`client/src/pages/LogWorkout.tsx`)
 
-A form for logging new workouts. Features a two-column layout on desktop:
+`LogWorkout.tsx` is a thin page wrapper that gates rendering on auth resolution and mounts `LogWorkoutForm` (keyed by user ID so an in-place account switch fully remounts the form and discards the previous user's draft). The form itself lives under `client/src/pages/log-workout/` and is a three-step stepper rendered by `LogWorkoutStepperLayout`:
 
-- **Left column** -- Workout title, date picker, RPE selector, notes (with voice input via `VoiceFieldButton`), and save button.
-- **Right column** -- Workout content with a mode selector:
-  - **Text mode** (`WorkoutTextMode`) -- Free-text workout description with voice dictation and AI parsing (`parseMutation`).
-  - **Exercise mode** (`WorkoutExerciseMode`) -- Structured entry with drag-and-drop exercise blocks (via `@dnd-kit`), exercise selectors, sets/reps/weight inputs.
+1. **Capture** (`steps/CaptureStep.tsx`) -- Workout title and date (`WorkoutDateFields`) plus the `WorkoutComposer`: a structured exercise list with a collapsible "Describe / dictate" panel that auto-parses free text or a photo into exercises.
+2. **Confirm** (`steps/ConfirmStep.tsx`) -- Review and correct the parsed exercise rows in a `DraftExerciseTable` before saving.
+3. **Reflect** (`steps/ReflectStep.tsx`) -- Capture effort (RPE) and notes for the session.
 
-Uses `useWorkoutEditor` and `useWorkoutForm` custom hooks. Respects user unit preferences (kg/lb, km/mi) via `useUnitPreferences`.
+A `StepIndicator` allows jumping between steps. Drafts are persisted client-side via `useLogWorkoutDraftPersistence`, and `useDuplicateLastWorkout` can prefill the form from the most recent workout. The form respects user unit preferences (kg/lb, km/mi) via `useUnitPreferences`.
 
 ### Analytics (`client/src/pages/Analytics.tsx`)
 
-Displays training data analysis across four tabs:
+Displays training data analysis across five tabs:
 
 - **Overview** (`TrainingOverviewTab`) -- Training volume summary, completion rates, streaks, weekly goal tracking, and workout heatmap. Four summary cards (total workouts, avg/week, total duration, avg duration) render a `DeltaIndicator` showing the percentage change versus the equal-length prior period (derived server-side — see [`previousStats` in `/training-overview`](api-reference.md#get-apiv1training-overview)). The weekly workout chart overlays shaded bands for any timeline annotations that intersect the visible window.
-- **Progression** (`ExerciseProgressionTab`) -- Exercise-level progression charts over time.
+- **Trends** (`ExerciseProgressionTab`) -- Exercise-level progression charts over time.
 - **Records** (`PersonalRecordsTab`) -- Personal records across all exercises.
 - **Breakdown** (`CategoryBreakdownTab`) -- Category-level training distribution (functional, running, strength, conditioning).
+- **Coach Insights** (`CoachInsightsTab`) -- AI-surfaced coaching signals: RPE trends, plan phase, weekly volume, station gaps, and fatigue/progression flags.
 
 A date range selector filters data across all tabs (30 days, 90 days, 6 months, 1 year, all time).
 
@@ -166,7 +166,10 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `CategoryBreakdownTab` -- Training distribution by category.
 - `MiniLineChart`, `MiniBarChart` -- Reusable small chart components.
 - `WorkoutHeatmap` -- GitHub-style activity heatmap.
+- `CoachInsightsTab` -- AI coaching-signal tab (RPE trends, plan phase, fatigue/progression flags).
+- `ExerciseProgressionCharts` -- Per-exercise progression chart group used by the Trends tab.
 - `chartConstants.ts` -- Shared chart configuration.
+- `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, and the `useTrainingOverviewData` hook.
 
 ### `coach/` -- AI Coach Panel Components
 
@@ -176,6 +179,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `CoachPanelFooter` -- Quick actions and message input.
 - `SuggestionCard` -- AI workout suggestion with apply/dismiss actions.
 - `SuggestionsTab` -- Hook and logic for fetching/applying suggestions.
+- `AIConsentDialog` -- Opt-in consent dialog shown before the first AI coach interaction.
 
 ### `onboarding/` -- Onboarding Wizard Steps
 
@@ -188,6 +192,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 ### `plans/` -- Plan Management
 
 - `GeneratePlanDialog` -- AI-powered training plan generation dialog.
+- `generate-plan/` -- Multi-step generation form: `GeneratePlanGoalStep`, `GeneratePlanScheduleStep`, `GeneratePlanDetailsStep`, and the `useGeneratePlanForm` hook.
 
 ### `settings/` -- Settings Page Sections
 
@@ -201,6 +206,9 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `coaching/CoachingUploadDialog` -- Upload dialog for coaching materials.
 - `coaching/RagStatusCard` -- RAG processing status indicator.
 - `coaching/useCoachingUpload.ts` -- Upload logic hook.
+- `data-tools/` -- `ExportDataCard`, `StructureOldWorkoutsCard`, and the `useWorkoutReparseTools` hook backing `DataToolsSection`.
+- `garmin/` -- `GarminConnectForm`, `GarminErrorBanner`, `GarminStatusRow`, and the `useGarminConnectionController` hook backing `GarminSection`.
+- `preferences/` -- `AiCoachCard`, `EmailNotificationsCard`, `TrainingGoalsCard`, `UnitsPreferencesCard`, `WorkoutReviewCard`, and `PreferenceRows` backing `PreferencesSection`.
 
 ### `timeline/` -- Timeline Page Components
 
@@ -251,17 +259,30 @@ Structured exercise entry surfaces shared across logging and detail:
 
 - `StravaIcon`, `GarminIcon` -- Brand-color SVG icons used in Settings and on timeline cards.
 
-### `workout/` -- Log Workout Page Components
+### `workout/` -- Workout Composer Components
+
+Shared building blocks for the Log Workout stepper's Capture and Confirm steps:
 
 - `WorkoutHeader` -- Page title.
+- `WorkoutDateFields` -- Workout title and date inputs.
 - `WorkoutDetailsCard` -- Title, date, RPE inputs.
 - `WorkoutNotesCard` -- Notes textarea with voice input.
 - `WorkoutSaveButton` -- Save action button.
-- `WorkoutComposer` -- Unified log-workout surface: structured exercise list with a collapsible "Describe / dictate" panel. Auto-parses the text panel's contents into the exercise list via Gemini on a debounce, preserving cells the user has already edited.
+- `WorkoutComposer` -- Unified log-workout surface: structured exercise list with a collapsible "Describe / dictate" panel. Auto-parses the text panel's contents into the exercise list on a debounce, preserving cells the user has already edited.
 - `WorkoutTextMode` -- Textarea + voice dictation used inside the composer's collapsible panel. Also mounts `ImageCaptureButton` for photo-to-workout parsing; the voice button is hidden while a photo preview is active to avoid conflicting input surfaces.
-- `WorkoutExerciseMode` -- Structured exercise block editor / picker.
+- `DraftExerciseTable` -- Editable draft exercise/set table shown on the Confirm step.
+- `ParseStatusStrip` -- Inline status indicator for the auto-parse pipeline.
 - `ExerciseRow` / `SortableExerciseBlock` -- Draggable exercise block primitives used by the composer.
 - `ExerciseImagePreview` -- Thumbnail + remove control rendered after a user captures a workout photo but before the parsed exercises are committed.
+
+### `workout-structure/` -- Structured Format Editor
+
+Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals):
+
+- `WorkoutStructureEditor` -- Top-level editor for a workout's structure blocks and steps.
+- `StructureBlocksEditor` -- Block-list editor for adding, ordering, and configuring structure blocks.
+- `configToStructureBlocks.ts` -- Converts editor config into the persisted `structureBlocks` shape.
+- `emomPreview.ts` -- Builds a minute-by-minute preview for EMOM blocks.
 
 ### Root-level Components
 

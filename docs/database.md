@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Hyrox Companion app uses **PostgreSQL** as its primary datastore, accessed through the **Drizzle ORM** for type-safe query building. A separate **pgvector**-enabled database (optionally Neon) handles vector embeddings for the RAG-based AI coaching pipeline. The schema is defined in TypeScript using Drizzle's `pgTable` builder, and migrations are managed by Drizzle Kit.
+The fitai.coach app uses **PostgreSQL** as its primary datastore, accessed through the **Drizzle ORM** for type-safe query building. A separate (optional) **pgvector**-enabled database handles vector embeddings for the RAG-based AI coaching pipeline. The schema is defined in TypeScript using Drizzle's `pgTable` builder, and migrations are managed by Drizzle Kit.
 
 Key technology choices:
 
@@ -16,7 +16,9 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts`. Every table uses `varchar(255)` primary keys with `gen_random_uuid()` defaults.
+All table definitions live in `shared/schema/tables.ts` (~755 lines, 26 tables plus their Drizzle relations). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+
+Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
 ### users
 
@@ -35,6 +37,7 @@ User accounts and preferences.
 | `email_notifications` | `boolean` | default `false` — **master** email toggle (GDPR opt-in) |
 | `email_weekly_summary` | `boolean` | default `false` — per-type toggle for the weekly training summary |
 | `email_missed_reminder` | `boolean` | default `false` — per-type toggle for the missed-workout reminder |
+| `show_adherence_insights` | `boolean` | default `true` — UI toggle for displaying plan-adherence insights |
 | `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to Gemini while this is `false` |
 | `training_style_id` | `text` | default `'balanced_default'` |
 | `training_style_previous_id` | `text` | nullable |
@@ -169,6 +172,9 @@ Individual workout days within a training plan.
 | `scheduled_date` | `date` | nullable |
 | `status` | `text` | default `'planned'` |
 | `ai_source` | `text` | nullable |
+| `ai_rationale` | `text` | nullable — auto-coach prescriptive rationale for the day |
+| `ai_note_updated_at` | `timestamp with time zone` | nullable |
+| `ai_inputs_used` | `jsonb` | nullable — typed `CoachNoteInputs`, the inputs that produced the rationale |
 
 **Check constraints:**
 - `status_check`: `status IN ('planned', 'completed', 'missed', 'skipped')`
@@ -195,6 +201,15 @@ Logged workouts, either entered manually or synced from Strava.
 | `main_workout` | `text` | NOT NULL |
 | `accessory` | `text` | nullable |
 | `notes` | `text` | nullable |
+| `prescribed_main_workout` | `text` | nullable — free-text prescription snapshot copied at log create |
+| `prescribed_accessory` | `text` | nullable |
+| `prescribed_notes` | `text` | nullable |
+| `planned_set_count` | `integer` | nullable — adherence snapshot |
+| `actual_set_count` | `integer` | nullable |
+| `matched_set_count` | `integer` | nullable |
+| `added_set_count` | `integer` | nullable |
+| `removed_set_count` | `integer` | nullable |
+| `compliance_pct` | `integer` | nullable |
 | `duration` | `integer` | nullable (minutes) |
 | `rpe` | `integer` | nullable |
 | `plan_day_id` | `varchar(255)` | FK -> `plan_days.id` ON DELETE SET NULL |
@@ -232,32 +247,225 @@ Logged workouts, either entered manually or synced from Strava.
 
 ### exercise_sets
 
-Individual exercise sets recorded within a workout log.
+Individual exercise sets. Each row is either **prescribed** (owned by a `plan_day` — the AI-generated rows shown in the workout detail modal) or **logged** (owned by a `workout_log` — what the user actually did). Exactly one owner column is set per row, enforced by the `exercise_set_single_owner_check`. On logged rows `reps`/`weight`/`distance`/`time` are the actual performed values, while the `planned_*` columns snapshot the prescription at log-create time.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
-| `workout_log_id` | `varchar(255)` | NOT NULL, FK -> `workout_logs.id` ON DELETE CASCADE |
+| `workout_log_id` | `varchar(255)` | nullable, FK -> `workout_logs.id` ON DELETE CASCADE |
+| `plan_day_id` | `varchar(255)` | nullable, FK -> `plan_days.id` ON DELETE CASCADE |
 | `exercise_name` | `varchar(255)` | NOT NULL |
 | `custom_label` | `text` | nullable |
 | `category` | `varchar(255)` | NOT NULL |
 | `set_number` | `integer` | NOT NULL, default `1` |
-| `reps` | `integer` | nullable |
-| `weight` | `real` | nullable |
-| `distance` | `real` | nullable |
-| `time` | `real` | nullable |
+| `reps` | `integer` | nullable (actual) |
+| `weight` | `real` | nullable (actual) |
+| `distance` | `real` | nullable (actual) |
+| `time` | `real` | nullable (actual) |
+| `planned_reps` | `integer` | nullable (prescription snapshot) |
+| `planned_weight` | `real` | nullable (prescription snapshot) |
+| `planned_distance` | `real` | nullable (prescription snapshot) |
+| `planned_time` | `real` | nullable (prescription snapshot) |
+| `block_id` | `varchar(255)` | nullable — structured-block grouping |
+| `step_number` | `integer` | nullable |
+| `interval_minute` | `integer` | nullable |
+| `cycle_number` | `integer` | nullable |
+| `step_role` | `varchar(50)` | nullable |
+| `group_id` | `varchar(255)` | nullable |
+| `intensity` | `jsonb` | nullable |
+| `load` | `jsonb` | nullable |
+| `rep_mode` | `varchar(50)` | nullable |
+| `tempo` | `jsonb` | nullable |
+| `standards` | `jsonb` | nullable |
 | `notes` | `text` | nullable |
 | `confidence` | `integer` | nullable |
 | `sort_order` | `integer` | default `0` |
 
 **Check constraints:**
 - `set_number_check`: `set_number > 0`
+- `exercise_set_single_owner_check`: `(workout_log_id IS NULL) <> (plan_day_id IS NULL)` — exactly one owner
+- Non-negative guards on `weight`/`distance`/`time` and their `planned_*` counterparts
+- `step_number_positive_check`, `cycle_number_positive_check`, `interval_minute_non_negative_check`
+- `rep_mode_check`: `rep_mode IN ('total', 'per_side')`
+- `exercise_set_block_step_pair_check`: `(block_id IS NULL) = (step_number IS NULL)`
 
 **Indexes:**
 - `idx_exercise_sets_workout_log_id` on (`workout_log_id`)
+- `idx_exercise_sets_plan_day_id` on (`plan_day_id`)
+- `idx_exercise_sets_plan_day_sort` on (`plan_day_id`, `sort_order`) -- composite
 - `idx_exercise_sets_exercise_name` on (`exercise_name`)
 - `idx_exercise_sets_workout_sort` on (`workout_log_id`, `sort_order`) -- composite
 - `idx_exercise_sets_workout_exercise` on (`workout_log_id`, `exercise_name`) -- composite
+
+---
+
+### workout_structure_blocks
+
+Structured-format primitives (EMOM, AMRAP, intervals, etc.) attached to a workout or plan day. Like `exercise_sets`, each block is owned by exactly one of `workout_log_id` / `plan_day_id`. Added in migration `0041`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `workout_log_id` | `varchar(255)` | nullable, FK -> `workout_logs.id` ON DELETE CASCADE |
+| `plan_day_id` | `varchar(255)` | nullable, FK -> `plan_days.id` ON DELETE CASCADE |
+| `section_type` | `varchar(50)` | NOT NULL |
+| `format_type` | `varchar(50)` | NOT NULL |
+| `duration_seconds` | `integer` | nullable |
+| `rounds` | `integer` | nullable |
+| `work_seconds` | `integer` | nullable |
+| `rest_seconds` | `integer` | nullable |
+| `duration_minutes` | `integer` | nullable |
+| `round_count` | `integer` | nullable |
+| `time_cap_minutes` | `integer` | nullable |
+| `work_interval_sec` | `integer` | nullable |
+| `rest_interval_sec` | `integer` | nullable |
+| `score` | `jsonb` | nullable — block scoring, added in migration `0046` |
+| `sequence_order` | `integer` | NOT NULL, default `0` |
+| `instructions` | `text` | nullable |
+| `sort_order` | `integer` | NOT NULL, default `0` |
+
+**Check constraints:**
+- `workout_structure_block_single_owner_check`: `(workout_log_id IS NULL) <> (plan_day_id IS NULL)`
+- Non-negative / positive guards on the duration, rounds, and interval columns
+
+**Indexes:**
+- `idx_workout_structure_blocks_workout_log_id` on (`workout_log_id`)
+- `idx_workout_structure_blocks_plan_day_id` on (`plan_day_id`)
+- `idx_workout_structure_blocks_workout_sort` on (`workout_log_id`, `sort_order`) -- composite
+- `idx_workout_structure_blocks_plan_day_sort` on (`plan_day_id`, `sort_order`) -- composite
+
+---
+
+### workout_structure_steps
+
+Individual steps inside a `workout_structure_block` (e.g. each minute of an EMOM). Added in migration `0041`, with EMOM minute support in `0043`/`0044`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `block_id` | `varchar(255)` | NOT NULL, FK -> `workout_structure_blocks.id` ON DELETE CASCADE |
+| `step_number` | `integer` | NOT NULL |
+| `minute_index` | `integer` | nullable |
+| `step_type` | `varchar(50)` | NOT NULL, default `'work'` |
+| `exercise_name` | `varchar(255)` | nullable |
+| `category` | `varchar(255)` | nullable |
+| `custom_label` | `text` | nullable |
+| `target_reps` | `integer` | nullable |
+| `target_time` | `real` | nullable |
+| `target_distance` | `real` | nullable |
+| `target_weight` | `real` | nullable |
+| `targets` | `jsonb` | nullable |
+| `step_role` | `varchar(50)` | nullable |
+| `intensity` | `jsonb` | nullable |
+| `load_mode` | `varchar(50)` | nullable |
+| `unilateral_mode` | `varchar(50)` | nullable |
+| `tempo` | `jsonb` | nullable |
+| `constraint_tags` | `jsonb` | nullable |
+| `group_id` | `varchar(255)` | nullable |
+| `group_meta` | `jsonb` | nullable |
+
+**Check constraints:**
+- `workout_structure_step_number_positive_check`: `step_number > 0`
+- `workout_structure_step_type_check`: `step_type IN ('work', 'rest', 'transition')`
+- `workout_structure_rest_step_target_restrictions_check`: rest steps may not carry exercise/target fields
+
+**Indexes:**
+- `idx_workout_structure_steps_block_id` on (`block_id`)
+- `idx_workout_structure_steps_block_step_unique` -- UNIQUE on (`block_id`, `step_number`)
+- `idx_workout_structure_steps_block_minute_unique` -- UNIQUE on (`block_id`, `minute_index`), added in migration `0044`
+
+---
+
+### structured_exercise_backfill_reviews
+
+Tracks owners (plan days / workout logs) whose structured exercise data needs manual review during the legacy-to-structured backfill.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `owner_type` | `text` | NOT NULL, CHECK in (`planDay`, `workoutLog`) |
+| `owner_id` | `varchar(255)` | NOT NULL |
+| `user_id` | `varchar(255)` | nullable, FK -> `users.id` ON DELETE SET NULL |
+| `status` | `text` | NOT NULL, CHECK in (`needs_manual_review`, `resolved`) |
+| `reason` | `text` | nullable |
+| `first_seen_at` | `timestamp` | default `now()` |
+| `last_seen_at` | `timestamp` | default `now()` |
+| `updated_at` | `timestamp` | default `now()` |
+
+**Indexes:**
+- `idx_structured_exercise_backfill_owner_unique` -- UNIQUE on (`owner_type`, `owner_id`)
+- `idx_structured_exercise_backfill_status` on (`status`)
+- `idx_structured_exercise_backfill_user_id` on (`user_id`)
+
+---
+
+### structured_exercise_health_counters
+
+Daily counters tracking the health of structured-exercise parsing/hydration. Composite primary key on `(day, owner_type, source, counter_name)`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `day` | `date` | NOT NULL, composite PK |
+| `owner_type` | `text` | NOT NULL, composite PK, CHECK in (`workout_log`, `plan_day`) |
+| `source` | `text` | NOT NULL, composite PK, CHECK in (`manual`, `voice`, `photo`, `import`) |
+| `counter_name` | `text` | NOT NULL, composite PK, CHECK against a fixed counter-name list |
+| `value` | `integer` | NOT NULL, default `0` |
+| `updated_at` | `timestamp` | default `now()` |
+
+---
+
+### structured_exercise_health_daily_rollups
+
+Per-day rollup of structured-exercise coverage, keyed by `day`.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `day` | `date` | PK |
+| `total_rows` | `integer` | NOT NULL, default `0` |
+| `structured_rows` | `integer` | NOT NULL, default `0` |
+| `legacy_only_rows` | `integer` | NOT NULL, default `0` |
+| `failed_hydration_backlog` | `integer` | NOT NULL, default `0` |
+| `legacy_only_pct` | `real` | NOT NULL, default `0` |
+| `updated_at` | `timestamp` | default `now()` |
+
+---
+
+### ai_usage_logs
+
+Per-call Gemini token-consumption records, used to cap daily AI spend and flag anomalies.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `model` | `varchar(100)` | NOT NULL |
+| `feature` | `varchar(50)` | NOT NULL |
+| `input_tokens` | `integer` | NOT NULL, default `0` |
+| `output_tokens` | `integer` | NOT NULL, default `0` |
+| `estimated_cost_cents` | `real` | NOT NULL, default `0` |
+| `created_at` | `timestamp` | NOT NULL, default `now()` |
+
+**Indexes:**
+- `idx_ai_usage_logs_user_created` on (`user_id`, `created_at`) -- composite
+
+---
+
+### push_subscriptions
+
+Web Push API subscription objects so the server can deliver push notifications to opted-in devices.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
+| `user_id` | `varchar(255)` | NOT NULL, FK -> `users.id` ON DELETE CASCADE |
+| `endpoint` | `text` | NOT NULL |
+| `p256dh` | `text` | NOT NULL |
+| `auth` | `text` | NOT NULL |
+| `created_at` | `timestamp` | default `now()` |
+
+**Indexes:**
+- `idx_push_subscriptions_user_id` on (`user_id`)
+- `idx_push_subscriptions_user_endpoint` -- UNIQUE on (`user_id`, `endpoint`)
 
 ---
 
@@ -476,18 +684,25 @@ All tables have explicit Drizzle relation definitions in `shared/schema/tables.t
 
 | Relation | Type | Description |
 |---|---|---|
-| `usersRelations` | `many` | trainingPlans, workoutLogs, chatMessages, coachingMaterials, customExercises, timelineAnnotations; `one` stravaConnection, garminConnection |
-| `trainingPlansRelations` | `one` user, `many` planDays |
-| `planDaysRelations` | `one` trainingPlan, `many` workoutLogs |
+| `usersRelations` | `many` trainingPlans, workoutLogs, customExercises, chatMessages, coachingMaterials, documentChunks, aiUsageLogs, pushSubscriptions, trainingStyles, mafProfiles, mafTestResults, mafWorkoutAnalyses; `one` stravaConnection, garminConnection |
+| `trainingPlansRelations` | `one` user; `many` planDays (`days`), workoutLogs |
+| `planDaysRelations` | `one` trainingPlan; `many` workoutLogs, exerciseSets |
 | `workoutLogsRelations` | `one` user, planDay (optional), trainingPlan (optional); `many` exerciseSets |
-| `exerciseSetsRelations` | `one` workoutLog |
+| `exerciseSetsRelations` | `one` workoutLog (optional), planDay (optional) |
 | `customExercisesRelations` | `one` user |
 | `chatMessagesRelations` | `one` user |
-| `coachingMaterialsRelations` | `one` user, `many` documentChunks |
-| `documentChunksRelations` | `one` coachingMaterial |
+| `coachingMaterialsRelations` | `one` user; `many` documentChunks (`chunks`) |
+| `documentChunksRelations` | `one` coachingMaterial, user |
 | `stravaConnectionsRelations` | `one` user |
 | `garminConnectionsRelations` | `one` user |
-| `timelineAnnotationsRelations` | `one` user |
+| `aiUsageLogsRelations` | `one` user |
+| `pushSubscriptionsRelations` | `one` user |
+| `userTrainingStyleRelations` | `one` user |
+| `mafProfileRelations` | `one` user |
+| `mafTestResultsRelations` | `one` user |
+| `mafWorkoutAnalysisRelations` | `one` user, workoutLog |
+
+Note: `timeline_annotations`, `rate_limit_buckets`, `server_runtime_cache`, and the `structured_exercise_*` tables do not declare Drizzle relations and are queried directly.
 
 ---
 
@@ -628,7 +843,7 @@ The `fromDriver` function parses the PostgreSQL `[0.1,0.2,...]` text representat
 
 ### Embedding Dimensions
 
-The embedding column uses **3072 dimensions**, matching the output of the Gemini embedding model. This is configured in the table definition:
+The embedding column uses **3072 dimensions**, matching the output of the Gemini embedding model `gemini-embedding-001`. The dimension count is the `EMBEDDING_DIMENSIONS` constant in `server/gemini/client.ts` (alongside the `EMBEDDING_MODEL` constant), and is mirrored in the table definition:
 
 ```typescript
 embedding: vector("embedding", { dimensions: 3072 }),
@@ -667,45 +882,18 @@ LIMIT $3
 
 ### Schema Bootstrapping
 
-The `document_chunks` table is **not** managed by Drizzle migrations on the main database. Instead, it is created at application startup by `ensureVectorSchema()` in `server/maintenance.ts`, which:
+The `document_chunks` table is **not** managed by Drizzle migrations. Instead, it is created at application startup by `runStartupMaintenance()` in `server/maintenance.ts`, which calls `ensurePgvectorExtension()` and then `ensureVectorSchema()`. Together these:
 
-1. Checks if the `document_chunks` table exists on the vector database
-2. Creates it if missing, with the `vector(3072)` column type
-3. Creates btree indexes on `material_id` and `user_id`
-4. Migrates the `embedding` column from `text` to `vector` type if needed (for upgrades from earlier versions)
+1. Ensure the pgvector extension via `CREATE EXTENSION IF NOT EXISTS vector`
+2. Check if the `document_chunks` table exists on the vector database and `CREATE TABLE` it if missing, with the `vector(3072)` column type
+3. Migrate the `embedding` column from `text` to `vector` type if needed (for upgrades from earlier versions) — this must run before the HNSW index, since `hnsw(embedding vector_cosine_ops)` requires a vector column
+4. Create the `idx_document_chunks_embedding_hnsw` HNSW index (`vector_cosine_ops`, `m = 16`, `ef_construction = 64`) if it does not already exist
 
-The pgvector extension itself is ensured via `CREATE EXTENSION IF NOT EXISTS vector` at startup.
+Because this runs against the vector pool, the `document_chunks` table can live on a separate connection (`VECTOR_DATABASE_URL`) independent of the main migration history.
 
 ---
 
 ## Storage Layer
-
-### Architecture
-
-## Transaction Patterns
-
-Drizzle transactions are used for atomic multi-table operations. Example from `workoutService.ts`:
-
-```typescript
-// Replace exercise sets atomically -- delete old, insert new
-await db.transaction(async (tx) => {
-  await tx.delete(exerciseSets)
-    .where(eq(exerciseSets.workoutLogId, workoutId));
-  if (setRows.length > 0) {
-    await tx.insert(exerciseSets).values(setRows);
-  }
-});
-```
-
-The workout creation flow uses multiple related operations:
-1. Insert `workoutLogs` record
-2. If linked to a plan day, update `planDays` status to "completed"
-3. Expand parsed exercises into `exerciseSets` rows
-4. Upsert `customExercises` for any new custom exercise names
-
-These run in a service-level orchestration (not a single DB transaction) because some steps involve external calls (AI parsing). The exercise set replacement uses a proper transaction to avoid partial state.
-
----
 
 ### Architecture
 
@@ -717,8 +905,12 @@ interface IStorage {
   workouts: WorkoutStorage;
   plans: PlanStorage;
   timeline: TimelineStorage;
+  timelineAnnotations: TimelineAnnotationsStorage;
   analytics: AnalyticsStorage;
   coaching: CoachingStorage;
+  idempotency: IdempotencyStorage;
+  aiUsage: AiUsageStorage;
+  push: PushStorage;
 }
 ```
 
@@ -728,15 +920,18 @@ Each domain class owns a cohesive slice of functionality:
 
 | Class | File | Responsibility |
 |---|---|---|
-| `UserStorage` | `server/storage/users.ts` | Users, chat, Strava connection, custom exercises, notification bookkeeping |
-| `WorkoutStorage` | `server/storage/workouts.ts` | Workout logs, exercise sets, Strava activity dedupe |
+| `UserStorage` | `server/storage/users.ts` | Users, chat, Strava/Garmin connections, custom exercises, notification bookkeeping |
+| `WorkoutStorage` | `server/storage/workouts.ts` | Workout logs, exercise sets, Strava/Garmin activity dedupe |
 | `PlanStorage` | `server/storage/plans.ts` | Training plans, plan days, scheduling, missed-day marking |
 | `TimelineStorage` | `server/storage/timeline.ts` | Unified timeline and upcoming planned days |
+| `TimelineAnnotationsStorage` | `server/storage/timelineAnnotations.ts` | Timeline annotation bands (injury/illness/travel/rest) |
 | `AnalyticsStorage` | `server/storage/analytics.ts` | Weekly stats, date-range queries, missed-workout reporting |
-| `CoachingStorage` | `server/storage/coaching.ts` | Coaching materials and RAG document chunks |
+| `CoachingStorage` | `server/storage/coaching.ts` | Coaching materials and RAG document chunks (on the vector pool) |
 | `IdempotencyStorage` | `server/storage/idempotency.ts` | Idempotency key caching (get, set, cleanup) |
+| `AiUsageStorage` | `server/storage/aiUsage.ts` | AI token usage logging and daily-spend totals |
+| `PushStorage` | `server/storage/push.ts` | Web Push subscription storage |
 
-Shared query logic (e.g., joining exercise sets with workout dates) is extracted into `server/storage/shared.ts`.
+Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, and `timelineWindow.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
 
 ### Composed Facade (`server/storage/index.ts`)
 
@@ -750,8 +945,12 @@ export const storage: IStorage = {
   workouts,
   plans: new PlanStorage(),
   timeline: new TimelineStorage(workouts),
+  timelineAnnotations: new TimelineAnnotationsStorage(),
   analytics: new AnalyticsStorage(),
   coaching: new CoachingStorage(),
+  idempotency: new IdempotencyStorage(),
+  aiUsage: new AiUsageStorage(),
+  push: new PushStorage(),
 };
 ```
 
@@ -792,7 +991,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **49 migrations**, `0000` through `0048`:
 
 ```
 migrations/
@@ -800,25 +999,24 @@ migrations/
   0001_flippant_shriek.sql
   0002_handy_living_lightning.sql
   ...
-  0015_thin_nextwave.sql
   0016_rename_hyrox_station_to_functional.sql
   0017_workout_logs_strava_unique.sql
   0018_backfill_plan_dates_and_workout_links.sql
   0019_add_idempotency_keys.sql
-  0020_spicy_rocket_racer.sql
-  0021_broken_serpent_society.sql
-  0022_closed_blazing_skull.sql
-  0023_cultured_ben_parker.sql
-  0024_hot_sue_storm.sql
-  0025_early_timeslip.sql
-  0026_smart_frog_thor.sql
+  ...
   0027_add_coach_notes.sql
   0028_plan_day_exercise_sets.sql
+  ...
+  0041_workout_structure_primitives.sql
+  ...
+  0046_complex_workout_block_scores.sql
+  0047_last_magik.sql
+  0048_shared_runtime_state.sql
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0028_snapshot.json
+    0048_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.
@@ -834,17 +1032,22 @@ Notable recent migrations:
 - `0019`: Creates the `idempotency_keys` table for server-side idempotency
 - `0027`: Adds coach-note columns to `plan_days` (`ai_rationale`, `ai_note_updated_at`, `ai_inputs_used`) so the auto-coach can persist prescriptive rationale per day.
 - `0028`: Adds `plan_day_id` FK on `exercise_sets`, allowing coach-prescribed exercises to be attached to a plan day before any workout is logged.
+- `0041`: Adds the `workout_structure_blocks` and `workout_structure_steps` tables — the structured-format (EMOM/AMRAP/interval) primitives.
+- `0043`: Adds EMOM support to structured blocks.
+- `0044`: Adds the unique index on `(block_id, minute_index)` in `workout_structure_steps`.
+- `0046`: Adds the `score` JSONB column to `workout_structure_blocks`.
+- `0047`: Adds the `onboarding_completed` column to `users`.
 - `0048`: Adds `rate_limit_buckets` and `server_runtime_cache` so rate limits and short-lived auth/AI/RAG caches are shared across app replicas.
 
 ### Startup Migration
 
-In addition to Drizzle Kit migrations, `server/maintenance.ts` runs at application startup to:
+In addition to Drizzle Kit migrations, `runStartupMaintenance()` in `server/maintenance.ts` runs at application startup to:
 
-1. Execute Drizzle migrations (`runDrizzleMigrations`)
-2. Ensure schema is up to date (`ensureSchemaUpToDate`)
-3. Enable the pgvector extension (`ensurePgvectorExtension`)
+1. Test the database connection (`testDatabaseConnection`)
+2. Execute Drizzle migrations (`runDrizzleMigrations`)
+3. Ensure the pgvector extension (`ensurePgvectorExtension`)
 4. Bootstrap the vector schema (`ensureVectorSchema`)
-5. Clean orphaned data and backfill missing fields
+5. Mark past planned days as missed and reset stale `isAutoCoaching` flags
 
 ---
 
@@ -896,13 +1099,14 @@ for (const ex of exercises) {
 - Single-column: `plan_id`, `scheduled_date`, `status`
 - Composite: `(plan_id, week_number)` for week-based queries, `(plan_id, status)` for filtering by plan and completion state
 
-**workout_logs** (7 indexes):
-- Single-column: `user_id`, `date`, `plan_day_id`, `plan_id`, `strava_activity_id`, `source`
+**workout_logs** (9 indexes):
+- Single-column: `user_id`, `date`, `plan_day_id`, `plan_id`, `strava_activity_id`, `garmin_activity_id`, `source`
 - Composite: `(user_id, date)` for the most common query pattern (user's workouts by date)
+- Partial unique: `(user_id, strava_activity_id)` and `(user_id, garmin_activity_id)` for per-user import dedupe
 
-**exercise_sets** (4 indexes):
-- Single-column: `workout_log_id`, `exercise_name`
-- Composite: `(workout_log_id, sort_order)` for ordered display, `(workout_log_id, exercise_name)` for per-exercise lookups within a workout
+**exercise_sets** (6 indexes):
+- Single-column: `workout_log_id`, `plan_day_id`, `exercise_name`
+- Composite: `(workout_log_id, sort_order)` for ordered display, `(workout_log_id, exercise_name)` for per-exercise lookups within a workout, `(plan_day_id, sort_order)` for prescribed-row ordering
 
 **chat_messages** (2 indexes):
 - Single-column: `user_id`
@@ -970,7 +1174,7 @@ export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({
 });
 ```
 
-This pattern is used for all entity insert/update schemas in `shared/schema/types.ts`.
+This pattern is used for all entity insert/update schemas, which live in the `shared/schema/types/` modules (e.g. `plans.ts`, `workouts.ts`, `coaching.ts`, `connections.ts`, `annotations.ts`). `createInsertSchema` and the shared patched `z` instance come from `shared/schema/zod.ts`, which binds `drizzle-zod` to the same `zod` constructor used elsewhere (required for the `.openapi()` prototype patch).
 
 ### Inferred Types
 
@@ -985,7 +1189,7 @@ These types are used throughout the storage layer and API routes, ensuring that 
 
 ### Validation Schemas
 
-Request-level validation schemas are defined alongside the types in `shared/schema/types.ts`:
+Request-level validation schemas are defined alongside the types in the `shared/schema/types/` modules (notably `requests.ts`):
 
 - `updateUserPreferencesSchema` -- validates preference updates with enum constraints
 - `chatRequestSchema` -- validates chat messages with length limits, truncates history to last 20 messages

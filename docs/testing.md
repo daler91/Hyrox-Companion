@@ -1,6 +1,6 @@
 # Testing Infrastructure
 
-This document describes the testing infrastructure for the Hyrox Companion application, covering unit tests, integration tests, end-to-end tests, CI/CD workflows, and conventions.
+This document describes the testing infrastructure for the fitai.coach application, covering unit tests, integration tests, end-to-end tests, CI/CD workflows, and conventions.
 
 ---
 
@@ -30,14 +30,13 @@ The project follows a testing pyramid with three layers:
 
 | Layer | Count | Location |
 |-------|-------|----------|
-| Unit/component/route tests (Vitest) | ~179 files | `client/src`, `server`, `shared`, and `test/` `*.test.{ts,tsx}` files |
+| Unit/component/route tests (Vitest) | ~176 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files |
 | Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
-| Smoke tests | ~25 cases | `test/` + `vitest.smoke.config.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
+| Smoke tests | 1 file | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
 | Cypress E2E specs | 12 files | `cypress/e2e/*.cy.ts` |
 
 The exact Vitest assertion count changes frequently as review-fix branches land.
 Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current file count.
-Cypress contributes **~60 `it()` blocks across 12 specs**.
 
 ### Coverage thresholds
 
@@ -72,11 +71,15 @@ exclude: ['**/*.integration.test.ts', ...] // Integration tests run separately
 | `@` | `client/src` |
 | `@shared` | `shared` |
 
-**Setup file** (`vitest.setup.ts`) imports `@testing-library/jest-dom/vitest` for DOM matchers (e.g., `toBeInTheDocument()`) and sets dummy environment variables so modules that read `process.env` at import time do not crash:
+**Setup file** (`vitest.setup.ts`):
 
-- `DATABASE_URL` -- dummy Postgres URL
-- `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` -- dummy values
-- `ENCRYPTION_KEY` -- 32-character test key
+- Pins `process.env.TZ = "UTC"` so date formatting matches CI on every machine.
+- Imports `@testing-library/jest-dom/vitest` for DOM matchers (e.g., `toBeInTheDocument()`).
+- Registers the `jest-axe` `toHaveNoViolations()` matcher via `expect.extend()` for automated a11y checks.
+- Sets dummy environment variables so modules that read `process.env` at import time do not crash:
+  - `DATABASE_URL` -- dummy Postgres URL
+  - `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` -- dummy values
+  - `ENCRYPTION_KEY` -- 32-character test key
 
 ### Integration test configuration (`vitest.integration.config.ts`)
 
@@ -178,11 +181,10 @@ Custom hooks are tested in files under `client/src/hooks/__tests__/`. These test
 
 ### Accessibility tests (jest-axe)
 
-Automated accessibility assertions live alongside the component they cover, using the filename convention **`*.a11y.test.tsx`** inside `__tests__/` directories. Each test renders the component, runs `axe()` against the markup, and asserts `toHaveNoViolations()`.
+Automated accessibility assertions live alongside the component they cover, using the filename convention **`*.a11y.test.tsx`** inside `__tests__/` directories. Each test renders the component, runs `axe()` against the markup, and asserts `toHaveNoViolations()`. The `toHaveNoViolations` matcher is registered globally in `vitest.setup.ts`, so individual test files only need to import `axe`.
 
 ```ts
-import { axe, toHaveNoViolations } from "jest-axe";
-expect.extend(toHaveNoViolations);
+import { axe } from "jest-axe";
 
 it("has no detectable a11y violations", async () => {
   const { container } = render(<WorkoutHeader title="Log Workout" />);
@@ -193,8 +195,13 @@ it("has no detectable a11y violations", async () => {
 Current a11y coverage includes:
 
 - `client/src/pages/__tests__/not-found.a11y.test.tsx`
+- `client/src/components/__tests__/MetricCard.a11y.test.tsx`
+- `client/src/components/__tests__/RpeSelector.a11y.test.tsx`
+- `client/src/components/__tests__/Breadcrumbs.a11y.test.tsx`
+- `client/src/components/ui/__tests__/OfflineIndicator.a11y.test.tsx`
 - `client/src/components/workout/__tests__/WorkoutHeader.a11y.test.tsx`
 - `client/src/components/timeline/__tests__/TimelineWorkoutCard.a11y.test.tsx`
+- `client/src/components/timeline/__tests__/CoachReviewingIndicator.a11y.test.tsx`
 - `client/src/components/coach/__tests__/SuggestionCard.a11y.test.tsx`
 
 Adding a new a11y test is part of the PR checklist for any user-facing component change. The tests run as part of the normal `pnpm test` Vitest pool — there is no separate command or workflow.
@@ -339,38 +346,30 @@ it("shows the workout form", () => {
 
 ## Production Smoke Tests
 
-**File:** `server/routes/tests/smoke.test.ts`
+**File:** `server/routes/__tests__/routeRegistration.smoke.test.ts`
 
-A dedicated suite of ~25 full-stack smoke tests that build and start the production server as a child process, then run HTTP assertions against it.
+A fast route-registration smoke test that imports `registerRoutes`, mounts it on a bare Express app, and asserts the route tree wires up correctly (for example, that the workouts router is mounted exactly once). All sub-routers, auth setup, and CSRF middleware are mocked, so the test runs quickly without a real server, database, or build step.
 
 ### Configuration
 
-Smoke tests use a **separate Vitest config** (`vitest.smoke.config.ts`):
+The smoke test uses a **separate Vitest config** (`vitest.smoke.config.ts`):
 
-- Excluded from the standard unit test suite
-- Runs on a dedicated port (`5111`) with `ALLOW_DEV_AUTH_BYPASS=true`
+- Included only via the `**/smoke.test.ts` glob; excluded from the standard unit test suite
 - Uses `node` environment (no jsdom)
-- Non-blocking in CI (separate workflow step)
+- Shares the integration setup file (`vitest.integration.setup.ts`)
+- Runs with `fileParallelism: false`
+- Runs as its own step in the Cypress workflow (`cypress.yml`)
 
 ### What's Tested
 
-- Health endpoint returns correct status during startup and after ready
-- API endpoints return expected responses under dev auth bypass
-- CSRF token flow (fetch token, attach header, verify mutating request succeeds)
-- Static file serving (SPA fallback, asset caching headers)
-- Error handling (404 for unknown API routes, validation errors)
-
-### Implementation Details
-
-- Spawns the built server (`dist/index.js`) as a child process
-- Uses a custom `CookieJar` class for native `fetch` cookie management
-- Waits for the health endpoint to return `"ok"` before running tests
-- Cleans up the child process in `afterAll`
+- `registerRoutes()` mounts each sub-router on the Express app
+- The workouts router is mounted exactly once (no duplicate registration)
 
 ### Running Smoke Tests
 
 ```bash
-pnpm run build
+pnpm test:smoke
+# equivalent to:
 pnpm exec vitest run --config vitest.smoke.config.ts
 ```
 
@@ -399,9 +398,10 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
   3. Enable pgvector extension
   4. Run integration tests: `pnpm exec vitest run --config vitest.integration.config.ts`
   5. Push database schema with `drizzle-kit push`
-  6. Start the built server in test mode (`NODE_ENV=test`, `ALLOW_DEV_AUTH_BYPASS=true`)
-  7. Wait for server health check at `/api/v1/health`
-  8. Run Cypress with `record: true` and `parallel: true` (Cypress Cloud)
+  6. Run the smoke test: `pnpm exec vitest run --config vitest.smoke.config.ts`
+  7. Start the built server in test mode (`NODE_ENV=test`, `ALLOW_DEV_AUTH_BYPASS=true`)
+  8. Wait for server health check at `/api/v1/health`
+  9. Run Cypress, recording to Cypress Cloud only when `CYPRESS_RECORD_KEY` is set
 
 ### 3. Check Migrations (`migrations.yml`)
 
@@ -591,11 +591,11 @@ project-root/
         plans.test.ts
         preferences.test.ts
         workouts.test.ts
+        routeRegistration.smoke.test.ts  # Route-registration smoke test
       tests/                         # Integration tests (real database)
         helpers.ts                   # Integration test setup helper
         api.integration.test.ts
         post-migration.integration.test.ts
-        smoke.test.ts                # Production smoke tests (~25 tests)
     services/
       aiEval.test.ts                 # AI evaluation tests
       aiService.test.ts              # AI service tests

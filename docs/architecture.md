@@ -2,7 +2,7 @@
 
 # Architecture Guide
 
-This document describes the high-level architecture of the Hyrox Companion (fitai.coach) project -- a full-stack TypeScript monorepo combining a React frontend, an Express API server, PostgreSQL with pgvector, a modular text AI provider layer, Gemini embeddings and vision parsing, Clerk authentication, Strava and Garmin Connect activity sync, and a GDPR-compliant opt-in consent model for every outbound data flow.
+This document describes the high-level architecture of the fitai.coach project -- a full-stack TypeScript monorepo combining a React frontend, an Express API server, PostgreSQL with pgvector, a modular text AI provider layer, Gemini embeddings and vision parsing, Clerk authentication, Strava and Garmin Connect activity sync, and a GDPR-compliant opt-in consent model for every outbound data flow.
 
 ---
 
@@ -92,18 +92,21 @@ sequenceDiagram
 
 **Middleware stack order** (as registered in `server/index.ts`):
 
-1. `compression()` -- gzip/brotli response compression
-2. `cors()` -- origin allowlist with `credentials: true`
-3. `helmet()` -- security headers (HSTS, X-Frame-Options, etc.)
+1. `compression()` -- gzip/brotli response compression (skipped for `text/event-stream`)
+2. `GET /api/v1/health` -- health endpoint, registered **before CORS** so platform probes always reach it
+3. `cors()` -- origin allowlist with `credentials: true`
 4. CSP nonce middleware -- per-request nonce for `<script>` tags (production only)
-5. Custom CSP override -- fine-grained Content-Security-Policy with Clerk and Strava domains
-6. Permissions-Policy header
-7. `express.json()` -- body parsing with 100kb default limit (2mb for `/api/v1/coaching-materials`)
-8. `express.urlencoded()` -- form body parsing (100kb limit)
-9. `pino-http` -- structured request logging with Clerk userId extraction
-10. `doubleCsrfProtection` -- CSRF verification on mutating requests (double-submit cookie via `csrf-csrf`)
-11. `idempotencyMiddleware` -- server-side idempotency enforcement via `X-Idempotency-Key` header (after auth)
-12. Route handlers (registered via `registerRoutes`)
+5. `helmet()` -- security headers (HSTS with preload, X-Frame-Options, etc.)
+6. Custom CSP override -- fine-grained Content-Security-Policy with Clerk and Strava domains
+7. Permissions-Policy header
+8. `express.json()` -- body parsing: 2mb for `/api/v1/coaching-materials`, 10mb for image-parse routes, 100kb default
+9. `express.urlencoded()` -- form body parsing (100kb limit)
+10. `cookieParser()` -- required by the CSRF double-submit middleware
+11. `pino-http` -- structured request logging with Clerk userId extraction
+12. request-context wiring -- async context carrying `requestId` / `userId`
+13. Route handlers (registered via `registerRoutes`)
+
+`registerRoutes()` then mounts `csrfProtection` on `/api/v1`; idempotency runs per protected mutating route via the `protectedRouteBuilder` guards rather than as a global middleware.
 
 ---
 
@@ -166,6 +169,7 @@ sequenceDiagram
 - The pipeline uses a `try/finally` block to guarantee `isAutoCoaching` is reset to `false` even on failure.
 - Suggestions can either `replace` or `append` content to `mainWorkout` or `accessory` fields on plan days.
 - The `aiSource` field on each plan day records whether the AI used RAG chunks (`"rag"`), legacy materials (`"legacy"`), or neither (`null`).
+- Suggestions pass through a safety layer (`aiSafety.ts`) and a repeat-modification guard (`aiModificationGuard.ts`) that suppresses repeated AI fatigue/volume reductions on an unchanged workout. See [AI and RAG](./ai-and-rag.md) for the guard's fingerprinting logic.
 
 ---
 
@@ -346,7 +350,7 @@ graph TD
 
     subgraph Services
         S_COACH["coachService\n(triggerAutoCoach)"]
-        S_AI["aiService\n(buildTrainingContext)"]
+        S_AI["services/ai\n(buildTrainingContext)"]
         S_RAG["ragRetrieval\n(retrieveCoachingContext)"]
         S_RAG_SVC["ragService\n(retrieveRelevantChunks)"]
         S_AI_CTX["aiContextService"]
@@ -357,6 +361,7 @@ graph TD
         GEMINI["Google Gemini API\n(embeddings + vision)"]
         CLERK["Clerk Auth"]
         STRAVA_API["Strava API"]
+        GARMIN_API["Garmin Connect"]
     end
 
     STORAGE["storage\n(Drizzle ORM)"]
@@ -451,7 +456,7 @@ flowchart LR
 ```
 
 **Key details:**
-- **Fixed UTC schedule**: `"0 9 * * *"` in `server/cron.ts` — daily at 09:00 UTC. Three other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, stale `isAutoCoaching` recovery every 10 minutes).
+- **Fixed UTC schedule**: `"0 9 * * *"` in `server/cron.ts` — daily at 09:00 UTC. Seven other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, and a one-shot startup email catch-up). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
 - **Startup catch-up**: if the server boots after 09:00 UTC (e.g. a Railway restart), `cron.ts` schedules a one-shot catch-up run after 30 s. The per-user "sent" markers below keep this idempotent.
 - **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the final "mark as sent" happens *after* Resend returns, so a retry after a post-send DB failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
 - **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — useful when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
