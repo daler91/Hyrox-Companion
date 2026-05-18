@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Hyrox Companion uses **TanStack Query (React Query)** for server state management and **local React state** (`useState`, `useRef`, `useCallback`) for UI state. There is no global state store (Redux, Zustand, etc.). An offline mutation queue backed by localStorage provides resilience when the network is unavailable.
+fitai.coach uses **TanStack Query (React Query v5)** for server state management and **local React state** (`useState`, `useRef`, `useCallback`, `useReducer`) for UI state. There is no global state store (Redux, Zustand, etc.). An offline mutation queue backed by localStorage provides resilience when the network is unavailable.
 
 ---
 
@@ -56,15 +56,25 @@ const queryClient = new QueryClient({
   - `"throw"` (default) -- Throws an error, triggering React Query's error state.
   - `"returnNull"` -- Returns `null`, useful for optional auth checks.
 
-### RateLimitError
+### Custom Error Types
 
-A custom error class that extracts the `Retry-After` header from 429 responses:
+`queryClient.ts` exports two custom error classes thrown from `throwIfResNotOk`:
+
+- **`RateLimitError`** -- Thrown on a 429 response. Extracts the `Retry-After` header (in seconds, or `null` if absent).
+- **`AiBudgetExceededError`** -- Thrown on a 429 whose body carries `code: "AI_BUDGET_EXCEEDED"`. Carries `currentCostCents` and `limitCents` so the UI can explain the daily AI spend cap.
 
 ```typescript
 class RateLimitError extends Error {
   readonly retryAfter: number | null;
 }
+
+class AiBudgetExceededError extends Error {
+  readonly currentCostCents: number;
+  readonly limitCents: number;
+}
 ```
+
+`resetCsrfToken()` is also exported here -- it clears the in-memory CSRF token cache on auth state transitions.
 
 ---
 
@@ -74,9 +84,9 @@ class RateLimitError extends Error {
 
 ### Base Functions
 
-- `apiRequest(method, url, data?, signal?, extraHeaders?)` -- Low-level fetch wrapper. Sets `Content-Type: application/json`, includes credentials, handles error responses. Automatically attaches the `x-csrf-token` header on mutating requests (POST/PUT/PATCH/DELETE).
-- `typedRequest<TResponse>(method, url, data?)` -- Returns parsed JSON typed as `TResponse`.
-- `rawRequest(method, url, data?)` -- Returns the raw `Response` object (for streaming, file downloads).
+- `apiRequest(method, url, data?, signal?, extraHeaders?)` -- Low-level fetch wrapper in `queryClient.ts`. Sets `Content-Type: application/json` when a body is present, includes credentials, handles error responses. Automatically attaches the `x-csrf-token` header on mutating requests (POST/PUT/PATCH/DELETE) and retries once with a fresh token on a 403.
+- `typedRequest<TResponse>(method, url, data?, options?)` -- Returns parsed JSON typed as `TResponse`. `options` accepts `timeoutMs` (default 15s), `signal`, and `headers`; the timeout is enforced via an `AbortController`.
+- `rawRequest(method, url, data?, options?)` -- Returns the raw `Response` object (for streaming, file downloads). Same `options` as `typedRequest`.
 
 ### CSRF Token Management
 
@@ -88,12 +98,12 @@ Each API domain has a dedicated module in `client/src/lib/api/`:
 
 | Module | File | Functions |
 |--------|------|-----------|
-| Workouts | `workouts.ts` | `create()`, `list()`, `get()`, `update()`, `delete()`, `getUnstructured()`, `reparse()`, `batchReparse()` |
-| Plans | `plans.ts` | CRUD, `import()`, `sample()`, `generate()`, `schedule()`, `updateDay()`, `updateDayStatus()` |
-| Coaching | `coaching.ts` | Chat (`send()`, `sendStream()`, `saveMessage()`), materials CRUD, `getRagStatus()`, `reEmbed()` |
-| Analytics | `analytics.ts` | `getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` (returns `currentStats` + optional `previousStats` for week-over-week deltas), timeline, suggestions |
-| User | `user.ts` | `auth.getUser()`, `preferences.get/update()` (includes `emailNotifications`, `emailWeeklySummary`, `emailMissedReminder`, `aiCoachEnabled`, `onboardingCompleted`), `strava.*`, `garmin.*` (`status/connect/disconnect/sync`), `email.check()`, `account.delete()` |
-| Exercises | `exercises.ts` | `listCustom()`, `create()`, `getHistory()` |
+| Workouts | `workouts.ts` | `create()`, `list()`, `latest()`, `get()`, `update()`, `updateBlockScore()`, `delete()`, `bulkDelete()`, `combine()`, `getUnstructured()`, `reparse()`, `reparseFromImage()`, `batchReparse()`, `history()`, `seedFromPlan()`, plus exercise-set CRUD (`addSet`/`updateSet`/`deleteSet` via `createExerciseSetMutationApi`) |
+| Plans | `plans.ts` | `list()`, `get()`, `import()`, `createSample()`, `rename()`, `updateGoal()`, `generate()`, `schedule()`, `updateDay()`, `updateDayWithoutPlan()`, `updateDayStatus()`, `deleteDay()`, `getDayExercises()`, `updateDayStructure()`, `addDayExercise()`/`updateDayExercise()`/`deleteDayExercise()`, `regenerateCoachNote()`, `reparseDay()`, `reparseDayFromImage()` |
+| Coaching | `coaching.ts` | `chat` (`send()`, `sendStream()`, `saveMessage()`, `clearHistory()`, `getCoachInsights()`), `coaching` materials CRUD (`list`/`create`/`update`/`delete`), `getRagStatus()`, `reEmbed()` |
+| Analytics | `analytics.ts` | `analytics` (`getPersonalRecords()`, `getExerciseAnalytics()`, `getTrainingOverview()` — returns a `TrainingOverview`), `timeline` (`get()`, `getSuggestions()`, `applySuggestion()`) |
+| User | `user.ts` | `auth.getUser()`, `preferences.get/update()` (covers `emailNotifications`, `emailWeeklySummary`, `emailMissedReminder`, `showAdherenceInsights`, `aiCoachEnabled`, `onboardingCompleted`, training-style and MAF fields), `strava.*` (`auth/disconnect/sync`), `garmin.*` (`connect/disconnect/sync`), `email.check()` |
+| Exercises | `exercises.ts` | `parse()`, `parseStructured()`, `parseFromImage()`, `parseStructuredFromImage()`, `getHistory()`, `listCustom()`, `createCustom()` |
 | Timeline Annotations | `timelineAnnotations.ts` | `list()`, `create()`, `update()`, `delete()` for injury / illness / travel / rest bands |
 
 ---
@@ -106,9 +116,9 @@ All hooks are in `client/src/hooks/`.
 
 | Hook | File | Purpose |
 |------|------|---------|
-| `useAuth` | `useAuth.ts` | Integrates Clerk auth with database user sync. Polls `isAutoCoaching` every 2s when active (max 5 min). Detects tab visibility to pause polling. Invalidates timeline queries when auto-coaching completes. |
-| `useSignOut` | `useSignOut.ts` | Clerk sign-out with query cache clearing. |
-| `useEmailCheck` | `useEmailCheck.ts` | Triggers email check on first authenticated load. |
+| `useAuth` | `useAuth.ts` | Integrates Clerk auth with database user sync. Polls the `authUser` query every 2s while `isAutoCoaching` is true (max 5 min, pauses while the tab is hidden). Invalidates timeline queries when auto-coaching completes. Resets the cached CSRF token on sign-in state transitions. Also exports `useIsAutoCoaching`, `useIsAiCoachEnabled`, `useIsOnboardingCompleted`, and `useIsAuthUserLoaded` -- thin `select`-based subscribers to single auth-user fields. |
+| `useSignOut` | `useSignOut.ts` | Clerk sign-out. Calls `clearUserLocalData()` to purge the offline queue and workout drafts from local/session storage before signing out. |
+| `useEmailCheck` | `useEmailCheck.ts` | Fire-and-forget email check once per authenticated session (gated on `isAuthenticated` and `isAppUserLoaded`). |
 
 ### Data Loading
 
@@ -123,7 +133,7 @@ All hooks are in `client/src/hooks/`.
 | Hook | File | Purpose |
 |------|------|---------|
 | `useApiMutation` | `useApiMutation.ts` | Generic wrapper around React Query's `useMutation`. Adds toast notifications (success/error), automatic query invalidation, and optional callbacks. |
-| `useWorkoutActions` | `useWorkoutActions.ts` | Workout CRUD mutations (create, update, delete, combine). |
+| `useWorkoutActions` | `useWorkoutActions.ts` | Timeline-entry action mutations: mark complete, skip, change status, delete workout/plan-day, and bulk delete (delegates to `workout-actions/useWorkoutActionMutations`). |
 | `useChatMutations` | `useChatMutations.ts` | Save chat message, clear chat history mutations. |
 | `useStravaMutations` | `useStravaMutations.ts` | Strava sync and disconnect mutations. |
 | `useGarminMutations` | `useGarminMutations.ts` | Garmin connect (email/password), disconnect, and manual sync mutations. Surfaces the `GARMIN_BUSY`, `GARMIN_SYNC_TOO_SOON`, and `GARMIN_CIRCUIT_OPEN` error codes as user-friendly toasts. |
@@ -160,6 +170,7 @@ Timeline annotation queries and mutations are composed directly from the `client
 | `useOnboarding` | `useOnboarding.ts` | Tracks durable onboarding completion with a local legacy fallback. |
 | `useOnboardingWizard` | `useOnboardingWizard.ts` | Multi-step wizard state (current step, form values, navigation). |
 | `useOnlineStatus` | `useOnlineStatus.ts` | Tracks `navigator.onLine` with event listeners. |
+| `useOfflineDropNotifier` | `useOfflineDropNotifier.ts` | Subscribes to the offline queue and shows a destructive toast whenever a queued mutation is permanently dropped (data loss). Mounted once near the app root. |
 | `useBlockCounts` | `useBlockCounts.ts` | Calculates exercise block statistics (total sets, exercises). |
 | `useCombineWorkouts` | `useCombineWorkouts.ts` | State for merging multiple workout logs into one. |
 | `use-toast` | `use-toast.ts` | Toast notification state management. |
@@ -170,6 +181,8 @@ Timeline annotation queries and mutations are composed directly from the `client
 | Hook | File | Purpose |
 |------|------|---------|
 | `useVoiceInput` | `useVoiceInput.ts` | Web Speech API integration. Manages microphone permissions, speech recognition start/stop, transcript accumulation, and error handling. |
+
+Additional feature hooks not catalogued above include `useWorkoutDetail`, `usePlanDayExercises`, `useExerciseSetsForOwner`, `useMoveTimelineEntry`, `useLogWorkoutDraft`, `usePushNotifications`, and `useUrlQueryState`. Related hooks are also grouped under the `voice/`, `workout-form/`, and `workout-actions/` subdirectories of `client/src/hooks/`.
 
 ### Hook Dependency Tree
 
@@ -214,14 +227,16 @@ A localStorage-backed mutation queue used by workout logging creates. Other muta
 
 | Function | Description |
 |----------|-------------|
-| `enqueueMutation(method, url, body, { id? })` | Adds a mutation to the queue. Returns the mutation ID. |
+| `enqueueMutation(method, url, body, options?)` | Adds a mutation to the queue (`options.id` overrides the generated ID). Returns the mutation ID. |
 | `getPendingCount()` | Returns the number of queued mutations. |
 | `flushQueue()` | Replays all pending mutations. Returns `{ synced, failed, dropped }`. |
 | `clearOfflineQueue()` | Removes queued mutation bodies from localStorage and notifies listeners. |
+| `createOfflineMutationId()` | Generates a crypto-backed unique mutation ID (`crypto.randomUUID()` with a `getRandomValues` fallback). |
+| `onMutationDropped(cb)` | Registers a callback fired whenever a mutation is permanently dropped. Returns an unsubscribe function. Used by `useOfflineDropNotifier`. |
 
 ### Auto-flush
 
-When the browser fires the `online` event, `flushQueue()` runs automatically. Queue writes dispatch `CustomEvent("offline-queue-change")`; successful or dropped replays dispatch `CustomEvent("offline-sync-complete")` for the UI to react.
+When the browser fires the `online` event, `flushQueue()` runs automatically. Queue writes dispatch the `OFFLINE_QUEUE_CHANGE_EVENT` (`"offline-queue-change"`); replays that synced or dropped at least one mutation dispatch the `OFFLINE_SYNC_COMPLETE_EVENT` (`"offline-sync-complete"`) for the UI to react. Both event names are exported constants.
 
 ### Error Handling
 

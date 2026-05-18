@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Hyrox Companion exposes a RESTful API under the `/api/v1/` prefix. All endpoints (except the health check and cron trigger) require Clerk JWT authentication. Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
+fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints (except the health check and cron trigger) require Clerk JWT authentication. Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
 
 **Base URL:** `/api/v1`
 **Content-Type:** `application/json` (requests and responses)
@@ -132,7 +132,7 @@ Retrieve a CSRF token for use in subsequent mutating requests.
 
 - **Auth:** Not strictly required (works pre-login, bound to IP; after login, bound to userId)
 - **Response:** `{ token: string }`
-- **Side effects:** Sets a signed `__Host-hyrox.x-csrf` cookie (production) or `hyrox.x-csrf` (development)
+- **Side effects:** Sets a signed `__Host-fitai.x-csrf` cookie (production) or `fitai.x-csrf` (development)
 
 The returned token must be sent as the `x-csrf-token` header on all mutating requests. Missing or invalid tokens result in a `403 Forbidden` response.
 
@@ -220,33 +220,44 @@ Permanently delete the authenticated user's account and all associated data (GDP
 
 ## Workout Routes
 
-**File:** `server/routes/workouts.ts`
+**Files:** `server/routes/workouts/` — a composite router (`index.ts`) that mounts `workoutsCrud.routes.ts`, `workoutsAi.routes.ts`, `workoutsTimeline.routes.ts`, `workoutsExport.routes.ts`, and `workoutsMigration.routes.ts`.
 
 ### GET /api/v1/workouts
 
 List workout logs for the current user with pagination.
 
 - **Auth:** Required
+- **Rate limit:** `workoutList` category, 60/min
 - **Query params:** `limit` (default 50, max capped), `offset` (default 0)
 - **Response:** `WorkoutLog[]`
 
-### GET /api/v1/workouts/:id
+### GET /api/v1/workouts/latest
 
-Get a single workout log by ID.
+Get the most recent workout log for the current user.
 
 - **Auth:** Required
-- **Response:** `WorkoutLog` with `exerciseSets`
+- **Rate limit:** `workout` category, 60/min
+- **Response:** `WorkoutLog` with `exerciseSets` and `structureBlocks`
+- **404:** No workouts found
+
+### GET /api/v1/workouts/:id
+
+Get a single workout log by ID. If the workout has structure blocks but no exercise sets, the missing sets are derived from the structure on read.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 60/min
+- **Response:** `WorkoutLog` with `exerciseSets` and `structureBlocks`
 - **404:** Workout not found
 
 ### POST /api/v1/workouts
 
-Create a new workout log, optionally with parsed exercises.
+Create a new workout log, optionally with parsed exercises and/or structure blocks.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
-- **Body:** `InsertWorkoutLog` fields + optional `exercises: ParsedExercise[]`
-- **Validation:** `insertWorkoutLogSchema` + `exercisesPayloadSchema`
-- **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job.
+- **Body:** `InsertWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks`
+- **Validation:** `createWorkoutRouteSchema` (`insertWorkoutLogSchema` extended with `exercisesPayloadSchema` + `structureBlocksPayloadSchema`)
+- **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job. A text-only write guard (`rejectTextOnlyWriteIfNeeded`) may reject the request when structured exercise data is required.
 - **Response:** Created `WorkoutLog` with expanded `exerciseSets`
 
 **Request example:**
@@ -330,7 +341,8 @@ Update an existing workout log.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
-- **Body:** Partial `UpdateWorkoutLog` fields + optional `exercises: ParsedExercise[]`
+- **Body:** Partial `UpdateWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks`
+- **Validation:** `updateWorkoutRouteSchema`
 - **Response:** Updated `WorkoutLog`
 
 ### DELETE /api/v1/workouts/:id
@@ -341,20 +353,92 @@ Delete a workout log and its exercise sets.
 - **Rate limit:** `workout` category, 40/min
 - **Response:** `{ success: true }`
 
+### POST /api/v1/workouts/:id/sets
+
+Add a single exercise set to a workout log.
+
+- **Auth:** Required (user must own the workout)
+- **Rate limit:** `workoutSet` category, 60/min
+- **Body:** `addExerciseSetBodySchema`
+- **Response:** `201` Created exercise set (or 404 when the workout doesn't belong to the user)
+
+### PATCH /api/v1/workouts/:id/sets/:setId
+
+Update a single exercise set on a workout log.
+
+- **Auth:** Required (user must own the workout)
+- **Rate limit:** `workoutSet` category, 120/min
+- **Body:** `patchExerciseSetBodySchema`
+- **Response:** Updated exercise set (or 404)
+
+### DELETE /api/v1/workouts/:id/sets/:setId
+
+Delete a single exercise set from a workout log.
+
+- **Auth:** Required (user must own the workout)
+- **Rate limit:** `workoutSet` category, 60/min
+- **Response:** `{ success: true }` (or 404)
+
+### POST /api/v1/workouts/:id/seed-from-plan
+
+Seed a workout log's exercise sets from its linked plan day.
+
+- **Auth:** Required
+- **Rate limit:** `workoutSet` category, 20/min
+- **Response:** `{ seededCount: number }`
+
+### PATCH /api/v1/workouts/:id/structure-blocks/:blockId/score
+
+Set or clear the score on a single structure block of a workout log.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 40/min
+- **Body:** `{ score: StructureBlockScore | null }`
+- **Response:** `{ structureBlocks }` (or 404)
+
+### GET /api/v1/workouts/:id/history
+
+Get history stats for a workout log.
+
+- **Auth:** Required
+- **Rate limit:** `workoutHistory` category, 60/min
+- **Response:** Workout history stats (or 404)
+
+### POST /api/v1/workouts/bulk-delete
+
+Delete multiple workout logs and/or plan days in a single request.
+
+- **Auth:** Required
+- **Rate limit:** `workoutBulkDelete` category, 20/min
+- **Body:** `{ workoutLogIds: string[], planDayIds: string[] }` — each capped at 100 entries, at least one id required
+- **Response:** Bulk delete result (or 404 when a target is not found)
+
+### POST /api/v1/workouts/combine
+
+Combine multiple workout logs into a single new workout, deleting the sources.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 10/min
+- **Body:** `{ newWorkout: InsertWorkoutLog, deleteWorkoutIds: string[] (1-10), skipPlanDayIds?: string[] (max 10) }`
+- **Response:** `201` Created `WorkoutLog`
+
 ### GET /api/v1/workouts/unstructured
 
 List workouts that have no parsed exercise sets (candidates for reparsing).
 
 - **Auth:** Required
+- **Rate limit:** `workoutList` category, 60/min
 - **Response:** `WorkoutLog[]`
 
 ### POST /api/v1/workouts/:id/reparse
 
-Re-parse a single workout's text into structured exercise sets using the configured text AI provider.
+Re-parse a single workout's text into structured exercise sets using the configured text AI provider. Writes the parsed sets through; responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets.
 
-- **Auth:** Required
+- **Auth:** Required (user must own the workout)
 - **Rate limit:** `reparse` category, 5/min
-- **Response:** `{ exercises: ParsedExercise[], saved: boolean, setCount?: number }`
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** Optional `{ prescribedMainWorkout?: string | null, prescribedAccessory?: string | null }`
+- **Response:** `{ exercises: ParsedExercise[], saved: boolean, setCount: number, rejectedCount: number, rejectionReasons: string[] }`
 
 ### POST /api/v1/workouts/batch-reparse
 
@@ -362,19 +446,47 @@ Re-parse all unstructured workouts for the current user.
 
 - **Auth:** Required
 - **Rate limit:** `batchReparse` category, 2/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** `{ total: number, parsed: number, failed: number }`
+
+### GET /api/v1/workouts/migration/reviews
+
+List assisted-migration backfill reviews for the current user.
+
+- **Auth:** Required
+- **Rate limit:** `migrationReviews` category, 20/min
+- **Query:** `ownerType?` (`workoutLog` | `planDay`), `ownerId?` — must be supplied together
+- **Response:** Backfill review list
+
+### POST /api/v1/workouts/migration/backfill
+
+Run an assisted-migration backfill pass for the current user.
+
+- **Auth:** Required
+- **Rate limit:** `migrationBackfill` category, 2/min
+- **Response:** Backfill result summary
+
+### POST /api/v1/workouts/migration/reviews/resolve
+
+Resolve a single assisted-migration backfill review.
+
+- **Auth:** Required
+- **Rate limit:** `migrationReviewResolve` category, 20/min
+- **Body:** `{ ownerType: "workoutLog" | "planDay", ownerId: string, action: "accept" | "reject" | "edit", reason?: string | null }`
+- **Response:** `{ ok: true }` (or 404 when the target is not found)
 
 ---
 
 ## Custom Exercise Routes
 
-**File:** `server/routes/workouts.ts`
+**File:** `server/routes/workouts/workoutsCrud.routes.ts`
 
 ### GET /api/v1/custom-exercises
 
 List all custom exercises defined by the current user.
 
 - **Auth:** Required
+- **Rate limit:** `customExercise` category, 60/min
 - **Response:** `CustomExercise[]`
 
 ### POST /api/v1/custom-exercises
@@ -383,8 +495,8 @@ Create or upsert a custom exercise.
 
 - **Auth:** Required
 - **Rate limit:** `customExercise` category, 20/min
-- **Body:** `{ name: string, category?: string }`
-- **Validation:** `insertCustomExerciseSchema`
+- **Body:** `{ name: string, category?: string }` (`category` defaults to `"conditioning"`)
+- **Validation:** `createCustomExerciseSchema` (`insertCustomExerciseSchema` without `userId`)
 - **Response:** `CustomExercise`
 
 ---
@@ -455,11 +567,12 @@ Update a training plan's goal.
 
 ### PATCH /api/v1/plans/:planId/days/:dayId
 
-Update a plan day (simple update, no cleanup).
+Update a plan day scoped to its parent plan.
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
 - **Body:** Partial `UpdatePlanDay` (focus, mainWorkout, accessory, notes, status, scheduledDate)
+- **Validation:** `updatePlanDaySchema`
 - **Response:** Updated `PlanDay`
 
 ### PATCH /api/v1/plans/days/:dayId
@@ -503,7 +616,81 @@ Schedule a plan by assigning dates to all days starting from a given date.
 - **Auth:** Required
 - **Rate limit:** `planSchedule` category, 10/min
 - **Body:** `{ startDate: "YYYY-MM-DD" }`
+- **Validation:** `schedulePlanRequestSchema`
 - **Response:** `{ success: true }`
+
+### GET /api/v1/plans/days/:dayId/sets
+
+List the exercise sets for a plan day. With `?includeStructure=true`, also returns structure blocks (and derives missing sets from structure when needed).
+
+- **Auth:** Required
+- **Rate limit:** `planDaySet` category, 60/min
+- **Query:** `includeStructure?` (`"true"`)
+- **Response:** `ExerciseSet[]`, or `{ exerciseSets, structureBlocks }` when `includeStructure=true` (or 404)
+
+### POST /api/v1/plans/days/:dayId/sets
+
+Add a single exercise set to a plan day.
+
+- **Auth:** Required
+- **Rate limit:** `planDaySet` category, 60/min
+- **Body:** `addExerciseSetBodySchema`
+- **Response:** `201` Created exercise set (or 404)
+
+### PATCH /api/v1/plans/days/:dayId/sets/:setId
+
+Update a single exercise set on a plan day.
+
+- **Auth:** Required
+- **Rate limit:** `planDaySet` category, 120/min
+- **Body:** `patchExerciseSetBodySchema`
+- **Response:** Updated exercise set (or 404)
+
+### DELETE /api/v1/plans/days/:dayId/sets/:setId
+
+Delete a single exercise set from a plan day.
+
+- **Auth:** Required
+- **Rate limit:** `planDaySet` category, 60/min
+- **Response:** `{ success: true }` (or 404)
+
+### PATCH /api/v1/plans/days/:dayId/structure
+
+Replace the structure blocks of a plan day.
+
+- **Auth:** Required
+- **Rate limit:** `planDaySet` category, 60/min
+- **Body:** `{ structureBlocks: StructureBlock[] }`
+- **Response:** The updated plan day structure (or 404)
+
+### POST /api/v1/plans/days/:dayId/reparse
+
+Re-parse a plan day's `mainWorkout`/`accessory` text into structured exercise sets, replacing existing prescribed rows. Responds `422 PARSE_WRITE_THROUGH_REQUIRED` when parsing produces no persisted sets.
+
+- **Auth:** Required
+- **Rate limit:** `planDayReparse` category, 5/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** Optional `{ mainWorkout?: string | null, accessory?: string | null }`
+- **Response:** `{ exercises, saved: true, setCount, rejectedCount, rejectionReasons }` (or 404)
+
+### POST /api/v1/plans/days/:dayId/reparse-from-image
+
+Photo sibling of `/reparse` — re-parse a plan day's prescribed exercises from an uploaded image. Same replace semantics.
+
+- **Auth:** Required
+- **Rate limit:** `planDayReparse` category, 5/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** `{ imageBase64, mimeType }`
+- **Response:** Same shape as `/reparse` (or 404)
+
+### POST /api/v1/plans/days/:dayId/coach-note/regenerate
+
+Manually refresh the AI coach note (`ai_rationale`) for a planned day. The service enforces a 30-second cooldown.
+
+- **Auth:** Required
+- **Rate limit:** `coachNoteRegenerate` category, 10/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Response:** The updated plan day, or `429 COOLDOWN` (with `Retry-After` header) when called inside the cooldown window
 
 ---
 
@@ -672,23 +859,46 @@ Parse free-text or voice input into structured exercise data using the configure
 ]
 ```
 
-### POST /api/v1/parse-exercises-from-image
+### POST /api/v1/parse-workout-structure
 
-Parse a photo of a workout plan (whiteboard, printout, screenshot) into structured exercise data using Gemini's multi-modal vision model. Images are expected to be compressed client-side via `client/src/lib/image.ts` (`compressImage`) before upload.
+Parse free text into a structured workout (blocks/structure) using the configured text AI provider.
 
 - **Auth:** Required
-- **Rate limit:** `parse` category, shared budget with text parsing
+- **Rate limit:** `parse` category, 5/min (shared budget with `parse-exercises`)
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** `{ text: string }` (1-2000 chars)
+- **Validation:** `parseExercisesRequestSchema`
+- **Response:** Parsed workout structure
+
+### POST /api/v1/parse-exercises-from-image
+
+Parse a photo of a workout plan (whiteboard, printout, screenshot) into structured exercise data using Gemini's multi-modal vision model. Images are expected to be compressed client-side via `client/src/lib/image.ts` (`compressImage`) before upload. A route-scoped `express.json({ limit: "10mb" })` parser handles the base64 body.
+
+- **Auth:** Required
+- **Rate limit:** `parse` category, 5/min (shared budget with text parsing)
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** `{ imageBase64: string, mimeType: "image/jpeg" | "image/png" | "image/webp" }`
 - **Response:** Same `ParsedExercise[]` shape as `/api/v1/parse-exercises`.
 
+### POST /api/v1/parse-workout-structure-from-image
+
+Photo sibling of `/parse-workout-structure` — parse a workout-structure photo into structured blocks.
+
+- **Auth:** Required
+- **Rate limit:** `parse` category, 5/min (shared budget)
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Body:** `{ imageBase64, mimeType }`
+- **Response:** Parsed workout structure
+
 ### POST /api/v1/workouts/:id/reparse-from-image
 
-Re-parse an existing workout's exercises against a newly-uploaded photo. Used from the workout detail dialog when the coach updates the prescribed block or when the athlete captures the post-session whiteboard.
+Re-parse an existing workout's exercises against a newly-uploaded photo. Used from the workout detail dialog when the coach updates the prescribed block or when the athlete captures the post-session whiteboard. Defined in `server/routes/workouts/workoutsAi.routes.ts`.
 
 - **Auth:** Required (user must own the workout)
-- **Rate limit:** `parse` category
+- **Rate limit:** `reparse` category, 5/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** `{ imageBase64, mimeType }` (same as above)
-- **Response:** The updated workout payload including re-parsed exercises.
+- **Response:** `{ exercises, saved: true, setCount, rejectedCount, rejectionReasons }`, or `422 PARSE_WRITE_THROUGH_REQUIRED` when no sets are persisted.
 
 ### POST /api/v1/chat
 
@@ -748,10 +958,11 @@ data: {"error":"Stream error"}
 
 ### GET /api/v1/chat/history
 
-Retrieve all saved chat messages for the current user.
+Retrieve saved chat messages for the current user, cursor-paginated.
 
 - **Auth:** Required
-- **Response:** `ChatMessage[]`
+- **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together
+- **Response:** `ChatMessage[]` (plain array for backward compatibility). When more rows exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back on the next request.
 
 ### POST /api/v1/chat/message
 
@@ -771,14 +982,41 @@ Clear all chat messages for the current user.
 - **Rate limit:** `chatHistoryDelete` category, 5/min
 - **Response:** `{ success: true }`
 
+### POST /api/v1/coach-insights
+
+Single-shot AI analysis of the athlete's progress against their stated goal. Reuses the chat surface with a fixed analysis prompt.
+
+- **Auth:** Required
+- **Rate limit:** `suggestions` category, 3/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
+- **Response:** `{ insights: string, ragInfo: RagInfo, generatedAt: string }`
+
 ### POST /api/v1/timeline/ai-suggestions
 
 Generate AI coaching suggestions for upcoming planned workouts.
 
 - **Auth:** Required
 - **Rate limit:** `suggestions` category, 3/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** `{ suggestions: WorkoutSuggestion[], ragInfo: RagInfo }`
 - **Note:** Returns empty suggestions if no upcoming planned workouts exist.
+
+### POST /api/v1/timeline/ai-suggestions/apply
+
+Apply a generated timeline AI suggestion to a plan day's field.
+
+- **Auth:** Required
+- **Rate limit:** `suggestionApply` category, 10/min
+- **AI gates:** `aiConsentCheck`
+- **Body:** `{ workoutId: string, targetField: "notes" | "mainWorkout" | "accessory", action: "replace" | "append", recommendation: string, rationale?: string | null, aiSource?: "rag" | "legacy" | "none" | null }`
+- **Response:** The updated plan day (or 404 when the plan day is not found)
+
+### GET /api/v1/timeline/ai-suggestions/debug/:workoutId
+
+Inspect the AI suggestion trace and metadata for a plan day. Debugging aid.
+
+- **Auth:** Required
+- **Response:** `{ workoutId, focus, aiSource, aiRationale, aiNoteUpdatedAt, trace, debugSummary }` (or 404)
 
 ---
 
@@ -799,9 +1037,10 @@ Create a new coaching material. Triggers background embedding via pg-boss queue.
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 10/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body limit:** 2MB (elevated from default 100kb)
 - **Body:** `{ title: string (1-255 chars), content: string (1-1,500,000 chars), type: "principles" | "document" }`
-- **Validation:** `insertCoachingMaterialSchema`
+- **Validation:** `createMaterialSchema` (`insertCoachingMaterialSchema` without `userId`)
 - **Side effects:** Queues `embed-coaching-material` job for RAG chunking/embedding.
 - **Response:** `201` Created `CoachingMaterial`
 
@@ -811,6 +1050,7 @@ Update a coaching material. Re-embeds if content or title changed.
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 10/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** Partial `{ title?, content?, type? }`
 - **Side effects:** Queues re-embedding if content or title changed.
 - **Response:** Updated `CoachingMaterial`
@@ -836,6 +1076,7 @@ Re-embed all coaching materials for the current user.
 
 - **Auth:** Required
 - **Rate limit:** `coaching` category, 5/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** Re-embed result summary
 
 ---
@@ -849,7 +1090,7 @@ Re-embed all coaching materials for the current user.
 Get the current user's preferences.
 
 - **Auth:** Required
-- **Response:** `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, aiCoachEnabled, onboardingCompleted }`
+- **Response:** Serialized preferences — `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, trainingStylePreviousId, trainingStyleChangedAt, trainingStyleRecomputeNow, onboardingCompleted, mafAge, mafInjuryIllnessMedication, mafConsistency, mafTrend, mafHrDataAvailable, mafHr, mafBaselineTestScheduledAt }` plus two derived fields: `planWeeklyDensity` (the active plan's per-week density, or `null`) and `weeklyGoalExceedsPlan` (boolean hint when the user's `weeklyGoal` exceeds that density).
 
 ### PATCH /api/v1/preferences
 
@@ -857,9 +1098,10 @@ Update user preferences.
 
 - **Auth:** Required
 - **Rate limit:** `preferences` category, 20/min
-- **Body:** Partial `{ weightUnit?: "kg" | "lbs", distanceUnit?: "km" | "miles", weeklyGoal?: 1-14, emailNotifications?: boolean, emailWeeklySummary?: boolean, emailMissedReminder?: boolean, aiCoachEnabled?: boolean, onboardingCompleted?: boolean }`
+- **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `weeklyGoal?`, the `email*` toggles, `aiCoachEnabled?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, and the `maf*` fields).
 - **Validation:** `updateUserPreferencesSchema`
-- **Response:** Updated preferences object
+- **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge`, `mafConsistency`, and `mafTrend` to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.
+- **Response:** Updated serialized preferences object
 - **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` gate the individual categories and take effect only when the master is on. All three default to `false` at the database level for new users (GDPR-compliant opt-in).
 - **AI consent semantics:** `aiCoachEnabled` gates every outbound AI provider call (workout parsing, chat, auto-coach, embeddings, and image parsing). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new AI requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
 - **Onboarding completion:** `onboardingCompleted` stores whether the welcome flow has finished across devices. It is app state, not a visible Settings preference.
@@ -890,9 +1132,10 @@ External cron trigger endpoint for batch email processing across all users.
 
 ### GET /api/v1/analytics/internal/structured-exercise-health
 
-Internal structured exercise health rollup endpoint.
+Internal structured exercise health rollup endpoint. Defined in `server/routes/analytics.ts`.
 
 - **Auth:** Clerk auth plus `x-internal-analytics-secret` header (timing-safe comparison with `INTERNAL_ANALYTICS_SECRET` env var)
+- **Rate limit:** `internalAnalytics` category, 5/min
 - **Response:** `{ rollups, counters }`
 
 ---
@@ -1042,13 +1285,14 @@ Imports the most recent activities from Garmin into `workout_logs`.
 
 ## Timeline and Export Routes
 
-**File:** `server/routes/workouts.ts`
+**Files:** `server/routes/workouts/workoutsTimeline.routes.ts`, `server/routes/workouts/workoutsExport.routes.ts`, and the exercise-history route in `server/routes/workouts/workoutsCrud.routes.ts`.
 
 ### GET /api/v1/timeline
 
 Get merged timeline of planned and logged workouts.
 
 - **Auth:** Required
+- **Rate limit:** `timeline` category, 60/min
 - **Query:** `planId?` (filter by plan), `limit?` (default capped), `offset?`
 - **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date
 
@@ -1112,6 +1356,7 @@ Get merged timeline of planned and logged workouts.
 Get historical exercise sets for a specific exercise.
 
 - **Auth:** Required
+- **Rate limit:** `workoutHistory` category, 60/min
 - **Response:** Exercise set history with dates
 
 ### GET /api/v1/export

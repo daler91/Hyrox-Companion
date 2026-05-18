@@ -224,12 +224,14 @@ Hyrox-Companion/
 |       `-- pages/             # Landing, Timeline, LogWorkout, Analytics, Settings, Privacy
 |-- server/                    # Express backend
 |   |-- ai/providers/          # Gemini, Anthropic, and OpenAI-compatible text adapters
-|   |-- bootstrap/             # Startup and health wiring
+|   |-- bootstrap/             # Startup, health, observability, and shutdown wiring
 |   |-- gemini/                # Gemini client, parsing, image, chat, suggestion helpers
-|   |-- middleware/            # CSRF, idempotency, validation, AI budget/consent
+|   |-- middleware/            # CSP nonce, CSRF, idempotency, AI budget/consent
+|   |-- prompts/               # AI prompt builders and coaching-context formatters
 |   |-- routes/                # Route modules and workout route groups
 |   |-- services/              # Business logic, AI context, RAG, analytics, plans
 |   |-- storage/               # Drizzle-backed data access
+|   |-- usecases/              # Use-case orchestration layer
 |   `-- utils/                 # Server utilities
 |-- shared/                    # Drizzle schema, Zod types, OpenAPI registry
 |-- migrations/                # Drizzle SQL migrations
@@ -376,7 +378,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The current suite includes more than 150 Vitest test files plus Cypress E2E coverage. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
+The current suite includes more than 170 Vitest test files plus Cypress E2E coverage. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 

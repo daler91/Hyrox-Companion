@@ -29,6 +29,7 @@ Everything else is optional and gates a specific feature (Clerk auth, AI provide
 - [Web Push (VAPID)](#web-push-vapid)
 - [Error Tracking (Sentry)](#error-tracking-sentry)
 - [Runtime & Dev](#runtime--dev)
+- [Feature Flags](#feature-flags)
 - [Client (Vite) Variables](#client-vite-variables)
 
 ---
@@ -40,15 +41,16 @@ Everything else is optional and gates a specific feature (Clerk auth, AI provide
 | `DATABASE_URL` | **Required** | — | Server (`server/db.ts`), pg-boss queue. |
 | `VECTOR_DATABASE_URL` | Optional | falls back to `DATABASE_URL` | RAG ingest + retrieval (`server/vectorDb.ts`). |
 | `ENCRYPTION_KEY` | **Required** | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). |
-| `CSRF_SECRET` | Required in `production` | falls back to `ENCRYPTION_KEY` in dev/test | `csrf-csrf` middleware. |
-| `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/index.ts:78-83`. |
-| `ALLOWED_ORIGINS` | Optional | — | CORS allow-list (`server/index.ts:212`). Localhost is always allowed. |
+| `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
+| `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/bootstrap/appConfig.ts`. |
+| `ALLOWED_ORIGINS` | Optional | — | CORS allow-list (`server/index.ts`). Localhost is always allowed. |
 
 ### Safety invariants (enforced at startup in `server/env.ts`)
 
 - **Key separation**: `CSRF_SECRET` must differ from `ENCRYPTION_KEY` in every environment. If they match, the server refuses to boot.
 - **Weak-key rejection**: A small set of obvious placeholder keys (all-zeros, `changeme_...`, the CI test key, etc.) is explicitly rejected in production via the `WEAK_ENCRYPTION_KEYS` list in `server/env.ts:11-17`.
 - **Dev bypass lockout**: `ALLOW_DEV_AUTH_BYPASS=true` combined with `NODE_ENV=production` is a hard fatal — the server refuses to boot.
+- **Live-key / env mismatch**: a `CLERK_PUBLISHABLE_KEY` starting with `pk_live_` while `NODE_ENV` is not `production` is a hard fatal — it catches a deploy that provisioned live Clerk keys but forgot to set `NODE_ENV=production`.
 - **TRUST_PROXY is a three-valued enum**: `"0"` (off — use when Express is exposed directly, rare), `"1"` (trust exactly one hop, correct for Railway and most PaaS), or `"loopback"` (only local reverse proxies). Hardcoding `1` into other deployments where the number of trusted hops changes would let attacker-controlled `X-Forwarded-For` headers drive `req.ip`.
 
 ---
@@ -78,6 +80,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 
 | Variable | Req? | Default | Used by |
 |---|---|---|---|
+| `AI_FEATURES_ENABLED` | Optional | `true` | Runtime kill switch for **all** AI routes (chat, parsing, plan generation, RAG, coach suggestions). Set to `false` to disable AI provider traffic without redeploying or rotating keys. Enforced in `server/middleware/aibudget.ts`. |
 | `AI_TEXT_PROVIDER` | Optional | `gemini` | Text provider: `gemini`, `anthropic`, or `openai-compatible`. |
 | `AI_TEXT_MODEL` | Optional | - | Generic text model override for non-Gemini providers. |
 | `AI_TEXT_FAST_MODEL` | Optional | provider default | Fast parser model override. Gemini fallback: `GEMINI_MODEL`. |
@@ -114,8 +117,8 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
-| `RESEND_API_KEY` | Optional | — | Without it, the cron still runs but the send step is a no-op. |
-| `RESEND_FROM_EMAIL` | Optional | — | `Display Name <address@example.com>` format. |
+| `RESEND_API_KEY` | Optional | — | Without it, the cron still runs but the send step is a no-op (`sendEmail()` logs and returns `false`). |
+| `RESEND_FROM_EMAIL` | Optional | `fitai.coach <Timmy@fitai.coach>` | Sender address in `Display Name <address@example.com>` format. |
 
 ### Cron
 
@@ -152,7 +155,7 @@ Sentry is fully optional. A missing DSN disables init without affecting anything
 
 | Variable | Req? | Default | Who reads it |
 |---|---|---|---|
-| `SENTRY_DSN` | Optional | — | Server (`@sentry/node` in `server/index.ts`). |
+| `SENTRY_DSN` | Optional | — | Server (`@sentry/node` via `configureObservability()` in `server/bootstrap/observability.ts`). |
 | `VITE_SENTRY_DSN` | Optional | — | Client (`@sentry/react` in `client/src/main.tsx`). |
 
 The Sentry `environment` tag is automatically derived from `NODE_ENV` on the server and from Vite's `MODE` on the client — there is no separate env var for it.
@@ -171,6 +174,20 @@ The Sentry `environment` tag is automatically derived from `NODE_ENV` on the ser
 
 ---
 
+## Feature Flags
+
+Rollout toggles, all parsed as the literal strings `"true"` / `"false"` in `server/env.ts`.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `EMOM_BUILDER_ENABLED` | `false` | Server-side gate for the EMOM workout builder. Keep aligned with the client `VITE_EMOM_BUILDER_ENABLED` flag for each deployment tier. |
+| `STRUCTURED_BLOCKS_ENABLED` | `true` | Enables the structured-blocks workout write path (`server/routes/structuredWriteGuard.ts`). |
+| `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` | `false` | Escape hatch: when `true`, forces the legacy write path even if `STRUCTURED_BLOCKS_ENABLED` is `true`. |
+
+`AI_FEATURES_ENABLED` is also a runtime flag — see [AI](#ai-text-providers-gemini-embeddings-gemini-vision).
+
+---
+
 ## Client (Vite) Variables
 
 Variables exposed to browser code must start with `VITE_` — Vite statically inlines any `import.meta.env.VITE_*` at build time. Everything else is server-only.
@@ -179,6 +196,7 @@ Variables exposed to browser code must start with `VITE_` — Vite statically in
 |---|---|---|
 | `VITE_CLERK_PUBLISHABLE_KEY` | `.env` | Browser-safe Clerk key. Mirrors `CLERK_PUBLISHABLE_KEY`. |
 | `VITE_SENTRY_DSN` | `.env` | Browser-safe Sentry DSN. Mirrors `SENTRY_DSN`. |
+| `VITE_EMOM_BUILDER_ENABLED` | `.env` | Client-side EMOM builder gate (`"true"`/`"false"`, default `false`). Keep aligned with the server `EMOM_BUILDER_ENABLED` flag. |
 | `MODE` | Vite built-in | `development` \| `production` — used as Sentry environment tag. |
 | `DEV` / `PROD` | Vite built-ins | Boolean guards used by `isDevPreview`, `RagDebugBadge`, etc. |
 

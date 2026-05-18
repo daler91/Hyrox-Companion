@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Hyrox Companion app uses [Clerk](https://clerk.com) for authentication. Clerk provides JWT-based identity management on both the client (via `@clerk/react`) and the server (via `@clerk/express`). A development auth bypass mode exists for local development, Cypress testing, and iframe preview contexts.
+The fitai.coach app uses [Clerk](https://clerk.com) for authentication. Clerk provides JWT-based identity management on both the client (via `@clerk/react`) and the server (via `@clerk/express`). A development auth bypass mode exists for local development, Cypress testing, and iframe preview contexts.
 
 The authentication flow works as follows:
 
@@ -136,16 +136,17 @@ Route handlers use this to obtain the current user's ID after the `isAuthenticat
 
 When a Clerk-authenticated request passes through `isAuthenticated`, the middleware calls `ensureUserExists(clerkUserId)`:
 
-1. Check whether a user row with that ID already exists in the database.
-2. If the user exists, return immediately (no remote call).
-3. If the user does not exist, fetch the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`.
-4. Upsert a row into the `users` table with:
+1. **Check the user-seen cache.** A user-seen cache (5-minute TTL) tracks recently provisioned users. The cache is layered: a per-process in-memory `Map`, backed by a shared `server_runtime_cache` table so multiple instances share the signal. If the user was seen recently, return immediately (no DB or remote call).
+2. **Check the database.** On a cache miss, look up the user row by ID. If a row already exists, mark the user seen and return.
+3. **Provision a minimal row.** If the user does not exist, upsert a minimal `users` row containing only the Clerk user ID, then call `hydrateClerkProfile()` to fill in the rest.
+4. **Hydrate the Clerk profile.** `hydrateClerkProfile()` fetches the full profile from Clerk's API via `clerkClient.users.getUser(clerkUserId)`, bounded by a 30-second timeout (`Promise.race`, since the Clerk SDK does not accept an `AbortSignal`). It then upserts the `users` row with:
    - `id` -- The Clerk user ID
    - `email` -- The primary email address
    - `firstName`, `lastName` -- Name fields
    - `profileImageUrl` -- Avatar URL
+   If the Clerk fetch fails or times out, the minimal row is left in place (the warning is logged and the request proceeds).
 
-The `upsertUser` method in `UserStorage` uses an `INSERT ... ON CONFLICT DO UPDATE` query, so subsequent calls update the profile data if it has changed in Clerk.
+The `upsertUser` method in `UserStorage` uses an `INSERT ... ON CONFLICT DO UPDATE` query, so subsequent calls update the profile data if it has changed in Clerk. If the upsert hits the `users_email_unique` constraint (the email already belongs to a different user), the profile is re-upserted without the `email` field so provisioning still succeeds.
 
 For the dev bypass path, a similar `ensureDevUserExists` function creates a user with the hardcoded ID `"dev-user"`, email `dev@localhost`, and name `Dev User`.
 
@@ -214,9 +215,10 @@ router.get('/api/v1/auth/user', isAuthenticated, rateLimiter("auth", 20), asyncH
 The middleware chain for a typical protected route is:
 
 1. `clerkMiddleware()` (global, if Clerk keys are present) -- Parses the JWT and attaches auth data to the request.
-2. `isAuthenticated` (per-route) -- Validates that the request has a valid user identity and syncs the user to the database. Returns `401` if unauthenticated.
-3. `rateLimiter(category, max)` (per-route) -- Applies per-user rate limiting, keyed by `userId` and backed by shared Postgres buckets outside tests.
-4. `asyncHandler(fn)` -- Wraps the route handler to catch async errors and forward them to Express error handling.
+2. `csrfProtection` (global on `/api/v1`, mounted in `server/routes.ts` as `app.use("/api/v1", csrfProtection)`) -- Verifies the `x-csrf-token` header against the signed cookie on mutating requests. Safe methods (`GET`/`HEAD`/`OPTIONS`) pass through.
+3. `isAuthenticated` (per-route) -- Validates that the request has a valid user identity and syncs the user to the database. Returns `401` if unauthenticated.
+4. `rateLimiter(category, max)` (per-route) -- Applies per-user rate limiting, keyed by `userId` and backed by shared Postgres buckets outside tests.
+5. `asyncHandler(fn)` -- Wraps the route handler to catch async errors and forward them to Express error handling.
 
 Unauthenticated requests receive:
 
@@ -237,7 +239,7 @@ The application uses CSRF protection via the `csrf-csrf` library (double-submit 
 ### Integration with Clerk Auth
 
 - The CSRF token is bound to the Clerk `userId` as the session identifier (via `getSessionIdentifier`). This means tokens issued before login are invalidated after sign-in, and tokens cannot be replayed across users.
-- On the client side, the cached CSRF token is reset when Clerk's `onSignIn` event fires, forcing a fresh token fetch after authentication transitions.
+- On the client side, the cached CSRF token is reset on any Clerk sign-in state transition. The `useClerkAuthImpl` hook tracks the previous `isSignedIn` value with a `useRef` and calls `resetCsrfToken()` whenever it flips, forcing a fresh token fetch after authentication transitions.
 - For pre-login requests (where Clerk auth hasn't run yet), the session identifier falls back to the client IP address.
 
 ### Key Separation (CSRF_SECRET vs. ENCRYPTION_KEY)
@@ -251,7 +253,7 @@ Mixing the two keys would tie the HMAC used for CSRF token signing to the same s
 
 ### Client Flow
 
-1. On app load, the API client calls `GET /api/v1/csrf-token` to obtain a CSRF token.
+1. On app load, the API client calls the unprotected `GET /api/v1/csrf-token` endpoint to obtain a CSRF token. The server returns the token in JSON and sets the paired signed httpOnly cookie (`__Host-fitai.x-csrf` in production, `fitai.x-csrf` in development).
 2. The token is cached in memory and attached as the `x-csrf-token` header on all mutating requests.
 3. If a 403 CSRF error is received, the client automatically refetches the token and retries the request.
 
@@ -289,7 +291,7 @@ Clerk manages session lifecycle entirely. The app does not implement custom toke
 - **Token refresh:** Handled automatically by the Clerk SDK. The `@clerk/react` provider monitors token expiration and refreshes tokens transparently.
 - **Session state:** The `useAuth` / `useUser` hooks from `@clerk/react` expose reactive `isSignedIn` and `isLoaded` properties that update when the session state changes.
 
-The server sets `trust proxy` to `1` in `setupAuth` to ensure correct client IP detection behind reverse proxies, which is important for rate limiting.
+The server configures Express's `trust proxy` setting in `server/bootstrap/appConfig.ts` (driven by the `TRUST_PROXY` env var) to ensure correct client IP detection behind reverse proxies, which is important for rate limiting and the CSRF session identifier's IP fallback.
 
 ---
 

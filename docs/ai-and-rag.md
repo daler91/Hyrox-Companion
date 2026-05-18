@@ -4,9 +4,9 @@
 
 ## Overview
 
-The Hyrox Companion routes text AI through a modular provider layer for workout parsing, coaching chat, suggestions, review notes, coach insights, and training plan generation. Gemini remains the default text provider, while Anthropic and OpenAI-compatible providers can be selected by environment variables. A Retrieval-Augmented Generation (RAG) pipeline enriches AI responses with user-uploaded coaching materials stored as Gemini-generated vector embeddings in pgvector.
+fitai.coach routes text AI through a modular provider layer for workout parsing, coaching chat, suggestions, review notes, coach insights, and training plan generation. Gemini remains the default text provider, while Anthropic and OpenAI-compatible providers can be selected by environment variables. A Retrieval-Augmented Generation (RAG) pipeline enriches AI responses with user-uploaded coaching materials stored as Gemini-generated vector embeddings in pgvector.
 
-**AI consent gate.** Every outbound AI request for workout parsing, chat (regular + streaming), auto-coach, suggestions, plan generation, embeddings, and image parsing is gated on `user.aiCoachEnabled` (defaults `false` for new users). When the flag is `false`, the coach service short-circuits (`triggerAutoCoach` returns `{ adjusted: 0 }` at `server/services/coachService.ts:82`) and the chat/parsing routes refuse to compose a prompt. The UI hides or disables the AI features until the user flips the toggle in Settings -> Preferences, and flipping it back to `false` stops new AI requests immediately.
+**AI consent gate.** Every outbound AI request for workout parsing, chat (regular + streaming), auto-coach, suggestions, plan generation, embeddings, and image parsing is gated on `user.aiCoachEnabled` (defaults `false` for new users). When the flag is `false`, the coach service short-circuits (`triggerAutoCoach` returns `{ adjusted: 0 }` early in `server/services/coachService.ts`) and the chat/parsing routes are blocked by the `aiConsentCheck` middleware (403 `AI_COACH_DISABLED`). The UI hides or disables the AI features until the user flips the toggle in Settings -> Preferences, and flipping it back to `false` stops new AI requests immediately.
 
 **Key dependencies:**
 - `@google/genai` -- Google Gemini API client for the default text provider, embeddings, and image parsing
@@ -39,8 +39,14 @@ photo-to-workout parsing still require `GEMINI_API_KEY`.
 
 **Files:** `server/ai/providers/*`, `server/gemini/client.ts`
 
-The text provider layer exposes a canonical interface for `generateText`,
-`generateJsonText`, and `streamText`. The shared Gemini client still provides:
+The text provider layer (`config.ts`, `index.ts`, `types.ts`, `http.ts`,
+`gemini.ts`, `anthropic.ts`, `openaiCompatible.ts`) exposes a canonical
+`TextAiProvider` interface (`generateText` + `streamText`) plus the
+`generateText`/`generateJsonText`/`streamText` entry points in `index.ts`.
+The active provider is chosen by `AI_TEXT_PROVIDER`, and `getTextAiProvider()`
+builds and caches a single instance. Each request resolves a per-role model
+(`fast` vs `reasoning`) via `resolveTextAiModel()`. The shared Gemini client
+still provides:
 
 - **Singleton client:** `getAiClient()` lazily initializes a `GoogleGenAI` instance using `GEMINI_API_KEY`.
 - **Models:**
@@ -61,9 +67,9 @@ The text provider layer exposes a canonical interface for `generateText`,
 
 ## Workout Parsing
 
-**File:** `server/gemini/exerciseParser.ts`
+**Files:** `server/gemini/exerciseParser.ts` (barrel re-export), `server/gemini/exerciseParser/` (`text.ts` for free-text parsing, `image.ts` for photo-to-workout parsing, plus `schema.ts`, `mapping.ts`, `provider.ts`, `validation.ts`, `fallback.ts`, `structure.ts`)
 
-Transforms free-text or voice input into structured exercise data.
+Transforms free-text, voice, or photo input into structured exercise data.
 
 ### Flow
 
@@ -184,14 +190,27 @@ Automatically adjusts upcoming plan days after a workout is completed.
 1. **Trigger:** User creates a workout via `POST /api/v1/workouts`. If `aiCoachEnabled`, the route sets `isAutoCoaching = true` on the user record and queues an `auto-coach` job via pg-boss.
 2. **Client polling:** The `useAuth` hook polls `isAutoCoaching` every 2 seconds (max 5 minutes) to show a loading indicator.
 3. **`triggerAutoCoach(userId)`:**
-   - Checks if AI coach is enabled; if not, resets flag and returns.
-   - Fetches in parallel: `buildTrainingContext()`, `getActivePlan()`, `getTimeline()`
-   - Extracts the next 7 upcoming planned workouts sorted by date.
+   - Checks if AI coach is enabled; if not, returns `{ adjusted: 0 }` (the `finally` block still clears the flag).
+   - Skips when the user is over the rolling 24h AI budget.
+   - Calls `buildTrainingContext()`, which already fetches the active plan, upcoming planned days, and recent timeline (no duplicate `getActivePlan` / `getTimeline` calls).
+   - Maps upcoming planned workouts (those with a `planDayId`) into the suggestion-generator shape.
    - Retrieves coaching materials via RAG (or legacy fallback).
    - Calls `generateWorkoutSuggestions()` with the training context, upcoming workouts, plan goal, and coaching materials.
-   - Applies each suggestion to the corresponding plan day via `storage.updatePlanDay()`.
+   - Runs each suggestion through the safety layer (`applySafetyLayerToSuggestions`) and the modification guard (`shouldSuppressRepeatedFatigueReduction`) before applying.
+   - Applies surviving modifications and review notes atomically inside a single `db.transaction()`.
    - Resets `isAutoCoaching = false` in a `finally` block.
 4. **Suggestion application:** Suggestions specify a `targetField` (`mainWorkout`, `accessory`, or `notes`) and an `action` (`replace` or `append`). Appended content is prefixed with `[AI Coach]`.
+
+### Repeated-Modification Guard
+
+**File:** `server/services/aiModificationGuard.ts`
+
+To prevent the auto-coach from repeatedly cutting volume on the same workout across consecutive runs, every fatigue-driven suggestion passes through `shouldSuppressRepeatedFatigueReduction()`:
+
+- `classifyCoachModification()` tags a suggestion as `fatigue_volume_reduction` when an active fatigue signal (`fatigueFlag` or RPE `rising`) coincides with fatigue and reduction keywords in the recommendation/rationale.
+- `buildWorkoutPrescriptionFingerprint()` computes a SHA-256 hash over the workout's normalized `mainWorkout`, `accessory`, `notes`, and sorted `exerciseDetails`.
+- A repeat reduction is suppressed when the prior `lastFatigueReduction` metadata carries the same prescription fingerprint **and** no new workouts have been completed since that modification.
+- `withCoachModificationMetadata()` stamps the applied modification onto `CoachNoteInputs` (`lastModification` / `lastFatigueReduction`) so the next run can detect the repeat.
 
 See also: [Integrations -- pg-boss Job Queue](integrations.md#job-queue-pg-boss)
 
@@ -329,7 +348,7 @@ Generates structured multi-week training plans via the configured text provider.
 
 ## Prompt Templates
 
-**File:** `server/prompts.ts`
+**Files:** `server/prompts.ts` (prompt strings + `buildSystemPrompt`), `server/prompts/` (`coachingContext.ts` for training-data sections, `materialsBuilder.ts` for coaching-material/RAG-chunk sections, `exerciseSetFormatter.ts` for structured exercise-set formatting)
 
 ### BASE_SYSTEM_PROMPT
 
@@ -429,10 +448,10 @@ Instructions for generating multi-week training plans with day-by-day structure.
 
 ### Helper Functions
 
-- `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks)` -- Assembles the full system prompt with training stats and coaching materials.
-- `buildCoachingMaterialsSection(materials)` -- Formats legacy coaching materials.
-- `buildRetrievedChunksSection(chunks)` -- Formats RAG-retrieved chunks.
-- `buildTrainingContextSection(context)` -- Formats training stats as structured text.
+- `buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks)` -- Assembles the full system prompt with training stats and coaching materials. When `retrievedChunks` is provided it takes priority over `coachingMaterials` (`server/prompts.ts`).
+- `buildCoachingMaterialsSection(materials)` -- Formats legacy coaching materials (`server/prompts/materialsBuilder.ts`).
+- `buildRetrievedChunksSection(chunks)` -- Formats RAG-retrieved chunks (`server/prompts/materialsBuilder.ts`).
+- `buildOverallStats` / `buildExerciseFocus` / `buildStructuredPerformance` / `buildRecentWorkouts` / `buildUpcomingWorkouts` -- Format the training-data sections of the system prompt (`server/prompts/coachingContext.ts`).
 
 ---
 
@@ -533,7 +552,8 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 
 ## Security
 
-- **Consent gate:** `user.aiCoachEnabled` must be `true` before any AI provider call runs on the user's behalf. See [Overview](#overview).
+- **Consent gate:** `aiConsentCheck` (`server/middleware/aiConsent.ts`) returns 403 `AI_COACH_DISABLED` unless `user.aiCoachEnabled === true` before any AI provider call runs on the user's behalf. See [Overview](#overview).
+- **Budget enforcement:** `aiBudgetCheck` (`server/middleware/aibudget.ts`) runs an operator kill switch (`AI_FEATURES_ENABLED=false` -> 503 `AI_FEATURES_DISABLED`) and a per-user rolling 24h cost cap. Spend over `DAILY_LIMIT_CENTS` (200 = $2.00/day) returns 429 `AI_BUDGET_EXCEEDED`; spend over `WARNING_THRESHOLD_CENTS` (150 = $1.50) allows the request but sets `X-AI-Budget-Warning` / `X-AI-Budget-Remaining-Cents` headers.
 - **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to the selected text provider.
 - **Output validation:** `validateAiOutput()` checks AI text responses for safety.
 - **HTML sanitization:** `sanitizeHtml()` strips HTML from all AI-generated content before database storage.
@@ -548,13 +568,21 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_TEXT_PROVIDER` | `gemini` | Text provider for chat, text parsing, suggestions, notes, insights, and plan generation |
-| `AI_TEXT_MODEL` | provider-specific | Generic text model override for non-Gemini providers |
+| `AI_FEATURES_ENABLED` | `true` | Operator kill switch. `false` returns 503 `AI_FEATURES_DISABLED` for all AI routes |
+| `AI_TEXT_PROVIDER` | `gemini` | Text provider for chat, text parsing, suggestions, notes, insights, and plan generation (`gemini`, `anthropic`, `openai-compatible`) |
+| `AI_TEXT_MODEL` | provider-specific | Generic text model override (applies to both roles for non-Gemini providers) |
 | `AI_TEXT_FAST_MODEL` | Gemini: `GEMINI_MODEL` | Fast parser model override |
 | `AI_TEXT_REASONING_MODEL` | Gemini: `GEMINI_SUGGESTIONS_MODEL` | Coaching/planning model override |
-| `AI_TEXT_REASONING_EFFORT` | `high` | Reasoning effort hint where supported |
-| `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | `openai` | OpenAI-compatible profile for base URL and key lookup |
+| `AI_TEXT_REASONING_EFFORT` | `high` | Reasoning effort hint (`none`, `low`, `medium`, `high`) where supported |
+| `AI_TEXT_OPENAI_COMPATIBLE_PROFILE` | `openai` | OpenAI-compatible profile (`openai`, `xai`, `groq`, `together`, `openrouter`, `deepseek`, `custom`) for base URL and key lookup |
+| `AI_TEXT_BASE_URL` | profile default | Overrides the OpenAI-compatible base URL (required for `custom`) |
+| `AI_TEXT_API_KEY` | profile/provider key | Overrides the API key for the active non-Gemini provider |
+| `OPENAI_API_KEY` / `XAI_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` / `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` | unset | Per-profile API keys for OpenAI-compatible providers |
+| `ANTHROPIC_API_KEY` | unset | API key for the Anthropic text provider |
 | `GEMINI_API_KEY` | required for Gemini text, RAG, image parse | Google Gemini API key |
+| `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Gemini fast/parser model |
+| `GEMINI_SUGGESTIONS_MODEL` | `gemini-3.1-pro-preview` | Gemini reasoning model for chat, suggestions, and plan generation |
+| `GEMINI_VISION_MODEL` | `gemini-2.5-flash` | Gemini model for photo-to-workout parsing |
 | `VECTOR_DATABASE_URL` | Falls back to `DATABASE_URL` | Separate pgvector database connection |
 | `RAG_CHUNK_SIZE` | 600 | Characters per document chunk |
 | `RAG_CHUNK_OVERLAP` | 100 | Character overlap between adjacent chunks |
@@ -565,15 +593,20 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 
 | File | Purpose |
 |------|---------|
-| `server/gemini/client.ts` | Gemini client, retry logic, embedding generation |
-| `server/gemini/exerciseParser.ts` | Free-text to structured exercise parsing |
+| `server/ai/providers/` | Text AI provider layer (Gemini, Anthropic, OpenAI-compatible) |
+| `server/gemini/client.ts` | Gemini client, retry logic, circuit breaker, embedding generation |
+| `server/gemini/exerciseParser.ts` + `server/gemini/exerciseParser/` | Free-text and photo-to-workout structured exercise parsing |
 | `server/gemini/chatService.ts` | Chat and streaming chat through the text provider facade |
 | `server/gemini/suggestionService.ts` | Workout suggestion generation |
 | `server/gemini/types.ts` | TrainingContext type definition |
 | `server/services/aiContextService.ts` | Shared context builder for AI endpoints |
-| `server/services/aiService.ts` | Re-exports from `server/services/ai/` |
+| `server/services/ai/` | Training context + coaching insights modules |
+| `server/services/aiModificationGuard.ts` | Suppresses repeated fatigue/volume reductions on the same workout |
+| `server/services/aiSafety.ts` | Red-flag symptom and HR-medication detection / escalation |
 | `server/services/ragService.ts` | Document chunking, embedding, and re-embedding |
 | `server/services/ragRetrieval.ts` | Vector search and fallback retrieval logic |
 | `server/services/coachService.ts` | Auto-coach pipeline |
 | `server/services/planGenerationService.ts` | AI training plan generation |
-| `server/prompts.ts` | All prompt templates and context formatters |
+| `server/middleware/aiConsent.ts` | `aiCoachEnabled` consent gate (403 `AI_COACH_DISABLED`) |
+| `server/middleware/aibudget.ts` | AI kill switch + rolling 24h budget enforcement |
+| `server/prompts.ts` + `server/prompts/` | All prompt templates and context formatters |

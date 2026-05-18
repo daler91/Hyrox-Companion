@@ -1,6 +1,6 @@
 # External Integrations
 
-This document covers the external service integrations used by the Hyrox Companion application: Strava and Garmin activity syncing, Resend transactional email, pg-boss job queue, node-cron scheduling, and Sentry error tracking.
+This document covers the external service integrations used by the fitai.coach application: Strava and Garmin activity syncing, Resend transactional email, pg-boss job queue, node-cron scheduling, and Sentry error tracking.
 
 ---
 
@@ -24,8 +24,8 @@ The application relies on six external integration layers:
 - **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts.
 - **Garmin Connect** -- Email/password sign-in against Garmin's reverse-engineered SSO (no public OAuth) to import activities. Wrapped in a strict safety stack because every request goes out through the same shared server IP.
 - **Resend** -- Transactional email delivery for weekly training summaries and missed workout reminders.
-- **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation). Retries are scoped to idempotent handlers only.
-- **node-cron** -- In-process cron scheduler that triggers the daily email pipeline.
+- **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation, and the two transactional email sends). Retries are scoped to idempotent handlers only.
+- **node-cron** -- In-process cron scheduler that triggers the daily email pipeline and a set of maintenance/telemetry jobs.
 - **Sentry** -- Server- and client-side error tracking. Completely optional; a missing DSN disables reporting without affecting the rest of the app.
 
 All integrations are configured through environment variables and initialized during server startup.
@@ -102,18 +102,20 @@ Tokens are encrypted at rest using AES-256-GCM (`server/crypto.ts`):
 
 - **Algorithm**: `aes-256-gcm`
 - **IV**: 12 random bytes per encryption (recommended size for GCM)
-- **Storage format**: `iv:authTag:ciphertext` (all hex-encoded)
-- **Graceful migration**: If stored data does not match the `iv:authTag:ciphertext` format (e.g., legacy plaintext), the decryptor returns the raw value, allowing gradual migration.
+- **Storage format**: `v1:iv:authTag:ciphertext` (all hex-encoded). The legacy unversioned `iv:authTag:ciphertext` (3-part) format is still accepted on read for backward compatibility.
+- **Strict decryption**: The plaintext passthrough has been removed — data that matches neither format throws `Malformed encrypted data`, as does a wrong-length (non-16-byte) auth tag or any GCM authentication failure.
 
 The encryption key is lazy-loaded so the server can boot in CI environments without performing crypto operations immediately.
 
 ### Token Refresh
 
-When `getValidAccessToken()` is called and the current token's `expiresAt` has passed, the server automatically refreshes the token:
+When `getValidAccessToken()` is called and the current token's `expiresAt` is within a 60-second safety window (`STRAVA_REFRESH_SAFETY_WINDOW_MS`), the server automatically refreshes the token so an in-flight request never races a just-expired token:
 
 1. POST to `https://www.strava.com/oauth/token` with `grant_type: refresh_token`
 2. The new token set (access token, refresh token, expiration) is persisted back to the database
 3. The fresh access token is returned for use
+
+Refresh requests retry on `429` and `5xx` responses.
 
 All external Strava API calls use `AbortSignal.timeout(15000)` (the `EXTERNAL_API_TIMEOUT_MS` constant).
 
@@ -125,8 +127,9 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   const connection = await storage.getStravaConnection(userId);
   if (!connection) return null;
 
-  // Token still valid — return decrypted token
-  if (connection.expiresAt > new Date()) {
+  // Token still valid (with a 60s safety window) — return decrypted token
+  const refreshAt = new Date(Date.now() + STRAVA_REFRESH_SAFETY_WINDOW_MS);
+  if (connection.expiresAt > refreshAt) {
     return connection.accessToken; // auto-decrypted by storage layer
   }
 
@@ -248,7 +251,7 @@ flowchart TD
     L2 -- ok --> L3{"Layer 3 — Min sync interval<br/>lastSyncedAt &lt; 5min?"}
     L3 -- too soon --> R429b["429 GARMIN_SYNC_TOO_SOON"]
     L3 -- ok --> L4{"Layer 4 — Prior lastError<br/>on the connection?"}
-    L4 -- yes --> R400["400 — disconnect+reconnect required"]
+    L4 -- yes --> R401["401 GARMIN_RECONNECT_REQUIRED"]
     L4 -- no --> L5{"Layer 5 — Global 429 breaker<br/>blockedUntil &gt; now?"}
     L5 -- tripped --> R503["503 GARMIN_CIRCUIT_OPEN"]
     L5 -- ok --> L6["Layer 6 — Use cached OAuth token<br/>(no silent re-login on 401)"]
@@ -264,7 +267,7 @@ flowchart TD
 | 1. Per-route rate limiter | 5 requests per 15 minutes per authenticated user on `/connect` and `/sync` | `garminConnectLimiter`, `garminSyncLimiter` in `server/garmin.ts` |
 | 2. Per-user in-flight mutex | Rejects overlapping `/connect` or `/sync` calls for the same user with HTTP 409 `GARMIN_BUSY`. Catches the gap between the rate limiter and completion. | `withUserLock()` + `inFlightUsers: Set<string>` |
 | 3. Minimum sync interval | Rejects `/sync` with HTTP 429 `GARMIN_SYNC_TOO_SOON` if `lastSyncedAt` is under 5 minutes old. | `MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000` |
-| 4. Fail-fast on `lastError` | If a previous sync left `lastError` set, refuse to retry automatically. The user must disconnect + reconnect, which caps the cost of a broken connection to one failed login attempt. | `handleGarminSync` preflight + `getGarminClient` |
+| 4. Fail-fast on `lastError` | If a previous sync left `lastError` set, refuse to retry automatically and return HTTP 401 `GARMIN_RECONNECT_REQUIRED`. The user must disconnect + reconnect, which caps the cost of a broken connection to one failed login attempt. | `handleGarminSync` preflight + `getGarminClient` |
 | 5. Global 429 circuit breaker | On *any* Garmin response that looks like a 429 ("429", "too many", "rate limit"), trip the breaker for 30 minutes. While tripped, every Garmin route returns HTTP 503 `GARMIN_CIRCUIT_OPEN` -- across all users on the instance. | `garminCircuitBreaker`, `GLOBAL_429_COOLDOWN_MS` |
 | 6. No silent re-login | Cached OAuth tokens live ~1 year. If a fresh-looking token unexpectedly 401s, the error surfaces to the user instead of auto-triggering a new login. | `getGarminClient()` does not fall through from the cached-token path back to login |
 | 7. Audit logging | Every Garmin API call and login is logged at `info` level with the user ID and a `context: "garmin"` tag so bans are traceable. | `logger.info({ userId, context: LOG_CTX }, ...)` throughout `server/garmin.ts` |
@@ -355,15 +358,17 @@ The `sendEmail()` function in `server/email.ts`:
 2. Calls `client.emails.send()` with from, to, subject, and HTML body
 3. Returns `true` on success, `false` on error (errors are logged but not thrown)
 
-### Batch Processing
+### Cron Enqueue
 
-`runEmailCronJob()` in `server/emailScheduler.ts`:
+`runEmailCronJob()` in `server/emailScheduler.ts` does **not** send email directly — it enqueues one pg-boss job per user per email type, and the per-user worker performs the actual send:
 
-1. Calls `storage.markMissedPlanDays()` to mark past planned days as missed before checking
-2. Fetches all users with `emailNotifications` enabled via `storage.getUsersWithEmailNotifications()`
-3. Processes users in batches of 5 (concurrency limit) using `Promise.allSettled`
-4. For each user, calls `checkAndSendEmailsForUser()` which independently checks and sends both email types
-5. Returns a summary: users checked, emails sent, and detail strings
+1. Calls `storage.plans.markMissedPlanDays()` to mark past planned days as missed before checking
+2. Fetches all users with `emailNotifications` enabled via `storage.users.getUsersWithEmailNotifications()`
+3. For each user, enqueues a `send-weekly-summary` job (only on Mondays, only if the per-type toggle is on) and/or a `send-missed-reminder` job (if its toggle is on), respecting per-type opt-ins so no job is queued for an email the user opted out of
+4. Every `sendJobNoRetry()` enqueue is `await`-ed via `Promise.allSettled` so the returned counts reflect what actually committed to the queue
+5. Returns a summary: users checked, jobs enqueued, and detail strings
+
+The pg-boss workers (`send-weekly-summary`, `send-missed-reminder`) then call `processWeeklySummary()` / `processMissedWorkoutReminder()`, which re-check the per-user idempotency guards and call `sendEmail()`. `checkAndSendEmailsForUser()` is the synchronous equivalent used by the per-user `POST /api/v1/emails/check` route.
 
 ### HTTP Endpoints
 
@@ -376,14 +381,14 @@ The external cron endpoint (`/api/v1/cron/emails`) allows platforms like Railway
 
 ### Encryption at Rest
 
-All Strava tokens are encrypted at rest using AES-256-GCM (`server/crypto.ts`):
+Strava and Garmin tokens are encrypted at rest using AES-256-GCM (`server/crypto.ts`):
 
 - **Algorithm**: AES-256-GCM with random 12-byte IV per encryption
-- **Key**: 32-byte key from `ENCRYPTION_KEY` env var. Accepts hex-encoded or raw string (SHA-256 hashed to 32 bytes as fallback).
-- **Format**: Stored as `${iv}:${authTag}:${encryptedText}` (all hex-encoded)
-- **Legacy detection**: If stored value doesn't match the `iv:tag:data` format (3 colon-separated parts), it's treated as unencrypted legacy data -- enabling graceful migration.
+- **Key**: 32-byte key from `ENCRYPTION_KEY` env var. Accepts a 64-char hex string, or any other string (SHA-256 hashed to 32 bytes as fallback).
+- **Format**: Stored as `v1:${iv}:${authTag}:${encryptedText}` (all hex-encoded). The legacy 3-part `${iv}:${authTag}:${encryptedText}` format is still accepted on read.
+- **No plaintext fallback**: A stored value matching neither format throws `Malformed encrypted data`. The unencrypted-legacy passthrough has been removed.
 - **Lazy key loading**: Key is loaded on first use, not at boot. This allows the server to start in CI environments without `ENCRYPTION_KEY`.
-- **Failure mode**: Decryption failures throw (strict) -- never return corrupted data.
+- **Failure mode**: Decryption failures throw (strict) -- never return corrupted data. The auth tag must be exactly 16 bytes.
 
 ---
 
@@ -403,9 +408,9 @@ const queue = new PgBoss(env.DATABASE_URL);
 
 The queue is started via `startQueue()`, which:
 
-1. Calls `queue.start()` to initialize pg-boss tables and begin polling
-2. Creates named queues
-3. Registers worker functions for each queue
+1. Calls `queue.start()` to initialize pg-boss tables and begin polling (wrapped in a 30s timeout that calls `queue.stop()` on failure to avoid leaking the connection pool)
+2. Creates the four named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`
+3. Registers a worker function for each queue
 
 Errors on the queue emit to a global error handler that logs via the application logger.
 
@@ -426,9 +431,23 @@ Errors on the queue emit to a global error handler that logs via the application
 - **On failure**: If the material is not found, the job is skipped with a warning. Other errors are re-thrown for pg-boss retry handling.
 - **Batch behavior**: Jobs are processed via `Promise.allSettled`. If any jobs in the batch fail, a summary error is thrown.
 
+#### `send-weekly-summary`
+
+- **Purpose**: Sends one user's weekly training summary email
+- **Payload**: `{ userId: string }`
+- **Worker**: Resolves the user, then calls `processWeeklySummary()` from `server/emailScheduler.ts`
+- **Enqueued via**: `sendJobNoRetry()` — email sending is not safely replayable, so `retryLimit: 0` (see [Scoped Retries](#scoped-retries-idempotent-vs-side-effectful-jobs)). The `lastWeeklySummaryAt` "sent" marker prevents duplicates.
+
+#### `send-missed-reminder`
+
+- **Purpose**: Sends one user's missed-workout reminder email
+- **Payload**: `{ userId: string }`
+- **Worker**: Resolves the user, then calls `processMissedWorkoutReminder()` from `server/emailScheduler.ts`
+- **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0` for the same reason. The `lastMissedReminderAt` "sent" marker prevents duplicates.
+
 ### Job Processing Pattern
 
-Both workers receive an array of `Job[]` objects and process them concurrently with a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll.
+Every worker receives an array of `Job[]` objects and processes them concurrently via the shared `runBatch()` helper, which uses a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll. Each job is additionally wrapped in a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`) that aborts the job — deliberately 10 minutes below the 60-minute `expireInMinutes` so an orphaned upstream call can tear down before pg-boss treats the job as re-dispatchable.
 
 ### Scoped Retries (Idempotent vs. Side-Effectful Jobs)
 
@@ -451,7 +470,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock, so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eight** scheduled jobs in total (the daily email check, six maintenance/telemetry jobs, and the startup catch-up). Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -502,8 +521,8 @@ Sentry provides centralized error tracking for both server and client. It is ent
 
 **Key files:**
 
-- `server/index.ts` -- Server-side Sentry initialization with `@sentry/node`. Wraps Express with request + error handlers so unhandled rejections and uncaught exceptions surface in Sentry.
-- `client/src/main.tsx` -- Client-side Sentry initialization with `@sentry/react`. The root `<App />` is wrapped in `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as its fallback UI.
+- `server/bootstrap/observability.ts` -- Server-side Sentry initialization. `configureObservability()` skips `Sentry.init` entirely when `SENTRY_DSN` is unset; `registerProcessErrorHandlers()` wires uncaught exceptions and unhandled rejections to `Sentry.captureException`. Both are invoked from `server/index.ts`.
+- `client/src/main.tsx` -- Client-side Sentry initialization with `@sentry/react`, gated on `VITE_SENTRY_DSN`. The root `<App />` is wrapped in `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as its fallback UI.
 - `client/src/components/FeatureErrorBoundaryWrapper.tsx` -- Per-feature error boundary that reports to Sentry with a `featureName` tag so regressions can be attributed to a specific page.
 
 ### Environment Variables
@@ -523,7 +542,7 @@ unless the developer explicitly opts in by setting the DSN variables.
 - **Server**: unhandled errors thrown from routes (via the Express error handler), rejected promises inside `asyncHandler`, and fatal errors from `runStartupMaintenance` before the HTTP listener binds.
 - **Client**: render-time errors caught by `Sentry.ErrorBoundary` / `FeatureErrorBoundaryWrapper`, plus any explicit `Sentry.captureException` calls inside fetch wrappers.
 
-PII-sensitive payloads (request bodies, auth headers) are scrubbed before being sent — see `beforeSend` hooks in the init calls.
+PII-sensitive payloads are scrubbed before being sent. The server `beforeSend` hook in `server/bootstrap/observability.ts` strips request body and query string, cookies, the `authorization`/`cookie`/`x-csrf-token`/`x-idempotency-key` headers, and the user's `email`, `username`, and `ip_address`. The server trace sample rate is `0.1` in production and `1.0` otherwise; `sendDefaultPii` is `false`.
 
 ---
 
