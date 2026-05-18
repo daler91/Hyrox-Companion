@@ -149,7 +149,7 @@ export function useTimelineTitleMutation(setters: TimelineTitleMutationOptions) 
       );
       if (entry.workoutLogId) {
         queryClient.setQueryData<WorkoutLog>(QUERY_KEYS.workout(entry.workoutLogId), (current) =>
-          current && current.focus === title
+          current?.focus === title
             ? { ...current, focus: context?.previousWorkoutFocus ?? entry.focus }
             : current,
         );

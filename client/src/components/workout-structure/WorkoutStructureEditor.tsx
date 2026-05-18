@@ -711,8 +711,8 @@ function ResultControls({
   const amrapScore = value.score?.type === "amrap" ? value.score : null;
   const roundsScore = value.score?.type === "rounds" ? value.score : null;
 
-  const handleNotesChange = (raw: string) => {
-    const notes = raw || null;
+  const handleNotesChange = (raw = "") => {
+    const notes = raw.length > 0 ? raw : null;
     if (value.blockType === "emom") onUpdateScore(mergeEmomScore(value.score, { notes }));
     if (value.blockType === "amrap") onUpdateScore(mergeAmrapScore(value.score, { notes }));
     if (value.blockType === "rounds") onUpdateScore(mergeRoundsScore(value.score, { notes }));

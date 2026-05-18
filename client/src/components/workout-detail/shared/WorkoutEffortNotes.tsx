@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { AthleteNoteInput } from "../AthleteNoteInput";
+import { AthleteNoteInput, ImmediateAthleteNoteInput } from "../AthleteNoteInput";
 import { RpePrompt } from "./RpePrompt";
 
 interface WorkoutEffortNotesProps {
@@ -40,6 +40,7 @@ export function WorkoutEffortNotes({
 }: WorkoutEffortNotesProps) {
   const [rpeEcho, setRpeEcho] = useState(rpe);
   const [lastRpeProp, setLastRpeProp] = useState(rpe);
+  const NoteInput = debounceNote ? AthleteNoteInput : ImmediateAthleteNoteInput;
 
   // Render-time sync: when the parent's value changes (server confirms a
   // save, or the surface re-mounts on a different workout) adopt it.
@@ -56,11 +57,10 @@ export function WorkoutEffortNotes({
   return (
     <div className="space-y-4" data-testid="workout-effort-notes">
       <RpePrompt value={rpeEcho} onChange={handleRpeChange} />
-      <AthleteNoteInput
+      <NoteInput
         value={note}
         onSave={onNoteChange}
         mode="form"
-        immediate={!debounceNote}
         disabled={noteDisabled}
       />
     </div>

@@ -94,7 +94,7 @@ function createOptionalIdempotencyKey(): string | undefined {
 }
 
 function isBrowserOffline(): boolean {
-  return globalThis.navigator !== undefined && globalThis.navigator.onLine === false;
+  return globalThis.navigator?.onLine === false;
 }
 
 function isConnectivityFailure(error: unknown): boolean {

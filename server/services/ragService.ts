@@ -202,7 +202,8 @@ function setRagCache(key: string, chunks: string[]) {
 }
 
 function ragCacheKey(userId: string, query: string, topK: number): string {
-  return `${ragCachePrefix(userId)}${hashRuntimeKey(`${topK}::${query}`)}`;
+  const queryKey = `${topK}::${query}`;
+  return `${ragCachePrefix(userId)}${hashRuntimeKey(queryKey)}`;
 }
 
 function ragCachePrefix(userId: string): string {

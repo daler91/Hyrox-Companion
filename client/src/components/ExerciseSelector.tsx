@@ -39,7 +39,7 @@ function normalizeSearchText(value: string): string {
 
 const exerciseAliasesByName = Object.entries(EXERCISE_NAME_ALIASES).reduce<Partial<Record<ExerciseName, string[]>>>(
   (aliasesByName, [alias, exerciseName]) => {
-    aliasesByName[exerciseName] = [...(aliasesByName[exerciseName] ?? []), alias, alias.replace(/_/g, " ")];
+    aliasesByName[exerciseName] = [...(aliasesByName[exerciseName] ?? []), alias, alias.replaceAll("_", " ")];
     return aliasesByName;
   },
   {},
@@ -47,7 +47,7 @@ const exerciseAliasesByName = Object.entries(EXERCISE_NAME_ALIASES).reduce<Parti
 
 const exerciseSearchTokens = (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
   .reduce<Record<ExerciseName, string[]>>((tokensByName, [name, def]) => {
-    const rawTokens = [name, name.replace(/_/g, " "), def.label, ...(exerciseAliasesByName[name] ?? [])];
+    const rawTokens = [name, name.replaceAll("_", " "), def.label, ...(exerciseAliasesByName[name] ?? [])];
     const tokens = new Set<string>();
 
     for (const rawToken of rawTokens) {
