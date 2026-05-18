@@ -1,4 +1,4 @@
-import type { CoachNoteInputs } from "@shared/schema";
+import type { CoachNoteInputs, WorkoutSuggestion } from "@shared/schema";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
@@ -30,8 +30,7 @@ export interface UpcomingWorkout {
   aiInputsUsed?: CoachNoteInputs | null;
 }
 
-export type { WorkoutSuggestion } from "@shared/schema";
-import type { WorkoutSuggestion } from "@shared/schema";
+export type { WorkoutSuggestion };
 
 export const workoutSuggestionSchema = z.object({
   workoutId: z.string(),
@@ -157,15 +156,15 @@ function formatModificationContext(
   modification: NonNullable<UpcomingWorkout["aiInputsUsed"]>["lastModification"],
 ): string | undefined {
   if (!modification) return undefined;
-  const details = [
-    `kind=${modification.kind}`,
-    modification.completedWorkoutCount != null
-      ? `completedWorkoutsAtEdit=${modification.completedWorkoutCount}`
-      : undefined,
-    modification.rpeTrend ? `rpeTrendAtEdit=${modification.rpeTrend}` : undefined,
-    modification.fatigueFlag != null ? `fatigueFlagAtEdit=${modification.fatigueFlag}` : undefined,
-    modification.reason ? `reason=${modification.reason}` : undefined,
-  ].filter(Boolean);
+  const details = [`kind=${modification.kind}`];
+  if (typeof modification.completedWorkoutCount === "number") {
+    details.push(`completedWorkoutsAtEdit=${modification.completedWorkoutCount}`);
+  }
+  if (modification.rpeTrend) details.push(`rpeTrendAtEdit=${modification.rpeTrend}`);
+  if (typeof modification.fatigueFlag === "boolean") {
+    details.push(`fatigueFlagAtEdit=${modification.fatigueFlag}`);
+  }
+  if (modification.reason) details.push(`reason=${modification.reason}`);
   return `${label}: ${details.join("; ")}`;
 }
 

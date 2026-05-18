@@ -85,7 +85,7 @@ function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
     workoutLogId: "workout-1",
     planDayId: "day-1",
     ...overrides,
-  } as TimelineEntry;
+  };
 }
 
 function makeSetters(initialEntry: TimelineEntry = makeEntry()) {

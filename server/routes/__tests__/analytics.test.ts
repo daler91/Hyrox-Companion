@@ -380,8 +380,8 @@ describe("Analytics Routes", () => {
 
     it("returns structured exercise health data when the secret matches", async () => {
       vi.mocked(db.execute)
-        .mockResolvedValueOnce({ rows: [{ day: "2026-05-16", total_rows: 10, structured_rows: 8, legacy_only_rows: 2, failed_hydration_backlog: 1, legacy_only_pct: 20 }] } as never)
-        .mockResolvedValueOnce({ rows: [{ day: "2026-05-16", owner_type: "workout", source: "manual", counter_name: "parse_text_succeeded", value: 3 }] } as never);
+        .mockResolvedValueOnce({ rows: [{ day: "2026-05-16", total_rows: 10, structured_rows: 8, legacy_only_rows: 2, failed_hydration_backlog: 1, legacy_only_pct: 20 }] })
+        .mockResolvedValueOnce({ rows: [{ day: "2026-05-16", owner_type: "workout", source: "manual", counter_name: "parse_text_succeeded", value: 3 }] });
 
       const response = await request(app)
         .get("/api/v1/analytics/internal/structured-exercise-health")

@@ -34,6 +34,7 @@ import {
   parseStructuredPlanDaySuggestionRows,
 } from "./structuredPlanDaySuggestion";
 import { resolveTrainingStyle } from "./training_styles";
+import type { TrainingStylePromptContext } from "./training_styles/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,6 +62,44 @@ interface PreparedSuggestion {
 interface AppliedSuggestionResult {
   readonly applied: boolean;
   readonly inputsUsed?: CoachNoteInputs;
+}
+
+interface SuggestionApplyContext {
+  readonly upcomingWorkouts: UpcomingWorkout[];
+  readonly userId: string;
+  readonly aiSource: "rag" | "legacy" | null | undefined;
+  readonly inputsUsed: CoachNoteInputs;
+  readonly coachSignals: CoachModificationSignals;
+  readonly unitPreferences: UnitPreferences;
+  readonly tx: DbExecutor;
+}
+
+type ReviewNote = Awaited<ReturnType<typeof generateReviewNotes>>[number];
+
+interface UnchangedWorkoutSelection {
+  readonly workouts: UpcomingWorkout[];
+  readonly ids: Set<string>;
+}
+
+interface ReviewNotesInput {
+  readonly trainingContext: TrainingContext;
+  readonly unchangedWorkouts: UpcomingWorkout[];
+  readonly activePlanGoal: string | undefined;
+  readonly coachingText: string | undefined;
+  readonly userId: string;
+  readonly stylePromptContext: TrainingStylePromptContext;
+  readonly forcedSafetyNote: string | null;
+}
+
+interface AutoCoachApplyInput {
+  readonly preparedSuggestions: PreparedSuggestion[];
+  readonly upcomingWorkouts: UpcomingWorkout[];
+  readonly userId: string;
+  readonly aiSource: "rag" | "legacy" | null;
+  readonly inputsUsed: CoachNoteInputs;
+  readonly coachSignals: CoachModificationSignals;
+  readonly unitPreferences: UnitPreferences;
+  readonly reviewNotes: ReviewNote[];
 }
 
 function hasStructuredExercises(entry: UpcomingWorkout | undefined): boolean {
@@ -211,15 +250,11 @@ function suggestionWillApply(
 
 async function applySuggestion(
   prepared: PreparedSuggestion,
-  upcomingWorkouts: UpcomingWorkout[],
-  userId: string,
-  aiSource: "rag" | "legacy" | null | undefined,
-  inputsUsed: CoachNoteInputs,
-  coachSignals: CoachModificationSignals,
-  unitPreferences: UnitPreferences,
-  tx: DbExecutor,
+  context: SuggestionApplyContext,
 ): Promise<AppliedSuggestionResult> {
   const { suggestion } = prepared;
+  const { upcomingWorkouts, userId, aiSource, inputsUsed, coachSignals, unitPreferences, tx } =
+    context;
   if (!suggestionWillApply(suggestion, upcomingWorkouts)) {
     return { applied: false };
   }
@@ -298,6 +333,140 @@ async function getCoachingMaterialsString(
   return retrieveCoachingText(userId, query);
 }
 
+function buildUpcomingWorkoutInputs(trainingContext: TrainingContext): UpcomingWorkout[] {
+  return (trainingContext.upcomingWorkouts ?? [])
+    .filter((w) => w.planDayId)
+    .map((w) => ({
+      id: w.planDayId!,
+      date: w.date,
+      focus: w.focus,
+      mainWorkout: w.mainWorkout,
+      accessory: w.accessory || undefined,
+      notes: w.notes || undefined,
+      aiSource: w.aiSource,
+      aiRationale: w.aiRationale,
+      aiNoteUpdatedAt: w.aiNoteUpdatedAt,
+      aiInputsUsed: w.aiInputsUsed,
+      ...(w.exerciseDetails && w.exerciseDetails.length > 0
+        ? { exerciseDetails: w.exerciseDetails }
+        : {}),
+    }));
+}
+
+function collectModifiedWorkoutIds(
+  suggestions: WorkoutSuggestion[],
+  upcomingWorkouts: UpcomingWorkout[],
+): Set<string> {
+  const modifiedIds = new Set<string>();
+  for (const suggestion of suggestions) {
+    if (suggestionWillApply(suggestion, upcomingWorkouts)) {
+      modifiedIds.add(suggestion.workoutId);
+    }
+  }
+  return modifiedIds;
+}
+
+function selectUnchangedWorkouts(
+  upcomingWorkouts: UpcomingWorkout[],
+  modifiedIds: Set<string>,
+): UnchangedWorkoutSelection {
+  const workouts: UpcomingWorkout[] = [];
+  const ids = new Set<string>();
+  for (const workout of upcomingWorkouts) {
+    if (!modifiedIds.has(workout.id)) {
+      workouts.push(workout);
+      ids.add(workout.id);
+    }
+  }
+  return { workouts, ids };
+}
+
+async function buildReviewNotes({
+  trainingContext,
+  unchangedWorkouts,
+  activePlanGoal,
+  coachingText,
+  userId,
+  stylePromptContext,
+  forcedSafetyNote,
+}: ReviewNotesInput): Promise<ReviewNote[]> {
+  if (unchangedWorkouts.length === 0) return [];
+  if (forcedSafetyNote) {
+    return unchangedWorkouts.map((workout) => ({
+      workoutId: workout.id,
+      note: forcedSafetyNote,
+    }));
+  }
+  return generateReviewNotes(
+    trainingContext,
+    unchangedWorkouts,
+    activePlanGoal,
+    coachingText,
+    userId,
+    stylePromptContext,
+  );
+}
+
+function deduplicateReviewNotes(
+  rawReviewNotes: ReviewNote[],
+  unchangedIds: Set<string>,
+): ReviewNote[] {
+  const deduplicatedNotes = new Map<string, ReviewNote>();
+  for (const note of rawReviewNotes) {
+    if (unchangedIds.has(note.workoutId)) {
+      deduplicatedNotes.set(note.workoutId, note);
+    }
+  }
+  return Array.from(deduplicatedNotes.values());
+}
+
+async function applyAutoCoachChanges({
+  preparedSuggestions,
+  upcomingWorkouts,
+  userId,
+  aiSource,
+  inputsUsed,
+  coachSignals,
+  unitPreferences,
+  reviewNotes,
+}: AutoCoachApplyInput): Promise<{ adjusted: number; noted: number }> {
+  return db.transaction(async (tx) => {
+    const modResults: AppliedSuggestionResult[] = [];
+    const inputsByWorkoutId = new Map<string, CoachNoteInputs>();
+    // Keep duplicate suggestions for the same plan day ordered so structured
+    // appends re-read sortOrder after any earlier insert in this transaction.
+    for (const prepared of preparedSuggestions) {
+      const currentInputs = inputsByWorkoutId.get(prepared.suggestion.workoutId) ?? inputsUsed;
+      const result = await applySuggestion(prepared, {
+        upcomingWorkouts,
+        userId,
+        aiSource,
+        inputsUsed: currentInputs,
+        coachSignals,
+        unitPreferences,
+        tx,
+      });
+      modResults.push(result);
+      if (result.applied && result.inputsUsed) {
+        inputsByWorkoutId.set(prepared.suggestion.workoutId, result.inputsUsed);
+      }
+    }
+    const noteResults = await Promise.all(
+      reviewNotes.map((note) => applyReviewNote(note.workoutId, note.note, userId, inputsUsed, tx)),
+    );
+
+    let adjustedCount = 0;
+    let notedCount = 0;
+    for (const result of modResults) if (result.applied) adjustedCount++;
+    for (const result of noteResults) if (result) notedCount++;
+
+    return {
+      adjusted: adjustedCount,
+      noted: notedCount,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -328,25 +497,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
 
     const activePlanGoal = trainingContext.activePlan?.goal ?? undefined;
 
-    // Map the training context's upcoming workouts to the shape expected
-    // by the suggestion generator.
-    const upcomingWorkouts: UpcomingWorkout[] = (trainingContext.upcomingWorkouts ?? [])
-      .filter((w) => w.planDayId)
-      .map((w) => ({
-        id: w.planDayId!,
-        date: w.date,
-        focus: w.focus,
-        mainWorkout: w.mainWorkout,
-        accessory: w.accessory || undefined,
-        notes: w.notes || undefined,
-        aiSource: w.aiSource,
-        aiRationale: w.aiRationale,
-        aiNoteUpdatedAt: w.aiNoteUpdatedAt,
-        aiInputsUsed: w.aiInputsUsed,
-        ...(w.exerciseDetails && w.exerciseDetails.length > 0
-          ? { exerciseDetails: w.exerciseDetails }
-          : {}),
-      }));
+    const upcomingWorkouts = buildUpcomingWorkoutInputs(trainingContext);
 
     const resolvedStyle = resolveTrainingStyle(user.trainingStyleId);
     const stylePromptContext = resolvedStyle.strategy.buildPromptContext(
@@ -415,100 +566,39 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // not in the upcoming slate) would otherwise be dropped in both the
     // modification pass AND the review-note pass, leaving that day with
     // no note at all (C-NOTE-1).
-    // ⚡ Bolt Performance Optimization:
-    // Replaced chained .filter().map() with a single for...of loop to avoid intermediate array allocations.
-    const modifiedIds = new Set<string>();
-    for (const s of suggestions) {
-      if (suggestionWillApply(s, upcomingWorkouts)) {
-        modifiedIds.add(s.workoutId);
-      }
-    }
+    const modifiedIds = collectModifiedWorkoutIds(suggestions, upcomingWorkouts);
 
-    // ⚡ Bolt Performance Optimization:
-    // Replaced chained .filter() and .map() with a single for...of loop to avoid intermediate array allocations.
-    const unchangedWorkouts: typeof upcomingWorkouts = [];
-    const unchangedIds = new Set<string>();
-    for (const w of upcomingWorkouts) {
-      if (!modifiedIds.has(w.id)) {
-        unchangedWorkouts.push(w);
-        unchangedIds.add(w.id);
-      }
-    }
+    const unchanged = selectUnchangedWorkouts(upcomingWorkouts, modifiedIds);
 
     const forcedSafetyNote = buildSafetyReviewNote(safetySignals);
-    let rawReviewNotes: Array<{ workoutId: string; note: string }> = [];
-    if (unchangedWorkouts.length > 0) {
-      if (forcedSafetyNote) {
-        rawReviewNotes = unchangedWorkouts.map((w) => ({
-          workoutId: w.id,
-          note: forcedSafetyNote,
-        }));
-      } else {
-        rawReviewNotes = await generateReviewNotes(
-          trainingContext,
-          unchangedWorkouts,
-          activePlanGoal,
-          coachingContext.text,
-          userId,
-          stylePromptContext,
-        );
-      }
-    }
+    const rawReviewNotes = await buildReviewNotes({
+      trainingContext,
+      unchangedWorkouts: unchanged.workouts,
+      activePlanGoal,
+      coachingText: coachingContext.text,
+      userId,
+      stylePromptContext,
+      forcedSafetyNote,
+    });
     // Drop any review note whose workoutId isn't actually an unchanged day:
     // AI providers occasionally hallucinate IDs, and a review-note write against
     // a modified day would overwrite its aiSource/aiRationale and mislabel
     // it as unchanged. Dedupe on workoutId so the last write doesn't clobber
     // a legitimate note either.
-    // ⚡ Bolt Performance Optimization:
-    // Replaced chained .filter().reduce() with a single for...of loop to avoid intermediate array allocations.
-    const deduplicatedNotes = new Map<string, (typeof rawReviewNotes)[number]>();
-    for (const n of rawReviewNotes) {
-      if (unchangedIds.has(n.workoutId)) {
-        deduplicatedNotes.set(n.workoutId, n);
-      }
-    }
-    const reviewNotes = Array.from(deduplicatedNotes.values());
+    const reviewNotes = deduplicateReviewNotes(rawReviewNotes, unchanged.ids);
 
     // Apply all modifications and review notes atomically: a failure mid-loop
     // rolls back every earlier apply so the plan never ends up partially
     // mutated (C2).
-    const { adjusted, noted } = await db.transaction(async (tx) => {
-      const modResults: AppliedSuggestionResult[] = [];
-      const inputsByWorkoutId = new Map<string, CoachNoteInputs>();
-      // Keep duplicate suggestions for the same plan day ordered so structured
-      // appends re-read sortOrder after any earlier insert in this transaction.
-      for (const s of preparedSuggestions) {
-        const currentInputs = inputsByWorkoutId.get(s.suggestion.workoutId) ?? inputsUsed;
-        const result = await applySuggestion(
-          s,
-          upcomingWorkouts,
-          userId,
-          coachingContext.source,
-          currentInputs,
-          coachSignals,
-          unitPreferences,
-          tx,
-        );
-        modResults.push(result);
-        if (result.applied && result.inputsUsed) {
-          inputsByWorkoutId.set(s.suggestion.workoutId, result.inputsUsed);
-        }
-      }
-      const noteResults = await Promise.all(
-        reviewNotes.map((n) => applyReviewNote(n.workoutId, n.note, userId, inputsUsed, tx)),
-      );
-
-      // ⚡ Bolt Performance Optimization:
-      // Replaced .filter(Boolean).length with a single loop to avoid intermediate array allocations.
-      let adjustedCount = 0;
-      let notedCount = 0;
-      for (const res of modResults) if (res.applied) adjustedCount++;
-      for (const res of noteResults) if (res) notedCount++;
-
-      return {
-        adjusted: adjustedCount,
-        noted: notedCount,
-      };
+    const { adjusted, noted } = await applyAutoCoachChanges({
+      preparedSuggestions,
+      upcomingWorkouts,
+      userId,
+      aiSource: coachingContext.source,
+      inputsUsed,
+      coachSignals,
+      unitPreferences,
+      reviewNotes,
     });
 
     if (adjusted > 0 || noted > 0) {

@@ -1,5 +1,5 @@
 import { Pencil } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,29 +14,29 @@ interface AthleteNoteInputProps {
   readonly disabled?: boolean;
   readonly reviewFirst?: boolean;
   readonly mode?: AthleteNoteMode;
-  /**
-   * Fire onSave on every keystroke instead of debouncing. Local-state
-   * consumers (LogSheet / AdhocLogSheet) pass this so the note is current
-   * the instant the user taps the action button; server-bound consumers
-   * leave it off so a keystroke isn't a PATCH.
-   */
-  readonly immediate?: boolean;
+}
+
+type AthleteNoteInputViewProps = Omit<AthleteNoteInputProps, "onSave"> & {
+  readonly persistDraft: (next: string) => void;
+};
+
+function toSavedAthleteNote(next: string): string | null {
+  return next.trim().length === 0 ? null : next;
 }
 
 /**
  * Full-width athlete note at the bottom of the dialog. Keystrokes update
- * local state immediately; the persisted save is debounced 500ms so every
- * character doesn't hit the API. Parent controls the mutation — this
- * component is purely a controlled textarea with built-in debounce.
+ * local state immediately, while the wrapper chooses whether persistence is
+ * immediate or debounced. Parent controls the mutation; this component is
+ * purely a controlled textarea with save timing injected.
  */
-export function AthleteNoteInput({
+function AthleteNoteInputView({
   value,
-  onSave,
   disabled,
   reviewFirst = false,
   mode = "review",
-  immediate = false,
-}: AthleteNoteInputProps) {
+  persistDraft,
+}: AthleteNoteInputViewProps) {
   const [draft, setDraft] = useState(value ?? "");
   const [isEditing, setIsEditing] = useState(!reviewFirst);
 
@@ -47,18 +47,6 @@ export function AthleteNoteInput({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(value ?? "");
   }, [value]);
-
-  const debouncedSave = useDebouncedCallback((next: string) => {
-    onSave(next.trim().length === 0 ? null : next);
-  }, SAVE_DEBOUNCE_MS);
-
-  const persistDraft = (next: string) => {
-    if (immediate) {
-      onSave(next.trim().length === 0 ? null : next);
-    } else {
-      debouncedSave(next);
-    }
-  };
 
   if (mode === "form") {
     return (
@@ -144,4 +132,23 @@ export function AthleteNoteInput({
       />
     </section>
   );
+}
+
+export function AthleteNoteInput({ onSave, ...props }: AthleteNoteInputProps) {
+  const debouncedSave = useDebouncedCallback((next: string) => {
+    onSave(toSavedAthleteNote(next));
+  }, SAVE_DEBOUNCE_MS);
+
+  return <AthleteNoteInputView {...props} persistDraft={debouncedSave} />;
+}
+
+export function ImmediateAthleteNoteInput({ onSave, ...props }: AthleteNoteInputProps) {
+  const saveImmediately = useCallback(
+    (next: string) => {
+      onSave(toSavedAthleteNote(next));
+    },
+    [onSave],
+  );
+
+  return <AthleteNoteInputView {...props} persistDraft={saveImmediately} />;
 }
