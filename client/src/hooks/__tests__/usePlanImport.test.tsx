@@ -36,8 +36,8 @@ describe("usePlanImport", () => {
     vi.mocked(toastHook.useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<
       typeof toastHook.useToast
     >);
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(async () =>
-      new Response(JSON.stringify({ success: true, id: "test-plan-id" })),
+    vi.mocked(queryClientLib.apiRequest).mockImplementation(
+      async () => new Response(JSON.stringify({ success: true, id: "test-plan-id" })),
     );
     vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
     const w = createWrapper();
@@ -117,7 +117,7 @@ describe("usePlanImport", () => {
       sToast: string;
       eToast: string;
       inv: string[][];
-      postAssert: (res: HookResult, mockFn: ReturnType<typeof vi.fn>) => void;
+      postAssert: (res: HookResult, mockFn: ReturnType<typeof vi.fn>) => void | Promise<void>;
     }
 
     const cases: MutationTestCase[] = [
@@ -131,8 +131,10 @@ describe("usePlanImport", () => {
         sToast: "Plan imported! Now set a start date.",
         eToast: "Failed to import plan",
         inv: [["/api/v1/plans"]],
-        postAssert: (res) => {
-          expect(res.current.schedulingPlanId).toBe("test-plan-id");
+        postAssert: async (res) => {
+          await waitFor(() => {
+            expect(res.current.schedulingPlanId).toBe("test-plan-id");
+          });
           expect(res.current.csvPreview).toBeNull();
         },
       },
@@ -207,7 +209,7 @@ describe("usePlanImport", () => {
           );
           expect(mockToast).toHaveBeenCalledWith({ title: sToast });
         });
-        postAssert(result, mockCb);
+        await postAssert(result, mockCb);
       },
     );
 

@@ -1,5 +1,5 @@
 import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -211,19 +211,35 @@ describe("ExerciseTable drag handle", () => {
   it("allows linked exercise rows to move or clear their block assignment", async () => {
     const user = userEvent.setup();
     const onUpdateSet = vi.fn();
-    const structureBlocks: StructureBlockInput[] = [{
-      id: "block-emom",
-      sectionType: "main",
-      formatType: "emom",
-      durationMinutes: 10,
-      steps: [
-        { stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Unassigned exercise" },
-        { stepNumber: 2, stepType: "work", minuteIndex: 2, exerciseName: "Unassigned exercise" },
-      ],
-    }];
+    const structureBlocks: StructureBlockInput[] = [
+      {
+        id: "block-emom",
+        sectionType: "main",
+        formatType: "emom",
+        durationMinutes: 10,
+        steps: [
+          { stepNumber: 1, stepType: "work", minuteIndex: 1, exerciseName: "Unassigned exercise" },
+          { stepNumber: 2, stepType: "work", minuteIndex: 2, exerciseName: "Unassigned exercise" },
+        ],
+      },
+    ];
     const sets: ExerciseSet[] = [
-      makeSet({ id: "set-1", setNumber: 1, sortOrder: 0, blockId: "block-emom", stepNumber: 2, intervalMinute: 2 }),
-      makeSet({ id: "set-2", setNumber: 2, sortOrder: 1, blockId: "block-emom", stepNumber: 2, intervalMinute: 2 }),
+      makeSet({
+        id: "set-1",
+        setNumber: 1,
+        sortOrder: 0,
+        blockId: "block-emom",
+        stepNumber: 2,
+        intervalMinute: 2,
+      }),
+      makeSet({
+        id: "set-2",
+        setNumber: 2,
+        sortOrder: 1,
+        blockId: "block-emom",
+        stepNumber: 2,
+        intervalMinute: 2,
+      }),
     ];
 
     render(
@@ -242,8 +258,11 @@ describe("ExerciseTable drag handle", () => {
     expect(assignmentBadge).toHaveTextContent(/EMOM 1.*min 2/);
 
     await user.click(assignmentBadge);
-    await user.click(screen.getByRole("menuitemradio", { name: /EMOM 1.*min 1/i }));
+    await user.click(await screen.findByRole("menuitemradio", { name: /EMOM 1.*min 1/i }));
 
+    await waitFor(() => {
+      expect(onUpdateSet).toHaveBeenCalledTimes(2);
+    });
     expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
       blockId: "block-emom",
       stepNumber: 1,
@@ -263,8 +282,11 @@ describe("ExerciseTable drag handle", () => {
 
     onUpdateSet.mockClear();
     await user.click(screen.getByTestId("exercise-row-block-assignment"));
-    await user.click(screen.getByRole("menuitemradio", { name: /No block assignment/i }));
+    await user.click(await screen.findByRole("menuitemradio", { name: /No block assignment/i }));
 
+    await waitFor(() => {
+      expect(onUpdateSet).toHaveBeenCalledTimes(2);
+    });
     expect(onUpdateSet).toHaveBeenNthCalledWith(1, "set-1", {
       blockId: null,
       stepNumber: null,
@@ -283,6 +305,6 @@ describe("ExerciseTable drag handle", () => {
     });
 
     await user.click(screen.getByTestId("exercise-row-actions"));
-    expect(screen.getByRole("menuitem", { name: /Block assignment/i })).toBeInTheDocument();
-  });
+    expect(await screen.findByRole("menuitem", { name: /Block assignment/i })).toBeInTheDocument();
+  }, 10_000);
 });

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -118,21 +118,29 @@ describe("TimelineFilters", () => {
 
     const mockCreateObjectURL = vi.fn().mockReturnValue("blob:mock-url");
     const mockRevokeObjectURL = vi.fn();
-    Object.defineProperty(globalThis.URL, 'createObjectURL', { writable: true, value: mockCreateObjectURL });
-    Object.defineProperty(globalThis.URL, 'revokeObjectURL', { writable: true, value: mockRevokeObjectURL });
+    Object.defineProperty(globalThis.URL, "createObjectURL", {
+      writable: true,
+      value: mockCreateObjectURL,
+    });
+    Object.defineProperty(globalThis.URL, "revokeObjectURL", {
+      writable: true,
+      value: mockRevokeObjectURL,
+    });
 
     const originalCreateElement = document.createElement.bind(document);
     const mockClick = vi.fn();
     const mockRemove = vi.fn();
 
-    const mockCreateElement = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      const element = originalCreateElement(tagName);
-      if (tagName === 'a') {
-        element.click = mockClick;
-        element.remove = mockRemove;
-      }
-      return element;
-    });
+    const mockCreateElement = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName === "a") {
+          element.click = mockClick;
+          element.remove = mockRemove;
+        }
+        return element;
+      });
 
     render(<TimelineFilters {...defaultProps} />);
 
@@ -142,7 +150,7 @@ describe("TimelineFilters", () => {
     await user.click(downloadBtn);
 
     expect(mockCreateObjectURL).toHaveBeenCalled();
-    expect(mockCreateElement).toHaveBeenCalledWith('a');
+    expect(mockCreateElement).toHaveBeenCalledWith("a");
     expect(mockClick).toHaveBeenCalled();
     expect(mockRemove).toHaveBeenCalled();
     expect(mockRevokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
@@ -186,13 +194,14 @@ describe("TimelineFilters", () => {
     const input = await screen.findByTestId("input-rename-plan");
     expect(input).toHaveValue("Beginner Hyrox");
 
-    await user.clear(input);
-    await user.type(input, "Super Beginner Hyrox");
+    fireEvent.change(input, { target: { value: "Super Beginner Hyrox" } });
 
     const submitBtn = await screen.findByTestId("button-rename-submit");
     await user.click(submitBtn);
 
-    expect(defaultProps.onRenamePlan).toHaveBeenCalledWith("plan-1", "Super Beginner Hyrox");
+    await waitFor(() => {
+      expect(defaultProps.onRenamePlan).toHaveBeenCalledWith("plan-1", "Super Beginner Hyrox");
+    });
   });
 
   it("disables save button when rename input is empty or just spaces", async () => {

@@ -20,7 +20,7 @@ const STORAGE_KEY = "fitai-offline-queue";
 
 function readStoredQueue(): Array<Record<string, unknown>> {
   const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) as Array<Record<string, unknown>> : [];
+  return raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : [];
 }
 
 describe("offlineQueue", () => {
@@ -30,14 +30,17 @@ describe("offlineQueue", () => {
   });
 
   it("generates replay ids with browser crypto", () => {
+    const deterministicUuid = "24936253-dc1a-4fe1-a481-f33c22053e78";
+    const randomUUID = vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(deterministicUuid);
     const mathRandom = vi.spyOn(Math, "random");
     try {
       const id = createOfflineMutationId();
 
-      expect(id).toMatch(/^[\da-f-]{32,36}$/i);
-      expect(id).not.toMatch(/^\d+-/);
+      expect(id).toBe(deterministicUuid);
+      expect(randomUUID).toHaveBeenCalledOnce();
       expect(mathRandom).not.toHaveBeenCalled();
     } finally {
+      randomUUID.mockRestore();
       mathRandom.mockRestore();
     }
   });
@@ -67,12 +70,16 @@ describe("offlineQueue", () => {
     enqueueMutation("POST", "/api/v1/workouts", { title: "Queued" }, { id: "event-id" });
     await flushQueue();
 
-    expect(queueChange).toHaveBeenCalledWith(expect.objectContaining({
-      detail: { pendingCount: 1 },
-    }));
-    expect(syncComplete).toHaveBeenCalledWith(expect.objectContaining({
-      detail: { synced: 1, failed: 0, dropped: 0 },
-    }));
+    expect(queueChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { pendingCount: 1 },
+      }),
+    );
+    expect(syncComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { synced: 1, failed: 0, dropped: 0 },
+      }),
+    );
 
     globalThis.removeEventListener(OFFLINE_QUEUE_CHANGE_EVENT, queueChange);
     globalThis.removeEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
@@ -92,24 +99,31 @@ describe("offlineQueue", () => {
   it("drops mutations that exceed the retry limit", async () => {
     const dropped = vi.fn();
     const unsubscribe = onMutationDropped(dropped);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([{
-      id: "too-many-retries",
-      method: "POST",
-      url: "/api/v1/workouts",
-      body: { title: "Old" },
-      timestamp: Date.now(),
-      retryCount: 5,
-    }]));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: "too-many-retries",
+          method: "POST",
+          url: "/api/v1/workouts",
+          body: { title: "Old" },
+          timestamp: Date.now(),
+          retryCount: 5,
+        },
+      ]),
+    );
 
     const result = await flushQueue();
 
     expect(result).toEqual({ synced: 0, failed: 0, dropped: 1 });
     expect(apiRequest).not.toHaveBeenCalled();
     expect(getPendingCount()).toBe(0);
-    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({
-      id: "too-many-retries",
-      reason: "max_retries",
-    }));
+    expect(dropped).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "too-many-retries",
+        reason: "max_retries",
+      }),
+    );
     unsubscribe();
   });
 });
