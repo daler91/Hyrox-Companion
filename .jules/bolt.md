@@ -1,3 +1,3 @@
-## 2024-05-18 - Optimized chaining methods
-**Learning:** Chained array iteration methods like `.map().filter().reduce()` are common but create unnecessary intermediate array allocations, reducing performance. Single `for...of` loops that maintain multiple pieces of state can execute in one pass (O(N)) instead of O(3N).
-**Action:** Always scan for chained iteration methods that are easily combined into a single pass when optimizing data aggregation logic, and add comments explaining the optimization.
+## 2026-05-18 - Avoid O(N log N) JSON.stringify in array sorts
+**Learning:** Calling `JSON.stringify()` inside a `.sort()` comparator executes the expensive serialization operation O(N log N) times, which can degrade performance even on medium-sized arrays. Combining this with `localeCompare` amplifies the overhead and can introduce environment-dependent determinism issues.
+**Action:** Use a Schwartzian transform (decorate-sort-undecorate) to pre-compute stringified keys in O(N) time before sorting. Use standard explicit string comparison (`<`, `>`) on the keys instead of `localeCompare` for safe, deterministic, and much faster sorting.

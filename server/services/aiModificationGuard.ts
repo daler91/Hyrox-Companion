@@ -84,19 +84,30 @@ function normalizeText(value: string | null | undefined): string | null {
 }
 
 function normalizeExerciseDetails(workout: WorkoutPrescriptionInput) {
+  // ⚡ Bolt Performance Optimization:
+  // Using a Schwartzian transform (decorate-sort-undecorate) to pre-compute stringified keys in O(N) time.
+  // This avoids O(N log N) expensive JSON.stringify() operations inside the sort comparator.
   return (workout.exerciseDetails ?? [])
-    .map((exercise) => ({
-      exerciseName: normalizeText(exercise.exerciseName),
-      customLabel: normalizeText(exercise.customLabel),
-      category: normalizeText(exercise.category),
-      setNumber: exercise.setNumber ?? null,
-      reps: exercise.reps ?? null,
-      weight: exercise.weight ?? null,
-      distance: exercise.distance ?? null,
-      time: exercise.time ?? null,
-      notes: normalizeText(exercise.notes),
-    }))
-    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    .map((exercise) => {
+      const item = {
+        exerciseName: normalizeText(exercise.exerciseName),
+        customLabel: normalizeText(exercise.customLabel),
+        category: normalizeText(exercise.category),
+        setNumber: exercise.setNumber ?? null,
+        reps: exercise.reps ?? null,
+        weight: exercise.weight ?? null,
+        distance: exercise.distance ?? null,
+        time: exercise.time ?? null,
+        notes: normalizeText(exercise.notes),
+      };
+      return { item, key: JSON.stringify(item) };
+    })
+    .sort((a, b) => {
+      if (a.key < b.key) return -1;
+      if (a.key > b.key) return 1;
+      return 0;
+    })
+    .map(({ item }) => item);
 }
 
 export function mapExerciseSetToPromptDetail(row: ExerciseSet | InsertExerciseSet): ExerciseDetail {
