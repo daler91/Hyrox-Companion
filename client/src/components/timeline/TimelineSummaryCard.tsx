@@ -121,7 +121,7 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
   const hasSummaryData =
     plans.length > 0 ||
     timelineData.length > 0 ||
-    (overview?.currentStats.totalWorkouts ?? 0) > 0 ||
+    (overview?.currentStats?.totalWorkouts ?? 0) > 0 ||
     (overview?.weeklyCompletedWorkouts ?? 0) > 0 ||
     (overview?.currentStreak ?? 0) > 0;
 

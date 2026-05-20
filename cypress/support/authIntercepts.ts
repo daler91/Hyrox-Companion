@@ -82,10 +82,21 @@ export function setupAuthIntercepts(overrides?: {
   cy.intercept("GET", "/api/v1/training-overview*", {
     statusCode: 200,
     body: overrides?.trainingOverview ?? {
+      currentStats: {
+        totalWorkouts: 0,
+        avgPerWeek: 0,
+        totalDuration: 0,
+        avgDuration: 0,
+        avgRpe: null,
+        avgCompliancePct: null,
+      },
       weeklySummaries: [],
       workoutDates: [],
       categoryTotals: {},
       stationCoverage: [],
+      currentStreak: 0,
+      weeklyCompletedWorkouts: 0,
+      weeklyGoal: 5,
     },
   }).as("trainingOverview");
 

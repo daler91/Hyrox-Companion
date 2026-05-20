@@ -147,4 +147,26 @@ describe("TimelineSummaryCard", () => {
 
     expect(screen.queryByTestId("timeline-summary-card")).not.toBeInTheDocument();
   });
+
+  it("tolerates overview responses without current stats", async () => {
+    mocks.getOverview.mockResolvedValue({
+      weeklySummaries: [],
+      workoutDates: [],
+      categoryTotals: {},
+      stationCoverage: [],
+      currentStreak: 0,
+      weeklyCompletedWorkouts: 0,
+      weeklyGoal: 5,
+    });
+    mocks.getPlans.mockResolvedValue([]);
+    mocks.getTimeline.mockResolvedValue([]);
+
+    renderSummary(null);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("timeline-summary-skeleton")).not.toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("timeline-summary-card")).not.toBeInTheDocument();
+  });
 });
