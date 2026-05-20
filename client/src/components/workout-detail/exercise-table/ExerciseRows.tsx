@@ -30,6 +30,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise } from "@/lib/exerciseUtils";
@@ -375,17 +381,26 @@ const GroupRow = memo(function GroupRow({
             />
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 text-muted-foreground"
-                aria-label={`Row actions for ${label}`}
-                data-testid="exercise-row-actions"
-              >
-                <MoreVertical className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground"
+                      aria-label={`Row actions for ${label}`}
+                      data-testid="exercise-row-actions"
+                    >
+                      <MoreVertical className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Row actions</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <DropdownMenuContent align="end">
               {changeExerciseItem}
               <BlockAssignmentAction
