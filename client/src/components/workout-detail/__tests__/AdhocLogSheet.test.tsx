@@ -57,6 +57,7 @@ vi.mock("@/lib/api", () => ({
   QUERY_KEYS: {
     workouts: ["workouts"],
     timeline: ["timeline"],
+    authUser: ["authUser"],
     personalRecords: ["personalRecords"],
     exerciseAnalytics: ["exerciseAnalytics"],
   },
@@ -122,6 +123,8 @@ describe("AdhocLogSheet", () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByTestId("mock-add-set"));
+    await user.clear(screen.getByTestId("adhoc-duration-minutes-input"));
+    await user.type(screen.getByTestId("adhoc-duration-minutes-input"), "47");
 
     expect(screen.getByTestId("adhoc-save-workout")).toBeEnabled();
     await user.click(screen.getByTestId("adhoc-save-workout"));
@@ -130,10 +133,12 @@ describe("AdhocLogSheet", () => {
     const payload = createWorkoutMock.mock.calls[0][0] as {
       title: string;
       focus: string;
+      duration?: number;
       exercises?: Array<{ exerciseName: string; sets: unknown[] }>;
     };
     expect(payload.title).toBe("Workout");
     expect(payload.focus).toBe("Workout");
+    expect(payload.duration).toBe(47);
     expect(payload.exercises).toBeDefined();
     expect(payload.exercises?.[0]?.exerciseName).toBe("back_squat");
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));

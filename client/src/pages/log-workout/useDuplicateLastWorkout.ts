@@ -10,6 +10,7 @@ import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 interface UseDuplicateLastWorkoutOptions {
   readonly setDate: (value: string) => void;
   readonly setRpe: (value: number | null) => void;
+  readonly setDurationMinutes: (value: string) => void;
   readonly setTitle: (value: string) => void;
   readonly setNotes: (value: string) => void;
   readonly setFreeText: (value: string) => void;
@@ -26,6 +27,7 @@ interface UseDuplicateLastWorkoutOptions {
 export function useDuplicateLastWorkout({
   setDate,
   setRpe,
+  setDurationMinutes,
   setTitle,
   setNotes,
   setFreeText,
@@ -38,6 +40,7 @@ export function useDuplicateLastWorkout({
     onSuccess: (latest) => {
       setDate(format(new Date(), "yyyy-MM-dd"));
       setRpe(null);
+      setDurationMinutes("");
       // The server stores the user-facing title in `focus`; the form's
       // "title" input binds to the same field on save.
       setTitle(latest.focus ?? "");

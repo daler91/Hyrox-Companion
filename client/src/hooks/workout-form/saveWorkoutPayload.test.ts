@@ -10,6 +10,7 @@ const baseInput = {
   freeText: "",
   notes: "",
   rpe: null,
+  durationMinutes: "",
   exerciseBlocks: [],
   exerciseData: {},
   weightLabel: "kg",
@@ -41,6 +42,18 @@ describe("buildWorkoutSavePayload", () => {
       notes: null,
       rpe: null,
     });
+  });
+
+  it("includes an optional workout duration when provided", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "5k easy run",
+      durationMinutes: "47",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.duration).toBe(47);
   });
 
   it("uses structured blocks and reports missing-field warnings", () => {

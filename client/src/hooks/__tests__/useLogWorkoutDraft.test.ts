@@ -29,6 +29,7 @@ describe("useLogWorkoutDraft", () => {
       freeText: "",
       notes: "Felt strong",
       rpe: 8,
+      durationMinutes: "62",
       useTextMode: false,
       exerciseBlocks: ["squat__1"],
       exerciseData: {
@@ -46,6 +47,7 @@ describe("useLogWorkoutDraft", () => {
     expect(loaded?.title).toBe("Leg day");
     expect(loaded?.notes).toBe("Felt strong");
     expect(loaded?.rpe).toBe(8);
+    expect(loaded?.durationMinutes).toBe("62");
     expect(loaded?.exerciseBlocks).toEqual(["squat__1"]);
     expect(loaded?.blockCounter).toBe(1);
   });
@@ -76,6 +78,32 @@ describe("useLogWorkoutDraft", () => {
       blockCounter: 0,
     });
     expect(loadLogWorkoutDraft(userKey)).toBeNull();
+  });
+
+  it("loads v2 drafts with a blank duration", () => {
+    globalThis.window.localStorage.setItem(
+      `fitai-log-workout-draft:${userKey}`,
+      JSON.stringify({
+        version: 2,
+        userKey,
+        savedAt: Date.now(),
+        title: "Older draft",
+        date: "2026-04-11",
+        freeText: "Run 30 minutes",
+        notes: "",
+        rpe: null,
+        useTextMode: true,
+        exerciseBlocks: [],
+        exerciseData: {},
+        structureBlocks: [],
+        blockCounter: 0,
+        step: 3,
+      }),
+    );
+
+    const loaded = loadLogWorkoutDraft(userKey);
+    expect(loaded?.durationMinutes).toBe("");
+    expect(loaded?.step).toBe(3);
   });
 
   it("isolates drafts per userKey", () => {
@@ -153,6 +181,7 @@ describe("useLogWorkoutDraft", () => {
     expect(loaded?.planDayId).toBe("plan-day-1");
     expect(loaded?.freeText).toBe("4x8 bench press\n\nEasy accessories");
     expect(loaded?.rpe).toBeNull();
+    expect(loaded?.durationMinutes).toBe("");
     expect(loaded?.exerciseBlocks).toEqual(["bench_press__1"]);
     expect(loaded?.exerciseData["bench_press__1"].sets[0]).toMatchObject({
       reps: 8,

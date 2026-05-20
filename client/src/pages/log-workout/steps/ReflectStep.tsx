@@ -4,6 +4,8 @@ import { useState } from "react";
 import { RpeSelector } from "@/components/RpeSelector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
 
 import { StepFooter } from "../StepFooter";
@@ -11,6 +13,8 @@ import { StepFooter } from "../StepFooter";
 interface ReflectStepProps {
   readonly rpe: number | null;
   readonly setRpe: (value: number | null) => void;
+  readonly durationMinutes: string;
+  readonly setDurationMinutes: (value: string) => void;
   readonly notes: string;
   readonly setNotes: (value: string) => void;
   readonly isNotesListening: boolean;
@@ -31,6 +35,8 @@ interface ReflectStepProps {
 export function ReflectStep({
   rpe,
   setRpe,
+  durationMinutes,
+  setDurationMinutes,
   notes,
   setNotes,
   isNotesListening,
@@ -69,6 +75,20 @@ export function ReflectStep({
                 : "Skip RPE for this workout"}
             </button>
           )}
+          <div className="space-y-2 pt-3">
+            <Label htmlFor="workout-duration-minutes">Total time (minutes)</Label>
+            <Input
+              id="workout-duration-minutes"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              placeholder="45"
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(event.target.value)}
+              data-testid="input-duration-minutes"
+            />
+          </div>
         </CardContent>
       </Card>
 

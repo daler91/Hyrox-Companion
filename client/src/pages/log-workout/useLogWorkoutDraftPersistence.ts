@@ -29,6 +29,7 @@ interface UseLogWorkoutDraftPersistenceOptions {
   readonly freeText: string;
   readonly notes: string;
   readonly rpe: number | null;
+  readonly durationMinutes: string;
   readonly planDayId?: string | null;
   readonly useTextMode: boolean;
   readonly exerciseBlocks: string[];
@@ -46,6 +47,7 @@ export function useLogWorkoutDraftPersistence({
   freeText,
   notes,
   rpe,
+  durationMinutes,
   planDayId,
   useTextMode,
   exerciseBlocks,
@@ -74,6 +76,7 @@ export function useLogWorkoutDraftPersistence({
         freeText,
         notes,
         rpe,
+        durationMinutes,
         planDayId,
         useTextMode,
         exerciseBlocks,
@@ -91,6 +94,7 @@ export function useLogWorkoutDraftPersistence({
     freeText,
     notes,
     rpe,
+    durationMinutes,
     planDayId,
     useTextMode,
     exerciseBlocks,

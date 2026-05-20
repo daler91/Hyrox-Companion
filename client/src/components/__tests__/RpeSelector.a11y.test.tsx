@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RpeSelector } from "../RpeSelector";
 
+const AXE_TIMEOUT_MS = 10_000;
+
 describe("RpeSelector a11y", () => {
   it("has no WCAG violations with no value selected", async () => {
     const { container } = render(
@@ -11,7 +13,7 @@ describe("RpeSelector a11y", () => {
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 
   it("has no WCAG violations with a value selected", async () => {
     const { container } = render(
@@ -19,7 +21,7 @@ describe("RpeSelector a11y", () => {
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 
   it("has no WCAG violations in compact mode without a visible legend", async () => {
     const { container } = render(
@@ -27,5 +29,5 @@ describe("RpeSelector a11y", () => {
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 });

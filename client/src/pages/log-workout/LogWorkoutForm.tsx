@@ -68,6 +68,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setNotes,
     rpe,
     setRpe,
+    durationMinutes,
+    setDurationMinutes,
     planDayId,
     setPlanDayId,
     voiceInput,
@@ -88,6 +90,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           freeText: initialDraft.freeText,
           notes: initialDraft.notes,
           rpe: initialDraft.rpe,
+          durationMinutes: initialDraft.durationMinutes,
           planDayId: initialDraft.planDayId,
         }
       : undefined,
@@ -107,6 +110,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   const { handleDuplicateLast, isDuplicating } = useDuplicateLastWorkout({
     setDate,
     setRpe,
+    setDurationMinutes,
     setTitle,
     setNotes,
     setFreeText,
@@ -125,6 +129,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     freeText,
     notes,
     rpe,
+    durationMinutes,
     planDayId,
     useTextMode,
     exerciseBlocks,
@@ -155,6 +160,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       setDate={setDate}
       rpe={rpe}
       setRpe={setRpe}
+      durationMinutes={durationMinutes}
+      setDurationMinutes={setDurationMinutes}
       notes={notes}
       setNotes={setNotes}
       freeText={freeText}

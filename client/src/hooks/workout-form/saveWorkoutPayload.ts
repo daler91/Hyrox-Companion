@@ -4,6 +4,7 @@ import type { StructuredExercise } from "@/components/ExerciseInput";
 import { configToStructureBlock } from "@/components/workout-structure";
 import { exerciseToPayload, generateSummary } from "@/hooks/useWorkoutEditor";
 import { getMissingFieldWarnings } from "@/lib/exerciseWarnings";
+import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 
 import type { SaveWorkoutInput } from "./types";
 
@@ -13,6 +14,7 @@ interface BuildWorkoutSavePayloadInput {
   readonly freeText: string;
   readonly notes: string;
   readonly rpe: number | null;
+  readonly durationMinutes?: string;
   readonly planDayId?: string | null;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
@@ -192,6 +194,7 @@ export function buildWorkoutSavePayload({
   freeText,
   notes,
   rpe,
+  durationMinutes,
   planDayId,
   exerciseBlocks,
   exerciseData,
@@ -201,6 +204,7 @@ export function buildWorkoutSavePayload({
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
   const effectiveTitle = title.trim() || "Workout";
   const hasStructured = exerciseBlocks.length > 0 || incomingStructureBlocks.length > 0;
+  const normalizedDuration = normalizeDurationMinutes(durationMinutes);
 
   if (!hasStructured) {
     if (!freeText.trim()) {
@@ -221,6 +225,7 @@ export function buildWorkoutSavePayload({
         mainWorkout: freeText,
         notes: notes || null,
         rpe: rpe || null,
+        ...(normalizedDuration != null ? { duration: normalizedDuration } : {}),
         ...(planDayId ? { planDayId } : {}),
       },
     };
@@ -283,6 +288,7 @@ export function buildWorkoutSavePayload({
       mainWorkout,
       notes: notes || null,
       rpe: rpe || null,
+      ...(normalizedDuration != null ? { duration: normalizedDuration } : {}),
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
       ...(structureBlocks.length > 0 ? { structureBlocks } : {}),

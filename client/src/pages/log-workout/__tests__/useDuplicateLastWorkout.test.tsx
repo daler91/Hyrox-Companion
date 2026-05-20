@@ -47,12 +47,14 @@ describe("useDuplicateLastWorkout", () => {
       exerciseSets: [],
     });
     const setPlanDayId = vi.fn();
+    const setDurationMinutes = vi.fn();
 
     const { result } = renderHook(
       () =>
         useDuplicateLastWorkout({
           setDate: vi.fn(),
           setRpe: vi.fn(),
+          setDurationMinutes,
           setTitle: vi.fn(),
           setNotes: vi.fn(),
           setFreeText: vi.fn(),
@@ -69,6 +71,7 @@ describe("useDuplicateLastWorkout", () => {
 
     await waitFor(() => {
       expect(setPlanDayId).toHaveBeenCalledWith(null);
+      expect(setDurationMinutes).toHaveBeenCalledWith("");
     });
   });
 });

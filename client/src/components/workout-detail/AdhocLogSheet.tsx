@@ -15,6 +15,7 @@ import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 import { ExerciseTable } from "./ExerciseTable";
@@ -214,6 +215,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const [accessory, setAccessory] = useState("");
   const [notes, setNotes] = useState("");
   const [rpe, setRpe] = useState<number | null>(null);
+  const [durationMinutes, setDurationMinutes] = useState("");
   const [exerciseSets, setExerciseSets] = useState<ExerciseSet[]>([]);
 
   const resetState = () => {
@@ -223,6 +225,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     setAccessory("");
     setNotes("");
     setRpe(null);
+    setDurationMinutes("");
     setExerciseSets([]);
   };
 
@@ -334,6 +337,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       const trimmedTitle = title.trim() || "Workout";
       const hasStructured = exerciseSets.length > 0;
       const hasFreeText = mainWorkout.trim().length > 0;
+      const normalizedDuration = normalizeDurationMinutes(durationMinutes);
 
       if (!hasStructured && !hasFreeText) {
         return Promise.reject(new Error("Please add at least one exercise or describe your workout."));
@@ -348,6 +352,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         accessory: accessory.trim() || null,
         notes: notes.trim() || null,
         rpe: rpe ?? null,
+        ...(normalizedDuration != null ? { duration: normalizedDuration } : {}),
         ...(hasStructured ? { exercises: setsToParsed(exerciseSets) } : {}),
       });
     },
@@ -407,6 +412,20 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
               onChange={(e) => setDate(e.target.value)}
               max={todayStr()}
               data-testid="adhoc-date-input"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="adhoc-duration-minutes">Total time (minutes)</Label>
+            <Input
+              id="adhoc-duration-minutes"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              placeholder="45"
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(event.target.value)}
+              data-testid="adhoc-duration-minutes-input"
             />
           </div>
         </div>

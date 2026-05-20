@@ -210,6 +210,7 @@ describe('useWorkoutForm', () => {
     expect(result.current.date).toBe(new Date().toISOString().split('T')[0]);
     expect(result.current.freeText).toBe('');
     expect(result.current.notes).toBe('');
+    expect(result.current.durationMinutes).toBe('');
   });
 
   describe('State management', () => {
@@ -221,12 +222,14 @@ describe('useWorkoutForm', () => {
         result.current.setDate('2024-05-01');
         result.current.setFreeText('Run 5k');
         result.current.setNotes('Felt great');
+        result.current.setDurationMinutes('48');
       });
 
       expect(result.current.title).toBe('My Workout');
       expect(result.current.date).toBe('2024-05-01');
       expect(result.current.freeText).toBe('Run 5k');
       expect(result.current.notes).toBe('Felt great');
+      expect(result.current.durationMinutes).toBe('48');
     });
   });
 
@@ -407,6 +410,7 @@ describe('useWorkoutForm', () => {
         result.current.setDate('2024-05-01');
         result.current.setFreeText('Ran 5k in 25 mins');
         result.current.setNotes('Felt great');
+        result.current.setDurationMinutes('25');
       });
 
       act(() => {
@@ -421,6 +425,7 @@ describe('useWorkoutForm', () => {
           mainWorkout: 'Ran 5k in 25 mins',
           notes: 'Felt great',
           rpe: null,
+          duration: 25,
         }, expect.any(AbortSignal), expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }));
       });
     });

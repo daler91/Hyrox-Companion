@@ -1,16 +1,15 @@
-import { screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, screen } from "@testing-library/react";
 import { expect } from "vitest";
 
-export async function renameWorkoutTitleFromHeader(
+export function renameWorkoutTitleFromHeader(
   testIdPrefix: string,
   typedTitle: string,
-): Promise<void> {
-  const user = userEvent.setup();
-  await user.click(screen.getByTestId(`${testIdPrefix}-edit`));
-  await user.clear(screen.getByTestId(`${testIdPrefix}-input`));
-  await user.type(screen.getByTestId(`${testIdPrefix}-input`), typedTitle);
-  await user.click(screen.getByTestId(`${testIdPrefix}-save`));
+): void {
+  fireEvent.click(screen.getByTestId(`${testIdPrefix}-edit`));
+  fireEvent.change(screen.getByTestId(`${testIdPrefix}-input`), {
+    target: { value: typedTitle },
+  });
+  fireEvent.click(screen.getByTestId(`${testIdPrefix}-save`));
 }
 
 export function expectWorkoutTitleRename(

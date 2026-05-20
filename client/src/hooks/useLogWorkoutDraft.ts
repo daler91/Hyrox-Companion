@@ -6,9 +6,9 @@ import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
 const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";
-// v2 adds `step`. v1 drafts are silently dropped on load — they're short-lived
+// v3 adds `durationMinutes`; v2 drafts hydrate it as blank. v1 drafts are silently dropped on load.
 // (cleared on save) so the upgrade cost is negligible.
-const DRAFT_VERSION = 2;
+const DRAFT_VERSION = 3;
 
 export type WorkoutStep = 1 | 2 | 3;
 export const FIRST_STEP: WorkoutStep = 1;
@@ -26,6 +26,7 @@ export interface LogWorkoutDraft {
   freeText: string;
   notes: string;
   rpe: number | null;
+  durationMinutes: string;
   planDayId?: string | null;
   useTextMode: boolean;
   exerciseBlocks: string[];
@@ -51,6 +52,7 @@ function isBlank(draft: LoadedDraft): boolean {
     draft.freeText.trim() === "" &&
     draft.notes.trim() === "" &&
     draft.rpe === null &&
+    (draft.durationMinutes ?? "").trim() === "" &&
     draft.planDayId == null &&
     draft.exerciseBlocks.length === 0
   );
@@ -62,7 +64,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
     const raw = globalThis.window.localStorage.getItem(getStorageKey(userKey));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LogWorkoutDraft;
-    if (parsed.version !== DRAFT_VERSION) return null;
+    if (parsed.version !== DRAFT_VERSION && parsed.version !== 2) return null;
     if (parsed.userKey !== userKey) return null;
     return {
       title: parsed.title ?? "",
@@ -70,6 +72,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
       freeText: parsed.freeText ?? "",
       notes: parsed.notes ?? "",
       rpe: parsed.rpe ?? null,
+      durationMinutes: parsed.durationMinutes ?? "",
       planDayId: parsed.planDayId ?? null,
       useTextMode: parsed.useTextMode ?? false,
       exerciseBlocks: parsed.exerciseBlocks ?? [],
@@ -119,6 +122,7 @@ export function saveLogWorkoutDraftFromTimelineEntry(
     freeText: prescription,
     notes: "",
     rpe: null,
+    durationMinutes: entry.duration != null ? String(entry.duration) : "",
     planDayId: entry.planDayId ?? null,
     useTextMode: structured.names.length === 0,
     exerciseBlocks: structured.names,
