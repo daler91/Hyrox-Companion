@@ -1,6 +1,6 @@
 import type { PersonalRecord, TimelineEntry, TrainingOverview } from "@shared/schema";
 
-import { typedRequest } from "./client";
+import { rawRequest, typedRequest } from "./client";
 import type { RagInfo } from "./coaching";
 
 export interface Suggestion {
@@ -27,6 +27,8 @@ export type ApplySuggestionResult =
       message: string;
     };
 
+export type AnalyticsExportFormat = "csv" | "json";
+
 export const analytics = {
   getPersonalRecords: (dateParams?: string) =>
     typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
@@ -36,6 +38,9 @@ export const analytics = {
 
   getTrainingOverview: (dateParams?: string) =>
     typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams ?? ""}`),
+
+  exportData: (format: AnalyticsExportFormat) =>
+    rawRequest("GET", `/api/v1/export?format=${format}`),
 } as const;
 
 export const timeline = {

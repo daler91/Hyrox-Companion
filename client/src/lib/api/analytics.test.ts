@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { analytics, timeline } from "./analytics";
-import { typedRequest } from "./client";
+import { rawRequest, typedRequest } from "./client";
 
 vi.mock("./client", () => ({
+  rawRequest: vi.fn(),
   typedRequest: vi.fn(),
 }));
 
@@ -41,6 +42,11 @@ describe("analytics API client", () => {
     it("getTrainingOverview() calls typedRequest with GET and correct URL when dateParams is provided", () => {
       analytics.getTrainingOverview("?range=week");
       expect(typedRequest).toHaveBeenCalledWith("GET", "/api/v1/training-overview?range=week");
+    });
+
+    it("exportData() calls rawRequest with GET and correct URL", () => {
+      analytics.exportData("csv");
+      expect(rawRequest).toHaveBeenCalledWith("GET", "/api/v1/export?format=csv");
     });
   });
 

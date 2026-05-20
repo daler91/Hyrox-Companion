@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { Activity, BarChart3, Download, FileJson, FileSpreadsheet, PieChart, Sparkles, Target,Trophy } from "lucide-react";
-import { useMemo } from "react";
+import { Activity, BarChart3, Download, FileJson, FileSpreadsheet, Loader2, PieChart, Sparkles, Target, Trophy } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
@@ -19,19 +19,29 @@ import {
 import { PageContainer } from "@/components/ui/PageContainer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
-import { QUERY_KEYS } from "@/lib/api";
+import { type AnalyticsExportFormat, api, QUERY_KEYS } from "@/lib/api";
 
 type DateRange = "30" | "90" | "180" | "365" | "all";
 
 const DATE_RANGES: readonly DateRange[] = ["30", "90", "180", "365", "all"];
 
+function getExportFilename(response: Response, exportFormat: AnalyticsExportFormat) {
+  const contentDisposition = response.headers.get("Content-Disposition");
+  const filenameMatch = contentDisposition?.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1] ?? `hyrox-training-data.${exportFormat}`;
+}
+
 export default function Analytics() {
+  const { toast } = useToast();
   const [dateRange, setDateRange] = useUrlQueryState<DateRange>(
     "range",
     "90",
     DATE_RANGES,
   );
+  const [exportingFormat, setExportingFormat] = useState<AnalyticsExportFormat | null>(null);
+  const isExporting = exportingFormat !== null;
 
   const dateParams = useMemo(() => {
     if (dateRange === "all") return "";
@@ -43,8 +53,28 @@ export default function Analytics() {
     queryKey: QUERY_KEYS.preferences,
   });
 
-  const handleExport = (exportFormat: "csv" | "json") => {
-    globalThis.location.href = `/api/v1/export?format=${exportFormat}`;
+  const handleExport = async (exportFormat: AnalyticsExportFormat) => {
+    setExportingFormat(exportFormat);
+    try {
+      const response = await api.analytics.exportData(exportFormat);
+      const blob = await response.blob();
+      const downloadUrl = globalThis.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = getExportFilename(response, exportFormat);
+      document.body.append(link);
+      link.click();
+      link.remove();
+      globalThis.URL.revokeObjectURL(downloadUrl);
+    } catch {
+      toast({
+        title: "Export failed",
+        description: "Could not download your training data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingFormat(null);
+    }
   };
 
   return (
@@ -81,15 +111,24 @@ export default function Analytics() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" data-testid="button-analytics-export">
-                <Download className="h-4 w-4 mr-2" aria-hidden="true" />
-                Export
+              <Button
+                variant="outline"
+                data-testid="button-analytics-export"
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" aria-hidden="true" />
+                )}
+                {isExporting ? "Exporting..." : "Export"}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => handleExport("csv")}
                 data-testid="button-export-analytics-csv"
+                disabled={isExporting}
               >
                 <FileSpreadsheet className="h-4 w-4 mr-2" aria-hidden="true" />
                 Export as CSV
@@ -97,6 +136,7 @@ export default function Analytics() {
               <DropdownMenuItem
                 onClick={() => handleExport("json")}
                 data-testid="button-export-analytics-json"
+                disabled={isExporting}
               >
                 <FileJson className="h-4 w-4 mr-2" aria-hidden="true" />
                 Export as JSON
