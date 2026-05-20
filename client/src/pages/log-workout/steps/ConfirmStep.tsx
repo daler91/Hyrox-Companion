@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { StructureBlocksEditor } from "@/components/workout-structure";
@@ -170,18 +172,31 @@ export function ConfirmStep({
           )}
 
           {hasLegacyEmomRows && !conversionDone && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm" data-testid="confirm-step-legacy-emom-warning">
-              <p className="font-medium text-destructive">Compatibility warning: legacy EMOM rows</p>
+            <div
+              className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+              data-testid="confirm-step-legacy-emom-warning"
+            >
+              <p className="font-medium">Compatibility warning: legacy EMOM rows</p>
               <span>Older EMOM rows are supported for display/editing, but new EMOM should be saved as structured blocks.</span>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <label className="text-xs">
-                  <span>Duration (min)</span>
-                  <input className="mt-1 w-full rounded border px-2 py-1" type="number" min={1} value={emomDurationMinutes} onChange={(e) => setEmomDurationMinutes(Number(e.target.value) || 1)} />
-                </label>
-                <label className="text-xs">
-                  <span>Step label</span>
-                  <input className="mt-1 w-full rounded border px-2 py-1" value={emomStepLabel} onChange={(e) => setEmomStepLabel(e.target.value)} />
-                </label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="legacy-emom-duration" className="text-xs">Duration (min)</Label>
+                  <Input
+                    id="legacy-emom-duration"
+                    type="number"
+                    min={1}
+                    value={emomDurationMinutes}
+                    onChange={(e) => setEmomDurationMinutes(Number(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="legacy-emom-step-label" className="text-xs">Step label</Label>
+                  <Input
+                    id="legacy-emom-step-label"
+                    value={emomStepLabel}
+                    onChange={(e) => setEmomStepLabel(e.target.value)}
+                  />
+                </div>
               </div>
               <Button type="button" size="sm" className="mt-2" onClick={handleConvertLegacyEmom}>
                 Convert to EMOM block
