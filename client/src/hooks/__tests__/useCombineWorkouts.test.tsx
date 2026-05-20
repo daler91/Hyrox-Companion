@@ -116,14 +116,15 @@ describe("useCombineWorkouts", () => {
           skipPlanDayIds: ["plan-1"],
         }, expect.any(AbortSignal));
         // Combine must invalidate: timeline + workouts (the combined row appears
-        // there) *and* personalRecords + exerciseAnalytics (the rebuilt exercise
-        // sets feed those derived views). Guards against a regression of the
-        // analytics-staleness gap flagged on PR #796.
-        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(4);
+        // there) *and* personalRecords + exerciseAnalytics + trainingOverview
+        // (the rebuilt exercise sets feed those derived views). Guards against a
+        // regression of the analytics-staleness gap flagged on PR #796.
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledTimes(5);
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/timeline"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/workouts"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/personal-records"] });
         expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/exercise-analytics"] });
+        expect(queryClientLib.queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/v1/training-overview"] });
       }
     });
   });

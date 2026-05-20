@@ -60,6 +60,7 @@ vi.mock("@/lib/api", () => ({
     authUser: ["authUser"],
     personalRecords: ["personalRecords"],
     exerciseAnalytics: ["exerciseAnalytics"],
+    trainingOverview: ["trainingOverview"],
   },
 }));
 

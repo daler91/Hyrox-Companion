@@ -64,6 +64,7 @@ vi.mock("@/components/timeline", () => ({
   ),
   TimelineHeader: () => <div />,
   TimelineFilters: () => <div />,
+  TimelineSummaryCard: () => <div data-testid="timeline-summary-card" />,
   TimelineSkeleton: () => <div />,
   TimelineEmptyState: () => <div />,
   TimelineTodayIndicator: () => <div />,

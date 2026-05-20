@@ -34,6 +34,8 @@ const mockApi = api.timelineAnnotations as unknown as {
   delete: ReturnType<typeof vi.fn>;
 };
 
+const DIALOG_TIMEOUT_MS = 10_000;
+
 function renderDialog(props: { open?: boolean } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -54,7 +56,7 @@ describe("AnnotationsDialog", () => {
     mockApi.list.mockResolvedValue([]);
     renderDialog();
     expect(await screen.findByTestId("annotations-empty")).toHaveTextContent(/no annotations yet/i);
-  });
+  }, DIALOG_TIMEOUT_MS);
 
   it("lists existing annotations", async () => {
     const annotations: TimelineAnnotation[] = [

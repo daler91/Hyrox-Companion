@@ -366,6 +366,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
       toast({ title: "Workout logged", description: "Your workout has been saved." });
       handleClose();
     },

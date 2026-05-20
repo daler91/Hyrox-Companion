@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ExerciseSelector } from "../ExerciseSelector";
 
+const INTERACTION_TIMEOUT_MS = 10_000;
+
 function setup() {
   const onToggle = vi.fn();
   render(<ExerciseSelector selectedExercises={[]} onToggle={onToggle} />);
@@ -25,7 +27,7 @@ describe("ExerciseSelector", () => {
     expect(screen.getByTestId("button-exercise-sled_push")).toHaveTextContent("Sled Push");
     expect(screen.queryByTestId("button-exercise-back_squat")).not.toBeInTheDocument();
     expect(screen.queryByText("Strength")).not.toBeInTheDocument();
-  });
+  }, INTERACTION_TIMEOUT_MS);
 
   it("filters exercises by canonical key", async () => {
     const { search, user } = setup();

@@ -34,6 +34,7 @@ export function useCombineWorkouts() {
       // derived from those sets must refresh.
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
       setCombiningEntry(null);
       setCombineSecondEntry(null);
       setShowCombineDialog(false);

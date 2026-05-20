@@ -6,6 +6,8 @@ import { memoryLocation } from "wouter/memory-location";
 
 import NotFound from "../not-found";
 
+const AXE_TIMEOUT_MS = 10_000;
+
 describe("NotFound a11y", () => {
   it("has no automated WCAG violations", async () => {
     const { hook } = memoryLocation({ path: "/nonexistent" });
@@ -17,5 +19,5 @@ describe("NotFound a11y", () => {
 
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 });

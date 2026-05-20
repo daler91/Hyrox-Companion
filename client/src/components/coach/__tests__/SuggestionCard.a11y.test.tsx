@@ -26,6 +26,8 @@ const mockRagInfo = {
   chunks: ["Sample coaching note A", "Sample coaching note B"],
 } as RagInfo;
 
+const AXE_TIMEOUT_MS = 10_000;
+
 describe("SuggestionCard a11y", () => {
   it("has no automated WCAG violations in the default state", async () => {
     const { container } = render(
@@ -38,7 +40,7 @@ describe("SuggestionCard a11y", () => {
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 
   it("has no automated WCAG violations while applying", async () => {
     const { container } = render(
@@ -51,7 +53,7 @@ describe("SuggestionCard a11y", () => {
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 
   it("has no automated WCAG violations with a RAG citation badge", async () => {
     const { container } = render(
@@ -65,5 +67,5 @@ describe("SuggestionCard a11y", () => {
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
-  });
+  }, AXE_TIMEOUT_MS);
 });

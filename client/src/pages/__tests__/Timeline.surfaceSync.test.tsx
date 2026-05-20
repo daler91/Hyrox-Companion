@@ -154,6 +154,7 @@ vi.mock("@/components/timeline", () => ({
   }) => <button onClick={() => onClick(entries[0])}>open</button>,
   TimelineHeader: () => <div />,
   TimelineFilters: () => <div />,
+  TimelineSummaryCard: () => <div data-testid="timeline-summary-card" />,
   TimelineTodayIndicator: () => <div />,
   TimelineSkeleton: () => <div />,
   TimelineEmptyState: () => <div />,

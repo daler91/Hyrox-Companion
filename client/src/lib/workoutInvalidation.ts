@@ -7,4 +7,5 @@ export function invalidateWorkoutWriteQueries(): void {
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }).catch(() => {});
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
 }

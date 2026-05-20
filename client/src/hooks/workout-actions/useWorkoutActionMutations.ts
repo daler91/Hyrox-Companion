@@ -89,7 +89,7 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
   const updateStatusMutation = useApiMutation({
     mutationFn: ({ dayId, status }: UpdateStatusVariables) =>
       api.plans.updateDayStatus(dayId, status),
-    invalidateQueries: [QUERY_KEYS.timeline],
+    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.trainingOverview],
     successToast: "Status updated",
     errorToast: "Failed to update status",
     ...updateStatusHandlers,
@@ -130,6 +130,7 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
       ]);
     },
   });
@@ -145,6 +146,7 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.workouts,
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
+      QUERY_KEYS.trainingOverview,
     ],
     successToast: "Workout deleted",
     errorToast: "Failed to delete workout",
@@ -187,6 +189,7 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.plans,
       QUERY_KEYS.personalRecords,
       QUERY_KEYS.exerciseAnalytics,
+      QUERY_KEYS.trainingOverview,
     ],
     successToast: (data) => ({
       title: data.deletedCount === 1 ? "Workout removed" : `${data.deletedCount} workouts removed`,

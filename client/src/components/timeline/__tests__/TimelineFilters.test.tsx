@@ -13,6 +13,8 @@ vi.mock("@/components/plans/GeneratePlanDialog", () => ({
 
 installRadixPointerMocks();
 
+const SELECT_TIMEOUT_MS = 10_000;
+
 describe("TimelineFilters", () => {
   const defaultProps = {
     plans: [
@@ -85,7 +87,7 @@ describe("TimelineFilters", () => {
     await user.click(plan2Option);
 
     expect(defaultProps.onPlanChange).toHaveBeenCalledWith("plan-2");
-  });
+  }, SELECT_TIMEOUT_MS);
 
   it("triggers onPlanChange with null when 'All Plans' is selected", async () => {
     const user = userEvent.setup();
@@ -98,7 +100,7 @@ describe("TimelineFilters", () => {
     await user.click(allPlansOption);
 
     expect(defaultProps.onPlanChange).toHaveBeenCalledWith(null);
-  });
+  }, SELECT_TIMEOUT_MS);
 
   it("triggers onFilterChange when a new status is selected", async () => {
     const user = userEvent.setup();

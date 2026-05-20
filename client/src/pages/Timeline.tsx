@@ -18,6 +18,7 @@ import {
   FloatingActionButton,
   TimelineFilters,
   TimelineHeader,
+  TimelineSummaryCard,
   TimelineTodayIndicator,
 } from "@/components/timeline";
 import { Input } from "@/components/ui/input";
@@ -307,6 +308,8 @@ export default function Timeline() {
               isUpdatingGoal={updatePlanGoalMutation.isPending}
               onScheduleClick={(planId) => setSchedulingPlanId(planId)}
             />
+
+            <TimelineSummaryCard selectedPlanId={selectedPlanId} />
 
             <BulkDeleteControls
               enabled={bulkDeleteMode}
