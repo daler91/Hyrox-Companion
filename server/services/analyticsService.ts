@@ -1,7 +1,9 @@
 import type { OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
 
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
+import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate } from "../storage/shared";
+import { getMondayWeekBoundaries } from "./weeklyProgress";
 
 // Analytics always operates on logged sets, so workoutLogId is guaranteed
 // non-null here. Use the narrowed LoggedExerciseSetWithDate from the
@@ -311,11 +313,15 @@ export function calculateTrainingOverview(
   workoutLogs: WorkoutLog[],
   exerciseSets: ExerciseSetWithDate[],
   previousWorkoutLogs?: WorkoutLog[],
+  weeklyGoal = 5,
 ): TrainingOverview {
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
   const currentStats = computeOverviewStats(weeklySummaries);
+  const completedDates = new Set(workoutLogs.map((log) => log.date));
+  const { thisMondayStr } = getMondayWeekBoundaries();
+  const weeklyCompletedWorkouts = workoutLogs.filter((log) => log.date >= thisMondayStr).length;
   // ⚡ Bolt Performance Optimization:
   // Replaced chained .map().filter().reduce() with a single for...of loop
   // to avoid intermediate array allocations and O(3N) passes.
@@ -362,5 +368,10 @@ export function calculateTrainingOverview(
     stationCoverage,
     currentStats,
     previousStats,
+    // Matches the AI context definition: consecutive completed calendar dates
+    // ending today or yesterday count; rest days and earlier gaps break it.
+    currentStreak: calculateStreak(completedDates),
+    weeklyCompletedWorkouts,
+    weeklyGoal,
   };
 }

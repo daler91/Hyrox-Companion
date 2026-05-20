@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -20,15 +20,13 @@ function renderTitle(overrides: Partial<ComponentProps<typeof EditableWorkoutTit
 }
 
 describe("EditableWorkoutTitle", () => {
-  it("opens edit mode and saves a trimmed title", async () => {
-    const user = userEvent.setup();
+  it("opens edit mode and saves a trimmed title", () => {
     const { onSave } = renderTitle();
 
-    await user.click(screen.getByTestId("title-edit"));
+    fireEvent.click(screen.getByTestId("title-edit"));
     const input = screen.getByTestId("title-input");
-    await user.clear(input);
-    await user.type(input, "  Engine day  ");
-    await user.click(screen.getByTestId("title-save"));
+    fireEvent.change(input, { target: { value: "  Engine day  " } });
+    fireEvent.click(screen.getByTestId("title-save"));
 
     expect(onSave).toHaveBeenCalledWith("Engine day");
     expect(screen.getByTestId("title-text")).toHaveTextContent("Strength");

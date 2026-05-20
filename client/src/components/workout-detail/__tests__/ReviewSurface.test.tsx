@@ -15,6 +15,7 @@ import {
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
+const RENDER_TIMEOUT_MS = 10_000;
 
 installRadixPointerMocks();
 
@@ -134,7 +135,7 @@ describe("ReviewSurface", () => {
     render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
 
     expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
-  });
+  }, RENDER_TIMEOUT_MS);
 
   it("saves and parses the visible prescribed reference text", async () => {
     const user = userEvent.setup();

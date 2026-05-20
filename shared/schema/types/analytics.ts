@@ -36,6 +36,9 @@ export interface TrainingOverview {
   workoutDates: string[];
   categoryTotals: Record<string, { count: number; totalSets: number }>;
   stationCoverage: Array<{ station: string; lastTrained: string | null; daysSince: number | null }>;
+  currentStreak: number;
+  weeklyCompletedWorkouts: number;
+  weeklyGoal: number;
   /** Current-period aggregate stats used for delta comparisons. */
   currentStats: OverviewStats;
   /**

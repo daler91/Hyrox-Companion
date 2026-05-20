@@ -1,5 +1,6 @@
 import type { TrainingContext } from "../../gemini/index";
 import { toDateStr } from "../../types";
+import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { TimelineEntry } from "./types";
 
 const FUNCTIONAL_EXERCISE_NAMES = [
@@ -131,17 +132,7 @@ export function computeWeeklyVolume(
   timeline: TimelineEntry[],
   weeklyGoal: number,
 ): NonNullable<TrainingContext["coachingInsights"]>["weeklyVolume"] {
-  const today = new Date(toDateStr());
-  const dayOfWeek = today.getDay(); // 0=Sun
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-  const thisMonday = new Date(today);
-  thisMonday.setDate(today.getDate() + mondayOffset);
-  const lastMonday = new Date(thisMonday);
-  lastMonday.setDate(thisMonday.getDate() - 7);
-
-  const thisMondayStr = toDateStr(thisMonday);
-  const lastMondayStr = toDateStr(lastMonday);
+  const { thisMondayStr, lastMondayStr } = getMondayWeekBoundaries();
 
   let thisWeek = 0;
   let lastWeek = 0;

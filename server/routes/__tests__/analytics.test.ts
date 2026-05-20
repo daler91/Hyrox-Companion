@@ -29,6 +29,9 @@ vi.mock("../../storage", () => ({
       getAllExerciseSetsWithDates: vi.fn(),
       getWorkoutLogsByDateRange: vi.fn(),
     },
+    users: {
+      getUser: vi.fn(),
+    },
   },
 }));
 
@@ -74,6 +77,7 @@ describe("Analytics Routes", () => {
     env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
     _cacheForTesting.clear();
     _workoutLogCacheForTesting.clear();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5 });
     app = createTestApp(analyticsRouter);
   });
 
@@ -250,6 +254,9 @@ describe("Analytics Routes", () => {
         workoutDates: ["2026-01-13"],
         categoryTotals: {},
         stationCoverage: [],
+        currentStreak: 0,
+        weeklyCompletedWorkouts: 0,
+        weeklyGoal: 5,
         currentStats: { ...zeroStats, totalWorkouts: 3, avgPerWeek: 3 },
       };
 
@@ -264,6 +271,7 @@ describe("Analytics Routes", () => {
       // No `from` query param → no previous-window fetch.
       expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined);
       expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+      expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
       expect(calculateTrainingOverview).toHaveBeenCalled();
     });
 
@@ -280,6 +288,9 @@ describe("Analytics Routes", () => {
         workoutDates: ["2026-02-01"],
         categoryTotals: {},
         stationCoverage: [],
+        currentStreak: 0,
+        weeklyCompletedWorkouts: 0,
+        weeklyGoal: 5,
         currentStats: zeroStats,
       });
 
@@ -289,6 +300,7 @@ describe("Analytics Routes", () => {
         expect.any(Array),
         expect.arrayContaining([expect.objectContaining({ exerciseName: "SkiErg" })]),
         undefined,
+        5,
       );
     });
     it("should pass date params to storage", async () => {
@@ -299,6 +311,9 @@ describe("Analytics Routes", () => {
         workoutDates: [],
         categoryTotals: {},
         stationCoverage: [],
+        currentStreak: 0,
+        weeklyCompletedWorkouts: 0,
+        weeklyGoal: 5,
         currentStats: zeroStats,
       });
 
@@ -316,6 +331,9 @@ describe("Analytics Routes", () => {
         workoutDates: [],
         categoryTotals: {},
         stationCoverage: [],
+        currentStreak: 0,
+        weeklyCompletedWorkouts: 0,
+        weeklyGoal: 5,
         currentStats: zeroStats,
         previousStats: zeroStats,
       });
@@ -340,6 +358,9 @@ describe("Analytics Routes", () => {
         workoutDates: [],
         categoryTotals: {},
         stationCoverage: [],
+        currentStreak: 0,
+        weeklyCompletedWorkouts: 0,
+        weeklyGoal: 5,
         currentStats: zeroStats,
       });
 
@@ -349,6 +370,26 @@ describe("Analytics Routes", () => {
       expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledTimes(1);
       // calculateTrainingOverview invoked with `undefined` for the previous logs arg.
       expect(vi.mocked(calculateTrainingOverview).mock.calls[0][2]).toBeUndefined();
+    });
+
+    it("passes the user's weekly goal into the overview calculator", async () => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 7 });
+      vi.mocked(calculateTrainingOverview).mockReturnValue({
+        weeklySummaries: [],
+        workoutDates: [],
+        categoryTotals: {},
+        stationCoverage: [],
+        currentStreak: 0,
+        weeklyCompletedWorkouts: 0,
+        weeklyGoal: 7,
+        currentStats: zeroStats,
+      });
+
+      await request(app).get("/api/v1/training-overview");
+
+      expect(calculateTrainingOverview).toHaveBeenCalledWith([], [], undefined, 7);
     });
 
     testInvalidDates("/api/v1/training-overview");

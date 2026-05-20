@@ -1,4 +1,4 @@
-import { describe, expect,it } from "vitest";
+import { afterEach, describe, expect,it, vi } from "vitest";
 
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeOverviewStats } from "./analyticsService";
 
@@ -234,6 +234,10 @@ function makeWorkoutLog(overrides: Record<string, unknown> = {}) {
 }
 
 describe("calculateTrainingOverview", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns empty overview for no data", () => {
     const result = calculateTrainingOverview([], []);
     expect(result.weeklySummaries).toEqual([]);
@@ -241,6 +245,27 @@ describe("calculateTrainingOverview", () => {
     expect(result.categoryTotals).toEqual({});
     expect(result.stationCoverage).toHaveLength(9); // 8 stations + running
     expect(result.stationCoverage.every((s) => s.lastTrained === null)).toBe(true);
+    expect(result.currentStreak).toBe(0);
+    expect(result.weeklyCompletedWorkouts).toBe(0);
+    expect(result.weeklyGoal).toBe(5);
+  });
+
+  it("returns AI-aligned streak and Monday-week completion fields", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T12:00:00Z"));
+
+    const logs = [
+      makeWorkoutLog({ id: "w1", date: "2026-05-20" }),
+      makeWorkoutLog({ id: "w2", date: "2026-05-19" }),
+      makeWorkoutLog({ id: "w3", date: "2026-05-18" }),
+      makeWorkoutLog({ id: "w4", date: "2026-05-17" }),
+      makeWorkoutLog({ id: "w5", date: "2026-05-11" }),
+    ];
+    const result = calculateTrainingOverview(logs, [], undefined, 6);
+
+    expect(result.currentStreak).toBe(4);
+    expect(result.weeklyCompletedWorkouts).toBe(3);
+    expect(result.weeklyGoal).toBe(6);
   });
 
   it("groups workouts into weekly summaries", () => {

@@ -209,15 +209,16 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
 
     const previousWindow = computePreviousWindow(dates.from, dates.to);
 
-    const [workoutLogs, allSets, previousWorkoutLogs] = await Promise.all([
+    const [workoutLogs, allSets, previousWorkoutLogs, user] = await Promise.all([
       getWorkoutLogsCoalesced(userId, dates.from, dates.to),
       getExerciseSetsCoalesced(userId, dates.from, dates.to),
       previousWindow
         ? getWorkoutLogsCoalesced(userId, previousWindow.from, previousWindow.to)
         : Promise.resolve(undefined),
+      storage.users.getUser(userId),
     ]);
 
-    res.json(calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs));
+    res.json(calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs, user?.weeklyGoal ?? 5));
   }));
 
 
