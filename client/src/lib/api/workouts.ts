@@ -2,6 +2,7 @@ import type {
   ExerciseSet,
   InsertWorkoutLog,
   ParsedExercise,
+  PersonalRecordAchievement,
   StructureBlockInput,
   StructureBlockScore,
   UpdateWorkoutLog,
@@ -64,18 +65,24 @@ type CreateWorkoutPayload = Omit<InsertWorkoutLog, "userId"> & {
   structureBlocks?: StructureBlockInput[];
 };
 
+export type WorkoutCreateResponse = WorkoutLog & {
+  exerciseSets?: ExerciseSet[];
+  structureBlocks?: StructureBlockInput[];
+  newPersonalRecords?: PersonalRecordAchievement[];
+};
+
 export const workouts = {
   // Server returns the bare WorkoutLog with `exerciseSets` embedded when
   // a `planDayId` is supplied (see workoutService.copyPrescribedSetsIntoLog).
   create: (data: CreateWorkoutPayload, options?: CreateWorkoutOptions) =>
     options?.idempotencyKey
-      ? typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>(
+      ? typedRequest<WorkoutCreateResponse>(
         "POST",
         "/api/v1/workouts",
         data,
         { headers: { "X-Idempotency-Key": options.idempotencyKey } },
       )
-      : typedRequest<WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] }>("POST", "/api/v1/workouts", data),
+      : typedRequest<WorkoutCreateResponse>("POST", "/api/v1/workouts", data),
 
   list: (params?: { limit?: number; offset?: number }) => {
     let qs = "";

@@ -5,10 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdhocLogSheet } from "../AdhocLogSheet";
 
-const { setLocationMock, createWorkoutMock, invalidateQueriesMock } = vi.hoisted(() => ({
+const { setLocationMock, createWorkoutMock, invalidateQueriesMock, toastMock } = vi.hoisted(() => ({
   setLocationMock: vi.fn(),
   createWorkoutMock: vi.fn(),
   invalidateQueriesMock: vi.fn().mockResolvedValue(undefined),
+  toastMock: vi.fn(),
 }));
 
 vi.mock("wouter", () => ({
@@ -69,7 +70,7 @@ vi.mock("@/lib/queryClient", () => ({
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 vi.mock("@/hooks/useUnitPreferences", () => ({
@@ -109,6 +110,7 @@ afterEach(() => {
   setLocationMock.mockReset();
   createWorkoutMock.mockReset();
   invalidateQueriesMock.mockClear();
+  toastMock.mockReset();
 });
 
 describe("AdhocLogSheet", () => {
@@ -143,6 +145,38 @@ describe("AdhocLogSheet", () => {
     expect(payload.exercises).toBeDefined();
     expect(payload.exercises?.[0]?.exerciseName).toBe("back_squat");
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows PR celebrations after an ad-hoc workout save", async () => {
+    createWorkoutMock.mockResolvedValueOnce({
+      id: "wk-1",
+      newPersonalRecords: [
+        {
+          exerciseKey: "back_squat",
+          exerciseName: "back_squat",
+          customLabel: null,
+          category: "strength",
+          metric: "maxWeight",
+          metricLabel: "Max weight",
+          value: 105,
+          previousValue: 100,
+          date: "2026-05-20",
+          workoutLogId: "wk-1",
+        },
+      ],
+    });
+    render(<AdhocLogSheet open onClose={vi.fn()} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("mock-add-set"));
+    await user.click(screen.getByTestId("adhoc-save-workout"));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith({
+        title: "New PR",
+        description: "Back Squat: Max weight 105",
+      });
+    });
   });
 
   it("routes to /log when the user taps Open full editor", async () => {

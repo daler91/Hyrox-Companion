@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { queryClient } from "@/lib/queryClient";
 import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
@@ -356,7 +357,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         ...(hasStructured ? { exercises: setsToParsed(exerciseSets) } : {}),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.workouts }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
       // Server flips isAutoCoaching on workout create; the auth-user
@@ -368,6 +369,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }).catch(() => {});
       toast({ title: "Workout logged", description: "Your workout has been saved." });
+      toastPersonalRecordAchievements(toast, data.newPersonalRecords);
       handleClose();
     },
     onError: (error: unknown) => {

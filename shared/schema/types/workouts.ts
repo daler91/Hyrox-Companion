@@ -588,3 +588,18 @@ export interface PersonalRecord {
   estimated1RM?: PersonalRecordValue;
 }
 
+export type PersonalRecordMetric = "maxWeight" | "maxDistance" | "bestTime" | "estimated1RM";
+
+export interface PersonalRecordAchievement {
+  exerciseKey: string;
+  exerciseName: string;
+  customLabel?: string | null;
+  category: string;
+  metric: PersonalRecordMetric;
+  metricLabel: string;
+  value: number;
+  previousValue: number;
+  date: string;
+  workoutLogId: string;
+}
+

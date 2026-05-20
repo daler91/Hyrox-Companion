@@ -6,6 +6,7 @@ import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
+import { findPersonalRecordAchievements } from "./personalRecordAchievements";
 import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
@@ -52,7 +53,25 @@ export async function createWorkout(input: {
     throw new AppError(ErrorCode.VALIDATION_ERROR, createLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
   }
 
-  return createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId, structureBlocks);
+  const createdWorkout = await createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId, structureBlocks);
+  if (!createdWorkout.exerciseSets || createdWorkout.exerciseSets.length === 0) return createdWorkout;
+
+  let newPersonalRecords: ReturnType<typeof findPersonalRecordAchievements>;
+  try {
+    const allSets = await storage.analytics.getAllExerciseSetsWithDates(input.userId);
+    const priorSets = allSets.filter((set) => set.workoutLogId !== createdWorkout.id);
+    newPersonalRecords = findPersonalRecordAchievements(priorSets, createdWorkout);
+  } catch (err) {
+    logger.warn(
+      { err, userId: input.userId, workoutLogId: createdWorkout.id },
+      "Failed to compute personal record achievements after workout create.",
+    );
+    return createdWorkout;
+  }
+
+  return newPersonalRecords.length > 0
+    ? { ...createdWorkout, newPersonalRecords }
+    : createdWorkout;
 }
 
 export async function updateWorkoutUseCase(input: {

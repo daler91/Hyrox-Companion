@@ -1,6 +1,8 @@
 import type { ExerciseSet, TimelineEntry, User, WorkoutLog, WorkoutStatus } from "@shared/schema";
 
+import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { queryClient } from "@/lib/queryClient";
 
 import { useApiMutation } from "../useApiMutation";
@@ -79,6 +81,7 @@ function patchTimelineEntriesForLoggedWorkout(
 }
 
 export function useWorkoutActionMutations(selectedPlanId: string | null) {
+  const { toast } = useToast();
   const updateStatusHandlers = buildOptimisticTimelineHandlers<UpdateStatusVariables>(
     selectedPlanId,
     (old, { dayId, status }) =>
@@ -132,6 +135,7 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.exerciseAnalytics }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
       ]);
+      toastPersonalRecordAchievements(toast, data.newPersonalRecords);
     },
   });
 

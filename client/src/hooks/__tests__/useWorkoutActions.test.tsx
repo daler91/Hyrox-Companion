@@ -159,6 +159,38 @@ describe('useWorkoutActions', () => {
           }, expect.any(AbortSignal));
         });
       });
+
+      it('shows PR celebrations after quick-complete saves', async () => {
+        mockLoggedWorkoutResponse({
+          newPersonalRecords: [
+            {
+              exerciseKey: 'back_squat',
+              exerciseName: 'back_squat',
+              customLabel: null,
+              category: 'strength',
+              metric: 'maxWeight',
+              metricLabel: 'Max weight',
+              value: 105,
+              previousValue: 100,
+              date: '2024-01-01',
+              workoutLogId: 'logged-pd-1',
+            },
+          ],
+        });
+        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'strength', mainWorkout: 'lift' });
+
+        act(() => {
+          result.current.handleMarkComplete(mockEntry);
+        });
+
+        await waitFor(() => {
+          expect(mockToast).toHaveBeenCalledWith({
+            title: 'New PR',
+            description: 'Back Squat: Max weight 105',
+          });
+        });
+      });
     });
 
     describe('confirmSkip', () => {

@@ -102,6 +102,36 @@ describe("useSaveWorkoutMutation", () => {
     expect(mocks.navigate).toHaveBeenCalledWith("/");
   });
 
+  it("shows a PR toast when the server returns new personal records", async () => {
+    mocks.createWorkout.mockResolvedValueOnce({
+      id: "workout-1",
+      newPersonalRecords: [
+        {
+          exerciseKey: "back_squat",
+          exerciseName: "back_squat",
+          customLabel: null,
+          category: "strength",
+          metric: "maxWeight",
+          metricLabel: "Max weight",
+          value: 105,
+          previousValue: 100,
+          date: "2026-05-16",
+          workoutLogId: "workout-1",
+        },
+      ],
+    });
+    const { result } = renderMutation();
+
+    await act(async () => {
+      await result.current.mutateAsync(workoutPayload);
+    });
+
+    expect(mocks.toast).toHaveBeenCalledWith({
+      title: "New PR",
+      description: "Back Squat: Max weight 105",
+    });
+  });
+
   it("allows online direct saves when secure offline ids are unavailable", async () => {
     mocks.createOfflineMutationId.mockImplementationOnce(() => {
       throw new TypeError("Secure random values are unavailable for offline mutation IDs.");

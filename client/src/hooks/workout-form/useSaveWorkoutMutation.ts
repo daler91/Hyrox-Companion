@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { api, isTimeoutLikeApiError } from "@/lib/api";
 import { createOfflineMutationId, enqueueMutation } from "@/lib/offlineQueue";
+import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
 
 import type { SaveWorkoutInput } from "./types";
@@ -11,7 +12,7 @@ import type { SaveWorkoutInput } from "./types";
 const WORKOUT_CREATE_URL = "/api/v1/workouts";
 
 type SaveWorkoutResult =
-  | { status: "saved" }
+  | { status: "saved"; newPersonalRecords: Awaited<ReturnType<typeof api.workouts.create>>["newPersonalRecords"] }
   | { status: "queued"; id: string };
 
 export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
@@ -27,8 +28,8 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
       const idempotencyKey = createOptionalIdempotencyKey();
 
       try {
-        await api.workouts.create(workoutData, createWorkoutOptions(idempotencyKey));
-        return { status: "saved" };
+        const createdWorkout = await api.workouts.create(workoutData, createWorkoutOptions(idempotencyKey));
+        return { status: "saved", newPersonalRecords: createdWorkout.newPersonalRecords };
       } catch (error) {
         if (isConnectivityFailure(error)) {
           return queueWorkoutSave(workoutData, idempotencyKey ?? createOfflineMutationId());
@@ -52,6 +53,7 @@ export function useSaveWorkoutMutation(onSaveSuccess?: () => void) {
         title: "Workout logged",
         description: "Your workout has been saved successfully.",
       });
+      toastPersonalRecordAchievements(toast, result.newPersonalRecords);
       navigate("/");
     },
     onError: (error: unknown) => {
