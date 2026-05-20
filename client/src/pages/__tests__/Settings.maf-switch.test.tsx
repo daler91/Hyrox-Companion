@@ -49,6 +49,11 @@ function seedQuery<T>(qc: QueryClient, key: readonly string[], data: T) {
   qc.setQueryData(key, data);
 }
 
+async function chooseSelectOption(label: string, option: string) {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("Settings MAF style switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,6 +137,74 @@ describe("Settings MAF style switch", () => {
     await waitFor(() => {
       expect(screen.getByTestId("maf-switch-blocked")).toHaveTextContent(
         "Complete MAF setup to switch styles",
+      );
+    });
+  }, 10_000);
+
+  it("stages MAF setup locally and persists it only from Save Settings", async () => {
+    const qc = new QueryClient();
+    seedQuery(qc, ["preferences"], {
+      weightUnit: "kg",
+      distanceUnit: "km",
+      weeklyGoal: 5,
+      emailNotifications: true,
+      emailWeeklySummary: true,
+      emailMissedReminder: true,
+      showAdherenceInsights: true,
+      aiCoachEnabled: true,
+      trainingStyleId: "balanced_default",
+      mafAge: null,
+      mafConsistency: null,
+      mafTrend: null,
+      mafHrDataAvailable: null,
+    });
+    seedQuery(qc, ["strava"], null);
+    seedQuery(qc, ["garmin"], null);
+
+    vi.mocked(api.preferences.update).mockResolvedValue({} as Awaited<
+      ReturnType<typeof api.preferences.update>
+    >);
+
+    render(
+      <QueryClientProvider client={qc}>
+        <Settings />
+      </QueryClientProvider>,
+    );
+
+    const balancedLabels = await screen.findAllByText("Balanced");
+    fireEvent.click(balancedLabels[0]);
+    fireEvent.click(await screen.findByText("MAF Method"));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByRole("heading", { name: "Complete MAF setup" })).toBeInTheDocument();
+    expect(screen.getByText("Age")).toBeInTheDocument();
+    expect(screen.getByText("Consistency")).toBeInTheDocument();
+    expect(screen.getByText("Trend")).toBeInTheDocument();
+    expect(screen.getByText("HR data available")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Age"), { target: { value: "39" } });
+    await chooseSelectOption("Consistency", "Moderate");
+    await chooseSelectOption("Trend", "Flat");
+    await chooseSelectOption("HR data available", "Yes");
+
+    expect(api.preferences.update).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save MAF setup" }));
+
+    expect(await screen.findByTestId("button-save-settings")).toBeInTheDocument();
+    expect(api.preferences.update).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("button-save-settings"));
+
+    await waitFor(() => {
+      expect(api.preferences.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trainingStyleId: "maf_method",
+          mafAge: 39,
+          mafConsistency: "moderate",
+          mafTrend: "flat",
+          mafHrDataAvailable: true,
+        }),
       );
     });
   }, 10_000);

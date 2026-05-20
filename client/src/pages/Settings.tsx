@@ -1,6 +1,6 @@
 import { calculateMafHr } from "@shared/maf";
 import { useMutation,useQuery } from "@tanstack/react-query";
-import { Info, Loader2, RotateCw } from "lucide-react";
+import { Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
@@ -12,13 +12,18 @@ import { PreferencesSection } from "@/components/settings/PreferencesSection";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  buildRecalculationSummary,
+  type MafConsistencyInput,
+  type MafHrDataAvailableInput,
+  type MafTrendInput,
+  type StyleAuditEntry,
+  TrainingStyleSection,
+} from "@/components/settings/TrainingStyleSection";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToastAction } from "@/components/ui/toast";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
 import { useToast } from "@/hooks/use-toast";
@@ -27,36 +32,6 @@ import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPrefere
 import { getUserDisplayName } from "@/lib/authUtils";
 import { queryClient } from "@/lib/queryClient";
 
-// Local alias so callsites that refer to `Preferences` still read naturally.
-// Shape is maintained by the api/user.ts export contract.
-interface StyleAuditEntry {
-  changedAtIso: string;
-  fromStyleId: string;
-  toStyleId: string;
-  recalculations: string[];
-}
-
-const STYLE_LABELS: Record<string, string> = {
-  balanced_default: "Balanced",
-  maf_method: "MAF Method",
-};
-
-function getStyleLabel(styleId: string): string {
-  return STYLE_LABELS[styleId] ?? "Balanced";
-}
-
-function buildRecalculationSummary(styleId: string): string[] {
-  const summary = [
-    "Coach recommendation prompt context switched to the selected style.",
-    "Future plan generation uses the updated style constraints.",
-    "Training-style recompute flag set for downstream AI calculations.",
-  ];
-  if (styleId === "maf_method") {
-    summary.push("MAF heart-rate ceiling recomputed and baseline test reminder scheduled.");
-  }
-  return summary;
-}
-
 type Preferences = UserPreferences;
 
 // The save mutation sends weeklyGoal as a number; local form state stores
@@ -64,9 +39,29 @@ type Preferences = UserPreferences;
 // value. `PreferencesSnapshot` captures the form-state shape (weeklyGoal as
 // string) used for Undo + committed-state tracking.
 type SavePayload = Omit<UserPreferences, "weeklyGoal"> & { weeklyGoal: number };
-interface PreferencesSnapshot extends Omit<UserPreferences, "weeklyGoal"> {
+interface PreferencesSnapshot
+  extends Omit<
+    UserPreferences,
+    "weeklyGoal" | "trainingStyleId" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
+  > {
   weeklyGoal: string;
   trainingStyleId: string;
+  mafAge: number | null;
+  mafConsistency: Exclude<MafConsistencyInput, ""> | null;
+  mafTrend: Exclude<MafTrendInput, ""> | null;
+  mafHrDataAvailable: boolean | null;
+}
+
+function mafAgeInputToSnapshot(value: string): number | null {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function mafHrDataAvailableInputToSnapshot(value: MafHrDataAvailableInput): boolean | null {
+  if (!value) {
+    return null;
+  }
+  return value === "yes";
 }
 
 function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
@@ -80,6 +75,10 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
     trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
+    mafAge: preferences.mafAge ?? null,
+    mafConsistency: preferences.mafConsistency ?? null,
+    mafTrend: preferences.mafTrend ?? null,
+    mafHrDataAvailable: preferences.mafHrDataAvailable ?? null,
   };
 }
 
@@ -94,6 +93,10 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     showAdherenceInsights: payload.showAdherenceInsights,
     aiCoachEnabled: payload.aiCoachEnabled,
     trainingStyleId: payload.trainingStyleId ?? "balanced_default",
+    mafAge: payload.mafAge ?? null,
+    mafConsistency: payload.mafConsistency ?? null,
+    mafTrend: payload.mafTrend ?? null,
+    mafHrDataAvailable: payload.mafHrDataAvailable ?? null,
   };
 }
 
@@ -108,6 +111,10 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
     trainingStyleId: snapshot.trainingStyleId,
+    mafAge: snapshot.mafAge,
+    mafConsistency: snapshot.mafConsistency,
+    mafTrend: snapshot.mafTrend,
+    mafHrDataAvailable: snapshot.mafHrDataAvailable,
   };
 }
 
@@ -125,17 +132,12 @@ export default function Settings() {
   const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
   const [aiCoachEnabled, setAiCoachEnabled] = useState(false);
   const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
-  const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
-  const [pendingStyleId, setPendingStyleId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [styleTransitionNotice, setStyleTransitionNotice] = useState<string | null>(null);
-  const [styleSwitchBlockedMessage, setStyleSwitchBlockedMessage] = useState<string | null>(null);
-  const [mafSetupOpen, setMafSetupOpen] = useState(false);
   const [mafAgeInput, setMafAgeInput] = useState("");
-  const [mafConsistencyInput, setMafConsistencyInput] = useState<"" | "low" | "moderate" | "high">("");
-  const [mafTrendInput, setMafTrendInput] = useState<"" | "improving" | "flat" | "declining">("");
-  const [mafHrDataAvailableInput, setMafHrDataAvailableInput] = useState<"" | "yes" | "no">("");
-  const [mafSetupError, setMafSetupError] = useState<string | null>(null);
+  const [mafConsistencyInput, setMafConsistencyInput] = useState<MafConsistencyInput>("");
+  const [mafTrendInput, setMafTrendInput] = useState<MafTrendInput>("");
+  const [mafHrDataAvailableInput, setMafHrDataAvailableInput] =
+    useState<MafHrDataAvailableInput>("");
   const [styleAuditEntries, setStyleAuditEntries] = useState<StyleAuditEntry[]>(() => {
     try {
       const raw = localStorage.getItem("fitai-settings-style-audit");
@@ -159,6 +161,10 @@ export default function Settings() {
     showAdherenceInsights: true,
     aiCoachEnabled: false,
     trainingStyleId: "balanced_default",
+    mafAge: null,
+    mafConsistency: null,
+    mafTrend: null,
+    mafHrDataAvailable: null,
   });
   // Snapshot of the last server-committed values used as the baseline for
   // dirty-state computation.
@@ -179,8 +185,26 @@ export default function Settings() {
       showAdherenceInsights,
       aiCoachEnabled,
       trainingStyleId,
+      mafAge: mafAgeInputToSnapshot(mafAgeInput),
+      mafConsistency: mafConsistencyInput || null,
+      mafTrend: mafTrendInput || null,
+      mafHrDataAvailable: mafHrDataAvailableInputToSnapshot(mafHrDataAvailableInput),
     }),
-    [weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId],
+    [
+      weightUnit,
+      distanceUnit,
+      weeklyGoal,
+      emailNotifications,
+      emailWeeklySummary,
+      emailMissedReminder,
+      showAdherenceInsights,
+      aiCoachEnabled,
+      trainingStyleId,
+      mafAgeInput,
+      mafConsistencyInput,
+      mafTrendInput,
+      mafHrDataAvailableInput,
+    ],
   );
 
   useEffect(() => {
@@ -234,6 +258,16 @@ export default function Settings() {
       setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? false);
       setTrainingStyleId(preferences.trainingStyleId ?? "balanced_default");
+      setMafAgeInput(preferences.mafAge != null ? String(preferences.mafAge) : "");
+      setMafConsistencyInput(preferences.mafConsistency ?? "");
+      setMafTrendInput(preferences.mafTrend ?? "");
+      setMafHrDataAvailableInput(
+        preferences.mafHrDataAvailable == null
+          ? ""
+          : preferences.mafHrDataAvailable
+            ? "yes"
+            : "no",
+      );
       // Seed the baseline snapshot on first load. After saves, onSuccess
       // keeps the baseline in sync with committed values.
       if (!baselineSnapshotRef.current) {
@@ -283,6 +317,17 @@ export default function Settings() {
               setEmailMissedReminder(previous.emailMissedReminder);
               setShowAdherenceInsights(previous.showAdherenceInsights);
               setAiCoachEnabled(previous.aiCoachEnabled);
+              setTrainingStyleId(previous.trainingStyleId);
+              setMafAgeInput(previous.mafAge != null ? String(previous.mafAge) : "");
+              setMafConsistencyInput(previous.mafConsistency ?? "");
+              setMafTrendInput(previous.mafTrend ?? "");
+              setMafHrDataAvailableInput(
+                previous.mafHrDataAvailable == null
+                  ? ""
+                  : previous.mafHrDataAvailable
+                    ? "yes"
+                    : "no",
+              );
               saveMutation.mutate(snapshotToSavePayload(previous));
             }}
           >
@@ -312,17 +357,33 @@ export default function Settings() {
   }, [hasChanges]);
 
   const handleSave = useCallback(() => {
+    const mafAge = mafAgeInputToSnapshot(mafAgeInput);
+    const mafConsistency = mafConsistencyInput || null;
+    const mafTrend = mafTrendInput || null;
+    const mafHrDataAvailable = mafHrDataAvailableInputToSnapshot(mafHrDataAvailableInput);
+    const hasValidMafInputs =
+      mafAge != null && mafAge >= 16 && mafAge <= 99 && Boolean(mafConsistency) && Boolean(mafTrend);
+
+    if (trainingStyleId === "maf_method" && !hasValidMafInputs) {
+      toast({
+        title: "Complete MAF setup",
+        description: "Enter a valid age and select the required MAF fields before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Capture the pre-save baseline so the post-save toast can offer Undo.
     undoSnapshotRef.current = baselineSnapshotRef.current
       ? { ...baselineSnapshotRef.current }
       : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = trainingStyleId !== committedStyleId;
-    const maf = trainingStyleId === "maf_method" ? calculateMafHr({
-      age: Number(preferences?.mafAge ?? 35),
+    const maf = trainingStyleId === "maf_method" && hasValidMafInputs ? calculateMafHr({
+      age: mafAge,
       injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication),
-      consistency: (preferences?.mafConsistency as "low" | "moderate" | "high") ?? "moderate",
-      trend: (preferences?.mafTrend as "improving" | "flat" | "declining") ?? "flat",
+      consistency: mafConsistency!,
+      trend: mafTrend!,
     }) : null;
     pendingStyleAuditRef.current = styleChanged
       ? {
@@ -345,32 +406,43 @@ export default function Settings() {
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
-      mafHr: styleChanged && trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
+      mafAge,
+      mafConsistency,
+      mafTrend,
+      mafHrDataAvailable,
+      mafHr: trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, preferences?.mafAge, preferences?.mafInjuryIllnessMedication, preferences?.mafConsistency, preferences?.mafTrend]);
-  const stageSaveAuditState = useCallback((nextStyleId: string) => {
-    undoSnapshotRef.current = baselineSnapshotRef.current
-      ? { ...baselineSnapshotRef.current }
-      : null;
-    const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
-    const styleChanged = nextStyleId !== committedStyleId;
-    pendingStyleAuditRef.current = styleChanged
-      ? {
-          changedAtIso: new Date().toISOString(),
-          fromStyleId: committedStyleId,
-          toStyleId: nextStyleId,
-          recalculations: buildRecalculationSummary(nextStyleId),
-        }
-      : null;
-    return { committedStyleId, styleChanged };
-  }, []);
+  }, [
+    saveMutation,
+    weightUnit,
+    distanceUnit,
+    weeklyGoal,
+    emailNotifications,
+    emailWeeklySummary,
+    emailMissedReminder,
+    showAdherenceInsights,
+    aiCoachEnabled,
+    trainingStyleId,
+    mafAgeInput,
+    mafConsistencyInput,
+    mafTrendInput,
+    mafHrDataAvailableInput,
+    preferences?.mafInjuryIllnessMedication,
+    toast,
+  ]);
 
   const userName = getUserDisplayName(user);
   const hasRequiredMafInputs = useCallback(() => {
-    const age = preferences?.mafAge;
-    return Number.isInteger(age) && age! >= 16 && age! <= 99 && Boolean(preferences?.mafConsistency) && Boolean(preferences?.mafTrend);
-  }, [preferences?.mafAge, preferences?.mafConsistency, preferences?.mafTrend]);
+    const age = mafAgeInputToSnapshot(mafAgeInput);
+    return (
+      age != null &&
+      age >= 16 &&
+      age <= 99 &&
+      Boolean(mafConsistencyInput) &&
+      Boolean(mafTrendInput)
+    );
+  }, [mafAgeInput, mafConsistencyInput, mafTrendInput]);
 
   if (isLoading) {
     return (
@@ -458,105 +530,20 @@ export default function Settings() {
           setAiCoachEnabled(v);
         }}
       />
-      <Card>
-        <CardHeader><CardTitle>Training style</CardTitle><CardDescription>Changing style updates future analysis and plan generation behavior.</CardDescription></CardHeader>
-        <CardContent>
-          <Select value={trainingStyleId} onValueChange={(v) => { setStyleSwitchBlockedMessage(null); setPendingStyleId(v); setConfirmStyleOpen(true); }}>
-            <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="balanced_default">Balanced</SelectItem><SelectItem value="maf_method">MAF Method</SelectItem></SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-      {styleTransitionNotice && (
-        <Card className="border-primary/40">
-          <CardHeader>
-            <CardTitle className="text-base">Style transition notice</CardTitle>
-            <CardDescription>{styleTransitionNotice}</CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-      {styleSwitchBlockedMessage && (
-        <p className="text-sm text-destructive" data-testid="maf-switch-blocked">{styleSwitchBlockedMessage}</p>
-      )}
-      <Card>
-        <CardHeader>
-          <CardTitle>Why this recommendation</CardTitle>
-          <CardDescription>
-            Active style: <strong>{getStyleLabel(trainingStyleId)}</strong>. Current phase: style transition.
-            Key constraints: {trainingStyleId === "maf_method" ? "MAF uses HR ceiling framing (stay at or under your ceiling; it is not a target to chase)." : "Balanced style blends aerobic work, quality sessions, and recovery constraints."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          <div className="flex gap-2"><Info className="h-4 w-4 mt-0.5" /><p>Recommendations are explained using your current style first, then filtered by saved constraints and available baseline data.</p></div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader><CardTitle>Settings audit</CardTitle><CardDescription>Tracks training-style changes and triggered downstream recalculations.</CardDescription></CardHeader>
-        <CardContent className="space-y-3">
-          {styleAuditEntries.length === 0 ? <p className="text-sm text-muted-foreground">No training-style changes recorded yet.</p> : styleAuditEntries.map((entry) => (
-            <div key={entry.changedAtIso} className="rounded-md border p-3 text-sm">
-              <p className="font-medium">{new Date(entry.changedAtIso).toLocaleString()} — {getStyleLabel(entry.fromStyleId)} → {getStyleLabel(entry.toStyleId)}</p>
-              <ul className="list-disc pl-5 text-muted-foreground">{entry.recalculations.map((item) => <li key={item}>{item}</li>)}</ul>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={confirmStyleOpen} onOpenChange={setConfirmStyleOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Change training style?</AlertDialogTitle><AlertDialogDescription>This will change how your AI analysis works and affect future plans. We’ll re-baseline MAF settings when needed.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction
-              onClick={() => {
-                if (!pendingStyleId) {
-                  return;
-                }
-                if (pendingStyleId === "maf_method" && !hasRequiredMafInputs()) {
-                  setStyleSwitchBlockedMessage("Complete MAF setup to switch styles");
-                  setMafSetupOpen(true);
-                  return;
-                }
-                setTrainingStyleId(pendingStyleId);
-                setStyleTransitionNotice(
-                  `Switched to ${getStyleLabel(pendingStyleId)}. Immediate: coaching language and new recommendations update now. After re-baseline: future trend analysis and longer-horizon plan adjustments will settle once new baseline data is captured.`,
-                );
-              }}
-            >
-              Confirm
-            </AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={mafSetupOpen} onOpenChange={setMafSetupOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Complete MAF setup</AlertDialogTitle><AlertDialogDescription>Required fields are marked. Optional field: HR data available.</AlertDialogDescription></AlertDialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Age (required)" value={mafAgeInput} onChange={(e) => setMafAgeInput(e.target.value)} data-testid="maf-age-input" />
-            <Select value={mafConsistencyInput} onValueChange={(v: "low" | "moderate" | "high") => setMafConsistencyInput(v)}><SelectTrigger><SelectValue placeholder="Consistency (required)" /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="moderate">Moderate</SelectItem><SelectItem value="high">High</SelectItem></SelectContent></Select>
-            <Select value={mafTrendInput} onValueChange={(v: "improving" | "flat" | "declining") => setMafTrendInput(v)}><SelectTrigger><SelectValue placeholder="Trend (required)" /></SelectTrigger><SelectContent><SelectItem value="improving">Improving</SelectItem><SelectItem value="flat">Flat</SelectItem><SelectItem value="declining">Declining</SelectItem></SelectContent></Select>
-            <Select value={mafHrDataAvailableInput} onValueChange={(v: "yes" | "no") => setMafHrDataAvailableInput(v)}><SelectTrigger><SelectValue placeholder="HR data available (optional)" /></SelectTrigger><SelectContent><SelectItem value="yes">Yes</SelectItem><SelectItem value="no">No</SelectItem></SelectContent></Select>
-            {mafSetupError && <p className="text-sm text-destructive">{mafSetupError}</p>}
-          </div>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={(e) => {
-            const parsedAge = Number.parseInt(mafAgeInput, 10);
-            if (!Number.isInteger(parsedAge) || parsedAge < 16 || parsedAge > 99 || !mafConsistencyInput || !mafTrendInput) {
-              e.preventDefault();
-              setMafSetupError("Enter a valid age and select required MAF fields.");
-              return;
-            }
-            setMafSetupError(null);
-            if (!pendingStyleId) return;
-            const { committedStyleId, styleChanged } = stageSaveAuditState(pendingStyleId);
-            const maf = calculateMafHr({ age: parsedAge, injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication), consistency: mafConsistencyInput, trend: mafTrendInput });
-            saveMutation.mutate({
-              weightUnit, distanceUnit, weeklyGoal: Number.parseInt(weeklyGoal, 10), emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled,
-              trainingStyleId: pendingStyleId, mafAge: parsedAge, mafConsistency: mafConsistencyInput, mafTrend: mafTrendInput,
-              mafHrDataAvailable: mafHrDataAvailableInput ? mafHrDataAvailableInput === "yes" : undefined,
-              trainingStylePreviousId: styleChanged ? committedStyleId : undefined, trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined, trainingStyleRecomputeNow: styleChanged,
-              mafHr: styleChanged ? maf.ceiling : undefined, mafBaselineTestScheduledAt: styleChanged ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
-            });
-            setTrainingStyleId(pendingStyleId);
-            setMafSetupOpen(false);
-            setStyleSwitchBlockedMessage(null);
-          }}>Save MAF setup</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      <TrainingStyleSection
+        trainingStyleId={trainingStyleId}
+        onTrainingStyleIdChange={setTrainingStyleId}
+        hasRequiredMafInputs={hasRequiredMafInputs()}
+        mafAgeInput={mafAgeInput}
+        mafConsistencyInput={mafConsistencyInput}
+        mafTrendInput={mafTrendInput}
+        mafHrDataAvailableInput={mafHrDataAvailableInput}
+        onMafAgeInputChange={setMafAgeInput}
+        onMafConsistencyInputChange={setMafConsistencyInput}
+        onMafTrendInputChange={setMafTrendInput}
+        onMafHrDataAvailableInputChange={setMafHrDataAvailableInput}
+        styleAuditEntries={styleAuditEntries}
+      />
       <PushNotificationSection />
 
       <CoachingSection />
