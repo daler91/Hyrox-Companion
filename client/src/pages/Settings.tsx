@@ -20,6 +20,16 @@ import {
   type StyleAuditEntry,
   TrainingStyleSection,
 } from "@/components/settings/TrainingStyleSection";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -28,6 +38,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
 import { queryClient } from "@/lib/queryClient";
@@ -121,7 +132,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
 export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const search = useSearch();
   const [weightUnit, setWeightUnit] = useState("kg");
   const [distanceUnit, setDistanceUnit] = useState("km");
@@ -173,6 +184,12 @@ export default function Settings() {
   // "Undo" action on the post-save toast.
   const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
   const pendingStyleAuditRef = useRef<StyleAuditEntry | null>(null);
+  const currentSettingsPath = `${location}${search ? `?${search}` : ""}`;
+  const unsavedChangesPrompt = useUnsavedChangesPrompt({
+    enabled: hasChanges,
+    currentPath: currentSettingsPath,
+    navigate: setLocation,
+  });
 
   const currentSnapshot = useCallback(
     (): PreferencesSnapshot => ({
@@ -560,8 +577,11 @@ export default function Settings() {
             variant="outline"
             data-testid="button-rerun-onboarding"
             onClick={() => {
-              clearLocalOnboardingComplete();
-              setLocation("/?onboarding=run");
+              unsavedChangesPrompt.requestNavigation(
+                "/?onboarding=run",
+                undefined,
+                clearLocalOnboardingComplete,
+              );
             }}
           >
             <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -593,6 +613,35 @@ export default function Settings() {
           </Button>
         </div>
       )}
+
+      <AlertDialog
+        open={unsavedChangesPrompt.isPromptOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            unsavedChangesPrompt.cancelNavigation();
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved settings changes. Discard them and leave Settings?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={unsavedChangesPrompt.cancelNavigation}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={unsavedChangesPrompt.discardChangesAndNavigate}
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageContainer>
   );
 }

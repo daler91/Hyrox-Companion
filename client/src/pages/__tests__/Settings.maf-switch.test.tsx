@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
@@ -54,10 +54,37 @@ async function chooseSelectOption(label: string, option: string) {
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
 
+function seedDefaultSettings(qc: QueryClient) {
+  seedQuery(qc, ["preferences"], {
+    weightUnit: "kg",
+    distanceUnit: "km",
+    weeklyGoal: 5,
+    emailNotifications: false,
+    emailWeeklySummary: false,
+    emailMissedReminder: false,
+    showAdherenceInsights: true,
+    aiCoachEnabled: false,
+    trainingStyleId: "balanced_default",
+    onboardingCompleted: true,
+    mafAge: null,
+    mafConsistency: null,
+    mafTrend: null,
+  });
+  seedQuery(qc, ["strava"], null);
+  seedQuery(qc, ["garmin"], null);
+}
+
+async function makeSettingsDirty() {
+  fireEvent.click(await screen.findByTestId("select-weekly-goal"));
+  fireEvent.click(await screen.findByRole("option", { name: "6" }));
+  expect(await screen.findByTestId("button-save-settings")).toBeInTheDocument();
+}
+
 describe("Settings MAF style switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    window.history.replaceState(null, "", "/settings");
   });
 
   it("hydrates nullable opt-in preferences as off", async () => {
@@ -237,7 +264,105 @@ describe("Settings MAF style switch", () => {
 
     fireEvent.click(await screen.findByTestId("button-rerun-onboarding"));
 
-    expect(mocks.setLocation).toHaveBeenCalledWith("/?onboarding=run");
+    expect(mocks.setLocation).toHaveBeenCalledWith("/?onboarding=run", undefined);
     expect(api.preferences.update).not.toHaveBeenCalledWith({ onboardingCompleted: false });
   });
+
+  it("prompts before following same-origin links with unsaved settings", async () => {
+    const qc = new QueryClient();
+    seedDefaultSettings(qc);
+
+    render(
+      <QueryClientProvider client={qc}>
+        <>
+          <Settings />
+          <a href="/analytics">Analytics link</a>
+        </>
+      </QueryClientProvider>,
+    );
+
+    await makeSettingsDirty();
+
+    fireEvent.click(screen.getByText("Analytics link"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
+    ).toBeInTheDocument();
+    expect(mocks.setLocation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Discard unsaved changes?" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("button-save-settings")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Analytics link"));
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
+
+    expect(mocks.setLocation).toHaveBeenCalledWith("/analytics", undefined);
+  }, 10_000);
+
+  it("prompts before Settings-owned programmatic navigation while dirty", async () => {
+    const qc = new QueryClient();
+    seedDefaultSettings(qc);
+
+    render(
+      <QueryClientProvider client={qc}>
+        <Settings />
+      </QueryClientProvider>,
+    );
+
+    await makeSettingsDirty();
+
+    fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
+    ).toBeInTheDocument();
+    expect(mocks.setLocation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("heading", { name: "Discard unsaved changes?" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("button-save-settings")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
+
+    expect(mocks.setLocation).toHaveBeenCalledWith("/?onboarding=run", undefined);
+  }, 10_000);
+
+  it("prompts on browser back or forward while settings are dirty", async () => {
+    const qc = new QueryClient();
+    seedDefaultSettings(qc);
+
+    render(
+      <QueryClientProvider client={qc}>
+        <Settings />
+      </QueryClientProvider>,
+    );
+
+    await makeSettingsDirty();
+
+    act(() => {
+      window.history.pushState(null, "", "/analytics");
+      window.dispatchEvent(new Event("popstate"));
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/settings");
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(mocks.setLocation).toHaveBeenCalledWith("/analytics", undefined);
+  }, 10_000);
 });
