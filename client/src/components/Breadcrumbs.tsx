@@ -7,7 +7,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { QUERY_KEYS } from "@/lib/api";
 
 const ROUTE_LABELS: Record<string, string> = {
-  "/": "Home",
+  "/": "Training",
   "/log": "Log Workout",
   "/analytics": "Analytics",
   "/settings": "Settings",
@@ -71,7 +71,7 @@ export function Breadcrumbs() {
   const currentLabel = ROUTE_LABELS[pathname];
   const isHome = pathname === "/";
 
-  // No trail when we have nothing to show beyond "Home".
+  // No trail when we have nothing to show beyond the current root page.
   if (!currentLabel) return null;
   if (isHome && !workoutId) return null;
 
@@ -88,7 +88,7 @@ export function Breadcrumbs() {
             className="hover:text-foreground transition-colors"
             data-testid="breadcrumb-home"
           >
-            Home
+            Training
           </Link>
         </li>
         <li aria-hidden="true" className="flex items-center">
