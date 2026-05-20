@@ -21,6 +21,7 @@ import {
   TimelineTodayIndicator,
 } from "@/components/timeline";
 import { Input } from "@/components/ui/input";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -281,8 +282,8 @@ export default function Timeline() {
         data-testid="input-csv-upload-onboarding"
       />
       <div className="flex h-full">
-        <div ref={scrollRef} className="flex-1 overflow-auto p-4 md:p-8 relative">
-          <div className="max-w-5xl mx-auto space-y-6">
+        <div ref={scrollRef} className="flex-1 overflow-auto relative">
+          <PageContainer size="default" className="space-y-6">
             <TimelineHeader
               canBulkDelete={bulkDeletableEntries.length > 0}
               bulkDeleteMode={bulkDeleteMode}
@@ -431,7 +432,7 @@ export default function Timeline() {
               annotationInitialDate={annotationInitialDate}
               setAnnotationInitialDate={setAnnotationInitialDate}
             />
-          </div>
+          </PageContainer>
         </div>
 
         <TimelineCoachPanels

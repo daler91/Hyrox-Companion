@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToastAction } from "@/components/ui/toast";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
@@ -383,7 +384,7 @@ export default function Settings() {
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
 
     return (
-      <div className="p-4 md:p-8 max-w-2xl mx-auto">
+      <PageContainer size="narrow">
         <Card className="border-destructive/40">
           <CardHeader>
             <CardTitle className="text-destructive">Couldn't load settings</CardTitle>
@@ -398,12 +399,12 @@ export default function Settings() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
+    <PageContainer size="narrow" className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground mt-1">
@@ -605,6 +606,6 @@ export default function Settings() {
           </Button>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

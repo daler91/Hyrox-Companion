@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
@@ -47,7 +48,7 @@ export default function Analytics() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+    <PageContainer size="default" className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
@@ -149,6 +150,6 @@ export default function Analytics() {
           <CoachInsightsTab />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

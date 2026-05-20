@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { WorkoutHeader } from "@/components/workout/WorkoutHeader";
 import type { useToast } from "@/hooks/use-toast";
 import type { WorkoutStep } from "@/hooks/useLogWorkoutDraft";
@@ -142,7 +143,7 @@ export function LogWorkoutStepperLayout({
   };
 
   return (
-    <div className="container max-w-3xl mx-auto p-4 pb-28 md:pb-8 pt-4 md:pt-8 min-h-screen">
+    <PageContainer size="form" className="pb-28 md:pb-8 min-h-screen">
       <WorkoutHeader
         onDuplicateLast={step === 1 ? handleDuplicateLast : undefined}
         isDuplicating={isDuplicating}
@@ -201,7 +202,7 @@ export function LogWorkoutStepperLayout({
           />
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

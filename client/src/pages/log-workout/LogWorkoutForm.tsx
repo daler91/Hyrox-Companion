@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useLocation } from "wouter";
 
 import { Badge } from "@/components/ui/badge";
+import { PageContainer } from "@/components/ui/PageContainer";
 import { useToast } from "@/hooks/use-toast";
 import {
   clearLogWorkoutDraft,
@@ -139,11 +140,11 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   return (
     <>
       {!import.meta.env.PROD && (
-        <div className="container max-w-3xl mx-auto px-4 pt-3">
+        <PageContainer size="form" className="pt-3 pb-0 md:pt-3 md:pb-0">
           <Badge variant="outline" data-testid="badge-editor-mode-diagnostics">
             Editor mode: {activeEditorMode}
           </Badge>
-        </div>
+        </PageContainer>
       )}
       <LogWorkoutStepperLayout
       step={step}
