@@ -25,7 +25,13 @@ vi.mock("@/components/brand/Logo", () => ({ Logo: () => <div data-testid="logo" 
 vi.mock("@/components/FeatureErrorBoundaryWrapper", () => ({ FeatureErrorBoundaryWrapper: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock("@/components/ui/loading-spinner", () => ({ LoadingSpinner: () => <div data-testid="loading-spinner" /> }));
 vi.mock("@/components/ui/sidebar", () => ({
-  SidebarProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="sidebar-provider">{children}</div>,
+  SidebarProvider: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <div className={className} data-testid="sidebar-provider">{children}</div>,
   SidebarTrigger: () => <button data-testid="button-sidebar-toggle" />,
 }));
 
@@ -93,6 +99,7 @@ describe("App providers", () => {
     render(<App />);
 
     const mainContent = document.querySelector("#main-content");
+    expect(screen.getByTestId("sidebar-provider")).toHaveClass("h-svh", "overflow-hidden");
     expect(mainContent).toHaveClass("min-h-0", "flex-1", "overflow-auto");
     expect(mainContent?.parentElement).toHaveClass("min-h-0", "flex-1", "min-w-0");
   });

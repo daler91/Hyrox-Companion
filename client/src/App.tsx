@@ -107,6 +107,7 @@ function AuthenticatedLayout() {
 
   return (
     <SidebarProvider
+      className="h-svh overflow-hidden"
       style={style as React.CSSProperties}
       defaultOpen={getStoredSidebarOpen()}
     >
