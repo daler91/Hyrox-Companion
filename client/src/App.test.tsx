@@ -85,4 +85,15 @@ describe("App providers", () => {
     expect(screen.getByTestId("offline-indicator")).toBeInTheDocument();
     expect(showSpy).toHaveBeenCalledWith("signed-in");
   });
+
+  it("keeps authenticated pages constrained to the main scroll region", async () => {
+    (globalThis as typeof globalThis & { Cypress?: unknown }).Cypress = {};
+    const App = await loadApp();
+
+    render(<App />);
+
+    const mainContent = document.querySelector("#main-content");
+    expect(mainContent).toHaveClass("min-h-0", "flex-1", "overflow-auto");
+    expect(mainContent?.parentElement).toHaveClass("min-h-0", "flex-1", "min-w-0");
+  });
 });

@@ -1,5 +1,100 @@
 import { setupAuthIntercepts } from "../support/authIntercepts";
 
+const stationCoverage = ([
+  ["skierg", "2024-03-11", 4],
+  ["sled_push", "2024-03-08", 7],
+  ["sled_pull", "2024-03-02", 13],
+  ["burpee_broad_jump", "2024-02-25", 19],
+  ["rowing", "2024-03-12", 3],
+  ["farmers_carry", "2024-02-20", 24],
+  ["sandbag_lunges", "2024-03-04", 11],
+  ["wall_balls", "2024-03-10", 5],
+  ["running", "2024-03-14", 1],
+] as const).map(([station, lastTrained, daysSince]) => ({ station, lastTrained, daysSince }));
+
+const weekStarts = [
+  "2024-01-01",
+  "2024-01-08",
+  "2024-01-15",
+  "2024-01-22",
+  "2024-01-29",
+  "2024-02-05",
+  "2024-02-12",
+  "2024-02-19",
+  "2024-02-26",
+  "2024-03-04",
+  "2024-03-11",
+  "2024-03-18",
+];
+
+const workoutCounts = [4, 5, 6, 7, 5, 8, 6, 7, 9, 8, 10, 6];
+const avgRpes = [5.5, 5.7, 6.1, 6.2, 5.6, 6.8, 6.0, 6.4, 7.0, 6.7, 7.2, 6.3];
+
+const weeklySummaries = weekStarts.map((weekStart, index) => {
+  const workoutCount = workoutCounts[index] ?? 0;
+  return {
+    weekStart,
+    workoutCount,
+    totalDuration: workoutCount * 60,
+    avgRpe: avgRpes[index] ?? null,
+    categoryBreakdown: {
+      run: Math.ceil(workoutCount / 2),
+      strength: Math.floor(workoutCount / 2),
+    },
+  };
+});
+
+const trainingOverview = {
+  currentStats: {
+    totalWorkouts: 87,
+    avgPerWeek: 6.2,
+    totalDuration: 5220,
+    avgDuration: 60,
+    avgRpe: 4.5,
+    avgCompliancePct: 96,
+  },
+  previousStats: {
+    totalWorkouts: 46,
+    avgPerWeek: 4.6,
+    totalDuration: 2760,
+    avgDuration: 60,
+    avgRpe: 5.2,
+    avgCompliancePct: 82,
+  },
+  weeklySummaries,
+  workoutDates: [
+    "2024-01-02",
+    "2024-01-04",
+    "2024-01-06",
+    "2024-01-09",
+    "2024-01-11",
+    "2024-01-13",
+    "2024-01-16",
+    "2024-01-18",
+    "2024-01-20",
+    "2024-02-06",
+    "2024-02-08",
+    "2024-02-10",
+    "2024-02-13",
+    "2024-02-15",
+    "2024-02-17",
+    "2024-03-05",
+    "2024-03-07",
+    "2024-03-09",
+    "2024-03-12",
+    "2024-03-14",
+  ],
+  categoryTotals: {
+    run: { count: 42, totalSets: 42 },
+    strength: { count: 28, totalSets: 140 },
+    functional: { count: 17, totalSets: 85 },
+  },
+  stationCoverage,
+  currentStreak: 6,
+  weeklyCompletedWorkouts: 6,
+  weeklyGoal: 5,
+};
+
 describe("Analytics Page", () => {
   describe("empty state", () => {
     beforeEach(() => {
@@ -29,6 +124,7 @@ describe("Analytics Page", () => {
   describe("with PR data", () => {
     beforeEach(() => {
       setupAuthIntercepts({
+        trainingOverview,
         personalRecords: {
           back_squat: {
             customLabel: null,
@@ -81,6 +177,24 @@ describe("Analytics Page", () => {
       cy.get('[role="option"]').contains("Back Squat").click();
       cy.getBySel("text-total-sessions").should("exist");
       cy.getBySel("text-total-sets").should("exist");
+    });
+
+    it("keeps analytics scrolling inside the main app region", () => {
+      cy.getBySel("chart-weekly-workouts").should("be.visible");
+
+      cy.get("#main-content").should(($mainContent) => {
+        const mainContent = $mainContent[0];
+        const styles = getComputedStyle(mainContent);
+
+        expect(styles.overflowY).to.equal("auto");
+        expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
+      });
+
+      cy.document().then((doc) => {
+        const scrollingElement = doc.scrollingElement ?? doc.documentElement;
+
+        expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
+      });
     });
   });
 });
