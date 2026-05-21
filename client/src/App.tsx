@@ -110,7 +110,7 @@ function AuthenticatedLayout() {
       style={style as React.CSSProperties}
       defaultOpen={getStoredSidebarOpen()}
     >
-      <div className="flex h-screen w-full">
+      <div className="flex h-svh w-full overflow-hidden">
         <a href="#main-content" className="skip-to-content">
           Skip to main content
         </a>

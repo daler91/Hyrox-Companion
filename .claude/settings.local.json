@@ -26,7 +26,11 @@
       "Bash(git push *)",
       "Bash(gh pr *)",
       "Bash(gh run *)",
-      "Bash(CLERK_PUBLISHABLE_KEY=dummy CLERK_SECRET_KEY=dummy DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy ENCRYPTION_KEY=01234567890123456789012345678901 npx vitest run server/services/analyticsService.test.ts server/services/workoutService.test.ts client/src/components/workout-detail/)"
+      "Bash(CLERK_PUBLISHABLE_KEY=dummy CLERK_SECRET_KEY=dummy DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy ENCRYPTION_KEY=01234567890123456789012345678901 npx vitest run server/services/analyticsService.test.ts server/services/workoutService.test.ts client/src/components/workout-detail/)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\russe\\\\Hyrox-Companion\\\\src\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(Sort-Object -Unique)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")"
     ]
   }
 }
