@@ -2,6 +2,7 @@ import type { TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
+import { calculateTrainingLoad } from "../trainingLoadService";
 import {
   computeCurrentWeek,
   computeExerciseGaps,
@@ -17,6 +18,20 @@ import {
   getExerciseBreakdown,
   getStructuredExerciseStats,
 } from "./trainingStats";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function todayUtcDate(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    .toISOString()
+    .split("T")[0];
+}
+
+function addDays(date: string, delta: number): string {
+  const timestamp = new Date(`${date}T00:00:00Z`).getTime() + delta * DAY_MS;
+  return new Date(timestamp).toISOString().split("T")[0];
+}
 
 function mapTestTrendDirection(
   trend: ReturnType<typeof computeRpeTrend>["rpeTrend"],
@@ -35,11 +50,16 @@ function mapTestTrendDirection(
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const [timeline, activePlanRecord, user, upcomingDays] = await Promise.all([
+  const today = todayUtcDate();
+  const loadHistoryStart = addDays(today, -70);
+  const [timeline, activePlanRecord, user, upcomingDays, loadWorkoutLogs, loadExerciseSets, loadTags] = await Promise.all([
     storage.timeline.getTimeline(userId),
     storage.plans.getActivePlan(userId),
     storage.users.getUser(userId),
     storage.timeline.getUpcomingPlannedDays(userId, 7),
+    storage.analytics.getWorkoutLogsByDateRange(userId, loadHistoryStart, today),
+    storage.analytics.getAllExerciseSetsWithDates(userId, loadHistoryStart, today),
+    storage.analytics.getExerciseLoadTags(),
   ]);
 
   const {
@@ -75,6 +95,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     : undefined;
   const weeklyVolume = weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal) : undefined;
   const progressionFlags = computeProgressionFlags(timeline);
+  const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
+    currentDate: today,
+  }).overview;
   const completedLast7d = recentWorkouts.filter((w) => {
     const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
     return days >= 0 && days <= 7;
@@ -112,6 +135,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     planPhase,
     weeklyVolume,
     progressionFlags,
+    loadGovernor,
     decisionTree: {
       currentPhase: decisionTree.phase,
       allowedWorkoutTypes: decisionTree.allowedWorkoutTypes,

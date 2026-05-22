@@ -164,6 +164,10 @@ function buildTimelineCoachInputs(
     fatigueFlag: insights?.fatigueFlag,
     planPhase: insights?.planPhase?.phaseLabel,
     weeklyVolumeTrend: insights?.weeklyVolume?.trend,
+    loadGovernorAcwrZone: insights?.loadGovernor?.zone,
+    loadGovernorAcwr: insights?.loadGovernor?.acwr ?? undefined,
+    loadGovernorFlaggedVectors: insights?.loadGovernor?.flaggedVectors,
+    loadGovernorRestrictions: insights?.loadGovernor?.activeRestrictions.map((r) => r.id),
     stationGaps: insights?.stationGaps
       ?.filter((g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
       .map((g) => g.station),

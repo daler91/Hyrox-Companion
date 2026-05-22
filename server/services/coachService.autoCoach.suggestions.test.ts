@@ -180,4 +180,194 @@ describe("coachService triggerAutoCoach suggestion application", () => {
       expect.anything(),
     );
   });
+
+  it("applies load-governor suggestions through structured rows before provider suggestions", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({
+        focus: "Run",
+        mainWorkout: "Hill repeats 8x60 seconds",
+        exerciseDetails: [
+          {
+            exerciseName: "hill_repeats",
+            category: "running",
+            setNumber: 1,
+            time: 40,
+            sortOrder: 0,
+          },
+        ],
+      }),
+    ]);
+    vi.mocked(buildTrainingContext).mockResolvedValue({
+      totalWorkouts: 10,
+      completedWorkouts: 10,
+      plannedWorkouts: 1,
+      missedWorkouts: 0,
+      skippedWorkouts: 0,
+      completionRate: 100,
+      currentStreak: 4,
+      recentWorkouts: [],
+      upcomingWorkouts: [
+        {
+          planDayId: "day-1",
+          date: "2026-01-16",
+          focus: "Run",
+          mainWorkout: "Hill repeats 8x60 seconds",
+          exerciseDetails: [
+            {
+              exerciseName: "hill_repeats",
+              category: "running",
+              setNumber: 1,
+              time: 40,
+              sortOrder: 0,
+            },
+          ],
+        },
+      ],
+      exerciseBreakdown: {},
+      coachingInsights: {
+        rpeTrend: "stable",
+        fatigueFlag: false,
+        undertrainingFlag: false,
+        stationGaps: [],
+        progressionFlags: [],
+        loadGovernor: {
+          currentUtss: 100,
+          acuteAvg: 70,
+          chronicAvg: 65,
+          acwr: 1.08,
+          zone: "sweet_spot",
+          flaggedVectors: ["posterior_chain"],
+          activeRestrictions: [
+            {
+              id: "posterior_chain_velocity_lock",
+              label: "Posterior chain velocity lock",
+              severity: "danger",
+              expiresOn: "2026-01-17",
+              vector: "posterior_chain",
+              rationale: "Recent posterior-chain load conflicts with speed work.",
+            },
+          ],
+          downshiftRationale: "Recent posterior-chain load conflicts with speed work.",
+          trend: [],
+        },
+      },
+    });
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
+      makeSuggestion({ recommendation: "Keep the hill repeats hard." }),
+    ]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(dbMockState.insertValues).toHaveBeenCalledWith([
+      expect.objectContaining({
+        planDayId: "day-1",
+        exerciseName: "recovery_run",
+        category: "running",
+      }),
+    ]);
+    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({
+        aiSource: "load_governor",
+        aiRationale: expect.stringContaining("posterior-chain"),
+        aiInputsUsed: expect.objectContaining({
+          loadGovernorAcwrZone: "sweet_spot",
+          loadGovernorFlaggedVectors: ["posterior_chain"],
+        }),
+      }),
+      "user-1",
+      expect.anything(),
+    );
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({ mainWorkout: "Keep the hill repeats hard." }),
+      "user-1",
+      expect.anything(),
+    );
+  });
+
+  it("does not fall back to text when a load-governor structured write fails", async () => {
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [
+      makeTimelineEntry({
+        focus: "Run",
+        mainWorkout: "Hill repeats 8x60 seconds",
+        exerciseDetails: [
+          {
+            exerciseName: "hill_repeats",
+            category: "running",
+            setNumber: 1,
+            time: 40,
+            sortOrder: 0,
+          },
+        ],
+      }),
+    ]);
+    vi.mocked(buildTrainingContext).mockResolvedValue({
+      totalWorkouts: 10,
+      completedWorkouts: 10,
+      plannedWorkouts: 1,
+      missedWorkouts: 0,
+      skippedWorkouts: 0,
+      completionRate: 100,
+      currentStreak: 4,
+      recentWorkouts: [],
+      upcomingWorkouts: [
+        {
+          planDayId: "day-1",
+          date: "2026-01-16",
+          focus: "Run",
+          mainWorkout: "Hill repeats 8x60 seconds",
+          exerciseDetails: [
+            {
+              exerciseName: "hill_repeats",
+              category: "running",
+              setNumber: 1,
+              time: 40,
+              sortOrder: 0,
+            },
+          ],
+        },
+      ],
+      exerciseBreakdown: {},
+      coachingInsights: {
+        rpeTrend: "stable",
+        fatigueFlag: false,
+        undertrainingFlag: false,
+        stationGaps: [],
+        progressionFlags: [],
+        loadGovernor: {
+          currentUtss: 100,
+          acuteAvg: 70,
+          chronicAvg: 65,
+          acwr: 1.08,
+          zone: "sweet_spot",
+          flaggedVectors: ["posterior_chain"],
+          activeRestrictions: [
+            {
+              id: "posterior_chain_velocity_lock",
+              label: "Posterior chain velocity lock",
+              severity: "danger",
+              expiresOn: "2026-01-17",
+              vector: "posterior_chain",
+              rationale: "Recent posterior-chain load conflicts with speed work.",
+            },
+          ],
+          downshiftRationale: "Recent posterior-chain load conflicts with speed work.",
+          trend: [],
+        },
+      },
+    });
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+    dbMockState.insertValues.mockRejectedValueOnce(new Error("structured write failed"));
+
+    await expect(triggerAutoCoach("user-1")).rejects.toThrow("structured write failed");
+    expect(parseExercisesFromText).not.toHaveBeenCalled();
+    expect(storage.plans.updatePlanDay).not.toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({ mainWorkout: expect.any(String) }),
+      "user-1",
+      expect.anything(),
+    );
+  });
 });

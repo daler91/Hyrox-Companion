@@ -20,6 +20,7 @@ function sourceLabel(source: CoachNoteSource): string {
     case "rag": return "RAG";
     case "legacy": return "Legacy";
     case "review": return "Review";
+    case "load_governor": return "Load governor";
   }
 }
 
@@ -31,6 +32,8 @@ function sourceBadgeClasses(source: CoachNoteSource): string {
       return "text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950";
     case "review":
       return "text-sky-600 border-sky-200 bg-sky-50 dark:text-sky-400 dark:border-sky-800 dark:bg-sky-950";
+    case "load_governor":
+      return "text-red-600 border-red-200 bg-red-50 dark:text-red-400 dark:border-red-800 dark:bg-red-950";
   }
 }
 
@@ -76,6 +79,26 @@ function progressionChip(flags: string[] | undefined): string | null {
   return `Progression: ${flags.length} flag${flags.length > 1 ? "s" : ""}`;
 }
 
+function acwrChip(inputs: CoachNoteInputs): string | null {
+  if (inputs.loadGovernorAcwrZone === "danger") return "ACWR danger";
+  if (inputs.loadGovernorAcwrZone === "yellow") return "Yellow load";
+  return null;
+}
+
+function loadGovernorVectorChips(inputs: CoachNoteInputs): string[] {
+  const vectors = new Set(inputs.loadGovernorFlaggedVectors ?? []);
+  for (const restriction of inputs.loadGovernorRestrictions ?? []) {
+    if (restriction.includes("posterior_chain")) vectors.add("posterior_chain");
+    if (restriction.includes("anterior_chain")) vectors.add("anterior_chain");
+    if (restriction.includes("elastic_tendon")) vectors.add("elastic_tendon");
+  }
+  const chips: string[] = [];
+  if (vectors.has("posterior_chain")) chips.push("Posterior chain");
+  if (vectors.has("anterior_chain")) chips.push("Anterior chain");
+  if (vectors.has("elastic_tendon")) chips.push("Elastic load");
+  return chips;
+}
+
 function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
   if (!inputs) return [];
   const candidates: Array<string | null | undefined> = [
@@ -86,12 +109,18 @@ function basedOnChips(inputs: CoachNoteInputs | null | undefined): string[] {
     inputs.weeklyVolumeTrend ? `Volume ${inputs.weeklyVolumeTrend}` : null,
     stationGapsChip(inputs.stationGaps),
     progressionChip(inputs.progressionFlags),
+    acwrChip(inputs),
     inputs.recentWorkoutCount && inputs.recentWorkoutCount > 0
       ? `${inputs.recentWorkoutCount} recent workouts`
       : null,
     inputs.ragUsed ? "Coaching docs" : null,
   ];
-  return candidates.filter((c): c is string => typeof c === "string");
+  return [
+    ...new Set([
+      ...candidates.filter((c): c is string => typeof c === "string"),
+      ...loadGovernorVectorChips(inputs),
+    ]),
+  ];
 }
 
 export function CoachNote({

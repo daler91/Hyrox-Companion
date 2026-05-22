@@ -344,6 +344,13 @@
       "when": 1779025184420,
       "tag": "0048_shared_runtime_state",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1779451200000,
+      "tag": "0049_exercise_load_tags",
+      "breakpoints": true
     }
   ]
 }

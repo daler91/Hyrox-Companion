@@ -324,6 +324,28 @@ export const workoutStructureBlocks = pgTable("workout_structure_blocks", {
   check("workout_structure_block_time_cap_positive_check", sql`time_cap_minutes IS NULL OR time_cap_minutes > 0`),
 ]);
 
+export const exerciseLoadTags = pgTable("exercise_load_tags", {
+  exerciseName: varchar("exercise_name", { length: 255 }).primaryKey(),
+  posteriorChain: real("posterior_chain").notNull().default(0),
+  anteriorChain: real("anterior_chain").notNull().default(0),
+  unilateralStability: real("unilateral_stability").notNull().default(0),
+  elasticTendon: real("elastic_tendon").notNull().default(0),
+  axialLoadModifier: real("axial_load_modifier").notNull().default(1),
+  tendonLoadModifier: real("tendon_load_modifier").notNull().default(1),
+  eccentricRiskModifier: real("eccentric_risk_modifier").notNull().default(1),
+  highIntensityRunningRisk: real("high_intensity_running_risk").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("exercise_load_tags_posterior_non_negative_check", sql`${table.posteriorChain} >= 0`),
+  check("exercise_load_tags_anterior_non_negative_check", sql`${table.anteriorChain} >= 0`),
+  check("exercise_load_tags_unilateral_non_negative_check", sql`${table.unilateralStability} >= 0`),
+  check("exercise_load_tags_elastic_non_negative_check", sql`${table.elasticTendon} >= 0`),
+  check("exercise_load_tags_axial_modifier_positive_check", sql`${table.axialLoadModifier} >= 0`),
+  check("exercise_load_tags_tendon_modifier_positive_check", sql`${table.tendonLoadModifier} >= 0`),
+  check("exercise_load_tags_eccentric_modifier_positive_check", sql`${table.eccentricRiskModifier} >= 0`),
+  check("exercise_load_tags_running_risk_non_negative_check", sql`${table.highIntensityRunningRisk} >= 0`),
+]);
+
 export const workoutStructureSteps = pgTable("workout_structure_steps", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
   blockId: varchar("block_id", { length: 255 }).notNull().references(() => workoutStructureBlocks.id, { onDelete: "cascade" }),

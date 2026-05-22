@@ -39,6 +39,21 @@ export const coachModificationKindSchema = z.enum([
   "workload_adjustment",
 ]);
 
+const loadGovernorAcwrZoneSchema = z.enum([
+  "insufficient_data",
+  "undertraining",
+  "sweet_spot",
+  "yellow",
+  "danger",
+]);
+
+const loadGovernorVectorSchema = z.enum([
+  "posterior_chain",
+  "anterior_chain",
+  "unilateral_stability",
+  "elastic_tendon",
+]);
+
 const coachModificationMetadataSchema = z.object({
   kind: coachModificationKindSchema,
   reason: z.string().max(400).optional(),
@@ -63,6 +78,10 @@ export const coachNoteInputsSchema = z.object({
   fatigueFlag: z.boolean().optional(),
   planPhase: z.enum(["early", "build", "peak", "taper", "race_week"]).optional(),
   weeklyVolumeTrend: z.enum(["increasing", "stable", "decreasing"]).optional(),
+  loadGovernorAcwrZone: loadGovernorAcwrZoneSchema.optional(),
+  loadGovernorAcwr: z.number().optional(),
+  loadGovernorFlaggedVectors: z.array(loadGovernorVectorSchema).optional(),
+  loadGovernorRestrictions: z.array(z.string()).optional(),
   stationGaps: z.array(z.string()).optional(),
   progressionFlags: z.array(z.string()).optional(),
   ragUsed: z.boolean().optional(),

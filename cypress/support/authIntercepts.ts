@@ -97,6 +97,17 @@ export function setupAuthIntercepts(overrides?: {
       currentStreak: 0,
       weeklyCompletedWorkouts: 0,
       weeklyGoal: 5,
+      trainingLoad: {
+        currentUtss: 0,
+        acuteAvg: 0,
+        chronicAvg: 0,
+        acwr: null,
+        zone: "insufficient_data",
+        flaggedVectors: [],
+        activeRestrictions: [],
+        downshiftRationale: null,
+        trend: [],
+      },
     },
   }).as("trainingOverview");
 

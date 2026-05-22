@@ -93,6 +93,22 @@ const trainingOverview = {
   currentStreak: 6,
   weeklyCompletedWorkouts: 6,
   weeklyGoal: 5,
+  trainingLoad: {
+    currentUtss: 82,
+    acuteAvg: 78,
+    chronicAvg: 70,
+    acwr: 1.11,
+    zone: "sweet_spot",
+    flaggedVectors: [],
+    activeRestrictions: [],
+    downshiftRationale: null,
+    trend: weekStarts.map((date, index) => ({
+      date,
+      utss: 60 + index * 2,
+      acwr: 0.95 + index * 0.02,
+      zone: "sweet_spot",
+    })),
+  },
 };
 
 describe("Analytics Page", () => {

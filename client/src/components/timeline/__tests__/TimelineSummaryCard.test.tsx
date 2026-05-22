@@ -47,6 +47,18 @@ function renderSummary(selectedPlanId: string | null = "plan-1") {
   );
 }
 
+const emptyTrainingLoad = {
+  currentUtss: 0,
+  acuteAvg: 0,
+  chronicAvg: 0,
+  acwr: null,
+  zone: "insufficient_data" as const,
+  flaggedVectors: [],
+  activeRestrictions: [],
+  downshiftRationale: null,
+  trend: [],
+};
+
 describe("TimelineSummaryCard", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -67,6 +79,7 @@ describe("TimelineSummaryCard", () => {
       currentStreak: 4,
       weeklyCompletedWorkouts: 3,
       weeklyGoal: 5,
+      trainingLoad: emptyTrainingLoad,
     });
     mocks.getPlans.mockResolvedValue([
       {
@@ -135,6 +148,7 @@ describe("TimelineSummaryCard", () => {
       currentStreak: 0,
       weeklyCompletedWorkouts: 0,
       weeklyGoal: 5,
+      trainingLoad: emptyTrainingLoad,
     });
     mocks.getPlans.mockResolvedValue([]);
     mocks.getTimeline.mockResolvedValue([]);

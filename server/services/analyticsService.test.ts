@@ -248,6 +248,11 @@ describe("calculateTrainingOverview", () => {
     expect(result.currentStreak).toBe(0);
     expect(result.weeklyCompletedWorkouts).toBe(0);
     expect(result.weeklyGoal).toBe(5);
+    expect(result.trainingLoad).toEqual(expect.objectContaining({
+      currentUtss: 0,
+      acwr: null,
+      zone: "insufficient_data",
+    }));
   });
 
   it("returns AI-aligned streak and Monday-week completion fields", () => {

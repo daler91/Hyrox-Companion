@@ -99,6 +99,12 @@ function todayUtcYyyyMmDd(): string {
     .split("T")[0];
 }
 
+function addCalendarDays(date: string, delta: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + delta);
+  return value.toISOString().split("T")[0];
+}
+
 function parseDateParams(req: DateReq, res: Response): { from?: string; to?: string } | null {
   const from = validDate(req.query.from);
   const rawTo = validDate(req.query.to);
@@ -208,17 +214,41 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
     if (!dates) return;
 
     const previousWindow = computePreviousWindow(dates.from, dates.to);
+    const loadCurrentDate = dates.to ?? todayUtcYyyyMmDd();
+    const loadHistoryStart = addCalendarDays(loadCurrentDate, -70);
 
-    const [workoutLogs, allSets, previousWorkoutLogs, user] = await Promise.all([
+    const [
+      workoutLogs,
+      allSets,
+      previousWorkoutLogs,
+      user,
+      loadTags,
+      loadWorkoutLogs,
+      loadExerciseSets,
+    ] = await Promise.all([
       getWorkoutLogsCoalesced(userId, dates.from, dates.to),
       getExerciseSetsCoalesced(userId, dates.from, dates.to),
       previousWindow
         ? getWorkoutLogsCoalesced(userId, previousWindow.from, previousWindow.to)
         : Promise.resolve(undefined),
       storage.users.getUser(userId),
+      storage.analytics.getExerciseLoadTags(),
+      getWorkoutLogsCoalesced(userId, loadHistoryStart, loadCurrentDate),
+      getExerciseSetsCoalesced(userId, loadHistoryStart, loadCurrentDate),
     ]);
 
-    res.json(calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs, user?.weeklyGoal ?? 5));
+    res.json(calculateTrainingOverview(
+      workoutLogs,
+      allSets,
+      previousWorkoutLogs,
+      user?.weeklyGoal ?? 5,
+      loadTags,
+      {
+        workoutLogs: loadWorkoutLogs,
+        exerciseSets: loadExerciseSets,
+        currentDate: loadCurrentDate,
+      },
+    ));
   }));
 
 

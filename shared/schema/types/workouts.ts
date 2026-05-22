@@ -1,5 +1,5 @@
 ﻿import type { WorkoutStatus } from "../enums";
-import { customExercises, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
+import { customExercises, exerciseLoadTags, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { CoachNoteInputs } from "./plans";
 // Workout log types and schemas
@@ -51,6 +51,7 @@ export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
 export type WorkoutStructureBlock = typeof workoutStructureBlocks.$inferSelect;
+export type ExerciseLoadTag = typeof exerciseLoadTags.$inferSelect;
 
 // Exercise set types and schemas
 export const insertExerciseSetSchema = createInsertSchema(exerciseSets).omit({
@@ -78,7 +79,7 @@ export type TimelineEntry = {
   planName?: string | null;
   planId?: string | null;
   source?: "manual" | "strava" | "garmin";
-  aiSource?: "rag" | "legacy" | "review" | null;
+  aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;

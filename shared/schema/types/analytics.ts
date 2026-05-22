@@ -7,6 +7,47 @@ export interface WeeklySummary {
   categoryBreakdown: Record<string, number>;
 }
 
+export type LoadGovernorAcwrZone =
+  | "insufficient_data"
+  | "undertraining"
+  | "sweet_spot"
+  | "yellow"
+  | "danger";
+
+export type LoadGovernorVector =
+  | "posterior_chain"
+  | "anterior_chain"
+  | "unilateral_stability"
+  | "elastic_tendon";
+
+export interface TrainingLoadTrendPoint {
+  date: string;
+  utss: number;
+  acwr: number | null;
+  zone: LoadGovernorAcwrZone;
+}
+
+export interface TrainingLoadRestriction {
+  id: string;
+  label: string;
+  severity: "info" | "caution" | "danger";
+  expiresOn: string | null;
+  vector?: LoadGovernorVector;
+  rationale: string;
+}
+
+export interface TrainingLoadOverview {
+  currentUtss: number;
+  acuteAvg: number;
+  chronicAvg: number;
+  acwr: number | null;
+  zone: LoadGovernorAcwrZone;
+  flaggedVectors: LoadGovernorVector[];
+  activeRestrictions: TrainingLoadRestriction[];
+  downshiftRationale: string | null;
+  trend: TrainingLoadTrendPoint[];
+}
+
 /**
  * Compact aggregate stats that the Analytics Overview tab surfaces as four
  * delta-indicator cards. Computed for both the currently-visible date range
@@ -47,5 +88,6 @@ export interface TrainingOverview {
    * window exists) or when the query didn't include a lower bound.
    */
   previousStats?: OverviewStats;
+  trainingLoad: TrainingLoadOverview;
 }
 

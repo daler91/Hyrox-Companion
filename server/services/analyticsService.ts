@@ -1,8 +1,9 @@
-import type { OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary,WorkoutLog } from "@shared/schema";
+import type { ExerciseLoadTag, OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary, WorkoutLog } from "@shared/schema";
 
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate } from "../storage/shared";
+import { calculateTrainingLoad } from "./trainingLoadService";
 import { getMondayWeekBoundaries } from "./weeklyProgress";
 
 // Analytics always operates on logged sets, so workoutLogId is guaranteed
@@ -314,10 +315,22 @@ export function calculateTrainingOverview(
   exerciseSets: ExerciseSetWithDate[],
   previousWorkoutLogs?: WorkoutLog[],
   weeklyGoal = 5,
+  loadTags: ExerciseLoadTag[] = [],
+  trainingLoadInput?: {
+    workoutLogs?: WorkoutLog[];
+    exerciseSets?: ExerciseSetWithDate[];
+    currentDate?: string;
+  },
 ): TrainingOverview {
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
+  const trainingLoad = calculateTrainingLoad(
+    trainingLoadInput?.workoutLogs ?? workoutLogs,
+    trainingLoadInput?.exerciseSets ?? exerciseSets,
+    loadTags,
+    trainingLoadInput?.currentDate ? { currentDate: trainingLoadInput.currentDate } : {},
+  ).overview;
   const currentStats = computeOverviewStats(weeklySummaries);
   const completedDates = new Set(workoutLogs.map((log) => log.date));
   const { thisMondayStr } = getMondayWeekBoundaries();
@@ -373,5 +386,6 @@ export function calculateTrainingOverview(
     currentStreak: calculateStreak(completedDates),
     weeklyCompletedWorkouts,
     weeklyGoal,
+    trainingLoad,
   };
 }

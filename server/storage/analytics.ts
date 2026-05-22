@@ -1,4 +1,6 @@
 import {
+  type ExerciseLoadTag,
+  exerciseLoadTags,
   planDays,
   trainingPlans,
   type WorkoutLog,
@@ -10,6 +12,10 @@ import { db } from "../db";
 import { type LoggedExerciseSetWithDate, queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {
+  async getExerciseLoadTags(): Promise<ExerciseLoadTag[]> {
+    return await db.select().from(exerciseLoadTags);
+  }
+
   async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<LoggedExerciseSetWithDate[]> {
     return await queryExerciseSetsWithDates(userId, { from, to });
   }

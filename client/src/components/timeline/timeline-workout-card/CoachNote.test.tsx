@@ -52,6 +52,27 @@ describe("CoachNote", () => {
     expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Review");
   });
 
+  it("labels load-governor notes and renders mechanical risk chips", () => {
+    render(
+      <CoachNote
+        {...baseProps}
+        source="load_governor"
+        inputsUsed={{
+          ...baseProps.inputsUsed,
+          loadGovernorAcwrZone: "danger",
+          loadGovernorFlaggedVectors: ["posterior_chain", "anterior_chain", "elastic_tendon"],
+          loadGovernorRestrictions: ["posterior_chain_velocity_lock"],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByTestId("coach-note-source-plan-day-1")).toHaveTextContent("Load governor");
+    expect(screen.getByText("ACWR danger")).toBeInTheDocument();
+    expect(screen.getByText("Posterior chain")).toBeInTheDocument();
+    expect(screen.getByText("Anterior chain")).toBeInTheDocument();
+    expect(screen.getByText("Elastic load")).toBeInTheDocument();
+  });
+
   it("promotes fatigue flag over raw RPE trend in the chip row", () => {
     render(
       <CoachNote

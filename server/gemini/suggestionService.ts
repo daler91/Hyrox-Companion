@@ -24,7 +24,7 @@ export interface UpcomingWorkout {
   accessory?: string;
   notes?: string;
   exerciseDetails?: PromptExerciseSet[];
-  aiSource?: "rag" | "legacy" | "review" | null;
+  aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
   aiInputsUsed?: CoachNoteInputs | null;

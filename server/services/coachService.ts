@@ -35,10 +35,13 @@ import {
 } from "./structuredPlanDaySuggestion";
 import { resolveTrainingStyle } from "./training_styles";
 import type { TrainingStylePromptContext } from "./training_styles/types";
+import { buildLoadGovernorSuggestions, type LoadGovernorSuggestion } from "./trainingLoadService";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+type AutoCoachAiSource = "rag" | "legacy" | "load_governor" | null | undefined;
 
 function getExistingFieldValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout): string {
   if (suggestion.targetField === "mainWorkout") return entry.mainWorkout;
@@ -57,6 +60,9 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
 interface PreparedSuggestion {
   readonly suggestion: WorkoutSuggestion;
   readonly structuredSetRows?: InsertExerciseSet[];
+  readonly aiSourceOverride?: AutoCoachAiSource;
+  readonly requiresStructuredWrite?: boolean;
+  readonly rationaleCode?: string;
 }
 
 interface AppliedSuggestionResult {
@@ -67,7 +73,7 @@ interface AppliedSuggestionResult {
 interface SuggestionApplyContext {
   readonly upcomingWorkouts: UpcomingWorkout[];
   readonly userId: string;
-  readonly aiSource: "rag" | "legacy" | null | undefined;
+  readonly aiSource: AutoCoachAiSource;
   readonly inputsUsed: CoachNoteInputs;
   readonly coachSignals: CoachModificationSignals;
   readonly unitPreferences: UnitPreferences;
@@ -95,7 +101,7 @@ interface AutoCoachApplyInput {
   readonly preparedSuggestions: PreparedSuggestion[];
   readonly upcomingWorkouts: UpcomingWorkout[];
   readonly userId: string;
-  readonly aiSource: "rag" | "legacy" | null;
+  readonly aiSource: AutoCoachAiSource;
   readonly inputsUsed: CoachNoteInputs;
   readonly coachSignals: CoachModificationSignals;
   readonly unitPreferences: UnitPreferences;
@@ -147,11 +153,21 @@ async function prepareSuggestion(
   }
 }
 
+function prepareLoadGovernorSuggestion(suggestion: LoadGovernorSuggestion): PreparedSuggestion {
+  return {
+    suggestion: suggestion.suggestion,
+    structuredSetRows: suggestion.structuredSetRows,
+    aiSourceOverride: "load_governor",
+    requiresStructuredWrite: Boolean(suggestion.structuredSetRows?.length),
+    rationaleCode: suggestion.rationaleCode,
+  };
+}
+
 async function applyStructuredSuggestion(
   prepared: PreparedSuggestion,
   entry: UpcomingWorkout,
   userId: string,
-  aiSource: "rag" | "legacy" | null | undefined,
+  aiSource: AutoCoachAiSource,
   inputsUsed: CoachNoteInputs,
   coachSignals: CoachModificationSignals,
   tx: DbExecutor,
@@ -210,6 +226,10 @@ function buildCoachNoteInputs(
     fatigueFlag: insights?.fatigueFlag,
     planPhase: insights?.planPhase?.phaseLabel,
     weeklyVolumeTrend: insights?.weeklyVolume?.trend,
+    loadGovernorAcwrZone: insights?.loadGovernor?.zone,
+    loadGovernorAcwr: insights?.loadGovernor?.acwr ?? undefined,
+    loadGovernorFlaggedVectors: insights?.loadGovernor?.flaggedVectors,
+    loadGovernorRestrictions: insights?.loadGovernor?.activeRestrictions.map((r) => r.id),
     stationGaps: insights?.stationGaps
       ?.filter((g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
       .map((g) => g.station),
@@ -259,12 +279,20 @@ async function applySuggestion(
     return { applied: false };
   }
   const entry = upcomingWorkouts.find((w) => w.id === suggestion.workoutId)!;
+  const resolvedSource = prepared.aiSourceOverride ?? aiSource;
+  if (
+    prepared.requiresStructuredWrite &&
+    shouldUseStructuredWrite(suggestion, entry) &&
+    (!prepared.structuredSetRows || prepared.structuredSetRows.length === 0)
+  ) {
+    return { applied: false };
+  }
   if (prepared.structuredSetRows && prepared.structuredSetRows.length > 0) {
     return applyStructuredSuggestion(
       prepared,
       entry,
       userId,
-      aiSource,
+      resolvedSource,
       inputsUsed,
       coachSignals,
       tx,
@@ -285,7 +313,7 @@ async function applySuggestion(
     suggestion.workoutId,
     {
       [suggestion.targetField]: updateValue,
-      aiSource: aiSource ?? null,
+      aiSource: resolvedSource ?? null,
       aiRationale: suggestion.rationale.slice(0, 400),
       aiNoteUpdatedAt: new Date(),
       aiInputsUsed: suggestionInputs,
@@ -532,6 +560,16 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     );
 
     const safetySignals = analyzeSafetySignals(trainingContext, upcomingWorkouts);
+    const loadGovernorPreparedSuggestions = trainingContext.coachingInsights?.loadGovernor
+      ? buildLoadGovernorSuggestions(
+          trainingContext.coachingInsights.loadGovernor,
+          upcomingWorkouts,
+        ).map(prepareLoadGovernorSuggestion)
+      : [];
+    const loadGovernorModifiedIds = collectModifiedWorkoutIds(
+      loadGovernorPreparedSuggestions.map((prepared) => prepared.suggestion),
+      upcomingWorkouts,
+    );
 
     const rawSuggestions = await generateWorkoutSuggestions(
       trainingContext,
@@ -546,6 +584,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const coachSignals = buildSignalsFromTrainingContext(trainingContext);
     const suggestions = safetyAdjustedSuggestions.filter(
       (suggestion) =>
+        !loadGovernorModifiedIds.has(suggestion.workoutId) &&
         !shouldSuppressRepeatedFatigueReduction(
           suggestion,
           workoutMap.get(suggestion.workoutId),
@@ -555,6 +594,10 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     const preparedSuggestions = await Promise.all(
       suggestions.map((s) => prepareSuggestion(s, upcomingWorkouts, unitPreferences, userId)),
     );
+    const allPreparedSuggestions = [
+      ...loadGovernorPreparedSuggestions,
+      ...preparedSuggestions,
+    ];
 
     // For any upcoming day the coach did NOT modify, request a short review
     // note so the athlete can still see the coach's thinking on that day.
@@ -566,7 +609,10 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // not in the upcoming slate) would otherwise be dropped in both the
     // modification pass AND the review-note pass, leaving that day with
     // no note at all (C-NOTE-1).
-    const modifiedIds = collectModifiedWorkoutIds(suggestions, upcomingWorkouts);
+    const modifiedIds = collectModifiedWorkoutIds(
+      allPreparedSuggestions.map((prepared) => prepared.suggestion),
+      upcomingWorkouts,
+    );
 
     const unchanged = selectUnchangedWorkouts(upcomingWorkouts, modifiedIds);
 
@@ -591,7 +637,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
     // rolls back every earlier apply so the plan never ends up partially
     // mutated (C2).
     const { adjusted, noted } = await applyAutoCoachChanges({
-      preparedSuggestions,
+      preparedSuggestions: allPreparedSuggestions,
       upcomingWorkouts,
       userId,
       aiSource: coachingContext.source,

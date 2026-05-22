@@ -1,5 +1,6 @@
 import { BarChart3, Loader2 } from "lucide-react";
 
+import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
 import { OverviewStatsGrid } from "./training-overview/OverviewStatsGrid";
 import { OverviewTrendCharts } from "./training-overview/OverviewTrendCharts";
 import { useTrainingOverviewData } from "./training-overview/useTrainingOverviewData";
@@ -23,7 +24,9 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     );
   }
 
-  if (!overview || overview.weeklySummaries.length === 0) {
+  const hasTrainingLoadData = overview?.trainingLoad?.trend.some((point) => point.utss > 0);
+
+  if (!overview || (overview.weeklySummaries.length === 0 && !hasTrainingLoadData)) {
     return (
       <div className="flex items-center justify-center py-12 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
         <div>
@@ -37,6 +40,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
   return (
     <div className="space-y-6">
       {stats && <OverviewStatsGrid stats={stats} previousStats={previousStats} />}
+      {overview.trainingLoad && <AcwrTrendChart trainingLoad={overview.trainingLoad} />}
       <WeeklyWorkoutsChart
         weeklySummaries={overview.weeklySummaries}
         weeklyGoal={weeklyGoal}

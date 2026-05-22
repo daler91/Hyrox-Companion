@@ -31,7 +31,7 @@ export interface TrainingContext {
     accessory?: string | null;
     notes?: string | null;
     exerciseDetails?: PromptExerciseSet[];
-    aiSource?: "rag" | "legacy" | "review" | null;
+    aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
     aiRationale?: string | null;
     aiNoteUpdatedAt?: string | Date | null;
     aiInputsUsed?: CoachNoteInputs | null;
@@ -75,6 +75,29 @@ export interface TrainingContext {
       lastWeekCompleted: number;
       goal: number;
       trend: "increasing" | "stable" | "decreasing";
+    };
+    loadGovernor?: {
+      currentUtss: number;
+      acuteAvg: number;
+      chronicAvg: number;
+      acwr: number | null;
+      zone: "insufficient_data" | "undertraining" | "sweet_spot" | "yellow" | "danger";
+      flaggedVectors: Array<"posterior_chain" | "anterior_chain" | "unilateral_stability" | "elastic_tendon">;
+      activeRestrictions: Array<{
+        id: string;
+        label: string;
+        severity: "info" | "caution" | "danger";
+        expiresOn: string | null;
+        vector?: "posterior_chain" | "anterior_chain" | "unilateral_stability" | "elastic_tendon";
+        rationale: string;
+      }>;
+      downshiftRationale: string | null;
+      trend: Array<{
+        date: string;
+        utss: number;
+        acwr: number | null;
+        zone: "insufficient_data" | "undertraining" | "sweet_spot" | "yellow" | "danger";
+      }>;
     };
     progressionFlags: Array<{
       exercise: string;

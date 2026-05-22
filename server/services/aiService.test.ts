@@ -19,6 +19,11 @@ vi.mock("../storage", () => ({
       getTimeline: vi.fn(),
       getUpcomingPlannedDays: vi.fn(),
     },
+    analytics: {
+      getWorkoutLogsByDateRange: vi.fn(),
+      getAllExerciseSetsWithDates: vi.fn(),
+      getExerciseLoadTags: vi.fn(),
+    },
   },
 }));
 
@@ -28,6 +33,9 @@ describe("buildTrainingContext", () => {
     vi.useFakeTimers();
     vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+    vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
   });
 
   afterEach(() => {
