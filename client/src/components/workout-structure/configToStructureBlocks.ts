@@ -15,7 +15,7 @@ function stepTargetsForConfig(step: WorkoutStep): NonNullable<StructureBlockInpu
     targets.durationSeconds = step.durationSeconds;
   }
   return Object.keys(targets).length > 0
-    ? (targets as NonNullable<StructureBlockInput["steps"][number]["targets"]>)
+    ? (targets)
     : undefined;
 }
 

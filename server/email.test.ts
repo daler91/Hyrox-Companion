@@ -7,9 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn() }));
 
 vi.mock("resend", () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: sendMock },
-  })),
+  Resend: vi.fn().mockImplementation(function () {
+    return { emails: { send: sendMock } };
+  }),
 }));
 
 // Mutable env mock so individual tests can toggle RESEND_API_KEY /

@@ -43,7 +43,7 @@ export class IdempotencyStorage {
         method: record.method,
         path: record.path,
         statusCode: record.statusCode,
-        responseBody: record.responseBody as object,
+        responseBody: record.responseBody,
         expiresAt,
       })
       .onConflictDoNothing();

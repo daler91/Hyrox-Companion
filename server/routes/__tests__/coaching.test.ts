@@ -78,7 +78,7 @@ describe("Coaching materials routes", () => {
 
     it("should create material and trigger background embedding", async () => {
       const createdMaterial = { id: "m1", ...validBody, userId: "test_user_id", createdAt: new Date(), updatedAt: new Date() };
-      vi.mocked(storage.coaching.createCoachingMaterial).mockResolvedValue(createdMaterial as unknown as MaterialRecord);
+      vi.mocked(storage.coaching.createCoachingMaterial).mockResolvedValue(createdMaterial);
 
       const response = await request(app)
         .post("/api/v1/coaching-materials")

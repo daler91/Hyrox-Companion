@@ -19,9 +19,9 @@ const embedContentSpy = vi.fn();
 // reaches the SDK via `new GoogleGenAI({...}).models.embedContent`, so the
 // mock must intercept that constructor.
 vi.mock("@google/genai", () => ({
-  GoogleGenAI: vi.fn().mockImplementation(() => ({
-    models: { embedContent: embedContentSpy },
-  })),
+  GoogleGenAI: vi.fn().mockImplementation(function () {
+    return { models: { embedContent: embedContentSpy } };
+  }),
 }));
 
 import { __resetEmbeddingCacheForTests, generateEmbedding } from "./client";

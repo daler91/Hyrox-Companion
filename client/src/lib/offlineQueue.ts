@@ -84,7 +84,7 @@ const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
   body: z.unknown(),
   timestamp: z.number(),
   retryCount: z.number().optional(),
-}) as z.ZodType<PendingMutation>;
+});
 const pendingMutationArraySchema = z.array(pendingMutationSchema);
 
 const STORAGE_KEY = "fitai-offline-queue";

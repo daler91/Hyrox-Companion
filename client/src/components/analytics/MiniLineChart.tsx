@@ -71,7 +71,7 @@ export const MiniLineChart = memo(function MiniLineChart({
       <div className="h-[200px] w-full" data-testid={`line-chart-${valueKey}`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={data as object[]}
+            data={data}
             margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
           >
             <CartesianGrid

@@ -36,7 +36,7 @@ describe('runEmailCronJob', () => {
             emailMissedReminder: true,
             lastWeeklySummaryAt: null,
             lastMissedReminderAt: null,
-          } as unknown as User,
+          },
         ]),
       },
     } as unknown as IStorage;
@@ -70,7 +70,7 @@ describe('runEmailCronJob', () => {
         emailMissedReminder: true,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
-      } as unknown as User,
+      },
       {
         id: 2,
         email: 'user2@example.com',
@@ -79,7 +79,7 @@ describe('runEmailCronJob', () => {
         emailMissedReminder: true,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
-      } as unknown as User,
+      },
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -125,7 +125,7 @@ describe('runEmailCronJob', () => {
         emailMissedReminder: true,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
-      } as unknown as User,
+      },
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -148,7 +148,7 @@ describe('runEmailCronJob', () => {
         emailMissedReminder: false,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
-      } as unknown as User,
+      },
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -169,7 +169,7 @@ describe('runEmailCronJob', () => {
         emailMissedReminder: false,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
-      } as unknown as User,
+      },
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -188,7 +188,7 @@ describe('runEmailCronJob', () => {
         emailMissedReminder: null,
         lastWeeklySummaryAt: null,
         lastMissedReminderAt: null,
-      } as unknown as User,
+      },
     ]);
 
     const result = await runEmailCronJob(mockStorage);

@@ -278,7 +278,7 @@ export class PlanStorage {
       // Perform a single batch update
       await tx
         .update(planDays)
-        .set({ scheduledDate: caseSql as unknown as string })
+        .set({ scheduledDate: caseSql })
         .where(inArray(planDays.id, updateIds));
 
       const resetUpdateIds = dateUpdates.filter((u) => u.resetStatus).map((u) => u.id);

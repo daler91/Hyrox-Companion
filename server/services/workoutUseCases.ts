@@ -1,4 +1,4 @@
-import { type exercisesPayloadSchema, type InsertWorkoutLog, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type UpdateWorkoutLog, type updateWorkoutLogSchema } from "@shared/schema";
+import { type exercisesPayloadSchema, type insertWorkoutLogSchema, lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type updateWorkoutLogSchema } from "@shared/schema";
 import type { z } from "zod";
 
 import { isTextAiProviderConfigured } from "../ai/providers";
@@ -53,7 +53,7 @@ export async function createWorkout(input: {
     throw new AppError(ErrorCode.VALIDATION_ERROR, createLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
   }
 
-  const createdWorkout = await createWorkoutAndScheduleCoaching(workoutData as InsertWorkoutLog, structured, input.userId, structureBlocks);
+  const createdWorkout = await createWorkoutAndScheduleCoaching(workoutData, structured, input.userId, structureBlocks);
   if (!createdWorkout.exerciseSets || createdWorkout.exerciseSets.length === 0) return createdWorkout;
 
   let newPersonalRecords: ReturnType<typeof findPersonalRecordAchievements>;
@@ -90,5 +90,5 @@ export async function updateWorkoutUseCase(input: {
     throw new AppError(ErrorCode.VALIDATION_ERROR, updateLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
   }
 
-  return updateWorkout(input.workoutId, updateData as UpdateWorkoutLog, structured, input.userId, structureBlocks);
+  return updateWorkout(input.workoutId, updateData, structured, input.userId, structureBlocks);
 }

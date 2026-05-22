@@ -34,7 +34,7 @@ function makeAnnotation(overrides: Partial<TimelineAnnotation> = {}): TimelineAn
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as TimelineAnnotation;
+  };
 }
 
 function renderGroup(

@@ -14,7 +14,7 @@ async function ensurePdfjs() {
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
   ]);
   if (!pdfjsWorkerConfigured) {
-    GlobalWorkerOptions.workerSrc = (workerModule as { default: string }).default;
+    GlobalWorkerOptions.workerSrc = (workerModule).default;
     pdfjsWorkerConfigured = true;
   }
   return { getDocument };
