@@ -190,10 +190,18 @@ describe("Analytics Page", () => {
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().should((doc) => {
-        const scrollingElement = doc.scrollingElement ?? doc.documentElement;
+      cy.document().then((doc) => {
+        // Ground truth: try to scroll the page. With overflow:hidden/clip on
+        // the locked root, scrollTop is clamped at 0 — the user cannot scroll
+        // the document. Empirical check sidesteps Blink's scrollHeight
+        // inflation from descendant overflow:auto content.
+        const scrollingElement = (doc.scrollingElement ?? doc.documentElement) as HTMLElement;
 
-        expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
+        scrollingElement.scrollTop = 9999;
+        const observed = scrollingElement.scrollTop;
+        scrollingElement.scrollTop = 0;
+
+        expect(observed, "document scrollTop should stay 0 (page is not scrollable)").to.equal(0);
       });
     });
   });
