@@ -187,20 +187,38 @@ describe("Analytics Page", () => {
         const styles = getComputedStyle(mainContent);
 
         expect(styles.overflowY).to.equal("auto");
+        expect(styles.overflowX).to.equal("hidden");
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().should((doc) => {
+      cy.window().then((win) => {
+        win.scrollTo(0, 400);
+        expect(win.scrollY, "window scroll remains locked").to.equal(0);
+      });
+
+      cy.get("#main-content")
+        .scrollTo("bottom")
+        .should(($mainContent) => {
+          expect($mainContent[0].scrollTop, "main content scrolls").to.be.greaterThan(0);
+        });
+
+      cy.document().then((doc) => {
         // The user-visible invariant is "the document shows no scrollbar".
         // That's determined directly by overflow on documentElement / body —
         // `clip` or `hidden` both produce no scrollbar. Asserting on computed
-        // overflow tests the invariant at its source, avoiding Blink's
-        // scrollHeight inflation from descendant overflow:auto content and
-        // inconsistent spec compliance around programmatic scrolling.
+        // overflow tests the invariant at its source, while the programmatic
+        // scroll check above catches any leak back to the document scroller.
         const htmlOverflow = getComputedStyle(doc.documentElement).overflowY;
         const bodyOverflow = getComputedStyle(doc.body).overflowY;
         expect(htmlOverflow, "html overflow-y").to.be.oneOf(["clip", "hidden"]);
         expect(bodyOverflow, "body overflow-y").to.be.oneOf(["clip", "hidden"]);
+      });
+
+      cy.window().then((win) => {
+        expect(
+          win.innerWidth - win.document.documentElement.clientWidth,
+          "document scrollbar gutter",
+        ).to.equal(0);
       });
     });
   });

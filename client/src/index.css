@@ -256,7 +256,8 @@
   }
 
   .app-shell-locked,
-  .app-shell-locked body {
+  .app-shell-locked body,
+  .app-shell-locked body #root {
     height: 100%;
     /* `clip` (vs `hidden`) makes the element a non-scroll container so
        `documentElement.scrollHeight` equals `clientHeight` — `hidden`
@@ -265,6 +266,10 @@
        `hidden` is the fallback for browsers without `clip` support. */
     overflow: hidden;
     overflow: clip;
+  }
+
+  .app-shell-locked body #root {
+    min-height: 0;
   }
 
   /* Keep keyboard-focused/scrolled-to elements clear of the sticky mobile header

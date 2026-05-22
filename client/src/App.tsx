@@ -50,7 +50,7 @@ function DevModeBanner() {
       // amber-400 on black passes 4.5:1 cleanly (~10:1); yellow-500 + text-xs
       // was marginal. Only renders in dev preview so visual changes are
       // invisible to end users, but keeps parity for screenshots / QA.
-      className="bg-amber-400 text-black text-center text-sm py-1 font-semibold z-50 relative"
+      className="relative z-50 shrink-0 bg-amber-400 py-1 text-center text-sm font-semibold text-black"
     >
       DEV MODE — Auth bypass active (Clerk skipped)
     </div>
@@ -96,33 +96,63 @@ function AuthenticatedLayout() {
   useEmailCheck(isAuthenticated, isAppUserLoaded);
   useOfflineDropNotifier();
 
-  // Lock html/body so only #main-content scrolls. `overflow: clip` (not
-  // `hidden`) is needed to forbid programmatic scrolling too — `hidden`
-  // only suppresses the visual scrollbar; JS can still set scrollTop and
-  // land at scrollHeight-clientHeight because Blink's documentElement
-  // scrollHeight reflects unrolled descendant overflow:auto content.
-  // Inline styles avoid any cascade / CSS-bundling ambiguity. Safari <16
-  // falls back to `hidden`, which still removes the visible scrollbar.
+  // Lock html/body/#root so only #main-content scrolls. `overflow: clip`
+  // removes the visible document scrollbar, and fixing body to the viewport
+  // keeps Blink from retaining a programmatic document scroll range from
+  // descendant overflow:auto content. Safari <16 falls back to `hidden`,
+  // which still removes the visible scrollbar.
   useLayoutEffect(() => {
     const html = document.documentElement;
     const body = document.body;
+    const root = document.getElementById("root");
     const overflowValue = CSS.supports?.("overflow", "clip") ? "clip" : "hidden";
     const prev = {
       htmlOverflow: html.style.overflow,
       htmlHeight: html.style.height,
+      htmlMaxHeight: html.style.maxHeight,
       bodyOverflow: body.style.overflow,
       bodyHeight: body.style.height,
+      bodyMaxHeight: body.style.maxHeight,
+      bodyPosition: body.style.position,
+      bodyInset: body.style.inset,
+      bodyWidth: body.style.width,
+      rootOverflow: root?.style.overflow,
+      rootHeight: root?.style.height,
+      rootMaxHeight: root?.style.maxHeight,
+      rootMinHeight: root?.style.minHeight,
     };
     html.style.overflow = overflowValue;
     html.style.height = "100%";
+    html.style.maxHeight = "100%";
     body.style.overflow = overflowValue;
     body.style.height = "100%";
+    body.style.maxHeight = "100%";
+    body.style.position = "fixed";
+    body.style.inset = "0";
+    body.style.width = "100%";
+    if (root) {
+      root.style.overflow = overflowValue;
+      root.style.height = "100%";
+      root.style.maxHeight = "100%";
+      root.style.minHeight = "0";
+    }
     html.classList.add("app-shell-locked");
     return () => {
       html.style.overflow = prev.htmlOverflow;
       html.style.height = prev.htmlHeight;
+      html.style.maxHeight = prev.htmlMaxHeight;
       body.style.overflow = prev.bodyOverflow;
       body.style.height = prev.bodyHeight;
+      body.style.maxHeight = prev.bodyMaxHeight;
+      body.style.position = prev.bodyPosition;
+      body.style.inset = prev.bodyInset;
+      body.style.width = prev.bodyWidth;
+      if (root) {
+        root.style.overflow = prev.rootOverflow ?? "";
+        root.style.height = prev.rootHeight ?? "";
+        root.style.maxHeight = prev.rootMaxHeight ?? "";
+        root.style.minHeight = prev.rootMinHeight ?? "";
+      }
       html.classList.remove("app-shell-locked");
     };
   }, []);
@@ -137,31 +167,34 @@ function AuthenticatedLayout() {
   };
 
   return (
-    <SidebarProvider
-      className="h-svh overflow-hidden"
-      style={style as React.CSSProperties}
-      defaultOpen={getStoredSidebarOpen()}
-    >
-      <div className="flex h-svh w-full overflow-hidden">
-        <a href="#main-content" className="skip-to-content">
-          Skip to main content
-        </a>
-        <AppSidebar />
-        <div className="flex flex-col flex-1 min-h-0 min-w-0">
-          <header className="sticky top-0 z-50 flex items-center gap-2 p-2 border-b h-14 flex-shrink-0 md:hidden bg-background/80 backdrop-blur-sm">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <Logo size={24} />
-          </header>
-          {/* tabIndex=-1 so the skip-to-content link can move focus here.
-              Without it, browsers move scroll but not focus, which defeats AT users. */}
-          <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-auto focus:outline-none">
-            <Breadcrumbs />
-            <AuthenticatedRouter />
-          </main>
+    <div className="flex h-svh min-h-0 flex-col overflow-hidden">
+      {isDevPreview() && <DevModeBanner />}
+      <SidebarProvider
+        className="min-h-0 flex-1 overflow-hidden"
+        style={style as React.CSSProperties}
+        defaultOpen={getStoredSidebarOpen()}
+      >
+        <div className="flex min-h-0 flex-1 w-full overflow-hidden">
+          <a href="#main-content" className="skip-to-content">
+            Skip to main content
+          </a>
+          <AppSidebar />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-50 flex h-14 flex-shrink-0 items-center gap-2 border-b bg-background/80 p-2 backdrop-blur-sm md:hidden">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <Logo size={24} />
+            </header>
+            {/* tabIndex=-1 so the skip-to-content link can move focus here.
+                Without it, browsers move scroll but not focus, which defeats AT users. */}
+            <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto focus:outline-none">
+              <Breadcrumbs />
+              <AuthenticatedRouter />
+            </main>
+          </div>
         </div>
-      </div>
-      <PrivacyConsentBanner />
-    </SidebarProvider>
+        <PrivacyConsentBanner />
+      </SidebarProvider>
+    </div>
   );
 }
 
@@ -192,7 +225,6 @@ function AppContent() {
 function App() {
   const appShell = (
     <>
-      {isDevPreview() && <DevModeBanner />}
       <AppContent />
       <Toaster />
       <OfflineIndicator />
