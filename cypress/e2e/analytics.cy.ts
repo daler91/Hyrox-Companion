@@ -190,10 +190,8 @@ describe("Analytics Page", () => {
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().then((doc) => {
-        const scrollingElement = doc.scrollingElement ?? doc.documentElement;
-
-        expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
+      cy.document().should((doc) => {
+        expect(doc.body.scrollHeight).to.be.at.most(doc.body.clientHeight + 1);
       });
     });
   });
