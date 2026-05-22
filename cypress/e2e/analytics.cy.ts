@@ -190,18 +190,17 @@ describe("Analytics Page", () => {
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().then((doc) => {
-        // Ground truth: try to scroll the page. With overflow:hidden/clip on
-        // the locked root, scrollTop is clamped at 0 — the user cannot scroll
-        // the document. Empirical check sidesteps Blink's scrollHeight
-        // inflation from descendant overflow:auto content.
-        const scrollingElement = (doc.scrollingElement ?? doc.documentElement) as HTMLElement;
-
-        scrollingElement.scrollTop = 9999;
-        const observed = scrollingElement.scrollTop;
-        scrollingElement.scrollTop = 0;
-
-        expect(observed, "document scrollTop should stay 0 (page is not scrollable)").to.equal(0);
+      cy.document().should((doc) => {
+        // The user-visible invariant is "the document shows no scrollbar".
+        // That's determined directly by overflow on documentElement / body —
+        // `clip` or `hidden` both produce no scrollbar. Asserting on computed
+        // overflow tests the invariant at its source, avoiding Blink's
+        // scrollHeight inflation from descendant overflow:auto content and
+        // inconsistent spec compliance around programmatic scrolling.
+        const htmlOverflow = getComputedStyle(doc.documentElement).overflowY;
+        const bodyOverflow = getComputedStyle(doc.body).overflowY;
+        expect(htmlOverflow, "html overflow-y").to.be.oneOf(["clip", "hidden"]);
+        expect(bodyOverflow, "body overflow-y").to.be.oneOf(["clip", "hidden"]);
       });
     });
   });
