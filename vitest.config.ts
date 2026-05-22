@@ -13,9 +13,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    exclude: ['**/*.integration.test.ts', '**/smoke.test.ts', '**/node_modules/**', '**/dist/**'],
+    exclude: ['**/*.integration.test.ts', '**/smoke.test.ts', '**/node_modules/**', '**/dist/**', '**/cypress/**'],
     globals: true,
     coverage: {
+      include: ['client/src/**', 'server/**', 'shared/**'],
       thresholds: {
         lines: 80,
         functions: 80,

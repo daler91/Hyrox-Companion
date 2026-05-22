@@ -9,6 +9,7 @@ describe("queryClient", () => {
 
   beforeEach(() => {
     globalThis.fetch = fetchMock;
+    fetchMock.mockReset();
   });
 
   afterEach(() => {
@@ -115,7 +116,7 @@ describe("queryClient", () => {
       const queryArgs = { queryKey } as unknown as QueryFunctionContext<string[], unknown>;
 
       if (shouldThrow) {
-        await expect(queryFn(queryArgs)).rejects.toThrow(expected as string);
+        await expect(queryFn(queryArgs)).rejects.toThrow(expected);
       } else {
         expect(await queryFn(queryArgs)).toBe(expected);
       }
