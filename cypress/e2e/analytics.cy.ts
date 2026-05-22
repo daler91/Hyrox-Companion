@@ -190,52 +190,8 @@ describe("Analytics Page", () => {
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().then((doc) => {
-        const scrollingElement = doc.scrollingElement ?? doc.documentElement;
-        const viewportH = scrollingElement.clientHeight;
-        const scrollH = scrollingElement.scrollHeight;
-
-        if (scrollH > viewportH + 1) {
-          const heightsOf = (selector: string) => {
-            const el = doc.querySelector(selector) as HTMLElement | null;
-            if (!el) return `${selector}: not found`;
-            const cs = getComputedStyle(el);
-            return `${selector}: offsetH=${el.offsetHeight} client=${el.clientHeight} scroll=${el.scrollHeight} cssH=${cs.height} cssMinH=${cs.minHeight} overflow=${cs.overflow}`;
-          };
-
-          const wrappers = [
-            heightsOf("html"),
-            heightsOf("body"),
-            heightsOf("[data-slot='sidebar-wrapper']"),
-            heightsOf("[data-slot='sidebar-wrapper'] > div"),
-            heightsOf("#main-content"),
-          ];
-
-          const offenders = Array.from(doc.querySelectorAll("body *"))
-            .map((el) => {
-              const r = el.getBoundingClientRect();
-              const cs = getComputedStyle(el);
-              return {
-                tag: el.tagName,
-                id: (el as HTMLElement).id || undefined,
-                cls: ((el as HTMLElement).className?.toString() || "").slice(0, 60),
-                bottom: Math.round(r.bottom),
-                h: Math.round(r.height),
-                pos: cs.position,
-              };
-            })
-            .filter((info) => info.bottom > viewportH + 1 && info.h > 0)
-            .sort((a, b) => b.bottom - a.bottom)
-            .slice(0, 8);
-
-          throw new Error(
-            `document overflowed: scrollHeight=${scrollH} clientHeight=${viewportH}\nwrapper heights:\n${wrappers
-              .map((w) => `  ${w}`)
-              .join("\n")}\nbottom-most offenders:\n${offenders
-              .map((o) => `  bottom=${o.bottom} h=${o.h} pos=${o.pos} <${o.tag.toLowerCase()}${o.id ? "#" + o.id : ""} class="${o.cls}">`)
-              .join("\n")}`
-          );
-        }
+      cy.document().should((doc) => {
+        expect(doc.body.scrollHeight).to.be.at.most(doc.body.clientHeight + 1);
       });
     });
   });
