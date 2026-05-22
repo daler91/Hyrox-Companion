@@ -190,7 +190,7 @@ describe("Analytics Page", () => {
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().then((doc) => {
+      cy.document().should((doc) => {
         const scrollingElement = doc.scrollingElement ?? doc.documentElement;
 
         expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
