@@ -196,6 +196,21 @@ describe("Analytics Page", () => {
         const scrollH = scrollingElement.scrollHeight;
 
         if (scrollH > viewportH + 1) {
+          const heightsOf = (selector: string) => {
+            const el = doc.querySelector(selector) as HTMLElement | null;
+            if (!el) return `${selector}: not found`;
+            const cs = getComputedStyle(el);
+            return `${selector}: offsetH=${el.offsetHeight} client=${el.clientHeight} scroll=${el.scrollHeight} cssH=${cs.height} cssMinH=${cs.minHeight} overflow=${cs.overflow}`;
+          };
+
+          const wrappers = [
+            heightsOf("html"),
+            heightsOf("body"),
+            heightsOf("[data-slot='sidebar-wrapper']"),
+            heightsOf("[data-slot='sidebar-wrapper'] > div"),
+            heightsOf("#main-content"),
+          ];
+
           const offenders = Array.from(doc.querySelectorAll("body *"))
             .map((el) => {
               const r = el.getBoundingClientRect();
@@ -211,10 +226,12 @@ describe("Analytics Page", () => {
             })
             .filter((info) => info.bottom > viewportH + 1 && info.h > 0)
             .sort((a, b) => b.bottom - a.bottom)
-            .slice(0, 15);
+            .slice(0, 8);
 
           throw new Error(
-            `document overflowed: scrollHeight=${scrollH} clientHeight=${viewportH}\nbottom-most offenders:\n${offenders
+            `document overflowed: scrollHeight=${scrollH} clientHeight=${viewportH}\nwrapper heights:\n${wrappers
+              .map((w) => `  ${w}`)
+              .join("\n")}\nbottom-most offenders:\n${offenders
               .map((o) => `  bottom=${o.bottom} h=${o.h} pos=${o.pos} <${o.tag.toLowerCase()}${o.id ? "#" + o.id : ""} class="${o.cls}">`)
               .join("\n")}`
           );
