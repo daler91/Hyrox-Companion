@@ -99,10 +99,29 @@ function AuthenticatedLayout() {
   // Lock html/body so only #main-content scrolls. Blink's documentElement
   // scrollHeight is influenced by the unrolled content of descendant
   // overflow:auto containers, which can produce a phantom document-level
-  // scrollbar alongside main-content's. Locking the root removes it.
+  // scrollbar alongside main-content's. Inline styles avoid any cascade
+  // or CSS-bundling ambiguity that affects classed selectors.
   useLayoutEffect(() => {
-    document.documentElement.classList.add("app-shell-locked");
-    return () => document.documentElement.classList.remove("app-shell-locked");
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      htmlHeight: html.style.height,
+      bodyOverflow: body.style.overflow,
+      bodyHeight: body.style.height,
+    };
+    html.style.overflow = "hidden";
+    html.style.height = "100%";
+    body.style.overflow = "hidden";
+    body.style.height = "100%";
+    html.classList.add("app-shell-locked");
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      html.style.height = prev.htmlHeight;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.height = prev.bodyHeight;
+      html.classList.remove("app-shell-locked");
+    };
   }, []);
 
   if (isLoading) {
