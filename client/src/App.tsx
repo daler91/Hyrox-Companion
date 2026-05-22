@@ -1,6 +1,6 @@
 import { ClerkProvider, Show } from "@clerk/react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useLayoutEffect } from "react";
 import { Route,Switch } from "wouter";
 
 import { AppSidebar } from "@/components/AppSidebar";
@@ -95,6 +95,15 @@ function AuthenticatedLayout() {
   const { isAuthenticated, isLoading, isAppUserLoaded } = useAuth();
   useEmailCheck(isAuthenticated, isAppUserLoaded);
   useOfflineDropNotifier();
+
+  // Lock html/body so only #main-content scrolls. Blink's documentElement
+  // scrollHeight is influenced by the unrolled content of descendant
+  // overflow:auto containers, which can produce a phantom document-level
+  // scrollbar alongside main-content's. Locking the root removes it.
+  useLayoutEffect(() => {
+    document.documentElement.classList.add("app-shell-locked");
+    return () => document.documentElement.classList.remove("app-shell-locked");
+  }, []);
 
   if (isLoading) {
     return <LazyFallback />;

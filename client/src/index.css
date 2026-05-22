@@ -255,6 +255,12 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 
+  .app-shell-locked,
+  .app-shell-locked body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   /* Keep keyboard-focused/scrolled-to elements clear of the sticky mobile header
    * (h-14 = 3.5rem). Scoped to mobile widths because:
    *   - the mobile sticky header only renders below `md` (App.tsx h-14 md:hidden)

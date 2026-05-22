@@ -102,5 +102,6 @@ describe("App providers", () => {
     expect(screen.getByTestId("sidebar-provider")).toHaveClass("h-svh", "overflow-hidden");
     expect(mainContent).toHaveClass("min-h-0", "flex-1", "overflow-auto");
     expect(mainContent?.parentElement).toHaveClass("min-h-0", "flex-1", "min-w-0");
+    expect(document.documentElement).toHaveClass("app-shell-locked");
   });
 });

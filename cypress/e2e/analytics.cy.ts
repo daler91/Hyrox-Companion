@@ -191,7 +191,9 @@ describe("Analytics Page", () => {
       });
 
       cy.document().should((doc) => {
-        expect(doc.body.scrollHeight).to.be.at.most(doc.body.clientHeight + 1);
+        const scrollingElement = doc.scrollingElement ?? doc.documentElement;
+
+        expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
       });
     });
   });
