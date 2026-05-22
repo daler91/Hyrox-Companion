@@ -1,6 +1,6 @@
 import { ClerkProvider, Show } from "@clerk/react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useLayoutEffect } from "react";
 import { Route,Switch } from "wouter";
 
 import { AppSidebar } from "@/components/AppSidebar";
@@ -95,6 +95,37 @@ function AuthenticatedLayout() {
   const { isAuthenticated, isLoading, isAppUserLoaded } = useAuth();
   useEmailCheck(isAuthenticated, isAppUserLoaded);
   useOfflineDropNotifier();
+
+  // Lock html/body so only #main-content scrolls. `overflow: clip` (not
+  // `hidden`) is needed to forbid programmatic scrolling too — `hidden`
+  // only suppresses the visual scrollbar; JS can still set scrollTop and
+  // land at scrollHeight-clientHeight because Blink's documentElement
+  // scrollHeight reflects unrolled descendant overflow:auto content.
+  // Inline styles avoid any cascade / CSS-bundling ambiguity. Safari <16
+  // falls back to `hidden`, which still removes the visible scrollbar.
+  useLayoutEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const overflowValue = CSS.supports?.("overflow", "clip") ? "clip" : "hidden";
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      htmlHeight: html.style.height,
+      bodyOverflow: body.style.overflow,
+      bodyHeight: body.style.height,
+    };
+    html.style.overflow = overflowValue;
+    html.style.height = "100%";
+    body.style.overflow = overflowValue;
+    body.style.height = "100%";
+    html.classList.add("app-shell-locked");
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      html.style.height = prev.htmlHeight;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.height = prev.bodyHeight;
+      html.classList.remove("app-shell-locked");
+    };
+  }, []);
 
   if (isLoading) {
     return <LazyFallback />;

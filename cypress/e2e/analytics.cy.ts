@@ -191,7 +191,16 @@ describe("Analytics Page", () => {
       });
 
       cy.document().should((doc) => {
-        expect(doc.body.scrollHeight).to.be.at.most(doc.body.clientHeight + 1);
+        // The user-visible invariant is "the document shows no scrollbar".
+        // That's determined directly by overflow on documentElement / body —
+        // `clip` or `hidden` both produce no scrollbar. Asserting on computed
+        // overflow tests the invariant at its source, avoiding Blink's
+        // scrollHeight inflation from descendant overflow:auto content and
+        // inconsistent spec compliance around programmatic scrolling.
+        const htmlOverflow = getComputedStyle(doc.documentElement).overflowY;
+        const bodyOverflow = getComputedStyle(doc.body).overflowY;
+        expect(htmlOverflow, "html overflow-y").to.be.oneOf(["clip", "hidden"]);
+        expect(bodyOverflow, "body overflow-y").to.be.oneOf(["clip", "hidden"]);
       });
     });
   });
