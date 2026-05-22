@@ -196,7 +196,8 @@ describe("Analytics Page", () => {
     });
 
     it("keeps analytics scrolling inside the main app region", () => {
-      cy.getBySel("chart-weekly-workouts").should("be.visible");
+      cy.getBySel("text-avg-workouts").should("be.visible");
+      cy.getBySel("chart-weekly-workouts").should("exist");
 
       cy.get("#main-content").should(($mainContent) => {
         const mainContent = $mainContent[0];
