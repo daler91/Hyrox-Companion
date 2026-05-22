@@ -94,7 +94,7 @@
     "tailwindcss-animate": "^1.0.7",
     "web-push": "^3.6.7",
     "workbox-window": "^7.4.1",
-    "wouter": "^3.9.0",
+    "wouter": "^3.10.0",
     "zod": "^4.4.3"
   },
   "//overrides": [
