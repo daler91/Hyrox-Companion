@@ -192,35 +192,33 @@ describe("Analytics Page", () => {
 
       cy.document().then((doc) => {
         const scrollingElement = doc.scrollingElement ?? doc.documentElement;
+        const viewportH = scrollingElement.clientHeight;
+        const scrollH = scrollingElement.scrollHeight;
 
-        if (scrollingElement.scrollHeight > scrollingElement.clientHeight + 1) {
-          const viewportH = scrollingElement.clientHeight;
-          const overflowers = Array.from(doc.querySelectorAll("body *"))
+        if (scrollH > viewportH + 1) {
+          const offenders = Array.from(doc.querySelectorAll("body *"))
             .map((el) => {
               const r = el.getBoundingClientRect();
               const cs = getComputedStyle(el);
               return {
                 tag: el.tagName,
-                id: (el as HTMLElement).id,
-                cls: (el as HTMLElement).className?.toString().slice(0, 80),
-                top: Math.round(r.top),
+                id: (el as HTMLElement).id || undefined,
+                cls: ((el as HTMLElement).className?.toString() || "").slice(0, 60),
                 bottom: Math.round(r.bottom),
-                height: Math.round(r.height),
-                position: cs.position,
-                overflow: cs.overflowY,
+                h: Math.round(r.height),
+                pos: cs.position,
               };
             })
-            .filter((info) => info.bottom > viewportH + 1 && info.height > 0)
+            .filter((info) => info.bottom > viewportH + 1 && info.h > 0)
             .sort((a, b) => b.bottom - a.bottom)
-            .slice(0, 30);
+            .slice(0, 15);
 
-          // eslint-disable-next-line no-console
-          console.log("[overflow-diagnostic] viewport=", viewportH, "scrollHeight=", scrollingElement.scrollHeight);
-          // eslint-disable-next-line no-console
-          console.log("[overflow-diagnostic] offenders=", JSON.stringify(overflowers, null, 2));
+          throw new Error(
+            `document overflowed: scrollHeight=${scrollH} clientHeight=${viewportH}\nbottom-most offenders:\n${offenders
+              .map((o) => `  bottom=${o.bottom} h=${o.h} pos=${o.pos} <${o.tag.toLowerCase()}${o.id ? "#" + o.id : ""} class="${o.cls}">`)
+              .join("\n")}`
+          );
         }
-
-        expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
       });
     });
   });
