@@ -190,8 +190,35 @@ describe("Analytics Page", () => {
         expect(mainContent.scrollHeight).to.be.greaterThan(mainContent.clientHeight);
       });
 
-      cy.document().should((doc) => {
+      cy.document().then((doc) => {
         const scrollingElement = doc.scrollingElement ?? doc.documentElement;
+
+        if (scrollingElement.scrollHeight > scrollingElement.clientHeight + 1) {
+          const viewportH = scrollingElement.clientHeight;
+          const overflowers = Array.from(doc.querySelectorAll("body *"))
+            .map((el) => {
+              const r = el.getBoundingClientRect();
+              const cs = getComputedStyle(el);
+              return {
+                tag: el.tagName,
+                id: (el as HTMLElement).id,
+                cls: (el as HTMLElement).className?.toString().slice(0, 80),
+                top: Math.round(r.top),
+                bottom: Math.round(r.bottom),
+                height: Math.round(r.height),
+                position: cs.position,
+                overflow: cs.overflowY,
+              };
+            })
+            .filter((info) => info.bottom > viewportH + 1 && info.height > 0)
+            .sort((a, b) => b.bottom - a.bottom)
+            .slice(0, 30);
+
+          // eslint-disable-next-line no-console
+          console.log("[overflow-diagnostic] viewport=", viewportH, "scrollHeight=", scrollingElement.scrollHeight);
+          // eslint-disable-next-line no-console
+          console.log("[overflow-diagnostic] offenders=", JSON.stringify(overflowers, null, 2));
+        }
 
         expect(scrollingElement.scrollHeight).to.be.at.most(scrollingElement.clientHeight + 1);
       });
