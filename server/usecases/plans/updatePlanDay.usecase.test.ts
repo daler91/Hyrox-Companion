@@ -7,7 +7,7 @@ describe("createUpdatePlanDayUseCase", () => {
     const updated = { id: "day-1" };
     const deps = { updatePlanDay: vi.fn().mockResolvedValue(updated) };
 
-    const result = await createUpdatePlanDayUseCase(deps)({ dayId: "day-1", userId: "user-1", data: { focus: "Tempo" } as never });
+    const result = await createUpdatePlanDayUseCase(deps)({ dayId: "day-1", userId: "user-1", data: { focus: "Tempo" } });
 
     expect(deps.updatePlanDay).toHaveBeenCalledWith("day-1", { focus: "Tempo" }, "user-1");
     expect(result).toBe(updated);

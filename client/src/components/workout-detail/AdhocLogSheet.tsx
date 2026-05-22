@@ -94,7 +94,7 @@ function makeAdhocRow(seed: RowSeed): ExerciseSet {
     notes: seed.notes ?? null,
     confidence: seed.confidence ?? null,
     sortOrder: seed.sortOrder,
-  } as ExerciseSet;
+  };
 }
 
 function flattenParsedToSets(parsed: ParsedExercise[]): ExerciseSet[] {

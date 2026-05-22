@@ -31,7 +31,7 @@ function createMockAnnotation(overrides: Partial<TimelineAnnotation>): TimelineA
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as TimelineAnnotation;
+  };
 }
 
 describe("useTimelineFilters", () => {

@@ -149,7 +149,7 @@ function linkedSetTargets(set: StructuredExercise["sets"][number]): NonNullable<
   if (distance != null) targets.targetDistance = distance;
   if (time != null) targets.targetTime = time;
   return Object.keys(targets).length > 0
-    ? (targets as NonNullable<StructureBlockInput["steps"][number]["targets"]>)
+    ? (targets)
     : undefined;
 }
 

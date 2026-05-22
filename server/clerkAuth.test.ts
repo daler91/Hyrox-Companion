@@ -41,7 +41,7 @@ describe("isAuthenticated middleware", () => {
   beforeEach(() => {
     req = { headers: {}, path: "/test" } as Request;
     res = { status: vi.fn().mockReturnThis(), json: vi.fn() } as unknown as Response;
-    next = vi.fn() as unknown as NextFunction;
+    next = vi.fn();
     clearUserSeenCache();
     vi.clearAllMocks();
     vi.mocked(storage.users.upsertUser).mockResolvedValue({ id: "test-user-id" });

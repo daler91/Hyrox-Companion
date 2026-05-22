@@ -307,7 +307,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     );
     return exerciseSets.map((set) => {
       const patch = patchesBySetId.get(set.id);
-      return patch ? ({ ...set, ...patch } as ExerciseSet) : set;
+      return patch ? ({ ...set, ...patch }) : set;
     });
   }, [exerciseSets, getPendingPatches]);
 

@@ -31,7 +31,7 @@ function stepTargets(step: WorkoutStructureStepRow): NonNullable<StructureBlockI
   if (step.targetDistance != null) targets.targetDistance = step.targetDistance;
   if (step.targetWeight != null) targets.targetWeight = step.targetWeight;
   return Object.keys(targets).length > 0
-    ? (targets as NonNullable<StructureBlockInput["steps"][number]["targets"]>)
+    ? (targets)
     : null;
 }
 

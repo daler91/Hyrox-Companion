@@ -50,7 +50,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
       if (!ownerId) return undefined;
       await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });
       const prev = getSnapshot(ownerId);
-      patchCachedSets((sets) => sets.map((s) => (s.id === setId ? ({ ...s, ...data } as ExerciseSet) : s)));
+      patchCachedSets((sets) => sets.map((s) => (s.id === setId ? ({ ...s, ...data }) : s)));
       return { prev };
     },
     onSuccess: (serverSet) => {

@@ -268,7 +268,7 @@ export class TimelineStorage {
     });
 
     return days.map((day) => ({
-      planDay: day as PlanDay,
+      planDay: day,
       planName: planNameById.get(day.planId)!,
       planId: day.planId,
     }));
