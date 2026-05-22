@@ -83,7 +83,7 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
   return (
     <div className={CHART_CARD_CLASS}>
       <p className="text-sm font-semibold">Workout Consistency</p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-hidden">
         <div className="min-w-[400px]">
           {/* Month labels */}
           <div className="flex ml-8 mb-1 text-[10px] text-muted-foreground">
