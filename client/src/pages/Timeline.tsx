@@ -285,11 +285,7 @@ export default function Timeline() {
       <div className="flex h-full">
         <div ref={scrollRef} className="flex-1 overflow-auto relative">
           <PageContainer size="default" className="space-y-6">
-            <TimelineHeader
-              canBulkDelete={bulkDeletableEntries.length > 0}
-              bulkDeleteMode={bulkDeleteMode}
-              onBulkDeleteModeChange={handleBulkDeleteModeChange}
-            />
+            <TimelineHeader />
 
             <CoachReviewingIndicator isActive={isAutoCoaching} />
 
@@ -307,6 +303,9 @@ export default function Timeline() {
               onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
               isUpdatingGoal={updatePlanGoalMutation.isPending}
               onScheduleClick={(planId) => setSchedulingPlanId(planId)}
+              canBulkDelete={bulkDeletableEntries.length > 0}
+              bulkDeleteMode={bulkDeleteMode}
+              onBulkDeleteModeChange={handleBulkDeleteModeChange}
             />
 
             <TimelineSummaryCard selectedPlanId={selectedPlanId} />

@@ -7,7 +7,9 @@ import {
   Pencil,
   Sparkles,
   Target,
+  Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -58,6 +60,9 @@ export default function TimelineFilters({
   onGoalSave,
   isUpdatingGoal,
   onScheduleClick,
+  canBulkDelete,
+  bulkDeleteMode,
+  onBulkDeleteModeChange,
 }: Readonly<TimelineFiltersProps>) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
@@ -206,6 +211,27 @@ export default function TimelineFilters({
                     )}
                     Import plan
                   </DropdownMenuItem>
+                  {onBulkDeleteModeChange ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={!canBulkDelete && !bulkDeleteMode}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          onBulkDeleteModeChange(!bulkDeleteMode);
+                        }}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        data-testid="menuitem-bulk-delete-mode"
+                      >
+                        {bulkDeleteMode ? (
+                          <X className="h-4 w-4 mr-2" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-2" />
+                        )}
+                        {bulkDeleteMode ? "Exit bulk delete" : "Bulk delete"}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
               <Input
