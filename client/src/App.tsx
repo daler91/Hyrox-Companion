@@ -96,23 +96,26 @@ function AuthenticatedLayout() {
   useEmailCheck(isAuthenticated, isAppUserLoaded);
   useOfflineDropNotifier();
 
-  // Lock html/body so only #main-content scrolls. Blink's documentElement
-  // scrollHeight is influenced by the unrolled content of descendant
-  // overflow:auto containers, which can produce a phantom document-level
-  // scrollbar alongside main-content's. Inline styles avoid any cascade
-  // or CSS-bundling ambiguity that affects classed selectors.
+  // Lock html/body so only #main-content scrolls. `overflow: clip` (not
+  // `hidden`) is needed to forbid programmatic scrolling too — `hidden`
+  // only suppresses the visual scrollbar; JS can still set scrollTop and
+  // land at scrollHeight-clientHeight because Blink's documentElement
+  // scrollHeight reflects unrolled descendant overflow:auto content.
+  // Inline styles avoid any cascade / CSS-bundling ambiguity. Safari <16
+  // falls back to `hidden`, which still removes the visible scrollbar.
   useLayoutEffect(() => {
     const html = document.documentElement;
     const body = document.body;
+    const overflowValue = CSS.supports?.("overflow", "clip") ? "clip" : "hidden";
     const prev = {
       htmlOverflow: html.style.overflow,
       htmlHeight: html.style.height,
       bodyOverflow: body.style.overflow,
       bodyHeight: body.style.height,
     };
-    html.style.overflow = "hidden";
+    html.style.overflow = overflowValue;
     html.style.height = "100%";
-    body.style.overflow = "hidden";
+    body.style.overflow = overflowValue;
     body.style.height = "100%";
     html.classList.add("app-shell-locked");
     return () => {
