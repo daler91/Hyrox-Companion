@@ -36,6 +36,61 @@ type SavePayloadResult =
       readonly description: string;
     };
 
+interface PayloadBaseInput {
+  readonly title: string;
+  readonly date: string;
+  readonly notes: string;
+  readonly rpe: number | null;
+  readonly durationMinutes?: string;
+  readonly planDayId?: string | null;
+}
+
+function buildBasePayload({
+  title,
+  date,
+  notes,
+  rpe,
+  durationMinutes,
+  planDayId,
+}: PayloadBaseInput): Omit<SaveWorkoutInput, "mainWorkout"> {
+  const normalizedDuration = normalizeDurationMinutes(durationMinutes);
+  return {
+    title,
+    date,
+    focus: title,
+    notes: notes || null,
+    rpe: rpe || null,
+    ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
+    ...(planDayId ? { planDayId } : {}),
+  };
+}
+
+function emptyWorkoutResult(
+  description = "Please add an exercise or describe your workout.",
+): SavePayloadResult {
+  return {
+    ok: false,
+    description,
+  };
+}
+
+function buildTextOnlyPayload(input: PayloadBaseInput & { readonly freeText: string }): SavePayloadResult {
+  if (!input.freeText.trim()) {
+    return emptyWorkoutResult();
+  }
+
+  return {
+    ok: true,
+    warnings: [],
+    lintIssues: [],
+    structureCompletenessScore: 100,
+    payload: {
+      ...buildBasePayload(input),
+      mainWorkout: input.freeText,
+    },
+  };
+}
+
 function normalizeLegacyExercise(exercise: StructuredExercise): StructuredExercise {
   if (exercise.exerciseName !== "emom") return exercise;
   return {
@@ -204,31 +259,25 @@ export function buildWorkoutSavePayload({
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
   const effectiveTitle = title.trim() || "Workout";
   const hasStructured = exerciseBlocks.length > 0 || incomingStructureBlocks.length > 0;
-  const normalizedDuration = normalizeDurationMinutes(durationMinutes);
+  const basePayload = buildBasePayload({
+    title: effectiveTitle,
+    date,
+    notes,
+    rpe,
+    durationMinutes,
+    planDayId,
+  });
 
   if (!hasStructured) {
-    if (!freeText.trim()) {
-      return {
-        ok: false,
-        description: "Please add an exercise or describe your workout.",
-      };
-    }
-    return {
-      ok: true,
-      warnings: [],
-      lintIssues: [],
-      structureCompletenessScore: 100,
-      payload: {
-        title: effectiveTitle,
-        date,
-        focus: effectiveTitle,
-        mainWorkout: freeText,
-        notes: notes || null,
-        rpe: rpe || null,
-        ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
-        ...(planDayId ? { planDayId } : {}),
-      },
-    };
+    return buildTextOnlyPayload({
+      title: effectiveTitle,
+      date,
+      notes,
+      rpe,
+      durationMinutes,
+      planDayId,
+      freeText,
+    });
   }
 
   const blocksWithIds = ensureBlockIds(incomingStructureBlocks);
@@ -247,10 +296,7 @@ export function buildWorkoutSavePayload({
   }
 
   if (exercises.length === 0 && blocksWithIds.length === 0 && !freeText.trim()) {
-    return {
-      ok: false,
-      description: "Please add at least one exercise or describe your workout.",
-    };
+    return emptyWorkoutResult("Please add at least one exercise or describe your workout.");
   }
 
   const missingFieldWarnings = [...new Set(exercises.flatMap((exercise) => getMissingFieldWarnings(exercise)))];
@@ -282,14 +328,8 @@ export function buildWorkoutSavePayload({
     lintIssues,
     structureCompletenessScore: lint.structureCompletenessScore,
     payload: {
-      title: effectiveTitle,
-      date,
-      focus: effectiveTitle,
+      ...basePayload,
       mainWorkout,
-      notes: notes || null,
-      rpe: rpe || null,
-      ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
-      ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
       ...(structureBlocks.length > 0 ? { structureBlocks } : {}),
     },
