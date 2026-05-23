@@ -131,13 +131,15 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
   const selectedPlan = choosePlan(plans, selectedPlanId, todayStr);
   const weeklyGoal = Math.max(overview?.weeklyGoal ?? 0, 1);
   const weeklyCompleted = overview?.weeklyCompletedWorkouts ?? 0;
-  const progressPct = Math.min(100, Math.round((weeklyCompleted / weeklyGoal) * 100));
   const streak = overview?.currentStreak ?? 0;
 
   const todayValue = todayEntry?.focus?.trim() || "No planned session today";
-  const todayDetail = todayEntry
-    ? (todayEntry.status === "completed" ? "Completed today" : todayEntry.mainWorkout)
-    : selectedPlan?.name;
+  let todayDetail = selectedPlan?.name;
+  if (todayEntry?.status === "completed") {
+    todayDetail = "Completed today";
+  } else if (todayEntry) {
+    todayDetail = todayEntry.mainWorkout;
+  }
 
   return (
     <Card data-testid="timeline-summary-card">
@@ -160,23 +162,18 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
           <p className="text-base font-semibold text-foreground">
             {weeklyCompleted} of {weeklyGoal} this week
           </p>
-          <div
-            role="progressbar"
+          <progress
             aria-label="Weekly workout progress"
-            aria-valuemin={0}
-            aria-valuemax={weeklyGoal}
-            aria-valuenow={Math.min(weeklyCompleted, weeklyGoal)}
             aria-valuetext={`${weeklyCompleted} of ${weeklyGoal} workouts completed this week`}
-            className="h-2 overflow-hidden rounded-full bg-muted"
-          >
-            <div
-              className={cn(
-                "h-full rounded-full bg-primary transition-[width] duration-500",
-                "motion-reduce:transition-none",
-              )}
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
+            className={cn(
+              "h-2 w-full appearance-none overflow-hidden rounded-full bg-muted",
+              "[&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted",
+              "[&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary",
+              "[&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-primary",
+            )}
+            max={weeklyGoal}
+            value={Math.min(weeklyCompleted, weeklyGoal)}
+          />
         </div>
 
         <SummaryItem

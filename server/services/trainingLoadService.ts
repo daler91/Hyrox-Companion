@@ -36,6 +36,17 @@ export interface ExerciseLoadTagInput {
   highIntensityRunningRisk: number;
 }
 
+type ExerciseLoadTagValues = readonly [
+  posteriorChain: number,
+  anteriorChain: number,
+  unilateralStability: number,
+  elasticTendon: number,
+  axialLoadModifier: number,
+  tendonLoadModifier: number,
+  eccentricRiskModifier: number,
+  highIntensityRunningRisk: number,
+];
+
 export type TrainingLoadSet = {
   id?: string;
   workoutLogId: string;
@@ -98,58 +109,59 @@ export interface TrainingLoadComputation {
 }
 
 export const DEFAULT_EXERCISE_LOAD_TAGS: ExerciseLoadTagInput[] = [
-  tag("deadlift", 1, 0.2, 0.2, 0.1, 1.5, 1, 1.2, 0),
-  tag("sumo_deadlift", 1, 0.25, 0.2, 0.1, 1.45, 1, 1.15, 0),
-  tag("stiff_leg_deadlift", 1, 0.1, 0.3, 0.15, 1.35, 1.1, 1.2, 0),
-  tag("romanian_deadlift", 1, 0.1, 0.25, 0.15, 1.35, 1.1, 1.2, 0),
-  tag("good_morning", 1, 0.1, 0.2, 0.1, 1.45, 1, 1.25, 0),
-  tag("single_leg_rdl", 0.85, 0.15, 0.9, 0.2, 1.15, 1.1, 1.15, 0),
-  tag("hip_thrust", 0.8, 0.1, 0.1, 0.1, 1.05, 1, 1, 0),
-  tag("kettlebell_swings", 0.85, 0.05, 0.2, 0.25, 1.05, 1.05, 1.1, 0),
-  tag("back_extension", 0.75, 0, 0.1, 0.1, 1, 1, 1.05, 0),
-  tag("back_squat", 0.35, 1, 0.2, 0.1, 1.4, 1, 1.2, 0),
-  tag("front_squat", 0.25, 1, 0.2, 0.1, 1.35, 1, 1.15, 0),
-  tag("leg_press", 0.2, 1, 0.1, 0.1, 0.8, 1, 1.1, 0),
-  tag("hack_squat", 0.2, 1, 0.15, 0.1, 1.05, 1, 1.1, 0),
-  tag("lunges", 0.35, 0.95, 0.9, 0.15, 1.1, 1, 1.2, 0),
-  tag("reverse_lunge", 0.35, 0.85, 0.9, 0.15, 1.05, 1, 1.15, 0),
-  tag("walking_lunges", 0.35, 0.95, 0.9, 0.2, 1.05, 1, 1.2, 0),
-  tag("bulgarian_split_squat", 0.35, 0.9, 1, 0.15, 1.1, 1, 1.15, 0),
-  tag("sled_push", 0.45, 0.95, 0.35, 0.25, 1.2, 1.1, 1.1, 0),
-  tag("sandbag_lunges", 0.35, 1, 0.8, 0.2, 1.15, 1, 1.2, 0),
-  tag("wall_balls", 0.2, 0.85, 0.2, 0.25, 0.9, 1.05, 1.1, 0),
-  tag("box_jumps", 0.25, 0.75, 0.7, 1, 0.6, 1.5, 1.25, 0.6),
-  tag("burpee_broad_jump", 0.55, 0.65, 0.8, 0.9, 0.7, 1.35, 1.2, 0.5),
-  tag("jump_rope", 0.1, 0.2, 0.2, 1, 0.5, 1.45, 1, 0.4),
-  tag("calf_raise", 0.05, 0.1, 0.15, 0.9, 0.8, 1.35, 1, 0),
-  tag("standing_calf_raise", 0.05, 0.1, 0.15, 0.9, 0.8, 1.35, 1, 0),
-  tag("seated_calf_raise", 0.05, 0.1, 0.15, 0.8, 0.75, 1.25, 1, 0),
-  tag("run_1k", 0.35, 0.45, 0.2, 0.45, 0.4, 1.15, 1.05, 0.45),
-  tag("easy_run", 0.2, 0.3, 0.1, 0.25, 0.35, 1, 1, 0.1),
-  tag("recovery_run", 0.15, 0.25, 0.1, 0.2, 0.3, 0.9, 0.9, 0),
-  tag("tempo_run", 0.45, 0.5, 0.2, 0.55, 0.45, 1.2, 1.05, 0.75),
-  tag("interval_run", 0.7, 0.55, 0.25, 0.85, 0.5, 1.45, 1.05, 1),
-  tag("hill_repeats", 0.85, 0.55, 0.35, 0.8, 0.55, 1.45, 1.1, 1),
-  tag("fartlek_run", 0.45, 0.45, 0.2, 0.55, 0.45, 1.2, 1, 0.65),
-  tag("long_run", 0.35, 0.65, 0.15, 0.5, 0.4, 1.15, 1.25, 0.25),
-  tag("treadmill_run", 0.25, 0.35, 0.1, 0.35, 0.35, 1.05, 1, 0.25),
-  tag("sprints", 0.8, 0.55, 0.35, 0.9, 0.55, 1.5, 1.1, 1),
-  tag("treadmill_intervals", 0.65, 0.5, 0.2, 0.75, 0.45, 1.35, 1, 0.9),
-  tag("incline_walk", 0.65, 0.45, 0.2, 0.35, 0.35, 1.15, 1, 0.45),
-  tag("stair_climber", 0.45, 0.85, 0.25, 0.35, 0.45, 1.15, 1.1, 0.35),
+  tag("deadlift", [1, 0.2, 0.2, 0.1, 1.5, 1, 1.2, 0]),
+  tag("sumo_deadlift", [1, 0.25, 0.2, 0.1, 1.45, 1, 1.15, 0]),
+  tag("stiff_leg_deadlift", [1, 0.1, 0.3, 0.15, 1.35, 1.1, 1.2, 0]),
+  tag("romanian_deadlift", [1, 0.1, 0.25, 0.15, 1.35, 1.1, 1.2, 0]),
+  tag("good_morning", [1, 0.1, 0.2, 0.1, 1.45, 1, 1.25, 0]),
+  tag("single_leg_rdl", [0.85, 0.15, 0.9, 0.2, 1.15, 1.1, 1.15, 0]),
+  tag("hip_thrust", [0.8, 0.1, 0.1, 0.1, 1.05, 1, 1, 0]),
+  tag("kettlebell_swings", [0.85, 0.05, 0.2, 0.25, 1.05, 1.05, 1.1, 0]),
+  tag("back_extension", [0.75, 0, 0.1, 0.1, 1, 1, 1.05, 0]),
+  tag("back_squat", [0.35, 1, 0.2, 0.1, 1.4, 1, 1.2, 0]),
+  tag("front_squat", [0.25, 1, 0.2, 0.1, 1.35, 1, 1.15, 0]),
+  tag("leg_press", [0.2, 1, 0.1, 0.1, 0.8, 1, 1.1, 0]),
+  tag("hack_squat", [0.2, 1, 0.15, 0.1, 1.05, 1, 1.1, 0]),
+  tag("lunges", [0.35, 0.95, 0.9, 0.15, 1.1, 1, 1.2, 0]),
+  tag("reverse_lunge", [0.35, 0.85, 0.9, 0.15, 1.05, 1, 1.15, 0]),
+  tag("walking_lunges", [0.35, 0.95, 0.9, 0.2, 1.05, 1, 1.2, 0]),
+  tag("bulgarian_split_squat", [0.35, 0.9, 1, 0.15, 1.1, 1, 1.15, 0]),
+  tag("sled_push", [0.45, 0.95, 0.35, 0.25, 1.2, 1.1, 1.1, 0]),
+  tag("sandbag_lunges", [0.35, 1, 0.8, 0.2, 1.15, 1, 1.2, 0]),
+  tag("wall_balls", [0.2, 0.85, 0.2, 0.25, 0.9, 1.05, 1.1, 0]),
+  tag("box_jumps", [0.25, 0.75, 0.7, 1, 0.6, 1.5, 1.25, 0.6]),
+  tag("burpee_broad_jump", [0.55, 0.65, 0.8, 0.9, 0.7, 1.35, 1.2, 0.5]),
+  tag("jump_rope", [0.1, 0.2, 0.2, 1, 0.5, 1.45, 1, 0.4]),
+  tag("calf_raise", [0.05, 0.1, 0.15, 0.9, 0.8, 1.35, 1, 0]),
+  tag("standing_calf_raise", [0.05, 0.1, 0.15, 0.9, 0.8, 1.35, 1, 0]),
+  tag("seated_calf_raise", [0.05, 0.1, 0.15, 0.8, 0.75, 1.25, 1, 0]),
+  tag("run_1k", [0.35, 0.45, 0.2, 0.45, 0.4, 1.15, 1.05, 0.45]),
+  tag("easy_run", [0.2, 0.3, 0.1, 0.25, 0.35, 1, 1, 0.1]),
+  tag("recovery_run", [0.15, 0.25, 0.1, 0.2, 0.3, 0.9, 0.9, 0]),
+  tag("tempo_run", [0.45, 0.5, 0.2, 0.55, 0.45, 1.2, 1.05, 0.75]),
+  tag("interval_run", [0.7, 0.55, 0.25, 0.85, 0.5, 1.45, 1.05, 1]),
+  tag("hill_repeats", [0.85, 0.55, 0.35, 0.8, 0.55, 1.45, 1.1, 1]),
+  tag("fartlek_run", [0.45, 0.45, 0.2, 0.55, 0.45, 1.2, 1, 0.65]),
+  tag("long_run", [0.35, 0.65, 0.15, 0.5, 0.4, 1.15, 1.25, 0.25]),
+  tag("treadmill_run", [0.25, 0.35, 0.1, 0.35, 0.35, 1.05, 1, 0.25]),
+  tag("sprints", [0.8, 0.55, 0.35, 0.9, 0.55, 1.5, 1.1, 1]),
+  tag("treadmill_intervals", [0.65, 0.5, 0.2, 0.75, 0.45, 1.35, 1, 0.9]),
+  tag("incline_walk", [0.65, 0.45, 0.2, 0.35, 0.35, 1.15, 1, 0.45]),
+  tag("stair_climber", [0.45, 0.85, 0.25, 0.35, 0.45, 1.15, 1.1, 0.35]),
 ];
 
-function tag(
-  exerciseName: string,
-  posteriorChain: number,
-  anteriorChain: number,
-  unilateralStability: number,
-  elasticTendon: number,
-  axialLoadModifier: number,
-  tendonLoadModifier: number,
-  eccentricRiskModifier: number,
-  highIntensityRunningRisk: number,
-): ExerciseLoadTagInput {
+function tag(exerciseName: string, values: ExerciseLoadTagValues): ExerciseLoadTagInput {
+  const [
+    posteriorChain,
+    anteriorChain,
+    unilateralStability,
+    elasticTendon,
+    axialLoadModifier,
+    tendonLoadModifier,
+    eccentricRiskModifier,
+    highIntensityRunningRisk,
+  ] = values;
+
   return {
     exerciseName,
     posteriorChain,
@@ -223,8 +235,7 @@ function inferTag(exerciseName: string, category?: string | null): ExerciseLoadT
   const anterior = lowerGroups.some((g) => /quads|legs/.test(g)) ? 0.45 : 0;
   const elastic = lowerGroups.some((g) => /calves|ankles|cardio/.test(g)) ? 0.25 : 0;
   const running = cat === "running";
-  return tag(
-    exerciseName,
+  return tag(exerciseName, [
     running ? Math.max(posterior, 0.2) : posterior,
     running ? Math.max(anterior, 0.25) : anterior,
     0.1,
@@ -233,7 +244,7 @@ function inferTag(exerciseName: string, category?: string | null): ExerciseLoadT
     1,
     running ? 1.05 : 1,
     running ? 0.25 : 0,
-  );
+  ]);
 }
 
 function getTag(
@@ -269,13 +280,14 @@ export function calculateStrengthStressScore(
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
   const weight = Number(set.weight ?? set.plannedWeight ?? 0);
   const distance = Number(set.distance ?? set.plannedDistance ?? 0);
-  const weightedTonnage = weight > 0 && reps > 0
-    ? weight * Math.max(reps, 1)
-    : reps > 0
-      ? reps * 20
-      : distance > 0
-        ? distance * 0.08
-        : 0;
+  let weightedTonnage = 0;
+  if (weight > 0 && reps > 0) {
+    weightedTonnage = weight * Math.max(reps, 1);
+  } else if (reps > 0) {
+    weightedTonnage = reps * 20;
+  } else if (distance > 0) {
+    weightedTonnage = distance * 0.08;
+  }
   if (weightedTonnage <= 0) return 0;
   const modifier = Math.max(0.4, tag.axialLoadModifier) * Math.max(0.6, tag.eccentricRiskModifier);
   return round((weightedTonnage / 100) * rpeFactor(rpe) * modifier, 2);
