@@ -2,11 +2,11 @@ import type { TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Dumbbell, Loader2, PieChart as PieChartIcon } from "lucide-react";
 import { useMemo } from "react";
-import { Cell, Legend,Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
@@ -51,6 +51,53 @@ function CategoryTooltip({ active, payload }: Readonly<{ active?: boolean; paylo
   );
 }
 
+function formatCount(value: number, singular: string, plural: string): string {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function MovementPatternCoverageCard({
+  patterns,
+}: Readonly<{ patterns: TrainingOverview["movementPatternCoverage"] }>) {
+  const maxSessionCount = Math.max(1, ...patterns.map((pattern) => pattern.sessionCount));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2" className="text-base">Movement Pattern Coverage</CardTitle>
+        <CardDescription>Session coverage, set volume, and recency by strength movement pattern</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3" data-testid="movement-pattern-coverage-grid">
+          {patterns.map((pattern) => {
+            const barWidth = pattern.sessionCount > 0
+              ? Math.max(8, Math.round((pattern.sessionCount / maxSessionCount) * 100))
+              : 0;
+            return (
+              <div key={pattern.pattern} className="rounded-lg border bg-card p-3 text-sm">
+                <div className="flex min-h-10 items-start justify-between gap-2">
+                  <p className="font-semibold leading-tight">{pattern.label}</p>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] leading-5 ${getFreshnessColor(pattern.daysSince)}`}>
+                    {getFreshnessLabel(pattern.daysSince)}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {formatCount(pattern.sessionCount, "session", "sessions")} - {formatCount(pattern.totalSets, "set", "sets")}
+                </p>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${barWidth}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) {
   const { data: overview, isLoading } = useQuery<TrainingOverview>({
     queryKey: ["/api/v1/training-overview", dateParams],
@@ -74,6 +121,10 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     }
     return result.sort((a, b) => b.value - a.value);
   }, [overview]);
+  const movementPatternCoverage = overview?.movementPatternCoverage ?? [];
+  const hasMovementPatternData = movementPatternCoverage.some(
+    (pattern) => pattern.sessionCount > 0 || pattern.totalSets > 0 || pattern.lastTrained !== null,
+  );
 
   if (isLoading) {
     return (
@@ -83,7 +134,14 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     );
   }
 
-  if (!overview || (pieData.length === 0 && overview.stationCoverage.every((s) => s.lastTrained === null))) {
+  if (
+    !overview ||
+    (
+      pieData.length === 0 &&
+      overview.stationCoverage.every((s) => s.lastTrained === null) &&
+      !hasMovementPatternData
+    )
+  ) {
     return (
       <div className="flex items-center justify-center py-12 text-center bg-muted/20 rounded-lg border border-dashed">
         <div className="space-y-3">
@@ -184,6 +242,8 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
           </div>
         </CardContent>
       </Card>
+
+      <MovementPatternCoverageCard patterns={movementPatternCoverage} />
     </div>
   );
 }

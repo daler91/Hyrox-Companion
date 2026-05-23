@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "./exercises";
+import {
+  EXERCISE_DEFINITIONS,
+  getExerciseMovementPatterns,
+  MOVEMENT_PATTERNS,
+  normalizeExerciseName,
+} from "./exercises";
 
 const requestedExpandedExerciseKeys = [
   "air_squat",
@@ -176,5 +181,52 @@ describe("normalizeExerciseName", () => {
 
   it("returns null for unknown names", () => {
     expect(normalizeExerciseName("made up movement xyz")).toBeNull();
+  });
+});
+
+describe("movement pattern metadata", () => {
+  it("keeps the requested movement patterns in dashboard order", () => {
+    expect(MOVEMENT_PATTERNS.map(({ pattern, label }) => [pattern, label])).toEqual([
+      ["squat", "Squat pattern"],
+      ["hinge", "Hinge pattern"],
+      ["horizontal_push", "Horizontal push"],
+      ["vertical_push", "Vertical push"],
+      ["horizontal_pull", "Horizontal pull"],
+      ["vertical_pull", "Vertical pull"],
+      ["lunge_split_squat", "Lunge / split squat"],
+      ["carry", "Carry"],
+      ["core_flexion", "Core flexion"],
+      ["core_anti_rotation", "Core anti-rotation"],
+    ]);
+  });
+
+  it("maps representative catalog exercises to movement patterns", () => {
+    expect(getExerciseMovementPatterns("back_squat")).toContain("squat");
+    expect(getExerciseMovementPatterns("deadlift")).toContain("hinge");
+    expect(getExerciseMovementPatterns("romanian_deadlift")).toContain("hinge");
+    expect(getExerciseMovementPatterns("bench_press")).toContain("horizontal_push");
+    expect(getExerciseMovementPatterns("push_up")).toContain("horizontal_push");
+    expect(getExerciseMovementPatterns("overhead_press")).toContain("vertical_push");
+    expect(getExerciseMovementPatterns("bent_over_row")).toContain("horizontal_pull");
+    expect(getExerciseMovementPatterns("pull_up")).toContain("vertical_pull");
+    expect(getExerciseMovementPatterns("lat_pulldown")).toContain("vertical_pull");
+    expect(getExerciseMovementPatterns("lunges")).toContain("lunge_split_squat");
+    expect(getExerciseMovementPatterns("bulgarian_split_squat")).toContain("lunge_split_squat");
+    expect(getExerciseMovementPatterns("farmers_carry")).toContain("carry");
+    expect(getExerciseMovementPatterns("crunch")).toContain("core_flexion");
+    expect(getExerciseMovementPatterns("sit_up")).toContain("core_flexion");
+    expect(getExerciseMovementPatterns("pallof_press")).toContain("core_anti_rotation");
+    expect(getExerciseMovementPatterns("side_plank")).toContain("core_anti_rotation");
+  });
+
+  it("uses catalog normalization before resolving movement patterns", () => {
+    expect(getExerciseMovementPatterns("Back Squat")).toContain("squat");
+    expect(getExerciseMovementPatterns("RDL")).toContain("hinge");
+    expect(getExerciseMovementPatterns("Lat Pull-Down")).toContain("vertical_pull");
+  });
+
+  it("does not map custom or unknown exercises", () => {
+    expect(getExerciseMovementPatterns("custom")).toEqual([]);
+    expect(getExerciseMovementPatterns("made_up_movement")).toEqual([]);
   });
 });
