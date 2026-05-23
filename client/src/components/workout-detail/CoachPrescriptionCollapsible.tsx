@@ -1,5 +1,5 @@
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
@@ -298,11 +298,14 @@ function EditablePrescription({
   const lastSavedRef = useRef<string>(value);
   if (value !== lastExternal) {
     setLastExternal(value);
+    if (draft === lastExternal) setDraft(value);
+  }
+
+  useLayoutEffect(() => {
     // The prop is the server's current truth (optimistic cache or fresh
     // fetch); whatever we sent before is moot.
     lastSavedRef.current = value;
-    if (draft === lastExternal) setDraft(value);
-  }
+  }, [value]);
 
   const debouncedSave = useDebouncedCallback((next: string) => {
     if (next === lastSavedRef.current) return;

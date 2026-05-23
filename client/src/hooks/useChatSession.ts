@@ -186,6 +186,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           ? formatTime(new Date(msg.timestamp))
           : "",
       }));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- One-time hydration from React Query into the editable chat buffer.
       setMessages([welcomeMessageObj, ...loadedMessages]);
       setHistoryLoaded(true);
     } else if (!historyLoading && chatHistory.length === 0 && !historyLoaded) {
