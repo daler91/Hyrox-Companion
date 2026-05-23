@@ -185,7 +185,7 @@ describe("ReviewSurface", () => {
       />,
     );
 
-    await renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
+    renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
 
     expectWorkoutTitleRename(onRenameTitle, "entry-1", "Renamed strength");
   });

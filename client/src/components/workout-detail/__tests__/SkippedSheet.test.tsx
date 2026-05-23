@@ -54,7 +54,7 @@ describe("SkippedSheet", () => {
       />,
     );
 
-    await renameWorkoutTitleFromHeader("workout-title-entry-1", "  Skipped engine  ");
+    renameWorkoutTitleFromHeader("workout-title-entry-1", "  Skipped engine  ");
 
     expectWorkoutTitleRename(onRenameTitle, "entry-1", "Skipped engine");
   });

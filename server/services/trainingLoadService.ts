@@ -37,14 +37,8 @@ export interface ExerciseLoadTagInput {
 }
 
 type ExerciseLoadTagValues = readonly [
-  posteriorChain: number,
-  anteriorChain: number,
-  unilateralStability: number,
-  elasticTendon: number,
-  axialLoadModifier: number,
-  tendonLoadModifier: number,
-  eccentricRiskModifier: number,
-  highIntensityRunningRisk: number,
+  posteriorChain: number, anteriorChain: number, unilateralStability: number, elasticTendon: number,
+  axialLoadModifier: number, tendonLoadModifier: number, eccentricRiskModifier: number, highIntensityRunningRisk: number,
 ];
 
 export type TrainingLoadSet = {
@@ -573,6 +567,70 @@ function computeRangeStart(workoutLogs: readonly Pick<WorkoutLog, "date">[], cur
   return earliestLog;
 }
 
+function shouldApplyCardioStress(
+  log: Pick<WorkoutLog, "duration" | "focus" | "mainWorkout" | "accessory" | "notes">,
+  sets: readonly TrainingLoadSet[],
+): boolean {
+  return Boolean(
+    log.duration &&
+      (sets.length === 0 ||
+        sets.some(isCardioSet) ||
+        /run|bike|row|ski|walk|hike/i.test(inferWorkoutText(log))),
+  );
+}
+
+function applyStrengthLoad(
+  day: DailyTrainingLoad,
+  log: Pick<WorkoutLog, "rpe">,
+  sets: readonly TrainingLoadSet[],
+  tags: Map<string, ExerciseLoadTagInput>,
+): void {
+  for (const set of sets) {
+    if (!isStrengthSet(set)) continue;
+    const setTag = getTag(tags, set.exerciseName, set.category);
+    const stress = calculateStrengthStressScore(set, setTag, log.rpe);
+    day.strengthStressScore += stress;
+    updateVectorLoads(day.vectorLoads, stress, setTag);
+  }
+}
+
+function applyCardioLoad(
+  day: DailyTrainingLoad,
+  log: Pick<WorkoutLog, "duration" | "rpe" | "focus" | "mainWorkout" | "accessory" | "notes">,
+  sets: readonly TrainingLoadSet[],
+  tags: Map<string, ExerciseLoadTagInput>,
+): void {
+  if (!shouldApplyCardioStress(log, sets)) return;
+
+  const stress = calculateCardioStressScore(log, [...sets], tags);
+  day.cardioStressScore += stress;
+  const cardioSets = sets.filter(isCardioSet);
+  if (cardioSets.length === 0) return;
+
+  const stressPerSet = stress / cardioSets.length;
+  for (const set of cardioSets) {
+    updateVectorLoads(day.vectorLoads, stressPerSet, getTag(tags, set.exerciseName, set.category), 0.25);
+  }
+}
+
+function finalizeDailyLoad(day: DailyTrainingLoad): void {
+  day.strengthStressScore = round(day.strengthStressScore, 1);
+  day.cardioStressScore = round(day.cardioStressScore, 1);
+  day.utss = round(day.strengthStressScore + day.cardioStressScore, 1);
+  for (const key of LOAD_VECTOR_KEYS) day.vectorLoads[key] = round(day.vectorLoads[key], 1);
+}
+
+function applyWorkoutLoad(
+  day: DailyTrainingLoad,
+  log: WorkoutLog,
+  sets: readonly TrainingLoadSet[],
+  tags: Map<string, ExerciseLoadTagInput>,
+): void {
+  applyStrengthLoad(day, log, sets, tags);
+  applyCardioLoad(day, log, sets, tags);
+  finalizeDailyLoad(day);
+}
+
 export function calculateTrainingLoad(
   workoutLogs: readonly WorkoutLog[],
   exerciseSets: readonly TrainingLoadSet[],
@@ -592,30 +650,7 @@ export function calculateTrainingLoad(
   for (const log of workoutLogs) {
     const day = getOrCreateDay(allDays, log.date);
     const sets = setsByLog.get(log.id) ?? [];
-    for (const set of sets) {
-      const setTag = getTag(tags, set.exerciseName, set.category);
-      if (isStrengthSet(set)) {
-        const stress = calculateStrengthStressScore(set, setTag, log.rpe);
-        day.strengthStressScore += stress;
-        updateVectorLoads(day.vectorLoads, stress, setTag);
-      }
-    }
-
-    if (log.duration && (sets.length === 0 || sets.some(isCardioSet) || /run|bike|row|ski|walk|hike/i.test(inferWorkoutText(log)))) {
-      const stress = calculateCardioStressScore(log, sets, tags);
-      day.cardioStressScore += stress;
-      const cardioSets = sets.filter(isCardioSet);
-      if (cardioSets.length > 0) {
-        const stressPerSet = stress / cardioSets.length;
-        for (const set of cardioSets) {
-          updateVectorLoads(day.vectorLoads, stressPerSet, getTag(tags, set.exerciseName, set.category), 0.25);
-        }
-      }
-    }
-    day.strengthStressScore = round(day.strengthStressScore, 1);
-    day.cardioStressScore = round(day.cardioStressScore, 1);
-    day.utss = round(day.strengthStressScore + day.cardioStressScore, 1);
-    for (const key of LOAD_VECTOR_KEYS) day.vectorLoads[key] = round(day.vectorLoads[key], 1);
+    applyWorkoutLoad(day, log, sets, tags);
   }
 
   applyAcwr(allDays, rangeStart, currentDate);
@@ -736,106 +771,110 @@ function restrictionIds(summary: TrainingLoadOverview): Set<string> {
   return new Set(summary.activeRestrictions.map((restriction) => restriction.id));
 }
 
+interface SuggestionRule {
+  readonly restrictionId: string; readonly maxDaysAhead: number;
+  readonly matches: (workout: UpcomingWorkoutForLoad) => boolean; readonly rationale: (summary: TrainingLoadOverview) => string;
+  readonly priority?: WorkoutSuggestion["priority"];
+}
+
+function canApplySuggestionRule(
+  rule: SuggestionRule,
+  restrictions: Set<string>,
+  currentDate: string,
+  workout: UpcomingWorkoutForLoad,
+  usedWorkoutIds: ReadonlySet<string>,
+): boolean {
+  const daysAhead = daysBetween(currentDate, workout.date);
+  return restrictions.has(rule.restrictionId) &&
+    !usedWorkoutIds.has(workout.id) &&
+    daysAhead >= 0 &&
+    daysAhead <= rule.maxDaysAhead &&
+    rule.matches(workout);
+}
+
+function applySuggestionRules(
+  summary: TrainingLoadOverview,
+  workouts: readonly UpcomingWorkoutForLoad[],
+  rules: readonly SuggestionRule[],
+  currentDate: string,
+  usedWorkoutIds: Set<string>,
+  suggestions: LoadGovernorSuggestion[],
+): void {
+  const restrictions = restrictionIds(summary);
+  for (const workout of workouts) {
+    const rule = rules.find((candidate) => canApplySuggestionRule(candidate, restrictions, currentDate, workout, usedWorkoutIds));
+    if (!rule) continue;
+    suggestions.push(buildSuggestion(workout, rule.rationale(summary), rule.restrictionId, rule.priority));
+    usedWorkoutIds.add(workout.id);
+  }
+}
+
+function applyOnrampSuggestions(
+  summary: TrainingLoadOverview,
+  workouts: readonly UpcomingWorkoutForLoad[],
+  currentDate: string,
+  usedWorkoutIds: Set<string>,
+  suggestions: LoadGovernorSuggestion[],
+): void {
+  const restrictions = restrictionIds(summary);
+  const rule: SuggestionRule = {
+    restrictionId: "acwr_onramp",
+    maxDaysAhead: 3,
+    matches: (candidate) => isHighIntensityRun(candidate) || isStrengthWorkout(candidate),
+    rationale: () =>
+      "Recent training load is below the 28-day baseline, so this session starts a 3-day on-ramp instead of jumping straight back to peak load.",
+    priority: "medium",
+  };
+  let onrampCount = 0;
+  for (const workout of workouts) {
+    if (onrampCount >= 3) return;
+    if (!canApplySuggestionRule(rule, restrictions, currentDate, workout, usedWorkoutIds)) continue;
+    suggestions.push(buildSuggestion(workout, rule.rationale(summary), rule.restrictionId, rule.priority));
+    usedWorkoutIds.add(workout.id);
+    onrampCount += 1;
+  }
+}
+
 export function buildLoadGovernorSuggestions(
   summary: TrainingLoadOverview,
   upcomingWorkouts: readonly UpcomingWorkoutForLoad[],
   currentDate = toIsoDate(new Date()),
 ): LoadGovernorSuggestion[] {
-  const restrictions = restrictionIds(summary);
   const suggestions: LoadGovernorSuggestion[] = [];
   const usedWorkoutIds = new Set<string>();
   const ordered = [...upcomingWorkouts].sort((a, b) => a.date.localeCompare(b.date));
 
-  const add = (workout: UpcomingWorkoutForLoad, suggestion: LoadGovernorSuggestion) => {
-    if (usedWorkoutIds.has(workout.id)) return;
-    suggestions.push(suggestion);
-    usedWorkoutIds.add(workout.id);
-  };
-
-  for (const workout of ordered) {
-    const daysAhead = daysBetween(currentDate, workout.date);
-    if (daysAhead < 0) continue;
-    if (
-      restrictions.has("posterior_chain_velocity_lock") &&
-      daysAhead <= 2 &&
-      isRunningWorkout(workout) &&
-      isHighIntensityRun(workout)
-    ) {
-      add(workout, buildSuggestion(
-        workout,
+  applySuggestionRules(summary, ordered, [
+    { restrictionId: "posterior_chain_velocity_lock", maxDaysAhead: 2,
+      matches: (workout) => isRunningWorkout(workout) && isHighIntensityRun(workout),
+      rationale: () =>
         "Gym log shows high posterior-chain strain, so this high-velocity run is downshifted to protect hamstrings while preserving aerobic volume.",
-        "posterior_chain_velocity_lock",
-      ));
-      continue;
-    }
-
-    if (
-      restrictions.has("anterior_chain_braking_guard") &&
-      daysAhead <= 3 &&
-      isRunningWorkout(workout) &&
-      (isBrakingRun(workout) || isHighIntensityRun(workout))
-    ) {
-      add(workout, buildSuggestion(
-        workout,
+    },
+    { restrictionId: "anterior_chain_braking_guard", maxDaysAhead: 3,
+      matches: (workout) => isRunningWorkout(workout) && (isBrakingRun(workout) || isHighIntensityRun(workout)),
+      rationale: () =>
         "Gym log shows high quad and patellar strain, so this run is shifted to a flat low-intensity session to reduce knee braking load.",
-        "anterior_chain_braking_guard",
-      ));
-      continue;
-    }
-
-    if (
-      restrictions.has("elastic_tendon_speed_guard") &&
-      daysAhead <= 3 &&
-      isPlyoOrSpeed(workout)
-    ) {
-      add(workout, buildSuggestion(
-        workout,
+    },
+    { restrictionId: "elastic_tendon_speed_guard", maxDaysAhead: 3,
+      matches: isPlyoOrSpeed,
+      rationale: () =>
         "Seven-day elastic tendon load is high, so speed and plyometric work is downshifted to protect the Achilles and plantar fascia.",
-        "elastic_tendon_speed_guard",
-      ));
-    }
-  }
-
-  for (const workout of ordered) {
-    const daysAhead = daysBetween(currentDate, workout.date);
-    if (daysAhead < 0 || daysAhead > 2 || usedWorkoutIds.has(workout.id)) continue;
-    if (restrictions.has("acwr_yellow_guard") && (isHighIntensityRun(workout) || isHighTaxStrengthWorkout(workout))) {
-      add(workout, buildSuggestion(
-        workout,
-        `ACWR is ${summary.acwr ?? "above target"}, so this higher-tax session is softened while acute load settles back toward the chronic baseline.`,
-        "acwr_yellow_guard",
-        "medium",
-      ));
-    }
-  }
-
-  for (const workout of ordered) {
-    const daysAhead = daysBetween(currentDate, workout.date);
-    if (daysAhead < 0 || daysAhead > 4 || usedWorkoutIds.has(workout.id)) continue;
-    if (restrictions.has("acwr_danger_lock") && (isHighIntensityRun(workout) || isStrengthWorkout(workout))) {
-      add(workout, buildSuggestion(
-        workout,
-        `ACWR is ${summary.acwr ?? "above target"}, so high-intensity training is downshifted to guide load back toward the chronic baseline.`,
-        "acwr_danger_lock",
-      ));
-    }
-  }
-
-  let onrampCount = 0;
-  for (const workout of ordered) {
-    if (!restrictions.has("acwr_onramp") || usedWorkoutIds.has(workout.id)) continue;
-    const daysAhead = daysBetween(currentDate, workout.date);
-    if (daysAhead < 0 || daysAhead > 3 || onrampCount >= 3) continue;
-    if (isHighIntensityRun(workout) || isStrengthWorkout(workout)) {
-      add(workout, buildSuggestion(
-        workout,
-        "Recent training load is below the 28-day baseline, so this session starts a 3-day on-ramp instead of jumping straight back to peak load.",
-        "acwr_onramp",
-        "medium",
-      ));
-      onrampCount += 1;
-    }
-  }
+    },
+  ], currentDate, usedWorkoutIds, suggestions);
+  applySuggestionRules(summary, ordered, [{
+    restrictionId: "acwr_yellow_guard", maxDaysAhead: 2,
+    matches: (workout) => isHighIntensityRun(workout) || isHighTaxStrengthWorkout(workout),
+    rationale: (loadSummary) =>
+      `ACWR is ${loadSummary.acwr ?? "above target"}, so this higher-tax session is softened while acute load settles back toward the chronic baseline.`,
+    priority: "medium",
+  }], currentDate, usedWorkoutIds, suggestions);
+  applySuggestionRules(summary, ordered, [{
+    restrictionId: "acwr_danger_lock", maxDaysAhead: 4,
+    matches: (workout) => isHighIntensityRun(workout) || isStrengthWorkout(workout),
+    rationale: (loadSummary) =>
+      `ACWR is ${loadSummary.acwr ?? "above target"}, so high-intensity training is downshifted to guide load back toward the chronic baseline.`,
+  }], currentDate, usedWorkoutIds, suggestions);
+  applyOnrampSuggestions(summary, ordered, currentDate, usedWorkoutIds, suggestions);
 
   return suggestions;
 }
