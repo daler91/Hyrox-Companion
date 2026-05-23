@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,6 +96,16 @@ function mockPlanDayExerciseState(overrides = {}) {
   mockUsePlanDayExercises.mockReturnValue(makePlanDayExerciseState(overrides));
 }
 
+function createDeferred() {
+  let resolve!: () => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("LogSheet parse failures", () => {
   beforeEach(() => {
     mockUsePlanDayExercises.mockReset();
@@ -140,6 +150,47 @@ describe("LogSheet parse failures", () => {
     await waitFor(() => {
       expect(onLogAsPlanned).toHaveBeenCalledWith(baseEntry, null, "Felt strong");
     });
+  });
+
+  it("locks completion while pending edits flush and the log mutation finishes", async () => {
+    const flush = createDeferred();
+    const log = createDeferred();
+    const flushPendingSetPatches = vi.fn(() => flush.promise);
+    const onLogAsPlanned = vi.fn(() => log.promise);
+    mockPlanDayExerciseState({ flushPendingSetPatches });
+
+    render(<LogSheet entry={baseEntry} onClose={vi.fn()} onLogAsPlanned={onLogAsPlanned} />);
+
+    const user = userEvent.setup();
+    const completeButton = screen.getByTestId("log-as-planned-entry-1");
+
+    await user.click(completeButton);
+
+    expect(completeButton).toBeDisabled();
+    expect(completeButton).toHaveTextContent("Completing");
+
+    await user.click(completeButton);
+
+    expect(flushPendingSetPatches).toHaveBeenCalledTimes(1);
+    expect(onLogAsPlanned).not.toHaveBeenCalled();
+
+    await act(async () => {
+      flush.resolve();
+      await flush.promise;
+    });
+
+    await waitFor(() => expect(onLogAsPlanned).toHaveBeenCalledTimes(1));
+    expect(completeButton).toBeDisabled();
+
+    await user.click(completeButton);
+    expect(onLogAsPlanned).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      log.resolve();
+      await log.promise;
+    });
+
+    await waitFor(() => expect(completeButton).toBeEnabled());
   });
 
   it("clears warning and enables save after retry succeeds", async () => {

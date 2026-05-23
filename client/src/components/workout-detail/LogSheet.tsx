@@ -1,6 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import { Check, MessageSquare, SkipForward, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
@@ -48,7 +48,7 @@ type LogSheetModeProps =
         entry: TimelineEntry,
         rpe: number | null,
         note: string | null,
-      ) => void;
+      ) => Promise<void> | void;
       readonly isLogging?: boolean;
     }
   | {
@@ -518,19 +518,38 @@ export function LogSheet({
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
   const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
   const { rpe, setRpe, note, setNote } = useEntryDraft(entry);
+  const [completingEntryId, setCompletingEntryId] = useState<string | null>(null);
+  const completionEntryIdRef = useRef<string | null>(null);
 
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
 
   if (!entry) return null;
 
+  const isCompletingCurrentEntry = completingEntryId === entry.id;
+  const finishCompletion = (submittedEntryId: string) => {
+    if (completionEntryIdRef.current !== submittedEntryId) return;
+    completionEntryIdRef.current = null;
+    setCompletingEntryId(null);
+  };
+
   const handleLog = async () => {
     if (!onLogAsPlanned) return;
+    if (completionEntryIdRef.current === entry.id) return;
+    const submittedEntryId = entry.id;
+    completionEntryIdRef.current = submittedEntryId;
+    setCompletingEntryId(submittedEntryId);
     // Flush any debounced cell edits before the log mutation runs — the
     // server's createWorkoutInTx copies persisted plan-day rows into
     // the new workoutLog, so a row edit still queued in the debounce
     // coordinator would be missing from the snapshot.
-    await planSets.flushPendingSetPatches();
-    onLogAsPlanned(entry, rpe, note.trim().length > 0 ? note : null);
+    try {
+      await planSets.flushPendingSetPatches();
+      await onLogAsPlanned(entry, rpe, note.trim().length > 0 ? note : null);
+    } catch {
+      finishCompletion(submittedEntryId);
+      return;
+    }
+    finishCompletion(submittedEntryId);
   };
 
   const handleDone = async () => {
@@ -599,7 +618,7 @@ export function LogSheet({
           setNote={setNote}
           onLog={handleLog}
           onDone={handleDone}
-          isLogging={isLogging}
+          isLogging={isCompletingCurrentEntry || isLogging}
           isSaving={planSets.isSaving}
           onAskCoach={handleAskCoach}
           onSkip={onSkip}

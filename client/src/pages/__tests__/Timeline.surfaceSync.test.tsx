@@ -10,6 +10,7 @@ import Timeline from "../Timeline";
 
 const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
 const timelineMocks = vi.hoisted(() => ({ setCoachOpen: vi.fn() }));
+const workoutActionMocks = vi.hoisted(() => ({ handleMarkComplete: vi.fn() }));
 const apiMocks = vi.hoisted(() => ({ updatePreferences: vi.fn() }));
 const viewportState = vi.hoisted(() => ({ isMobile: false }));
 const dataMocks = vi.hoisted(() => ({ scrollToToday: vi.fn() }));
@@ -121,7 +122,7 @@ vi.mock("@/hooks/useTimelineState", () => ({
     workoutActions: {
       skipConfirmEntry: null,
       setSkipConfirmEntry: vi.fn(),
-      handleMarkComplete: vi.fn(),
+      handleMarkComplete: workoutActionMocks.handleMarkComplete,
       handleChangeStatus: vi.fn(),
       handleDelete: vi.fn(),
       confirmSkip: vi.fn(),
@@ -169,11 +170,36 @@ vi.mock("@/components/timeline", () => ({
 }));
 
 vi.mock("@/components/workout-detail/LogSheet", () => ({
-  LogSheet: ({ entry, mode }: { entry: TimelineEntry | null; mode?: "log" | "edit" }) => {
+  LogSheet: ({
+    entry,
+    mode,
+    onLogAsPlanned,
+  }: {
+    entry: TimelineEntry | null;
+    mode?: "log" | "edit";
+    onLogAsPlanned?: (
+      entry: TimelineEntry,
+      rpe: number | null,
+      note: string | null,
+    ) => Promise<void> | void;
+  }) => {
     if (!entry) return null;
     if (mode === "edit") return <div data-testid="edit-sheet">{`${entry.id}:${entry.date}`}</div>;
     logSheetMounts += 1;
-    return <div data-testid="log-sheet">{`${entry.id}:${entry.date}`}</div>;
+    return (
+      <div data-testid="log-sheet">
+        {`${entry.id}:${entry.date}`}
+        <button
+          type="button"
+          data-testid="mock-log-complete"
+          onClick={() => {
+            void onLogAsPlanned?.(entry, null, null);
+          }}
+        >
+          Complete
+        </button>
+      </div>
+    );
   },
 }));
 vi.mock("@/components/workout-detail/PreviewSheet", () => ({
@@ -239,7 +265,20 @@ vi.mock("@/components/workout-detail/PreviewSheet", () => ({
     );
   },
 }));
-vi.mock("@/components/workout-detail/ReviewSurface", () => ({ ReviewSurface: () => <div /> }));
+vi.mock("@/components/workout-detail/ReviewSurface", () => ({
+  ReviewSurface: ({
+    entry,
+    showCompletionSuccess,
+  }: {
+    entry: TimelineEntry | null;
+    showCompletionSuccess?: boolean;
+  }) =>
+    entry ? (
+      <div data-testid="review-surface" data-completion-success={String(!!showCompletionSuccess)}>
+        {entry.id}
+      </div>
+    ) : null,
+}));
 vi.mock("@/components/workout-detail/SkippedSheet", () => ({ SkippedSheet: () => <div /> }));
 vi.mock("@/components/coach/AIConsentDialog", () => ({
   AIConsentDialog: ({
@@ -362,6 +401,7 @@ describe("Timeline surface sync", () => {
     authState.aiCoachEnabled = true;
     viewportState.isMobile = false;
     timelineMocks.setCoachOpen.mockReset();
+    workoutActionMocks.handleMarkComplete.mockReset();
     apiMocks.updatePreferences.mockReset();
     apiMocks.updatePreferences.mockResolvedValue({});
     dataMocks.scrollToToday.mockReset();
@@ -390,6 +430,35 @@ describe("Timeline surface sync", () => {
     expect(logSheetMounts).toBeGreaterThan(0);
     // No close/reopen loop via URL writes.
     expect(setOpenWorkoutId).toHaveBeenCalledTimes(0);
+  });
+
+  it("hands a completed workout from the log sheet into the review surface", async () => {
+    const user = userEvent.setup();
+    const completedEntry = makeEntry({
+      id: "log-wl1",
+      status: "completed",
+      workoutLogId: "wl1",
+    });
+    workoutActionMocks.handleMarkComplete.mockImplementation((
+      _entry: TimelineEntry,
+      options?: { onSuccess?: (entry: TimelineEntry) => void },
+    ) => {
+      options?.onSuccess?.(completedEntry);
+    });
+
+    renderTimeline();
+
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("e1:2026-01-01");
+
+    await user.click(screen.getByTestId("mock-log-complete"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("review-surface")).toHaveTextContent("log-wl1");
+    });
+    expect(screen.queryByTestId("log-sheet")).not.toBeInTheDocument();
+    expect(screen.getByTestId("review-surface")).toHaveAttribute("data-completion-success", "true");
+    expect(openWorkoutId).toBe("pd1");
+    expect(setOpenWorkoutId).not.toHaveBeenCalledWith(null);
   });
 
   it("opens future workout edit mode without changing the scheduled date", async () => {

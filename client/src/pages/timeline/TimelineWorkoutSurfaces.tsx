@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import type { Dispatch, SetStateAction } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import {
@@ -143,6 +143,7 @@ export function TimelineWorkoutSurfaces({
   annotationInitialDate,
   setAnnotationInitialDate,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
+  const [completionSuccessEntryId, setCompletionSuccessEntryId] = useState<string | null>(null);
   const titleMutation = useTimelineTitleMutation({
     setPreviewEntry,
     setFutureEditEntry,
@@ -175,12 +176,21 @@ export function TimelineWorkoutSurfaces({
         onClose={closeWorkoutSurfaces}
         isLogging={logWorkoutMutation.isPending}
         onLogAsPlanned={(entry, rpeOverride, noteOverride) => {
-          closeEmbeddedCoach();
-          setLogEntry(null);
-          handleMarkComplete({
-            ...entry,
-            rpe: rpeOverride ?? null,
-            notes: noteOverride,
+          return new Promise<void>((resolve, reject) => {
+            handleMarkComplete({
+              ...entry,
+              rpe: rpeOverride ?? null,
+              notes: noteOverride,
+            }, {
+              onSuccess: (completedEntry) => {
+                closeEmbeddedCoach();
+                setLogEntry(null);
+                setReviewEntry(completedEntry);
+                setCompletionSuccessEntryId(completedEntry.id);
+                resolve();
+              },
+              onError: reject,
+            });
           });
         }}
         onSkip={(entry) => {
@@ -250,7 +260,10 @@ export function TimelineWorkoutSurfaces({
       <ReviewSurface
         key={reviewEntry?.id ?? "review-surface"}
         entry={reviewEntry}
-        onClose={closeWorkoutSurfaces}
+        onClose={() => {
+          setCompletionSuccessEntryId(null);
+          closeWorkoutSurfaces();
+        }}
         onAskCoach={openEmbeddedCoach}
         coachChatOpen={embeddedCoachEntryId === reviewEntry?.id}
         coachChatNonce={embeddedCoachSeedNonce}
@@ -261,14 +274,17 @@ export function TimelineWorkoutSurfaces({
         onShowWorkoutDetails={onShowWorkoutDetails}
         onRenameTitle={handleRenameTitle}
         isRenamingTitle={titleMutation.isRenamingEntry(reviewEntry)}
+        showCompletionSuccess={reviewEntry?.id === completionSuccessEntryId}
         onMarkPlanned={(entry) => {
           closeEmbeddedCoach();
           setReviewEntry(null);
+          setCompletionSuccessEntryId(null);
           handleChangeStatus(entry, "planned");
         }}
         onDelete={(entry) => {
           closeEmbeddedCoach();
           setReviewEntry(null);
+          setCompletionSuccessEntryId(null);
           handleDelete(entry);
         }}
       />
