@@ -122,7 +122,7 @@ export function saveLogWorkoutDraftFromTimelineEntry(
     freeText: prescription,
     notes: "",
     rpe: null,
-    durationMinutes: entry.duration != null ? String(entry.duration) : "",
+    durationMinutes: entry.duration == null ? "" : String(entry.duration),
     planDayId: entry.planDayId ?? null,
     useTextMode: structured.names.length === 0,
     exerciseBlocks: structured.names,

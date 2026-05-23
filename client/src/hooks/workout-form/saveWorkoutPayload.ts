@@ -225,7 +225,7 @@ export function buildWorkoutSavePayload({
         mainWorkout: freeText,
         notes: notes || null,
         rpe: rpe || null,
-        ...(normalizedDuration != null ? { duration: normalizedDuration } : {}),
+        ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
         ...(planDayId ? { planDayId } : {}),
       },
     };
@@ -288,7 +288,7 @@ export function buildWorkoutSavePayload({
       mainWorkout,
       notes: notes || null,
       rpe: rpe || null,
-      ...(normalizedDuration != null ? { duration: normalizedDuration } : {}),
+      ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
       ...(planDayId ? { planDayId } : {}),
       exercises: exercises.map(exerciseToPayload) as ParsedExercise[],
       ...(structureBlocks.length > 0 ? { structureBlocks } : {}),

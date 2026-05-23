@@ -275,7 +275,7 @@ export default function Settings() {
       setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
       setAiCoachEnabled(preferences.aiCoachEnabled ?? false);
       setTrainingStyleId(preferences.trainingStyleId ?? "balanced_default");
-      setMafAgeInput(preferences.mafAge != null ? String(preferences.mafAge) : "");
+      setMafAgeInput(preferences.mafAge == null ? "" : String(preferences.mafAge));
       setMafConsistencyInput(preferences.mafConsistency ?? "");
       setMafTrendInput(preferences.mafTrend ?? "");
       setMafHrDataAvailableInput(
@@ -335,7 +335,7 @@ export default function Settings() {
               setShowAdherenceInsights(previous.showAdherenceInsights);
               setAiCoachEnabled(previous.aiCoachEnabled);
               setTrainingStyleId(previous.trainingStyleId);
-              setMafAgeInput(previous.mafAge != null ? String(previous.mafAge) : "");
+              setMafAgeInput(previous.mafAge == null ? "" : String(previous.mafAge));
               setMafConsistencyInput(previous.mafConsistency ?? "");
               setMafTrendInput(previous.mafTrend ?? "");
               setMafHrDataAvailableInput(

@@ -19,11 +19,11 @@ interface UseUnsavedChangesPromptOptions {
 }
 
 function browserPath(): string {
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
 }
 
 function normalizeInternalPath(to: string): string {
-  const url = new URL(to, window.location.origin);
+  const url = new URL(to, globalThis.location.origin);
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -113,8 +113,8 @@ export function useUnsavedChangesPrompt({
         return;
       }
 
-      const url = new URL(anchor.href, window.location.href);
-      if (url.origin !== window.location.origin) {
+      const url = new URL(anchor.href, globalThis.location.href);
+      if (url.origin !== globalThis.location.origin) {
         return;
       }
 
@@ -146,13 +146,13 @@ export function useUnsavedChangesPrompt({
         return;
       }
 
-      window.history.pushState(null, "", currentPathRef.current);
+      globalThis.history.pushState(null, "", currentPathRef.current);
       setPendingNavigation({ to: destination });
       setIsPromptOpen(true);
     };
 
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    globalThis.addEventListener("popstate", handlePopState);
+    return () => globalThis.removeEventListener("popstate", handlePopState);
   }, [enabled]);
 
   return {

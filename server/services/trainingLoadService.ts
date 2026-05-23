@@ -1,13 +1,11 @@
-import type {
-  LoadGovernorAcwrZone,
-  LoadGovernorVector,
-  TrainingLoadOverview,
-  TrainingLoadRestriction,
-} from "@shared/schema";
 import {
   EXERCISE_DEFINITIONS,
   type ExerciseLoadTag,
   type InsertExerciseSet,
+  type LoadGovernorAcwrZone,
+  type LoadGovernorVector,
+  type TrainingLoadOverview,
+  type TrainingLoadRestriction,
   type WorkoutLog,
   type WorkoutSuggestion,
 } from "@shared/schema";
