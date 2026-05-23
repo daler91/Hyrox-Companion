@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { type GroupedExercise, groupExerciseSets } from "@/lib/exerciseUtils";
 import { assignmentPatchForStep, isUnassignedGroup } from "@/lib/workoutStructureAssignments";
@@ -337,16 +338,25 @@ function StructureBlockCard({
             </p>
           ) : null}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onRemove}
-          aria-label={`Remove block ${index + 1}`}
-          data-testid={`structure-block-remove-${index}`}
-        >
-          <Trash2 className="size-4" aria-hidden />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={onRemove}
+                aria-label={`Remove block ${index + 1}`}
+                data-testid={`structure-block-remove-${index}`}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Remove block</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       <WorkoutStructureEditor

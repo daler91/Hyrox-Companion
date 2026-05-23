@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatExerciseSummary, getExerciseLabel, type GroupedExercise } from "@/lib/exerciseUtils";
 import { groupMatchesBlockStep } from "@/lib/workoutStructureAssignments";
 
@@ -400,40 +401,63 @@ function MovementRow({
             {stepTypes.map((t) => <SelectItem key={t} value={t}>{STEP_TYPE_LABELS[t]}</SelectItem>)}
           </SelectContent>
         </Select>
-        <div className="ml-auto flex items-center gap-0.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onMoveUp}
-            disabled={isFirst}
-            aria-label={`Move ${positionLabel} earlier`}
-          >
-            <ArrowUp className="size-3.5" aria-hidden />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onMoveDown}
-            disabled={isLast}
-            aria-label={`Move ${positionLabel} later`}
-          >
-            <ArrowDown className="size-3.5" aria-hidden />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            onClick={onRemove}
-            aria-label={`Remove ${positionLabel}`}
-          >
-            <X className="size-3.5" aria-hidden />
-          </Button>
-        </div>
+        <TooltipProvider>
+          <div className="ml-auto flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={onMoveUp}
+                  disabled={isFirst}
+                  aria-label={`Move ${positionLabel} earlier`}
+                >
+                  <ArrowUp className="size-3.5" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Move earlier</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={onMoveDown}
+                  disabled={isLast}
+                  aria-label={`Move ${positionLabel} later`}
+                >
+                  <ArrowDown className="size-3.5" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Move later</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={onRemove}
+                  aria-label={`Remove ${positionLabel}`}
+                >
+                  <X className="size-3.5" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Remove</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
       {step.type === "work" ? (
