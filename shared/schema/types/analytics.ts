@@ -1,4 +1,6 @@
 ﻿// Analytics — Training Overview types
+import type { MovementPattern } from "../exercises";
+
 export interface WeeklySummary {
   weekStart: string; // YYYY-MM-DD (Monday)
   workoutCount: number;
@@ -48,6 +50,15 @@ export interface TrainingLoadOverview {
   trend: TrainingLoadTrendPoint[];
 }
 
+export interface MovementPatternCoverage {
+  pattern: MovementPattern;
+  label: string;
+  sessionCount: number;
+  totalSets: number;
+  lastTrained: string | null;
+  daysSince: number | null;
+}
+
 /**
  * Compact aggregate stats that the Analytics Overview tab surfaces as four
  * delta-indicator cards. Computed for both the currently-visible date range
@@ -77,6 +88,7 @@ export interface TrainingOverview {
   workoutDates: string[];
   categoryTotals: Record<string, { count: number; totalSets: number }>;
   stationCoverage: Array<{ station: string; lastTrained: string | null; daysSince: number | null }>;
+  movementPatternCoverage: MovementPatternCoverage[];
   currentStreak: number;
   weeklyCompletedWorkouts: number;
   weeklyGoal: number;

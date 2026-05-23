@@ -245,6 +245,13 @@ describe("calculateTrainingOverview", () => {
     expect(result.categoryTotals).toEqual({});
     expect(result.stationCoverage).toHaveLength(9); // 8 stations + running
     expect(result.stationCoverage.every((s) => s.lastTrained === null)).toBe(true);
+    expect(result.movementPatternCoverage).toHaveLength(10);
+    expect(result.movementPatternCoverage.every((pattern) => (
+      pattern.sessionCount === 0 &&
+      pattern.totalSets === 0 &&
+      pattern.lastTrained === null &&
+      pattern.daysSince === null
+    ))).toBe(true);
     expect(result.currentStreak).toBe(0);
     expect(result.weeklyCompletedWorkouts).toBe(0);
     expect(result.weeklyGoal).toBe(5);
@@ -342,6 +349,74 @@ describe("calculateTrainingOverview", () => {
     const sledPush = result.stationCoverage.find((s) => s.station === "sled_push");
     expect(sledPush?.lastTrained).toBeNull();
     expect(sledPush?.daysSince).toBeNull();
+  });
+
+  it("aggregates movement pattern sessions, sets, and recency from mapped exercise sets", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-20T12:00:00Z"));
+
+    const sets = [
+      makeSet({ exerciseName: "back_squat", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({ exerciseName: "back_squat", workoutLogId: "w1", date: "2026-01-17" }),
+      makeSet({ exerciseName: "bench_press", workoutLogId: "w2", date: "2026-01-18" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    const squat = result.movementPatternCoverage.find((pattern) => pattern.pattern === "squat");
+    expect(squat).toEqual({
+      pattern: "squat",
+      label: "Squat pattern",
+      sessionCount: 1,
+      totalSets: 2,
+      lastTrained: "2026-01-17",
+      daysSince: 3,
+    });
+
+    const horizontalPush = result.movementPatternCoverage.find((pattern) => pattern.pattern === "horizontal_push");
+    expect(horizontalPush).toEqual(expect.objectContaining({
+      sessionCount: 1,
+      totalSets: 1,
+      lastTrained: "2026-01-18",
+      daysSince: 2,
+    }));
+  });
+
+  it("counts multi-pattern exercises toward each mapped movement pattern", () => {
+    const sets = [
+      makeSet({ exerciseName: "trap_bar_deadlift", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({ exerciseName: "wall_balls", category: "functional", workoutLogId: "w2", date: "2026-01-16" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    const getPattern = (patternName: string) =>
+      result.movementPatternCoverage.find((pattern) => pattern.pattern === patternName);
+
+    expect(getPattern("squat")).toEqual(expect.objectContaining({ sessionCount: 2, totalSets: 2 }));
+    expect(getPattern("hinge")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+    expect(getPattern("vertical_push")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+  });
+
+  it("always returns every movement pattern and excludes custom or unmapped exercises", () => {
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "Odd lift", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({ exerciseName: "easy_run", category: "running", workoutLogId: "w2", date: "2026-01-16" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    expect(result.movementPatternCoverage.map((pattern) => pattern.pattern)).toEqual([
+      "squat",
+      "hinge",
+      "horizontal_push",
+      "vertical_push",
+      "horizontal_pull",
+      "vertical_pull",
+      "lunge_split_squat",
+      "carry",
+      "core_flexion",
+      "core_anti_rotation",
+    ]);
+    expect(result.movementPatternCoverage.every((pattern) => pattern.sessionCount === 0)).toBe(true);
+    expect(result.movementPatternCoverage.every((pattern) => pattern.totalSets === 0)).toBe(true);
   });
 
   it("handles null RPE gracefully", () => {

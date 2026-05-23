@@ -1,4 +1,14 @@
-import type { ExerciseLoadTag, OverviewStats, PersonalRecord, TrainingOverview, WeeklySummary, WorkoutLog } from "@shared/schema";
+import { getExerciseMovementPatterns, MOVEMENT_PATTERNS } from "@shared/schema";
+import type {
+  ExerciseLoadTag,
+  MovementPattern,
+  MovementPatternCoverage,
+  OverviewStats,
+  PersonalRecord,
+  TrainingOverview,
+  WeeklySummary,
+  WorkoutLog,
+} from "@shared/schema";
 
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
 import { calculateStreak } from "../routeUtils";
@@ -269,6 +279,56 @@ function buildStationCoverage(
   });
 }
 
+function calculateDaysSince(lastTrained: string | null, todayStr: string): number | null {
+  if (!lastTrained) return null;
+  return Math.round(
+    (new Date(todayStr).getTime() - new Date(lastTrained).getTime()) / (1000 * 60 * 60 * 24)
+  );
+}
+
+function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]): MovementPatternCoverage[] {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const patternStats = new Map<MovementPattern, {
+    workoutLogIds: Set<string>;
+    totalSets: number;
+    lastTrained: string | null;
+  }>();
+
+  for (const { pattern } of MOVEMENT_PATTERNS) {
+    patternStats.set(pattern, {
+      workoutLogIds: new Set<string>(),
+      totalSets: 0,
+      lastTrained: null,
+    });
+  }
+
+  for (const set of exerciseSets) {
+    const patterns = getExerciseMovementPatterns(set.exerciseName);
+    for (const pattern of patterns) {
+      const stats = patternStats.get(pattern);
+      if (!stats) continue;
+      stats.workoutLogIds.add(set.workoutLogId);
+      stats.totalSets += 1;
+      if (!stats.lastTrained || set.date > stats.lastTrained) {
+        stats.lastTrained = set.date;
+      }
+    }
+  }
+
+  return MOVEMENT_PATTERNS.map(({ pattern, label }) => {
+    const stats = patternStats.get(pattern);
+    const lastTrained = stats?.lastTrained ?? null;
+    return {
+      pattern,
+      label,
+      sessionCount: stats?.workoutLogIds.size ?? 0,
+      totalSets: stats?.totalSets ?? 0,
+      lastTrained,
+      daysSince: calculateDaysSince(lastTrained, todayStr),
+    };
+  });
+}
+
 /**
  * Aggregate the flat weekly summaries into the four card-level stats that
  * the Analytics Overview tab renders. Kept as a pure function so it can be
@@ -325,6 +385,7 @@ export function calculateTrainingOverview(
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
+  const movementPatternCoverage = buildMovementPatternCoverage(exerciseSets);
   const trainingLoad = calculateTrainingLoad(
     trainingLoadInput?.workoutLogs ?? workoutLogs,
     trainingLoadInput?.exerciseSets ?? exerciseSets,
@@ -379,6 +440,7 @@ export function calculateTrainingOverview(
     workoutDates,
     categoryTotals,
     stationCoverage,
+    movementPatternCoverage,
     currentStats,
     previousStats,
     // Matches the AI context definition: consecutive completed calendar dates
