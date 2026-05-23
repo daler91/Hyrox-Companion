@@ -353,7 +353,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         accessory: accessory.trim() || null,
         notes: notes.trim() || null,
         rpe: rpe ?? null,
-        ...(normalizedDuration != null ? { duration: normalizedDuration } : {}),
+        ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
         ...(hasStructured ? { exercises: setsToParsed(exerciseSets) } : {}),
       });
     },

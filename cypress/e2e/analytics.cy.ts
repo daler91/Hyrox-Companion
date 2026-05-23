@@ -28,7 +28,7 @@ const weekStarts = [
 ];
 
 const workoutCounts = [4, 5, 6, 7, 5, 8, 6, 7, 9, 8, 10, 6];
-const avgRpes = [5.5, 5.7, 6.1, 6.2, 5.6, 6.8, 6.0, 6.4, 7.0, 6.7, 7.2, 6.3];
+const avgRpes = [5.5, 5.7, 6.1, 6.2, 5.6, 6.8, 6, 6.4, 7, 6.7, 7.2, 6.3];
 
 const weeklySummaries = weekStarts.map((weekStart, index) => {
   const workoutCount = workoutCounts[index] ?? 0;

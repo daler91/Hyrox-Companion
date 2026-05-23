@@ -84,7 +84,7 @@ describe("Settings MAF style switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    window.history.replaceState(null, "", "/settings");
+    globalThis.history.replaceState(null, "", "/settings");
   });
 
   it("hydrates nullable opt-in preferences as off", async () => {
@@ -352,14 +352,14 @@ describe("Settings MAF style switch", () => {
     await makeSettingsDirty();
 
     act(() => {
-      window.history.pushState(null, "", "/analytics");
-      window.dispatchEvent(new Event("popstate"));
+      globalThis.history.pushState(null, "", "/analytics");
+      globalThis.dispatchEvent(new Event("popstate"));
     });
 
     expect(
       await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
     ).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/settings");
+    expect(globalThis.location.pathname).toBe("/settings");
 
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 
