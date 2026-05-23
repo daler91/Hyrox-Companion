@@ -1,5 +1,12 @@
 import type { TimelineEntry } from "@shared/schema";
-import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import {
@@ -145,7 +152,9 @@ export function TimelineWorkoutSurfaces({
 }: Readonly<TimelineWorkoutSurfacesProps>) {
   const [completionSuccessEntryId, setCompletionSuccessEntryId] = useState<string | null>(null);
   const logEntryRef = useRef(logEntry);
-  useEffect(() => {
+  // Sync synchronously during commit so a mutation promise resolving between
+  // the dismiss render and a passive effect still sees the cleared entry.
+  useLayoutEffect(() => {
     logEntryRef.current = logEntry;
   }, [logEntry]);
   const titleMutation = useTimelineTitleMutation({
