@@ -71,10 +71,10 @@
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",
-    "express": "^4.21.2",
+    "express": "^4.22.2",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
-    "lucide-react": "^0.453.0",
+    "lucide-react": "^0.577.0",
     "mammoth": "^1.12.0",
     "node-cron": "^4.2.1",
     "p-limit": "^7.3.0",
@@ -227,7 +227,14 @@
     "  rather than a runtime one, but we pin the patched version to clear the advisory and",
     "  reduce supply-chain exposure. Dependabot cannot update transitive pnpm deps, so the",
     "  override is required.",
-    "  Remove when vite ships a version whose postcss range resolves to >=8.5.10."
+    "  Remove when vite ships a version whose postcss range resolves to >=8.5.10.",
+    "",
+    "qs >=6.15.2: fixes GHSA-q8mj-m7cp-5q26 / CVE-2026-8723 (DoS in",
+    "  stringify() with arrayFormat 'comma' and encodeValuesOnly). Pulled transitively",
+    "  by express/body-parser, @flow-js/garmin-connect, superagent/supertest, Cypress",
+    "  request, and MCP SDK paths. Patched in 6.15.2. Dependabot cannot update",
+    "  transitive pnpm deps, so the override is required.",
+    "  Remove when all transitive qs ranges resolve to >=6.15.2 by default."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -242,7 +249,8 @@
     "@xmldom/xmldom": "^0.8.13",
     "uuid": "^14.0.0",
     "systeminformation": "5.31.6",
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "qs": ">=6.15.2"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -252,12 +260,12 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
-    "@types/express": "4.17.21",
+    "@types/express": "4.17.25",
     "@types/jest-axe": "^3.5.9",
     "@types/node": "25.9.1",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.18.0",
-    "@types/react": "^18.3.28",
+    "@types/react": "^18.3.29",
     "@types/react-dom": "^18.3.7",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/web-push": "^3.6.4",
@@ -271,7 +279,7 @@
     "esbuild": "0.27.5",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "jest-axe": "^10.0.0",
     "jsdom": "^28.1.0",
@@ -305,7 +313,8 @@
       "@xmldom/xmldom": "^0.8.13",
       "uuid": "^14.0.0",
       "systeminformation": "5.31.6",
-      "postcss": "^8.5.10"
+      "postcss": "^8.5.10",
+      "qs": ">=6.15.2"
     }
   },
   "packageManager": "pnpm@9.12.0",
