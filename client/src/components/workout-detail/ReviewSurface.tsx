@@ -1,5 +1,5 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
-import { MessageSquare, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { CheckCircle2, MessageSquare, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
@@ -41,6 +41,7 @@ interface ReviewSurfaceProps {
   readonly onDelete?: (entry: TimelineEntry) => void;
   readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
   readonly isRenamingTitle?: boolean;
+  readonly showCompletionSuccess?: boolean;
 }
 
 type MigrationReviewFlag = { status: string; reason: string | null } | null;
@@ -119,6 +120,7 @@ export function ReviewSurface({
   onDelete,
   onRenameTitle,
   isRenamingTitle = false,
+  showCompletionSuccess = false,
 }: ReviewSurfaceProps) {
   const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit, showAdherenceInsights } = useUnitPreferences();
@@ -222,6 +224,7 @@ export function ReviewSurface({
           />
         }
       >
+        <CompletionSuccessCallout visible={showCompletionSuccess} />
         <ReviewDetailsColumn
           entry={displayEntry}
           detail={detail}
@@ -248,6 +251,24 @@ export function ReviewSurface({
         />
       </WorkoutCoachLayout>
     </ResponsiveSheet>
+  );
+}
+
+function CompletionSuccessCallout({ visible }: { readonly visible: boolean }) {
+  if (!visible) return null;
+
+  return (
+    <div
+      className="flex items-start gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-foreground"
+      data-testid="review-completion-success"
+      role="status"
+    >
+      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+      <div>
+        <p className="font-medium">Workout completed</p>
+        <p className="text-muted-foreground">Review or adjust your results below.</p>
+      </div>
+    </div>
   );
 }
 

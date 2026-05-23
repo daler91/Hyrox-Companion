@@ -191,6 +191,33 @@ describe('useWorkoutActions', () => {
           });
         });
       });
+
+      it('passes a completed timeline entry to the success callback', async () => {
+        mockLoggedWorkoutResponse({ id: 'logged-pd-1', notes: 'finished', rpe: 7 });
+        const onSuccess = vi.fn();
+        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const mockEntry = createMockTimelineEntry({
+          planDayId: 'pd-1',
+          date: '2024-01-01',
+          focus: 'strength',
+          mainWorkout: 'lift',
+        });
+
+        act(() => {
+          result.current.handleMarkComplete(mockEntry, { onSuccess });
+        });
+
+        await waitFor(() => {
+          expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'log-logged-pd-1',
+            status: 'completed',
+            workoutLogId: 'logged-pd-1',
+            planDayId: 'pd-1',
+            notes: 'finished',
+            rpe: 7,
+          }));
+        });
+      });
     });
 
     describe('confirmSkip', () => {

@@ -2,8 +2,15 @@ import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
 import { useCallback, useState } from "react";
 
 import { isTimelineEntryBulkDeletable } from "./workout-actions/bulkDelete";
-import { useWorkoutActionMutations } from "./workout-actions/useWorkoutActionMutations";
+import {
+  buildLoggedTimelineEntry,
+  useWorkoutActionMutations,
+} from "./workout-actions/useWorkoutActionMutations";
 
+interface MarkCompleteOptions {
+  readonly onSuccess?: (entry: TimelineEntry) => void;
+  readonly onError?: (error: Error) => void;
+}
 
 
 export function useWorkoutActions(selectedPlanId: string | null) {
@@ -17,8 +24,11 @@ export function useWorkoutActions(selectedPlanId: string | null) {
   } = useWorkoutActionMutations(selectedPlanId);
 
   const handleMarkComplete = useCallback(
-    (entry: TimelineEntry) => {
-      if (!entry.planDayId) return;
+    (entry: TimelineEntry, options?: MarkCompleteOptions) => {
+      if (!entry.planDayId) {
+        options?.onError?.(new Error("Cannot complete a workout without a plan day"));
+        return;
+      }
       logWorkoutMutation.mutate({
         planDayId: entry.planDayId,
         date: entry.date,
@@ -28,6 +38,13 @@ export function useWorkoutActions(selectedPlanId: string | null) {
         notes: entry.notes || undefined,
         rpe: entry.rpe ?? undefined,
         sourceEntry: entry,
+      }, {
+        onSuccess: (workout) => {
+          options?.onSuccess?.(buildLoggedTimelineEntry(workout, entry));
+        },
+        onError: (error) => {
+          options?.onError?.(error instanceof Error ? error : new Error("Failed to log workout"));
+        },
       });
     },
     [logWorkoutMutation],

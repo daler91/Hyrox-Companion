@@ -137,6 +137,18 @@ describe("ReviewSurface", () => {
     expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
   }, RENDER_TIMEOUT_MS);
 
+  it("shows the just-completed success callout only when requested", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    const { rerender } = render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    expect(screen.queryByTestId("review-completion-success")).not.toBeInTheDocument();
+
+    rerender(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} showCompletionSuccess />);
+
+    expect(screen.getByTestId("review-completion-success")).toHaveTextContent("Workout completed");
+  });
+
   it("saves and parses the visible prescribed reference text", async () => {
     const user = userEvent.setup();
     const updateReference = { mutate: vi.fn() };

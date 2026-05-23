@@ -20,9 +20,9 @@ function markAutoCoachingActive() {
   });
 }
 
-type CreatedWorkout = WorkoutLog & { exerciseSets?: ExerciseSet[] };
+export type CreatedWorkout = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 
-function buildLoggedTimelineEntry(workout: CreatedWorkout, sourceEntry?: TimelineEntry | null): TimelineEntry {
+export function buildLoggedTimelineEntry(workout: CreatedWorkout, sourceEntry?: TimelineEntry | null): TimelineEntry {
   return {
     id: `log-${workout.id}`,
     date: workout.date ?? sourceEntry?.date ?? "",
