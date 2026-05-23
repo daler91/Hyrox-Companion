@@ -75,6 +75,13 @@ function mafHrDataAvailableInputToSnapshot(value: MafHrDataAvailableInput): bool
   return value === "yes";
 }
 
+function mafHrDataAvailableToInput(value: boolean | null | undefined): MafHrDataAvailableInput {
+  if (value == null) {
+    return "";
+  }
+  return value ? "yes" : "no";
+}
+
 function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
   return {
     weightUnit: preferences.weightUnit || "kg",
@@ -184,7 +191,8 @@ export default function Settings() {
   // "Undo" action on the post-save toast.
   const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
   const pendingStyleAuditRef = useRef<StyleAuditEntry | null>(null);
-  const currentSettingsPath = `${location}${search ? `?${search}` : ""}`;
+  const settingsSearchPath = search ? `?${search}` : "";
+  const currentSettingsPath = `${location}${settingsSearchPath}`;
   const unsavedChangesPrompt = useUnsavedChangesPrompt({
     enabled: hasChanges,
     currentPath: currentSettingsPath,
@@ -278,13 +286,7 @@ export default function Settings() {
       setMafAgeInput(preferences.mafAge == null ? "" : String(preferences.mafAge));
       setMafConsistencyInput(preferences.mafConsistency ?? "");
       setMafTrendInput(preferences.mafTrend ?? "");
-      setMafHrDataAvailableInput(
-        preferences.mafHrDataAvailable == null
-          ? ""
-          : preferences.mafHrDataAvailable
-            ? "yes"
-            : "no",
-      );
+      setMafHrDataAvailableInput(mafHrDataAvailableToInput(preferences.mafHrDataAvailable));
       // Seed the baseline snapshot on first load. After saves, onSuccess
       // keeps the baseline in sync with committed values.
       if (!baselineSnapshotRef.current) {
@@ -338,13 +340,7 @@ export default function Settings() {
               setMafAgeInput(previous.mafAge == null ? "" : String(previous.mafAge));
               setMafConsistencyInput(previous.mafConsistency ?? "");
               setMafTrendInput(previous.mafTrend ?? "");
-              setMafHrDataAvailableInput(
-                previous.mafHrDataAvailable == null
-                  ? ""
-                  : previous.mafHrDataAvailable
-                    ? "yes"
-                    : "no",
-              );
+              setMafHrDataAvailableInput(mafHrDataAvailableToInput(previous.mafHrDataAvailable));
               saveMutation.mutate(snapshotToSavePayload(previous));
             }}
           >

@@ -1,5 +1,4 @@
-import type { User } from '@shared/schema';
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runEmailCronJob } from './emailScheduler';
 import type { IStorage } from './storage';

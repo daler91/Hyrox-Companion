@@ -1,5 +1,5 @@
 CREATE TABLE "exercise_load_tags" (
-	"exercise_name" varchar(255) PRIMARY KEY NOT NULL,
+	"exercise_name" character varying(255) PRIMARY KEY NOT NULL,
 	"posterior_chain" real DEFAULT 0 NOT NULL,
 	"anterior_chain" real DEFAULT 0 NOT NULL,
 	"unilateral_stability" real DEFAULT 0 NOT NULL,
