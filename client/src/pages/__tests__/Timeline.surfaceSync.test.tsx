@@ -174,6 +174,7 @@ vi.mock("@/components/workout-detail/LogSheet", () => ({
     entry,
     mode,
     onLogAsPlanned,
+    onClose,
   }: {
     entry: TimelineEntry | null;
     mode?: "log" | "edit";
@@ -182,6 +183,7 @@ vi.mock("@/components/workout-detail/LogSheet", () => ({
       rpe: number | null,
       note: string | null,
     ) => Promise<void> | void;
+    onClose?: () => void;
   }) => {
     if (!entry) return null;
     if (mode === "edit") return <div data-testid="edit-sheet">{`${entry.id}:${entry.date}`}</div>;
@@ -197,6 +199,9 @@ vi.mock("@/components/workout-detail/LogSheet", () => ({
           }}
         >
           Complete
+        </button>
+        <button type="button" data-testid="mock-log-close" onClick={() => onClose?.()}>
+          Close
         </button>
       </div>
     );
@@ -459,6 +464,105 @@ describe("Timeline surface sync", () => {
     expect(screen.getByTestId("review-surface")).toHaveAttribute("data-completion-success", "true");
     expect(openWorkoutId).toBe("pd1");
     expect(setOpenWorkoutId).not.toHaveBeenCalledWith(null);
+  });
+
+  it("does not reopen the workout surface when the log sheet is dismissed mid-mutation", async () => {
+    const user = userEvent.setup();
+    const completedEntry = makeEntry({
+      id: "log-wl1",
+      status: "completed",
+      workoutLogId: "wl1",
+    });
+    let resolveSuccess: (() => void) | null = null;
+    workoutActionMocks.handleMarkComplete.mockImplementation((
+      _entry: TimelineEntry,
+      options?: { onSuccess?: (entry: TimelineEntry) => void },
+    ) => {
+      resolveSuccess = () => options?.onSuccess?.(completedEntry);
+    });
+
+    const qc = new QueryClient();
+    const { rerender } = renderTimeline(qc);
+
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("e1:2026-01-01");
+
+    await user.click(screen.getByTestId("mock-log-complete"));
+    await user.click(screen.getByTestId("mock-log-close"));
+
+    openWorkoutId = null;
+    rerender(
+      <QueryClientProvider client={qc}>
+        <Timeline />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("log-sheet")).not.toBeInTheDocument();
+    });
+
+    setOpenWorkoutId.mockClear();
+
+    act(() => {
+      resolveSuccess?.();
+    });
+
+    expect(screen.queryByTestId("review-surface")).not.toBeInTheDocument();
+    expect(setOpenWorkoutId).not.toHaveBeenCalledWith("pd1");
+  });
+
+  it("clears the completion-success flag when reopening a previously completed entry", async () => {
+    const user = userEvent.setup();
+    const completedEntry = makeEntry({
+      id: "log-wl1",
+      status: "completed",
+      workoutLogId: "wl1",
+    });
+    workoutActionMocks.handleMarkComplete.mockImplementation((
+      _entry: TimelineEntry,
+      options?: { onSuccess?: (entry: TimelineEntry) => void },
+    ) => {
+      options?.onSuccess?.(completedEntry);
+    });
+
+    const qc = new QueryClient();
+    const { rerender } = renderTimeline(qc);
+
+    await user.click(await screen.findByTestId("mock-log-complete"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("review-surface")).toHaveAttribute(
+        "data-completion-success",
+        "true",
+      );
+    });
+
+    timelineData = [completedEntry];
+    setVisibleTimelineGroups({ past: [["2026-01-01", timelineData]] });
+    openWorkoutId = null;
+    rerender(
+      <QueryClientProvider client={qc}>
+        <Timeline />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("review-surface")).not.toBeInTheDocument();
+    });
+
+    openWorkoutId = "pd1";
+    rerender(
+      <QueryClientProvider client={qc}>
+        <Timeline />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("review-surface")).toHaveTextContent("log-wl1");
+    });
+    expect(screen.getByTestId("review-surface")).toHaveAttribute(
+      "data-completion-success",
+      "false",
+    );
   });
 
   it("opens future workout edit mode without changing the scheduled date", async () => {

@@ -1,5 +1,12 @@
 import type { TimelineEntry } from "@shared/schema";
-import { type Dispatch, type SetStateAction, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { CsvPreviewData } from "@/components/timeline";
 import {
@@ -144,6 +151,12 @@ export function TimelineWorkoutSurfaces({
   setAnnotationInitialDate,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
   const [completionSuccessEntryId, setCompletionSuccessEntryId] = useState<string | null>(null);
+  const logEntryRef = useRef(logEntry);
+  // Sync synchronously during commit so a mutation promise resolving between
+  // the dismiss render and a passive effect still sees the cleared entry.
+  useLayoutEffect(() => {
+    logEntryRef.current = logEntry;
+  }, [logEntry]);
   const titleMutation = useTimelineTitleMutation({
     setPreviewEntry,
     setFutureEditEntry,
@@ -154,6 +167,13 @@ export function TimelineWorkoutSurfaces({
   const handleRenameTitle = (entry: TimelineEntry, title: string) => {
     titleMutation.mutate({ entry, title });
   };
+
+  useEffect(() => {
+    if (completionSuccessEntryId && reviewEntry?.id !== completionSuccessEntryId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale success callout when review surface transitions to a different entry
+      setCompletionSuccessEntryId(null);
+    }
+  }, [completionSuccessEntryId, reviewEntry?.id]);
 
   return (
     <>
@@ -183,10 +203,13 @@ export function TimelineWorkoutSurfaces({
               notes: noteOverride,
             }, {
               onSuccess: (completedEntry) => {
+                const userDismissedLogSheet = logEntryRef.current?.id !== entry.id;
                 closeEmbeddedCoach();
                 setLogEntry(null);
-                setReviewEntry(completedEntry);
-                setCompletionSuccessEntryId(completedEntry.id);
+                if (!userDismissedLogSheet) {
+                  setReviewEntry(completedEntry);
+                  setCompletionSuccessEntryId(completedEntry.id);
+                }
                 resolve();
               },
               onError: reject,
