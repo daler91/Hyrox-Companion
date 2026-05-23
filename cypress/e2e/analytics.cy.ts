@@ -12,6 +12,26 @@ const stationCoverage = ([
   ["running", "2024-03-14", 1],
 ] as const).map(([station, lastTrained, daysSince]) => ({ station, lastTrained, daysSince }));
 
+const movementPatternCoverage = ([
+  ["squat", "Squat pattern", 8, 40, "2024-03-10", 5],
+  ["hinge", "Hinge pattern", 6, 30, "2024-03-08", 7],
+  ["horizontal_push", "Horizontal push", 5, 24, "2024-03-06", 9],
+  ["vertical_push", "Vertical push", 4, 18, "2024-03-02", 13],
+  ["horizontal_pull", "Horizontal pull", 7, 32, "2024-03-12", 3],
+  ["vertical_pull", "Vertical pull", 3, 14, "2024-02-28", 16],
+  ["lunge_split_squat", "Lunge / split squat", 4, 20, "2024-03-04", 11],
+  ["carry", "Carry", 2, 10, "2024-02-20", 24],
+  ["core_flexion", "Core flexion", 5, 25, "2024-03-01", 14],
+  ["core_anti_rotation", "Core anti-rotation", 3, 12, "2024-02-26", 18],
+] as const).map(([pattern, label, sessionCount, totalSets, lastTrained, daysSince]) => ({
+  pattern,
+  label,
+  sessionCount,
+  totalSets,
+  lastTrained,
+  daysSince,
+}));
+
 const weekStarts = [
   "2024-01-01",
   "2024-01-08",
@@ -90,6 +110,7 @@ const trainingOverview = {
     functional: { count: 17, totalSets: 85 },
   },
   stationCoverage,
+  movementPatternCoverage,
   currentStreak: 6,
   weeklyCompletedWorkouts: 6,
   weeklyGoal: 5,
