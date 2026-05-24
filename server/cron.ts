@@ -37,7 +37,12 @@ export async function runCronJobWithLock<T>(
   name: keyof typeof CRON_LOCK_KEYS,
   run: () => Promise<T>,
 ) {
-  return withPgAdvisoryLock(pool, { key: CRON_LOCK_KEYS[name], name }, run);
+  try {
+    return await withPgAdvisoryLock(pool, { key: CRON_LOCK_KEYS[name], name }, run);
+  } catch (err) {
+    logger.error({ context: "cron", err, job: name }, "Cron advisory lock execution failed");
+    return { acquired: false, value: undefined };
+  }
 }
 
 /** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
@@ -226,7 +231,11 @@ export function startCron(storage: IStorage): void {
         }
       });
     };
-    setTimeout(() => void runCatchUp(), 30_000);
+    setTimeout(() => {
+      void runCatchUp().catch((err) => {
+        logger.error({ context: "cron", err }, "Startup email catch-up task failed before job execution");
+      });
+    }, 30_000);
   }
 }
 
