@@ -69,6 +69,7 @@ describe("TimelineSummaryCard", () => {
       categoryTotals: {},
       stationCoverage: [],
       movementPatternCoverage: [],
+      muscleGroupCoverage: [],
       currentStats: {
         totalWorkouts: 12,
         avgPerWeek: 3,
@@ -139,6 +140,7 @@ describe("TimelineSummaryCard", () => {
       categoryTotals: {},
       stationCoverage: [],
       movementPatternCoverage: [],
+      muscleGroupCoverage: [],
       currentStats: {
         totalWorkouts: 0,
         avgPerWeek: 0,
@@ -171,6 +173,7 @@ describe("TimelineSummaryCard", () => {
       categoryTotals: {},
       stationCoverage: [],
       movementPatternCoverage: [],
+      muscleGroupCoverage: [],
       currentStreak: 0,
       weeklyCompletedWorkouts: 0,
       weeklyGoal: 5,

@@ -32,6 +32,37 @@ const movementPatternCoverage = ([
   daysSince,
 }));
 
+const muscleGroupCoverage = ([
+  ["chest", "Chest", "upper", 7, 34, "2024-03-10", 5],
+  ["shoulders", "Shoulders", "upper", 6, 28, "2024-03-10", 5],
+  ["rear_delts", "Rear delts", "upper", 3, 12, "2024-03-06", 9],
+  ["traps", "Traps", "upper", 2, 8, "2024-03-02", 13],
+  ["lats", "Lats", "upper", 8, 36, "2024-03-12", 3],
+  ["upper_back", "Upper back", "upper", 8, 36, "2024-03-12", 3],
+  ["biceps", "Biceps", "upper", 4, 18, "2024-03-04", 11],
+  ["triceps", "Triceps", "upper", 5, 20, "2024-03-10", 5],
+  ["forearms", "Forearms", "upper", 2, 10, "2024-02-20", 24],
+  ["core", "Core", "core", 9, 42, "2024-03-12", 3],
+  ["obliques", "Obliques", "core", 3, 12, "2024-03-01", 14],
+  ["lower_back", "Lower back", "core", 5, 21, "2024-03-08", 7],
+  ["hip_flexors", "Hip flexors", "lower", 3, 14, "2024-03-01", 14],
+  ["quads", "Quads", "lower", 10, 52, "2024-03-14", 1],
+  ["hamstrings", "Hamstrings", "lower", 8, 37, "2024-03-12", 3],
+  ["glutes", "Glutes", "lower", 9, 45, "2024-03-12", 3],
+  ["adductors", "Adductors", "lower", 2, 8, "2024-02-28", 16],
+  ["hip_abductors", "Hip abductors", "lower", 2, 8, "2024-02-28", 16],
+  ["calves", "Calves", "lower", 7, 30, "2024-03-14", 1],
+  ["tibialis", "Tibialis", "lower", 1, 4, "2024-02-20", 24],
+] as const).map(([muscle, label, bodyRegion, sessionCount, totalSets, lastTrained, daysSince]) => ({
+  muscle,
+  label,
+  bodyRegion,
+  sessionCount,
+  totalSets,
+  lastTrained,
+  daysSince,
+}));
+
 const weekStarts = [
   "2024-01-01",
   "2024-01-08",
@@ -111,6 +142,7 @@ const trainingOverview = {
   },
   stationCoverage,
   movementPatternCoverage,
+  muscleGroupCoverage,
   currentStreak: 6,
   weeklyCompletedWorkouts: 6,
   weeklyGoal: 5,
@@ -214,6 +246,19 @@ describe("Analytics Page", () => {
       cy.get('[role="option"]').contains("Back Squat").click();
       cy.getBySel("text-total-sessions").should("exist");
       cy.getBySel("text-total-sets").should("exist");
+    });
+
+    it("renders the muscle heat map across desktop and mobile widths", () => {
+      cy.getBySel("tab-breakdown").click();
+      cy.getBySel("muscle-heat-map-card").should("be.visible");
+      cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
+      cy.getBySel("muscle-tile-quads").should("contain", "52 sets");
+      cy.getBySel("muscle-tile-quads").should("contain", "Peak set volume");
+
+      cy.viewport(390, 844);
+      cy.getBySel("muscle-heat-map-card").should("be.visible");
+      cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
+      cy.getBySel("muscle-tile-quads").scrollIntoView().should("be.visible");
     });
 
     it("keeps analytics scrolling inside the main app region", () => {

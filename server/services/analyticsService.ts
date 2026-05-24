@@ -1,13 +1,20 @@
-import { getExerciseMovementPatterns, MOVEMENT_PATTERNS } from "@shared/schema";
 import type {
   ExerciseLoadTag,
+  HeatMapMuscle,
   MovementPattern,
   MovementPatternCoverage,
+  MuscleGroupCoverage,
   OverviewStats,
   PersonalRecord,
   TrainingOverview,
   WeeklySummary,
   WorkoutLog,
+} from "@shared/schema";
+import {
+  getExerciseHeatMapMuscles,
+  getExerciseMovementPatterns,
+  MOVEMENT_PATTERNS,
+  MUSCLE_HEAT_MAP_GROUPS,
 } from "@shared/schema";
 
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
@@ -329,6 +336,50 @@ function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]): Move
   });
 }
 
+function buildMuscleGroupCoverage(exerciseSets: ExerciseSetWithDate[]): MuscleGroupCoverage[] {
+  const todayStr = new Date().toISOString().split("T")[0];
+  const muscleStats = new Map<HeatMapMuscle, {
+    workoutLogIds: Set<string>;
+    totalSets: number;
+    lastTrained: string | null;
+  }>();
+
+  for (const { muscle } of MUSCLE_HEAT_MAP_GROUPS) {
+    muscleStats.set(muscle, {
+      workoutLogIds: new Set<string>(),
+      totalSets: 0,
+      lastTrained: null,
+    });
+  }
+
+  for (const set of exerciseSets) {
+    const muscles = getExerciseHeatMapMuscles(set.exerciseName);
+    for (const muscle of muscles) {
+      const stats = muscleStats.get(muscle);
+      if (!stats) continue;
+      stats.workoutLogIds.add(set.workoutLogId);
+      stats.totalSets += 1;
+      if (!stats.lastTrained || set.date > stats.lastTrained) {
+        stats.lastTrained = set.date;
+      }
+    }
+  }
+
+  return MUSCLE_HEAT_MAP_GROUPS.map(({ muscle, label, bodyRegion }) => {
+    const stats = muscleStats.get(muscle);
+    const lastTrained = stats?.lastTrained ?? null;
+    return {
+      muscle,
+      label,
+      bodyRegion,
+      sessionCount: stats?.workoutLogIds.size ?? 0,
+      totalSets: stats?.totalSets ?? 0,
+      lastTrained,
+      daysSince: calculateDaysSince(lastTrained, todayStr),
+    };
+  });
+}
+
 /**
  * Aggregate the flat weekly summaries into the four card-level stats that
  * the Analytics Overview tab renders. Kept as a pure function so it can be
@@ -386,6 +437,7 @@ export function calculateTrainingOverview(
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);
   const movementPatternCoverage = buildMovementPatternCoverage(exerciseSets);
+  const muscleGroupCoverage = buildMuscleGroupCoverage(exerciseSets);
   const trainingLoad = calculateTrainingLoad(
     trainingLoadInput?.workoutLogs ?? workoutLogs,
     trainingLoadInput?.exerciseSets ?? exerciseSets,
@@ -441,6 +493,7 @@ export function calculateTrainingOverview(
     categoryTotals,
     stationCoverage,
     movementPatternCoverage,
+    muscleGroupCoverage,
     currentStats,
     previousStats,
     // Matches the AI context definition: consecutive completed calendar dates

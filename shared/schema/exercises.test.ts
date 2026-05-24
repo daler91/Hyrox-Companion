@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   EXERCISE_DEFINITIONS,
+  getExerciseHeatMapMuscles,
   getExerciseMovementPatterns,
   MOVEMENT_PATTERNS,
+  MUSCLE_HEAT_MAP_GROUPS,
   normalizeExerciseName,
 } from "./exercises";
 
@@ -228,5 +230,67 @@ describe("movement pattern metadata", () => {
   it("does not map custom or unknown exercises", () => {
     expect(getExerciseMovementPatterns("custom")).toEqual([]);
     expect(getExerciseMovementPatterns("made_up_movement")).toEqual([]);
+  });
+});
+
+describe("muscle heat map metadata", () => {
+  it("keeps canonical muscle groups grouped for the analytics heat map", () => {
+    expect(MUSCLE_HEAT_MAP_GROUPS.map(({ muscle, label, bodyRegion }) => [muscle, label, bodyRegion])).toEqual([
+      ["chest", "Chest", "upper"],
+      ["shoulders", "Shoulders", "upper"],
+      ["rear_delts", "Rear delts", "upper"],
+      ["traps", "Traps", "upper"],
+      ["lats", "Lats", "upper"],
+      ["upper_back", "Upper back", "upper"],
+      ["biceps", "Biceps", "upper"],
+      ["triceps", "Triceps", "upper"],
+      ["forearms", "Forearms", "upper"],
+      ["core", "Core", "core"],
+      ["obliques", "Obliques", "core"],
+      ["lower_back", "Lower back", "core"],
+      ["hip_flexors", "Hip flexors", "lower"],
+      ["quads", "Quads", "lower"],
+      ["hamstrings", "Hamstrings", "lower"],
+      ["glutes", "Glutes", "lower"],
+      ["adductors", "Adductors", "lower"],
+      ["hip_abductors", "Hip abductors", "lower"],
+      ["calves", "Calves", "lower"],
+      ["tibialis", "Tibialis", "lower"],
+    ]);
+  });
+
+  it("maps representative exercises from catalog muscle groups", () => {
+    expect(getExerciseHeatMapMuscles("bench_press")).toEqual(["chest", "triceps"]);
+    expect(getExerciseHeatMapMuscles("face_pull")).toEqual(["rear_delts", "upper_back"]);
+    expect(getExerciseHeatMapMuscles("pallof_press")).toEqual(["core", "obliques"]);
+    expect(getExerciseHeatMapMuscles("tibialis_raise")).toEqual(["calves", "tibialis"]);
+    expect(getExerciseHeatMapMuscles("hip_abduction_machine")).toEqual(["glutes", "hip_abductors"]);
+  });
+
+  it("uses catalog normalization before resolving heat map muscles", () => {
+    expect(getExerciseHeatMapMuscles("Back Squat")).toEqual(["quads", "glutes"]);
+    expect(getExerciseHeatMapMuscles("RDL")).toEqual(["hamstrings", "glutes"]);
+    expect(getExerciseHeatMapMuscles("Lat Pull-Down")).toEqual(["lats", "upper_back", "biceps", "lower_back"]);
+  });
+
+  it("expands broad muscle groups and removes non-muscle cardio metadata", () => {
+    expect(getExerciseHeatMapMuscles("burpee_broad_jump")).toEqual([
+      "chest",
+      "shoulders",
+      "lats",
+      "upper_back",
+      "core",
+      "quads",
+      "hamstrings",
+      "glutes",
+      "calves",
+    ]);
+    expect(getExerciseHeatMapMuscles("easy_run")).toEqual(["quads", "hamstrings", "glutes", "calves"]);
+    expect(getExerciseHeatMapMuscles("rowing")).toEqual(["lats", "upper_back", "lower_back", "quads", "hamstrings", "glutes", "calves"]);
+  });
+
+  it("does not map custom or unknown exercises", () => {
+    expect(getExerciseHeatMapMuscles("custom")).toEqual([]);
+    expect(getExerciseHeatMapMuscles("made_up_movement")).toEqual([]);
   });
 });

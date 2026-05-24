@@ -231,6 +231,85 @@ export const MOVEMENT_PATTERNS = [
 
 export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number]["pattern"];
 
+export const MUSCLE_HEAT_MAP_GROUPS = [
+  { muscle: "chest", label: "Chest", bodyRegion: "upper" },
+  { muscle: "shoulders", label: "Shoulders", bodyRegion: "upper" },
+  { muscle: "rear_delts", label: "Rear delts", bodyRegion: "upper" },
+  { muscle: "traps", label: "Traps", bodyRegion: "upper" },
+  { muscle: "lats", label: "Lats", bodyRegion: "upper" },
+  { muscle: "upper_back", label: "Upper back", bodyRegion: "upper" },
+  { muscle: "biceps", label: "Biceps", bodyRegion: "upper" },
+  { muscle: "triceps", label: "Triceps", bodyRegion: "upper" },
+  { muscle: "forearms", label: "Forearms", bodyRegion: "upper" },
+  { muscle: "core", label: "Core", bodyRegion: "core" },
+  { muscle: "obliques", label: "Obliques", bodyRegion: "core" },
+  { muscle: "lower_back", label: "Lower back", bodyRegion: "core" },
+  { muscle: "hip_flexors", label: "Hip flexors", bodyRegion: "lower" },
+  { muscle: "quads", label: "Quads", bodyRegion: "lower" },
+  { muscle: "hamstrings", label: "Hamstrings", bodyRegion: "lower" },
+  { muscle: "glutes", label: "Glutes", bodyRegion: "lower" },
+  { muscle: "adductors", label: "Adductors", bodyRegion: "lower" },
+  { muscle: "hip_abductors", label: "Hip abductors", bodyRegion: "lower" },
+  { muscle: "calves", label: "Calves", bodyRegion: "lower" },
+  { muscle: "tibialis", label: "Tibialis", bodyRegion: "lower" },
+] as const;
+
+export type HeatMapMuscle = (typeof MUSCLE_HEAT_MAP_GROUPS)[number]["muscle"];
+export type MuscleHeatMapBodyRegion = (typeof MUSCLE_HEAT_MAP_GROUPS)[number]["bodyRegion"];
+
+const MAJOR_FULL_BODY_MUSCLES = [
+  "chest",
+  "shoulders",
+  "lats",
+  "upper_back",
+  "core",
+  "quads",
+  "hamstrings",
+  "glutes",
+  "calves",
+] as const satisfies readonly HeatMapMuscle[];
+
+const LOWER_BODY_MUSCLES = [
+  "quads",
+  "hamstrings",
+  "glutes",
+  "calves",
+] as const satisfies readonly HeatMapMuscle[];
+
+const BACK_REGION_MUSCLES = [
+  "lats",
+  "upper_back",
+  "lower_back",
+] as const satisfies readonly HeatMapMuscle[];
+
+const RAW_MUSCLE_GROUP_TO_HEAT_MAP = {
+  Adductors: ["adductors"],
+  Ankles: ["calves", "tibialis"],
+  Back: BACK_REGION_MUSCLES,
+  Biceps: ["biceps"],
+  Calves: ["calves"],
+  Cardio: [],
+  Chest: ["chest"],
+  Core: ["core"],
+  Forearms: ["forearms"],
+  "Full Body": MAJOR_FULL_BODY_MUSCLES,
+  Glutes: ["glutes"],
+  Hamstrings: ["hamstrings"],
+  "Hip Abductors": ["hip_abductors"],
+  "Hip Flexors": ["hip_flexors"],
+  Lats: ["lats"],
+  Legs: LOWER_BODY_MUSCLES,
+  "Lower Back": ["lower_back"],
+  Obliques: ["obliques"],
+  Quads: ["quads"],
+  "Rear Delts": ["rear_delts"],
+  Shoulders: ["shoulders"],
+  Tibialis: ["tibialis"],
+  Traps: ["traps"],
+  Triceps: ["triceps"],
+  "Upper Back": ["upper_back"],
+} satisfies Record<string, readonly HeatMapMuscle[]>;
+
 export const EXERCISE_MOVEMENT_PATTERNS = {
   skierg: ["vertical_pull"],
   sled_push: ["squat"],
@@ -637,4 +716,22 @@ export function getExerciseMovementPatterns(exerciseName: string): readonly Move
   return EXERCISE_MOVEMENT_PATTERNS[
     normalizedExerciseName as keyof typeof EXERCISE_MOVEMENT_PATTERNS
   ];
+}
+
+export function getExerciseHeatMapMuscles(exerciseName: string): readonly HeatMapMuscle[] {
+  const normalizedExerciseName = normalizeExerciseName(exerciseName);
+  if (!normalizedExerciseName) return [];
+
+  const definition = EXERCISE_DEFINITIONS[normalizedExerciseName];
+  if (!definition || normalizedExerciseName === "custom") return [];
+
+  const muscles = new Set<HeatMapMuscle>();
+  for (const group of definition.muscleGroups) {
+    const mappedMuscles = RAW_MUSCLE_GROUP_TO_HEAT_MAP[group] ?? [];
+    for (const muscle of mappedMuscles) muscles.add(muscle);
+  }
+
+  return MUSCLE_HEAT_MAP_GROUPS
+    .map(({ muscle }) => muscle)
+    .filter((muscle) => muscles.has(muscle));
 }

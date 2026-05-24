@@ -1,9 +1,8 @@
+import type { MovementPatternCoverage, MuscleGroupCoverage, TrainingOverview } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import type { MovementPatternCoverage, TrainingOverview } from "@shared/schema";
 
 import { CategoryBreakdownTab } from "../CategoryBreakdownTab";
 
@@ -44,6 +43,29 @@ const defaultPatternCoverage: MovementPatternCoverage[] = [
   { pattern: "core_anti_rotation", label: "Core anti-rotation", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
 ];
 
+const defaultMuscleCoverage: MuscleGroupCoverage[] = [
+  { muscle: "chest", label: "Chest", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "shoulders", label: "Shoulders", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "rear_delts", label: "Rear delts", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "traps", label: "Traps", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "lats", label: "Lats", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "upper_back", label: "Upper back", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "biceps", label: "Biceps", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "triceps", label: "Triceps", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "forearms", label: "Forearms", bodyRegion: "upper", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "core", label: "Core", bodyRegion: "core", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "obliques", label: "Obliques", bodyRegion: "core", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "lower_back", label: "Lower back", bodyRegion: "core", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "hip_flexors", label: "Hip flexors", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "quads", label: "Quads", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "hamstrings", label: "Hamstrings", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "glutes", label: "Glutes", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "adductors", label: "Adductors", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "hip_abductors", label: "Hip abductors", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "calves", label: "Calves", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+  { muscle: "tibialis", label: "Tibialis", bodyRegion: "lower", sessionCount: 0, totalSets: 0, lastTrained: null, daysSince: null },
+];
+
 function makeOverview(overrides: Partial<TrainingOverview> = {}): TrainingOverview {
   return {
     weeklySummaries: [],
@@ -51,6 +73,7 @@ function makeOverview(overrides: Partial<TrainingOverview> = {}): TrainingOvervi
     categoryTotals: {},
     stationCoverage: [],
     movementPatternCoverage: defaultPatternCoverage,
+    muscleGroupCoverage: defaultMuscleCoverage,
     currentStreak: 0,
     weeklyCompletedWorkouts: 0,
     weeklyGoal: 5,
@@ -84,6 +107,15 @@ function renderWithQueryClient(children: ReactNode) {
 describe("CategoryBreakdownTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("keeps the no-data empty state when muscle coverage has no trained muscles", async () => {
+    mocks.getTrainingOverview.mockResolvedValue(makeOverview());
+
+    renderWithQueryClient(<CategoryBreakdownTab dateParams="range=90" />);
+
+    expect(await screen.findByText(/training mix and station coverage appear here/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Muscle Heat Map" })).not.toBeInTheDocument();
   });
 
   it("renders movement pattern coverage with counts and freshness", async () => {
@@ -129,6 +161,52 @@ describe("CategoryBreakdownTab", () => {
     expect(mocks.getTrainingOverview).toHaveBeenCalledWith("from=2026-05-01&to=2026-05-23");
   });
 
+  it("renders the muscle heat map silhouette and set-volume tiles", async () => {
+    mocks.getTrainingOverview.mockResolvedValue(makeOverview({
+      muscleGroupCoverage: defaultMuscleCoverage.map((muscle) => {
+        if (muscle.muscle === "quads") {
+          return {
+            ...muscle,
+            sessionCount: 3,
+            totalSets: 12,
+            lastTrained: "2026-05-22",
+            daysSince: 1,
+          };
+        }
+        if (muscle.muscle === "chest") {
+          return {
+            ...muscle,
+            sessionCount: 1,
+            totalSets: 3,
+            lastTrained: "2026-05-12",
+            daysSince: 11,
+          };
+        }
+        return muscle;
+      }),
+    }));
+
+    renderWithQueryClient(<CategoryBreakdownTab dateParams="from=2026-05-01&to=2026-05-23" />);
+
+    expect(await screen.findByRole("heading", { name: "Muscle Heat Map" })).toBeInTheDocument();
+    expect(screen.getByTestId("muscle-heat-map-silhouette")).toBeInTheDocument();
+    const grid = screen.getByTestId("muscle-heat-map-grid");
+    expect(within(grid).getByRole("heading", { name: "Upper body" })).toBeInTheDocument();
+    expect(within(grid).getByRole("heading", { name: "Core" })).toBeInTheDocument();
+    expect(within(grid).getByRole("heading", { name: "Lower body" })).toBeInTheDocument();
+
+    const quadsTile = screen.getByTestId("muscle-tile-quads");
+    expect(quadsTile).toHaveTextContent("Quads");
+    expect(quadsTile).toHaveTextContent("12 sets - 3 sessions");
+    expect(quadsTile).toHaveTextContent("Yesterday");
+    expect(quadsTile).toHaveTextContent("Peak set volume");
+
+    const chestTile = screen.getByTestId("muscle-tile-chest");
+    expect(chestTile).toHaveTextContent("Chest");
+    expect(chestTile).toHaveTextContent("3 sets - 1 session");
+    expect(chestTile).toHaveTextContent("11d ago");
+  });
+
   it("renders empty pattern tiles when other breakdown data exists", async () => {
     mocks.getTrainingOverview.mockResolvedValue(makeOverview({
       stationCoverage: [{ station: "skierg", lastTrained: "2026-05-20", daysSince: 3 }],
@@ -139,7 +217,10 @@ describe("CategoryBreakdownTab", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Movement Pattern Coverage" })).toBeInTheDocument();
     });
-    expect(screen.getAllByText("Never trained")).toHaveLength(10);
-    expect(screen.getAllByText("0 sessions - 0 sets")).toHaveLength(10);
+    const movementGrid = screen.getByTestId("movement-pattern-coverage-grid");
+    expect(within(movementGrid).getAllByText("Never trained")).toHaveLength(10);
+    expect(within(movementGrid).getAllByText("0 sessions - 0 sets")).toHaveLength(10);
+    expect(screen.getByRole("heading", { name: "Muscle Heat Map" })).toBeInTheDocument();
+    expect(screen.getByTestId("muscle-tile-quads")).toHaveTextContent("0 sets - 0 sessions");
   });
 });
