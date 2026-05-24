@@ -288,7 +288,9 @@ sequenceDiagram
 
 The Log Workout page autosaves a working draft to `localStorage` so an accidental refresh or navigation does not lose in-progress data.
 
-- **Storage keys:** `fitai-log-workout-draft` (the draft payload) and `fitai-log-workout-draft-announced` (a flag the UI uses to surface the "restored a draft" toast at most once per draft).
+- **Storage keys:**
+  - `fitai-log-workout-draft` — the draft payload, in `localStorage` (durable across sessions and tabs).
+  - `fitai-log-workout-draft-announced` — a per-tab flag in `sessionStorage` that suppresses re-showing the "restored a draft" toast more than once within the same browser session. Scoped to `sessionStorage` deliberately so a fresh tab announces the restore again.
 - **Schema version:** `DRAFT_VERSION = 3`. Drafts written under v2 are still readable for backward compatibility; older versions are discarded.
 - **Lifetime:** Drafts persist **indefinitely** until they are explicitly cleared. The hook stores `savedAt: Date.now()` but never checks the timestamp for expiry — clearing only happens when the user successfully saves the workout, taps the "discard draft" affordance, signs out (via `clearUserLocalData()` in `client/src/hooks/useSignOut.ts`), or deletes their account (via `AccountDangerZone`). This is intentional, since the draft is single-user device-local state with no privacy retention concern beyond the signout/deletion paths that already clear it.
 
