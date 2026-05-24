@@ -250,13 +250,13 @@ describe("Analytics Page", () => {
 
     it("renders the muscle heat map across desktop and mobile widths", () => {
       cy.getBySel("tab-breakdown").click();
-      cy.getBySel("muscle-heat-map-card").should("be.visible");
+      cy.getBySel("muscle-heat-map-card").scrollIntoView().should("be.visible");
       cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
       cy.getBySel("muscle-tile-quads").should("contain", "52 sets");
       cy.getBySel("muscle-tile-quads").should("contain", "Peak set volume");
 
       cy.viewport(390, 844);
-      cy.getBySel("muscle-heat-map-card").should("be.visible");
+      cy.getBySel("muscle-heat-map-card").scrollIntoView().should("be.visible");
       cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
       cy.getBySel("muscle-tile-quads").scrollIntoView().should("be.visible");
     });
