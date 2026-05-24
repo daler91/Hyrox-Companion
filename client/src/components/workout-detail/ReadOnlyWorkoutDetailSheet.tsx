@@ -83,6 +83,7 @@ export function ReadOnlyWorkoutDetailSheet({
       description={formatScheduledDate(entry.date)}
       contentClassName={coachChatOpen ? "sm:max-w-5xl" : undefined}
       mobileFullHeight={coachPanel.coachPanelOpen}
+      desktopFullHeight={coachChatOpen}
       testId={sheetTestId}
     >
       <WorkoutCoachLayout

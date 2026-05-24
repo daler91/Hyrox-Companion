@@ -105,8 +105,9 @@ describe("EmbeddedWorkoutCoachChat", () => {
     expect(screen.getByTestId("input-chat-message")).toHaveValue(
       "Can you walk me through your take on my Long Run workout on Saturday, May 9 (1 exercise, 2 sets)?",
     );
-    expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveClass("self-start");
-    expect(screen.getByTestId("coach-chat-area")).toHaveClass("flex-none", "max-h-[320px]");
+    expect(screen.getByTestId("embedded-workout-coach-chat")).toHaveClass("min-h-0");
+    expect(screen.getByTestId("embedded-workout-coach-chat")).not.toHaveClass("self-start");
+    expect(screen.getByTestId("coach-chat-area")).toHaveClass("flex-1", "max-h-none", "min-h-0");
 
     await user.click(screen.getByTestId("embedded-workout-coach-chat-back"));
 
@@ -125,7 +126,6 @@ describe("EmbeddedWorkoutCoachChat", () => {
         onBack={onBack}
         backButtonText="Workout details"
         chatAreaClassName="min-h-0 max-h-none flex-1"
-        isPanelView
       />,
     );
 

@@ -40,18 +40,18 @@ vi.mock("../EmbeddedWorkoutCoachChat", () => ({
   buildWorkoutCoachSeedMessage: () => "Seeded coach prompt",
   EmbeddedWorkoutCoachChat: ({
     backButtonText,
+    className,
     isHidden,
-    isPanelView,
     onBack,
   }: {
     backButtonText?: string;
+    className?: string;
     isHidden?: boolean;
-    isPanelView?: boolean;
     onBack: () => void;
   }) => (
     <div
       data-testid="embedded-workout-coach-chat"
-      data-panel-view={String(isPanelView)}
+      data-panel-view={String((className ?? "").includes("rounded-none"))}
       hidden={isHidden}
     >
       <button type="button" onClick={onBack} data-testid="embedded-workout-coach-chat-back">
