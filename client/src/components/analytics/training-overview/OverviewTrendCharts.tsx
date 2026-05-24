@@ -7,7 +7,7 @@ interface OverviewTrendChartsProps {
 
 export function OverviewTrendCharts({ rpeData, durationData }: OverviewTrendChartsProps) {
   return (
-    <div className="grid gap-6 sm:grid-cols-2">
+    <div className="space-y-6" data-testid="overview-trend-charts">
       {rpeData.length > 1 && (
         <MiniLineChart
           data={rpeData}
