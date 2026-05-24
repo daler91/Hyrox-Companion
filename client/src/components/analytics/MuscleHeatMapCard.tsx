@@ -4,22 +4,22 @@ import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+import {
+  type AnalysisMetric,
+  buildBalanceAnalysis,
+  CoverageAnalysisPanel,
+  findPriorityGap,
+  findTopCoverage,
+  formatCount,
+  formatPercent,
+  getFreshnessLabel,
+  hasCoverageWork,
+  STALE_AFTER_DAYS,
+  sumCoverageSets,
+} from "./coverageAnalysis";
+
 type MuscleCoverage = TrainingOverview["muscleGroupCoverage"][number];
 type BodySide = "front" | "back";
-type AnalysisTone = "good" | "watch" | "gap";
-type MuscleAnalysisMetric = {
-  readonly label: string;
-  readonly value: string;
-  readonly detail: string;
-  readonly tone?: AnalysisTone;
-};
-type MuscleBalanceAnalysis = {
-  readonly label: string;
-  readonly value: string;
-  readonly detail: string;
-  readonly tone: AnalysisTone;
-  readonly recommendation: string | null;
-};
 type HeatTone = {
   readonly label: string;
   readonly zoneClass: string;
@@ -61,8 +61,6 @@ const REGION_LABELS = {
   lower: "Lower body",
 } as const;
 
-const STALE_AFTER_DAYS = 14;
-const BALANCE_RATIO_THRESHOLD = 1.6;
 const UPPER_PUSH_MUSCLES = ["chest", "shoulders", "triceps"] as const satisfies readonly HeatMapMuscle[];
 const UPPER_PULL_MUSCLES = ["lats", "upper_back", "rear_delts", "traps", "biceps"] as const satisfies readonly HeatMapMuscle[];
 const POSTERIOR_CHAIN_MUSCLES = ["hamstrings", "glutes", "lower_back"] as const satisfies readonly HeatMapMuscle[];
@@ -156,147 +154,14 @@ function getHeatTone(totalSets: number, maxTotalSets: number): HeatTone {
   return HEAT_TONES[getHeatLevel(totalSets, maxTotalSets)] ?? HEAT_TONES[0];
 }
 
-function formatCount(value: number, singular: string, plural: string): string {
-  return `${value} ${value === 1 ? singular : plural}`;
-}
-
-function formatPercent(value: number, total: number): string {
-  if (total <= 0) return "0%";
-  return `${Math.round((value / total) * 100)}%`;
-}
-
-function getFreshnessLabel(daysSince: number | null): string {
-  if (daysSince === null) return "Never trained";
-  if (daysSince === 0) return "Today";
-  if (daysSince === 1) return "Yesterday";
-  return `${daysSince}d ago`;
-}
-
-function hasMuscleWork(muscle: MuscleCoverage): boolean {
-  return muscle.sessionCount > 0 || muscle.totalSets > 0 || muscle.lastTrained !== null;
-}
-
-function sumMuscleSets(
-  muscles: readonly MuscleCoverage[],
-  muscleNames: readonly HeatMapMuscle[],
-): number {
-  return muscles.reduce(
-    (sum, muscle) => sum + (muscleNames.includes(muscle.muscle) ? muscle.totalSets : 0),
-    0,
-  );
-}
-
-function getTopMuscle(muscles: readonly MuscleCoverage[]): MuscleCoverage | null {
-  return [...muscles]
-    .filter(hasMuscleWork)
-    .sort((a, b) => (
-      b.totalSets - a.totalSets ||
-      b.sessionCount - a.sessionCount ||
-      a.label.localeCompare(b.label)
-    ))[0] ?? null;
-}
-
-function getMusclePriorityGap(muscles: readonly MuscleCoverage[]): {
-  readonly muscle: MuscleCoverage;
-  readonly reason: string;
-} | null {
-  const neverTrained = muscles.find((muscle) => !hasMuscleWork(muscle) || muscle.daysSince === null);
-  if (neverTrained) {
-    return {
-      muscle: neverTrained,
-      reason: "it has no logged sets in this range",
-    };
-  }
-
-  const stale = [...muscles]
-    .filter((muscle) => muscle.daysSince !== null && muscle.daysSince > STALE_AFTER_DAYS)
-    .sort((a, b) => (b.daysSince ?? 0) - (a.daysSince ?? 0))[0];
-  if (!stale) return null;
-
-  return {
-    muscle: stale,
-    reason: `last trained ${getFreshnessLabel(stale.daysSince).toLowerCase()}`,
-  };
-}
-
-function buildMuscleBalanceAnalysis(
-  label: string,
-  leftLabel: string,
-  leftSets: number,
-  rightLabel: string,
-  rightSets: number,
-): MuscleBalanceAnalysis {
-  const value = `${formatCount(leftSets, "set", "sets")} / ${formatCount(rightSets, "set", "sets")}`;
-  const leftLower = leftLabel.toLowerCase();
-  const rightLower = rightLabel.toLowerCase();
-
-  if (leftSets === 0 && rightSets === 0) {
-    return {
-      label,
-      value,
-      detail: `No ${leftLower} or ${rightLower} volume logged.`,
-      tone: "gap",
-      recommendation: `Add ${leftLower} and ${rightLower} exposure before judging this balance.`,
-    };
-  }
-
-  if (leftSets === 0) {
-    return {
-      label,
-      value,
-      detail: `Missing ${leftLower} volume.`,
-      tone: "gap",
-      recommendation: `Add ${leftLower} work to balance ${rightLower} volume.`,
-    };
-  }
-
-  if (rightSets === 0) {
-    return {
-      label,
-      value,
-      detail: `${leftLabel} volume is leading ${rightLower} volume.`,
-      tone: "gap",
-      recommendation: `Add ${rightLower} work to balance ${leftLower} volume.`,
-    };
-  }
-
-  const ratio = leftSets / rightSets;
-  if (ratio >= BALANCE_RATIO_THRESHOLD) {
-    return {
-      label,
-      value,
-      detail: `${leftLabel} volume is leading ${rightLower} volume.`,
-      tone: "watch",
-      recommendation: `Add ${rightLower} work before more ${leftLower} volume.`,
-    };
-  }
-  if (ratio <= 1 / BALANCE_RATIO_THRESHOLD) {
-    return {
-      label,
-      value,
-      detail: `${rightLabel} volume is leading ${leftLower} volume.`,
-      tone: "watch",
-      recommendation: `Add ${leftLower} work before more ${rightLower} volume.`,
-    };
-  }
-
-  return {
-    label,
-    value,
-    detail: `${leftLabel} and ${rightLower} volume are balanced.`,
-    tone: "good",
-    recommendation: null,
-  };
-}
-
-function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): MuscleAnalysisMetric {
+function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): AnalysisMetric {
   const coreMuscles = muscles.filter((muscle) => (
     CORE_FRESHNESS_MUSCLES.some((coreMuscle) => coreMuscle === muscle.muscle)
   ));
-  const trainedCore = coreMuscles.filter(hasMuscleWork);
+  const trainedCore = coreMuscles.filter(hasCoverageWork);
   const freshest = [...trainedCore]
     .sort((a, b) => (a.daysSince ?? Number.POSITIVE_INFINITY) - (b.daysSince ?? Number.POSITIVE_INFINITY))[0] ?? null;
-  const staleOrMissing = coreMuscles.filter((muscle) => !hasMuscleWork(muscle) || muscle.daysSince === null || muscle.daysSince > STALE_AFTER_DAYS);
+  const staleOrMissing = coreMuscles.filter((muscle) => !hasCoverageWork(muscle) || muscle.daysSince === null || muscle.daysSince > STALE_AFTER_DAYS);
 
   if (!freshest) {
     return {
@@ -317,8 +182,8 @@ function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): MuscleAna
 
 function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
   const totalSets = muscles.reduce((sum, muscle) => sum + muscle.totalSets, 0);
-  const topMuscle = getTopMuscle(muscles);
-  const priorityGap = getMusclePriorityGap(muscles);
+  const topMuscle = findTopCoverage(muscles);
+  const priorityGap = findPriorityGap(muscles, "it has no logged sets in this range");
   const regionTotals = {
     upper: muscles.filter((muscle) => muscle.bodyRegion === "upper").reduce((sum, muscle) => sum + muscle.totalSets, 0),
     core: muscles.filter((muscle) => muscle.bodyRegion === "core").reduce((sum, muscle) => sum + muscle.totalSets, 0),
@@ -328,27 +193,27 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
   const dominantRegion = (Object.entries(regionTotals) as Array<[keyof typeof regionTotals, number]>)
     .sort((a, b) => b[1] - a[1])[0];
   const balances = [
-    buildMuscleBalanceAnalysis(
+    buildBalanceAnalysis(
       "Upper Push / Pull",
       "Upper push",
-      sumMuscleSets(muscles, UPPER_PUSH_MUSCLES),
+      sumCoverageSets(muscles, UPPER_PUSH_MUSCLES, (muscle) => muscle.muscle),
       "upper pull",
-      sumMuscleSets(muscles, UPPER_PULL_MUSCLES),
+      sumCoverageSets(muscles, UPPER_PULL_MUSCLES, (muscle) => muscle.muscle),
     ),
-    buildMuscleBalanceAnalysis(
+    buildBalanceAnalysis(
       "Quad / Posterior Chain",
       "Quad work",
-      sumMuscleSets(muscles, ["quads"]),
+      sumCoverageSets(muscles, ["quads"], (muscle) => muscle.muscle),
       "posterior chain",
-      sumMuscleSets(muscles, POSTERIOR_CHAIN_MUSCLES),
+      sumCoverageSets(muscles, POSTERIOR_CHAIN_MUSCLES, (muscle) => muscle.muscle),
     ),
   ];
   const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
   const leastLoaded = [...muscles]
-    .filter(hasMuscleWork)
+    .filter(hasCoverageWork)
     .sort((a, b) => a.totalSets - b.totalSets || a.label.localeCompare(b.label))[0] ?? null;
 
-  const metrics: MuscleAnalysisMetric[] = [
+  const metrics: AnalysisMetric[] = [
     {
       label: "Region mix",
       value: totalSets > 0 && dominantRegion ? `${REGION_LABELS[dominantRegion[0]]} ${formatPercent(dominantRegion[1], totalSets)}` : "No set volume",
@@ -365,7 +230,7 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
     },
     {
       label: "Cold gap",
-      value: priorityGap?.muscle.label ?? "No stale gaps",
+      value: priorityGap?.item.label ?? "No stale gaps",
       detail: priorityGap?.reason ?? "Every trained muscle group is inside the 14-day freshness window.",
       tone: priorityGap ? "gap" : "good",
     },
@@ -374,7 +239,7 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
 
   const nextFocus = (() => {
     if (priorityGap) {
-      return `Next focus: Add ${priorityGap.muscle.label}; ${priorityGap.reason}.`;
+      return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
     }
     if (nextBalance?.recommendation) {
       return `Next focus: ${nextBalance.recommendation}`;
@@ -386,38 +251,6 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
   })();
 
   return { metrics, balances, nextFocus, totalSets };
-}
-
-function getAnalysisToneClass(tone: AnalysisTone = "watch"): string {
-  if (tone === "good") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  }
-  if (tone === "gap") {
-    return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
-  }
-  return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-}
-
-function MuscleAnalysisMetricTile({ metric }: Readonly<{ metric: MuscleAnalysisMetric }>) {
-  return (
-    <div className={`rounded-md border p-3 ${getAnalysisToneClass(metric.tone)}`}>
-      <p className="text-xs font-medium uppercase tracking-wide opacity-80">{metric.label}</p>
-      <p className="mt-1 text-sm font-semibold leading-tight text-foreground">{metric.value}</p>
-      <p className="mt-1 text-xs leading-snug opacity-90">{metric.detail}</p>
-    </div>
-  );
-}
-
-function MuscleBalanceTile({ balance }: Readonly<{ balance: MuscleBalanceAnalysis }>) {
-  return (
-    <div className={`rounded-md border p-3 ${getAnalysisToneClass(balance.tone)}`}>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-medium uppercase tracking-wide opacity-80">{balance.label}</p>
-        <p className="shrink-0 text-xs font-semibold text-foreground">{balance.value}</p>
-      </div>
-      <p className="mt-2 text-xs leading-snug opacity-90">{balance.detail}</p>
-    </div>
-  );
 }
 
 function makeTransform(shape: MuscleShape): string | undefined {
@@ -586,22 +419,16 @@ export function MuscleHeatMapCard({
         <CardDescription>Set-volume coverage by trained muscle group</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="space-y-3" data-testid="muscle-heat-map-analysis">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {analysis.metrics.map((metric) => (
-              <MuscleAnalysisMetricTile key={metric.label} metric={metric} />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {analysis.balances.map((balance) => (
-              <MuscleBalanceTile key={balance.label} balance={balance} />
-            ))}
-          </div>
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm" data-testid="muscle-heat-map-next-focus">
-            <span className="font-semibold">{formatCount(analysis.totalSets, "mapped set", "mapped sets")} analyzed. </span>
-            <span className="text-muted-foreground">{analysis.nextFocus}</span>
-          </div>
-        </div>
+        <CoverageAnalysisPanel
+          balances={analysis.balances}
+          balanceGridClassName="grid grid-cols-1 gap-3 lg:grid-cols-2"
+          metricGridClassName="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4"
+          metrics={analysis.metrics}
+          nextFocus={analysis.nextFocus}
+          nextFocusTestId="muscle-heat-map-next-focus"
+          testId="muscle-heat-map-analysis"
+          totalSets={analysis.totalSets}
+        />
         <div className="grid gap-6 xl:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.2fr)]">
           <div
             className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1"
