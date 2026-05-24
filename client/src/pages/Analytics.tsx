@@ -152,6 +152,10 @@ export default function Analytics() {
             <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
             Overview
           </TabsTrigger>
+          <TabsTrigger value="breakdown" className="shrink-0 sm:shrink" data-testid="tab-breakdown">
+            <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
+            Breakdown
+          </TabsTrigger>
           <TabsTrigger value="trends" className="shrink-0 sm:shrink" data-testid="tab-trends">
             <Activity className="h-4 w-4 mr-2 hidden sm:block" />
             Progression
@@ -159,10 +163,6 @@ export default function Analytics() {
           <TabsTrigger value="prs" className="shrink-0 sm:shrink" data-testid="tab-prs">
             <Trophy className="h-4 w-4 mr-2 hidden sm:block" />
             Records
-          </TabsTrigger>
-          <TabsTrigger value="breakdown" className="shrink-0 sm:shrink" data-testid="tab-breakdown">
-            <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
-            Breakdown
           </TabsTrigger>
           <TabsTrigger value="insights" className="shrink-0 sm:shrink" data-testid="tab-coach-insights">
             <Sparkles className="h-4 w-4 mr-2 hidden sm:block" />
@@ -174,16 +174,16 @@ export default function Analytics() {
           <TrainingOverviewTab dateParams={dateParams} weeklyGoal={preferences?.weeklyGoal} />
         </TabsContent>
 
+        <TabsContent value="breakdown" className="space-y-6">
+          <CategoryBreakdownTab dateParams={dateParams} />
+        </TabsContent>
+
         <TabsContent value="trends" className="space-y-6">
           <ExerciseProgressionTab dateParams={dateParams} />
         </TabsContent>
 
         <TabsContent value="prs" className="space-y-6">
           <PersonalRecordsTab dateParams={dateParams} />
-        </TabsContent>
-
-        <TabsContent value="breakdown" className="space-y-6">
-          <CategoryBreakdownTab dateParams={dateParams} />
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">

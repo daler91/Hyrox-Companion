@@ -6,11 +6,11 @@ import { CHART_CARD_CLASS } from "./chartConstants";
 
 const DAY_LABELS = [
   { key: "mon", label: "Mon" },
-  { key: "tue", label: "" },
+  { key: "tue", label: "Tue" },
   { key: "wed", label: "Wed" },
-  { key: "thu", label: "" },
+  { key: "thu", label: "Thu" },
   { key: "fri", label: "Fri" },
-  { key: "sat", label: "" },
+  { key: "sat", label: "Sat" },
   { key: "sun", label: "Sun" },
 ];
 const WEEKS_TO_SHOW = 16;
@@ -116,6 +116,7 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
                 <div
                   key={day.key}
                   className="flex h-7 items-center justify-end pr-1 text-[10px] text-muted-foreground"
+                  data-testid="workout-heatmap-day-label"
                 >
                   {day.label}
                 </div>
