@@ -21,6 +21,7 @@ let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 // 15min gives a comfortable margin above the longest expected auto-coach
 // run and well below user-perceived "stuck" thresholds (W5).
 const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
+const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 
 export const CRON_LOCK_KEYS = {
   dailyEmail: 42_010_001n,
@@ -218,24 +219,24 @@ export function startCron(storage: IStorage): void {
   const currentHour = new Date().getUTCHours();
   if (currentHour >= 9) {
     const runCatchUp = async () => {
-      await runCronJobWithLock("startupEmailCatchUp", async () => {
-        logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
-        try {
-          const result = await runEmailCronJob(storage);
-          logger.info(
-            { context: "cron", ...result },
-            `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
-          );
-        } catch (err) {
-          logger.error({ context: "cron", err }, "Startup email catch-up failed");
-        }
-      });
-    };
-    setTimeout(() => {
-      void runCatchUp().catch((err) => {
+      try {
+        await runCronJobWithLock("startupEmailCatchUp", async () => {
+          logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
+          try {
+            const result = await runEmailCronJob(storage);
+            logger.info(
+              { context: "cron", ...result },
+              `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
+            );
+          } catch (err) {
+            logger.error({ context: "cron", err }, "Startup email catch-up failed");
+          }
+        });
+      } catch (err) {
         logger.error({ context: "cron", err }, "Startup email catch-up task failed before job execution");
-      });
-    }, 30_000);
+      }
+    };
+    setTimeout(runCatchUp, STARTUP_CATCH_UP_DELAY_MS);
   }
 }
 
