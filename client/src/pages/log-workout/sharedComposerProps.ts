@@ -1,7 +1,6 @@
 import type {
   ComposerAutoParseProps,
   ComposerExerciseEditorProps,
-  ComposerExerciseProps,
   ComposerParseDiagnosticsProps,
   ComposerTextProps,
   ComposerVoiceProps,
@@ -9,10 +8,11 @@ import type {
 
 export type {
   ComposerAutoParseProps,
-  ComposerExerciseProps,
   ComposerTextProps,
   ComposerVoiceProps,
 };
+
+export type { ComposerExerciseProps } from "@/components/workout/workoutComposer.types";
 
 /**
  * Composer state shared between CaptureStep (consumer) and

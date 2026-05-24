@@ -64,7 +64,7 @@ const REGION_LABELS = {
 const UPPER_PUSH_MUSCLES = ["chest", "shoulders", "triceps"] as const satisfies readonly HeatMapMuscle[];
 const UPPER_PULL_MUSCLES = ["lats", "upper_back", "rear_delts", "traps", "biceps"] as const satisfies readonly HeatMapMuscle[];
 const POSTERIOR_CHAIN_MUSCLES = ["hamstrings", "glutes", "lower_back"] as const satisfies readonly HeatMapMuscle[];
-const CORE_FRESHNESS_MUSCLES = ["core", "obliques", "lower_back"] as const satisfies readonly HeatMapMuscle[];
+const CORE_FRESHNESS_MUSCLES: ReadonlySet<HeatMapMuscle> = new Set<HeatMapMuscle>(["core", "obliques", "lower_back"]);
 
 const HEAT_TONES: readonly HeatTone[] = [
   {
@@ -156,7 +156,7 @@ function getHeatTone(totalSets: number, maxTotalSets: number): HeatTone {
 
 function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): AnalysisMetric {
   const coreMuscles = muscles.filter((muscle) => (
-    CORE_FRESHNESS_MUSCLES.some((coreMuscle) => coreMuscle === muscle.muscle)
+    CORE_FRESHNESS_MUSCLES.has(muscle.muscle)
   ));
   const trainedCore = coreMuscles.filter(hasCoverageWork);
   const freshest = [...trainedCore]
