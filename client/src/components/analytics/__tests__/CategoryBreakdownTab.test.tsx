@@ -109,10 +109,10 @@ function applyCoverageOverrides<T, K extends string>(
   getKey: (item: T) => K,
   overrides: Partial<Record<K, Partial<T>>>,
 ): T[] {
-  return coverage.map((item) => ({
-    ...item,
-    ...(overrides[getKey(item)] ?? {}),
-  }));
+  return coverage.map((item) => {
+    const override = overrides[getKey(item)];
+    return override ? { ...item, ...override } : { ...item };
+  });
 }
 
 function expectTextContentGroup(element: HTMLElement, expectedTexts: readonly string[]) {
