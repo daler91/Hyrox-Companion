@@ -28,15 +28,16 @@
 
 ---
 
-fitai.coach helps athletes plan structured training, log complex workouts, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, Strava and Garmin sync, RAG-backed coaching materials, and privacy controls that keep AI features opt-in.
+fitai.coach helps athletes plan structured training, log complex workouts, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, RAG-backed coaching materials, and privacy controls that keep AI features opt-in.
 
 ## Features
 
 ### Unified Training Experience
 
 - **Interactive timeline** - View past, current, and upcoming training with planned, completed, missed, and skipped states.
-- **Structured workout logging** - Log free-text, voice-entered, table-backed, or block-based sessions with sets, reps, loads, distances, times, notes, and scores.
-- **Training plans** - Import CSV, DOCX, or PDF plans, start from built-in programming, or generate a plan with AI.
+- **Structured workout logging** - Log free-text, voice-entered, table-backed, or block-based sessions with sets, reps, loads, distances, times, custom exercise names, notes, and scores.
+- **Training plans** - Import CSV plans, start from built-in programming, or generate a plan with AI.
+- **Training styles** - Choose balanced programming or MAF Method constraints, with MAF setup fields used to calculate and persist the athlete's heart-rate ceiling.
 - **Timeline annotations** - Mark injury, illness, travel, rest, or other date ranges so analytics and training gaps have context.
 - **Guided onboarding** - Configure profile, units, goals, schedule, and initial plan setup before landing in the main app.
 
@@ -65,7 +66,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, under
 - **Exercise progression** - See personal records, set history, category breakdowns, and progression trends.
 - **Coach insights** - Surface RPE trends, plan phase, weekly volume, station gaps, fatigue flags, and progression flags.
 - **Data export** - Download workout timeline and exercise sets as CSV or JSON.
-- **Email notifications** - Send weekly summaries and missed-day reminders through pg-boss and Resend.
+- **Email and push notifications** - Send opt-in weekly summaries and missed-day reminders through pg-boss, Resend, and Web Push when configured.
 
 ### Privacy & Data Control
 
@@ -77,6 +78,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, under
 ### PWA & Offline
 
 - **Installable app** - Vite PWA and Workbox provide installability and offline-aware behavior.
+- **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured.
 - **Offline feedback** - The client surfaces offline/drop notifications so failed interactions are visible.
 
 ---
@@ -106,6 +108,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 - **Gemini-specific services**: embeddings and image parsing through `@google/genai`
 - **Jobs and scheduling**: pg-boss plus node-cron
 - **Email**: Resend
+- **Push notifications**: Web Push with VAPID keys
 - **Logging**: Pino and pino-http
 - **API docs**: Swagger UI generated from Zod/OpenAPI schemas
 - **Validation**: Zod and drizzle-zod
@@ -323,9 +326,10 @@ ALLOW_DEV_AUTH_BYPASS=true
 
 ```bash
 pnpm install
-pnpm run db:generate
 pnpm run db:migrate
 ```
+
+Use `pnpm run db:generate` only when you intentionally change `shared/schema/tables.ts` and need to create a new migration.
 
 ### 3. Start the Application
 
@@ -352,7 +356,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | `pnpm lint:fix`             | Auto-fix ESLint issues                                |
 | `pnpm format`               | Format the repo with Prettier                         |
 | `pnpm format:check`         | Check formatting without writing files                |
-| `pnpm db:generate`          | Generate Drizzle migrations from schema changes       |
+| `pnpm db:generate`          | Generate a new Drizzle migration after schema changes |
 | `pnpm db:migrate`           | Run pending Drizzle migrations                        |
 | `pnpm db:check`             | Validate migration/schema consistency                 |
 | `pnpm db:decode-entities`   | Decode stored HTML entities in workout text           |
@@ -378,7 +382,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The current suite includes more than 170 Vitest test files plus Cypress E2E coverage. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
+The current suite includes 187 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 

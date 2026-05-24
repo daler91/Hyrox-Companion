@@ -311,7 +311,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `RESEND_FROM_EMAIL` | No | Sender address for outbound emails |
 | `VAPID_PUBLIC_KEY` | No | Web Push VAPID public key (push endpoints return 404 if unset) |
 | `VAPID_PRIVATE_KEY` | No | Web Push VAPID private key |
-| `VAPID_EMAIL` | No | Contact `mailto:` address for Web Push |
+| `VAPID_EMAIL` | No | Bare contact email address for Web Push; the server prepends `mailto:` when registering VAPID details |
 | `AI_FEATURES_ENABLED` | No | Runtime kill switch for AI provider traffic (default `true`; `false` disables all AI features) |
 | `AI_TEXT_PROVIDER` | No | Text AI provider (`gemini`, `anthropic`, or `openai-compatible`; default `gemini`) |
 | `AI_TEXT_MODEL` | No | Default text model override for the configured provider |
