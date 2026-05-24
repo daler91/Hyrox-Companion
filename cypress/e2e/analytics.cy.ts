@@ -75,16 +75,17 @@ const scrollMainContentToTestId = (selector: string) => {
 };
 
 const expectInMainContentViewport = (selector: string) => {
-  cy.getBySel(selector).should(($element) => {
-    const elementRect = $element[0].getBoundingClientRect();
-    const mainContent = document.querySelector("#main-content");
-    expect(mainContent, "#main-content").to.not.equal(null);
-    const mainRect = mainContent!.getBoundingClientRect();
+  cy.get("#main-content").then(($mainContent) => {
+    const mainRect = $mainContent[0].getBoundingClientRect();
 
-    expect(elementRect.width, `${selector} width`).to.be.greaterThan(0);
-    expect(elementRect.height, `${selector} height`).to.be.greaterThan(0);
-    expect(elementRect.bottom, `${selector} bottom`).to.be.greaterThan(mainRect.top);
-    expect(elementRect.top, `${selector} top`).to.be.lessThan(mainRect.bottom);
+    cy.getBySel(selector).should(($element) => {
+      const elementRect = $element[0].getBoundingClientRect();
+
+      expect(elementRect.width, `${selector} width`).to.be.greaterThan(0);
+      expect(elementRect.height, `${selector} height`).to.be.greaterThan(0);
+      expect(elementRect.bottom, `${selector} bottom`).to.be.greaterThan(mainRect.top);
+      expect(elementRect.top, `${selector} top`).to.be.lessThan(mainRect.bottom);
+    });
   });
 };
 
