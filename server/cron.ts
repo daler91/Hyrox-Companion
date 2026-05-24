@@ -236,7 +236,9 @@ export function startCron(storage: IStorage): void {
         logger.error({ context: "cron", err }, "Startup email catch-up task failed before job execution");
       }
     };
-    setTimeout(runCatchUp, STARTUP_CATCH_UP_DELAY_MS);
+    setTimeout(() => {
+      void runCatchUp();
+    }, STARTUP_CATCH_UP_DELAY_MS);
   }
 }
 
