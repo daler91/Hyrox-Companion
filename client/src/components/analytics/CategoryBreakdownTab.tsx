@@ -11,7 +11,21 @@ import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
+import {
+  type AnalysisMetric,
+  buildBalanceAnalysis,
+  CoverageAnalysisPanel,
+  findPriorityGap,
+  findTopCoverage,
+  formatCount,
+  formatPercent,
+  getFreshnessLabel,
+  hasCoverageWork,
+  sumCoverageSets,
+} from "./coverageAnalysis";
 import { MuscleHeatMapCard } from "./MuscleHeatMapCard";
+
+type MovementPatternCoverage = TrainingOverview["movementPatternCoverage"][number];
 
 const STATION_LABELS: Record<string, string> = {
   skierg: "SkiErg",
@@ -32,13 +46,6 @@ function getFreshnessColor(daysSince: number | null): string {
   return "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30";
 }
 
-function getFreshnessLabel(daysSince: number | null): string {
-  if (daysSince === null) return "Never trained";
-  if (daysSince === 0) return "Today";
-  if (daysSince === 1) return "Yesterday";
-  return `${daysSince}d ago`;
-}
-
 interface CategoryBreakdownTabProps {
   readonly dateParams: string;
 }
@@ -53,14 +60,83 @@ function CategoryTooltip({ active, payload }: Readonly<{ active?: boolean; paylo
   );
 }
 
-function formatCount(value: number, singular: string, plural: string): string {
-  return `${value} ${value === 1 ? singular : plural}`;
+function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage[]) {
+  const trainedPatterns = patterns.filter(hasCoverageWork);
+  const totalSets = patterns.reduce((sum, pattern) => sum + pattern.totalSets, 0);
+  const topPattern = findTopCoverage(patterns);
+  const priorityGap = findPriorityGap(patterns, "it has no logged sessions in this range");
+  const coveragePercent = formatPercent(trainedPatterns.length, patterns.length);
+  const balances = [
+    buildBalanceAnalysis(
+      "Push / Pull",
+      "Push",
+      sumCoverageSets(patterns, ["horizontal_push", "vertical_push"], (pattern) => pattern.pattern),
+      "pull",
+      sumCoverageSets(patterns, ["horizontal_pull", "vertical_pull"], (pattern) => pattern.pattern),
+    ),
+    buildBalanceAnalysis(
+      "Squat+Lunge / Hinge",
+      "Squat/lunge",
+      sumCoverageSets(patterns, ["squat", "lunge_split_squat"], (pattern) => pattern.pattern),
+      "hinge",
+      sumCoverageSets(patterns, ["hinge"], (pattern) => pattern.pattern),
+    ),
+    buildBalanceAnalysis(
+      "Core Flexion / Anti-rotation",
+      "Core flexion",
+      sumCoverageSets(patterns, ["core_flexion"], (pattern) => pattern.pattern),
+      "anti-rotation",
+      sumCoverageSets(patterns, ["core_anti_rotation"], (pattern) => pattern.pattern),
+    ),
+  ];
+  const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
+  const leastLoaded = [...trainedPatterns]
+    .sort((a, b) => a.totalSets - b.totalSets || a.label.localeCompare(b.label))[0] ?? null;
+
+  const metrics: AnalysisMetric[] = [
+    {
+      label: "Coverage",
+      value: `${trainedPatterns.length}/${patterns.length}`,
+      detail: `${coveragePercent} of movement patterns trained in this range.`,
+      tone: trainedPatterns.length === patterns.length ? "good" : "watch",
+    },
+    {
+      label: "Strongest",
+      value: topPattern?.label ?? "No loaded pattern",
+      detail: topPattern
+        ? `${formatCount(topPattern.totalSets, "set", "sets")} across ${formatCount(topPattern.sessionCount, "session", "sessions")}.`
+        : "Log strength or functional sets to reveal the dominant pattern.",
+      tone: topPattern ? "good" : "gap",
+    },
+    {
+      label: "Gap",
+      value: priorityGap?.item.label ?? "No stale gaps",
+      detail: priorityGap?.reason ?? "Every trained movement pattern is inside the 14-day freshness window.",
+      tone: priorityGap ? "gap" : "good",
+    },
+  ];
+
+  const nextFocus = (() => {
+    if (priorityGap) {
+      return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
+    }
+    if (nextBalance?.recommendation) {
+      return `Next focus: ${nextBalance.recommendation}`;
+    }
+    if (leastLoaded) {
+      return `Next focus: Keep ${leastLoaded.label} in rotation; it is the lowest loaded trained pattern.`;
+    }
+    return "Next focus: Log a strength or functional movement so coverage analysis can start.";
+  })();
+
+  return { metrics, balances, nextFocus, totalSets };
 }
 
 function MovementPatternCoverageCard({
   patterns,
 }: Readonly<{ patterns: TrainingOverview["movementPatternCoverage"] }>) {
   const maxSessionCount = Math.max(1, ...patterns.map((pattern) => pattern.sessionCount));
+  const analysis = useMemo(() => buildMovementPatternAnalysis(patterns), [patterns]);
 
   return (
     <Card>
@@ -68,7 +144,17 @@ function MovementPatternCoverageCard({
         <CardTitle as="h2" className="text-base">Movement Pattern Coverage</CardTitle>
         <CardDescription>Session coverage, set volume, and recency by strength movement pattern</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-5">
+        <CoverageAnalysisPanel
+          balances={analysis.balances}
+          balanceGridClassName="grid grid-cols-1 gap-3 lg:grid-cols-3"
+          metricGridClassName="grid grid-cols-1 gap-3 md:grid-cols-3"
+          metrics={analysis.metrics}
+          nextFocus={analysis.nextFocus}
+          nextFocusTestId="movement-pattern-next-focus"
+          testId="movement-pattern-analysis"
+          totalSets={analysis.totalSets}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3" data-testid="movement-pattern-coverage-grid">
           {patterns.map((pattern) => {
             const barWidth = pattern.sessionCount > 0
