@@ -87,6 +87,12 @@ function clickExportOption(testId: string) {
   fireEvent.click(screen.getByTestId(testId));
 }
 
+function getTabLabels() {
+  return screen
+    .getAllByRole("tab")
+    .map((tab) => tab.textContent?.replace(/\s+/g, " ").trim());
+}
+
 describe("Analytics export", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -157,5 +163,23 @@ describe("Analytics export", () => {
       });
     });
     expect(screen.getByTestId("button-analytics-export")).not.toBeDisabled();
+  });
+});
+
+describe("Analytics tabs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows Breakdown as the second tab", () => {
+    renderAnalytics();
+
+    expect(getTabLabels()).toEqual([
+      "Overview",
+      "Breakdown",
+      "Progression",
+      "Records",
+      "Coach Insights",
+    ]);
   });
 });

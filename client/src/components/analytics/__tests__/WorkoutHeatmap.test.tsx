@@ -21,6 +21,8 @@ describe("WorkoutHeatmap", () => {
     expect(screen.getAllByTestId("workout-heatmap-month-label").map((label) => label.textContent))
       .toEqual(["Feb", "Mar", "Apr", "May"]);
     expect(screen.getAllByText("May")).toHaveLength(1);
+    expect(screen.getAllByTestId("workout-heatmap-day-label").map((label) => label.textContent))
+      .toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
     const grid = screen.getByTestId("workout-heatmap-grid");
     expect(grid.getAttribute("style")).toContain("repeat(16, minmax(2rem, 1fr))");
