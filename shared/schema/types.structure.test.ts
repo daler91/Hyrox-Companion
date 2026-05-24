@@ -3,81 +3,51 @@ import { describe, expect, it } from 'vitest';
 import { lintWorkoutStructure } from './structureLint';
 import { structureBlockSchema } from './types';
 
+function expectStructureBlock(input: unknown, success: boolean) {
+  expect(structureBlockSchema.safeParse(input).success).toBe(success);
+}
+
+function emomBlock(steps: unknown[], durationMinutes = 8) {
+  return {
+    sectionType: 'main',
+    formatType: 'emom',
+    durationMinutes,
+    steps,
+  };
+}
+
+type EmomRejectCase = [string, unknown[], number];
+
 describe('structureBlockSchema EMOM semantics', () => {
   it('accepts EMOM with unique minute indices and rest steps', () => {
-    const parsed = structureBlockSchema.safeParse({
-      sectionType: 'main',
-      formatType: 'emom',
-      durationMinutes: 16,
-      steps: [
+    expectStructureBlock(
+      emomBlock([
         { stepNumber: 1, minuteIndex: 1, stepType: 'work', exerciseName: 'Burpee Broad Jump', targets: { targetReps: 6 } },
         { stepNumber: 2, minuteIndex: 2, stepType: 'work', exerciseName: 'Sandbag Lunges', targets: { targetReps: 12 } },
         { stepNumber: 3, minuteIndex: 3, stepType: 'work', exerciseName: 'Wall Balls', targets: { targetReps: 15 } },
         { stepNumber: 4, minuteIndex: 4, stepType: 'rest' },
-      ],
-    });
-    expect(parsed.success).toBe(true);
+      ], 16),
+      true,
+    );
   });
 
-  it('rejects duplicate minute index in EMOM', () => {
-    const parsed = structureBlockSchema.safeParse({
-      sectionType: 'main',
-      formatType: 'emom',
-      durationMinutes: 10,
-      steps: [
+  const emomRejectCases: EmomRejectCase[] = [
+    [
+      'duplicate minute index',
+      [
         { stepNumber: 1, minuteIndex: 1, stepType: 'work', exerciseName: 'Row' },
         { stepNumber: 2, minuteIndex: 1, stepType: 'rest' },
       ],
-    });
-    expect(parsed.success).toBe(false);
-  });
+      10,
+    ],
+    ['steps without minute index', [{ stepNumber: 1, stepType: 'work', exerciseName: 'Row' }], 10],
+    ['rest step with targets', [{ stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { targetReps: 10 } }], 8],
+    ['rest step with alias targets', [{ stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { reps: 10 } }], 8],
+    ['rest step with whitespace-only labels', [{ stepNumber: 1, minuteIndex: 1, stepType: 'rest', customLabel: '   ' }], 8],
+  ];
 
-  it('rejects EMOM steps without minute index', () => {
-    const parsed = structureBlockSchema.safeParse({
-      sectionType: 'main',
-      formatType: 'emom',
-      durationMinutes: 10,
-      steps: [
-        { stepNumber: 1, stepType: 'work', exerciseName: 'Row' },
-      ],
-    });
-    expect(parsed.success).toBe(false);
-  });
-
-  it('rejects rest step with targets', () => {
-    const parsed = structureBlockSchema.safeParse({
-      sectionType: 'main',
-      formatType: 'emom',
-      durationMinutes: 8,
-      steps: [
-        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { targetReps: 10 } },
-      ],
-    });
-    expect(parsed.success).toBe(false);
-  });
-
-  it('rejects rest step with alias targets', () => {
-    const parsed = structureBlockSchema.safeParse({
-      sectionType: 'main',
-      formatType: 'emom',
-      durationMinutes: 8,
-      steps: [
-        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', targets: { reps: 10 } },
-      ],
-    });
-    expect(parsed.success).toBe(false);
-  });
-
-  it('rejects rest step with whitespace-only labels', () => {
-    const parsed = structureBlockSchema.safeParse({
-      sectionType: 'main',
-      formatType: 'emom',
-      durationMinutes: 8,
-      steps: [
-        { stepNumber: 1, minuteIndex: 1, stepType: 'rest', customLabel: '   ' },
-      ],
-    });
-    expect(parsed.success).toBe(false);
+  it.each(emomRejectCases)('rejects EMOM %s', (_caseName, steps, durationMinutes) => {
+    expectStructureBlock(emomBlock(steps, durationMinutes), false);
   });
 
   it('preserves legacy timing and ordering fields for backward compatibility', () => {

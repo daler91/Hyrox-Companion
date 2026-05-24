@@ -5,7 +5,7 @@ import { beforeEach,describe, expect, it, vi } from "vitest";
 import { sendJob } from "../../queue";
 import { storage } from "../../storage";
 import coachingRouter from "../coaching";
-import { createTestApp } from "./testUtils";
+import { createTestApp, resetRouteTestState } from "./testUtils";
 
 // Mock auth
 vi.mock("../../clerkAuth", () => ({
@@ -54,8 +54,7 @@ describe("Coaching materials routes", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true });
     app = createTestApp(coachingRouter);
   });

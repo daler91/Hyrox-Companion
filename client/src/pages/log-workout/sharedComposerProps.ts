@@ -1,65 +1,26 @@
-import type { ExerciseName, StructureBlockInput } from "@shared/schema";
+import type {
+  ComposerAutoParseProps,
+  ComposerExerciseEditorProps,
+  ComposerExerciseProps,
+  ComposerParseDiagnosticsProps,
+  ComposerTextProps,
+  ComposerVoiceProps,
+} from "@/components/workout/workoutComposer.types";
 
-import type { StructuredExercise } from "@/components/ExerciseInput";
-import type { ParseDiagnostics } from "@/hooks/useWorkoutEditor";
+export type {
+  ComposerAutoParseProps,
+  ComposerExerciseProps,
+  ComposerTextProps,
+  ComposerVoiceProps,
+};
 
 /**
  * Composer state shared between CaptureStep (consumer) and
- * LogWorkoutStepperLayout (parent). Hoisted into one definition so the
- * 19-line block of `readonly freeText…stopListening` declarations doesn't
- * duplicate between the two prop interfaces.
+ * LogWorkoutStepperLayout (parent).
  */
-export interface SharedComposerProps {
-  readonly freeText: string;
-  readonly setFreeText: (value: string) => void;
-  readonly exerciseBlocks: string[];
-  readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
-  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
-  readonly removeBlock: (blockId: string) => void;
-  readonly reorderBlocks: (nextOrder: string[]) => void;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly autoParsing: boolean;
-  readonly autoParseError: boolean;
-  readonly parseDiagnostics: ParseDiagnostics;
-  readonly cancelAutoParse: () => void;
-  readonly isListening: boolean;
-  readonly isSupported: boolean;
-  readonly interimTranscript: string;
-  readonly toggleListening: () => void;
-  readonly stopListening: () => void;
-}
-
-export interface ComposerTextProps {
-  readonly freeText: string;
-  readonly setFreeText: (value: string) => void;
-}
-
-export interface ComposerExerciseProps {
-  readonly exerciseBlocks: string[];
-  readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
-  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
-  readonly removeBlock: (blockId: string) => void;
-  readonly reorderBlocks: (nextOrder: string[]) => void;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-  readonly autoParsing: boolean;
-  readonly parseDiagnostics: ParseDiagnostics;
-  readonly cancelAutoParse: () => void;
-  readonly structureBlocks: StructureBlockInput[];
-  readonly setStructureBlocks: (blocks: StructureBlockInput[]) => void;
-}
-
-export interface ComposerAutoParseProps {
-  readonly autoParseError: boolean;
-}
-
-export interface ComposerVoiceProps {
-  readonly isListening: boolean;
-  readonly isSupported: boolean;
-  readonly interimTranscript: string;
-  readonly toggleListening: () => void;
-  readonly stopListening: () => void;
-}
+export interface SharedComposerProps
+  extends ComposerTextProps,
+    ComposerExerciseEditorProps,
+    ComposerAutoParseProps,
+    ComposerParseDiagnosticsProps,
+    ComposerVoiceProps {}

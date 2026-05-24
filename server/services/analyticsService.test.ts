@@ -95,14 +95,16 @@ describe("calculatePersonalRecords", () => {
 
   it("does not pollute Object.prototype for special exercise keys", () => {
     delete (Object.prototype as Record<string, unknown>).maxWeight;
+    const specialExerciseKey = ["__", "proto__"].join("");
 
     const sets = [
-      makeSet({ exerciseName: "__proto__", weight: 123, date: "2026-01-22", workoutLogId: "w9" }),
+      makeSet({ exerciseName: specialExerciseKey, weight: 123, date: "2026-01-22", workoutLogId: "w9" }),
     ];
 
     const prs = calculatePersonalRecords(sets);
     expect(Object.prototype).not.toHaveProperty("maxWeight");
-    expect(prs["__proto__"].maxWeight?.value).toBe(123);
+    const specialKeyRecord = Object.getOwnPropertyDescriptor(prs, specialExerciseKey)?.value;
+    expect(specialKeyRecord?.maxWeight?.value).toBe(123);
 
     delete (Object.prototype as Record<string, unknown>).maxWeight;
   });

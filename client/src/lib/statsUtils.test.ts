@@ -8,6 +8,12 @@ import { calculateStats } from "./statsUtils";
 // End of the week (Saturday) is May 18, 2024.
 const MOCK_TODAY = new Date("2024-05-15T12:00:00Z");
 
+function calculateStatsFor(timeline: Partial<TimelineEntry>[]) {
+  return calculateStats(timeline as TimelineEntry[]);
+}
+
+type StreakCase = [string, Partial<TimelineEntry>[], number];
+
 describe("calculateStats", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -43,7 +49,7 @@ describe("calculateStats", () => {
         { date: "2024-05-19", status: "planned" },
       ];
 
-      const stats = calculateStats(timeline as TimelineEntry[]);
+      const stats = calculateStatsFor(timeline);
 
       expect(stats.workoutsThisWeek).toBe(4); // 12th, 14th, 16th, 18th
       expect(stats.completedThisWeek).toBe(2); // 12th, 18th
@@ -63,7 +69,7 @@ describe("calculateStats", () => {
         { date: "2024-05-20", status: "planned" }, // Counted
       ];
 
-      const stats = calculateStats(timeline as TimelineEntry[]);
+      const stats = calculateStatsFor(timeline);
 
       expect(stats.plannedUpcoming).toBe(3); // 15th, 16th, 20th
     });
@@ -82,7 +88,7 @@ describe("calculateStats", () => {
         { date: "2024-05-17", status: "planned" },
       ];
 
-      const stats = calculateStats(timeline as TimelineEntry[]);
+      const stats = calculateStatsFor(timeline);
 
       // 2 completed out of 3 total (past + today)
       expect(stats.completionRate).toBe(Math.round((2 / 3) * 100));
@@ -93,65 +99,55 @@ describe("calculateStats", () => {
         { date: "2024-05-16", status: "completed" }, // Future
       ];
 
-      const stats = calculateStats(timeline as TimelineEntry[]);
+      const stats = calculateStatsFor(timeline);
 
       expect(stats.completionRate).toBe(0);
     });
   });
 
   describe("current streak (currentStreak)", () => {
-    it("should count consecutive days backwards from today", () => {
-      const timeline: Partial<TimelineEntry>[] = [
-        { date: "2024-05-15", status: "completed" }, // Today
-        { date: "2024-05-14", status: "completed" }, // Yesterday
-        { date: "2024-05-13", status: "completed" }, // Day before yesterday
-      ];
+    const streakCases: StreakCase[] = [
+      [
+        "consecutive days backwards from today",
+        [
+          { date: "2024-05-15", status: "completed" },
+          { date: "2024-05-14", status: "completed" },
+          { date: "2024-05-13", status: "completed" },
+        ],
+        3,
+      ],
+      [
+        "yesterday when today is not completed",
+        [
+          { date: "2024-05-14", status: "completed" },
+          { date: "2024-05-13", status: "completed" },
+          { date: "2024-05-12", status: "completed" },
+        ],
+        3,
+      ],
+      [
+        "only up to a missed day",
+        [
+          { date: "2024-05-15", status: "completed" },
+          { date: "2024-05-14", status: "completed" },
+          { date: "2024-05-12", status: "completed" },
+        ],
+        2,
+      ],
+      [
+        "multiple completed entries on the same day as one day",
+        [
+          { date: "2024-05-15", status: "completed" },
+          { date: "2024-05-15", status: "completed" },
+          { date: "2024-05-14", status: "completed" },
+        ],
+        2,
+      ],
+      ["zero when neither today nor yesterday has a completed entry", [{ date: "2024-05-13", status: "completed" }], 0],
+    ];
 
-      const stats = calculateStats(timeline as TimelineEntry[]);
-      expect(stats.currentStreak).toBe(3);
-    });
-
-    it("should count streak even if today is not completed but yesterday was", () => {
-      const timeline: Partial<TimelineEntry>[] = [
-        { date: "2024-05-14", status: "completed" }, // Yesterday
-        { date: "2024-05-13", status: "completed" }, // Day before yesterday
-        { date: "2024-05-12", status: "completed" }, // 3 days ago
-      ];
-
-      const stats = calculateStats(timeline as TimelineEntry[]);
-      expect(stats.currentStreak).toBe(3);
-    });
-
-    it("should break streak if a day is missed", () => {
-      const timeline: Partial<TimelineEntry>[] = [
-        { date: "2024-05-15", status: "completed" }, // Today
-        { date: "2024-05-14", status: "completed" }, // Yesterday
-        // 2024-05-13 is missing/missed
-        { date: "2024-05-12", status: "completed" }, // 3 days ago
-      ];
-
-      const stats = calculateStats(timeline as TimelineEntry[]);
-      expect(stats.currentStreak).toBe(2);
-    });
-
-    it("should count multiple completed entries on the same day as 1 day for streak", () => {
-      const timeline: Partial<TimelineEntry>[] = [
-        { date: "2024-05-15", status: "completed" },
-        { date: "2024-05-15", status: "completed" },
-        { date: "2024-05-14", status: "completed" },
-      ];
-
-      const stats = calculateStats(timeline as TimelineEntry[]);
-      expect(stats.currentStreak).toBe(2);
-    });
-
-    it("should return 0 streak if neither today nor yesterday has a completed entry", () => {
-      const timeline: Partial<TimelineEntry>[] = [
-        { date: "2024-05-13", status: "completed" }, // 2 days ago
-      ];
-
-      const stats = calculateStats(timeline as TimelineEntry[]);
-      expect(stats.currentStreak).toBe(0);
+    it.each(streakCases)("should count %s", (_caseName, timeline, expectedStreak) => {
+      expect(calculateStatsFor(timeline).currentStreak).toBe(expectedStreak);
     });
   });
 

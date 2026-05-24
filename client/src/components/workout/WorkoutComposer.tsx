@@ -14,31 +14,18 @@ import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
 import { buildParseImagePayload, type ImagePreviewState,shouldRetainImagePreview } from "./workoutComposer.utils";
+import type {
+  ComposerAutoParseProps,
+  ComposerExerciseEditorProps,
+  ComposerTextProps,
+  ComposerVoiceProps,
+} from "./workoutComposer.types";
 
-interface WorkoutComposerProps {
-  readonly freeText: string;
-  readonly setFreeText: (value: string) => void;
-  readonly exerciseBlocks: string[];
-  readonly exerciseData: Record<string, StructuredExercise>;
-  readonly addExercise: (name: ExerciseName, customLabel?: string) => void;
-  readonly updateBlock: (blockId: string, data: StructuredExercise) => void;
-  readonly removeBlock: (blockId: string) => void;
-  readonly reorderBlocks: (nextOrder: string[]) => void;
-  readonly weightUnit: "kg" | "lbs";
-  readonly distanceUnit: "km" | "miles";
-
-  /** Parse control surfaced from useWorkoutEditor. */
-  readonly autoParsing: boolean;
-  readonly autoParseError: boolean;
-  readonly cancelAutoParse: () => void;
-
-  /** Voice input for dictating into the text panel. */
-  readonly isListening: boolean;
-  readonly isSupported: boolean;
-  readonly interimTranscript: string;
-  readonly toggleListening: () => void;
-  readonly stopListening: () => void;
-
+interface WorkoutComposerProps
+  extends ComposerTextProps,
+    ComposerExerciseEditorProps,
+    ComposerAutoParseProps,
+    ComposerVoiceProps {
   readonly toast: typeof toastFn;
   /**
    * When true, the "Describe / dictate" panel starts expanded. Typical

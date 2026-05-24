@@ -22,3 +22,8 @@ export function createTestApp(router: express.Router) {
   setupTestErrorHandler(app);
   return app;
 }
+
+export async function resetRouteTestState() {
+  const routeUtils = await import("../../routeUtils");
+  routeUtils.clearRateLimitBuckets();
+}

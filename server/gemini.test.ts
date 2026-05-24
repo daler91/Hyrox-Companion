@@ -10,43 +10,29 @@ import {
 } from "./gemini/index";
 
 describe("isRetryableError", () => {
-  it("returns true for 429 rate limit", () => {
-    expect(isRetryableError(new Error("Request failed with status 429"))).toBe(true);
+  it.each([
+    new Error("Request failed with status 429"),
+    new Error("rate limit exceeded"),
+    new Error("500 Internal Server Error"),
+    new Error("503 Service Unavailable"),
+    new Error("network error"),
+    new Error("ECONNRESET"),
+    new Error("request timeout"),
+    new Error("fetch failed"),
+  ])("returns true for retryable error %#", (error) => {
+    expect(isRetryableError(error)).toBe(true);
   });
 
-  it("returns true for 'rate limit' message", () => {
-    expect(isRetryableError(new Error("rate limit exceeded"))).toBe(true);
-  });
-
-  it("returns true for 500 server error", () => {
-    expect(isRetryableError(new Error("500 Internal Server Error"))).toBe(true);
-  });
-
-  it("returns true for 503 service unavailable", () => {
-    expect(isRetryableError(new Error("503 Service Unavailable"))).toBe(true);
-  });
-
-  it("returns true for network errors", () => {
-    expect(isRetryableError(new Error("network error"))).toBe(true);
-    expect(isRetryableError(new Error("ECONNRESET"))).toBe(true);
-    expect(isRetryableError(new Error("request timeout"))).toBe(true);
-    expect(isRetryableError(new Error("fetch failed"))).toBe(true);
-  });
-
-  it("returns false for 400 bad request", () => {
-    expect(isRetryableError(new Error("400 Bad Request"))).toBe(false);
-  });
-
-  it("returns false for non-Error values", () => {
-    expect(isRetryableError("string error")).toBe(false);
-    expect(isRetryableError(42)).toBe(false);
-    expect(isRetryableError(null)).toBe(false);
-    expect(isRetryableError(undefined)).toBe(false);
-  });
-
-  it("returns false for unrelated error messages", () => {
-    expect(isRetryableError(new Error("Invalid JSON"))).toBe(false);
-    expect(isRetryableError(new Error("Missing required field"))).toBe(false);
+  it.each([
+    new Error("400 Bad Request"),
+    "string error",
+    42,
+    null,
+    undefined,
+    new Error("Invalid JSON"),
+    new Error("Missing required field"),
+  ])("returns false for non-retryable error %#", (error) => {
+    expect(isRetryableError(error)).toBe(false);
   });
 });
 
@@ -106,21 +92,13 @@ describe("workoutSuggestionSchema", () => {
     expect(() => workoutSuggestionSchema.parse(missing)).toThrow();
   });
 
-  it("rejects invalid targetField enum", () => {
+  it.each([
+    ["targetField", { targetField: "invalid" }],
+    ["action", { action: "delete" }],
+    ["priority", { priority: "urgent" }],
+  ])("rejects invalid %s enum", (_field, override) => {
     expect(() =>
-      workoutSuggestionSchema.parse({ ...validSuggestion, targetField: "invalid" }),
-    ).toThrow();
-  });
-
-  it("rejects invalid action enum", () => {
-    expect(() =>
-      workoutSuggestionSchema.parse({ ...validSuggestion, action: "delete" }),
-    ).toThrow();
-  });
-
-  it("rejects invalid priority enum", () => {
-    expect(() =>
-      workoutSuggestionSchema.parse({ ...validSuggestion, priority: "urgent" }),
+      workoutSuggestionSchema.parse({ ...validSuggestion, ...override }),
     ).toThrow();
   });
 });

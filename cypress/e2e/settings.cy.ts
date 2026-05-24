@@ -1,43 +1,36 @@
 import { setupAuthIntercepts } from "../support/authIntercepts";
 
+function visitSettings(options?: Parameters<typeof setupAuthIntercepts>[0]) {
+  setupAuthIntercepts(options);
+  cy.visit("/settings");
+  cy.wait("@authUser");
+  cy.wait("@preferences");
+  cy.wait("@stravaStatus");
+}
+
 describe("Settings Page", () => {
   describe("default state", () => {
     beforeEach(() => {
-      setupAuthIntercepts();
-      cy.visit("/settings");
-      cy.wait("@authUser");
-      cy.wait("@preferences");
-      cy.wait("@stravaStatus");
+      visitSettings();
     });
 
     it("displays the user display name", () => {
       cy.getBySel("text-display-name").should("contain", "Test Athlete");
     });
 
-    it("shows weight unit selector with default value", () => {
-      cy.getBySel("select-weight-unit").should("exist");
-    });
-
-    it("shows distance unit selector with default value", () => {
-      cy.getBySel("select-distance-unit").should("exist");
-    });
-
-    it("shows weekly goal selector", () => {
-      cy.getBySel("select-weekly-goal").should("exist");
-    });
-
-    it("shows email notifications toggle", () => {
-      cy.getBySel("switch-email-notifications").should("exist");
-    });
-
-    it("shows export data buttons", () => {
-      cy.getBySel("button-export-csv").should("exist");
-      cy.getBySel("button-export-json").should("exist");
-    });
-
-    it("shows structure old workouts section", () => {
-      cy.getBySel("button-find-unstructured").should("exist");
-    });
+    for (const selector of [
+      "select-weight-unit",
+      "select-distance-unit",
+      "select-weekly-goal",
+      "switch-email-notifications",
+      "button-export-csv",
+      "button-export-json",
+      "button-find-unstructured",
+    ]) {
+      it(`shows ${selector}`, () => {
+        cy.getBySel(selector).should("exist");
+      });
+    }
 
     it("hides save button when no changes", () => {
       cy.getBySel("button-save-settings").should("not.exist");
@@ -46,11 +39,7 @@ describe("Settings Page", () => {
 
   describe("Strava disconnected", () => {
     beforeEach(() => {
-      setupAuthIntercepts({ stravaStatus: { connected: false } });
-      cy.visit("/settings");
-      cy.wait("@authUser");
-      cy.wait("@preferences");
-      cy.wait("@stravaStatus");
+      visitSettings({ stravaStatus: { connected: false } });
     });
 
     it("shows connect Strava button when not connected", () => {
@@ -60,17 +49,13 @@ describe("Settings Page", () => {
 
   describe("Strava connected", () => {
     beforeEach(() => {
-      setupAuthIntercepts({
+      visitSettings({
         stravaStatus: {
           connected: true,
           athleteId: "12345",
           lastSyncedAt: new Date().toISOString(),
         },
       });
-      cy.visit("/settings");
-      cy.wait("@authUser");
-      cy.wait("@preferences");
-      cy.wait("@stravaStatus");
     });
 
     it("shows sync and disconnect buttons when Strava is connected", () => {

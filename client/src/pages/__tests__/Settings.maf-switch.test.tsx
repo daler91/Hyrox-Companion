@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
@@ -49,13 +50,27 @@ function seedQuery<T>(qc: QueryClient, key: readonly string[], data: T) {
   qc.setQueryData(key, data);
 }
 
+function seedSettings(qc: QueryClient, preferences: Record<string, unknown>) {
+  seedQuery(qc, ["preferences"], preferences);
+  seedQuery(qc, ["strava"], null);
+  seedQuery(qc, ["garmin"], null);
+}
+
+function renderSettings(qc: QueryClient, children: ReactNode = <Settings />) {
+  return render(
+    <QueryClientProvider client={qc}>
+      {children}
+    </QueryClientProvider>,
+  );
+}
+
 async function chooseSelectOption(label: string, option: string) {
   fireEvent.click(screen.getByLabelText(label));
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
 
-function seedDefaultSettings(qc: QueryClient) {
-  seedQuery(qc, ["preferences"], {
+function defaultSettings() {
+  return {
     weightUnit: "kg",
     distanceUnit: "km",
     weeklyGoal: 5,
@@ -69,9 +84,11 @@ function seedDefaultSettings(qc: QueryClient) {
     mafAge: null,
     mafConsistency: null,
     mafTrend: null,
-  });
-  seedQuery(qc, ["strava"], null);
-  seedQuery(qc, ["garmin"], null);
+  };
+}
+
+function seedDefaultSettings(qc: QueryClient) {
+  seedSettings(qc, defaultSettings());
 }
 
 async function makeSettingsDirty() {
@@ -89,7 +106,7 @@ describe("Settings MAF style switch", () => {
 
   it("hydrates nullable opt-in preferences as off", async () => {
     const qc = new QueryClient();
-    seedQuery(qc, ["preferences"], {
+    seedSettings(qc, {
       weightUnit: "kg",
       distanceUnit: "km",
       weeklyGoal: 5,
@@ -103,14 +120,7 @@ describe("Settings MAF style switch", () => {
       mafConsistency: null,
       mafTrend: null,
     });
-    seedQuery(qc, ["strava"], null);
-    seedQuery(qc, ["garmin"], null);
-
-    render(
-      <QueryClientProvider client={qc}>
-        <Settings />
-      </QueryClientProvider>,
-    );
+    renderSettings(qc);
 
     expect(await screen.findByTestId("switch-email-notifications")).toHaveAttribute(
       "data-state",
@@ -132,7 +142,7 @@ describe("Settings MAF style switch", () => {
 
   it("blocks switching to MAF and opens setup modal when required fields are missing", async () => {
     const qc = new QueryClient();
-    seedQuery(qc, ["preferences"], {
+    seedSettings(qc, {
       weightUnit: "kg",
       distanceUnit: "km",
       weeklyGoal: 5,
@@ -146,14 +156,7 @@ describe("Settings MAF style switch", () => {
       mafConsistency: null,
       mafTrend: null,
     });
-    seedQuery(qc, ["strava"], null);
-    seedQuery(qc, ["garmin"], null);
-
-    render(
-      <QueryClientProvider client={qc}>
-        <Settings />
-      </QueryClientProvider>,
-    );
+    renderSettings(qc);
 
     const balancedLabels = await screen.findAllByText("Balanced");
     fireEvent.click(balancedLabels[0]);
@@ -170,7 +173,7 @@ describe("Settings MAF style switch", () => {
 
   it("stages MAF setup locally and persists it only from Save Settings", async () => {
     const qc = new QueryClient();
-    seedQuery(qc, ["preferences"], {
+    seedSettings(qc, {
       weightUnit: "kg",
       distanceUnit: "km",
       weeklyGoal: 5,
@@ -185,18 +188,12 @@ describe("Settings MAF style switch", () => {
       mafTrend: null,
       mafHrDataAvailable: null,
     });
-    seedQuery(qc, ["strava"], null);
-    seedQuery(qc, ["garmin"], null);
 
     vi.mocked(api.preferences.update).mockResolvedValue({} as Awaited<
       ReturnType<typeof api.preferences.update>
     >);
 
-    render(
-      <QueryClientProvider client={qc}>
-        <Settings />
-      </QueryClientProvider>,
-    );
+    renderSettings(qc);
 
     const balancedLabels = await screen.findAllByText("Balanced");
     fireEvent.click(balancedLabels[0]);
@@ -238,29 +235,11 @@ describe("Settings MAF style switch", () => {
 
   it("reruns onboarding through the forced URL without changing durable completion", async () => {
     const qc = new QueryClient();
-    seedQuery(qc, ["preferences"], {
-      weightUnit: "kg",
-      distanceUnit: "km",
-      weeklyGoal: 5,
-      emailNotifications: false,
-      emailWeeklySummary: false,
-      emailMissedReminder: false,
-      showAdherenceInsights: true,
-      aiCoachEnabled: false,
-      trainingStyleId: "balanced_default",
+    seedSettings(qc, {
+      ...defaultSettings(),
       onboardingCompleted: true,
-      mafAge: null,
-      mafConsistency: null,
-      mafTrend: null,
     });
-    seedQuery(qc, ["strava"], null);
-    seedQuery(qc, ["garmin"], null);
-
-    render(
-      <QueryClientProvider client={qc}>
-        <Settings />
-      </QueryClientProvider>,
-    );
+    renderSettings(qc);
 
     fireEvent.click(await screen.findByTestId("button-rerun-onboarding"));
 
@@ -272,13 +251,12 @@ describe("Settings MAF style switch", () => {
     const qc = new QueryClient();
     seedDefaultSettings(qc);
 
-    render(
-      <QueryClientProvider client={qc}>
-        <>
-          <Settings />
-          <a href="/analytics">Analytics link</a>
-        </>
-      </QueryClientProvider>,
+    renderSettings(
+      qc,
+      <>
+        <Settings />
+        <a href="/analytics">Analytics link</a>
+      </>,
     );
 
     await makeSettingsDirty();
@@ -309,11 +287,7 @@ describe("Settings MAF style switch", () => {
     const qc = new QueryClient();
     seedDefaultSettings(qc);
 
-    render(
-      <QueryClientProvider client={qc}>
-        <Settings />
-      </QueryClientProvider>,
-    );
+    renderSettings(qc);
 
     await makeSettingsDirty();
 
@@ -343,11 +317,7 @@ describe("Settings MAF style switch", () => {
     const qc = new QueryClient();
     seedDefaultSettings(qc);
 
-    render(
-      <QueryClientProvider client={qc}>
-        <Settings />
-      </QueryClientProvider>,
-    );
+    renderSettings(qc);
 
     await makeSettingsDirty();
 

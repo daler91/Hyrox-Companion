@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   generateWorkoutSuggestions,
   parseExercisesFromText,
+  type TrainingContext,
 } from "../gemini/index";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
@@ -16,6 +17,82 @@ import {
   mockBaseAutoCoachDeps,
 } from "./coachService.testFixtures";
 import { retrieveRelevantChunks } from "./ragService";
+
+const HILL_REPEATS_WORKOUT = "Hill repeats 8x60 seconds";
+const HILL_REPEAT_SET = {
+  exerciseName: "hill_repeats",
+  category: "running",
+  setNumber: 1,
+  time: 40,
+  sortOrder: 0,
+};
+
+function expectPlanDayUpdate(planDayId: string, update: Record<string, unknown>) {
+  expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
+    planDayId,
+    expect.objectContaining(update),
+    "user-1",
+    expect.anything(),
+  );
+}
+
+function hillRepeatTimelineEntry() {
+  return makeTimelineEntry({
+    focus: "Run",
+    mainWorkout: HILL_REPEATS_WORKOUT,
+    exerciseDetails: [HILL_REPEAT_SET],
+  });
+}
+
+function loadGovernorTrainingContext(): TrainingContext {
+  return {
+    totalWorkouts: 10,
+    completedWorkouts: 10,
+    plannedWorkouts: 1,
+    missedWorkouts: 0,
+    skippedWorkouts: 0,
+    completionRate: 100,
+    currentStreak: 4,
+    recentWorkouts: [],
+    upcomingWorkouts: [
+      {
+        planDayId: "day-1",
+        date: "2026-01-16",
+        focus: "Run",
+        mainWorkout: HILL_REPEATS_WORKOUT,
+        exerciseDetails: [HILL_REPEAT_SET],
+      },
+    ],
+    exerciseBreakdown: {},
+    coachingInsights: {
+      rpeTrend: "stable",
+      fatigueFlag: false,
+      undertrainingFlag: false,
+      stationGaps: [],
+      progressionFlags: [],
+      loadGovernor: {
+        currentUtss: 100,
+        acuteAvg: 70,
+        chronicAvg: 65,
+        acwr: 1.08,
+        zone: "sweet_spot",
+        flaggedVectors: ["posterior_chain"],
+        activeRestrictions: [
+          {
+            id: "posterior_chain_velocity_lock",
+            label: "Posterior chain velocity lock",
+            severity: "danger",
+            expiresOn: "2026-01-17",
+            vector: "posterior_chain",
+            rationale: "Recent posterior-chain load conflicts with speed work.",
+          },
+        ],
+        downshiftRationale: "Recent posterior-chain load conflicts with speed work.",
+        trend: [],
+      },
+    },
+  };
+}
 
 describe("coachService triggerAutoCoach suggestion application", () => {
   it("applies suggestions and returns adjusted count", async () => {
@@ -36,18 +113,13 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-      "day-1",
-      expect.objectContaining({
-        mainWorkout: "4x5 Squats @ 80%",
-        aiSource: null,
-        aiRationale: "Progressive overload",
-        aiNoteUpdatedAt: new Date("2026-01-15T12:00:00Z"),
-        aiInputsUsed: expect.objectContaining({ ragUsed: false }),
-      }),
-      "user-1",
-      expect.anything(),
-    );
+    expectPlanDayUpdate("day-1", {
+      mainWorkout: "4x5 Squats @ 80%",
+      aiSource: null,
+      aiRationale: "Progressive overload",
+      aiNoteUpdatedAt: new Date("2026-01-15T12:00:00Z"),
+      aiInputsUsed: expect.objectContaining({ ragUsed: false }),
+    });
   });
 
   it("uses RAG when chunks are available and dimensions match", async () => {
@@ -62,17 +134,12 @@ describe("coachService triggerAutoCoach suggestion application", () => {
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
     expect(retrieveRelevantChunks).toHaveBeenCalled();
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-      "day-1",
-      expect.objectContaining({
-        notes: "Focus on form",
-        aiSource: "rag",
-        aiRationale: "Progressive overload",
-        aiInputsUsed: expect.objectContaining({ ragUsed: true }),
-      }),
-      "user-1",
-      expect.anything(),
-    );
+    expectPlanDayUpdate("day-1", {
+      notes: "Focus on form",
+      aiSource: "rag",
+      aiRationale: "Progressive overload",
+      aiInputsUsed: expect.objectContaining({ ragUsed: true }),
+    });
   });
 
   it("falls back to legacy when RAG dimension mismatch occurs", async () => {
@@ -101,16 +168,11 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-      "day-1",
-      expect.objectContaining({
-        accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises",
-        aiSource: null,
-        aiRationale: "Progressive overload",
-      }),
-      "user-1",
-      expect.anything(),
-    );
+    expectPlanDayUpdate("day-1", {
+      accessory: "Leg Press\n[AI Coach] Add 3x10 calf raises",
+      aiSource: null,
+      aiRationale: "Progressive overload",
+    });
   });
 
   it("falls back to text-field writes when structured recommendation parsing returns no exercises", async () => {
@@ -136,15 +198,10 @@ describe("coachService triggerAutoCoach suggestion application", () => {
 
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
     expect(dbMockState.insertValues).not.toHaveBeenCalled();
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-      "day-1",
-      expect.objectContaining({
-        mainWorkout: "Keep this lighter today",
-        aiRationale: "Progressive overload",
-      }),
-      "user-1",
-      expect.anything(),
-    );
+    expectPlanDayUpdate("day-1", {
+      mainWorkout: "Keep this lighter today",
+      aiRationale: "Progressive overload",
+    });
   });
 
   it("keeps notes suggestions as text writes for table-backed workouts", async () => {
@@ -170,88 +227,17 @@ describe("coachService triggerAutoCoach suggestion application", () => {
     expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
     expect(parseExercisesFromText).not.toHaveBeenCalled();
     expect(dbMockState.insertValues).not.toHaveBeenCalled();
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-      "day-1",
-      expect.objectContaining({
-        notes: "Keep two reps in reserve.",
-        aiRationale: "Progressive overload",
-      }),
-      "user-1",
-      expect.anything(),
-    );
+    expectPlanDayUpdate("day-1", {
+      notes: "Keep two reps in reserve.",
+      aiRationale: "Progressive overload",
+    });
   });
 
   it("applies load-governor suggestions through structured rows before provider suggestions", async () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext, [
-      makeTimelineEntry({
-        focus: "Run",
-        mainWorkout: "Hill repeats 8x60 seconds",
-        exerciseDetails: [
-          {
-            exerciseName: "hill_repeats",
-            category: "running",
-            setNumber: 1,
-            time: 40,
-            sortOrder: 0,
-          },
-        ],
-      }),
+      hillRepeatTimelineEntry(),
     ]);
-    vi.mocked(buildTrainingContext).mockResolvedValue({
-      totalWorkouts: 10,
-      completedWorkouts: 10,
-      plannedWorkouts: 1,
-      missedWorkouts: 0,
-      skippedWorkouts: 0,
-      completionRate: 100,
-      currentStreak: 4,
-      recentWorkouts: [],
-      upcomingWorkouts: [
-        {
-          planDayId: "day-1",
-          date: "2026-01-16",
-          focus: "Run",
-          mainWorkout: "Hill repeats 8x60 seconds",
-          exerciseDetails: [
-            {
-              exerciseName: "hill_repeats",
-              category: "running",
-              setNumber: 1,
-              time: 40,
-              sortOrder: 0,
-            },
-          ],
-        },
-      ],
-      exerciseBreakdown: {},
-      coachingInsights: {
-        rpeTrend: "stable",
-        fatigueFlag: false,
-        undertrainingFlag: false,
-        stationGaps: [],
-        progressionFlags: [],
-        loadGovernor: {
-          currentUtss: 100,
-          acuteAvg: 70,
-          chronicAvg: 65,
-          acwr: 1.08,
-          zone: "sweet_spot",
-          flaggedVectors: ["posterior_chain"],
-          activeRestrictions: [
-            {
-              id: "posterior_chain_velocity_lock",
-              label: "Posterior chain velocity lock",
-              severity: "danger",
-              expiresOn: "2026-01-17",
-              vector: "posterior_chain",
-              rationale: "Recent posterior-chain load conflicts with speed work.",
-            },
-          ],
-          downshiftRationale: "Recent posterior-chain load conflicts with speed work.",
-          trend: [],
-        },
-      },
-    });
+    vi.mocked(buildTrainingContext).mockResolvedValue(loadGovernorTrainingContext());
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([
       makeSuggestion({ recommendation: "Keep the hill repeats hard." }),
     ]);
@@ -266,19 +252,14 @@ describe("coachService triggerAutoCoach suggestion application", () => {
         category: "running",
       }),
     ]);
-    expect(storage.plans.updatePlanDay).toHaveBeenCalledWith(
-      "day-1",
-      expect.objectContaining({
-        aiSource: "load_governor",
-        aiRationale: expect.stringContaining("posterior-chain"),
-        aiInputsUsed: expect.objectContaining({
-          loadGovernorAcwrZone: "sweet_spot",
-          loadGovernorFlaggedVectors: ["posterior_chain"],
-        }),
+    expectPlanDayUpdate("day-1", {
+      aiSource: "load_governor",
+      aiRationale: expect.stringContaining("posterior-chain"),
+      aiInputsUsed: expect.objectContaining({
+        loadGovernorAcwrZone: "sweet_spot",
+        loadGovernorFlaggedVectors: ["posterior_chain"],
       }),
-      "user-1",
-      expect.anything(),
-    );
+    });
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalledWith(
       "day-1",
       expect.objectContaining({ mainWorkout: "Keep the hill repeats hard." }),
@@ -289,75 +270,9 @@ describe("coachService triggerAutoCoach suggestion application", () => {
 
   it("does not fall back to text when a load-governor structured write fails", async () => {
     mockBaseAutoCoachDeps(storage, buildTrainingContext, [
-      makeTimelineEntry({
-        focus: "Run",
-        mainWorkout: "Hill repeats 8x60 seconds",
-        exerciseDetails: [
-          {
-            exerciseName: "hill_repeats",
-            category: "running",
-            setNumber: 1,
-            time: 40,
-            sortOrder: 0,
-          },
-        ],
-      }),
+      hillRepeatTimelineEntry(),
     ]);
-    vi.mocked(buildTrainingContext).mockResolvedValue({
-      totalWorkouts: 10,
-      completedWorkouts: 10,
-      plannedWorkouts: 1,
-      missedWorkouts: 0,
-      skippedWorkouts: 0,
-      completionRate: 100,
-      currentStreak: 4,
-      recentWorkouts: [],
-      upcomingWorkouts: [
-        {
-          planDayId: "day-1",
-          date: "2026-01-16",
-          focus: "Run",
-          mainWorkout: "Hill repeats 8x60 seconds",
-          exerciseDetails: [
-            {
-              exerciseName: "hill_repeats",
-              category: "running",
-              setNumber: 1,
-              time: 40,
-              sortOrder: 0,
-            },
-          ],
-        },
-      ],
-      exerciseBreakdown: {},
-      coachingInsights: {
-        rpeTrend: "stable",
-        fatigueFlag: false,
-        undertrainingFlag: false,
-        stationGaps: [],
-        progressionFlags: [],
-        loadGovernor: {
-          currentUtss: 100,
-          acuteAvg: 70,
-          chronicAvg: 65,
-          acwr: 1.08,
-          zone: "sweet_spot",
-          flaggedVectors: ["posterior_chain"],
-          activeRestrictions: [
-            {
-              id: "posterior_chain_velocity_lock",
-              label: "Posterior chain velocity lock",
-              severity: "danger",
-              expiresOn: "2026-01-17",
-              vector: "posterior_chain",
-              rationale: "Recent posterior-chain load conflicts with speed work.",
-            },
-          ],
-          downshiftRationale: "Recent posterior-chain load conflicts with speed work.",
-          trend: [],
-        },
-      },
-    });
+    vi.mocked(buildTrainingContext).mockResolvedValue(loadGovernorTrainingContext());
     vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
     dbMockState.insertValues.mockRejectedValueOnce(new Error("structured write failed"));
 

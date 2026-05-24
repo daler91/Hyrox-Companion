@@ -29,31 +29,31 @@ const applyTimelineSuggestionSchema = z.object({
   aiSource: z.enum(["rag", "legacy", "none"]).nullable().optional(),
 });
 
+async function loadParseUserContext(req: ExpressRequest) {
+  const userId = getUserId(req);
+  const [user, userCustomExercises] = await Promise.all([
+    storage.users.getUser(userId),
+    storage.users.getCustomExercises(userId),
+  ]);
+
+  return {
+    userId,
+    unitPreferences: { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" },
+    customExerciseNames: userCustomExercises.map((exercise) => exercise.name),
+  };
+}
+
 protectedPost(router, "/api/v1/parse-exercises", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
-    const userId = getUserId(req);
-    // ⚡ Perf: Parallelize independent DB queries to cut latency from
-    // 2 sequential round trips down to 1 concurrent round trip.
-    const [user, userCustomExercises] = await Promise.all([
-      storage.users.getUser(userId),
-      storage.users.getCustomExercises(userId),
-    ]);
-    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
-    const customNames = userCustomExercises.map(e => e.name);
-    const exercises = await parseExercisesFromText(text.trim(), unitPreferences, customNames, userId);
+    const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
+    const exercises = await parseExercisesFromText(text.trim(), unitPreferences, customExerciseNames, userId);
     res.json(exercises);
   });
 
 protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesRequestSchema>>, res: Response) => {
     const { text } = req.body;
-    const userId = getUserId(req);
-    const [user, userCustomExercises] = await Promise.all([
-      storage.users.getUser(userId),
-      storage.users.getCustomExercises(userId),
-    ]);
-    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
-    const customNames = userCustomExercises.map(e => e.name);
-    const parsed = await parseWorkoutStructureFromText(text.trim(), unitPreferences, customNames, userId);
+    const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
+    const parsed = await parseWorkoutStructureFromText(text.trim(), unitPreferences, customExerciseNames, userId);
     res.json(parsed);
   });
 
@@ -63,18 +63,12 @@ protectedPost(router, "/api/v1/parse-workout-structure", { limiter: rateLimiter(
 // mounted in server/index.ts BEFORE the global 100kb parser.
 protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
-    const userId = getUserId(req);
-    const [user, userCustomExercises] = await Promise.all([
-      storage.users.getUser(userId),
-      storage.users.getCustomExercises(userId),
-    ]);
-    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
-    const customNames = userCustomExercises.map(e => e.name);
+    const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const exercises = await parseExercisesFromImage({
       imageBase64,
       mimeType,
       ...unitPreferences,
-      customExerciseNames: customNames,
+      customExerciseNames,
       userId,
     });
     res.json(exercises);
@@ -82,18 +76,12 @@ protectedPost(router, "/api/v1/parse-exercises-from-image", { limiter: rateLimit
 
 protectedPost(router, "/api/v1/parse-workout-structure-from-image", { limiter: rateLimiter("parse", 5), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(parseExercisesFromImageRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof parseExercisesFromImageRequestSchema>>, res: Response) => {
     const { imageBase64, mimeType } = req.body;
-    const userId = getUserId(req);
-    const [user, userCustomExercises] = await Promise.all([
-      storage.users.getUser(userId),
-      storage.users.getCustomExercises(userId),
-    ]);
-    const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
-    const customNames = userCustomExercises.map(e => e.name);
+    const { userId, unitPreferences, customExerciseNames } = await loadParseUserContext(req);
     const parsed = await parseWorkoutStructureFromImage({
       imageBase64,
       mimeType,
       ...unitPreferences,
-      customExerciseNames: customNames,
+      customExerciseNames,
       userId,
     });
     res.json(parsed);

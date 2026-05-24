@@ -7,7 +7,7 @@ import { env } from "../../env";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
 import { storage } from "../../storage";
 import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting, validDate } from "../analytics";
-import { createTestApp } from "./testUtils";
+import { createTestApp, resetRouteTestState } from "./testUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
 vi.mock("../../clerkAuth", () => ({
@@ -49,8 +49,6 @@ vi.mock("../../services/analyticsService", () => ({
   calculateTrainingOverview: vi.fn(),
 }));
 
-import { clearRateLimitBuckets } from "../../routeUtils";
-
 describe("Analytics Routes", () => {
   describe("validDate", () => {
     it("should return undefined for falsy values", () => {
@@ -72,8 +70,8 @@ describe("Analytics Routes", () => {
 
   let app: express.Express;
 
-  beforeEach(() => {
-    clearRateLimitBuckets();
+  beforeEach(async () => {
+    await resetRouteTestState();
     vi.clearAllMocks();
     env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
     _cacheForTesting.clear();
@@ -260,21 +258,29 @@ describe("Analytics Routes", () => {
       downshiftRationale: null,
       trend: [],
     };
+    const makeTrainingOverview = (
+      overrides: Partial<ReturnType<typeof calculateTrainingOverview>> = {},
+    ): ReturnType<typeof calculateTrainingOverview> => ({
+      weeklySummaries: [],
+      workoutDates: [],
+      categoryTotals: {},
+      stationCoverage: [],
+      movementPatternCoverage: [],
+      muscleGroupCoverage: [],
+      currentStreak: 0,
+      weeklyCompletedWorkouts: 0,
+      weeklyGoal: 5,
+      currentStats: zeroStats,
+      trainingLoad: emptyTrainingLoad,
+      ...overrides,
+    });
 
     it("should return training overview data", async () => {
-      const mockOverview = {
+      const mockOverview = makeTrainingOverview({
         weeklySummaries: [{ weekStart: "2026-01-12", workoutCount: 3 }],
         workoutDates: ["2026-01-13"],
-        categoryTotals: {},
-        stationCoverage: [],
-        movementPatternCoverage: [],
-        muscleGroupCoverage: [],
-        currentStreak: 0,
-        weeklyCompletedWorkouts: 0,
-        weeklyGoal: 5,
         currentStats: { ...zeroStats, totalWorkouts: 3, avgPerWeek: 3 },
-        trainingLoad: emptyTrainingLoad,
-      };
+      });
 
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
@@ -300,19 +306,9 @@ describe("Analytics Routes", () => {
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
         { id: "set-1", workoutLogId: "log-1", exerciseName: "SkiErg", reps: null, distance: "1000", date: "2026-02-01" },
       ]);
-      vi.mocked(calculateTrainingOverview).mockReturnValue({
-        weeklySummaries: [],
+      vi.mocked(calculateTrainingOverview).mockReturnValue(makeTrainingOverview({
         workoutDates: ["2026-02-01"],
-        categoryTotals: {},
-        stationCoverage: [],
-        movementPatternCoverage: [],
-        muscleGroupCoverage: [],
-        currentStreak: 0,
-        weeklyCompletedWorkouts: 0,
-        weeklyGoal: 5,
-        currentStats: zeroStats,
-        trainingLoad: emptyTrainingLoad,
-      });
+      }));
 
       const response = await request(app).get("/api/v1/training-overview");
       expect(response.status).toBe(200);
@@ -332,19 +328,7 @@ describe("Analytics Routes", () => {
     it("should pass date params to storage", async () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculateTrainingOverview).mockReturnValue({
-        weeklySummaries: [],
-        workoutDates: [],
-        categoryTotals: {},
-        stationCoverage: [],
-        movementPatternCoverage: [],
-        muscleGroupCoverage: [],
-        currentStreak: 0,
-        weeklyCompletedWorkouts: 0,
-        weeklyGoal: 5,
-        currentStats: zeroStats,
-        trainingLoad: emptyTrainingLoad,
-      });
+      vi.mocked(calculateTrainingOverview).mockReturnValue(makeTrainingOverview());
 
       const response = await request(app).get("/api/v1/training-overview?from=2026-01-01&to=2026-03-31");
 
@@ -355,20 +339,9 @@ describe("Analytics Routes", () => {
     it("fetches a same-length previous window when `from` is set", async () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculateTrainingOverview).mockReturnValue({
-        weeklySummaries: [],
-        workoutDates: [],
-        categoryTotals: {},
-        stationCoverage: [],
-        movementPatternCoverage: [],
-        muscleGroupCoverage: [],
-        currentStreak: 0,
-        weeklyCompletedWorkouts: 0,
-        weeklyGoal: 5,
-        currentStats: zeroStats,
+      vi.mocked(calculateTrainingOverview).mockReturnValue(makeTrainingOverview({
         previousStats: zeroStats,
-        trainingLoad: emptyTrainingLoad,
-      });
+      }));
 
       await request(app).get("/api/v1/training-overview?from=2026-02-01&to=2026-02-28");
 
@@ -385,19 +358,7 @@ describe("Analytics Routes", () => {
     it("skips the previous-window fetch when `from` is absent", async () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(calculateTrainingOverview).mockReturnValue({
-        weeklySummaries: [],
-        workoutDates: [],
-        categoryTotals: {},
-        stationCoverage: [],
-        movementPatternCoverage: [],
-        muscleGroupCoverage: [],
-        currentStreak: 0,
-        weeklyCompletedWorkouts: 0,
-        weeklyGoal: 5,
-        currentStats: zeroStats,
-        trainingLoad: emptyTrainingLoad,
-      });
+      vi.mocked(calculateTrainingOverview).mockReturnValue(makeTrainingOverview());
 
       await request(app).get("/api/v1/training-overview");
 
@@ -411,19 +372,9 @@ describe("Analytics Routes", () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
       vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 7 });
-      vi.mocked(calculateTrainingOverview).mockReturnValue({
-        weeklySummaries: [],
-        workoutDates: [],
-        categoryTotals: {},
-        stationCoverage: [],
-        movementPatternCoverage: [],
-        muscleGroupCoverage: [],
-        currentStreak: 0,
-        weeklyCompletedWorkouts: 0,
+      vi.mocked(calculateTrainingOverview).mockReturnValue(makeTrainingOverview({
         weeklyGoal: 7,
-        currentStats: zeroStats,
-        trainingLoad: emptyTrainingLoad,
-      });
+      }));
 
       await request(app).get("/api/v1/training-overview");
 

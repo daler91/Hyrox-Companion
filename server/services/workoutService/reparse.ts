@@ -1,4 +1,4 @@
-import { exerciseSets, type InsertExerciseSet, type ParsedExercise, workoutLogs } from "@shared/schema";
+import { exerciseSets, type InsertExerciseSet, type ParsedExercise, type StructureBlockInput, workoutLogs } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
 import { eq, sql } from "drizzle-orm";
 import pLimit from "p-limit";
@@ -21,6 +21,16 @@ const hydrationLocks = new Map<string, Promise<ReparseWriteThroughResult | null>
 
 function buildHydrationLockKey(owner: SetOwner): string {
   return "workoutLogId" in owner ? `workout:${owner.workoutLogId}` : `planDay:${owner.planDayId}`;
+}
+
+function ownerCounterType(owner: SetOwner): "workout_log" | "plan_day" {
+  return "workoutLogId" in owner ? "workout_log" : "plan_day";
+}
+
+function trackManualFixCompleted(owner: SetOwner, source: CounterSource): void {
+  void incrementStructuredExerciseCounter(ownerCounterType(owner), source, "manual_fix_completed").catch((err: unknown) => {
+    logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
+  });
 }
 
 function resolveHydrationQualityState(
@@ -128,18 +138,7 @@ async function reparseFromText(
 
   const { acceptedRows, rejectedRows, fallbackUsed, structureBlocks } =
     await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), unitPreferences);
-  if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
-
-  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
-  const setCount = await replaceExerciseSetsAndStructureByOwner(
-    owner,
-    setRows,
-    structureBlocks.length > 0 ? structureBlocks : undefined,
-  );
-  void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
-    logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
-  });
-  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length, fallbackUsed);
+  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, fallbackUsed);
 }
 
 function buildReparseWriteThroughResult(
@@ -156,6 +155,27 @@ function buildReparseWriteThroughResult(
     rejectionReasons: rejectedCount > 0 ? ["schema_validation_failed"] : [],
     fallbackUsed,
   };
+}
+
+async function writeParsedStructure(
+  owner: SetOwner,
+  context: "workout" | "plan",
+  source: CounterSource,
+  acceptedRows: ParsedExercise[],
+  rejectedCount: number,
+  structureBlocks: StructureBlockInput[],
+  fallbackUsed: boolean,
+): Promise<ReparseWriteThroughResult | null> {
+  if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
+
+  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
+  const setCount = await replaceExerciseSetsAndStructureByOwner(
+    owner,
+    setRows,
+    structureBlocks.length > 0 ? structureBlocks : undefined,
+  );
+  trackManualFixCompleted(owner, source);
+  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedCount, fallbackUsed);
 }
 
 export function reparseWorkout(
@@ -207,18 +227,7 @@ async function reparseFromImage(
     customExerciseNames,
     userId,
   });
-  if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
-
-  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
-  const setCount = await replaceExerciseSetsAndStructureByOwner(
-    owner,
-    setRows,
-    structureBlocks.length > 0 ? structureBlocks : undefined,
-  );
-  void incrementStructuredExerciseCounter("workoutLogId" in owner ? "workout_log" : "plan_day", source, "manual_fix_completed").catch((err: unknown) => {
-    logger.warn({ context: "health-metrics", event: "manual_fix_counter_failed", owner, err }, "Manual fix telemetry increment failed");
-  });
-  return buildReparseWriteThroughResult(acceptedRows, setCount, rejectedRows.length, false);
+  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, false);
 }
 
 /**

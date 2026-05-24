@@ -15,7 +15,7 @@ import { buildTrainingContext } from "../../services/ai";
 import { retrieveRelevantChunks } from "../../services/ragService";
 import { storage } from "../../storage";
 import aiRouter from "../ai";
-import { createTestApp } from "./testUtils";
+import { createTestApp, resetRouteTestState } from "./testUtils";
 
 const MOCK_TRAINING_CONTEXT = "Training context";
 const CHAT_STREAM_ENDPOINT = "/api/v1/chat/stream";
@@ -161,8 +161,7 @@ describe("AI route consent compliance", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: false });
   });
@@ -182,8 +181,7 @@ describe("POST /api/parse-exercises", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
     app = createTestApp(aiRouter);
@@ -334,8 +332,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
     app = createTestApp(aiRouter);
@@ -426,8 +423,7 @@ describe("POST /api/chat", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
 
   });
@@ -478,8 +474,7 @@ describe("POST /api/chat/stream", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
 
   });
@@ -544,8 +539,7 @@ describe("Chat History and Messages Routes", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
 
   });
@@ -668,8 +662,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
 
   });
@@ -837,8 +830,7 @@ describe("POST /api/timeline/ai-suggestions/apply", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "kg" });
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
@@ -888,8 +880,7 @@ describe("RAG pipeline in chat endpoints", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const routeUtils = await import("../../routeUtils");
-    routeUtils.clearRateLimitBuckets();
+    await resetRouteTestState();
     app = createTestApp(aiRouter);
 
   });
