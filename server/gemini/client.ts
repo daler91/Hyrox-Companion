@@ -6,7 +6,7 @@ import { AI_CALL_TIMEOUT_MS,AI_REQUEST_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
 import { recordAiUsage } from "../services/aiUsageService";
-import { getRuntimeCache, hashRuntimeKey, setRuntimeCache } from "../sharedRuntimeState";
+import { getRuntimeCache, hashRuntimeKey } from "../sharedRuntimeState";
 import {
   assertBreakerClosed,
   CircuitBreakerOpenError,
@@ -179,11 +179,9 @@ function writeEmbeddingCache(key: string, values: number[]): void {
     embeddingCache.delete(firstKey);
   }
 
-  if (env.NODE_ENV !== "test") {
-    void setRuntimeCache(key, { values }, EMBEDDING_CACHE_TTL_MS).catch((err: unknown) => {
-      logger.warn({ err }, "[ai] Failed to write shared embedding cache");
-    });
-  }
+  // Keep embedding cache process-local and bounded. Writing full vectors to the
+  // shared runtime cache allows unbounded growth in server_runtime_cache under
+  // attacker-controlled input volume.
 }
 
 // Exported for tests to reset the cache between cases without reloading
