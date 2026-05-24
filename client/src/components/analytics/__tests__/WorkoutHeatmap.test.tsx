@@ -16,7 +16,8 @@ describe("WorkoutHeatmap", () => {
   it("renders one month-label row and a full 16-week grid", () => {
     render(<WorkoutHeatmap workoutDates={["2026-05-18", "2026-05-20"]} />);
 
-    expect(screen.getAllByTestId("workout-heatmap-month-label-row")).toHaveLength(1);
+    const monthLabelRow = screen.getByTestId("workout-heatmap-month-label-row");
+    expect(monthLabelRow).toHaveClass("gap-x-2");
     expect(screen.getAllByTestId("workout-heatmap-month-label").map((label) => label.textContent))
       .toEqual(["Feb", "Mar", "Apr", "May"]);
     expect(screen.getAllByText("May")).toHaveLength(1);

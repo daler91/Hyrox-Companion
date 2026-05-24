@@ -89,7 +89,7 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
           <div className="flex gap-2">
             <div className="w-8 shrink-0" aria-hidden="true" />
             <div
-              className="grid flex-1 text-[10px] text-muted-foreground"
+              className="grid flex-1 gap-x-2 text-[10px] text-muted-foreground"
               style={{ gridTemplateColumns: WEEK_GRID_TEMPLATE }}
               data-testid="workout-heatmap-month-label-row"
             >
