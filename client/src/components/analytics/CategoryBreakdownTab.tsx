@@ -27,18 +27,6 @@ import { MuscleHeatMapCard } from "./MuscleHeatMapCard";
 
 type MovementPatternCoverage = TrainingOverview["movementPatternCoverage"][number];
 
-const STATION_LABELS: Record<string, string> = {
-  skierg: "SkiErg",
-  sled_push: "Sled Push",
-  sled_pull: "Sled Pull",
-  burpee_broad_jump: "Burpee Broad Jump",
-  rowing: "Rowing",
-  farmers_carry: "Farmers Carry",
-  sandbag_lunges: "Sandbag Lunges",
-  wall_balls: "Wall Balls",
-  running: "Running",
-};
-
 function getFreshnessColor(daysSince: number | null): string {
   if (daysSince === null) return "bg-muted/40 text-muted-foreground";
   if (daysSince <= 7) return "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30";
@@ -230,7 +218,6 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     !overview ||
     (
       pieData.length === 0 &&
-      overview.stationCoverage.every((s) => s.lastTrained === null) &&
       !hasMovementPatternData &&
       !hasMuscleHeatMapData
     )
@@ -240,7 +227,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
         <div className="space-y-3">
           <PieChartIcon className="h-10 w-10 mx-auto text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            Your training mix and station coverage appear here once you&apos;ve logged a handful of workouts across different categories.
+            Your training mix and coverage insights appear here once you&apos;ve logged a handful of workouts across different categories.
           </p>
           <Button variant="outline" asChild>
             <Link href="/log" data-testid="button-log-workout-from-breakdown">
@@ -292,49 +279,6 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
           </CardContent>
         </Card>
       )}
-
-      {/* Functional Station Coverage */}
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2" className="text-base">Functional Station Coverage</CardTitle>
-          <CardDescription>Track when you last trained each functional station (incl. hyrox stations)</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" data-testid="station-coverage-grid">
-            {overview.stationCoverage.map((station) => (
-              <div
-                key={station.station}
-                className={`p-3 rounded-lg border text-sm ${getFreshnessColor(station.daysSince)}`}
-              >
-                <p className="font-semibold">
-                  {STATION_LABELS[station.station] ?? station.station}
-                </p>
-                <p className="text-xs mt-1 opacity-80">
-                  {getFreshnessLabel(station.daysSince)}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-sm bg-green-500/30 border border-green-500/30" />
-              <span>&le; 7 days</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-sm bg-amber-500/30 border border-amber-500/30" />
-              <span>8-14 days</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-sm bg-red-500/30 border border-red-500/30" />
-              <span>14+ days</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded-sm bg-muted/40" />
-              <span>Never</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <MuscleHeatMapCard muscles={muscleGroupCoverage} />
 
