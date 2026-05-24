@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -258,30 +259,48 @@ const SetRow = memo(function SetRow({
             showPlannedDiffs={showPlannedDiffs}
           />
         ))}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => setNotesOpen((v) => !v)}
-          aria-label={notesOpen ? "Hide note" : "Add note"}
-          aria-pressed={notesOpen}
-          className={cn("size-7 text-muted-foreground", notesOpen && "text-foreground")}
-          data-testid={`button-toggle-note-${set.id}`}
-        >
-          <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onDelete}
-          disabled={!canDelete}
-          aria-label={`Remove set ${set.setNumber}`}
-          className="size-7 text-muted-foreground disabled:opacity-40"
-          data-testid={`button-remove-set-${set.id}`}
-        >
-          <X className="h-3.5 w-3.5" aria-hidden />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setNotesOpen((v) => !v)}
+                aria-label={notesOpen ? "Hide note" : "Add note"}
+                aria-pressed={notesOpen}
+                className={cn("size-7 text-muted-foreground", notesOpen && "text-foreground")}
+                data-testid={`button-toggle-note-${set.id}`}
+              >
+                <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{notesOpen ? "Hide note" : "Add note"}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={onDelete}
+                disabled={!canDelete}
+                aria-label={`Remove set ${set.setNumber}`}
+                className="size-7 text-muted-foreground disabled:opacity-40"
+                data-testid={`button-remove-set-${set.id}`}
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Remove set</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {notesOpen && <NotesField set={set} onUpdate={onUpdate} />}
