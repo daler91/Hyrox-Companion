@@ -63,6 +63,31 @@ const muscleGroupCoverage = ([
   daysSince,
 }));
 
+const scrollMainContentToTestId = (selector: string) => {
+  cy.getBySel(selector).then(($element) => {
+    cy.get("#main-content").then(($mainContent) => {
+      const mainContent = $mainContent[0];
+      const elementRect = $element[0].getBoundingClientRect();
+      const mainRect = mainContent.getBoundingClientRect();
+      mainContent.scrollTop = Math.max(0, mainContent.scrollTop + elementRect.top - mainRect.top - 24);
+    });
+  });
+};
+
+const expectInMainContentViewport = (selector: string) => {
+  cy.getBySel(selector).should(($element) => {
+    const elementRect = $element[0].getBoundingClientRect();
+    const mainContent = document.querySelector("#main-content");
+    expect(mainContent, "#main-content").to.not.equal(null);
+    const mainRect = mainContent!.getBoundingClientRect();
+
+    expect(elementRect.width, `${selector} width`).to.be.greaterThan(0);
+    expect(elementRect.height, `${selector} height`).to.be.greaterThan(0);
+    expect(elementRect.bottom, `${selector} bottom`).to.be.greaterThan(mainRect.top);
+    expect(elementRect.top, `${selector} top`).to.be.lessThan(mainRect.bottom);
+  });
+};
+
 const weekStarts = [
   "2024-01-01",
   "2024-01-08",
@@ -250,15 +275,22 @@ describe("Analytics Page", () => {
 
     it("renders the muscle heat map across desktop and mobile widths", () => {
       cy.getBySel("tab-breakdown").click();
-      cy.getBySel("muscle-heat-map-card").scrollIntoView().should("be.visible");
+      scrollMainContentToTestId("muscle-heat-map-card");
+      cy.getBySel("muscle-heat-map-card").should("exist");
+      expectInMainContentViewport("muscle-heat-map-card");
+      scrollMainContentToTestId("muscle-heat-map-silhouette");
       cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
       cy.getBySel("muscle-tile-quads").should("contain", "52 sets");
       cy.getBySel("muscle-tile-quads").should("contain", "Peak set volume");
 
       cy.viewport(390, 844);
-      cy.getBySel("muscle-heat-map-card").scrollIntoView().should("be.visible");
+      scrollMainContentToTestId("muscle-heat-map-card");
+      cy.getBySel("muscle-heat-map-card").should("exist");
+      expectInMainContentViewport("muscle-heat-map-card");
+      scrollMainContentToTestId("muscle-heat-map-silhouette");
       cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
-      cy.getBySel("muscle-tile-quads").scrollIntoView().should("be.visible");
+      scrollMainContentToTestId("muscle-tile-quads");
+      cy.getBySel("muscle-tile-quads").should("be.visible");
     });
 
     it("keeps analytics scrolling inside the main app region", () => {
