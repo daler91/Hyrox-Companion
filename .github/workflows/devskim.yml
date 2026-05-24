@@ -30,8 +30,20 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Create trusted NuGet config
+        run: |
+          cat > "$RUNNER_TEMP/nuget.trusted.config" <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+          </configuration>
+          EOF
+
       - name: Install DevSkim CLI
-        run: dotnet tool install --global Microsoft.CST.DevSkim.CLI --version 1.0.70
+        run: dotnet tool install --global Microsoft.CST.DevSkim.CLI --version 1.0.70 --configfile "$RUNNER_TEMP/nuget.trusted.config"
 
       - name: Run DevSkim scanner
         run: |
