@@ -265,14 +265,12 @@ Shared building blocks for the Log Workout stepper's Capture and Confirm steps:
 
 - `WorkoutHeader` -- Page title.
 - `WorkoutDateFields` -- Workout title and date inputs.
-- `WorkoutDetailsCard` -- Title, date, RPE inputs.
 - `WorkoutNotesCard` -- Notes textarea with voice input.
-- `WorkoutSaveButton` -- Save action button.
 - `WorkoutComposer` -- Unified log-workout surface: structured exercise list with a collapsible "Describe / dictate" panel. Auto-parses the text panel's contents into the exercise list on a debounce, preserving cells the user has already edited.
 - `WorkoutTextMode` -- Textarea + voice dictation used inside the composer's collapsible panel. Also mounts `ImageCaptureButton` for photo-to-workout parsing; the voice button is hidden while a photo preview is active to avoid conflicting input surfaces.
 - `DraftExerciseTable` -- Editable draft exercise/set table shown on the Confirm step.
 - `ParseStatusStrip` -- Inline status indicator for the auto-parse pipeline.
-- `ExerciseRow` / `SortableExerciseBlock` -- Draggable exercise block primitives used by the composer.
+- `ExerciseRow` -- Exercise row renderer used by the composer.
 - `ExerciseImagePreview` -- Thumbnail + remove control rendered after a user captures a workout photo but before the parsed exercises are committed.
 
 ### `workout-structure/` -- Structured Format Editor
@@ -305,7 +303,6 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 - `RagDebugBadge` -- Dev-only indicator that surfaces which RAG chunks (if any) were injected into the last chat response; gated behind a dev flag.
 - `RpeSelector` -- Rate of Perceived Exertion selector.
 - `VoiceButton` / `VoiceFieldButton` -- Voice input controls.
-- `WeeklySummary` -- Weekly training summary.
 - `QuickActions` -- Quick action buttons.
 - `WorkoutCard` -- Workout display card.
 
