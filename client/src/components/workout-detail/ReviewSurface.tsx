@@ -259,17 +259,16 @@ function CompletionSuccessCallout({ visible }: { readonly visible: boolean }) {
   if (!visible) return null;
 
   return (
-    <div
+    <output
       className="flex items-start gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-foreground"
       data-testid="review-completion-success"
-      role="status"
     >
       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-      <div>
-        <p className="font-medium">Workout completed</p>
-        <p className="text-muted-foreground">Review or adjust your results below.</p>
-      </div>
-    </div>
+      <span>
+        <span className="block font-medium">Workout completed</span>
+        <span className="block text-muted-foreground">Review or adjust your results below.</span>
+      </span>
+    </output>
   );
 }
 
