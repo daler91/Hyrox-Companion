@@ -252,6 +252,13 @@ describe("calculateTrainingOverview", () => {
       pattern.lastTrained === null &&
       pattern.daysSince === null
     ))).toBe(true);
+    expect(result.muscleGroupCoverage).toHaveLength(20);
+    expect(result.muscleGroupCoverage.every((muscle) => (
+      muscle.sessionCount === 0 &&
+      muscle.totalSets === 0 &&
+      muscle.lastTrained === null &&
+      muscle.daysSince === null
+    ))).toBe(true);
     expect(result.currentStreak).toBe(0);
     expect(result.weeklyCompletedWorkouts).toBe(0);
     expect(result.weeklyGoal).toBe(5);
@@ -417,6 +424,86 @@ describe("calculateTrainingOverview", () => {
     ]);
     expect(result.movementPatternCoverage.every((pattern) => pattern.sessionCount === 0)).toBe(true);
     expect(result.movementPatternCoverage.every((pattern) => pattern.totalSets === 0)).toBe(true);
+  });
+
+  it("aggregates muscle heat map sessions, set volume, and recency", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-20T12:00:00Z"));
+
+    const sets = [
+      makeSet({ exerciseName: "back_squat", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({ exerciseName: "back_squat", workoutLogId: "w1", date: "2026-01-17" }),
+      makeSet({ exerciseName: "bench_press", workoutLogId: "w2", date: "2026-01-18" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    const quads = result.muscleGroupCoverage.find((muscle) => muscle.muscle === "quads");
+    expect(quads).toEqual({
+      muscle: "quads",
+      label: "Quads",
+      bodyRegion: "lower",
+      sessionCount: 1,
+      totalSets: 2,
+      lastTrained: "2026-01-17",
+      daysSince: 3,
+    });
+
+    const chest = result.muscleGroupCoverage.find((muscle) => muscle.muscle === "chest");
+    expect(chest).toEqual(expect.objectContaining({
+      bodyRegion: "upper",
+      sessionCount: 1,
+      totalSets: 1,
+      lastTrained: "2026-01-18",
+      daysSince: 2,
+    }));
+  });
+
+  it("counts broad and multi-muscle exercises toward each mapped heat map muscle", () => {
+    const sets = [
+      makeSet({ exerciseName: "burpee_broad_jump", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({ exerciseName: "rowing", workoutLogId: "w2", date: "2026-01-16" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+    const getMuscle = (muscleName: string) =>
+      result.muscleGroupCoverage.find((muscle) => muscle.muscle === muscleName);
+
+    expect(getMuscle("chest")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+    expect(getMuscle("lats")).toEqual(expect.objectContaining({ sessionCount: 2, totalSets: 2 }));
+    expect(getMuscle("quads")).toEqual(expect.objectContaining({ sessionCount: 2, totalSets: 2 }));
+    expect(getMuscle("lower_back")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+  });
+
+  it("always returns every heat map muscle and excludes custom or unmapped exercises", () => {
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "Odd lift", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({ exerciseName: "made_up_movement", workoutLogId: "w2", date: "2026-01-16" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    expect(result.muscleGroupCoverage.map((muscle) => muscle.muscle)).toEqual([
+      "chest",
+      "shoulders",
+      "rear_delts",
+      "traps",
+      "lats",
+      "upper_back",
+      "biceps",
+      "triceps",
+      "forearms",
+      "core",
+      "obliques",
+      "lower_back",
+      "hip_flexors",
+      "quads",
+      "hamstrings",
+      "glutes",
+      "adductors",
+      "hip_abductors",
+      "calves",
+      "tibialis",
+    ]);
+    expect(result.muscleGroupCoverage.every((muscle) => muscle.sessionCount === 0)).toBe(true);
+    expect(result.muscleGroupCoverage.every((muscle) => muscle.totalSets === 0)).toBe(true);
   });
 
   it("handles null RPE gracefully", () => {

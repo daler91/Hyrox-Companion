@@ -95,6 +95,7 @@ export function setupAuthIntercepts(overrides?: {
       categoryTotals: {},
       stationCoverage: [],
       movementPatternCoverage: [],
+      muscleGroupCoverage: [],
       currentStreak: 0,
       weeklyCompletedWorkouts: 0,
       weeklyGoal: 5,

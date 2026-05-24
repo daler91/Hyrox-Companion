@@ -11,6 +11,8 @@ import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
 
+import { MuscleHeatMapCard } from "./MuscleHeatMapCard";
+
 const STATION_LABELS: Record<string, string> = {
   skierg: "SkiErg",
   sled_push: "Sled Push",
@@ -122,8 +124,12 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     return result.sort((a, b) => b.value - a.value);
   }, [overview]);
   const movementPatternCoverage = overview?.movementPatternCoverage ?? [];
+  const muscleGroupCoverage = overview?.muscleGroupCoverage ?? [];
   const hasMovementPatternData = movementPatternCoverage.some(
     (pattern) => pattern.sessionCount > 0 || pattern.totalSets > 0 || pattern.lastTrained !== null,
+  );
+  const hasMuscleHeatMapData = muscleGroupCoverage.some(
+    (muscle) => muscle.sessionCount > 0 || muscle.totalSets > 0 || muscle.lastTrained !== null,
   );
 
   if (isLoading) {
@@ -139,7 +145,8 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     (
       pieData.length === 0 &&
       overview.stationCoverage.every((s) => s.lastTrained === null) &&
-      !hasMovementPatternData
+      !hasMovementPatternData &&
+      !hasMuscleHeatMapData
     )
   ) {
     return (
@@ -242,6 +249,8 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
           </div>
         </CardContent>
       </Card>
+
+      <MuscleHeatMapCard muscles={muscleGroupCoverage} />
 
       <MovementPatternCoverageCard patterns={movementPatternCoverage} />
     </div>
