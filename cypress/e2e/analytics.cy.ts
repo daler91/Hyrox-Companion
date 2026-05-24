@@ -80,7 +80,10 @@ const expectInMainContentViewport = (selector: string) => {
 
     cy.getBySel(selector).should(($element) => {
       const elementRect = $element[0].getBoundingClientRect();
+      const styles = getComputedStyle($element[0]);
 
+      expect(styles.display, `${selector} display`).to.not.equal("none");
+      expect(styles.visibility, `${selector} visibility`).to.not.equal("hidden");
       expect(elementRect.width, `${selector} width`).to.be.greaterThan(0);
       expect(elementRect.height, `${selector} height`).to.be.greaterThan(0);
       expect(elementRect.bottom, `${selector} bottom`).to.be.greaterThan(mainRect.top);
@@ -280,7 +283,8 @@ describe("Analytics Page", () => {
       cy.getBySel("muscle-heat-map-card").should("exist");
       expectInMainContentViewport("muscle-heat-map-card");
       scrollMainContentToTestId("muscle-heat-map-silhouette");
-      cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
+      cy.getBySel("muscle-heat-map-silhouette").should("exist");
+      expectInMainContentViewport("muscle-heat-map-silhouette");
       cy.getBySel("muscle-tile-quads").should("contain", "52 sets");
       cy.getBySel("muscle-tile-quads").should("contain", "Peak set volume");
 
@@ -289,9 +293,11 @@ describe("Analytics Page", () => {
       cy.getBySel("muscle-heat-map-card").should("exist");
       expectInMainContentViewport("muscle-heat-map-card");
       scrollMainContentToTestId("muscle-heat-map-silhouette");
-      cy.getBySel("muscle-heat-map-silhouette").should("be.visible");
+      cy.getBySel("muscle-heat-map-silhouette").should("exist");
+      expectInMainContentViewport("muscle-heat-map-silhouette");
       scrollMainContentToTestId("muscle-tile-quads");
-      cy.getBySel("muscle-tile-quads").should("be.visible");
+      cy.getBySel("muscle-tile-quads").should("exist");
+      expectInMainContentViewport("muscle-tile-quads");
     });
 
     it("keeps analytics scrolling inside the main app region", () => {
