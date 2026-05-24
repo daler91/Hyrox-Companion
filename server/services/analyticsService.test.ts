@@ -392,14 +392,16 @@ describe("calculateTrainingOverview", () => {
     const sets = [
       makeSet({ exerciseName: "trap_bar_deadlift", workoutLogId: "w1", date: "2026-01-15" }),
       makeSet({ exerciseName: "wall_balls", category: "functional", workoutLogId: "w2", date: "2026-01-16" }),
+      makeSet({ exerciseName: "burpee_broad_jump", category: "functional", workoutLogId: "w3", date: "2026-01-17" }),
     ];
     const result = calculateTrainingOverview([], sets);
 
     const getPattern = (patternName: string) =>
       result.movementPatternCoverage.find((pattern) => pattern.pattern === patternName);
 
-    expect(getPattern("squat")).toEqual(expect.objectContaining({ sessionCount: 2, totalSets: 2 }));
+    expect(getPattern("squat")).toEqual(expect.objectContaining({ sessionCount: 3, totalSets: 3 }));
     expect(getPattern("hinge")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+    expect(getPattern("horizontal_push")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
     expect(getPattern("vertical_push")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
   });
 

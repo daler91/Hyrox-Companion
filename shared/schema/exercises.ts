@@ -314,6 +314,7 @@ export const EXERCISE_MOVEMENT_PATTERNS = {
   skierg: ["vertical_pull"],
   sled_push: ["squat"],
   sled_pull: ["hinge", "horizontal_pull"],
+  burpee_broad_jump: ["squat", "horizontal_push"],
   rowing: ["horizontal_pull"],
   farmers_carry: ["carry"],
   sandbag_lunges: ["lunge_split_squat"],

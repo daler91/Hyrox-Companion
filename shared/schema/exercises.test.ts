@@ -208,6 +208,7 @@ describe("movement pattern metadata", () => {
     expect(getExerciseMovementPatterns("romanian_deadlift")).toContain("hinge");
     expect(getExerciseMovementPatterns("bench_press")).toContain("horizontal_push");
     expect(getExerciseMovementPatterns("push_up")).toContain("horizontal_push");
+    expect(getExerciseMovementPatterns("burpee_broad_jump")).toEqual(["squat", "horizontal_push"]);
     expect(getExerciseMovementPatterns("overhead_press")).toContain("vertical_push");
     expect(getExerciseMovementPatterns("bent_over_row")).toContain("horizontal_pull");
     expect(getExerciseMovementPatterns("pull_up")).toContain("vertical_pull");
