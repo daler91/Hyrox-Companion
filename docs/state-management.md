@@ -14,6 +14,7 @@ fitai.coach uses **TanStack Query (React Query v5)** for server state management
 - [API Client Layer](#api-client-layer)
 - [Custom Hooks Catalog](#custom-hooks-catalog)
 - [Offline Queue](#offline-queue)
+- [Workout Draft Persistence](#workout-draft-persistence)
 - [Utility Functions](#utility-functions)
 - [Performance Patterns](#performance-patterns)
 
@@ -278,6 +279,20 @@ sequenceDiagram
     end
     Queue->>User: CustomEvent("offline-sync-complete")
 ```
+
+---
+
+## Workout Draft Persistence
+
+**File:** `client/src/hooks/useLogWorkoutDraft.ts`
+
+The Log Workout page autosaves a working draft to `localStorage` so an accidental refresh or navigation does not lose in-progress data.
+
+- **Storage keys:**
+  - `fitai-log-workout-draft` — the draft payload, in `localStorage` (durable across sessions and tabs).
+  - `fitai-log-workout-draft-announced` — a per-tab flag in `sessionStorage` that suppresses re-showing the "restored a draft" toast more than once within the same browser session. Scoped to `sessionStorage` deliberately so a fresh tab announces the restore again.
+- **Schema version:** `DRAFT_VERSION = 3`. Drafts written under v2 are still readable for backward compatibility; older versions are discarded.
+- **Lifetime:** Drafts persist **indefinitely** until they are explicitly cleared. The hook stores `savedAt: Date.now()` but never checks the timestamp for expiry — clearing only happens when the user successfully saves the workout, taps the "discard draft" affordance, signs out (via `clearUserLocalData()` in `client/src/hooks/useSignOut.ts`), or deletes their account (via `AccountDangerZone`). This is intentional, since the draft is single-user device-local state with no privacy retention concern beyond the signout/deletion paths that already clear it.
 
 ---
 

@@ -56,7 +56,7 @@
 
 - ~~**19. Resolve dependency security overrides**~~ — Documented all 4 overrides with CVE/GHSA IDs, parent dependency info, and removal conditions. Fixed esbuild range inconsistency. Found `serialize-javascript` is removable now, `undici` safe to remove on next lockfile regen.
 
-- ~~**20. Persistent rate limiter**~~ — Documented limitation and Redis upgrade path in `server/routeUtils.ts`. Acceptable for single-instance Railway deployment.
+- ~~**20. Persistent rate limiter**~~ — Replaced `MemoryStore` with `PostgresRateLimitStore` in `server/routeUtils.ts` (backed by the `rate_limit_buckets` table in `shared/schema/tables.ts`; `server/rateLimitStore.ts` implements the adapter). `MemoryStore` is only used in tests. Multi-replica deployments now share per-user limits.
 
 - ~~**21. Improve PWA offline strategy**~~ — Added Workbox runtimeCaching: NetworkFirst for API (10s timeout), CacheFirst for fonts (1yr), StaleWhileRevalidate for images (30d).
 
