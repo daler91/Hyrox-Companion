@@ -14,12 +14,12 @@ I re-ran a fresh multi-pass review across:
 
 ## 1) Architecture & Design Patterns
 
-### [Severity Level]: Medium — PARTIALLY RESOLVED (2026-04-22)
-**File/Location:** `server/routes/workouts.ts` + `server/services/workoutUseCases.ts`
+### [Severity Level]: Medium — PARTIALLY RESOLVED (2026-05-24)
+**File/Location:** `server/routes/workouts/*` + `server/services/workoutUseCases.ts` + `server/services/workoutService/reparse.ts`
 
-**Status:** The use-case layer now exists. `workoutUseCases.ts` exports `createWorkout` and `updateWorkoutUseCase`, and `workouts.ts` delegates its create/update flow through them (`grep workoutUseCases server/routes/workouts.ts`). The specific example shown below was the target state of the refactor.
+**Status:** The single-file `server/routes/workouts.ts` no longer exists. Routes are now split across `server/routes/workouts/workoutsCrud.routes.ts`, `workoutsAi.routes.ts`, `workoutsExport.routes.ts`, `workoutsMigration.routes.ts`, and `workoutsTimeline.routes.ts`. The use-case layer exists (`workoutUseCases.ts` exports `createWorkout`/`updateWorkoutUseCase`), and reparse orchestration was extracted into `server/services/workoutService/reparse.ts`.
 
-**Remaining work:** `workouts.ts` is still ~420 lines because the image-parse, re-parse, batch re-parse, and unstructured-workout routes have not yet been pulled into the use-case layer — they still mix transport parsing, validation edge-cases, and orchestration inline. Splitting those out is the next step to complete the refactor.
+**Remaining work:** The reparse, image-parse, batch re-parse, and unstructured-workout handlers in `workoutsAi.routes.ts` still call service functions directly from the route layer instead of going through a thin use-case wrapper. The next step is a `parseWorkoutUseCases.ts` (or equivalent) so the route handlers shrink to validate-and-delegate.
 
 **Original issue:**
 `workouts.ts` was carrying too many responsibilities (transport parsing, validation edge-cases, business orchestration, and response shaping). This weakened separation of concerns and made transactional behavior harder to reason about as features grew.
@@ -160,27 +160,23 @@ export async function* streamChatWithCoach(...args: unknown[], signal?: AbortSig
 
 ## 4) Maintainability & Scalability
 
-### [Severity Level]: Medium
-**File/Location:** `server/routes/workouts.ts` (`POST /api/v1/custom-exercises`)
+### [Severity Level]: Medium — RESOLVED
+**File/Location:** `server/routes/workouts/workoutsCrud.routes.ts` (`POST /api/v1/custom-exercises`)
 
-**The Issue:**
-This endpoint uses inline `safeParse` + custom error shape while most routes use `validateBody(...)`. API validation contracts are inconsistent.
+**Status:** Fixed. The endpoint is now registered with `protectedPost(router, "/api/v1/custom-exercises", { limiter: rateLimiter("customExercise", 20), middleware: [validateBody(createCustomExerciseSchema)] }, ...)` (`server/routes/workouts/workoutsCrud.routes.ts:87`). The schema lives in `server/routes/workouts/shared.ts:8` as `createCustomExerciseSchema = insertCustomExerciseSchema.omit({ userId: true })`. The endpoint now uses the same shared validation middleware as the rest of the routes, and the inline `safeParse` is gone.
 
-**Why it matters:**
-Clients must special-case error handling; observability and contract testing become fragmented.
+**Original issue:**
+This endpoint used inline `safeParse` + custom error shape while most routes used `validateBody(...)`, making API validation contracts inconsistent.
 
-**The Fix:**
-Adopt shared validation middleware here as well.
-
+**The Fix (now in place):**
 ```ts
 const createCustomExerciseSchema = insertCustomExerciseSchema.omit({ userId: true });
 
-router.post(
+protectedPost(
+  router,
   "/api/v1/custom-exercises",
-  isAuthenticated,
-  rateLimiter("customExercise", 20),
-  validateBody(createCustomExerciseSchema),
-  asyncHandler(async (req, res) => {
+  { limiter: rateLimiter("customExercise", 20), middleware: [validateBody(createCustomExerciseSchema)] },
+  async (req, res) => {
     const userId = getUserId(req);
     const { name, category } = req.body;
     const exercise = await storage.users.upsertCustomExercise({
@@ -189,7 +185,7 @@ router.post(
       category: category || "conditioning",
     });
     res.json(exercise);
-  }),
+  },
 );
 ```
 
@@ -203,18 +199,15 @@ router.post(
 **Status:** No code change required. Verified at `server/strava.ts:315-322`: `skipped` is already
 incremented exactly once per already-imported activity. This audit item was stale.
 
-### [Severity Level]: Medium
+### [Severity Level]: Medium — RESOLVED
 **File/Location:** `server/emailScheduler.ts` (`runEmailCronJob`)
 
-**The Issue:**
-Job enqueue calls are fire-and-forget and not awaited, but function still reports optimistic success counts.
+**Status:** Fixed. `server/emailScheduler.ts:154-191` now collects each `sendJobNoRetry(...)` call into an `ops: Promise<unknown>[]` array, awaits the batch with `Promise.allSettled`, and reports the fulfilled count as `emailsSent` while logging individual rejections. Reporting now reflects actual queue acceptance instead of fire-and-forget optimism.
 
-**Why it matters:**
-When queue sends fail, reporting becomes inaccurate and jobs may silently drop.
+**Original issue:**
+Job enqueue calls were fire-and-forget and not awaited, but the function still reported optimistic success counts.
 
-**The Fix:**
-Await enqueue operations with `Promise.allSettled` and report fulfilled count only.
-
+**The Fix (now in place):**
 ```ts
 const ops: Promise<unknown>[] = [];
 for (const user of usersToCheck) {
@@ -239,7 +232,7 @@ return {
 
 1. ~~**High:** server-side idempotency enforcement for mutating endpoints.~~ — RESOLVED
 2. ~~**Medium:** abort propagation for AI SSE streaming.~~ — RESOLVED
-3. **Medium:** fix Strava skipped-counter bug.
-4. **Medium:** await email job enqueues and correct reporting.
-5. **Medium:** normalize custom-exercise validation contract.
-6. **Medium:** extract workout orchestration to use-case layer.
+3. ~~**Medium:** fix Strava skipped-counter bug.~~ — RESOLVED (verified already correct)
+4. ~~**Medium:** await email job enqueues and correct reporting.~~ — RESOLVED
+5. ~~**Medium:** normalize custom-exercise validation contract.~~ — RESOLVED
+6. **Medium:** extract reparse/image-parse/batch-reparse orchestration into a `parseWorkoutUseCases.ts` so `workoutsAi.routes.ts` handlers shrink to validate-and-delegate.
