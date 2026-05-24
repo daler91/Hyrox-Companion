@@ -1,16 +1,18 @@
 import type { TimelineEntry } from "@shared/schema";
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
 import { EmbeddedWorkoutCoachChat } from "./EmbeddedWorkoutCoachChat";
 import { MobileCoachToggle } from "./MobileCoachToggle";
 
 const SPLIT_WORKOUT_COACH_LAYOUT =
-  "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
+  "grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]";
 const MOBILE_WORKOUT_COACH_LAYOUT = "flex min-h-0 flex-1 flex-col";
 const STACKED_WORKOUT_COACH_LAYOUT = "space-y-4";
 const MOBILE_COACH_CARD =
   "min-h-0 flex-1 self-stretch overflow-hidden rounded-none border-0 bg-background";
-const MOBILE_COACH_CHAT_AREA = "min-h-0 max-h-none flex-1";
+const EXPANDED_COACH_CHAT_AREA = "min-h-0 max-h-none flex-1";
 
 interface WorkoutCoachPanelStateArgs {
   readonly coachChatOpen: boolean;
@@ -71,9 +73,17 @@ export function WorkoutCoachLayout({
   panelState,
   returnTestId,
 }: WorkoutCoachLayoutProps) {
+  const detailsScrollable = panelState.layoutClassName === SPLIT_WORKOUT_COACH_LAYOUT;
   return (
     <div className={panelState.layoutClassName}>
-      <div className="min-w-0 space-y-4" hidden={panelState.detailsHidden} data-testid={detailsTestId}>
+      <div
+        className={cn(
+          "min-w-0 space-y-4",
+          detailsScrollable && "min-h-0 overflow-y-auto pr-1",
+        )}
+        hidden={panelState.detailsHidden}
+        data-testid={detailsTestId}
+      >
         <MobileCoachToggle
           visible={panelState.returnButtonVisible}
           onClick={onShowCoachPanel}
@@ -105,10 +115,9 @@ export function WorkoutCoachChatPanel({
       seedNonce={coachChatNonce}
       onBack={getCoachBackHandler(panelState.coachPanelOpen, onShowWorkoutDetails, onCloseCoachChat)}
       backButtonText={panelState.coachPanelOpen ? "Workout details" : undefined}
-      chatAreaClassName={panelState.coachPanelOpen ? MOBILE_COACH_CHAT_AREA : undefined}
+      chatAreaClassName={EXPANDED_COACH_CHAT_AREA}
       className={panelState.coachPanelOpen ? MOBILE_COACH_CARD : undefined}
       isHidden={panelState.chatHidden}
-      isPanelView={panelState.coachPanelOpen}
     />
   );
 }

@@ -204,6 +204,7 @@ export function ReviewSurface({
       description={formatScheduledDate(entry.date)}
       contentClassName={sheetContentClassName}
       mobileFullHeight={coachPanel.coachPanelOpen}
+      desktopFullHeight={coachChatOpen}
       testId={`review-surface-${entry.id}`}
     >
       <WorkoutCoachLayout

@@ -25,6 +25,7 @@ interface ResponsiveSheetProps {
   readonly children: React.ReactNode;
   readonly contentClassName?: string;
   readonly mobileFullHeight?: boolean;
+  readonly desktopFullHeight?: boolean;
   readonly testId?: string;
 }
 
@@ -36,6 +37,7 @@ export function ResponsiveSheet({
   children,
   contentClassName,
   mobileFullHeight = false,
+  desktopFullHeight = false,
   testId,
 }: ResponsiveSheetProps) {
   const isMobile = useIsMobile();
@@ -74,14 +76,28 @@ export function ResponsiveSheet({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn("sm:max-w-lg max-h-[90vh] overflow-hidden", contentClassName)}
+        className={cn(
+          "sm:max-w-lg",
+          desktopFullHeight
+            ? "h-[90vh] flex flex-col overflow-hidden"
+            : "max-h-[90vh] overflow-hidden",
+          contentClassName,
+        )}
         data-testid={testId}
       >
-        <DialogHeader>
+        <DialogHeader className={desktopFullHeight ? "shrink-0" : undefined}>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <div className="max-h-[calc(90vh-7rem)] overflow-y-auto pr-1">{children}</div>
+        <div
+          className={
+            desktopFullHeight
+              ? "min-h-0 flex-1 flex flex-col overflow-hidden"
+              : "max-h-[calc(90vh-7rem)] overflow-y-auto pr-1"
+          }
+        >
+          {children}
+        </div>
       </DialogContent>
     </Dialog>
   );

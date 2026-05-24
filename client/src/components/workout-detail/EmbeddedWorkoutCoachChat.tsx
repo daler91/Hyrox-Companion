@@ -19,7 +19,6 @@ interface EmbeddedWorkoutCoachChatProps {
   readonly chatAreaClassName?: string;
   readonly className?: string;
   readonly isHidden?: boolean;
-  readonly isPanelView?: boolean;
 }
 
 export function buildWorkoutCoachSeedMessage(
@@ -46,7 +45,6 @@ export function EmbeddedWorkoutCoachChat({
   chatAreaClassName,
   className,
   isHidden = false,
-  isPanelView = false,
 }: EmbeddedWorkoutCoachChatProps) {
   const seed = useMemo<ChatInputSeed>(
     () => ({ text: seedText, nonce: seedNonce }),
@@ -76,8 +74,7 @@ export function EmbeddedWorkoutCoachChat({
     <section
       hidden={isHidden}
       className={cn(
-        "flex w-full min-w-0 self-start flex-col rounded-lg border border-border bg-card",
-        isPanelView && "min-h-0",
+        "flex min-h-0 w-full min-w-0 flex-col rounded-lg border border-border bg-card",
         className,
       )}
       aria-label="Coach chat about this workout"
@@ -109,7 +106,7 @@ export function EmbeddedWorkoutCoachChat({
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
-        className={cn("max-h-[320px] flex-none", chatAreaClassName)}
+        className={cn("min-h-0 max-h-none flex-1", chatAreaClassName)}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={noopSuggestion}
         onDismissSuggestion={noopId}
