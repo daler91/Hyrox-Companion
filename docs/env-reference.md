@@ -8,15 +8,14 @@ This is the curated companion to [`.env.example`](../.env.example). `.env.exampl
 
 ## TL;DR — minimum to boot
 
-You only need three variables to start the server locally:
+You only need two variables to start the server locally:
 
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | Any reachable Postgres connection string (with `pgvector` installed). |
 | `ENCRYPTION_KEY` | 32+ char hex string. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `CSRF_SECRET` | Production only. Must differ from `ENCRYPTION_KEY`. Same generator as above. |
 
-Everything else is optional and gates a specific feature (Clerk auth, AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
+Production also requires `CSRF_SECRET`; it must differ from `ENCRYPTION_KEY`. In development/test, omitting it makes the CSRF middleware generate a random per-process fallback. Everything else is optional and gates a specific feature (Clerk auth, AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
 
 ---
 
@@ -145,7 +144,7 @@ npx web-push generate-vapid-keys
 |---|---|---|---|
 | `VAPID_PUBLIC_KEY` | Optional (required for push) | — | Sent to the client via `GET /api/v1/push/vapid-key`. |
 | `VAPID_PRIVATE_KEY` | Optional (required for push) | — | Server-only. Do not expose. |
-| `VAPID_EMAIL` | Optional (required for push) | — | `mailto:` contact that push services (Google, Mozilla) reach on abuse reports. |
+| `VAPID_EMAIL` | Optional (required for push) | — | Bare contact email address; `server/pushNotifications.ts` prepends `mailto:` when registering VAPID details with push services. |
 
 ---
 

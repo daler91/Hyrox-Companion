@@ -125,7 +125,7 @@ sequenceDiagram
     participant Plan as storage.getActivePlan
     participant TL as storage.getTimeline
     participant RAG as retrieveCoachingText
-    participant Gemini as generateWorkoutSuggestions (Gemini)
+    participant TextAI as generateWorkoutSuggestions (configured text provider)
     participant Storage as Storage Layer
     participant Poll as useAuth (polling)
 
@@ -149,8 +149,8 @@ sequenceDiagram
     Coach->>RAG: retrieveCoachingText(userId, query)
     RAG-->>Coach: coaching text + source (rag | legacy | null)
 
-    Coach->>Gemini: generateWorkoutSuggestions(context, upcoming, goal, coachingText)
-    Gemini-->>Coach: WorkoutSuggestion[]
+    Coach->>TextAI: generateWorkoutSuggestions(context, upcoming, goal, coachingText)
+    TextAI-->>Coach: WorkoutSuggestion[]
 
     loop For each suggestion
         Coach->>Storage: updatePlanDay(workoutId, field, aiSource)
@@ -411,16 +411,16 @@ graph TD
 
 **Notable patterns:**
 - **Route handlers** are thin orchestrators -- they validate input, delegate to use-case functions (e.g., `workoutUseCases.ts`), and return responses. The use-case layer separates transport concerns from business logic orchestration.
-- **coachService** is the most connected service, depending on `aiService`, `ragRetrieval`, Gemini, and the storage layer.
+- **coachService** is the most connected service, depending on `aiService`, `ragRetrieval`, the configured text AI provider, Gemini-specific embedding/vision helpers, and the storage layer.
 - **ragRetrieval** delegates vector search to `ragService`, which queries the `pgvector` extension directly via a separate connection pool (`vectorPool`).
 - **pg-boss** uses the same PostgreSQL database for its job queue, keeping infrastructure simple.
 - **Storage** is a single abstraction layer over Drizzle ORM; all database access goes through it (including idempotency key caching via `IdempotencyStorage`).
 
 ---
 
-## 7. Cron → Email Pipeline
+## 7. Cron → Notification Pipeline
 
-The daily notification pipeline is split across three runtimes: `node-cron` fires at a fixed UTC time, the tick enqueues per-user jobs into pg-boss, and the queue workers call Resend. Splitting the work this way means one user's slow send cannot block the next user, and a worker crash mid-batch only loses the in-flight job (the rest stay queued).
+The daily notification pipeline is split across three runtimes: `node-cron` fires at a fixed UTC time, the tick enqueues per-user jobs into pg-boss, and the queue workers send email through Resend plus Web Push notifications for subscribed devices. Splitting the work this way means one user's slow send cannot block the next user, and a worker crash mid-batch only loses the in-flight job (the rest stay queued).
 
 ```mermaid
 flowchart LR
@@ -446,6 +446,8 @@ flowchart LR
 
     Tmpl1 --> Send[Resend.emails.send]
     Tmpl2 --> Send
+    Tmpl1 --> Push[sendPushToUser]
+    Tmpl2 --> Push
 
     Send --> Mark[Persist &quot;sent&quot; marker<br/>lastWeeklySummaryAt /<br/>lastMissedReminderAt]
 

@@ -38,7 +38,7 @@ User accounts and preferences.
 | `email_weekly_summary` | `boolean` | default `false` — per-type toggle for the weekly training summary |
 | `email_missed_reminder` | `boolean` | default `false` — per-type toggle for the missed-workout reminder |
 | `show_adherence_insights` | `boolean` | default `true` — UI toggle for displaying plan-adherence insights |
-| `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to Gemini while this is `false` |
+| `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to an AI provider while this is `false` |
 | `training_style_id` | `text` | default `'balanced_default'` |
 | `training_style_previous_id` | `text` | nullable |
 | `training_style_changed_at` | `timestamp with time zone` | nullable |
@@ -62,7 +62,7 @@ No additional indexes (queries are by PK).
 **Consent columns.** The four boolean columns above default to `false` at the DB layer so new accounts are opted-out of every third-party data flow by default. The application reads them as follows:
 
 - No email is ever sent unless `email_notifications = true` **and** the per-type toggle for the category is `true`. The scheduler in `server/emailScheduler.ts` enforces both checks.
-- No Gemini call is issued unless `ai_coach_enabled = true`. The auto-coach service short-circuits (`server/services/coachService.ts`) and the chat / parsing routes check the flag before composing a prompt.
+- No AI provider call is issued unless `ai_coach_enabled = true`. The auto-coach service short-circuits (`server/services/coachService.ts`) and the chat / parsing routes check the flag before composing a prompt.
 
 ---
 
@@ -985,9 +985,9 @@ Three npm scripts manage migrations:
 
 | Command | Description |
 |---|---|
-| `npm run db:generate` | Generates a new SQL migration from schema changes (`drizzle-kit generate`) |
-| `npm run db:migrate` | Applies pending migrations to the database (`drizzle-kit migrate`) |
-| `npm run db:check` | Validates that the schema and migrations are in sync (`drizzle-kit check`) |
+| `pnpm run db:generate` | Generates a new SQL migration from schema changes (`drizzle-kit generate`) |
+| `pnpm run db:migrate` | Applies pending migrations to the database (`drizzle-kit migrate`) |
+| `pnpm run db:check` | Validates that the schema and migrations are in sync (`drizzle-kit check`) |
 
 ### Migration Files
 

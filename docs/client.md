@@ -121,6 +121,8 @@ User preferences and account management. Organized into sections:
 - **StravaSection** -- Connect/disconnect Strava, view sync status. Handles OAuth callback query parameters (`?strava=connected` or `?strava=error`).
 - **GarminSection** -- Email/password credential form for the Garmin Connect link, status/last-sync badge, and a manual "Sync now" button. Surfaces the `lastError` banner when a prior sync left the connection in a broken state and disables sync buttons when the global 429 circuit breaker is tripped.
 - **PreferencesSection** -- Weight unit (kg/lb), distance unit (km/mi), weekly workout goal. Email toggles are now split: a master `emailNotifications` switch plus nested per-type toggles for the weekly summary and the missed-workout reminder (the nested pair is disabled and grayed out when the master is off). The AI-coach toggle is the **consent gate** for AI provider calls -- it defaults off for new users, and the AI features in the app are hidden or disabled until the user flips it on.
+- **TrainingStyleSection** -- Balanced vs. MAF Method training-style selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes and downstream recalculation intent.
+- **PushNotificationSection** -- Browser Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification action when the current browser and server VAPID configuration support push.
 - **CoachingSection** -- AI coaching configuration and materials management.
 - **DataToolsSection** -- Data export and account deletion. The "Delete account" flow confirms with a hold-to-delete button, then calls `DELETE /api/v1/account` and hard-redirects to the landing page after Clerk sign-out.
 
@@ -200,6 +202,8 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `StravaSection` -- Strava connection management.
 - `GarminSection` -- Garmin Connect credential form, status display, manual sync button.
 - `PreferencesSection` -- Unit preferences, weekly goal, master email toggle + nested per-type email toggles (`emailWeeklySummary`, `emailMissedReminder`), AI consent toggle (`aiCoachEnabled`).
+- `TrainingStyleSection` -- Balanced/MAF style selector, MAF setup dialog, style transition notice, and local settings audit.
+- `PushNotificationSection` -- Web Push subscribe/unsubscribe and test-notification controls.
 - `DataToolsSection` -- Data export + account deletion (hold-to-confirm → `DELETE /api/v1/account`).
 - `CoachingSection` -- AI coaching configuration.
 - `coaching/CoachingMaterialList` -- Uploaded coaching materials list.
@@ -298,7 +302,6 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 - `ExerciseSelector` -- Exercise picker.
 - `ExerciseInput` -- Individual exercise input fields.
 - `ImageCaptureButton` -- Camera + file-input wrapper that opens the device camera (or falls back to file chooser), compresses the picked image via `lib/image.ts`, and exposes the result as a base64 payload. Used by the Log Workout flow and by `CoachPrescriptionCollapsible` in workout detail surfaces.
-- `MetricCard` -- Reusable stat/metric card.
 - `PrivacyConsentBanner` -- AI-consent gate shown on first entry when `aiCoachEnabled` is `false`; opens the relevant Settings section on "Manage".
 - `RagDebugBadge` -- Dev-only indicator that surfaces which RAG chunks (if any) were injected into the last chat response; gated behind a dev flag.
 - `RpeSelector` -- Rate of Perceived Exertion selector.

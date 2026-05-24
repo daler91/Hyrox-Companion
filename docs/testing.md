@@ -30,13 +30,13 @@ The project follows a testing pyramid with three layers:
 
 | Layer | Count | Location |
 |-------|-------|----------|
-| Unit/component/route tests (Vitest) | ~176 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files |
+| Unit/component/route tests (Vitest) | 184 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
 | Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
 | Smoke tests | 1 file | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
 | Cypress E2E specs | 12 files | `cypress/e2e/*.cy.ts` |
 
 The exact Vitest assertion count changes frequently as review-fix branches land.
-Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current file count.
+Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current total test-file count, and add `-g "!*.integration.test.ts" -g "!*.smoke.test.ts"` when you need the unit/component/route count.
 
 ### Coverage thresholds
 
@@ -155,11 +155,11 @@ Components are rendered with `render()` and queried using `screen` queries:
 
 ```ts
 import { render, screen } from "@testing-library/react";
+import { Button } from "@/components/ui/button";
 
-it("renders the title and value correctly", () => {
-  render(<MetricCard title="Total Workouts" value="12" icon={Activity} />);
-  expect(screen.getByText("Total Workouts")).toBeInTheDocument();
-  expect(screen.getByText("12")).toBeInTheDocument();
+it("renders the button label correctly", () => {
+  render(<Button>Save changes</Button>);
+  expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
 });
 ```
 
@@ -195,7 +195,6 @@ it("has no detectable a11y violations", async () => {
 Current a11y coverage includes:
 
 - `client/src/pages/__tests__/not-found.a11y.test.tsx`
-- `client/src/components/__tests__/MetricCard.a11y.test.tsx`
 - `client/src/components/__tests__/RpeSelector.a11y.test.tsx`
 - `client/src/components/__tests__/Breadcrumbs.a11y.test.tsx`
 - `client/src/components/ui/__tests__/OfflineIndicator.a11y.test.tsx`
@@ -621,7 +620,7 @@ project-root/
       __tests__/
         ChatMessage.test.tsx          # Chat message component
         ExerciseInput.test.tsx        # Exercise input component
-        MetricCard.test.tsx           # Metric card component
+        RpeSelector.a11y.test.tsx     # RPE selector accessibility
       timeline/
         __tests__/
           TimelineFilters.test.tsx    # Timeline filter component
