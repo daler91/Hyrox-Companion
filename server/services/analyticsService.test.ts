@@ -25,8 +25,8 @@ describe("calculatePersonalRecords", () => {
     expect(Object.keys(result).length).toBe(0);
     expect(result).not.toBeNull();
     expect(result).not.toBeUndefined();
-    // Verify type is preserved correctly
-    expect(result).toStrictEqual({});
+    expect(Object.keys(result)).toEqual([]);
+    expect(Object.getPrototypeOf(result)).toBeNull();
     // We expect it to strictly match the shape of Record<string, PRRecord> which is an empty object
     expect(typeof result).toBe('object');
   });
@@ -91,6 +91,21 @@ describe("calculatePersonalRecords", () => {
     expect(prs["back_squat"].bestTime).toBeUndefined();
   });
 
+
+
+  it("does not pollute Object.prototype for special exercise keys", () => {
+    delete (Object.prototype as Record<string, unknown>).maxWeight;
+
+    const sets = [
+      makeSet({ exerciseName: "__proto__", weight: 123, date: "2026-01-22", workoutLogId: "w9" }),
+    ];
+
+    const prs = calculatePersonalRecords(sets);
+    expect(Object.prototype).not.toHaveProperty("maxWeight");
+    expect(prs["__proto__"].maxWeight?.value).toBe(123);
+
+    delete (Object.prototype as Record<string, unknown>).maxWeight;
+  });
   it("handles multiple exercises independently", () => {
     const sets = [
       makeSet({ exerciseName: "back_squat", weight: 100 }),

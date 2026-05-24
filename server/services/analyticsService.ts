@@ -83,7 +83,7 @@ function updateE1RM(pr: PersonalRecord, set: ExerciseSetWithDate): void {
 }
 
 export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PersonalRecord> {
-  const prs: Record<string, PersonalRecord> = {};
+  const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
 
   for (const set of allSets) {
     const prKey = getExerciseKey(set);
