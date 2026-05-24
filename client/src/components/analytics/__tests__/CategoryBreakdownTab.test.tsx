@@ -139,6 +139,15 @@ describe("CategoryBreakdownTab", () => {
             daysSince: 11,
           };
         }
+        if (pattern.pattern === "horizontal_push") {
+          return {
+            ...pattern,
+            sessionCount: 2,
+            totalSets: 8,
+            lastTrained: "2026-05-18",
+            daysSince: 5,
+          };
+        }
         return pattern;
       }),
     }));
@@ -146,6 +155,18 @@ describe("CategoryBreakdownTab", () => {
     renderWithQueryClient(<CategoryBreakdownTab dateParams="from=2026-05-01&to=2026-05-23" />);
 
     expect(await screen.findByRole("heading", { name: "Movement Pattern Coverage" })).toBeInTheDocument();
+    const analysis = screen.getByTestId("movement-pattern-analysis");
+    expect(analysis).toHaveTextContent("3/10");
+    expect(analysis).toHaveTextContent("30% of movement patterns trained in this range.");
+    expect(analysis).toHaveTextContent("Horizontal push");
+    expect(analysis).toHaveTextContent("8 sets across 2 sessions.");
+    expect(analysis).toHaveTextContent("Vertical push");
+    expect(analysis).toHaveTextContent("it has no logged sessions in this range");
+    expect(analysis).toHaveTextContent("Push volume is leading pull volume.");
+    expect(screen.getByTestId("movement-pattern-next-focus")).toHaveTextContent(
+      "Next focus: Add Vertical push; it has no logged sessions in this range.",
+    );
+
     const grid = screen.getByTestId("movement-pattern-coverage-grid");
     expect(grid.children).toHaveLength(10);
 
@@ -189,6 +210,19 @@ describe("CategoryBreakdownTab", () => {
     renderWithQueryClient(<CategoryBreakdownTab dateParams="from=2026-05-01&to=2026-05-23" />);
 
     expect(await screen.findByRole("heading", { name: "Muscle Heat Map" })).toBeInTheDocument();
+    const analysis = screen.getByTestId("muscle-heat-map-analysis");
+    expect(analysis).toHaveTextContent("Lower body 80%");
+    expect(analysis).toHaveTextContent("Upper 20% / Core 0% / Lower 80% by set volume.");
+    expect(analysis).toHaveTextContent("Quads");
+    expect(analysis).toHaveTextContent("12 sets across 3 sessions.");
+    expect(analysis).toHaveTextContent("Shoulders");
+    expect(analysis).toHaveTextContent("it has no logged sets in this range");
+    expect(analysis).toHaveTextContent("Upper push volume is leading upper pull volume.");
+    expect(analysis).toHaveTextContent("Quad work volume is leading posterior chain volume.");
+    expect(screen.getByTestId("muscle-heat-map-next-focus")).toHaveTextContent(
+      "Next focus: Add Shoulders; it has no logged sets in this range.",
+    );
+
     expect(screen.getByTestId("muscle-heat-map-silhouette")).toBeInTheDocument();
     const grid = screen.getByTestId("muscle-heat-map-grid");
     expect(within(grid).getByRole("heading", { name: "Upper body" })).toBeInTheDocument();
