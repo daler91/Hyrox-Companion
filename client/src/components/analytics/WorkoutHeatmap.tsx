@@ -14,6 +14,7 @@ const DAY_LABELS = [
   { key: "sun", label: "Sun" },
 ];
 const WEEKS_TO_SHOW = 16;
+const WEEK_GRID_TEMPLATE = `repeat(${WEEKS_TO_SHOW}, minmax(2rem, 1fr))`;
 
 function getMonday(date: Date): Date {
   const d = new Date(date);
@@ -84,65 +85,67 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
     <div className={CHART_CARD_CLASS}>
       <p className="text-sm font-semibold">Workout Consistency</p>
       <div className="overflow-x-auto overflow-y-hidden">
-        <div className="min-w-[400px]">
-          {/* Month labels */}
-          <div className="flex ml-8 mb-1 text-[10px] text-muted-foreground">
-            {monthLabels.map((m) => (
-              <div
-                key={`${m.label}-${m.colStart}`}
-                className="absolute"
-                style={{ marginLeft: `${m.colStart * 18}px` }}
-              >
-                {m.label}
-              </div>
-            ))}
-          </div>
-          <div className="relative mt-4">
-            {/* Month labels row - relative positioning */}
-            <div className="flex ml-8 mb-1 h-4">
+        <div className="min-w-[560px] w-full">
+          <div className="flex gap-2">
+            <div className="w-8 shrink-0" aria-hidden="true" />
+            <div
+              className="grid flex-1 text-[10px] text-muted-foreground"
+              style={{ gridTemplateColumns: WEEK_GRID_TEMPLATE }}
+              data-testid="workout-heatmap-month-label-row"
+            >
               {monthLabels.map((m, i) => {
                 const nextStart = monthLabels[i + 1]?.colStart ?? WEEKS_TO_SHOW;
                 const span = nextStart - m.colStart;
                 return (
                   <div
                     key={`${m.label}-${m.colStart}`}
-                    className="text-[10px] text-muted-foreground shrink-0"
-                    style={{ width: `${span * 18}px` }}
+                    className="truncate"
+                    style={{ gridColumn: `${m.colStart + 1} / span ${span}` }}
+                    data-testid="workout-heatmap-month-label"
                   >
                     {m.label}
                   </div>
                 );
               })}
             </div>
+          </div>
 
-            <div className="flex gap-0">
-              {/* Day labels */}
-              <div className="flex flex-col gap-[2px] mr-1 shrink-0">
-                {DAY_LABELS.map((day) => (
-                  <div key={day.key} className="h-[14px] w-6 text-[10px] text-muted-foreground flex items-center justify-end pr-1">
-                    {day.label}
-                  </div>
-                ))}
-              </div>
+          <div className="mt-2 flex gap-2">
+            <div className="flex w-8 shrink-0 flex-col gap-1">
+              {DAY_LABELS.map((day) => (
+                <div
+                  key={day.key}
+                  className="flex h-7 items-center justify-end pr-1 text-[10px] text-muted-foreground"
+                >
+                  {day.label}
+                </div>
+              ))}
+            </div>
 
-              {/* Grid */}
-              <div className="flex gap-[2px]">
-                {grid.map((week) => (
-                  <div key={week[0].date} className="flex flex-col gap-[2px]">
-                    {week.map((cell) => (
-                      <div
-                        key={cell.date}
-                        className={`h-[14px] w-[14px] rounded-sm ${getHeatmapCellColor(cell)}`}
-                        title={`${cell.date}${cell.hasWorkout ? " - Workout logged" : ""}`}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+            <div
+              className="grid flex-1 gap-x-2"
+              style={{ gridTemplateColumns: WEEK_GRID_TEMPLATE }}
+              data-testid="workout-heatmap-grid"
+            >
+              {grid.map((week) => (
+                <div
+                  key={week[0].date}
+                  className="flex flex-col items-center gap-1"
+                  data-testid="workout-heatmap-week"
+                >
+                  {week.map((cell) => (
+                    <div
+                      key={cell.date}
+                      className={`aspect-square w-full max-w-7 rounded-sm ${getHeatmapCellColor(cell)}`}
+                      title={`${cell.date}${cell.hasWorkout ? " - Workout logged" : ""}`}
+                      data-testid="workout-heatmap-cell"
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Legend */}
           <div className="flex items-center gap-2 mt-3 text-[10px] text-muted-foreground">
             <span>Less</span>
             <div className="h-[10px] w-[10px] rounded-sm bg-muted/60" />
