@@ -179,6 +179,20 @@ describe("parseExercisesFromText", () => {
     expect(result.some((r) => (r.missingFields ?? []).some((f) => f.includes("Heuristic fallback parser")))).toBe(true);
   });
 
+
+
+  it("skips heuristic fallback rows with excessive set counts", async () => {
+    const mockResponse = {
+      text: JSON.stringify([
+        { exerciseName: "", category: "strength", sets: [{ reps: 1 }] },
+      ]),
+    };
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce(mockResponse);
+
+    const input = "Squat 1000000x1";
+    await expect(parseExercisesFromText(input)).resolves.toEqual([]);
+  });
+
   it("should fall back to source text when customLabel and exerciseName are both 'custom'", async () => {
     const mockResponse = {
       text: JSON.stringify([

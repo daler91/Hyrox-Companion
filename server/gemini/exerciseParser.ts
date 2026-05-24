@@ -16,7 +16,7 @@ export const parsedExerciseSchema = z.object({
   customLabel: z.string().optional().nullable(),
   confidence: z.number().min(0).max(100).optional().nullable(),
   missingFields: z.array(z.string()).optional().nullable(),
-  sets: z.array(exerciseSetSchema).min(1),
+  sets: z.array(exerciseSetSchema).min(1).max(50),
 });
 
 const parserResponseSchema = z.object({
@@ -273,6 +273,8 @@ function canonicalExerciseName(label: string): string {
   return VALID_EXERCISE_NAMES instanceof Set && VALID_EXERCISE_NAMES.has(normalized) ? normalized : "custom";
 }
 
+const MAX_HEURISTIC_FALLBACK_SETS = 50;
+
 function heuristicFallbackRowsFromText(text: string): unknown[] {
   const chunks = text.split(/[.;\n]+/).map((s) => s.trim()).filter(Boolean);
   const rows: unknown[] = [];
@@ -292,7 +294,7 @@ function heuristicFallbackRowsFromText(text: string): unknown[] {
     const name = (lead && /^\d+\s*x/i.test(body) ? lead[1] : capture?.[1])?.trim() ?? "";
     const sets = Number.parseInt(capture?.[2] ?? "", 10);
     const value = Number.parseInt(capture?.[3] ?? "", 10);
-    if (!Number.isFinite(sets) || sets <= 0 || !Number.isFinite(value) || value <= 0) continue;
+    if (!Number.isFinite(sets) || sets <= 0 || sets > MAX_HEURISTIC_FALLBACK_SETS || !Number.isFinite(value) || value <= 0) continue;
     const perSet = Array.from({ length: sets }, (_v, i) => (
       timeMatch || intervalTimeMatch || (leadOnlyMatch && /min|mins|minute|minutes/i.test(body))
         ? { setNumber: i + 1, time: value }
