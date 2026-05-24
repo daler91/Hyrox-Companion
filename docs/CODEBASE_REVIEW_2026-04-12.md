@@ -1,5 +1,7 @@
 # Codebase Review — April 12, 2026
 
+> **Status — 2026-05-24:** This is a historical snapshot. For the consolidated current view of resolved findings, see `docs/CODEBASE_REVIEW_2026-05-16.md`. Updates beyond the original "Addressed in Quick-Wins Pass" table are listed in the new "Subsequent Resolutions" section below. The per-finding tables further down are kept as a historical record, not as an open-bug list.
+
 ## Review passes executed
 1. **Pass 1 (Security):** authn/authz boundaries, secrets, CSRF/CORS/CSP, idempotency, token handling, AI output sanitisation, SSRF, dependency overrides.
 2. **Pass 2 (Business analysis):** README parity, Hyrox-specific domain modelling, feature creep, monetisation, user-story completeness.
@@ -73,6 +75,23 @@ decisions (#3, #6, #21, #30). They are tracked in the **Critical Findings** and
 No scores are updated yet — the closed findings are a minority of each category's
 total. A revised score would be premature until the heavier data-privacy and
 business-scope items ship.
+
+---
+
+## Subsequent Resolutions — 2026-05-24
+
+Beyond the 10 quick-wins above, additional findings have been closed in
+subsequent work. These are recorded here so the per-finding tables below are
+not misread as the live open-bug list.
+
+| # | Area | Status | Evidence |
+|---|------|--------|----------|
+| 5 | Security | **Fixed** | CSP override now merges `connectSrc` into the per-request policy via `server/index.ts` (the per-request middleware) rather than serving the restrictive Helmet default. |
+| 14 | DevOps | **Partially Fixed** | Rate limits and short-lived runtime cache state moved to PostgreSQL-backed shared tables (`rate_limit_buckets`, `server_runtime_cache`) with advisory-locked cron. A Redis adapter is no longer required for single-region multi-replica. |
+| 16 | Security | **Still Open** | `STRAVA_STATE_SECRET` is still `optional()` in `server/env.ts`. Production deployments without the env var continue to fall back to a process-local random secret (`server/strava.ts`). |
+
+Other items in the Critical/Warning tables below should be cross-checked
+against the current source before being treated as open.
 
 ---
 
