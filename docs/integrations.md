@@ -30,6 +30,8 @@ The application relies on six external integration layers:
 
 All integrations are configured through environment variables and initialized during server startup.
 
+Gemini AI provider behavior — model names, retry/jitter, circuit breaker, embedding setup, AI consent middleware, and AI-budget guard — is documented separately in [`docs/ai-and-rag.md`](ai-and-rag.md). This document covers everything else.
+
 ---
 
 ## Strava Integration
@@ -209,6 +211,8 @@ The `strava_connections` table (`shared/schema/tables.ts`):
 ---
 
 ## Garmin Connect Integration
+
+> **Caveat — unofficial integration.** Garmin Connect uses an unofficial, reverse-engineered SSO library ([`@flow-js/garmin-connect`](https://www.npmjs.com/package/@flow-js/garmin-connect)). There is no official Garmin OAuth application flow for end users; users provide their email + password directly. The integration is inherently fragile against upstream Garmin changes, and does **not** support accounts with 2-step verification (2SV) enabled. The safety stack below exists specifically because every outbound call shares the server's IP, so a single misbehaving code path could earn a Garmin-side ban that affects every user.
 
 **Key files:**
 
@@ -470,7 +474,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eight** scheduled jobs in total (the daily email check, six maintenance/telemetry jobs, and the startup catch-up). Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **seven recurring** scheduled jobs (the daily email check plus six maintenance/telemetry jobs) and one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -556,30 +560,17 @@ The `runStartupMaintenance(storage)` function runs a consolidated sequence of ch
 
 1. **Test database connection** -- Attempts to connect to PostgreSQL and run `SELECT 1`. Times out after 15 seconds. If this fails, the server startup is aborted (fatal error).
 
-2. **Run Drizzle migrations** -- Executes pending migrations from the `migrations/` folder using `drizzle-orm/node-postgres/migrator`. In production where `drizzle-kit push` is used, "already exists" errors are expected and treated as non-fatal.
+2. **Run Drizzle migrations** -- Executes pending migrations from the `migrations/` folder using `drizzle-orm/node-postgres/migrator`. "Already exists" errors are expected in environments where `drizzle-kit push` has previously run and are treated as non-fatal.
 
-3. **Ensure schema is up to date** -- Checks for and applies incremental schema changes that may not be covered by migrations:
-   - Adds `ai_coach_enabled` column to `users` if missing
-   - Converts `email_notifications` from integer to boolean if needed
-   - Adds `goal` column to `training_plans` if missing
-   - Adds `is_auto_coaching` column to `users` if missing
-   - Adds `ai_source` column to `plan_days` if missing
-   - Creates the `coaching_materials` table if it does not exist (with foreign key to `users` and index on `user_id`)
+3. **Ensure pgvector extension** -- Runs `CREATE EXTENSION IF NOT EXISTS vector` on the vector database to enable vector similarity search.
 
-4. **Ensure pgvector extension** -- Runs `CREATE EXTENSION IF NOT EXISTS vector` on the vector database to enable vector similarity search.
+4. **Ensure vector schema** -- Creates the `document_chunks` table on the vector database if it does not exist. Also checks that the `embedding` column uses the native `vector` type (not `text`) and converts it if needed. This step runs on the separate `vectorPool` that Drizzle migrations do not manage.
 
-5. **Ensure vector schema** -- Creates the `document_chunks` table on the vector database if it does not exist. Also checks that the `embedding` column uses the native `vector` type (not `text`) and converts it if needed.
+5. **Mark missed plan days** -- Calls `storage.plans.markMissedPlanDays()` to flag any past planned days that were never completed. Non-fatal; logged as a warning if it fails.
 
-6. **Clean orphaned data** -- Within a transaction, nullifies `plan_day_id` on `workout_logs` where the referenced `plan_days` row no longer exists.
+6. **Reset stale auto-coaching flags** -- Calls `storage.users.resetStaleAutoCoaching()` to clear the `is_auto_coaching` flag on any user whose previous server process died mid-coach. Non-fatal; logged as a warning if it fails.
 
-7. **Backfill plan dates and workout links** -- Runs three backfill queries:
-   - Sets `start_date` and `end_date` on `training_plans` from the min/max `scheduled_date` of their plan days
-   - Sets `plan_id` on `workout_logs` that have a `plan_day_id` but no `plan_id`
-   - Sets `plan_id` on standalone `workout_logs` (no `plan_day_id`) that fall within a training plan's date range
-
-8. **Mark missed plan days** -- Calls `storage.markMissedPlanDays()` to flag any past planned days that were never completed.
-
-All steps after the database connection test are non-fatal: failures are logged as warnings and the server continues to start.
+Historical schema-patching steps (defensive `ALTER TABLE` adds for `ai_coach_enabled`, `email_notifications`, `goal`, `is_auto_coaching`, `ai_source`, and the `coaching_materials` table) were removed once those columns and tables became part of the Drizzle migration sequence; see the resolution of `TECHNICAL_DEBT.md` #8.
 
 ---
 
