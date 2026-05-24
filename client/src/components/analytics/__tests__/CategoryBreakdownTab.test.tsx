@@ -131,7 +131,7 @@ describe("CategoryBreakdownTab", () => {
 
     renderWithQueryClient(<CategoryBreakdownTab dateParams="range=90" />);
 
-    expect(await screen.findByText(/training mix and station coverage appear here/i)).toBeInTheDocument();
+    expect(await screen.findByText(/training mix and coverage insights appear here/i)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Muscle Heat Map" })).not.toBeInTheDocument();
   });
 
@@ -222,6 +222,7 @@ describe("CategoryBreakdownTab", () => {
 
   it("renders empty pattern tiles when other breakdown data exists", async () => {
     mocks.getTrainingOverview.mockResolvedValue(makeOverview({
+      categoryTotals: { strength: { count: 1, totalSets: 1 } },
       stationCoverage: [{ station: "skierg", lastTrained: "2026-05-20", daysSince: 3 }],
     }));
 
@@ -230,6 +231,8 @@ describe("CategoryBreakdownTab", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Movement Pattern Coverage" })).toBeInTheDocument();
     });
+    expect(screen.queryByRole("heading", { name: "Functional Station Coverage" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("station-coverage-grid")).not.toBeInTheDocument();
     const movementGrid = screen.getByTestId("movement-pattern-coverage-grid");
     expect(within(movementGrid).getAllByText("Never trained")).toHaveLength(10);
     expect(within(movementGrid).getAllByText("0 sessions - 0 sets")).toHaveLength(10);
