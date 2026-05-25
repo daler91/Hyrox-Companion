@@ -45,3 +45,4 @@ tmp_*.txt
 # Development artifacts
 attached_assets/
 pr_description.md
+node_modules/

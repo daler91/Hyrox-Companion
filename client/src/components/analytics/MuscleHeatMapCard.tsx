@@ -184,11 +184,14 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
   const totalSets = muscles.reduce((sum, muscle) => sum + muscle.totalSets, 0);
   const topMuscle = findTopCoverage(muscles);
   const priorityGap = findPriorityGap(muscles, "it has no logged sets in this range");
-  const regionTotals = {
-    upper: muscles.filter((muscle) => muscle.bodyRegion === "upper").reduce((sum, muscle) => sum + muscle.totalSets, 0),
-    core: muscles.filter((muscle) => muscle.bodyRegion === "core").reduce((sum, muscle) => sum + muscle.totalSets, 0),
-    lower: muscles.filter((muscle) => muscle.bodyRegion === "lower").reduce((sum, muscle) => sum + muscle.totalSets, 0),
-  };
+      // Replaced chained .filter().reduce() with a single for...of loop
+  // to avoid intermediate array allocations and reduce overhead.
+  const regionTotals = { upper: 0, core: 0, lower: 0 };
+  for (const muscle of muscles) {
+    if (muscle.bodyRegion === "upper") regionTotals.upper += muscle.totalSets;
+    else if (muscle.bodyRegion === "core") regionTotals.core += muscle.totalSets;
+    else if (muscle.bodyRegion === "lower") regionTotals.lower += muscle.totalSets;
+  }
   const regionMix = `Upper ${formatPercent(regionTotals.upper, totalSets)} / Core ${formatPercent(regionTotals.core, totalSets)} / Lower ${formatPercent(regionTotals.lower, totalSets)}`;
   const dominantRegion = (Object.entries(regionTotals) as Array<[keyof typeof regionTotals, number]>)
     .sort((a, b) => b[1] - a[1])[0];
