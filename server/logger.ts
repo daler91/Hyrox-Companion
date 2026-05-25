@@ -21,6 +21,7 @@ export const logger = pino({
     "req.headers.authorization",
     "req.headers.cookie",
     "req.headers.x-cron-secret",
+    "req.headers.x-internal-analytics-secret",
     'req.body.password',
     'req.body.newPassword',
     'req.body.currentPassword',
