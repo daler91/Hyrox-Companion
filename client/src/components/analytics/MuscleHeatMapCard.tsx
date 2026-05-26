@@ -181,14 +181,21 @@ function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): AnalysisM
 }
 
 function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
-  const totalSets = muscles.reduce((sum, muscle) => sum + muscle.totalSets, 0);
+  // ⚡ Bolt Performance Optimization:
+  // Consolidated 4 O(N) array traversals (one reduce, three filter+reduces) into a single O(N) pass.
+  // This eliminates intermediate array allocations and O(4N) iteration overhead.
+  let totalSets = 0;
+  const regionTotals = { upper: 0, core: 0, lower: 0 };
+
+  for (const muscle of muscles) {
+    totalSets += muscle.totalSets;
+    if (muscle.bodyRegion === "upper") regionTotals.upper += muscle.totalSets;
+    else if (muscle.bodyRegion === "core") regionTotals.core += muscle.totalSets;
+    else if (muscle.bodyRegion === "lower") regionTotals.lower += muscle.totalSets;
+  }
+
   const topMuscle = findTopCoverage(muscles);
   const priorityGap = findPriorityGap(muscles, "it has no logged sets in this range");
-  const regionTotals = {
-    upper: muscles.filter((muscle) => muscle.bodyRegion === "upper").reduce((sum, muscle) => sum + muscle.totalSets, 0),
-    core: muscles.filter((muscle) => muscle.bodyRegion === "core").reduce((sum, muscle) => sum + muscle.totalSets, 0),
-    lower: muscles.filter((muscle) => muscle.bodyRegion === "lower").reduce((sum, muscle) => sum + muscle.totalSets, 0),
-  };
   const regionMix = `Upper ${formatPercent(regionTotals.upper, totalSets)} / Core ${formatPercent(regionTotals.core, totalSets)} / Lower ${formatPercent(regionTotals.lower, totalSets)}`;
   const dominantRegion = (Object.entries(regionTotals) as Array<[keyof typeof regionTotals, number]>)
     .sort((a, b) => b[1] - a[1])[0];
