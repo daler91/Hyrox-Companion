@@ -659,7 +659,11 @@ export function calculateTrainingLoad(
     // ⚡ Bolt Performance Optimization:
     // Fast string comparison for YYYY-MM-DD dates instead of localeCompare.
     // Avoids unnecessary overhead since ISO dates sort lexicographically.
-    dailyLoads: Array.from(allDays.values()).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+    dailyLoads: Array.from(allDays.values()).sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return 0;
+    }),
     overview: buildOverview(allDays, currentDate, rangeStart),
   };
 }
@@ -848,7 +852,11 @@ export function buildLoadGovernorSuggestions(
   // ⚡ Bolt Performance Optimization:
   // Fast string comparison for YYYY-MM-DD dates instead of localeCompare.
   // Avoids unnecessary overhead since ISO dates sort lexicographically.
-  const ordered = [...upcomingWorkouts].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const ordered = [...upcomingWorkouts].sort((a, b) => {
+    if (a.date < b.date) return -1;
+    if (a.date > b.date) return 1;
+    return 0;
+  });
 
   applySuggestionRules(summary, ordered, [
     { restrictionId: "posterior_chain_velocity_lock", maxDaysAhead: 2,
