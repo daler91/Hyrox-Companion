@@ -13,13 +13,13 @@ import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib
 import type { CompressedImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
+import { buildParseImagePayload, type ImagePreviewState,shouldRetainImagePreview } from "./workoutComposer.utils";
 import type {
   ComposerAutoParseProps,
   ComposerExerciseEditorProps,
   ComposerTextProps,
   ComposerVoiceProps,
 } from "./workoutComposer.types";
-import { buildParseImagePayload, type ImagePreviewState,shouldRetainImagePreview } from "./workoutComposer.utils";
 
 interface WorkoutComposerProps
   extends ComposerTextProps,

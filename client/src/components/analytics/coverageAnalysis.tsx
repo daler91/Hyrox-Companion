@@ -63,7 +63,7 @@ export function findTopCoverage<T extends CoverageWork>(items: readonly T[]): T 
     .sort((a, b) => (
       b.totalSets - a.totalSets ||
       b.sessionCount - a.sessionCount ||
-      (a.label < b.label ? -1 : a.label > b.label ? 1 : 0)
+      a.label.localeCompare(b.label)
     ))[0] ?? null;
 }
 
