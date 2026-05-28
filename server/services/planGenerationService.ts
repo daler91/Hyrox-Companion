@@ -7,7 +7,6 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
-import pLimit from "p-limit";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
@@ -19,7 +18,6 @@ import { storage } from "../storage";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
 const PLAN_GENERATION_CHUNK_WEEKS = 2;
-const PLAN_GENERATION_CHUNK_CONCURRENCY = 3;
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 // Structured exercises the model must include for non-rest generated days.
@@ -358,9 +356,8 @@ async function generatePlanDays(
   unitPreferences: Required<UnitPreferences>,
 ): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
-  const limit = pLimit(PLAN_GENERATION_CHUNK_CONCURRENCY);
   const dayChunks = await Promise.all(
-    ranges.map((range) => limit(() => generatePlanChunk(input, userId, range, unitPreferences))),
+    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences)),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {
