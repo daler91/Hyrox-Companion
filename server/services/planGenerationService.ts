@@ -110,7 +110,9 @@ function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRa
   lines.push(...buildGenerationUnitLines(unitPreferences));
 
   if (input.raceDate) {
-    lines.push(`- Race Date: ${input.raceDate} (structure phases to peak for this date)`);
+    lines.push(
+      `- Race Date: ${input.raceDate} (structure phases to peak for this date; taper the final 1-2 days into a light shakeout/rest, and treat race day itself as the event — not a training session)`,
+    );
   }
 
   if (input.focusAreas && input.focusAreas.length > 0) {
@@ -497,6 +499,13 @@ export async function executePlanGeneration(
     const scheduleStartDate: string | undefined = normalized.startDate;
     if (scheduleStartDate) {
       await storage.plans.schedulePlan(planId, scheduleStartDate, userId);
+    }
+
+    // Once the calendar dates are committed, reserve the race day: the race date
+    // becomes the event, the day before a shakeout, and any days after it easy
+    // recovery. Runs after schedulePlan so plan-day scheduledDates are persisted.
+    if (normalized.raceDate && scheduleStartDate) {
+      await storage.plans.applyRaceDayAdjustments(planId, normalized.raceDate, userId);
     }
 
     await storage.plans.updateGenerationStatus(planId, "ready");

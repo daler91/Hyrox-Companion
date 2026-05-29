@@ -129,7 +129,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     return groupTimelineExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
-  const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status);
+  const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status, entry.focus);
   const aiCoachClasses = getAiCoachCardClasses(isTargetedByCoach);
   const dragClasses = getDragCardClasses(isDragging, isMoving);
 
@@ -458,7 +458,7 @@ function TimelineCardHeader({
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
-      {getStatusBadge(entry.status)}
+      {getStatusBadge(entry.status, entry.focus)}
       {isTargetedByCoach && (
         <Badge
           variant="outline"

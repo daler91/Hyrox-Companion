@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
       createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
       schedulePlan: vi.fn(),
+      applyRaceDayAdjustments: vi.fn(),
       updateGenerationStatus: vi.fn(),
     },
     users: {
@@ -182,6 +183,7 @@ describe("executePlanGeneration", () => {
     mocks.retryWithBackoff.mockImplementation((fn: () => Promise<unknown>) => fn());
     mocks.trackUsageFromResponse.mockReturnValue(undefined);
     mocks.plans.schedulePlan.mockResolvedValue(true);
+    mocks.plans.applyRaceDayAdjustments.mockResolvedValue(true);
     mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
     mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
   });
@@ -390,6 +392,35 @@ describe("executePlanGeneration", () => {
     expect(mocks.plans.schedulePlan).toHaveBeenCalledWith("plan-1", "2026-01-05", "user-1");
   });
 
+  it("reserves the race day after scheduling when the end date is the race date", async () => {
+    const generatedDays = makeGeneratedWeek(1);
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
+
+    await executePlanGeneration("plan-1", baseInput, "user-1");
+
+    expect(mocks.plans.applyRaceDayAdjustments).toHaveBeenCalledWith(
+      "plan-1",
+      "2026-01-12",
+      "user-1",
+    );
+    // Must run AFTER scheduling, so the plan-day scheduledDates are persisted.
+    expect(mocks.plans.applyRaceDayAdjustments.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.plans.schedulePlan.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not reserve a race day when the end date is not the race date", async () => {
+    const input = { ...baseInput, endDateIsRaceDate: false };
+    const generatedDays = makeGeneratedWeek(1);
+    setupPlanStorage(input, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
+
+    await executePlanGeneration("plan-1", input, "user-1");
+
+    expect(mocks.plans.applyRaceDayAdjustments).not.toHaveBeenCalled();
+  });
+
   it("includes the race-date prompt line when the end date is the race date", async () => {
     const generatedDays = makeGeneratedWeek(1);
     setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
@@ -397,7 +428,10 @@ describe("executePlanGeneration", () => {
 
     await executePlanGeneration("plan-1", baseInput, "user-1");
 
-    expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Race Date: 2026-01-12");
+    const prompt = getPromptText(mocks.generateContent.mock.calls[0]);
+    expect(prompt).toContain("Race Date: 2026-01-12");
+    // Nudges the model to taper the final days into the race.
+    expect(prompt).toContain("shakeout");
   });
 
   it("omits the race-date prompt line when the end date is not the race date", async () => {
