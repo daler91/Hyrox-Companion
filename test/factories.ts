@@ -61,6 +61,8 @@ export function createMockTrainingPlan(overrides: Partial<TrainingPlan> = {}): T
     goal: null,
     startDate: null,
     endDate: null,
+    generationStatus: "ready",
+    generationError: null,
     ...overrides,
   };
 }

@@ -1,9 +1,9 @@
 import type { GeneratePlanInput, PlanDay } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createMockPlanDay, createMockTrainingPlan, createMockTrainingPlanWithDays } from "../../test/factories";
+import { createMockPlanDay } from "../../test/factories";
 import { ErrorCode } from "../errors";
-import { generatePlan } from "./planGenerationService";
+import { executePlanGeneration } from "./planGenerationService";
 
 const mocks = vi.hoisted(() => {
   const generateContent = vi.fn();
@@ -21,10 +21,9 @@ const mocks = vi.hoisted(() => {
     retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
     trackUsageFromResponse: vi.fn(),
     plans: {
-      createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
-      getTrainingPlan: vi.fn(),
       schedulePlan: vi.fn(),
+      updateGenerationStatus: vi.fn(),
     },
     users: {
       getUser: vi.fn(),
@@ -159,13 +158,9 @@ function mockAiChunks(...chunks: GeneratedDayLike[][]): void {
   }
 }
 
-function setupPlanStorage(input: GeneratePlanInput, createdDays: PlanDay[]): void {
-  const plan = createMockTrainingPlan({ id: "plan-1", userId: "user-1", goal: input.goal, totalWeeks: input.totalWeeks });
-  mocks.plans.createTrainingPlan.mockResolvedValue(plan);
+function setupPlanStorage(_input: GeneratePlanInput, createdDays: PlanDay[]): void {
   mocks.plans.createPlanDays.mockResolvedValue(createdDays);
-  mocks.plans.getTrainingPlan.mockResolvedValue(
-    createMockTrainingPlanWithDays({ id: "plan-1", userId: "user-1", days: createdDays }),
-  );
+  mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
 }
 
 function getPromptText(call: unknown[]): string {
@@ -173,7 +168,7 @@ function getPromptText(call: unknown[]): string {
   return request.contents[0].parts[0].text;
 }
 
-describe("generatePlan", () => {
+describe("executePlanGeneration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.insertValues.mockResolvedValue(undefined);
@@ -183,6 +178,7 @@ describe("generatePlan", () => {
     mocks.retryWithBackoff.mockImplementation((fn: () => Promise<unknown>) => fn());
     mocks.trackUsageFromResponse.mockReturnValue(undefined);
     mocks.plans.schedulePlan.mockResolvedValue(true);
+    mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
     mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
   });
 
@@ -197,7 +193,7 @@ describe("generatePlan", () => {
       [...makeGeneratedWeek(8), ...makeGeneratedWeek(7)],
     );
 
-    await generatePlan(input, "user-1");
+    await executePlanGeneration("plan-1", input, "user-1");
 
     expect(mocks.generateContent).toHaveBeenCalledTimes(4);
     expect(mocks.retryWithBackoff.mock.calls.map((call) => call[1])).toEqual([
@@ -235,7 +231,7 @@ describe("generatePlan", () => {
     setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
     mockAiChunks(generatedDays);
 
-    await generatePlan(baseInput, "user-1");
+    await executePlanGeneration("plan-1", baseInput, "user-1");
 
     expect(mocks.plans.createPlanDays).toHaveBeenCalledWith([
       expect.objectContaining({ dayName: "Monday", notes: "Keep bracing tight", aiSource: "generated" }),
@@ -292,7 +288,7 @@ describe("generatePlan", () => {
     setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
     mockAiChunks(generatedDays);
 
-    await generatePlan(baseInput, "user-1");
+    await executePlanGeneration("plan-1", baseInput, "user-1");
 
     expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Weight: lbs");
     expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Distance preference: miles");
@@ -318,44 +314,43 @@ describe("generatePlan", () => {
     setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
     mockAiChunks(generatedDays);
 
-    await expect(generatePlan(baseInput, "user-1")).resolves.toEqual(
-      expect.objectContaining({ id: "plan-1" }),
-    );
+    await executePlanGeneration("plan-1", baseInput, "user-1");
 
     expect(mocks.tx.insert).not.toHaveBeenCalled();
     expect(mocks.plans.createPlanDays).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ dayName: "Sunday", notes: "Hydrate" })]),
       mocks.tx,
     );
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "ready");
   });
 
-  it("rejects incomplete chunk coverage before creating a plan", async () => {
+  it("rejects incomplete chunk coverage and marks plan failed", async () => {
     const input = { ...baseInput, totalWeeks: 2 } as const;
     mockAiChunks(makeGeneratedWeek(1));
 
-    await expect(generatePlan(input, "user-1")).rejects.toMatchObject({
+    await expect(executePlanGeneration("plan-1", input, "user-1")).rejects.toMatchObject({
       code: ErrorCode.AI_ERROR,
       status: 502,
     });
 
     expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.any(String));
   });
 
-  it("rejects non-rest days missing exercise-table rows before creating a plan", async () => {
+  it("rejects non-rest days missing exercise-table rows and marks plan failed", async () => {
     const generatedDays = makeGeneratedWeek(1, { exercises: undefined });
     mockAiChunks(generatedDays);
 
-    await expect(generatePlan(baseInput, "user-1")).rejects.toMatchObject({
+    await expect(executePlanGeneration("plan-1", baseInput, "user-1")).rejects.toMatchObject({
       code: ErrorCode.AI_ERROR,
       status: 502,
     });
 
     expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.any(String));
   });
 
-  it("rejects non-rest days when all generated exercise rows are invalid", async () => {
+  it("rejects non-rest days when all generated exercise rows are invalid and marks plan failed", async () => {
     const generatedDays = makeGeneratedWeek(1, {
       exercises: [
         { exerciseName: "back_squat", category: "strength", sets: [] },
@@ -363,21 +358,21 @@ describe("generatePlan", () => {
     });
     mockAiChunks(generatedDays);
 
-    await expect(generatePlan(baseInput, "user-1")).rejects.toMatchObject({
+    await expect(executePlanGeneration("plan-1", baseInput, "user-1")).rejects.toMatchObject({
       code: ErrorCode.AI_ERROR,
       status: 502,
     });
 
     expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.any(String));
   });
 
-  it("does not create a partial plan when a chunk provider call times out", async () => {
+  it("does not commit plan days when a chunk provider call times out", async () => {
     mocks.generateContent.mockRejectedValue(new Error("AI call timed out after 90000ms (planGeneration:w1-1)"));
 
-    await expect(generatePlan(baseInput, "user-1")).rejects.toThrow("timed out");
+    await expect(executePlanGeneration("plan-1", baseInput, "user-1")).rejects.toThrow("timed out");
 
     expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(mocks.plans.createTrainingPlan).not.toHaveBeenCalled();
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.stringContaining("timed out"));
   });
 });
