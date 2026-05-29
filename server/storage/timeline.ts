@@ -13,6 +13,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray } from 
 
 import { db } from "../db";
 import { toDateStr } from "../types";
+import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
 import { sortAndWindowTimelineEntries } from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
 
@@ -85,6 +86,7 @@ function createPlannedDayEntry(
   scheduledDate: string,
   row: { planName: string; planId: string },
   today: string,
+  override: RaceDayOverride | null,
 ): TimelineEntry {
   const status = calculatePlanDayStatus(day.status, scheduledDate, today);
   return {
@@ -92,19 +94,70 @@ function createPlannedDayEntry(
     date: scheduledDate,
     type: "planned",
     status: status,
-    focus: day.focus,
-    mainWorkout: day.mainWorkout,
-    accessory: day.accessory,
-    notes: day.notes,
+    focus: override ? override.focus : day.focus,
+    mainWorkout: override ? override.mainWorkout : day.mainWorkout,
+    accessory: override ? override.accessory : day.accessory,
+    notes: override ? override.notes : day.notes,
     planDayId: day.id,
     weekNumber: day.weekNumber,
     dayName: day.dayName,
     planName: row.planName,
     planId: row.planId,
     aiSource: day.aiSource as TimelineEntry["aiSource"],
-    aiRationale: day.aiRationale,
-    aiNoteUpdatedAt: day.aiNoteUpdatedAt,
-    aiInputsUsed: day.aiInputsUsed,
+    // Coach notes describe the original workout; drop them on a derived race/shakeout/recovery day.
+    aiRationale: override ? null : day.aiRationale,
+    aiNoteUpdatedAt: override ? null : day.aiNoteUpdatedAt,
+    aiInputsUsed: override ? null : day.aiInputsUsed,
+  };
+}
+
+export interface UpcomingPlannedDay {
+  planDayId: string;
+  date: string;
+  focus: string;
+  mainWorkout: string;
+  accessory: string | null;
+  notes: string | null;
+  aiSource: TimelineEntry["aiSource"];
+  aiRationale: string | null;
+  aiNoteUpdatedAt: Date | null;
+  aiInputsUsed: PlanDay["aiInputsUsed"];
+  exerciseSets: ExerciseSet[];
+  structureBlocks: TimelineEntry["structureBlocks"];
+}
+
+// Shape one upcoming planned-day row for the AI coach, applying a race-day
+// override when present (which blanks the original workout's exercises/notes).
+function toUpcomingPlannedDay(
+  row: {
+    id: string;
+    focus: string | null;
+    mainWorkout: string | null;
+    accessory: string | null;
+    notes: string | null;
+    aiSource: string | null;
+    aiRationale: string | null;
+    aiNoteUpdatedAt: Date | null;
+    aiInputsUsed: PlanDay["aiInputsUsed"];
+  },
+  scheduledDate: string,
+  override: RaceDayOverride | null,
+  setsByPlanDayId: Map<string, ExerciseSet[]>,
+  blocksByPlanDayId: Map<string, TimelineEntry["structureBlocks"]>,
+): UpcomingPlannedDay {
+  return {
+    planDayId: row.id,
+    date: scheduledDate,
+    focus: override?.focus ?? row.focus ?? "",
+    mainWorkout: override?.mainWorkout ?? row.mainWorkout ?? "",
+    accessory: override ? override.accessory : row.accessory,
+    notes: override ? override.notes : row.notes,
+    aiSource: row.aiSource as TimelineEntry["aiSource"],
+    aiRationale: override ? null : row.aiRationale,
+    aiNoteUpdatedAt: override ? null : row.aiNoteUpdatedAt,
+    aiInputsUsed: override ? null : row.aiInputsUsed,
+    exerciseSets: override ? [] : (setsByPlanDayId.get(row.id) ?? []),
+    structureBlocks: override ? [] : (blocksByPlanDayId.get(row.id) ?? []),
   };
 }
 
@@ -134,7 +187,10 @@ function addSetToGroup(groups: Map<string, ExerciseSet[]>, key: string, set: Exe
   groups.set(key, [set]);
 }
 
-function collectExerciseSetOwnerIds(entries: TimelineEntry[]): {
+function collectExerciseSetOwnerIds(
+  entries: TimelineEntry[],
+  suppressedPlanDayIds: ReadonlySet<string>,
+): {
   readonly workoutLogIds: string[];
   readonly planDayIds: string[];
 } {
@@ -146,7 +202,8 @@ function collectExerciseSetOwnerIds(entries: TimelineEntry[]): {
       workoutLogIds.add(entry.workoutLogId);
       continue;
     }
-    if (entry.planDayId) {
+    // Race/shakeout/recovery days are displayed without their underlying exercises.
+    if (entry.planDayId && !suppressedPlanDayIds.has(entry.planDayId)) {
       planDayIds.add(entry.planDayId);
     }
   }
@@ -225,8 +282,11 @@ function hydrateTimelineStructureBlocks(
 export class TimelineStorage {
   constructor(private readonly workoutStorage: WorkoutStorage) {}
 
-  private async attachExerciseSets(entries: TimelineEntry[]): Promise<void> {
-    const { workoutLogIds, planDayIds } = collectExerciseSetOwnerIds(entries);
+  private async attachExerciseSets(
+    entries: TimelineEntry[],
+    suppressedPlanDayIds: ReadonlySet<string> = new Set(),
+  ): Promise<void> {
+    const { workoutLogIds, planDayIds } = collectExerciseSetOwnerIds(entries, suppressedPlanDayIds);
 
     if (workoutLogIds.length === 0 && planDayIds.length === 0) return;
 
@@ -252,7 +312,7 @@ export class TimelineStorage {
     // break `sqlLimit` semantics.
     const userPlans = await db.query.trainingPlans.findMany({
       where: eq(trainingPlans.userId, userId),
-      columns: { id: true, name: true },
+      columns: { id: true, name: true, raceDate: true },
     });
     if (userPlans.length === 0) return [];
 
@@ -260,6 +320,7 @@ export class TimelineStorage {
     const relevantPlanIds = planId && planIds.includes(planId) ? [planId] : planIds;
     if (relevantPlanIds.length === 0) return [];
     const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
+    const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
 
     const days = await db.query.planDays.findMany({
       where: and(inArray(planDays.planId, relevantPlanIds), isNotNull(planDays.scheduledDate)),
@@ -271,6 +332,7 @@ export class TimelineStorage {
       planDay: day,
       planName: planNameById.get(day.planId)!,
       planId: day.planId,
+      raceDate: raceDateById.get(day.planId) ?? null,
     }));
   }
 
@@ -309,8 +371,9 @@ export class TimelineStorage {
     linkedWorkouts: WorkoutLog[],
     standaloneWorkouts: WorkoutLog[],
     today: string,
-  ): TimelineEntry[] {
+  ): { entries: TimelineEntry[]; suppressedPlanDayIds: Set<string> } {
     const entries: TimelineEntry[] = [];
+    const suppressedPlanDayIds = new Set<string>();
 
     const workoutsByPlanDayId = new Map<string, WorkoutLog>();
     for (const log of linkedWorkouts) {
@@ -324,16 +387,20 @@ export class TimelineStorage {
       if (!day.scheduledDate) continue;
       const linkedLog = workoutsByPlanDayId.get(day.id);
       if (linkedLog) {
+        // A logged workout shows what the athlete actually did — never overridden.
         entries.push(
           createLinkedWorkoutEntry(day, linkedLog, { planName: row.planName, planId: row.planId }),
         );
       } else {
+        const override = deriveRaceDayOverride(day.scheduledDate, row.raceDate);
+        if (override) suppressedPlanDayIds.add(day.id);
         entries.push(
           createPlannedDayEntry(
             day,
             day.scheduledDate,
             { planName: row.planName, planId: row.planId },
             today,
+            override,
           ),
         );
       }
@@ -343,7 +410,7 @@ export class TimelineStorage {
       entries.push(createStandaloneWorkoutEntry(log));
     }
 
-    return entries;
+    return { entries, suppressedPlanDayIds };
   }
 
   async getTimeline(
@@ -368,13 +435,13 @@ export class TimelineStorage {
       this.fetchStandaloneWorkouts(userId, sqlOverFetch),
     ]);
 
-    const entries = this.buildTimelineEntries(
+    const { entries, suppressedPlanDayIds } = this.buildTimelineEntries(
       scheduledDays,
       linkedWorkouts,
       standaloneWorkouts,
       today,
     );
-    await this.attachExerciseSets(entries);
+    await this.attachExerciseSets(entries, suppressedPlanDayIds);
 
     // Unavoidable in-memory step: merge two SQL streams and apply final window.
     return this.sortAndWindowEntries(entries, limit, offset);
@@ -384,35 +451,17 @@ export class TimelineStorage {
    * Fetch only upcoming planned workouts directly from DB with LIMIT.
    * Avoids loading the full timeline for AI suggestions.
    */
-  async getUpcomingPlannedDays(
-    userId: string,
-    limit: number,
-  ): Promise<
-    Array<{
-      planDayId: string;
-      date: string;
-      focus: string;
-      mainWorkout: string;
-      accessory: string | null;
-      notes: string | null;
-      aiSource: TimelineEntry["aiSource"];
-      aiRationale: string | null;
-      aiNoteUpdatedAt: Date | null;
-      aiInputsUsed: PlanDay["aiInputsUsed"];
-      exerciseSets?: ExerciseSet[];
-      structureBlocks?: TimelineEntry["structureBlocks"];
-    }>
-  > {
+  async getUpcomingPlannedDays(userId: string, limit: number): Promise<UpcomingPlannedDay[]> {
     const today = toDateStr();
     // Relational query: resolve user's plans first, then pull matching days
     // filtered by plan IDs. Same pattern as fetchScheduledDays.
-    const userPlanIds = (
-      await db.query.trainingPlans.findMany({
-        where: eq(trainingPlans.userId, userId),
-        columns: { id: true },
-      })
-    ).map((p) => p.id);
-    if (userPlanIds.length === 0) return [];
+    const userPlans = await db.query.trainingPlans.findMany({
+      where: eq(trainingPlans.userId, userId),
+      columns: { id: true, raceDate: true },
+    });
+    if (userPlans.length === 0) return [];
+    const userPlanIds = userPlans.map((p) => p.id);
+    const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
 
     const rows = await db.query.planDays.findMany({
       where: and(
@@ -424,6 +473,7 @@ export class TimelineStorage {
       ),
       columns: {
         id: true,
+        planId: true,
         scheduledDate: true,
         focus: true,
         mainWorkout: true,
@@ -445,38 +495,15 @@ export class TimelineStorage {
       this.workoutStorage.getWorkoutStructuresByPlanDays(planDayIds),
     ]);
 
-    const upcoming: Array<{
-      planDayId: string;
-      date: string;
-      focus: string;
-      mainWorkout: string;
-      accessory: string | null;
-      notes: string | null;
-      aiSource: TimelineEntry["aiSource"];
-      aiRationale: string | null;
-      aiNoteUpdatedAt: Date | null;
-      aiInputsUsed: PlanDay["aiInputsUsed"];
-      exerciseSets: ExerciseSet[];
-      structureBlocks: TimelineEntry["structureBlocks"];
-    }> = [];
-
+    const upcoming: UpcomingPlannedDay[] = [];
     for (const r of rows) {
-      if (r.scheduledDate !== null) {
-        upcoming.push({
-          planDayId: r.id,
-          date: r.scheduledDate,
-          focus: r.focus || "",
-          mainWorkout: r.mainWorkout || "",
-          accessory: r.accessory,
-          notes: r.notes,
-          aiSource: r.aiSource as TimelineEntry["aiSource"],
-          aiRationale: r.aiRationale,
-          aiNoteUpdatedAt: r.aiNoteUpdatedAt,
-          aiInputsUsed: r.aiInputsUsed,
-          exerciseSets: setsByPlanDayId.get(r.id) ?? [],
-          structureBlocks: blocksByPlanDayId.get(r.id) ?? [],
-        });
-      }
+      if (r.scheduledDate === null) continue;
+      // Same race-day derivation as the timeline, so the coach sees the race day
+      // and its light shakeout/recovery context instead of the raw workout.
+      const override = deriveRaceDayOverride(r.scheduledDate, raceDateById.get(r.planId));
+      upcoming.push(
+        toUpcomingPlannedDay(r, r.scheduledDate, override, setsByPlanDayId, blocksByPlanDayId),
+      );
     }
 
     return upcoming;

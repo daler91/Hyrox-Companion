@@ -123,6 +123,40 @@ describe('exportService - generateCSV', () => {
     expect(csv).toBe(expectedRows);
   });
 
+  it('shows the race-day mainWorkout when a race day has no exercises (no empty cell)', async () => {
+    // Read-time derivation gives race/shakeout/recovery days no exercise sets; the
+    // CSV must fall back to mainWorkout (structuredSummary([]) and (undefined) → null).
+    const timeline = [
+      {
+        planDayId: 'p-1',
+        date: '2026-07-11',
+        type: 'planned',
+        status: 'planned',
+        focus: 'Race Day',
+        mainWorkout: 'HYROX race day. Execute your plan.',
+        accessory: null,
+        notes: null,
+        exerciseSets: [],
+      },
+      {
+        planDayId: 'p-2',
+        date: '2026-07-18',
+        type: 'planned',
+        status: 'planned',
+        focus: 'Race Day',
+        mainWorkout: 'HYROX race day. Trust your training.',
+        accessory: null,
+        notes: null,
+        exerciseSets: undefined,
+      },
+    ];
+    const storage = createMockStorage(timeline, []);
+    const csv = await generateCSV(mockUserId, storage);
+
+    expect(csv).toContain('2026-07-11,planned,planned,Race Day,HYROX race day. Execute your plan.,,,,');
+    expect(csv).toContain('2026-07-18,planned,planned,Race Day,HYROX race day. Trust your training.,,,,');
+  });
+
   it('should propagate errors when storage fails', async () => {
     const storage = createMockStorage([], []);
     storage.timeline.getTimeline = vi.fn().mockRejectedValue(new Error('Storage failure'));
