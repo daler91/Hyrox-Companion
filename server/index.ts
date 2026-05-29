@@ -22,6 +22,7 @@ import { AppError } from "./errors";
 import { isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
 import { runStartupMaintenance } from "./maintenance";
+import { cspHeaderMiddleware } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
@@ -148,44 +149,19 @@ app.use(cors({
   },
   credentials: true,
 }));
-const clerkDomains =
-  "https://*.clerk.accounts.dev https://*.fitai.coach https://clerk.fitai.coach";
-const connectSrc = isDev
-  ? [
-      "'self'",
-      clerkDomains,
-      "https://www.strava.com",
-      "https://*.ingest.us.sentry.io",
-      "ws:",
-      "wss:",
-    ]
-  : [
-      "'self'",
-      clerkDomains,
-      "https://www.strava.com",
-      "https://*.ingest.us.sentry.io",
-    ];
-
-// Generate per-request CSP nonce (production only; dev uses 'unsafe-inline')
+// Generate per-request CSP nonce (production only; dev uses 'unsafe-inline').
+// Must run before cspHeaderMiddleware so the nonce is available to the policy.
 if (!isDev) {
   app.use(cspNonceMiddleware);
 }
 
+// Helmet's own CSP is disabled: the Content-Security-Policy header is owned
+// entirely by cspHeaderMiddleware (server/middleware/csp.ts), the single source
+// of truth. This avoids the previous footgun where helmet set a stale CSP
+// (connect-src 'self') that the per-request middleware silently overwrote.
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
-        connectSrc: ["'self'"],
-        frameSrc: ["'self'"],
-        frameAncestors: ["'none'"],
-        workerSrc: ["'self'", "blob:"],
-      },
-    },
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     // 🛡️ Sentinel: Explicit HSTS with preload (CODEBASE_REVIEW_2026-04-12.md
@@ -199,25 +175,7 @@ app.use(
   }),
 );
 
-// Override helmet's default CSP with per-request nonce-based policy
-app.use((_req, res, next) => {
-  const scriptSrc = isDev
-    ? `'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomains}`
-    : `'self' 'nonce-${res.locals.cspNonce}' ${clerkDomains}`;
-  const policy = [
-    `default-src 'self'`,
-    `script-src ${scriptSrc}`,
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
-    `font-src 'self' https://fonts.gstatic.com data:`,
-    `img-src 'self' data: https://img.clerk.com https://*.clerk.com https://*.strava.com`,
-    `connect-src ${connectSrc.join(" ")}`,
-    `frame-src 'self' ${clerkDomains}`,
-    `frame-ancestors 'none'`,
-    `worker-src 'self' blob:`,
-  ].join("; ");
-  res.setHeader("Content-Security-Policy", policy);
-  next();
-});
+app.use(cspHeaderMiddleware(isDev));
 
 app.use((req, res, next) => {
   res.setHeader(
