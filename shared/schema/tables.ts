@@ -75,6 +75,10 @@ export const serverRuntimeCache = pgTable("server_runtime_cache", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("idx_server_runtime_cache_expires_at").on(table.expiresAt),
+  // text_pattern_ops lets deleteRuntimeCachePrefix()'s `key LIKE 'prefix%'`
+  // use an index regardless of the database's default collation (a plain btree
+  // on a non-C collation can't serve a LIKE-prefix scan). See review L4.
+  index("idx_server_runtime_cache_key_pattern").on(table.key.op("text_pattern_ops")),
 ]);
 
 export const trainingPlans = pgTable("training_plans", {

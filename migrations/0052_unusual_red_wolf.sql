@@ -1,0 +1,1 @@
+CREATE INDEX "idx_server_runtime_cache_key_pattern" ON "server_runtime_cache" USING btree ("key" text_pattern_ops);

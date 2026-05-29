@@ -64,6 +64,9 @@ function serializePreferences(user: {
     emailNotifications: user.emailNotifications ?? false,
     emailWeeklySummary: user.emailWeeklySummary ?? false,
     emailMissedReminder: user.emailMissedReminder ?? false,
+    // Display toggle, not an AI/email consent flag: defaults ON to match the
+    // `show_adherence_insights` column default (shared/schema/tables.ts). The
+    // consent/notification flags above intentionally default false (opt-in).
     showAdherenceInsights: user.showAdherenceInsights ?? true,
     aiCoachEnabled: user.aiCoachEnabled ?? false,
     trainingStyleId: user.trainingStyleId ?? "balanced_default",
