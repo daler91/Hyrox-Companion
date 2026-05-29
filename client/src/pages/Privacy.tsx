@@ -121,7 +121,10 @@ export default function Privacy() {
             Garmin does not offer a public OAuth API for end users. To sync Garmin activities, we
             store your Garmin email and password encrypted at rest using AES-256-GCM. We strongly
             recommend using a unique password for your Garmin account. You can disconnect your Garmin
-            account at any time in Settings, which permanently deletes your stored credentials.
+            account at any time in Settings, which permanently deletes your stored credentials. If a
+            Garmin connection repeatedly fails to sync, we also clear the stored credentials
+            automatically and ask you to reconnect, so they are not kept for a connection that is no
+            longer working.
           </p>
 
           <h2>6. Data Security</h2>

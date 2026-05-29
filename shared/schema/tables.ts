@@ -211,8 +211,13 @@ export const garminConnections = pgTable("garmin_connections", {
   userId: varchar("user_id", { length: 255 }).notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   // displayName from getUserProfile() — opaque hash, not the email.
   garminDisplayName: varchar("garmin_display_name", { length: 255 }),
-  encryptedEmail: text("encrypted_email").notNull(),
-  encryptedPassword: text("encrypted_password").notNull(),
+  // Garmin email + password, encrypted at rest (AES-256-GCM). Nullable because
+  // they're cleared when a connection enters the failed state (lastError set) —
+  // a broken connection needs a manual reconnect, which re-collects them, so we
+  // never retain replayable credentials for a connection we won't reuse without
+  // the user re-entering them (review M2). Invariant: non-null iff lastError is null.
+  encryptedEmail: text("encrypted_email"),
+  encryptedPassword: text("encrypted_password"),
   // JSON.stringify(IOauth1Token) and JSON.stringify(IOauth2Token), each
   // encrypted with encryptToken(). Null until the first successful login.
   encryptedOauth1Token: text("encrypted_oauth1_token"),

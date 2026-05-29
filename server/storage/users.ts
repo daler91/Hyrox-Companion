@@ -313,8 +313,8 @@ export class UserStorage {
 
     return {
       ...connection,
-      encryptedEmail: decryptToken(connection.encryptedEmail),
-      encryptedPassword: decryptToken(connection.encryptedPassword),
+      encryptedEmail: connection.encryptedEmail ? decryptToken(connection.encryptedEmail) : null,
+      encryptedPassword: connection.encryptedPassword ? decryptToken(connection.encryptedPassword) : null,
       encryptedOauth1Token: connection.encryptedOauth1Token
         ? decryptToken(connection.encryptedOauth1Token)
         : null,
@@ -358,8 +358,8 @@ export class UserStorage {
 
     return {
       ...connection,
-      encryptedEmail: decryptToken(connection.encryptedEmail),
-      encryptedPassword: decryptToken(connection.encryptedPassword),
+      encryptedEmail: connection.encryptedEmail ? decryptToken(connection.encryptedEmail) : null,
+      encryptedPassword: connection.encryptedPassword ? decryptToken(connection.encryptedPassword) : null,
       encryptedOauth1Token: connection.encryptedOauth1Token
         ? decryptToken(connection.encryptedOauth1Token)
         : null,
@@ -410,9 +410,21 @@ export class UserStorage {
    * without exposing internals. Called from the routes module on auth failure.
    */
   async setGarminError(userId: string, error: string): Promise<void> {
+    // Clear every stored Garmin secret when a connection breaks. Layers 4 & 6
+    // (server/garmin.ts) refuse to auto-retry once lastError is set, so the
+    // email/password/tokens are dead weight until a manual reconnect re-collects
+    // them — dropping them here avoids retaining replayable credentials for a
+    // connection we will never reuse automatically (review M2). The non-secret
+    // tombstone (display name, lastError, lastSyncedAt) is kept for the UI.
     await db
       .update(garminConnections)
-      .set({ lastError: error })
+      .set({
+        lastError: error,
+        encryptedEmail: null,
+        encryptedPassword: null,
+        encryptedOauth1Token: null,
+        encryptedOauth2Token: null,
+      })
       .where(eq(garminConnections.userId, userId));
   }
 

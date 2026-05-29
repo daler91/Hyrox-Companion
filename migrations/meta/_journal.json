@@ -372,6 +372,13 @@
       "when": 1780076981809,
       "tag": "0052_unusual_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1780078353069,
+      "tag": "0053_dizzy_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }
