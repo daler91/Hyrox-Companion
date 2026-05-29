@@ -1,60 +1,48 @@
-import type { NextFunction, Request, Response } from "express";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
-// Single source of truth for the Content-Security-Policy header.
+import type { Response } from "express";
+import type { HelmetOptions } from "helmet";
+
+// Single source of truth for the Content-Security-Policy directives.
 //
-// Previously the policy was declared twice: once in the `helmet()` config and
-// once in a hand-built override middleware that silently replaced helmet's
-// header on every request. The helmet copy was dead code (always overwritten)
-// and its `connectSrc: ["'self'"]` was actively misleading — removing the
-// override would have collapsed connect-src to 'self' and broken Clerk/Strava/
-// Sentry with no test catching it. Helmet's CSP is now disabled and this module
-// is the only place the directives live.
+// These directives are handed to helmet() so the CSP header is owned by one
+// well-tested layer — no hand-built override middleware that silently replaces
+// helmet's header (the M1 footgun), and no `contentSecurityPolicy: false`
+// (which static analysers read as "CSP disabled"). In production, script-src
+// carries a per-request nonce seeded by cspNonceMiddleware (which must run
+// before helmet); dev relaxes to 'unsafe-inline'/'unsafe-eval' for Vite HMR and
+// adds the ws:/wss: HMR socket origins to connect-src.
 
-const CLERK_DOMAINS = "https://*.clerk.accounts.dev https://*.fitai.coach https://clerk.fitai.coach";
+const CLERK_DOMAINS = ["https://*.clerk.accounts.dev", "https://*.fitai.coach", "https://clerk.fitai.coach"];
 
-/**
- * Build the Content-Security-Policy header value.
- *
- * Dev relaxes script-src to 'unsafe-inline'/'unsafe-eval' (Vite HMR) and adds
- * ws:/wss: to connect-src for the HMR socket. Production uses a per-request
- * nonce for script-src and omits the websocket sources.
- */
-export function buildCspPolicy(opts: { isDev: boolean; nonce?: string }): string {
-  const { isDev, nonce } = opts;
+type CspDirectives = NonNullable<
+  Exclude<HelmetOptions["contentSecurityPolicy"], boolean | undefined>["directives"]
+>;
 
+export function buildCspDirectives({ isDev }: { isDev: boolean }): CspDirectives {
   const scriptSrc = isDev
-    ? `'self' 'unsafe-inline' 'unsafe-eval' ${CLERK_DOMAINS}`
-    : `'self' 'nonce-${nonce ?? ""}' ${CLERK_DOMAINS}`;
+    ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...CLERK_DOMAINS]
+    : [
+        "'self'",
+        (_req: IncomingMessage, res: ServerResponse) => `'nonce-${(res as Response).locals.cspNonce}'`,
+        ...CLERK_DOMAINS,
+      ];
 
-  const connectSrc = [
-    "'self'",
-    CLERK_DOMAINS,
-    "https://www.strava.com",
-    "https://*.ingest.us.sentry.io",
-    ...(isDev ? ["ws:", "wss:"] : []),
-  ].join(" ");
-
-  return [
-    `default-src 'self'`,
-    `script-src ${scriptSrc}`,
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${CLERK_DOMAINS}`,
-    `font-src 'self' https://fonts.gstatic.com data:`,
-    `img-src 'self' data: https://img.clerk.com https://*.clerk.com https://*.strava.com`,
-    `connect-src ${connectSrc}`,
-    `frame-src 'self' ${CLERK_DOMAINS}`,
-    `frame-ancestors 'none'`,
-    `worker-src 'self' blob:`,
-  ].join("; ");
-}
-
-/**
- * Express middleware that sets the CSP header from {@link buildCspPolicy}.
- * In production it reads the per-request nonce seeded by `cspNonceMiddleware`,
- * which must run before this middleware.
- */
-export function cspHeaderMiddleware(isDev: boolean) {
-  return (_req: Request, res: Response, next: NextFunction): void => {
-    res.setHeader("Content-Security-Policy", buildCspPolicy({ isDev, nonce: res.locals.cspNonce }));
-    next();
+  return {
+    defaultSrc: ["'self'"],
+    scriptSrc,
+    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", ...CLERK_DOMAINS],
+    fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+    imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
+    connectSrc: [
+      "'self'",
+      ...CLERK_DOMAINS,
+      "https://www.strava.com",
+      "https://*.ingest.us.sentry.io",
+      ...(isDev ? ["ws:", "wss:"] : []),
+    ],
+    frameSrc: ["'self'", ...CLERK_DOMAINS],
+    frameAncestors: ["'none'"],
+    workerSrc: ["'self'", "blob:"],
   };
 }

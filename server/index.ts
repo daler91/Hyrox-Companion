@@ -22,7 +22,7 @@ import { AppError } from "./errors";
 import { isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
 import { runStartupMaintenance } from "./maintenance";
-import { cspHeaderMiddleware } from "./middleware/csp";
+import { buildCspDirectives } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
@@ -150,18 +150,22 @@ app.use(cors({
   credentials: true,
 }));
 // Generate per-request CSP nonce (production only; dev uses 'unsafe-inline').
-// Must run before cspHeaderMiddleware so the nonce is available to the policy.
+// Must run before helmet so the nonce is available to the script-src directive
+// function in buildCspDirectives.
 if (!isDev) {
   app.use(cspNonceMiddleware);
 }
 
-// Helmet's own CSP is disabled: the Content-Security-Policy header is owned
-// entirely by cspHeaderMiddleware (server/middleware/csp.ts), the single source
-// of truth. This avoids the previous footgun where helmet set a stale CSP
-// (connect-src 'self') that the per-request middleware silently overwrote.
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    // CSP directives live in one place (server/middleware/csp.ts) and are
+    // emitted by helmet itself — a single source of truth, with no separate
+    // override middleware and no disabled CSP. useDefaults:false so the emitted
+    // policy is exactly buildCspDirectives.
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: buildCspDirectives({ isDev }),
+    },
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     // 🛡️ Sentinel: Explicit HSTS with preload (CODEBASE_REVIEW_2026-04-12.md
@@ -174,8 +178,6 @@ app.use(
     },
   }),
 );
-
-app.use(cspHeaderMiddleware(isDev));
 
 app.use((req, res, next) => {
   res.setHeader(
