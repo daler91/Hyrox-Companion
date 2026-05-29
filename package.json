@@ -233,7 +233,19 @@
     "  by express/body-parser, @flow-js/garmin-connect, superagent/supertest, Cypress",
     "  request, and MCP SDK paths. Patched in 6.15.2. Dependabot cannot update",
     "  transitive pnpm deps, so the override is required.",
-    "  Remove when all transitive qs ranges resolve to >=6.15.2 by default."
+    "  Remove when all transitive qs ranges resolve to >=6.15.2 by default.",
+    "",
+    "tmp ^0.2.6: fixes CVE-2026-44705 / GHSA-ph9p-34f9-6g65 (path traversal via unsanitized",
+    "  prefix/postfix/dir, Dependabot issue #62). In tmp <0.2.6, the prefix, postfix, and dir",
+    "  options are concatenated into the generated filename and normalized by path.join() with no",
+    "  containment check, so traversal sequences (../) or an absolute dir escape the intended temp",
+    "  directory and create files at attacker-controlled locations with the process's privileges.",
+    "  Patched in 0.2.6 (constrained to ^0.2.6 => >=0.2.6 <0.3.0 to stay on the 0.2.x line and avoid",
+    "  API drift). Pulled transitively by cypress 15.15.0 (depends on tmp 0.2.5); cypress is the only",
+    "  consumer, is a devDependency, and we never call tmp with user-controlled prefix/postfix/dir,",
+    "  so runtime is unaffected. Dependabot cannot update transitive pnpm deps, so the override is",
+    "  required to clear the advisory.",
+    "  Remove when cypress ships a version that depends on tmp >=0.2.6."
   ],
   "overrides": {
     "esbuild": "0.27.5",
@@ -249,7 +261,8 @@
     "uuid": "^14.0.0",
     "systeminformation": "5.31.6",
     "postcss": "^8.5.10",
-    "qs": ">=6.15.2"
+    "qs": ">=6.15.2",
+    "tmp": "^0.2.6"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -313,7 +326,8 @@
       "uuid": "^14.0.0",
       "systeminformation": "5.31.6",
       "postcss": "^8.5.10",
-      "qs": ">=6.15.2"
+      "qs": ">=6.15.2",
+      "tmp": "^0.2.6"
     }
   },
   "packageManager": "pnpm@9.12.0",
