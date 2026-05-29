@@ -1,4 +1,4 @@
-import { exerciseSets, workoutLogs } from "@shared/schema";
+import { workoutLogs } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
