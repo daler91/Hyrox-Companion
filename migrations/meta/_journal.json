@@ -365,6 +365,13 @@
       "when": 1780025510934,
       "tag": "0051_slow_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1780076981809,
+      "tag": "0052_unusual_red_wolf",
+      "breakpoints": true
     }
   ]
 }
