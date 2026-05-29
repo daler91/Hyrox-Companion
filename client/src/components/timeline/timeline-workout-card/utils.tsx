@@ -1,5 +1,6 @@
+import { RACE_DAY_FOCUS } from "@shared/raceDay";
 import type { PersonalRecord } from "@shared/schema";
-import { CheckCircle2, Clock, SkipForward,XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Flag, SkipForward, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
@@ -23,7 +24,24 @@ export function hasPRInWorkout(
   );
 }
 
-export function getStatusBadge(status: string) {
+// Exact, case-insensitive match against the server's race-day marker so it never
+// collides with workout focuses like "Race Pace" or "Race Simulation".
+export function isRaceDayEntry(focus: string | null | undefined): boolean {
+  return (focus ?? "").trim().toLowerCase() === RACE_DAY_FOCUS.toLowerCase();
+}
+
+export function getStatusBadge(status: string, focus?: string | null) {
+  if (isRaceDayEntry(focus)) {
+    return (
+      <Badge
+        className="bg-amber-500/15 text-amber-700 dark:text-amber-300"
+        data-testid="badge-race-day"
+      >
+        <Flag className="h-3 w-3 mr-1" />
+        Race Day
+      </Badge>
+    );
+  }
   switch (status) {
     case "completed":
       return (
@@ -62,9 +80,11 @@ export function getCardClasses(
   isBeingCombined: boolean | undefined,
   canBeCombinedWith: boolean | undefined,
   status: string,
+  focus?: string | null,
 ) {
   if (isBeingCombined) return "border-primary ring-2 ring-primary/30";
   if (canBeCombinedWith) return "border-primary/50 hover:border-primary";
+  if (isRaceDayEntry(focus)) return "border-amber-500/40 bg-amber-500/10";
   if (status === "completed") return "border-success/20 bg-success/5";
   if (status === "missed") return "border-red-500/20 bg-red-500/5";
   if (status === "skipped") return "border-yellow-500/20 bg-yellow-500/5";
