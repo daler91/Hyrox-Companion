@@ -3,6 +3,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface EditableWorkoutTitleProps {
   readonly title: string | null | undefined;
@@ -86,30 +87,48 @@ export function EditableWorkoutTitle({
           className="h-8 min-w-0"
           data-testid={`${testIdPrefix}-input`}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={saveDraft}
-          disabled={isSaving || draft.trim().length === 0}
-          aria-label="Save workout title"
-          data-testid={`${testIdPrefix}-save`}
-        >
-          <Check className="h-4 w-4" aria-hidden />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={cancelEditing}
-          disabled={isSaving}
-          aria-label="Cancel title edit"
-          data-testid={`${testIdPrefix}-cancel`}
-        >
-          <X className="h-4 w-4" aria-hidden />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={saveDraft}
+                disabled={isSaving || draft.trim().length === 0}
+                aria-label="Save workout title"
+                data-testid={`${testIdPrefix}-save`}
+              >
+                <Check className="h-4 w-4" aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Save title</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={cancelEditing}
+                disabled={isSaving}
+                aria-label="Cancel title edit"
+                data-testid={`${testIdPrefix}-cancel`}
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Cancel</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </span>
     );
   }
@@ -119,18 +138,27 @@ export function EditableWorkoutTitle({
       <span className="min-w-0 truncate" data-testid={`${testIdPrefix}-text`}>
         {displayTitle}
       </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 shrink-0"
-        onClick={startEditing}
-        disabled={isSaving}
-        aria-label="Edit workout title"
-        data-testid={`${testIdPrefix}-edit`}
-      >
-        <Pencil className="h-3.5 w-3.5" aria-hidden />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={startEditing}
+              disabled={isSaving}
+              aria-label="Edit workout title"
+              data-testid={`${testIdPrefix}-edit`}
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Edit workout title</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </span>
   );
 }
