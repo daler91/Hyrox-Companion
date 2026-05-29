@@ -501,13 +501,6 @@ export async function executePlanGeneration(
       await storage.plans.schedulePlan(planId, scheduleStartDate, userId);
     }
 
-    // Once the calendar dates are committed, reserve the race day: the race date
-    // becomes the event, the day before a shakeout, and any days after it easy
-    // recovery. Runs after schedulePlan so plan-day scheduledDates are persisted.
-    if (normalized.raceDate && scheduleStartDate) {
-      await storage.plans.applyRaceDayAdjustments(planId, normalized.raceDate, userId);
-    }
-
     await storage.plans.updateGenerationStatus(planId, "ready");
 
     logger.info(
