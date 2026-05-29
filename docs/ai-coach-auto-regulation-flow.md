@@ -188,7 +188,7 @@ flowchart TD
 sequenceDiagram
     participant Job as Auto-coach job
     participant Coach as coachService
-    participant LG as trainingLoadService
+    participant LG as trainingLoadGovernor
     participant Provider as Text AI provider
     participant DB as PostgreSQL
     participant UI as Timeline card
@@ -228,7 +228,8 @@ sequenceDiagram
 | Auto-coach orchestration | `server/services/coachService.ts` |
 | Shared training context | `server/services/ai/index.ts`, `server/gemini/types.ts` |
 | Provider suggestion prompt | `server/gemini/suggestionService.ts` |
-| Deterministic load math and restrictions | `server/services/trainingLoadService.ts` |
+| Deterministic load math + ACWR/restrictions | `server/services/trainingLoadService.ts` |
+| Load-governor suggestion builder (`buildLoadGovernorSuggestions`) | `server/services/trainingLoadGovernor.ts` |
 | Exercise load tag schema | `shared/schema/tables.ts`, `migrations/0049_exercise_load_tags.sql` |
 | Coach-note metadata type | `shared/schema/types/plans.ts` |
 | Timeline coach note UI | `client/src/components/timeline/timeline-workout-card/CoachNote.tsx` |

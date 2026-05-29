@@ -566,15 +566,15 @@ The `user_id` column has a UNIQUE constraint, enforcing one Strava connection pe
 
 ### garmin_connections
 
-Garmin Connect session storage. Unlike Strava, Garmin has no public OAuth — authentication uses email/password against the reverse-engineered SSO flow ([@flow-js/garmin-connect](https://www.npmjs.com/package/@flow-js/garmin-connect)). Credentials and OAuth token blobs are encrypted at rest with the shared `encryptToken`/`decryptToken` helpers (AES-256-GCM). The `lastError` column is plaintext (generated message, non-secret) and is surfaced to the UI as a reconnect banner.
+Garmin Connect session storage. Unlike Strava, Garmin has no public OAuth — authentication uses email/password against the reverse-engineered SSO flow ([@flow-js/garmin-connect](https://www.npmjs.com/package/@flow-js/garmin-connect)). Credentials and OAuth token blobs are encrypted at rest with the shared `encryptToken`/`decryptToken` helpers (AES-256-GCM). The `lastError` column is plaintext (generated message, non-secret) and is surfaced to the UI as a reconnect banner. Since migration `0053` the credential columns are **nullable**: when a connection enters the failed state (`lastError` set), the email/password and OAuth token blobs are cleared, so a dead connection never retains replayable credentials — only an explicit reconnect re-populates them.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `varchar(255)` | PK, default `gen_random_uuid()` |
 | `user_id` | `varchar(255)` | NOT NULL, UNIQUE, FK -> `users.id` ON DELETE CASCADE |
 | `garmin_display_name` | `varchar(255)` | nullable (hashed/opaque display name from `getUserProfile()`) |
-| `encrypted_email` | `text` | NOT NULL (encrypted AES-256-GCM) |
-| `encrypted_password` | `text` | NOT NULL (encrypted AES-256-GCM) |
+| `encrypted_email` | `text` | nullable (encrypted AES-256-GCM); cleared when a connection fails — see above |
+| `encrypted_password` | `text` | nullable (encrypted AES-256-GCM); cleared when a connection fails — see above |
 | `encrypted_oauth1_token` | `text` | nullable, `JSON.stringify(IOauth1Token)` encrypted |
 | `encrypted_oauth2_token` | `text` | nullable, `JSON.stringify(IOauth2Token)` encrypted |
 | `token_expires_at` | `timestamp` | nullable — derived from `oauth2.expires_at` |
@@ -1004,7 +1004,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **49 migrations**, `0000` through `0048`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **54 migrations**, `0000` through `0053`:
 
 ```
 migrations/
@@ -1025,11 +1025,16 @@ migrations/
   0046_complex_workout_block_scores.sql
   0047_last_magik.sql
   0048_shared_runtime_state.sql
+  0049_exercise_load_tags.sql
+  0050_rapid_stingray.sql
+  0051_slow_omega_flight.sql
+  0052_unusual_red_wolf.sql          # text_pattern_ops index on server_runtime_cache.key
+  0053_dizzy_omega_sentinel.sql      # garmin_connections credential columns -> nullable
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0048_snapshot.json
+    0053_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.

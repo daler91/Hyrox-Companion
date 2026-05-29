@@ -14,12 +14,12 @@ I re-ran a fresh multi-pass review across:
 
 ## 1) Architecture & Design Patterns
 
-### [Severity Level]: Medium — PARTIALLY RESOLVED (2026-05-24)
+### [Severity Level]: Medium — RESOLVED (2026-05-29)
 **File/Location:** `server/routes/workouts/*` + `server/services/workoutUseCases.ts` + `server/services/workoutService/reparse.ts`
 
 **Status:** The single-file `server/routes/workouts.ts` no longer exists. Routes are now split across `server/routes/workouts/workoutsCrud.routes.ts`, `workoutsAi.routes.ts`, `workoutsExport.routes.ts`, `workoutsMigration.routes.ts`, and `workoutsTimeline.routes.ts`. The use-case layer exists (`workoutUseCases.ts` exports `createWorkout`/`updateWorkoutUseCase`), and reparse orchestration was extracted into `server/services/workoutService/reparse.ts`.
 
-**Remaining work:** The reparse, image-parse, batch re-parse, and unstructured-workout handlers in `workoutsAi.routes.ts` still call service functions directly from the route layer instead of going through a thin use-case wrapper. The next step is a `parseWorkoutUseCases.ts` (or equivalent) so the route handlers shrink to validate-and-delegate.
+**Resolved (PR #1291):** Orchestration for the reparse, image-parse, and batch-reparse handlers was extracted into `server/services/parseWorkoutUseCases.ts` (`reparseWorkoutUseCase` / `reparseWorkoutFromImageUseCase` / `batchReparseWorkoutsUseCase`). The handlers in `workoutsAi.routes.ts` are now thin validate-and-delegate wrappers that map a `not_found` / `parse_failed` / `ok` outcome to HTTP.
 
 **Original issue:**
 `workouts.ts` was carrying too many responsibilities (transport parsing, validation edge-cases, business orchestration, and response shaping). This weakened separation of concerns and made transactional behavior harder to reason about as features grew.
@@ -235,4 +235,4 @@ return {
 3. ~~**Medium:** fix Strava skipped-counter bug.~~ — RESOLVED (verified already correct)
 4. ~~**Medium:** await email job enqueues and correct reporting.~~ — RESOLVED
 5. ~~**Medium:** normalize custom-exercise validation contract.~~ — RESOLVED
-6. **Medium:** extract reparse/image-parse/batch-reparse orchestration into a `parseWorkoutUseCases.ts` so `workoutsAi.routes.ts` handlers shrink to validate-and-delegate.
+6. ~~**Medium:** extract reparse/image-parse/batch-reparse orchestration into a `parseWorkoutUseCases.ts` so `workoutsAi.routes.ts` handlers shrink to validate-and-delegate.~~ — RESOLVED (PR #1291)
