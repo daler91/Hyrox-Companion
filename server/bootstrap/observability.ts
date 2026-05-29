@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/node";
 
 import { env } from "../env";
-import { logger } from "../logger";
+import { logger, SENSITIVE_REQUEST_HEADERS } from "../logger";
 
 export function configureObservability(deps: { init?: typeof Sentry.init; getClient?: typeof Sentry.getClient } = {}): void {
   const init = deps.init ?? Sentry.init;
@@ -22,14 +22,12 @@ export function configureObservability(deps: { init?: typeof Sentry.init; getCli
         delete event.request.data;
         delete event.request.query_string;
         delete event.request.cookies;
-        if (event.request.headers) {
-          delete event.request.headers.authorization;
-          delete event.request.headers.cookie;
-          delete event.request.headers["x-csrf-token"];
-          delete event.request.headers["x-idempotency-key"];
-          // Keep in sync with the pino redact list in server/logger.ts.
-          delete event.request.headers["x-cron-secret"];
-          delete event.request.headers["x-internal-analytics-secret"];
+        const headers = event.request.headers;
+        if (headers) {
+          // Scrub the same sensitive headers the pino logger redacts.
+          for (const header of SENSITIVE_REQUEST_HEADERS) {
+            Reflect.deleteProperty(headers, header);
+          }
         }
       }
       if (event.user) {

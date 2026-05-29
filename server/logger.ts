@@ -11,6 +11,18 @@ import { getRequestContext } from "./requestContext";
 
 const isDev = env.NODE_ENV !== "production";
 
+// Sensitive request headers scrubbed from BOTH structured logs (the pino redact
+// list below) and Sentry events (server/bootstrap/observability.ts beforeSend).
+// Single source of truth so the two scrubbers can't drift apart (review L2).
+export const SENSITIVE_REQUEST_HEADERS = [
+  "authorization",
+  "cookie",
+  "x-csrf-token",
+  "x-idempotency-key",
+  "x-cron-secret",
+  "x-internal-analytics-secret",
+] as const;
+
 export const logger = pino({
   level: env.LOG_LEVEL || "info",
   // Redact credentials that can appear in either headers or request bodies.
@@ -18,10 +30,7 @@ export const logger = pino({
   // leaving them unredacted leaks tokens into log aggregators and Sentry
   // breadcrumbs. `*` covers nested objects (e.g. req.body.strava.accessToken).
   redact: [
-    "req.headers.authorization",
-    "req.headers.cookie",
-    "req.headers.x-cron-secret",
-    "req.headers.x-internal-analytics-secret",
+    ...SENSITIVE_REQUEST_HEADERS.map((header) => `req.headers.${header}`),
     'req.body.password',
     'req.body.newPassword',
     'req.body.currentPassword',
