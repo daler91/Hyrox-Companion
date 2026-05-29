@@ -418,6 +418,34 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that RPE",
   });
 
+  // Connect/disconnect this workout to a plan day. Optimistically patches the
+  // cached workout's planId/planDayId so the picker reflects the choice
+  // instantly; invalidates timeline + plans so the workout moves into (or out
+  // of) the plan-day slot and the day's completion state refreshes. The server
+  // derives planId from the day, so the request only carries planDayId.
+  const updatePlanDay = useApiMutation({
+    mutationFn: ({ planDayId }: { planId: string | null; planDayId: string | null }) =>
+      api.workouts.assignPlanDay(workoutId!, planDayId),
+    onMutate: async ({ planId, planDayId }: { planId: string | null; planDayId: string | null }) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+      patchCachedWorkout({ planId, planDayId });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
+      if (workoutId && prev) {
+        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
+      }
+    },
+    invalidateQueries: workoutId
+      ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.timeline, QUERY_KEYS.plans]
+      : [QUERY_KEYS.timeline, QUERY_KEYS.plans],
+    successToast: "Updated plan link",
+    errorToast: "Couldn't update plan link",
+  });
+
   return {
     workout: workoutQuery.data,
     history: historyQuery.data,
@@ -441,5 +469,6 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateReference,
     updateFocus,
     updateRpe,
+    updatePlanDay,
   };
 }

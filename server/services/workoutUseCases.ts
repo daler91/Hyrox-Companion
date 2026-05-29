@@ -7,7 +7,7 @@ import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
 import { findPersonalRecordAchievements } from "./personalRecordAchievements";
-import { createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
+import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
 type CreateWorkoutPayload = z.infer<typeof insertWorkoutLogSchema> & {
   exercises?: z.infer<typeof exercisesPayloadSchema>;
@@ -91,4 +91,12 @@ export async function updateWorkoutUseCase(input: {
   }
 
   return updateWorkout(input.workoutId, updateData, structured, input.userId, structureBlocks);
+}
+
+export async function assignWorkoutPlanDayUseCase(input: {
+  userId: string;
+  workoutId: string;
+  planDayId: string | null;
+}) {
+  return assignWorkoutPlanDay(input.workoutId, input.planDayId, input.userId);
 }

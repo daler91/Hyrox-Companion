@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
+import { WorkoutPlanDayPicker } from "@/components/workout-detail/shared/WorkoutPlanDayPicker";
 
 import { StepFooter } from "../StepFooter";
 
@@ -15,6 +16,10 @@ interface ReflectStepProps {
   readonly setRpe: (value: number | null) => void;
   readonly durationMinutes: string;
   readonly setDurationMinutes: (value: string) => void;
+  readonly planId: string | null;
+  readonly setPlanId: (value: string | null) => void;
+  readonly planDayId: string | null;
+  readonly setPlanDayId: (value: string | null) => void;
   readonly notes: string;
   readonly setNotes: (value: string) => void;
   readonly isNotesListening: boolean;
@@ -37,6 +42,10 @@ export function ReflectStep({
   setRpe,
   durationMinutes,
   setDurationMinutes,
+  planId,
+  setPlanId,
+  planDayId,
+  setPlanDayId,
   notes,
   setNotes,
   isNotesListening,
@@ -89,6 +98,26 @@ export function ReflectStep({
               data-testid="input-duration-minutes"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Connect to a plan</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Optionally link this workout to a scheduled plan day so it counts toward your plan.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <WorkoutPlanDayPicker
+            planId={planId}
+            planDayId={planDayId}
+            onChange={(next) => {
+              setPlanId(next.planId);
+              setPlanDayId(next.planDayId);
+            }}
+            idPrefix="log-plan"
+          />
         </CardContent>
       </Card>
 

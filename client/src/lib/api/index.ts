@@ -48,6 +48,7 @@ export const QUERY_KEYS = {
   authUser: ["/api/v1/auth/user"] as const,
   preferences: ["/api/v1/preferences"] as const,
   plans: ["/api/v1/plans"] as const,
+  plan: (id: string) => ["/api/v1/plans", id] as const,
   timeline: ["/api/v1/timeline"] as const,
   timelineAnnotations: ["/api/v1/timeline-annotations"] as const,
   workouts: ["/api/v1/workouts"] as const,

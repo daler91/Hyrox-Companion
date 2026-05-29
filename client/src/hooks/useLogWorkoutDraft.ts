@@ -27,6 +27,7 @@ export interface LogWorkoutDraft {
   notes: string;
   rpe: number | null;
   durationMinutes: string;
+  planId?: string | null;
   planDayId?: string | null;
   useTextMode: boolean;
   exerciseBlocks: string[];
@@ -53,6 +54,7 @@ function isBlank(draft: LoadedDraft): boolean {
     draft.notes.trim() === "" &&
     draft.rpe === null &&
     (draft.durationMinutes ?? "").trim() === "" &&
+    draft.planId == null &&
     draft.planDayId == null &&
     draft.exerciseBlocks.length === 0
   );
@@ -73,6 +75,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
       notes: parsed.notes ?? "",
       rpe: parsed.rpe ?? null,
       durationMinutes: parsed.durationMinutes ?? "",
+      planId: parsed.planId ?? null,
       planDayId: parsed.planDayId ?? null,
       useTextMode: parsed.useTextMode ?? false,
       exerciseBlocks: parsed.exerciseBlocks ?? [],
@@ -123,6 +126,7 @@ export function saveLogWorkoutDraftFromTimelineEntry(
     notes: "",
     rpe: null,
     durationMinutes: entry.duration == null ? "" : String(entry.duration),
+    planId: entry.planId ?? null,
     planDayId: entry.planDayId ?? null,
     useTextMode: structured.names.length === 0,
     exerciseBlocks: structured.names,

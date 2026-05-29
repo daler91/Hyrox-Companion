@@ -48,6 +48,28 @@ vi.mock("@/components/workout-structure", () => ({
   StructureBlocksEditor: () => <div data-testid="structure-blocks-editor" />,
 }));
 
+vi.mock("../shared/WorkoutPlanDayPicker", () => ({
+  WorkoutPlanDayPicker: ({
+    planId,
+    planDayId,
+    onChange,
+  }: {
+    planId: string | null;
+    planDayId: string | null;
+    onChange: (next: { planId: string | null; planDayId: string | null }) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="mock-plan-picker"
+      data-plan-id={planId ?? ""}
+      data-plan-day-id={planDayId ?? ""}
+      onClick={() => onChange({ planId: "plan-9", planDayId: "day-9" })}
+    >
+      plan picker
+    </button>
+  ),
+}));
+
 vi.mock("../AthleteNoteInput", () => ({
   AthleteNoteInput: () => <textarea aria-label="Athlete note" />,
 }));
@@ -102,6 +124,7 @@ function makeDetail(overrides: Record<string, unknown> = {}) {
     updateNote: { mutate: vi.fn() },
     updateRpe: { mutate: vi.fn() },
     updateReference: { mutate: vi.fn() },
+    updatePlanDay: { mutate: vi.fn(), isPending: false },
     reparseFreeText: { mutate: vi.fn(), isPending: false },
     reparseFromImage: { mutate: vi.fn(), isPending: false },
     ...overrides,
@@ -116,6 +139,25 @@ describe("ReviewSurface", () => {
       vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }),
     );
     mockUseWorkoutDetail.mockReset();
+  });
+
+  it("wires the plan-day picker to the current link and updatePlanDay", async () => {
+    const updatePlanDay = { mutate: vi.fn(), isPending: false };
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({ planId: "plan-1", planDayId: "day-1" }),
+        updatePlanDay,
+      }),
+    );
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    const picker = screen.getByTestId("mock-plan-picker");
+    expect(picker.getAttribute("data-plan-id")).toBe("plan-1");
+    expect(picker.getAttribute("data-plan-day-id")).toBe("day-1");
+
+    await userEvent.click(picker);
+    expect(updatePlanDay.mutate).toHaveBeenCalledWith({ planId: "plan-9", planDayId: "day-9" });
   });
 
   it("surfaces planned differences when adherence guidance is enabled", () => {

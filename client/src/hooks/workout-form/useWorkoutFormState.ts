@@ -13,6 +13,7 @@ export function useWorkoutFormState(initialValues?: WorkoutFormInitialValues) {
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [rpe, setRpe] = useState<number | null>(initialValues?.rpe ?? null);
   const [durationMinutes, setDurationMinutes] = useState(initialValues?.durationMinutes ?? "");
+  const [planId, setPlanId] = useState<string | null>(initialValues?.planId ?? null);
   const [planDayId, setPlanDayId] = useState<string | null>(initialValues?.planDayId ?? null);
 
   return {
@@ -28,6 +29,8 @@ export function useWorkoutFormState(initialValues?: WorkoutFormInitialValues) {
     setRpe,
     durationMinutes,
     setDurationMinutes,
+    planId,
+    setPlanId,
     planDayId,
     setPlanDayId,
   };
