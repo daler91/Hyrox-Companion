@@ -1,8 +1,8 @@
 import type { TrainingLoadOverview, WorkoutLog } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
+import { buildLoadGovernorSuggestions } from "./trainingLoadGovernor";
 import {
-  buildLoadGovernorSuggestions,
   calculateCardioStressScore,
   calculateStrengthStressScore,
   calculateTrainingLoad,

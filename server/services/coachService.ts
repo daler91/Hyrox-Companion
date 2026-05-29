@@ -35,7 +35,7 @@ import {
 } from "./structuredPlanDaySuggestion";
 import { resolveTrainingStyle } from "./training_styles";
 import type { TrainingStylePromptContext } from "./training_styles/types";
-import { buildLoadGovernorSuggestions, type LoadGovernorSuggestion } from "./trainingLoadService";
+import { buildLoadGovernorSuggestions, type LoadGovernorSuggestion } from "./trainingLoadGovernor";
 
 // ---------------------------------------------------------------------------
 // Helpers
