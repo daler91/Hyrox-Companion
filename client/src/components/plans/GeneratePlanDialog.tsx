@@ -28,9 +28,9 @@ function getDescription(step: number, mode: GeneratePlanDialogProps["mode"], isG
   if (isGenerating) return "Generating your plan — this takes 1–2 minutes…";
   if (step === 0) return "What's your training goal?";
   if (step === 1 && mode === "onboarding") {
-    return "Set your plan duration, schedule, and experience level.";
+    return "Set your plan dates, schedule, and experience level.";
   }
-  if (step === 1) return "Set your plan duration and experience level.";
+  if (step === 1) return "Set your plan dates and experience level.";
   return "Optional: focus areas and additional details.";
 }
 
@@ -42,11 +42,9 @@ export function GeneratePlanDialog({
   initialGoal,
   initialStartDate,
 }: GeneratePlanDialogProps) {
-  const isOnboarding = mode === "onboarding";
   const form = useGeneratePlanForm({
     initialGoal,
     initialStartDate,
-    requireStartDate: isOnboarding,
   });
   const generatePlan = useGeneratePlan();
 
@@ -91,8 +89,6 @@ export function GeneratePlanDialog({
 
         {form.step === 1 && (
           <GeneratePlanScheduleStep
-            totalWeeks={form.totalWeeks}
-            onTotalWeeksChange={form.setTotalWeeks}
             daysPerWeek={form.daysPerWeek}
             onDaysPerWeekChange={form.handleDaysPerWeekChange}
             restDays={form.restDays}
@@ -102,12 +98,15 @@ export function GeneratePlanDialog({
             onExperienceLevelChange={form.setExperienceLevel}
             startDate={form.startDate}
             onStartDateChange={form.setStartDate}
-            raceDate={form.raceDate}
-            onRaceDateChange={form.handleRaceDateChange}
+            endDate={form.endDate}
+            onEndDateChange={form.setEndDate}
+            endDateIsRaceDate={form.endDateIsRaceDate}
+            onEndDateIsRaceDateChange={form.setEndDateIsRaceDate}
+            planWeeks={form.planWeeks}
+            dateError={form.dateError}
             onBack={() => form.setStep(0)}
             onNext={() => form.setStep(2)}
             canProceed={form.canProceedStep1}
-            isStartDateRequired={form.isStartDateRequired}
           />
         )}
 

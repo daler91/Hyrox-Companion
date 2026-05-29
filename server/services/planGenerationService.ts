@@ -1,3 +1,4 @@
+import { computePlanWeeks } from "@shared/dateUtils";
 import {
   exerciseSets,
   exerciseSetSchema,
@@ -93,7 +94,7 @@ function buildGenerationUnitLines(unitPreferences: Required<UnitPreferences>): s
   ];
 }
 
-function buildGenerationPrompt(input: GeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>): string {
+function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
     `Generate ${formatWeekRange(range)} of a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
@@ -315,22 +316,8 @@ function validateAndOrderGeneratedDays(days: GeneratedDay[], totalWeeks: number)
     });
 }
 
-function calculateStartDate(raceDate: string, totalWeeks: number): string {
-  const race = new Date(raceDate);
-  const start = new Date(race);
-  start.setDate(start.getDate() - totalWeeks * 7);
-  // Align to nearest Monday
-  const dayOfWeek = start.getDay();
-  let mondayOffset: number;
-  if (dayOfWeek === 0) mondayOffset = 1;        // Sunday → next Monday
-  else if (dayOfWeek === 1) mondayOffset = 0;    // Already Monday
-  else mondayOffset = 8 - dayOfWeek;             // Tue-Sat → next Monday
-  start.setDate(start.getDate() + mondayOffset);
-  return start.toISOString().split("T")[0];
-}
-
 async function generatePlanChunk(
-  input: GeneratePlanInput,
+  input: NormalizedGeneratePlanInput,
   userId: string,
   range: WeekRange,
   unitPreferences: Required<UnitPreferences>,
@@ -355,7 +342,7 @@ async function generatePlanChunk(
 }
 
 async function generatePlanDays(
-  input: GeneratePlanInput,
+  input: NormalizedGeneratePlanInput,
   userId: string,
   unitPreferences: Required<UnitPreferences>,
   signal?: AbortSignal,
@@ -372,16 +359,55 @@ async function generatePlanDays(
   return days;
 }
 
+// Fallback only for a legacy queued job that predates the start/end-date rename
+// and therefore lacks a date span (matches the old schema default of 8 weeks).
+const LEGACY_DEFAULT_WEEKS = 8;
+
+// During generation we work with the input enriched with two DERIVED values:
+//   - totalWeeks: computed from the start → end span (no longer user-entered)
+//   - raceDate:   the end date, but only when flagged as the athlete's race day
+// Carrying them on one object keeps the prompt/chunking code below unchanged.
+type NormalizedGeneratePlanInput = GeneratePlanInput & {
+  totalWeeks: number;
+  raceDate?: string;
+};
+
+// Shape of a plan-generation job enqueued by a PREVIOUS server version. Such a
+// job can sit in the durable queue across a deploy and reach executePlanGeneration
+// with the old field names. Reading through this view lets those in-flight jobs
+// still complete. Remove once the queue has fully drained post-deploy.
+interface LegacyGeneratePlanInput {
+  totalWeeks?: number;
+  raceDate?: string;
+  startDate?: string;
+  endDate?: string;
+  endDateIsRaceDate?: boolean;
+}
+
+function normalizeGeneratePlanInput(input: GeneratePlanInput): NormalizedGeneratePlanInput {
+  const raw = input as LegacyGeneratePlanInput;
+  const totalWeeks =
+    raw.startDate && raw.endDate
+      ? computePlanWeeks(raw.startDate, raw.endDate)
+      : (raw.totalWeeks ?? LEGACY_DEFAULT_WEEKS);
+  // raceDate drives the "peak for this date" prompt line. New inputs set it only
+  // when the athlete flags the end date as their race day; legacy inputs carried
+  // it as its own field.
+  const raceDate = raw.endDate ? (raw.endDateIsRaceDate ? raw.endDate : undefined) : raw.raceDate;
+  return { ...input, totalWeeks, raceDate };
+}
+
 export async function createPendingPlan(
   input: GeneratePlanInput,
   userId: string,
 ): Promise<TrainingPlanWithDays> {
+  const { totalWeeks } = normalizeGeneratePlanInput(input);
   const planName = `AI Plan: ${input.goal.slice(0, 80)}`;
   const plan = await storage.plans.createTrainingPlan({
     userId,
     name: planName,
     sourceFileName: null,
-    totalWeeks: input.totalWeeks,
+    totalWeeks,
     goal: input.goal,
     generationStatus: "pending",
   });
@@ -394,8 +420,9 @@ export async function executePlanGeneration(
   userId: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  const normalized = normalizeGeneratePlanInput(input);
   logger.info(
-    { userId, planId, totalWeeks: input.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
+    { userId, planId, totalWeeks: normalized.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
     "[planGen] Generating AI training plan",
   );
 
@@ -407,7 +434,7 @@ export async function executePlanGeneration(
       weightUnit: standardizeWeightUnit(user?.weightUnit),
       distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
     };
-    const days = await generatePlanDays(input, userId, unitPreferences, signal);
+    const days = await generatePlanDays(normalized, userId, unitPreferences, signal);
 
     // Plan days and their structured exercise sets are written inside a single
     // transaction so a failure in any step rolls the whole insertion back.
@@ -457,15 +484,12 @@ export async function executePlanGeneration(
       "[planGen] Persisted structured plan-day exercises",
     );
 
-    // Auto-schedule the plan if a start date is provided or can be derived from race date
-    let resolvedStartDate: string | undefined;
-    if (input.startDate) {
-      resolvedStartDate = input.startDate;
-    } else if (input.raceDate) {
-      resolvedStartDate = calculateStartDate(input.raceDate, input.totalWeeks);
-    }
-    if (resolvedStartDate) {
-      await storage.plans.schedulePlan(planId, resolvedStartDate, userId);
+    // Every plan now carries a start date (the form requires one), so the plan is
+    // always scheduled onto the calendar. startDate is absent only for a legacy
+    // in-flight queued job, hence the guard.
+    const scheduleStartDate: string | undefined = normalized.startDate;
+    if (scheduleStartDate) {
+      await storage.plans.schedulePlan(planId, scheduleStartDate, userId);
     }
 
     await storage.plans.updateGenerationStatus(planId, "ready");

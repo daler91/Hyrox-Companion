@@ -1,10 +1,15 @@
+import {
+  addDaysToISODate,
+  computePlanWeeks,
+  dayDiff,
+  MAX_PLAN_WEEKS,
+  MIN_PLAN_WEEKS,
+} from "@shared/dateUtils";
 import type { GeneratePlanInput } from "@shared/schema";
 import { useState } from "react";
 
-import { toISODateString } from "@/lib/dateUtils";
+import { getTodayString } from "@/lib/dateUtils";
 
-export const MAX_WEEKS = 24;
-export const MIN_WEEKS = 1;
 export const DEFAULT_WEEKS = 8;
 export const MAX_DAYS_PER_WEEK = 7;
 export const MIN_DAYS_PER_WEEK = 2;
@@ -47,11 +52,11 @@ export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 
 export interface GeneratePlanFormValues {
   readonly goal: string;
-  readonly totalWeeks: number;
   readonly daysPerWeek: number;
   readonly experienceLevel: ExperienceLevel;
-  readonly raceDate: string;
   readonly startDate: string;
+  readonly endDate: string;
+  readonly endDateIsRaceDate: boolean;
   readonly restDays: string[];
   readonly focusAreas: string[];
   readonly injuries: string;
@@ -60,38 +65,42 @@ export interface GeneratePlanFormValues {
 export interface GeneratePlanFormOptions {
   readonly initialGoal?: string;
   readonly initialStartDate?: string;
-  readonly requireStartDate?: boolean;
 }
 
-export function calculateSuggestedStartDate(race: string, weeks: number): string {
-  const raceD = new Date(race);
-  const start = new Date(raceD);
-  start.setDate(start.getDate() - weeks * 7);
-  const dayOfWeek = start.getDay();
-  let mondayOffset: number;
-  if (dayOfWeek === 0) mondayOffset = 1;
-  else if (dayOfWeek === 1) mondayOffset = 0;
-  else mondayOffset = 8 - dayOfWeek;
-  start.setDate(start.getDate() + mondayOffset);
-  // Local-TZ string: matches plan-day scheduledDate semantics on the server.
-  return toISODateString(start);
+/**
+ * Validate the start → end date range that now drives a plan's length. Returns a
+ * human-readable error, or null when the span is a valid 1–24 week plan. The
+ * week count is checked on the RAW rounded span (not `computePlanWeeks`, which
+ * clamps) so an out-of-range span is rejected rather than silently clamped.
+ */
+export function getPlanDateError(startDate: string, endDate: string): string | null {
+  if (!startDate || !endDate) return "Start and end dates are required.";
+  const span = dayDiff(startDate, endDate);
+  if (span <= 0) return "End date must be after the start date.";
+  const weeks = Math.round(span / 7);
+  if (weeks < MIN_PLAN_WEEKS || weeks > MAX_PLAN_WEEKS) {
+    return `Plan length must be between ${MIN_PLAN_WEEKS} and ${MAX_PLAN_WEEKS} weeks (your dates span ${weeks} weeks).`;
+  }
+  return null;
 }
 
 export function getGeneratePlanFormValidation(
-  values: Pick<GeneratePlanFormValues, "goal" | "daysPerWeek" | "restDays"> &
-    Partial<Pick<GeneratePlanFormValues, "startDate">>,
-  options: Pick<GeneratePlanFormOptions, "requireStartDate"> = {},
+  values: Pick<
+    GeneratePlanFormValues,
+    "goal" | "daysPerWeek" | "restDays" | "startDate" | "endDate"
+  >,
 ) {
   const requiredRestDays = 7 - values.daysPerWeek;
   const canProceedStep0 = values.goal.trim().length > 0;
-  const hasRequiredStartDate = !options.requireStartDate || (values.startDate ?? "").length > 0;
   const hasRequiredRestDays =
     values.daysPerWeek === 7 || values.restDays.length === requiredRestDays;
-  const canProceedStep1 = hasRequiredRestDays && hasRequiredStartDate;
+  const dateError = getPlanDateError(values.startDate, values.endDate);
+  const canProceedStep1 = hasRequiredRestDays && dateError === null;
   return {
     requiredRestDays,
     canProceedStep0,
     canProceedStep1,
+    dateError,
     canGenerate: canProceedStep0 && canProceedStep1,
   };
 }
@@ -99,11 +108,11 @@ export function getGeneratePlanFormValidation(
 export function buildGeneratePlanInput(values: GeneratePlanFormValues): GeneratePlanInput {
   return {
     goal: values.goal,
-    totalWeeks: values.totalWeeks,
     daysPerWeek: values.daysPerWeek,
     experienceLevel: values.experienceLevel,
-    ...(values.raceDate ? { raceDate: values.raceDate } : {}),
-    ...(values.startDate ? { startDate: values.startDate } : {}),
+    startDate: values.startDate,
+    endDate: values.endDate,
+    endDateIsRaceDate: values.endDateIsRaceDate,
     ...(values.daysPerWeek < 7 && values.restDays.length > 0
       ? { restDays: values.restDays as GeneratePlanInput["restDays"] }
       : {}),
@@ -114,15 +123,18 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
 
 export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const initialGoal = options.initialGoal ?? "";
-  const initialStartDate = options.initialStartDate ?? "";
-  const isStartDateRequired = options.requireStartDate === true;
+  // Plan length is derived from the dates, so both are always prefilled: start
+  // from the caller (onboarding) or today, end at the historical default length.
+  const baseStartDate = options.initialStartDate || getTodayString();
+  const defaultEndDate = addDaysToISODate(baseStartDate, DEFAULT_WEEKS * 7);
+
   const [step, setStep] = useState<GeneratePlanStep>(0);
   const [goal, setGoal] = useState(initialGoal);
-  const [totalWeeks, setTotalWeeks] = useState(DEFAULT_WEEKS);
   const [daysPerWeek, setDaysPerWeek] = useState(DEFAULT_DAYS_PER_WEEK);
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>("intermediate");
-  const [raceDate, setRaceDate] = useState("");
-  const [startDate, setStartDate] = useState(initialStartDate);
+  const [startDate, setStartDate] = useState(baseStartDate);
+  const [endDate, setEndDate] = useState(defaultEndDate);
+  const [endDateIsRaceDate, setEndDateIsRaceDate] = useState(true);
   const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [injuries, setInjuries] = useState("");
@@ -130,11 +142,11 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const resetForm = () => {
     setStep(0);
     setGoal(initialGoal);
-    setTotalWeeks(DEFAULT_WEEKS);
     setDaysPerWeek(DEFAULT_DAYS_PER_WEEK);
     setExperienceLevel("intermediate");
-    setRaceDate("");
-    setStartDate(initialStartDate);
+    setStartDate(baseStartDate);
+    setEndDate(defaultEndDate);
+    setEndDateIsRaceDate(true);
     setRestDays(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
     setFocusAreas([]);
     setInjuries("");
@@ -158,51 +170,45 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
     setRestDays(DEFAULT_REST_DAYS[clamped] ?? []);
   };
 
-  const handleRaceDateChange = (value: string) => {
-    setRaceDate(value);
-    if (value && !startDate) {
-      setStartDate(calculateSuggestedStartDate(value, totalWeeks));
-    }
-  };
-
   const values: GeneratePlanFormValues = {
     goal,
-    totalWeeks,
     daysPerWeek,
     experienceLevel,
-    raceDate,
     startDate,
+    endDate,
+    endDateIsRaceDate,
     restDays,
     focusAreas,
     injuries,
   };
-  const validation = getGeneratePlanFormValidation(values, {
-    requireStartDate: isStartDateRequired,
-  });
+  const validation = getGeneratePlanFormValidation(values);
+  // Clamped for display; out-of-range spans surface via validation.dateError and
+  // block progression, so the readout only ever shows a sensible 1–24.
+  const planWeeks = computePlanWeeks(startDate, endDate);
 
   return {
     step,
     setStep,
     goal,
     setGoal,
-    totalWeeks,
-    setTotalWeeks,
     daysPerWeek,
     experienceLevel,
     setExperienceLevel,
-    raceDate,
     startDate,
     setStartDate,
+    endDate,
+    setEndDate,
+    endDateIsRaceDate,
+    setEndDateIsRaceDate,
+    planWeeks,
     restDays,
     focusAreas,
     injuries,
     setInjuries,
     resetForm,
-    isStartDateRequired,
     toggleFocus,
     toggleRestDay,
     handleDaysPerWeekChange,
-    handleRaceDateChange,
     values,
     ...validation,
   };
