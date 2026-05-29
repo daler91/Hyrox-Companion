@@ -135,6 +135,10 @@ export function createOpenAiCompatibleTextProvider(options: OpenAiCompatibleAdap
       const response = await retryWithBackoff(
         () => postJson(request, options, false),
         request.label,
+        undefined,
+        undefined,
+        request.timeoutMs,
+        request.timeoutMs,
       );
       const payload = await readJsonPayload(response);
       return {

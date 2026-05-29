@@ -33,6 +33,13 @@ export interface TextAiRequest {
   feature?: string;
   userId?: string;
   signal?: AbortSignal;
+  /**
+   * Per-call override (ms) for the AI attempt timeout AND retry budget. When
+   * unset, falls back to the global AI_CALL_TIMEOUT_MS / AI_REQUEST_TIMEOUT_MS.
+   * Use only for slow background reasoning calls (e.g. plan generation) that
+   * run inside a pg-boss job, never for synchronous request-path calls.
+   */
+  timeoutMs?: number;
 }
 
 export interface ResolvedTextAiRequest extends TextAiRequest {

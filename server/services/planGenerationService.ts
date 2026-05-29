@@ -10,6 +10,7 @@ import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, 
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
+import { PLAN_GENERATION_AI_TIMEOUT_MS } from "../constants";
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
@@ -346,6 +347,7 @@ async function generatePlanChunk(
     feature: "plan_generation",
     userId,
     signal,
+    timeoutMs: PLAN_GENERATION_AI_TIMEOUT_MS,
   });
 
   const text = response.text || "[]";

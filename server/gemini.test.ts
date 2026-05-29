@@ -69,6 +69,36 @@ describe("retryWithBackoff", () => {
     await expect(retryWithBackoff(fn, "test", 2, 1)).rejects.toThrow("503 Service Unavailable");
     expect(fn).toHaveBeenCalledTimes(3);
   });
+
+  it("times out a slow call at the default 90s per-attempt limit", async () => {
+    vi.useFakeTimers();
+    try {
+      const fn = vi.fn(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve("late"), 100_000)),
+      );
+      const promise = retryWithBackoff(fn, "slow");
+      const assertion = expect(promise).rejects.toThrow("AI call timed out after 90000ms (slow)");
+      await vi.advanceTimersByTimeAsync(90_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lets a slow call exceed 90s when the per-call timeout is raised", async () => {
+    vi.useFakeTimers();
+    try {
+      const fn = vi.fn(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve("done"), 100_000)),
+      );
+      // budgetMs and callTimeoutMs raised to 5min; maxRetries/baseDelayMs keep defaults.
+      const promise = retryWithBackoff(fn, "slow", undefined, undefined, 300_000, 300_000);
+      await vi.advanceTimersByTimeAsync(100_000);
+      await expect(promise).resolves.toBe("done");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("workoutSuggestionSchema", () => {
