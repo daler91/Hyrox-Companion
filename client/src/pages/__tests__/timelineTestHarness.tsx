@@ -117,6 +117,7 @@ export function buildTimelineStatePayload(entries: TimelineEntry[] = [buildTimel
       startDate: null, setStartDate: vi.fn(), fileInputRef: { current: null }, handleFileUpload: vi.fn(),
       confirmImport: vi.fn(), importMutation: { isPending: false }, samplePlanMutation: { isPending: false },
       renamePlanMutation: { isPending: false }, schedulePlanMutation: { isPending: false }, updatePlanGoalMutation: { isPending: false },
+      deletePlanMutation: { isPending: false, mutate: vi.fn() },
     },
     workoutActions: {
       skipConfirmEntry: null, setSkipConfirmEntry: vi.fn(), handleMarkComplete: vi.fn(), handleChangeStatus: vi.fn(),
