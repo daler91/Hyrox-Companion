@@ -33,6 +33,14 @@ export const AI_REQUEST_TIMEOUT_MS = 120_000;
  */
 export const AI_CALL_TIMEOUT_MS = 90_000;
 
+/**
+ * Per-attempt timeout for plan-generation reasoning chunks. These run off the
+ * HTTP path inside a pg-boss job (JOB_TIMEOUT_MS = 50min), so they can afford
+ * far more than the default 90s AI_CALL_TIMEOUT_MS. The reasoning model takes
+ * 60-120+ s per dense 2-week chunk; 90s was killing every call.
+ */
+export const PLAN_GENERATION_AI_TIMEOUT_MS = 300_000; // 5 minutes
+
 /** Default timeline query limit */
 export const DEFAULT_TIMELINE_LIMIT = 500;
 

@@ -60,6 +60,10 @@ export const geminiTextProvider: TextAiProvider = {
           contents: geminiContents(request),
         }),
       request.label,
+      undefined,
+      undefined,
+      request.timeoutMs,
+      request.timeoutMs,
     );
 
     return {

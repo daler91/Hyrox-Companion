@@ -76,6 +76,7 @@ export async function retryWithBackoff<T>(
   maxRetries: number = 4,
   baseDelayMs: number = 2000,
   budgetMs: number = AI_REQUEST_TIMEOUT_MS,
+  callTimeoutMs: number = AI_CALL_TIMEOUT_MS,
 ): Promise<T> {
   // Fast-fail when the breaker is open so prolonged outages don't amplify
   // latency across every caller (CODEBASE_AUDIT.md §5). Breaker open error
@@ -90,7 +91,7 @@ export async function retryWithBackoff<T>(
     }
     try {
       const remaining = deadline - Date.now();
-      const result = await withTimeout(fn(), Math.min(remaining, AI_CALL_TIMEOUT_MS), label);
+      const result = await withTimeout(fn(), Math.min(remaining, callTimeoutMs), label);
       recordBreakerSuccess();
       return result;
     } catch (error) {

@@ -146,6 +146,10 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
       const response = await retryWithBackoff(
         () => postAnthropic(request, options, false),
         request.label,
+        undefined,
+        undefined,
+        request.timeoutMs,
+        request.timeoutMs,
       );
       const payload = await readJsonPayload(response);
       return {
