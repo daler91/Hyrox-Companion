@@ -3,6 +3,11 @@
 Generated: 2026-05-29 (America/Chicago)
 Branch reviewed: `claude/happy-bohr-cNk7D`
 
+> **Status — 2026-05-29: historical baseline.** All findings below have been remediated
+> (PRs #1290–#1292); only the low-priority **L5** remains. See the Remediation Status
+> matrix immediately below — the sections after it are retained as the original review
+> evidence, not a current open-issues list.
+
 Review basis: a fresh multi-pass audit of the current checkout across security,
 privacy, performance, QA/correctness, DevOps, UX/accessibility, business logic, and
 architecture. Method: three parallel exploration sweeps (security/privacy, backend
@@ -13,6 +18,36 @@ modified during this review.
 
 This report follows the convention set by `docs/CODEBASE_REVIEW_2026-05-16.md`: it is a
 new dated report against the current checkout, not an edit of the prior baseline.
+
+---
+
+## Remediation Status — 2026-05-29
+
+All findings in this report have since been **remediated** across PRs #1290–#1292. The
+sections below (Executive Summary onward) are retained unedited as the original review
+evidence. This report is now a historical baseline; future reviews should start from the
+current checkout and create a new dated report.
+
+| ID | Finding | Status | Resolution |
+| --- | --- | --- | --- |
+| M1 | Redundant / conflicting CSP definitions | ✅ Resolved (#1290) | helmet now owns the CSP via a single `buildCspDirectives()` source (no `contentSecurityPolicy: false`, no override middleware); `server/middleware/csp.ts` + unit tests added. |
+| M2 | Reusable Garmin credentials retained on dead connections | ✅ Resolved (#1292) | `setGarminError` now clears the stored email/password + cached OAuth tokens (columns made nullable, migration `0053`), keeping only the non-secret tombstone for the reconnect UI. **(a) was already satisfied** — `Privacy.tsx` §5 already disclosed Garmin credential storage; added a note covering the new auto-clear. |
+| L1 | Stale CSRF debt entry | ✅ Resolved (#1290) | `TECHNICAL_DEBT.md` #22 marked RESOLVED with the `csrf-csrf` double-submit details; summary table → 28/28. |
+| L2 | Sentry scrub list diverged from pino redact list | ✅ Resolved (#1290) | Added `x-cron-secret` / `x-internal-analytics-secret` to Sentry `beforeSend`. |
+| L3 | Retry helper skipped transient network / timeout errors | ✅ Resolved (#1291) | `retryWithJitter` now retries `TimeoutError` + transient socket codes (never 4xx or a deliberate `AbortError`); unit tests added. |
+| L4 | Prefix cache delete could sequential-scan | ✅ Resolved (#1291) | `text_pattern_ops` index on `server_runtime_cache.key` (migration `0052`). |
+| L5 | One oversized module (`trainingLoadService.ts`, 806 lines) | ⏳ Open | Deferred as low-priority; still the lone lint warning. |
+| L6 | `showAdherenceInsights` default-on inconsistency | ✅ Resolved (#1291) | Confirmed intentional (display toggle, matches the column default); documented with a comment. |
+| A1 | Reparse orchestration inline in route handlers | ✅ Resolved (#1291) | Extracted `server/services/parseWorkoutUseCases.ts`; handlers slimmed to validate-and-delegate; use-case unit tests added. |
+
+**Remaining:** only **L5** (split the oversized `trainingLoadService.ts`), plus the 14
+non-blocking SonarCloud maintainability issues introduced by the A1 refactor (relocated
+code re-counted as "new code"; the quality gate still passed). Both are low-priority and
+optional.
+
+**Corrections surfaced during remediation:** **M2(a)** was a stale recommendation — the
+privacy policy already disclosed Garmin credential storage (`Privacy.tsx` §5), so only
+the auto-clear behavior (M2b) required work.
 
 ---
 
