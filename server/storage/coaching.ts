@@ -8,6 +8,7 @@ import {
 import { and,eq } from "drizzle-orm";
 
 import { db } from "../db";
+import { EMBEDDING_DIMENSIONS } from "../gemini/client";
 import { vectorPool } from "../vectorDb";
 
 export class CoachingStorage {
@@ -133,11 +134,17 @@ export class CoachingStorage {
     topK: number,
   ): Promise<DocumentChunk[]> {
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
+    // Order by cosine distance using the `halfvec` cast so the planner can use
+    // the half-precision HNSW index (idx_document_chunks_embedding_hnsw). The
+    // cast expression must match the index expression exactly. See the index
+    // creation in server/maintenance.ts for why halfvec is required (3072 dims
+    // exceeds pgvector's 2000-dim limit for native `vector` HNSW indexes).
+    // EMBEDDING_DIMENSIONS is a trusted numeric constant, safe to interpolate.
     const result = await vectorPool.query<DocumentChunk>(
       `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
        FROM document_chunks
        WHERE user_id = $1 AND embedding IS NOT NULL
-       ORDER BY embedding::vector <=> $2::vector
+       ORDER BY embedding::halfvec(${EMBEDDING_DIMENSIONS}) <=> $2::halfvec(${EMBEDDING_DIMENSIONS})
        LIMIT $3`,
       [userId, embeddingStr, topK],
     );

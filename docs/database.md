@@ -849,6 +849,15 @@ The embedding column uses **3072 dimensions**, matching the output of the Gemini
 embedding: vector("embedding", { dimensions: 3072 }),
 ```
 
+> **Note on indexing 3072-dim vectors.** pgvector's HNSW (and IVFFlat) indexes
+> have a hard **2000-dimension limit** for the native `vector` type, so a plain
+> `hnsw (embedding vector_cosine_ops)` fails with _"column cannot have more than
+> 2000 dimensions for hnsw index"_. The index is therefore built on the embedding
+> cast to **`halfvec`** (half precision), which raises the HNSW ceiling to 4000
+> dims. Storage stays full-precision `vector(3072)`; only the index and the
+> ORDER BY use half precision (negligible for approximate cosine ranking).
+> Requires **pgvector >= 0.7.0** (Neon/Supabase ship this).
+
 ### Separate Vector Database Pool (`server/vectorDb.ts`)
 
 Vector operations use a dedicated connection pool that can point to a separate database (e.g., Neon with pgvector):
@@ -876,9 +885,13 @@ The `CoachingStorage.searchChunksByEmbedding()` method performs cosine distance 
 ```sql
 SELECT ... FROM document_chunks
 WHERE user_id = $1 AND embedding IS NOT NULL
-ORDER BY embedding::vector <=> $2::vector
+ORDER BY embedding::halfvec(3072) <=> $2::halfvec(3072)
 LIMIT $3
 ```
+
+The `::halfvec(3072)` cast in the ORDER BY mirrors the half-precision HNSW index
+expression so the planner can use the index (the cast expressions must match
+exactly). See **Embedding Dimensions** above for why `halfvec` is used.
 
 ### Schema Bootstrapping
 
@@ -886,8 +899,8 @@ The `document_chunks` table is **not** managed by Drizzle migrations. Instead, i
 
 1. Ensure the pgvector extension via `CREATE EXTENSION IF NOT EXISTS vector`
 2. Check if the `document_chunks` table exists on the vector database and `CREATE TABLE` it if missing, with the `vector(3072)` column type
-3. Migrate the `embedding` column from `text` to `vector` type if needed (for upgrades from earlier versions) — this must run before the HNSW index, since `hnsw(embedding vector_cosine_ops)` requires a vector column
-4. Create the `idx_document_chunks_embedding_hnsw` HNSW index (`vector_cosine_ops`, `m = 16`, `ef_construction = 64`) if it does not already exist
+3. Migrate the `embedding` column from `text` to `vector` type if needed (for upgrades from earlier versions) — this must run before the HNSW index, since the index requires a vector column
+4. Create the `idx_document_chunks_embedding_hnsw` HNSW index on `embedding::halfvec(3072)` (`halfvec_cosine_ops`, `m = 16`, `ef_construction = 64`) if it does not already exist. This step is best-effort: if it fails (e.g. pgvector < 0.7.0, which lacks `halfvec`), a warning is logged and startup continues — vector search still works via sequential scan.
 
 Because this runs against the vector pool, the `document_chunks` table can live on a separate connection (`VECTOR_DATABASE_URL`) independent of the main migration history.
 
@@ -1114,7 +1127,7 @@ for (const ex of exercises) {
 
 **document_chunks** (3 indexes):
 - Single-column: `material_id`, `user_id`
-- `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding vector_cosine_ops` for fast approximate cosine similarity search. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
+- `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding::halfvec(3072) halfvec_cosine_ops` for fast approximate cosine similarity search. Built on the `halfvec` (half-precision) cast because 3072-dim embeddings exceed pgvector's 2000-dim HNSW limit for native `vector`. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
 
 **training_plans**, **coaching_materials**, **custom_exercises** (1 index each):
 - All indexed on `user_id`

@@ -54,6 +54,10 @@ const EXPECTED_INDEXES = [
 const VECTOR_DB_INDEXES = [
   "idx_document_chunks_material_id",
   "idx_document_chunks_user_id",
+  // NOTE: idx_document_chunks_embedding_hnsw is intentionally NOT asserted
+  // here. It is not part of the Drizzle schema (drizzle-kit push does not
+  // create it) — it is created code-side by ensureVectorSchema() only when
+  // the server boots, which happens after this suite runs in CI.
 ];
 
 // Column expectations per table (column_name -> data_type)

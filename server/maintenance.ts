@@ -92,16 +92,35 @@ async function ensureVectorSchema() {
 
     // Create HNSW index for fast cosine similarity search on embeddings.
     // Idempotent — checks pg_indexes first.
+    //
+    // The embedding is indexed as `halfvec` (half-precision) rather than the
+    // native `vector` type: pgvector's HNSW index has a hard 2000-dimension
+    // limit for `vector`, but our embeddings are 3072-dim (gemini-embedding-001),
+    // so a plain `hnsw (embedding vector_cosine_ops)` fails with "column cannot
+    // have more than 2000 dimensions for hnsw index". Casting to `halfvec` raises
+    // the HNSW ceiling to 4000 dims. Storage stays full-precision `vector(N)`;
+    // only the index + ORDER BY use half precision, which is negligible for
+    // approximate cosine ranking. The matching ORDER BY cast lives in
+    // CoachingStorage.searchChunksByEmbedding(). Requires pgvector >= 0.7.0.
     const hnswIdx = await client.query(`
       SELECT 1 FROM pg_indexes WHERE indexname = 'idx_document_chunks_embedding_hnsw'
     `);
     if (hnswIdx.rowCount === 0) {
-      await client.query(`
-        CREATE INDEX idx_document_chunks_embedding_hnsw
-        ON document_chunks USING hnsw (embedding vector_cosine_ops)
-        WITH (m = 16, ef_construction = 64)
-      `);
-      logger.info({ context: "db" }, "Created HNSW index on document_chunks.embedding");
+      try {
+        await client.query(`
+          CREATE INDEX idx_document_chunks_embedding_hnsw
+          ON document_chunks USING hnsw ((embedding::halfvec(${EMBEDDING_DIMENSIONS})) halfvec_cosine_ops)
+          WITH (m = 16, ef_construction = 64)
+        `);
+        logger.info({ context: "db" }, "Created HNSW index on document_chunks.embedding");
+      } catch (indexError) {
+        // Non-fatal: vector search still works via sequential scan. The most
+        // likely cause is pgvector < 0.7.0 (no halfvec support).
+        logger.warn(
+          { context: "db", err: indexError, dimensions: EMBEDDING_DIMENSIONS },
+          "Could not create HNSW index on document_chunks.embedding — vector search will fall back to sequential scan. Upgrade pgvector to >= 0.7.0 for halfvec HNSW support.",
+        );
+      }
     }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Vector schema setup failed");
