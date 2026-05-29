@@ -191,7 +191,7 @@ describe("POST /api/v1/plans/generate", () => {
     const { createPendingPlan } = await import("../../services/planGenerationService");
     const { sendJobNoRetry } = await import("../../queue");
     const stubPlan = { id: "plan-1", name: "AI Plan: Hyrox race prep", generationStatus: "pending", generationError: null, days: [] };
-    vi.mocked(createPendingPlan).mockResolvedValue(stubPlan as never);
+    vi.mocked(createPendingPlan).mockResolvedValue(stubPlan);
 
     const response = await request(app)
       .post("/api/v1/plans/generate")
