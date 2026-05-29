@@ -39,6 +39,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { ConfirmDialog } from "../ConfirmDialog";
 import type { FilterStatus } from "../types";
 import { downloadTemplate } from "./csv-utils";
 import { GoalDialog } from "./GoalDialog";
@@ -60,6 +61,8 @@ export default function TimelineFilters({
   onGoalSave,
   isUpdatingGoal,
   onScheduleClick,
+  onDeletePlan,
+  isDeletingPlan,
   canBulkDelete,
   bulkDeleteMode,
   onBulkDeleteModeChange,
@@ -69,6 +72,7 @@ export default function TimelineFilters({
   const [goalDialogOpen, setGoalDialogOpen] = useState(false);
   const [goalText, setGoalText] = useState("");
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
@@ -98,6 +102,13 @@ export default function TimelineFilters({
     if (selectedPlanId) {
       onGoalSave?.(selectedPlanId, goalText.trim() || null);
       setGoalDialogOpen(false);
+    }
+  };
+
+  const handleDeleteConfirm = () => {
+    if (selectedPlanId) {
+      onDeletePlan?.(selectedPlanId);
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -174,6 +185,19 @@ export default function TimelineFilters({
                         >
                           <CalendarDays className="h-4 w-4 mr-2" />
                           Reschedule
+                        </DropdownMenuItem>
+                      ) : null}
+                      {onDeletePlan ? (
+                        <DropdownMenuItem
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setDeleteConfirmOpen(true);
+                          }}
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                          data-testid="menuitem-delete-plan"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete plan
                         </DropdownMenuItem>
                       ) : null}
                       <DropdownMenuSeparator />
@@ -299,6 +323,20 @@ export default function TimelineFilters({
       <GeneratePlanDialog
         open={generateDialogOpen}
         onOpenChange={setGenerateDialogOpen}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete training plan?"
+        description="This permanently deletes this plan and all of its workout days. This cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteConfirm}
+        isPending={isDeletingPlan}
+        isDestructive
+        cancelTestId="button-cancel-delete-plan"
+        confirmTestId="button-confirm-delete-plan"
       />
     </>
   );

@@ -58,6 +58,7 @@ describe("TimelineFilters", () => {
     isImporting: false,
     onRenamePlan: vi.fn(),
     isRenaming: false,
+    onDeletePlan: vi.fn(),
   };
 
   beforeEach(() => {
@@ -237,5 +238,39 @@ describe("TimelineFilters", () => {
     const submitBtn = await screen.findByTestId("button-rename-submit");
     expect(submitBtn).toBeDisabled();
     expect(submitBtn.querySelector(".animate-spin")).toBeInTheDocument();
+  });
+
+  it("deletes the selected plan after confirmation", async () => {
+    const user = userEvent.setup();
+    render(<TimelineFilters {...defaultProps} />);
+
+    await user.click(screen.getByTestId("button-plan-tools"));
+
+    const deleteItem = await screen.findByTestId("menuitem-delete-plan");
+    await user.click(deleteItem);
+
+    expect(await screen.findByText("Delete training plan?")).toBeInTheDocument();
+
+    const confirmBtn = await screen.findByTestId("button-confirm-delete-plan");
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(defaultProps.onDeletePlan).toHaveBeenCalledWith("plan-1");
+    });
+  });
+
+  it("does not delete when the confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    render(<TimelineFilters {...defaultProps} />);
+
+    await user.click(screen.getByTestId("button-plan-tools"));
+
+    const deleteItem = await screen.findByTestId("menuitem-delete-plan");
+    await user.click(deleteItem);
+
+    const cancelBtn = await screen.findByTestId("button-cancel-delete-plan");
+    await user.click(cancelBtn);
+
+    expect(defaultProps.onDeletePlan).not.toHaveBeenCalled();
   });
 });

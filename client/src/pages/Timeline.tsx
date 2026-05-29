@@ -97,6 +97,7 @@ export default function Timeline() {
     renamePlanMutation,
     schedulePlanMutation,
     updatePlanGoalMutation,
+    deletePlanMutation,
   } = planImport;
   const {
     skipConfirmEntry,
@@ -303,6 +304,14 @@ export default function Timeline() {
               onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
               isUpdatingGoal={updatePlanGoalMutation.isPending}
               onScheduleClick={(planId) => setSchedulingPlanId(planId)}
+              onDeletePlan={(planId) =>
+                deletePlanMutation.mutate(planId, {
+                  onSuccess: () => {
+                    if (selectedPlanId === planId) setSelectedPlanId(null);
+                  },
+                })
+              }
+              isDeletingPlan={deletePlanMutation.isPending}
               canBulkDelete={bulkDeletableEntries.length > 0}
               bulkDeleteMode={bulkDeleteMode}
               onBulkDeleteModeChange={handleBulkDeleteModeChange}

@@ -77,6 +77,18 @@ export function usePlanImport({
     },
   });
 
+  const deletePlanMutation = useMutation({
+    mutationFn: (planId: string) => api.plans.deletePlan(planId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      toast({ title: "Plan deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete plan", variant: "destructive" });
+    },
+  });
+
   const schedulePlanMutation = useMutation({
     mutationFn: ({ planId, startDate: sd }: { planId: string; startDate: string }) =>
       api.plans.schedule(planId, sd),
@@ -173,5 +185,6 @@ export function usePlanImport({
     renamePlanMutation,
     schedulePlanMutation,
     updatePlanGoalMutation,
+    deletePlanMutation,
   };
 }

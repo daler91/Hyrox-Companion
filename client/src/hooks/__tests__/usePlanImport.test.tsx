@@ -113,7 +113,7 @@ describe("usePlanImport", () => {
       trigger: (res: HookResult) => void;
       method: string;
       endpoint: string;
-      payload: Record<string, unknown>;
+      payload: unknown;
       sToast: string;
       eToast: string;
       inv: string[][];
@@ -178,6 +178,18 @@ describe("usePlanImport", () => {
         payload: { name: "New Name" },
         sToast: "Plan renamed",
         eToast: "Failed to rename plan",
+        inv: [["/api/v1/plans"], ["/api/v1/timeline"]],
+        postAssert: () => {},
+      },
+      {
+        name: "deletePlanMutation",
+        setup: () => {},
+        trigger: (res) => res.current.deletePlanMutation.mutate("p1"),
+        method: "DELETE",
+        endpoint: "/api/v1/plans/p1",
+        payload: undefined,
+        sToast: "Plan deleted",
+        eToast: "Failed to delete plan",
         inv: [["/api/v1/plans"], ["/api/v1/timeline"]],
         postAssert: () => {},
       },
