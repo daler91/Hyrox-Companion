@@ -250,7 +250,12 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
             <CardDescription>Workout sessions by exercise category</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[280px] w-full" data-testid="chart-category-pie">
+            <div
+              className="h-[280px] w-full"
+              data-testid="chart-category-pie"
+              role="img"
+              aria-label={`Pie chart of training sessions by category: ${pieData.map((slice) => `${slice.name} ${slice.value}`).join(", ")}`}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
