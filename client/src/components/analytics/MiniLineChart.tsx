@@ -68,7 +68,7 @@ export const MiniLineChart = memo(function MiniLineChart({
       <div className="flex justify-between items-center">
         <p className="text-sm font-semibold">{label}</p>
       </div>
-      <div className="h-[200px] w-full" data-testid={`line-chart-${valueKey}`}>
+      <div className="h-[200px] w-full" data-testid={`line-chart-${valueKey}`} role="img" aria-label={`${label}, line chart`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}

@@ -89,7 +89,12 @@ export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: Traini
       </div>
 
       {hasTrend ? (
-        <div className="h-[220px] w-full" data-testid="chart-acwr-trend">
+        <div
+          className="h-[220px] w-full"
+          data-testid="chart-acwr-trend"
+          role="img"
+          aria-label={`Line chart of acute-to-chronic workload ratio over ${chartData.length} days; current zone ${ZONE_LABELS[trainingLoad.zone]}, ACWR ${formatAcwr(trainingLoad.acwr)}`}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 5 }}>
               <CartesianGrid strokeDasharray={GRID_DASH} vertical={false} stroke={GRID_BORDER} />
