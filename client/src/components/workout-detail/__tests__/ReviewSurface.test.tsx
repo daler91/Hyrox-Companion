@@ -153,8 +153,8 @@ describe("ReviewSurface", () => {
     render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
 
     const picker = screen.getByTestId("mock-plan-picker");
-    expect(picker.getAttribute("data-plan-id")).toBe("plan-1");
-    expect(picker.getAttribute("data-plan-day-id")).toBe("day-1");
+    expect(picker.dataset.planId).toBe("plan-1");
+    expect(picker.dataset.planDayId).toBe("day-1");
 
     await userEvent.click(picker);
     expect(updatePlanDay.mutate).toHaveBeenCalledWith({ planId: "plan-9", planDayId: "day-9" });

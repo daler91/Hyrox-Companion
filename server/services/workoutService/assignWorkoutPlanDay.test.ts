@@ -95,7 +95,7 @@ describe("assignWorkoutPlanDay", () => {
       plainWhere([{ id: "set-1", workoutLogId: WORKOUT_ID }]), // actual sets
       plainWhere([fresh]), // final fresh read
     ]);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-A" } as never);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-A" });
 
     const result = await assignWorkoutPlanDay(WORKOUT_ID, "day-1", USER_ID);
 
@@ -117,7 +117,7 @@ describe("assignWorkoutPlanDay", () => {
       plainWhere([]), // actual sets (none)
       plainWhere([{ id: WORKOUT_ID, planId: "plan-B", planDayId: "day-new" }]),
     ]);
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-new", planId: "plan-B" } as never);
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-new", planId: "plan-B" });
 
     await assignWorkoutPlanDay(WORKOUT_ID, "day-new", USER_ID);
 
