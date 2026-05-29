@@ -390,10 +390,15 @@ function normalizeGeneratePlanInput(input: GeneratePlanInput): NormalizedGenerat
     raw.startDate && raw.endDate
       ? computePlanWeeks(raw.startDate, raw.endDate)
       : (raw.totalWeeks ?? LEGACY_DEFAULT_WEEKS);
-  // raceDate drives the "peak for this date" prompt line. New inputs set it only
-  // when the athlete flags the end date as their race day; legacy inputs carried
-  // it as its own field.
-  const raceDate = raw.endDate ? (raw.endDateIsRaceDate ? raw.endDate : undefined) : raw.raceDate;
+  // raceDate drives the "peak for this date" prompt line and is persisted on the
+  // plan. New inputs set it only when the athlete flags the end date as their race
+  // day; legacy inputs carried it as its own field.
+  let raceDate: string | undefined;
+  if (raw.endDate) {
+    raceDate = raw.endDateIsRaceDate ? raw.endDate : undefined;
+  } else {
+    raceDate = raw.raceDate;
+  }
   return { ...input, totalWeeks, raceDate };
 }
 
@@ -401,7 +406,7 @@ export async function createPendingPlan(
   input: GeneratePlanInput,
   userId: string,
 ): Promise<TrainingPlanWithDays> {
-  const { totalWeeks } = normalizeGeneratePlanInput(input);
+  const { totalWeeks, raceDate } = normalizeGeneratePlanInput(input);
   const planName = `AI Plan: ${input.goal.slice(0, 80)}`;
   const plan = await storage.plans.createTrainingPlan({
     userId,
@@ -409,6 +414,8 @@ export async function createPendingPlan(
     sourceFileName: null,
     totalWeeks,
     goal: input.goal,
+    // Captured at creation so it survives schedulePlan overwriting start/end dates.
+    raceDate: raceDate ?? null,
     generationStatus: "pending",
   });
   return { ...plan, days: [] };

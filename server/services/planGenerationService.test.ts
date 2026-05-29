@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { ErrorCode } from "../errors";
-import { executePlanGeneration } from "./planGenerationService";
+import { createPendingPlan, executePlanGeneration } from "./planGenerationService";
 
 const mocks = vi.hoisted(() => {
   const generateContent = vi.fn();
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
     trackUsageFromResponse: vi.fn(),
     plans: {
+      createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
       schedulePlan: vi.fn(),
       updateGenerationStatus: vi.fn(),
@@ -432,5 +433,28 @@ describe("executePlanGeneration", () => {
 
     expect(mocks.generateContent).toHaveBeenCalledTimes(4);
     expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Race Date: 2026-03-02");
+  });
+});
+
+describe("createPendingPlan", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.plans.createTrainingPlan.mockResolvedValue({ id: "plan-1", name: "AI Plan: x", totalWeeks: 1 });
+  });
+
+  it("persists the race date when the end date is the athlete's race date", async () => {
+    await createPendingPlan(baseInput, "user-1");
+
+    expect(mocks.plans.createTrainingPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ raceDate: baseInput.endDate, totalWeeks: 1, goal: baseInput.goal }),
+    );
+  });
+
+  it("stores a null race date when the end date is not the race date", async () => {
+    await createPendingPlan({ ...baseInput, endDateIsRaceDate: false }, "user-1");
+
+    expect(mocks.plans.createTrainingPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ raceDate: null }),
+    );
   });
 });
