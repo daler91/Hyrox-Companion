@@ -193,7 +193,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       aiInputsUsed: d.aiInputsUsed,
       ...((d.exerciseSets?.length ?? 0) > 0
         ? {
-            exerciseDetails: d.exerciseSets!.map((es) => ({
+            exerciseDetails: d.exerciseSets.map((es) => ({
               exerciseName: es.exerciseName,
               customLabel: es.customLabel,
               category: es.category,
