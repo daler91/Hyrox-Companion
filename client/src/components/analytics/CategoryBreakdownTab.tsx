@@ -240,6 +240,8 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
     );
   }
 
+  const categorySummary = pieData.map((slice) => `${slice.name} ${slice.value}`).join(", ");
+
   return (
     <div className="space-y-6">
       {/* Category Distribution */}
@@ -254,7 +256,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
               className="h-[280px] w-full"
               data-testid="chart-category-pie"
               role="img"
-              aria-label={`Pie chart of training sessions by category: ${pieData.map((slice) => `${slice.name} ${slice.value}`).join(", ")}`}
+              aria-label={`Pie chart of training sessions by category: ${categorySummary}`}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
