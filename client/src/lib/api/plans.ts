@@ -32,6 +32,8 @@ export const plans = {
   updateDayWithoutPlan: (dayId: string, updates: Record<string, unknown>) =>
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}`, updates),
 
+  deletePlan: (planId: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/${planId}`),
+
   deleteDay: (dayId: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/days/${dayId}`),
 
   schedule: (planId: string, startDate: string) =>

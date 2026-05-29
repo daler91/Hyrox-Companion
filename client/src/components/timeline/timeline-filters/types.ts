@@ -17,6 +17,9 @@ export interface TimelineFiltersProps {
   readonly isUpdatingGoal?: boolean;
   /** Open the schedule-plan dialog for the given plan id. */
   readonly onScheduleClick?: (planId: string) => void;
+  /** Delete the given plan (after the in-component confirmation dialog). */
+  readonly onDeletePlan?: (planId: string) => void;
+  readonly isDeletingPlan?: boolean;
   readonly canBulkDelete?: boolean;
   readonly bulkDeleteMode?: boolean;
   readonly onBulkDeleteModeChange?: (enabled: boolean) => void;
