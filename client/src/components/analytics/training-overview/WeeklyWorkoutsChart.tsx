@@ -58,6 +58,7 @@ export function WeeklyWorkoutsChart({
   weeklyGoal,
   annotationBands,
 }: WeeklyWorkoutsChartProps) {
+  const goalSuffix = weeklyGoal ? `, against a goal of ${weeklyGoal} per week` : "";
   return (
     <div className={CHART_CARD_CLASS}>
       <p className="text-sm font-semibold">Weekly Workouts</p>
@@ -65,7 +66,7 @@ export function WeeklyWorkoutsChart({
         className="h-[200px] w-full"
         data-testid="chart-weekly-workouts"
         role="img"
-        aria-label={`Bar chart of weekly workout counts over ${weeklySummaries.length} weeks${weeklyGoal ? `, against a goal of ${weeklyGoal} per week` : ""}`}
+        aria-label={`Bar chart of weekly workout counts over ${weeklySummaries.length} weeks${goalSuffix}`}
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={weeklySummaries} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
