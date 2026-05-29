@@ -86,8 +86,11 @@ export const trainingPlans = pgTable("training_plans", {
   goal: text("goal"),
   startDate: date("start_date"),
   endDate: date("end_date"),
+  generationStatus: text("generation_status").notNull().default("ready"),
+  generationError: text("generation_error"),
 }, (table) => [
   index("idx_training_plans_user_id").on(table.userId),
+  check("training_plans_generation_status_check", sql`generation_status IN ('pending', 'generating', 'ready', 'failed')`),
 ]);
 
 export const planDays = pgTable("plan_days", {

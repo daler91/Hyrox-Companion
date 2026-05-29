@@ -31,6 +31,8 @@ const samplePlan = {
   goal: null,
   startDate: null,
   endDate: null,
+  generationStatus: "ready",
+  generationError: null,
 };
 
 function mockSamplePlanCreation() {

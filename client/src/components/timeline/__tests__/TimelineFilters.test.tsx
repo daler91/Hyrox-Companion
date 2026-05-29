@@ -29,6 +29,8 @@ describe("TimelineFilters", () => {
         goal: null,
         startDate: null,
         endDate: null,
+        generationStatus: "ready",
+        generationError: null,
       },
       {
         id: "plan-2",
@@ -41,6 +43,8 @@ describe("TimelineFilters", () => {
         goal: null,
         startDate: null,
         endDate: null,
+        generationStatus: "ready",
+        generationError: null,
       },
     ],
     plansLoading: false,

@@ -9,8 +9,8 @@ describe("getGeneratePlanErrorToast", () => {
         new Error('503: {"error":"AI service temporarily unavailable.","code":"AI_UNAVAILABLE"}'),
       ),
     ).toEqual({
-      title: "AI plan generation timed out",
-      description: "The AI service took too long or was temporarily unavailable. Please try again in a moment.",
+      title: "AI plan generation failed",
+      description: "The AI service was temporarily unavailable. Please try again in a moment.",
     });
   });
 

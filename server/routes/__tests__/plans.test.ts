@@ -25,7 +25,7 @@ vi.mock("../../middleware/aibudget", () => ({
 }));
 
 vi.mock("../../services/planGenerationService", () => ({
-  generatePlan: vi.fn(),
+  createPendingPlan: vi.fn(),
 }));
 
 // Mock the storage functions
@@ -59,7 +59,10 @@ vi.mock("../../storage", () => ({
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
 
 // Mock the planService functions
-vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock("../../queue", () => ({
+  queue: { send: vi.fn().mockResolvedValue(undefined) },
+  sendJobNoRetry: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../../services/planService", () => ({
   importPlanFromCSV: vi.fn().mockResolvedValue({ id: "mock_plan_id", name: "Mock Plan" }),
   createSamplePlan: vi.fn(),
@@ -170,7 +173,7 @@ describe("POST /api/v1/plans/generate", () => {
   });
 
   it("requires AI consent before generating a plan", async () => {
-    const { generatePlan } = await import("../../services/planGenerationService");
+    const { createPendingPlan } = await import("../../services/planGenerationService");
     vi.mocked(storage.users.getUser).mockResolvedValueOnce({ id: "test_user_id", aiCoachEnabled: false });
 
     const response = await request(app)
@@ -179,22 +182,26 @@ describe("POST /api/v1/plans/generate", () => {
 
     expect(response.status).toBe(403);
     expect(response.body.code).toBe("AI_COACH_DISABLED");
-    expect(generatePlan).not.toHaveBeenCalled();
+    expect(createPendingPlan).not.toHaveBeenCalled();
   });
 
-  it("returns a classified AI error when generation times out upstream", async () => {
-    const { generatePlan } = await import("../../services/planGenerationService");
-    vi.mocked(generatePlan).mockRejectedValue(new Error("AI call timed out after 90000ms (planGeneration)"));
+  it("returns 202 with stub plan and enqueues a background job", async () => {
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    const stubPlan = { id: "plan-1", name: "AI Plan: Hyrox race prep", generationStatus: "pending", generationError: null, days: [] };
+    vi.mocked(createPendingPlan).mockResolvedValue(stubPlan as never);
 
     const response = await request(app)
       .post("/api/v1/plans/generate")
       .send(generatePlanPayload);
 
-    expect(response.status).toBe(503);
-    expect(response.body).toEqual({
-      error: "AI service temporarily unavailable.",
-      code: "AI_UNAVAILABLE",
-    });
+    expect(response.status).toBe(202);
+    expect(response.body.id).toBe("plan-1");
+    expect(response.body.generationStatus).toBe("pending");
+    expect(sendJobNoRetry).toHaveBeenCalledWith(
+      "plan-generation",
+      expect.objectContaining({ planId: "plan-1", userId: "test_user_id" }),
+    );
   });
 });
 

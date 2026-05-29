@@ -1,3 +1,4 @@
+import type { GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
 
@@ -6,6 +7,7 @@ import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 import { triggerAutoCoach } from "./services/coachService";
+import { executePlanGeneration } from "./services/planGenerationService";
 import { embedCoachingMaterial } from "./services/ragService";
 import { storage } from "./storage";
 
@@ -249,6 +251,23 @@ export async function startQueue() {
     queueName: "send-missed-reminder",
     process: async (context) =>
       context ? processMissedWorkoutReminder(storage, context.user, new Date()) : false,
+  });
+
+  await queue.createQueue("plan-generation");
+  await queue.work("plan-generation", async (jobs: Job[]) => {
+    await runBatch("plan-generation", jobs, async (job) => {
+      const { planId, userId, input } = job.data as { planId: string; userId: string; input: GeneratePlanInput };
+      logger.info({ jobId: job.id, planId, userId }, "[pg-boss] Processing plan-generation job");
+      try {
+        await runWithTimeout("plan-generation", (signal) =>
+          executePlanGeneration(planId, input, userId, signal),
+        );
+        logger.info({ jobId: job.id, planId }, "[pg-boss] Completed plan-generation job");
+      } catch (error) {
+        logger.error({ err: error, jobId: job.id, planId }, "[pg-boss] Failed plan-generation job");
+        throw error;
+      }
+    });
   });
 
   logger.info("pg-boss queue started and workers registered");

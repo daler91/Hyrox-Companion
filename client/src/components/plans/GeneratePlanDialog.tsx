@@ -24,7 +24,8 @@ interface GeneratePlanDialogProps {
   readonly initialStartDate?: string;
 }
 
-function getDescription(step: number, mode: GeneratePlanDialogProps["mode"]): string {
+function getDescription(step: number, mode: GeneratePlanDialogProps["mode"], isGenerating: boolean): string {
+  if (isGenerating) return "Generating your plan — this takes 1–2 minutes…";
   if (step === 0) return "What's your training goal?";
   if (step === 1 && mode === "onboarding") {
     return "Set your plan duration, schedule, and experience level.";
@@ -50,8 +51,12 @@ export function GeneratePlanDialog({
   const generatePlan = useGeneratePlan();
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (generatePlan.isPending) return; // prevent closing while generating
     onOpenChange(nextOpen);
-    if (!nextOpen) form.resetForm();
+    if (!nextOpen) {
+      form.resetForm();
+      generatePlan.reset();
+    }
   };
 
   const handleGenerate = () => {
@@ -72,7 +77,7 @@ export function GeneratePlanDialog({
             <Sparkles className="h-5 w-5" />
             Generate AI Training Plan
           </DialogTitle>
-          <DialogDescription>{getDescription(form.step, mode)}</DialogDescription>
+          <DialogDescription>{getDescription(form.step, mode, generatePlan.isPending)}</DialogDescription>
         </DialogHeader>
 
         {form.step === 0 && (

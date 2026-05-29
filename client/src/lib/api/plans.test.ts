@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { typedRequest } from './client';
-import { IMAGE_REPARSE_REQUEST_OPTIONS, PLAN_GENERATION_REQUEST_OPTIONS } from './constants';
+import { IMAGE_REPARSE_REQUEST_OPTIONS } from './constants';
 import { plans } from './plans';
 
 vi.mock('./client', () => ({
@@ -25,7 +25,7 @@ describe('plans API client', () => {
     );
   });
 
-  it('generate() uses the AI plan generation timeout request options', () => {
+  it('generate() POSTs to the generate endpoint without a custom timeout (returns 202 immediately)', () => {
     const payload = {
       goal: 'Hyrox race prep',
       totalWeeks: 8,
@@ -39,7 +39,14 @@ describe('plans API client', () => {
       'POST',
       '/api/v1/plans/generate',
       payload,
-      PLAN_GENERATION_REQUEST_OPTIONS,
+    );
+  });
+
+  it('getGenerationStatus() GETs the status endpoint for the given plan', () => {
+    plans.getGenerationStatus('plan-123');
+    expect(typedRequest).toHaveBeenCalledWith(
+      'GET',
+      '/api/v1/plans/plan-123/generation-status',
     );
   });
 });

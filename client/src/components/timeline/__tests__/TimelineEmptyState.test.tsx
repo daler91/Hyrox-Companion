@@ -23,6 +23,8 @@ function makePlan(overrides: Partial<TrainingPlan> = {}): TrainingPlan {
     goal: null,
     startDate: null,
     endDate: null,
+    generationStatus: "ready",
+    generationError: null,
     ...overrides,
   };
 }

@@ -351,6 +351,13 @@
       "when": 1779451200000,
       "tag": "0049_exercise_load_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1780014555671,
+      "tag": "0050_rapid_stingray",
+      "breakpoints": true
     }
   ]
 }
