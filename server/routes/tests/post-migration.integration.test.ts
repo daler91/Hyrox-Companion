@@ -54,6 +54,10 @@ const EXPECTED_INDEXES = [
 const VECTOR_DB_INDEXES = [
   "idx_document_chunks_material_id",
   "idx_document_chunks_user_id",
+  // Half-precision HNSW index for cosine similarity search. Created as
+  // halfvec because 3072-dim embeddings exceed pgvector's 2000-dim HNSW
+  // limit for native `vector`. Requires pgvector >= 0.7.0.
+  "idx_document_chunks_embedding_hnsw",
 ];
 
 // Column expectations per table (column_name -> data_type)
