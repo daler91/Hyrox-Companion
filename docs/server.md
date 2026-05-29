@@ -149,6 +149,7 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 - Returns `429` with `Retry-After` header and `RATE_LIMITED` error code
 - Limiter instances are cached per `(category, maxRequests, windowMs)` tuple
 - Uses PostgreSQL-backed `rate_limit_buckets` outside tests so limits are shared across app replicas
+- **Fail-closed on store error** (`passOnStoreError: false` in `server/routeUtils.ts`): if the Postgres rate-limit store is unavailable (e.g. a database outage), rate-limited requests are rejected rather than allowed through unthrottled. A DB outage therefore surfaces as request errors on these routes — not a silent bypass of abuse limits — so an attacker can't defeat the limiter by inducing store errors.
 - The SPA fallback route in `server/static.ts` has its own rate limiter (100 requests per 15 minutes)
 
 ### Body Size Limits
