@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyWorkoutCompliance,
   expandExercisesToSetRows,
+  isDateWithinPlanWindow,
   resolveStructureStepTimeTarget,
   shouldDeriveStructureExerciseSets,
   summarizeSetAdherence,
@@ -325,6 +326,31 @@ describe("shouldDeriveStructureExerciseSets", () => {
 
   it("does not derive duplicate movement rows when explicit sets already exist", () => {
     expect(shouldDeriveStructureExerciseSets(2)).toBe(false);
+  });
+});
+
+describe("isDateWithinPlanWindow", () => {
+  it("includes a date inside the plan window", () => {
+    expect(isDateWithinPlanWindow("2026-06-15", "2026-06-01", "2026-06-30")).toBe(true);
+  });
+
+  it("includes the boundary dates (inclusive)", () => {
+    expect(isDateWithinPlanWindow("2026-06-01", "2026-06-01", "2026-06-30")).toBe(true);
+    expect(isDateWithinPlanWindow("2026-06-30", "2026-06-01", "2026-06-30")).toBe(true);
+  });
+
+  it("excludes a date before the plan starts", () => {
+    expect(isDateWithinPlanWindow("2026-05-31", "2026-06-01", "2026-06-30")).toBe(false);
+  });
+
+  it("excludes a date after the plan ends", () => {
+    expect(isDateWithinPlanWindow("2026-07-01", "2026-06-01", "2026-06-30")).toBe(false);
+  });
+
+  it("treats a missing bound as unbounded (cannot exclude)", () => {
+    expect(isDateWithinPlanWindow("2026-06-15", null, "2026-06-30")).toBe(true);
+    expect(isDateWithinPlanWindow("2026-06-15", "2026-06-01", null)).toBe(true);
+    expect(isDateWithinPlanWindow("2026-06-15", null, null)).toBe(true);
   });
 });
 

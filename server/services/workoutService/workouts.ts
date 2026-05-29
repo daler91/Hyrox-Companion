@@ -30,6 +30,21 @@ import {
 } from "./structure";
 import type { CreateWorkoutResult, UpdateWorkoutResult, WorkoutTx } from "./types";
 
+/**
+ * Whether a workout dated `date` falls within a plan's [startDate, endDate]
+ * window. When either bound is missing the window is treated as unbounded (we
+ * can't exclude) — though getPlanForDate only ever returns plans with both
+ * dates set. Dates are ISO `YYYY-MM-DD`, so lexicographic comparison is correct.
+ */
+export function isDateWithinPlanWindow(
+  date: string,
+  startDate: string | null,
+  endDate: string | null,
+): boolean {
+  if (!startDate || !endDate) return true;
+  return date >= startDate && date <= endDate;
+}
+
 async function resolveActivePlanLinks(
   workoutData: InsertWorkoutLog,
   userId: string,
@@ -49,6 +64,13 @@ async function resolveActivePlanLinks(
 
   const plan = await storage.plans.getPlanForDate(userId, workoutData.date);
   if (!plan) return {};
+
+  // getPlanForDate falls back to the nearest plan even when the date is outside
+  // every plan's window, so only attribute when the workout actually falls within
+  // this plan's range — otherwise the timeline would tag it with an unrelated plan.
+  if (!isDateWithinPlanWindow(workoutData.date, plan.startDate, plan.endDate)) {
+    return {};
+  }
 
   const planId = plan.id;
 
