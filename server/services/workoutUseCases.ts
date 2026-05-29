@@ -97,6 +97,11 @@ export async function assignWorkoutPlanDayUseCase(input: {
   userId: string;
   workoutId: string;
   planDayId: string | null;
+  planId?: string | null;
 }) {
-  return assignWorkoutPlanDay(input.workoutId, input.planDayId, input.userId);
+  return assignWorkoutPlanDay(
+    input.workoutId,
+    { planId: input.planId ?? null, planDayId: input.planDayId },
+    input.userId,
+  );
 }

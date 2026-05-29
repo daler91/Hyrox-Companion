@@ -26,19 +26,30 @@ interface WorkoutPlanDayPickerProps {
   /** The plan day the workout currently fulfils. */
   readonly planDayId: string | null;
   /**
-   * Fires only on a terminal choice: a specific day was picked, or the link was
-   * cleared ("No plan"). Picking a plan alone just narrows the day list and does
-   * NOT fire — so a caller that mutates on change never commits a half-selection.
+   * Fires on a terminal choice: a specific day was picked, or the link was
+   * cleared ("No plan"). By default, picking a plan alone just narrows the day
+   * list and does NOT fire — so a caller that mutates on change never commits a
+   * half-selection. With `commitPlanWithoutDay`, picking a plan also fires
+   * (planDayId === null) so a plan-only link is committed immediately.
    */
   readonly onChange: (next: PlanDayLink) => void;
   readonly disabled?: boolean;
   readonly idPrefix?: string;
+  /**
+   * When true, choosing a plan immediately commits a plan-only link
+   * (planDayId === null) and the day below becomes an optional refinement. Used
+   * for already-logged workouts, where attaching to a plan is enough to tag and
+   * filter the workout and picking a specific day is optional (adds adherence +
+   * day-completion). Defaults to false (a day must be chosen to commit).
+   */
+  readonly commitPlanWithoutDay?: boolean;
 }
 
 /**
- * Cascading Plan -> Day picker used to connect a logged workout to a plan day
- * (or change/remove that link). The link is always to a specific day; planId is
- * derived from the chosen day server-side. The day list is restricted to
+ * Cascading Plan -> Day picker used to connect a logged workout to a plan (or
+ * change/remove that link). By default the link is to a specific scheduled day
+ * and planId is derived from it server-side. With `commitPlanWithoutDay`, the
+ * workout can be linked to a plan alone (no day). The day list is restricted to
  * scheduled days because a workout linked to an unscheduled day would drop off
  * the timeline.
  */
@@ -48,6 +59,7 @@ export function WorkoutPlanDayPicker({
   onChange,
   disabled = false,
   idPrefix = "workout-plan",
+  commitPlanWithoutDay = false,
 }: WorkoutPlanDayPickerProps) {
   // Internal draft so picking a plan can narrow the day list without committing.
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(planId);
@@ -90,6 +102,11 @@ export function WorkoutPlanDayPicker({
     // New plan: clear the day so the athlete makes a fresh choice within it.
     setSelectedPlanId(value);
     setSelectedDayId(null);
+    // When plan-only links are allowed, attaching to the plan commits right
+    // away; the day dropdown is then just an optional refinement.
+    if (commitPlanWithoutDay) {
+      onChange({ planId: value, planDayId: null });
+    }
   };
 
   const handleDayChange = (value: string) => {
@@ -156,7 +173,9 @@ export function WorkoutPlanDayPicker({
           </Select>
           {!daysLoading && scheduledDays.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              This plan has no scheduled days yet. Schedule it first to connect a workout.
+              {commitPlanWithoutDay
+                ? "This plan has no scheduled days yet — the workout is linked to the plan."
+                : "This plan has no scheduled days yet. Schedule it first to connect a workout."}
             </p>
           ) : null}
         </div>

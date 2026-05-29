@@ -115,11 +115,12 @@ export const workouts = {
   update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
     typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),
 
-  // Connect a logged workout to a specific plan day, or clear the link
-  // (planDayId === null). The server derives planId from the day and handles
-  // plan-day completion + adherence side effects.
-  assignPlanDay: (id: string, planDayId: string | null) =>
-    typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}/plan-day`, { planDayId }),
+  // Connect a logged workout to a plan: a specific plan day, the plan alone
+  // (planDayId === null, planId set), or clear the link (both null). When a day
+  // is given the server derives planId from it and handles plan-day completion
+  // + adherence side effects.
+  assignPlanDay: (id: string, link: { planId: string | null; planDayId: string | null }) =>
+    typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}/plan-day`, link),
 
   updateBlockScore: (id: string, blockId: string, score: StructureBlockScore | null) =>
     typedRequest<{ structureBlocks: StructureBlockInput[] }>(

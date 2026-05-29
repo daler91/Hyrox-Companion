@@ -368,26 +368,31 @@ const ADHERENCE_RESET = {
 } as const;
 
 /**
- * Connect a logged workout to a specific plan day, or clear the link
- * (planDayId === null). Mirrors the plan-day side effects of
- * createWorkoutInTx without touching the workout's own exercise_sets — those
- * stay workout-owned (exercise_set_single_owner_check). All writes are atomic:
+ * Connect a logged workout to a plan: a specific plan day, the plan alone
+ * (planDayId === null with planId set), or clear the link (both null). Mirrors
+ * the plan-day side effects of createWorkoutInTx without touching the workout's
+ * own exercise_sets — those stay workout-owned (exercise_set_single_owner_check).
+ * All writes are atomic:
  *   - validates the workout belongs to the user (row-locked FOR UPDATE);
- *   - when linking: validates the target day's ownership, derives planId,
- *     re-points the FKs, recomputes the adherence snapshot against the day's
- *     prescription, and re-derives the day's status from the live log count;
+ *   - when linking to a day: validates the target day's ownership, derives
+ *     planId, re-points the FKs, recomputes the adherence snapshot against the
+ *     day's prescription, and re-derives the day's status from the live count;
+ *   - when linking to a plan only: validates plan ownership, sets planId, nulls
+ *     planDayId + adherence (no prescription to diff against — the timeline tag
+ *     and plan filter key off planId alone);
  *   - when clearing: nulls the FKs + adherence columns;
- *   - in both cases, when the workout was previously linked to a DIFFERENT
- *     day, that old day's status is re-derived too (drops back to "planned"
- *     unless the user/cron explicitly marked it skipped/missed).
+ *   - in all cases, when the workout was previously linked to a DIFFERENT day,
+ *     that old day's status is re-derived too (drops back to "planned" unless
+ *     the user/cron explicitly marked it skipped/missed).
  *
  * Returns the freshly-read log, or null when the workout isn't found / owned.
  */
 export async function assignWorkoutPlanDay(
   workoutId: string,
-  planDayId: string | null,
+  link: { planId: string | null; planDayId: string | null },
   userId: string,
 ): Promise<WorkoutLog | null> {
+  const { planId, planDayId } = link;
   return await db.transaction(async (tx) => {
     const [existing] = await tx
       .select()
@@ -414,6 +419,21 @@ export async function assignWorkoutPlanDay(
         .where(eq(exerciseSets.workoutLogId, workoutId));
       await persistAdherenceSnapshot(tx, workoutId, planDayId, actualSets);
       await storage.plans.syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
+    } else if (planId) {
+      // Plan-only link: attach to the plan without committing to a specific day.
+      // No prescription to diff against, so adherence is reset; the timeline tag
+      // and plan filter key off planId alone.
+      const [plan] = await tx
+        .select({ id: trainingPlans.id })
+        .from(trainingPlans)
+        .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
+      if (!plan) {
+        throw new AppError(ErrorCode.NOT_FOUND, "Plan not found", 404);
+      }
+      await tx
+        .update(workoutLogs)
+        .set({ planId, planDayId: null, ...ADHERENCE_RESET })
+        .where(eq(workoutLogs.id, workoutId));
     } else {
       await tx
         .update(workoutLogs)

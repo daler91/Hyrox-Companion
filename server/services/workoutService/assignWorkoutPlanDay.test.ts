@@ -69,7 +69,7 @@ describe("assignWorkoutPlanDay", () => {
   it("returns null and skips all writes when the workout isn't owned", async () => {
     const tx = setupTx([lockedLookup([])]);
 
-    const result = await assignWorkoutPlanDay(WORKOUT_ID, "day-1", USER_ID);
+    const result = await assignWorkoutPlanDay(WORKOUT_ID, { planId: null, planDayId: "day-1" }, USER_ID);
 
     expect(result).toBeNull();
     expect(storage.plans.getPlanDay).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe("assignWorkoutPlanDay", () => {
     setupTx([lockedLookup([{ id: WORKOUT_ID, planDayId: null }])]);
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue(undefined);
 
-    await expect(assignWorkoutPlanDay(WORKOUT_ID, "day-1", USER_ID)).rejects.toMatchObject({
+    await expect(assignWorkoutPlanDay(WORKOUT_ID, { planId: null, planDayId: "day-1" }, USER_ID)).rejects.toMatchObject({
       status: 404,
       code: "NOT_FOUND",
     });
@@ -97,7 +97,7 @@ describe("assignWorkoutPlanDay", () => {
     ]);
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-A" });
 
-    const result = await assignWorkoutPlanDay(WORKOUT_ID, "day-1", USER_ID);
+    const result = await assignWorkoutPlanDay(WORKOUT_ID, { planId: null, planDayId: "day-1" }, USER_ID);
 
     expect(tx.updateSet).toHaveBeenCalledWith({ planId: "plan-A", planDayId: "day-1" });
     expect(persistAdherenceSnapshot).toHaveBeenCalledWith(
@@ -119,7 +119,7 @@ describe("assignWorkoutPlanDay", () => {
     ]);
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-new", planId: "plan-B" });
 
-    await assignWorkoutPlanDay(WORKOUT_ID, "day-new", USER_ID);
+    await assignWorkoutPlanDay(WORKOUT_ID, { planId: null, planDayId: "day-new" }, USER_ID);
 
     expect(storage.plans.syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("day-new", USER_ID, expect.anything());
     expect(storage.plans.syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("day-old", USER_ID, expect.anything());
@@ -132,7 +132,7 @@ describe("assignWorkoutPlanDay", () => {
       plainWhere([{ id: WORKOUT_ID, planId: null, planDayId: null }]),
     ]);
 
-    await assignWorkoutPlanDay(WORKOUT_ID, null, USER_ID);
+    await assignWorkoutPlanDay(WORKOUT_ID, { planId: null, planDayId: null }, USER_ID);
 
     expect(storage.plans.getPlanDay).not.toHaveBeenCalled();
     expect(persistAdherenceSnapshot).not.toHaveBeenCalled();
@@ -146,5 +146,50 @@ describe("assignWorkoutPlanDay", () => {
     );
     expect(storage.plans.syncPlanDayStatusFromWorkouts).toHaveBeenCalledTimes(1);
     expect(storage.plans.syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("day-old", USER_ID, expect.anything());
+  });
+
+  it("links a workout to a plan only (no day): sets planId, nulls the day + adherence, no snapshot", async () => {
+    const fresh = { id: WORKOUT_ID, planId: "plan-A", planDayId: null };
+    const tx = setupTx([
+      lockedLookup([{ id: WORKOUT_ID, planDayId: null }]),
+      plainWhere([{ id: "plan-A" }]), // plan ownership check
+      plainWhere([fresh]), // final fresh read
+    ]);
+
+    const result = await assignWorkoutPlanDay(WORKOUT_ID, { planId: "plan-A", planDayId: null }, USER_ID);
+
+    expect(storage.plans.getPlanDay).not.toHaveBeenCalled();
+    expect(persistAdherenceSnapshot).not.toHaveBeenCalled();
+    expect(tx.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ planId: "plan-A", planDayId: null, compliancePct: null, plannedSetCount: null }),
+    );
+    // No day involved and none previously linked → no day-status sync.
+    expect(storage.plans.syncPlanDayStatusFromWorkouts).not.toHaveBeenCalled();
+    expect(result).toEqual(fresh);
+  });
+
+  it("plan-only link re-syncs a previously-linked day", async () => {
+    setupTx([
+      lockedLookup([{ id: WORKOUT_ID, planDayId: "day-old" }]),
+      plainWhere([{ id: "plan-A" }]), // plan ownership check
+      plainWhere([{ id: WORKOUT_ID, planId: "plan-A", planDayId: null }]),
+    ]);
+
+    await assignWorkoutPlanDay(WORKOUT_ID, { planId: "plan-A", planDayId: null }, USER_ID);
+
+    expect(storage.plans.syncPlanDayStatusFromWorkouts).toHaveBeenCalledTimes(1);
+    expect(storage.plans.syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("day-old", USER_ID, expect.anything());
+  });
+
+  it("throws 404 and skips the write when the target plan isn't owned by the user", async () => {
+    const tx = setupTx([
+      lockedLookup([{ id: WORKOUT_ID, planDayId: null }]),
+      plainWhere([]), // plan ownership check finds nothing
+    ]);
+
+    await expect(
+      assignWorkoutPlanDay(WORKOUT_ID, { planId: "plan-x", planDayId: null }, USER_ID),
+    ).rejects.toMatchObject({ status: 404, code: "NOT_FOUND" });
+    expect(tx.updateSet).not.toHaveBeenCalled();
   });
 });

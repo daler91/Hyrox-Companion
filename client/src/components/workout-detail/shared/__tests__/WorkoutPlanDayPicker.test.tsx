@@ -40,6 +40,7 @@ function renderPicker(props: {
   planId: string | null;
   planDayId: string | null;
   onChange: (next: PlanDayLink) => void;
+  commitPlanWithoutDay?: boolean;
 }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -72,6 +73,31 @@ describe("WorkoutPlanDayPicker", () => {
     await user.click(await screen.findByRole("option", { name: /Week 1 · Monday · Engine/i }));
 
     expect(onChange).toHaveBeenCalledWith({ planId: "plan-1", planDayId: "day-1" });
+  });
+
+  it("commits a plan-only link immediately when commitPlanWithoutDay is set", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    renderPicker({ planId: null, planDayId: null, onChange, commitPlanWithoutDay: true });
+
+    await user.click(await screen.findByRole("combobox", { name: /select training plan/i }));
+    await user.click(await screen.findByRole("option", { name: /Plan A \(8 weeks\)/i }));
+
+    // Attaching to the plan commits right away — no day required.
+    expect(onChange).toHaveBeenCalledWith({ planId: "plan-1", planDayId: null });
+  });
+
+  it("still lets you refine to a specific day after a plan-only link", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    renderPicker({ planId: null, planDayId: null, onChange, commitPlanWithoutDay: true });
+
+    await user.click(await screen.findByRole("combobox", { name: /select training plan/i }));
+    await user.click(await screen.findByRole("option", { name: /Plan A \(8 weeks\)/i }));
+    await user.click(await screen.findByRole("combobox", { name: /select plan day/i }));
+    await user.click(await screen.findByRole("option", { name: /Week 1 · Monday · Engine/i }));
+
+    expect(onChange).toHaveBeenLastCalledWith({ planId: "plan-1", planDayId: "day-1" });
   });
 
   it("clears the link when 'No plan' is chosen", async () => {

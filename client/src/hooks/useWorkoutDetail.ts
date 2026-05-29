@@ -418,14 +418,14 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that RPE",
   });
 
-  // Connect/disconnect this workout to a plan day. Optimistically patches the
-  // cached workout's planId/planDayId so the picker reflects the choice
-  // instantly; invalidates timeline + plans so the workout moves into (or out
-  // of) the plan-day slot and the day's completion state refreshes. The server
-  // derives planId from the day, so the request only carries planDayId.
+  // Connect/disconnect this workout to a plan (a specific day, the plan alone,
+  // or neither). Optimistically patches the cached workout's planId/planDayId so
+  // the picker reflects the choice instantly; invalidates timeline + plans so the
+  // workout moves into (or out of) the plan-day slot, picks up the plan tag, and
+  // the day's completion state refreshes.
   const updatePlanDay = useApiMutation({
-    mutationFn: ({ planDayId }: { planId: string | null; planDayId: string | null }) =>
-      api.workouts.assignPlanDay(workoutId!, planDayId),
+    mutationFn: (link: { planId: string | null; planDayId: string | null }) =>
+      api.workouts.assignPlanDay(workoutId!, link),
     onMutate: async ({ planId, planDayId }: { planId: string | null; planDayId: string | null }) => {
       if (!workoutId) return undefined;
       await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });

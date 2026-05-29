@@ -189,8 +189,8 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   });
 
   protectedPatch(router, "/api/v1/workouts/:id/plan-day", { limiter: rateLimiter("workout", 40), middleware: [validateBody(assignWorkoutPlanDaySchema)] }, async (req: Request<{ id: string }>, res: Response) => {
-    const { planDayId } = req.body as z.infer<typeof assignWorkoutPlanDaySchema>;
-    const result = await assignWorkoutPlanDayUseCase({ userId: getUserId(req), workoutId: req.params.id, planDayId });
+    const { planDayId, planId } = req.body as z.infer<typeof assignWorkoutPlanDaySchema>;
+    const result = await assignWorkoutPlanDayUseCase({ userId: getUserId(req), workoutId: req.params.id, planDayId, planId: planId ?? null });
     if (!result) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }

@@ -424,11 +424,12 @@ interface ReviewPlanLinkSectionProps {
 }
 
 /**
- * Connect this logged workout to a plan day, or change/remove the link. Reads
- * the current link from detail.workout (the source of truth — the timeline
- * entry doesn't carry plan info for standalone logs) and writes through
- * updatePlanDay. Rendered for Strava sessions too: a synced run can legitimately
- * fulfil a plan day.
+ * Connect this logged workout to a plan, or change/remove the link. Reads the
+ * current link from detail.workout (the source of truth) and writes through
+ * updatePlanDay. Uses commitPlanWithoutDay: picking a plan attaches the workout
+ * immediately (enough to tag + filter it), and choosing a specific day is an
+ * optional refinement that adds adherence + day-completion. Rendered for Strava
+ * sessions too: a synced run can legitimately fulfil a plan day.
  */
 function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionProps) {
   if (!workoutLogId) return null;
@@ -446,6 +447,7 @@ function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionPr
           planDayId={workout?.planDayId ?? null}
           onChange={(next) => detail.updatePlanDay.mutate(next)}
           disabled={detail.updatePlanDay.isPending}
+          commitPlanWithoutDay
           idPrefix={`review-plan-${workoutLogId}`}
         />
       </section>

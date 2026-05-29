@@ -145,11 +145,17 @@ describe("Workouts Routes", () => {
     const assignRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "day-1" });
     expect(assignRes.status).toBe(200);
     expect(assignRes.body).toMatchObject({ planId: "plan-1", planDayId: "day-1" });
-    expect(assignWorkoutPlanDayUseCase).toHaveBeenCalledWith({ userId: "test_user_id", workoutId: "workout-1", planDayId: "day-1" });
+    expect(assignWorkoutPlanDayUseCase).toHaveBeenCalledWith({ userId: "test_user_id", workoutId: "workout-1", planDayId: "day-1", planId: null });
 
     vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce({ id: "workout-1", planId: null, planDayId: null });
     const clearRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: null });
     expect(clearRes.status).toBe(200);
+
+    // Plan-only link: planDayId null with a planId forwards both to the use case.
+    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce({ id: "workout-1", planId: "plan-1", planDayId: null });
+    const planOnlyRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: null, planId: "plan-1" });
+    expect(planOnlyRes.status).toBe(200);
+    expect(assignWorkoutPlanDayUseCase).toHaveBeenLastCalledWith({ userId: "test_user_id", workoutId: "workout-1", planDayId: null, planId: "plan-1" });
   });
 
   it("rejects a plan-day assignment with a missing/invalid body and 404s when the workout is gone", async () => {
