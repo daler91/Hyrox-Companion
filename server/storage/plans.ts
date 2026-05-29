@@ -25,6 +25,17 @@ export class PlanStorage {
     return trainingPlan;
   }
 
+  async updateGenerationStatus(
+    planId: string,
+    status: "pending" | "generating" | "ready" | "failed",
+    generationError?: string | null,
+  ): Promise<void> {
+    await db
+      .update(trainingPlans)
+      .set({ generationStatus: status, generationError: generationError ?? null })
+      .where(eq(trainingPlans.id, planId));
+  }
+
   async listTrainingPlans(userId: string): Promise<TrainingPlan[]> {
     return await db.select().from(trainingPlans).where(eq(trainingPlans.userId, userId));
   }

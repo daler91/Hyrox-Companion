@@ -1,7 +1,7 @@
 import type { ExerciseSet, GeneratePlanInput, PlanDay, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
-import { IMAGE_REPARSE_REQUEST_OPTIONS, PLAN_GENERATION_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
+import { IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import { type AddExerciseSetPayload, createExerciseSetMutationApi, type PatchExerciseSetPayload } from "./exerciseSetMutations";
 
@@ -41,7 +41,13 @@ export const plans = {
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }),
 
   generate: (input: GeneratePlanInput) =>
-    typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input, PLAN_GENERATION_REQUEST_OPTIONS),
+    typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input),
+
+  getGenerationStatus: (planId: string) =>
+    typedRequest<{ planId: string; generationStatus: string; error?: string }>(
+      "GET",
+      `/api/v1/plans/${planId}/generation-status`,
+    ),
 
   // Plan-day prescribed exerciseSets — used by the v2 dialog when a
   // planned entry is open so the athlete can tweak the coach's

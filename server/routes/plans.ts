@@ -7,8 +7,9 @@ import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
-import { generatePlan } from "../services/planGenerationService";
+import { createPendingPlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
+import { sendJobNoRetry } from "../queue";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 import { deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
@@ -195,13 +196,21 @@ protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample
 
 protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGenerate", 3), aiConsent: true, aiBudget: true, validation: [validateBody(generatePlanInputSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    try {
-      const fullPlan = await generatePlan(req.body as GeneratePlanInput, userId);
-      res.json(fullPlan);
-    } catch (error: unknown) {
-      return sendPlanGenerationError(req, res, error, userId);
-    }
+    const stub = await createPendingPlan(req.body as GeneratePlanInput, userId);
+    await sendJobNoRetry("plan-generation", { planId: stub.id, userId, input: req.body });
+    return res.status(202).json(stub);
   });
+
+router.get("/api/v1/plans/:id/generation-status", isAuthenticated, rateLimiter("planStatus", 60), asyncHandler(async (req: ExpressRequest<{ id: string }>, res: Response) => {
+  const userId = getUserId(req);
+  const plan = await storage.plans.getTrainingPlan(req.params.id, userId);
+  if (!plan) return sendNotFound(res, "Training plan not found");
+  return res.json({
+    planId: plan.id,
+    generationStatus: plan.generationStatus,
+    ...(plan.generationError ? { error: plan.generationError } : {}),
+  });
+}));
 
 protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
   const userId = getUserId(req);

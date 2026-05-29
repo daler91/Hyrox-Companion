@@ -333,6 +333,7 @@ async function generatePlanChunk(
   userId: string,
   range: WeekRange,
   unitPreferences: Required<UnitPreferences>,
+  signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
   const prompt = buildGenerationPrompt(input, range, unitPreferences);
   const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
@@ -344,6 +345,7 @@ async function generatePlanChunk(
     label,
     feature: "plan_generation",
     userId,
+    signal,
   });
 
   const text = response.text || "[]";
@@ -354,10 +356,11 @@ async function generatePlanDays(
   input: GeneratePlanInput,
   userId: string,
   unitPreferences: Required<UnitPreferences>,
+  signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
   const dayChunks = await Promise.all(
-    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences)),
+    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences, signal)),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {
@@ -367,109 +370,111 @@ async function generatePlanDays(
   return days;
 }
 
-export async function generatePlan(
+export async function createPendingPlan(
   input: GeneratePlanInput,
   userId: string,
 ): Promise<TrainingPlanWithDays> {
+  const planName = `AI Plan: ${input.goal.slice(0, 80)}`;
+  const plan = await storage.plans.createTrainingPlan({
+    userId,
+    name: planName,
+    sourceFileName: null,
+    totalWeeks: input.totalWeeks,
+    goal: input.goal,
+    generationStatus: "pending",
+  });
+  return { ...plan, days: [] };
+}
+
+export async function executePlanGeneration(
+  planId: string,
+  input: GeneratePlanInput,
+  userId: string,
+  signal?: AbortSignal,
+): Promise<void> {
   logger.info(
-    { userId, totalWeeks: input.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
+    { userId, planId, totalWeeks: input.totalWeeks, daysPerWeek: input.daysPerWeek, experienceLevel: input.experienceLevel },
     "[planGen] Generating AI training plan",
   );
 
-  const user = await storage.users.getUser(userId);
-  const unitPreferences = {
-    weightUnit: standardizeWeightUnit(user?.weightUnit),
-    distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
-  };
-  const days = await generatePlanDays(input, userId, unitPreferences);
+  await storage.plans.updateGenerationStatus(planId, "generating");
 
-  // Plan, plan days, and their structured exercise sets are written inside
-  // a single transaction so a failure in any step rolls the whole plan back.
-  // Previously an error in the exerciseSets insert left a half-created plan
-  // in the database, which retries would duplicate.
-  const planName = `AI Plan: ${input.goal.slice(0, 80)}`;
-  const { plan, daysWithExercises, totalSetRows } = await db.transaction(async (tx) => {
-    const createdPlan = await storage.plans.createTrainingPlan({
-      userId,
-      name: planName,
-      sourceFileName: null,
-      totalWeeks: input.totalWeeks,
-      goal: input.goal,
-    }, tx);
+  try {
+    const user = await storage.users.getUser(userId);
+    const unitPreferences = {
+      weightUnit: standardizeWeightUnit(user?.weightUnit),
+      distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
+    };
+    const days = await generatePlanDays(input, userId, unitPreferences, signal);
 
-    const planDaysPayload = days.map((day) => ({
-      planId: createdPlan.id,
-      weekNumber: day.weekNumber,
-      dayName: day.dayName,
-      focus: day.focus,
-      mainWorkout: normalizeWorkoutTextUnits(day.mainWorkout, unitPreferences) ?? day.mainWorkout,
-      accessory: normalizeWorkoutTextUnits(day.accessory || null, unitPreferences) || null,
-      notes: day.notes || null,
-      status: "planned" as const,
-      aiSource: "generated" as const,
-    }));
+    // Plan days and their structured exercise sets are written inside a single
+    // transaction so a failure in any step rolls the whole insertion back.
+    const { daysWithExercises, totalSetRows } = await db.transaction(async (tx) => {
+      const planDaysPayload = days.map((day) => ({
+        planId,
+        weekNumber: day.weekNumber,
+        dayName: day.dayName,
+        focus: day.focus,
+        mainWorkout: normalizeWorkoutTextUnits(day.mainWorkout, unitPreferences) ?? day.mainWorkout,
+        accessory: normalizeWorkoutTextUnits(day.accessory || null, unitPreferences) || null,
+        notes: day.notes || null,
+        status: "planned" as const,
+        aiSource: "generated" as const,
+      }));
 
-    const createdPlanDays = await storage.plans.createPlanDays(planDaysPayload, tx);
+      const createdPlanDays = await storage.plans.createPlanDays(planDaysPayload, tx);
 
-    // Expand structured exercises under each plan day. We pair generated
-    // days with persisted plan days positionally rather than by
-    // (weekNumber, dayName) because providers can (rarely) return duplicate
-    // day entries in a week, which would collide in a map and silently
-    // attach one day's prescribed sets to another's plan_day row.
-    // createPlanDays preserves input order via RETURNING, so index mapping
-    // is 1:1.
-    if (createdPlanDays.length !== planDaysPayload.length) {
-      throw new AppError(
-        ErrorCode.INTERNAL_ERROR,
-        "createPlanDays returned unexpected row count",
-        500,
-      );
+      if (createdPlanDays.length !== planDaysPayload.length) {
+        throw new AppError(
+          ErrorCode.INTERNAL_ERROR,
+          "createPlanDays returned unexpected row count",
+          500,
+        );
+      }
+
+      const allSetRows: InsertExerciseSet[] = [];
+      let dwe = 0;
+      for (let i = 0; i < days.length; i++) {
+        const day = days[i];
+        if (!day.exercises || day.exercises.length === 0) continue;
+        const pd = createdPlanDays[i];
+        const normalised = day.exercises.map((exercise) => normalizeGeneratedExercise(exercise, unitPreferences));
+        allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
+        dwe++;
+      }
+
+      if (allSetRows.length > 0) {
+        await tx.insert(exerciseSets).values(allSetRows);
+      }
+
+      return { daysWithExercises: dwe, totalSetRows: allSetRows.length };
+    });
+
+    logger.info(
+      { userId, planId, daysWithExercises, totalSetRows, totalDays: days.length },
+      "[planGen] Persisted structured plan-day exercises",
+    );
+
+    // Auto-schedule the plan if a start date is provided or can be derived from race date
+    let resolvedStartDate: string | undefined;
+    if (input.startDate) {
+      resolvedStartDate = input.startDate;
+    } else if (input.raceDate) {
+      resolvedStartDate = calculateStartDate(input.raceDate, input.totalWeeks);
+    }
+    if (resolvedStartDate) {
+      await storage.plans.schedulePlan(planId, resolvedStartDate, userId);
     }
 
-    const allSetRows: InsertExerciseSet[] = [];
-    let dwe = 0;
-    for (let i = 0; i < days.length; i++) {
-      const day = days[i];
-      if (!day.exercises || day.exercises.length === 0) continue;
-      const pd = createdPlanDays[i];
-      const normalised = day.exercises.map((exercise) => normalizeGeneratedExercise(exercise, unitPreferences));
-      allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
-      dwe++;
-    }
+    await storage.plans.updateGenerationStatus(planId, "ready");
 
-    if (allSetRows.length > 0) {
-      await tx.insert(exerciseSets).values(allSetRows);
-    }
-
-    return { plan: createdPlan, daysWithExercises: dwe, totalSetRows: allSetRows.length };
-  });
-
-  logger.info(
-    { userId, planId: plan.id, daysWithExercises, totalSetRows, totalDays: days.length },
-    "[planGen] Persisted structured plan-day exercises",
-  );
-
-  // Auto-schedule the plan if a start date is provided or can be derived from race date
-  let resolvedStartDate: string | undefined;
-  if (input.startDate) {
-    resolvedStartDate = input.startDate;
-  } else if (input.raceDate) {
-    resolvedStartDate = calculateStartDate(input.raceDate, input.totalWeeks);
+    logger.info(
+      { userId, planId, dayCount: days.length },
+      "[planGen] AI plan generated successfully",
+    );
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await storage.plans.updateGenerationStatus(planId, "failed", errorMessage);
+    throw error;
   }
-  if (resolvedStartDate) {
-    await storage.plans.schedulePlan(plan.id, resolvedStartDate, userId);
-  }
-
-  // Fetch the complete plan with days
-  const fullPlan = await storage.plans.getTrainingPlan(plan.id, userId);
-  if (!fullPlan) {
-    throw new AppError(ErrorCode.INTERNAL_ERROR, "Failed to retrieve generated plan", 500);
-  }
-
-  logger.info(
-    { userId, planId: plan.id, dayCount: days.length },
-    "[planGen] AI plan generated successfully",
-  );
-
-  return fullPlan;
 }
