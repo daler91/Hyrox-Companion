@@ -23,32 +23,45 @@ vi.mock("../../storage", () => ({ storage: {} }));
 let linkedRows: unknown[] = [];
 let standaloneRows: unknown[] = [];
 
-// A chainable, awaitable query stub. workoutLogs queries return linked vs
-// standalone rows (standalone is the one that calls `.$dynamic()`); exercise_set
-// queries return [] (we never need prescribed sets in these tests).
-function selectStub() {
+// A chainable Drizzle-style query stub. Each builder method returns a real
+// Promise (augmented with the builder methods), so `await query` uses the
+// native Promise `then` rather than a hand-rolled thenable. workoutLogs queries
+// resolve to linked vs standalone rows (standalone is the `.$dynamic()` branch);
+// everything else (exercise_sets) resolves to [].
+interface SelectChain extends Promise<unknown[]> {
+  from(table: unknown): SelectChain;
+  where(): SelectChain;
+  orderBy(): SelectChain;
+  $dynamic(): SelectChain;
+  limit(): SelectChain;
+}
+
+function selectStub(): SelectChain {
   let table: unknown;
   let dynamic = false;
-  const chain = {
-    from(t: unknown) {
-      table = t;
-      return chain;
-    },
-    where: () => chain,
-    orderBy: () => chain,
-    $dynamic: () => {
-      dynamic = true;
-      return chain;
-    },
-    limit: () => chain,
-    then(onFulfilled: (rows: unknown[]) => unknown, onRejected?: (e: unknown) => unknown) {
-      let rows: unknown[] = [];
-      if (table === workoutLogs) rows = dynamic ? standaloneRows : linkedRows;
-      else if (table === exerciseSets) rows = [];
-      return Promise.resolve(rows).then(onFulfilled, onRejected);
-    },
+  const resolveRows = (): unknown[] => {
+    if (table === workoutLogs) return dynamic ? standaloneRows : linkedRows;
+    return []; // exercise_sets and anything else
   };
-  return chain;
+  const make = (): SelectChain => {
+    const methods = {
+      from(t: unknown) {
+        table = t;
+        return make();
+      },
+      where: () => make(),
+      orderBy: () => make(),
+      $dynamic: () => {
+        dynamic = true;
+        return make();
+      },
+      limit: () => make(),
+    };
+    // Promise.resolve().then(resolveRows) defers row resolution to a microtask,
+    // by which point the synchronous builder chain has set table/dynamic.
+    return Object.assign(Promise.resolve().then(resolveRows), methods);
+  };
+  return make();
 }
 
 const workoutStorage = {

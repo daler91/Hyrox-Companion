@@ -111,6 +111,56 @@ function createPlannedDayEntry(
   };
 }
 
+export interface UpcomingPlannedDay {
+  planDayId: string;
+  date: string;
+  focus: string;
+  mainWorkout: string;
+  accessory: string | null;
+  notes: string | null;
+  aiSource: TimelineEntry["aiSource"];
+  aiRationale: string | null;
+  aiNoteUpdatedAt: Date | null;
+  aiInputsUsed: PlanDay["aiInputsUsed"];
+  exerciseSets: ExerciseSet[];
+  structureBlocks: TimelineEntry["structureBlocks"];
+}
+
+// Shape one upcoming planned-day row for the AI coach, applying a race-day
+// override when present (which blanks the original workout's exercises/notes).
+function toUpcomingPlannedDay(
+  row: {
+    id: string;
+    focus: string | null;
+    mainWorkout: string | null;
+    accessory: string | null;
+    notes: string | null;
+    aiSource: string | null;
+    aiRationale: string | null;
+    aiNoteUpdatedAt: Date | null;
+    aiInputsUsed: PlanDay["aiInputsUsed"];
+  },
+  scheduledDate: string,
+  override: RaceDayOverride | null,
+  setsByPlanDayId: Map<string, ExerciseSet[]>,
+  blocksByPlanDayId: Map<string, TimelineEntry["structureBlocks"]>,
+): UpcomingPlannedDay {
+  return {
+    planDayId: row.id,
+    date: scheduledDate,
+    focus: override?.focus ?? row.focus ?? "",
+    mainWorkout: override?.mainWorkout ?? row.mainWorkout ?? "",
+    accessory: override ? override.accessory : row.accessory,
+    notes: override ? override.notes : row.notes,
+    aiSource: row.aiSource as TimelineEntry["aiSource"],
+    aiRationale: override ? null : row.aiRationale,
+    aiNoteUpdatedAt: override ? null : row.aiNoteUpdatedAt,
+    aiInputsUsed: override ? null : row.aiInputsUsed,
+    exerciseSets: override ? [] : (setsByPlanDayId.get(row.id) ?? []),
+    structureBlocks: override ? [] : (blocksByPlanDayId.get(row.id) ?? []),
+  };
+}
+
 function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
   return {
     id: `log-${log.id}`,
@@ -401,25 +451,7 @@ export class TimelineStorage {
    * Fetch only upcoming planned workouts directly from DB with LIMIT.
    * Avoids loading the full timeline for AI suggestions.
    */
-  async getUpcomingPlannedDays(
-    userId: string,
-    limit: number,
-  ): Promise<
-    Array<{
-      planDayId: string;
-      date: string;
-      focus: string;
-      mainWorkout: string;
-      accessory: string | null;
-      notes: string | null;
-      aiSource: TimelineEntry["aiSource"];
-      aiRationale: string | null;
-      aiNoteUpdatedAt: Date | null;
-      aiInputsUsed: PlanDay["aiInputsUsed"];
-      exerciseSets?: ExerciseSet[];
-      structureBlocks?: TimelineEntry["structureBlocks"];
-    }>
-  > {
+  async getUpcomingPlannedDays(userId: string, limit: number): Promise<UpcomingPlannedDay[]> {
     const today = toDateStr();
     // Relational query: resolve user's plans first, then pull matching days
     // filtered by plan IDs. Same pattern as fetchScheduledDays.
@@ -463,41 +495,15 @@ export class TimelineStorage {
       this.workoutStorage.getWorkoutStructuresByPlanDays(planDayIds),
     ]);
 
-    const upcoming: Array<{
-      planDayId: string;
-      date: string;
-      focus: string;
-      mainWorkout: string;
-      accessory: string | null;
-      notes: string | null;
-      aiSource: TimelineEntry["aiSource"];
-      aiRationale: string | null;
-      aiNoteUpdatedAt: Date | null;
-      aiInputsUsed: PlanDay["aiInputsUsed"];
-      exerciseSets: ExerciseSet[];
-      structureBlocks: TimelineEntry["structureBlocks"];
-    }> = [];
-
+    const upcoming: UpcomingPlannedDay[] = [];
     for (const r of rows) {
-      if (r.scheduledDate !== null) {
-        // Same race-day derivation as the timeline, so the coach sees the race day
-        // and its light shakeout/recovery context instead of the raw workout.
-        const override = deriveRaceDayOverride(r.scheduledDate, raceDateById.get(r.planId));
-        upcoming.push({
-          planDayId: r.id,
-          date: r.scheduledDate,
-          focus: override ? override.focus : r.focus || "",
-          mainWorkout: override ? override.mainWorkout : r.mainWorkout || "",
-          accessory: override ? override.accessory : r.accessory,
-          notes: override ? override.notes : r.notes,
-          aiSource: r.aiSource as TimelineEntry["aiSource"],
-          aiRationale: override ? null : r.aiRationale,
-          aiNoteUpdatedAt: override ? null : r.aiNoteUpdatedAt,
-          aiInputsUsed: override ? null : r.aiInputsUsed,
-          exerciseSets: override ? [] : (setsByPlanDayId.get(r.id) ?? []),
-          structureBlocks: override ? [] : (blocksByPlanDayId.get(r.id) ?? []),
-        });
-      }
+      if (r.scheduledDate === null) continue;
+      // Same race-day derivation as the timeline, so the coach sees the race day
+      // and its light shakeout/recovery context instead of the raw workout.
+      const override = deriveRaceDayOverride(r.scheduledDate, raceDateById.get(r.planId));
+      upcoming.push(
+        toUpcomingPlannedDay(r, r.scheduledDate, override, setsByPlanDayId, blocksByPlanDayId),
+      );
     }
 
     return upcoming;
