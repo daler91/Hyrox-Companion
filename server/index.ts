@@ -22,6 +22,7 @@ import { AppError } from "./errors";
 import { isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
 import { runStartupMaintenance } from "./maintenance";
+import { buildCspDirectives } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
@@ -148,43 +149,22 @@ app.use(cors({
   },
   credentials: true,
 }));
-const clerkDomains =
-  "https://*.clerk.accounts.dev https://*.fitai.coach https://clerk.fitai.coach";
-const connectSrc = isDev
-  ? [
-      "'self'",
-      clerkDomains,
-      "https://www.strava.com",
-      "https://*.ingest.us.sentry.io",
-      "ws:",
-      "wss:",
-    ]
-  : [
-      "'self'",
-      clerkDomains,
-      "https://www.strava.com",
-      "https://*.ingest.us.sentry.io",
-    ];
-
-// Generate per-request CSP nonce (production only; dev uses 'unsafe-inline')
+// Generate per-request CSP nonce (production only; dev uses 'unsafe-inline').
+// Must run before helmet so the nonce is available to the script-src directive
+// function in buildCspDirectives.
 if (!isDev) {
   app.use(cspNonceMiddleware);
 }
 
 app.use(
   helmet({
+    // CSP directives live in one place (server/middleware/csp.ts) and are
+    // emitted by helmet itself — a single source of truth, with no separate
+    // override middleware and no disabled CSP. useDefaults:false so the emitted
+    // policy is exactly buildCspDirectives.
     contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],
-        connectSrc: ["'self'"],
-        frameSrc: ["'self'"],
-        frameAncestors: ["'none'"],
-        workerSrc: ["'self'", "blob:"],
-      },
+      useDefaults: false,
+      directives: buildCspDirectives({ isDev }),
     },
     crossOriginEmbedderPolicy: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
@@ -198,26 +178,6 @@ app.use(
     },
   }),
 );
-
-// Override helmet's default CSP with per-request nonce-based policy
-app.use((_req, res, next) => {
-  const scriptSrc = isDev
-    ? `'self' 'unsafe-inline' 'unsafe-eval' ${clerkDomains}`
-    : `'self' 'nonce-${res.locals.cspNonce}' ${clerkDomains}`;
-  const policy = [
-    `default-src 'self'`,
-    `script-src ${scriptSrc}`,
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${clerkDomains}`,
-    `font-src 'self' https://fonts.gstatic.com data:`,
-    `img-src 'self' data: https://img.clerk.com https://*.clerk.com https://*.strava.com`,
-    `connect-src ${connectSrc.join(" ")}`,
-    `frame-src 'self' ${clerkDomains}`,
-    `frame-ancestors 'none'`,
-    `worker-src 'self' blob:`,
-  ].join("; ");
-  res.setHeader("Content-Security-Policy", policy);
-  next();
-});
 
 app.use((req, res, next) => {
   res.setHeader(

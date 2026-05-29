@@ -1,7 +1,7 @@
 # Technical Debt Registry
 
 > Living document cataloging known technical debt in the Hyrox-Companion codebase.
-> Last audited: 2026-04-22 (doc refresh — no new items, registry re-reviewed alongside the codebase documentation sweep)
+> Last audited: 2026-05-29 (marked #22 CSRF resolved — the `csrf-csrf` double-submit middleware was implemented and the entry had gone stale; see docs/CODEBASE_REVIEW_2026-05-29.md L1)
 
 ---
 
@@ -60,12 +60,11 @@
 
 - ~~**21. Improve PWA offline strategy**~~ — Added Workbox runtimeCaching: NetworkFirst for API (10s timeout), CacheFirst for fonts (1yr), StaleWhileRevalidate for images (30d).
 
-### 22. CSRF protection assessment
-- **Files:** `server/index.ts`, `server/clerkAuth.ts`
-- **Issue:** The app uses cookie-based auth (`credentials: "include"`) via Clerk, which is CSRF-vulnerable in principle.
-- **Mitigations already in place:** CORS with explicit origin allowlist rejects cross-origin requests. Clerk uses SameSite cookies by default. CSP with nonce prevents inline script injection.
-- **Remaining risk:** Low. A same-site CSRF attack would require XSS first (mitigated by CSP). Consider adding `csrf-csrf` middleware if the threat model changes.
-- **Status:** Documented. No immediate action needed.
+### ~~22. CSRF protection~~ (RESOLVED)
+- **Files:** `server/middleware/csrf.ts`, `server/routes.ts`, `server/env.ts`
+- **Issue:** The app uses cookie-based auth (`credentials: "include"`) via Clerk, which is CSRF-vulnerable in principle; CORS is not a CSRF control.
+- **Resolution:** Double-submit-cookie CSRF protection (`csrf-csrf`) is now enforced on all state-changing `/api/v1` routes. `doubleCsrfProtection` is mounted at `server/routes.ts:34`; the token is issued by `GET /api/v1/csrf-token` (`server/routes.ts:29`) and clients echo it back via the `x-csrf-token` header. The token is bound to the Clerk `userId` session identifier, the cookie is `__Host-`-prefixed with `httpOnly` / `sameSite=strict` / `secure` in production, and `CSRF_SECRET` is required in production and must differ from `ENCRYPTION_KEY` (enforced in `server/env.ts`). Defense-in-depth (CORS allowlist, SameSite cookies, nonce CSP) remains.
+- **Status:** RESOLVED. The original "documented as acceptable — no action needed" note was superseded when `csrf-csrf` was implemented; the entry stayed stale until the 2026-05-29 review.
 
 - ~~**23. Performance optimizations**~~ — Added 120s-TTL in-memory cache for RAG retrieval in `server/services/ragService.ts` (keyed by userId+query+topK, invalidated on `embedCoachingMaterial`). Debounced auto-coach via pg-boss `singletonKey: auto-coach:${userId}`/`singletonSeconds: 60` in `server/services/workoutService.ts` so bulk workout creation coalesces into a single coach run per user.
 
@@ -78,5 +77,5 @@
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
-| P3 — Low | 9/10 | 1 | #22 (CSRF) documented as acceptable — low risk, no action needed |
-| **Total** | **27/28** | **1** | Only #22 remains, documented as acceptable under current threat model |
+| P3 — Low | 10/10 | 0 | All resolved (#22 CSRF resolved via `csrf-csrf` double-submit) |
+| **Total** | **28/28** | **0** | All catalogued debt resolved |
