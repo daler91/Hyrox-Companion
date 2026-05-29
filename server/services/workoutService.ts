@@ -25,4 +25,4 @@ export {
   updateWorkoutStructureBlockScore,
 } from "./workoutService/structure";
 export type { CreateWorkoutResult, UpdateWorkoutResult } from "./workoutService/types";
-export { createWorkout, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService/workouts";
+export { assignWorkoutPlanDay, createWorkout, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService/workouts";

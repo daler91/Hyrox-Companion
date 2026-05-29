@@ -26,6 +26,10 @@ interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerci
   readonly setRpe: (value: number | null) => void;
   readonly durationMinutes: string;
   readonly setDurationMinutes: (value: string) => void;
+  readonly planId: string | null;
+  readonly setPlanId: (value: string | null) => void;
+  readonly planDayId: string | null;
+  readonly setPlanDayId: (value: string | null) => void;
   readonly notes: string;
   readonly setNotes: (value: string) => void;
   readonly isNotesListening: boolean;
@@ -64,6 +68,10 @@ export function LogWorkoutStepperLayout({
   setRpe,
   durationMinutes,
   setDurationMinutes,
+  planId,
+  setPlanId,
+  planDayId,
+  setPlanDayId,
   notes,
   setNotes,
   freeText,
@@ -195,6 +203,10 @@ export function LogWorkoutStepperLayout({
             setRpe={setRpe}
             durationMinutes={durationMinutes}
             setDurationMinutes={setDurationMinutes}
+            planId={planId}
+            setPlanId={setPlanId}
+            planDayId={planDayId}
+            setPlanDayId={setPlanDayId}
             notes={notes}
             setNotes={setNotes}
             isNotesListening={isNotesListening}

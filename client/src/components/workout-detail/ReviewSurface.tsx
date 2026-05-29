@@ -20,6 +20,7 @@ import { ExerciseTable } from "./ExerciseTable";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
+import { WorkoutPlanDayPicker } from "./shared/WorkoutPlanDayPicker";
 import {
   getWorkoutCoachPanelState,
   WorkoutCoachChatPanel,
@@ -335,6 +336,7 @@ function ReviewDetailsColumn({
         distanceUnit={distanceUnit}
         showPlannedDiffs={showPlannedDiffs}
       />
+      <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
       <ReviewEffortNotes
         isStrava={isStrava}
         rpe={rpe}
@@ -412,6 +414,41 @@ function ReviewEffortNotes({
         onNoteChange={onSaveNote}
         debounceNote
       />
+    </>
+  );
+}
+
+interface ReviewPlanLinkSectionProps {
+  readonly detail: WorkoutDetailState;
+  readonly workoutLogId: string | null;
+}
+
+/**
+ * Connect this logged workout to a plan day, or change/remove the link. Reads
+ * the current link from detail.workout (the source of truth — the timeline
+ * entry doesn't carry plan info for standalone logs) and writes through
+ * updatePlanDay. Rendered for Strava sessions too: a synced run can legitimately
+ * fulfil a plan day.
+ */
+function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionProps) {
+  if (!workoutLogId) return null;
+  const workout = detail.workout;
+
+  return (
+    <>
+      <Separator />
+      <section className="space-y-2" data-testid={`review-plan-link-${workoutLogId}`}>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Training plan
+        </p>
+        <WorkoutPlanDayPicker
+          planId={workout?.planId ?? null}
+          planDayId={workout?.planDayId ?? null}
+          onChange={(next) => detail.updatePlanDay.mutate(next)}
+          disabled={detail.updatePlanDay.isPending}
+          idPrefix={`review-plan-${workoutLogId}`}
+        />
+      </section>
     </>
   );
 }

@@ -49,6 +49,7 @@ vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefin
 vi.mock("../../services/workoutUseCases", () => ({
   createWorkout: vi.fn(),
   updateWorkoutUseCase: vi.fn(),
+  assignWorkoutPlanDayUseCase: vi.fn(),
 }));
 vi.mock("../../services/workoutService", () => ({
   reparseWorkout: vi.fn(),
@@ -135,6 +136,33 @@ describe("Workouts Routes", () => {
 
     vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
     vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] });
+  });
+
+  it("assigns and clears a workout's plan day via the dedicated endpoint", async () => {
+    const { assignWorkoutPlanDayUseCase } = await import("../../services/workoutUseCases");
+    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValue({ id: "workout-1", planId: "plan-1", planDayId: "day-1" });
+
+    const assignRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "day-1" });
+    expect(assignRes.status).toBe(200);
+    expect(assignRes.body).toMatchObject({ planId: "plan-1", planDayId: "day-1" });
+    expect(assignWorkoutPlanDayUseCase).toHaveBeenCalledWith({ userId: "test_user_id", workoutId: "workout-1", planDayId: "day-1" });
+
+    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce({ id: "workout-1", planId: null, planDayId: null });
+    const clearRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: null });
+    expect(clearRes.status).toBe(200);
+  });
+
+  it("rejects a plan-day assignment with a missing/invalid body and 404s when the workout is gone", async () => {
+    const { assignWorkoutPlanDayUseCase } = await import("../../services/workoutUseCases");
+
+    const emptyRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({});
+    expect(emptyRes.status).toBe(400);
+    const blankRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "" });
+    expect(blankRes.status).toBe(400);
+
+    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce(null);
+    const missingRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "day-1" });
+    expect(missingRes.status).toBe(404);
   });
 
   it("keeps endpoint contract parity for CRUD/reparse/timeline/export", async () => {

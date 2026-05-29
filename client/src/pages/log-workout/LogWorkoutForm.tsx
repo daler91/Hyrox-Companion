@@ -70,6 +70,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setRpe,
     durationMinutes,
     setDurationMinutes,
+    planId,
+    setPlanId,
     planDayId,
     setPlanDayId,
     voiceInput,
@@ -91,6 +93,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           notes: initialDraft.notes,
           rpe: initialDraft.rpe,
           durationMinutes: initialDraft.durationMinutes,
+          planId: initialDraft.planId,
           planDayId: initialDraft.planDayId,
         }
       : undefined,
@@ -114,6 +117,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setTitle,
     setNotes,
     setFreeText,
+    setPlanId,
     setPlanDayId,
     resetEditor,
     toast,
@@ -130,6 +134,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     notes,
     rpe,
     durationMinutes,
+    planId,
     planDayId,
     useTextMode,
     exerciseBlocks,
@@ -162,6 +167,10 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       setRpe={setRpe}
       durationMinutes={durationMinutes}
       setDurationMinutes={setDurationMinutes}
+      planId={planId}
+      setPlanId={setPlanId}
+      planDayId={planDayId}
+      setPlanDayId={setPlanDayId}
       notes={notes}
       setNotes={setNotes}
       freeText={freeText}

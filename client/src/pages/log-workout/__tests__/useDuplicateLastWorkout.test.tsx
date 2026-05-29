@@ -46,6 +46,7 @@ describe("useDuplicateLastWorkout", () => {
       mainWorkout: "Free text fallback",
       exerciseSets: [],
     });
+    const setPlanId = vi.fn();
     const setPlanDayId = vi.fn();
     const setDurationMinutes = vi.fn();
 
@@ -58,6 +59,7 @@ describe("useDuplicateLastWorkout", () => {
           setTitle: vi.fn(),
           setNotes: vi.fn(),
           setFreeText: vi.fn(),
+          setPlanId,
           setPlanDayId,
           resetEditor: vi.fn(),
           toast: vi.fn(),
@@ -70,6 +72,7 @@ describe("useDuplicateLastWorkout", () => {
     });
 
     await waitFor(() => {
+      expect(setPlanId).toHaveBeenCalledWith(null);
       expect(setPlanDayId).toHaveBeenCalledWith(null);
       expect(setDurationMinutes).toHaveBeenCalledWith("");
     });

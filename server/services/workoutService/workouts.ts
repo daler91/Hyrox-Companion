@@ -9,11 +9,13 @@ import {
   trainingPlans,
   type UpdateWorkoutLog,
   users,
+  type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../../db";
+import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../../queue";
 import { storage } from "../../storage";
@@ -329,4 +331,81 @@ function maybeEnqueueAutoCoachOnDateChange(
     .catch((err) =>
       logger.error({ err }, "Failed to queue auto-coach job after workout date change"),
     );
+}
+
+// Adherence columns are recomputed only while a workout fulfils a plan day.
+// When the link is cleared there's no prescription to diff against, so we null
+// them out rather than leave a stale snapshot from the previous day.
+const ADHERENCE_RESET = {
+  plannedSetCount: null,
+  actualSetCount: null,
+  matchedSetCount: null,
+  addedSetCount: null,
+  removedSetCount: null,
+  compliancePct: null,
+} as const;
+
+/**
+ * Connect a logged workout to a specific plan day, or clear the link
+ * (planDayId === null). Mirrors the plan-day side effects of
+ * createWorkoutInTx without touching the workout's own exercise_sets — those
+ * stay workout-owned (exercise_set_single_owner_check). All writes are atomic:
+ *   - validates the workout belongs to the user (row-locked FOR UPDATE);
+ *   - when linking: validates the target day's ownership, derives planId,
+ *     re-points the FKs, recomputes the adherence snapshot against the day's
+ *     prescription, and re-derives the day's status from the live log count;
+ *   - when clearing: nulls the FKs + adherence columns;
+ *   - in both cases, when the workout was previously linked to a DIFFERENT
+ *     day, that old day's status is re-derived too (drops back to "planned"
+ *     unless the user/cron explicitly marked it skipped/missed).
+ *
+ * Returns the freshly-read log, or null when the workout isn't found / owned.
+ */
+export async function assignWorkoutPlanDay(
+  workoutId: string,
+  planDayId: string | null,
+  userId: string,
+): Promise<WorkoutLog | null> {
+  return await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.id, workoutId), eq(workoutLogs.userId, userId)))
+      .for("update");
+    if (!existing) return null;
+
+    const previousPlanDayId = existing.planDayId;
+
+    if (planDayId) {
+      const planDay = await storage.plans.getPlanDay(planDayId, userId, tx);
+      if (!planDay) {
+        throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
+      }
+      await tx
+        .update(workoutLogs)
+        .set({ planId: planDay.planId, planDayId })
+        .where(eq(workoutLogs.id, workoutId));
+
+      const actualSets = await tx
+        .select()
+        .from(exerciseSets)
+        .where(eq(exerciseSets.workoutLogId, workoutId));
+      await persistAdherenceSnapshot(tx, workoutId, planDayId, actualSets);
+      await storage.plans.syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
+    } else {
+      await tx
+        .update(workoutLogs)
+        .set({ planId: null, planDayId: null, ...ADHERENCE_RESET })
+        .where(eq(workoutLogs.id, workoutId));
+    }
+
+    if (previousPlanDayId && previousPlanDayId !== planDayId) {
+      await storage.plans.syncPlanDayStatusFromWorkouts(previousPlanDayId, userId, tx);
+    }
+
+    // persistAdherenceSnapshot writes after the FK update, so re-read the row
+    // to return the freshest columns to the client.
+    const [fresh] = await tx.select().from(workoutLogs).where(eq(workoutLogs.id, workoutId));
+    return fresh ?? null;
+  });
 }

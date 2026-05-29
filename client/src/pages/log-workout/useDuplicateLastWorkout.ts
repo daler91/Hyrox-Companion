@@ -14,6 +14,7 @@ interface UseDuplicateLastWorkoutOptions {
   readonly setTitle: (value: string) => void;
   readonly setNotes: (value: string) => void;
   readonly setFreeText: (value: string) => void;
+  readonly setPlanId: (value: string | null) => void;
   readonly setPlanDayId: (value: string | null) => void;
   readonly resetEditor: (
     blocks: string[],
@@ -31,6 +32,7 @@ export function useDuplicateLastWorkout({
   setTitle,
   setNotes,
   setFreeText,
+  setPlanId,
   setPlanDayId,
   resetEditor,
   toast,
@@ -45,6 +47,7 @@ export function useDuplicateLastWorkout({
       // "title" input binds to the same field on save.
       setTitle(latest.focus ?? "");
       setNotes(latest.notes ?? "");
+      setPlanId(null);
       setPlanDayId(null);
 
       const structureBlocks = Array.isArray(latest.structureBlocks) ? latest.structureBlocks : [];

@@ -24,13 +24,13 @@ import {
   isBulkDeleteWorkoutsNotFoundError,
 } from "../../services/bulkDeleteWorkouts";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
-import { createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
+import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { createMutateExerciseSetUseCase } from "../../usecases/workouts/mutateExerciseSet.usecase";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 import { rejectTextOnlyWriteIfNeeded } from "../structuredWriteGuard";
-import { createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
+import { assignWorkoutPlanDaySchema, createCustomExerciseSchema, createWorkoutRouteSchema, updateWorkoutRouteSchema } from "./shared";
 
 const patchExerciseSetSchema = patchExerciseSetBodySchema;
 const addExerciseSetSchema = addExerciseSetBodySchema;
@@ -182,6 +182,15 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   protectedPatch(router, "/api/v1/workouts/:id", { limiter: rateLimiter("workout", 40), middleware: [validateBody(updateWorkoutRouteSchema)] }, async (req: Request<{ id: string }>, res: Response) => {
     if (await rejectTextOnlyWriteIfNeeded(req, res, "workout_log")) return;
     const result = await updateWorkoutUseCase({ userId: getUserId(req), workoutId: req.params.id, payload: req.body as never });
+    if (!result) {
+      return sendNotFound(res, WORKOUT_NOT_FOUND);
+    }
+    res.json(result);
+  });
+
+  protectedPatch(router, "/api/v1/workouts/:id/plan-day", { limiter: rateLimiter("workout", 40), middleware: [validateBody(assignWorkoutPlanDaySchema)] }, async (req: Request<{ id: string }>, res: Response) => {
+    const { planDayId } = req.body as z.infer<typeof assignWorkoutPlanDaySchema>;
+    const result = await assignWorkoutPlanDayUseCase({ userId: getUserId(req), workoutId: req.params.id, planDayId });
     if (!result) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
