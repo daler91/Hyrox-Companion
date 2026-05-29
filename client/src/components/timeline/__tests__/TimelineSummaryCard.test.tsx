@@ -133,6 +133,31 @@ describe("TimelineSummaryCard", () => {
     expect(mocks.getTimeline).toHaveBeenCalledWith("plan-1");
   });
 
+  it("counts down to the explicit race date rather than the plan end date", async () => {
+    mocks.getPlans.mockResolvedValue([
+      {
+        id: "plan-1",
+        userId: "user-1",
+        name: "HYROX build",
+        sourceFileName: null,
+        totalWeeks: 8,
+        goal: null,
+        startDate: "2026-05-01",
+        endDate: "2026-05-30",
+        raceDate: "2026-06-15",
+      },
+    ]);
+
+    renderSummary("plan-1");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-summary-card")).toBeInTheDocument();
+    });
+
+    // raceDate (Jun 15, 26 days out) wins over endDate (May 30, which would be 10 days).
+    expect(screen.getByText("Race day in 26 days")).toBeInTheDocument();
+  });
+
   it("renders nothing when there is no plan, timeline, or workout data", async () => {
     mocks.getOverview.mockResolvedValue({
       weeklySummaries: [],

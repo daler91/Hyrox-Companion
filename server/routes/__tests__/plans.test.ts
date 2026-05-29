@@ -79,9 +79,11 @@ vi.mock("../../services/workoutService", () => ({
 const emptyPlanDayRowsResponse = { exerciseSets: [], structureBlocks: [] };
 const generatePlanPayload = {
   goal: "Hyrox race prep",
-  totalWeeks: 8,
   daysPerWeek: 5,
   experienceLevel: "intermediate",
+  startDate: "2026-05-04",
+  endDate: "2026-06-29", // 56-day span → 8-week plan
+  endDateIsRaceDate: true,
 };
 
 function mockEmptyPlanDayRows() {

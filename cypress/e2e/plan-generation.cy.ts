@@ -45,9 +45,11 @@ describe("Plan Generation", () => {
     cy.get("textarea#goal").type("Prepare for Hyrox Doubles in 8 weeks");
     cy.contains("button", /Next/).click();
 
-    // Step 1 — Weeks/Days/Rest Days labels appear
-    cy.contains("Weeks").should("be.visible");
+    // Step 1 — schedule + date fields appear (plan length is derived from the dates)
     cy.contains(/Days\/Week/i).should("be.visible");
     cy.contains("Experience Level").should("be.visible");
+    cy.contains("Start Date").should("be.visible");
+    cy.contains("End Date").should("be.visible");
+    cy.contains("This is my race date").should("be.visible");
   });
 });

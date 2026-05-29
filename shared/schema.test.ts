@@ -1,6 +1,10 @@
 import { describe, expect,it } from "vitest";
 
-import { importPlanRequestSchema, parseExercisesFromImageRequestSchema } from "./schema";
+import {
+  generatePlanInputSchema,
+  importPlanRequestSchema,
+  parseExercisesFromImageRequestSchema,
+} from "./schema";
 
 describe("importPlanRequestSchema validation", () => {
   it("rejects a very large csvContent", () => {
@@ -87,5 +91,54 @@ describe("parseExercisesFromImageRequestSchema validation", () => {
         true,
       );
     }
+  });
+});
+
+describe("generatePlanInputSchema validation", () => {
+  const validBase = {
+    goal: "Hyrox race prep",
+    daysPerWeek: 5,
+    experienceLevel: "intermediate" as const,
+    startDate: "2026-05-04",
+    endDate: "2026-06-29", // 56-day span → 8 weeks
+  };
+
+  it("accepts a valid date range and defaults endDateIsRaceDate to true", () => {
+    const result = generatePlanInputSchema.safeParse(validBase);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.endDateIsRaceDate).toBe(true);
+    }
+  });
+
+  it("rejects an end date on or before the start date", () => {
+    const result = generatePlanInputSchema.safeParse({
+      ...validBase,
+      startDate: "2026-06-29",
+      endDate: "2026-05-04",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.includes("endDate"))).toBe(true);
+    }
+  });
+
+  it("rejects a span longer than 24 weeks", () => {
+    const result = generatePlanInputSchema.safeParse({
+      ...validBase,
+      startDate: "2026-01-01",
+      endDate: "2027-01-01",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires an end date", () => {
+    const result = generatePlanInputSchema.safeParse({
+      goal: "Hyrox race prep",
+      daysPerWeek: 5,
+      experienceLevel: "intermediate",
+      startDate: "2026-05-04",
+    });
+    expect(result.success).toBe(false);
   });
 });

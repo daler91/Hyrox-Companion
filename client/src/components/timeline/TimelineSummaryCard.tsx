@@ -44,13 +44,29 @@ function getTodayEntry(entries: readonly TimelineEntry[], todayStr: string): Tim
     ?? entries.find((entry) => entry.date === todayStr);
 }
 
-function formatRaceCountdown(plan: TrainingPlan | undefined): string {
-  if (!plan?.endDate) return "No race date set";
-  const days = daysUntil(plan.endDate);
+// The athlete's race day. Prefer the explicit raceDate; fall back to endDate for
+// plans created before race dates were captured (or whose end isn't a race day).
+function planRaceDate(plan: TrainingPlan | undefined): string | null {
+  return plan?.raceDate ?? plan?.endDate ?? null;
+}
+
+function formatRaceCountdown(raceDate: string | null): string {
+  if (!raceDate) return "No race date set";
+  const days = daysUntil(raceDate);
   if (days === 0) return "Race day today";
   if (days > 0) return `Race day in ${days} day${days === 1 ? "" : "s"}`;
   const elapsed = Math.abs(days);
   return `Race day was ${elapsed} day${elapsed === 1 ? "" : "s"} ago`;
+}
+
+function formatRaceDate(raceDate: string | null): string | undefined {
+  if (!raceDate) return undefined;
+  return parseLocalDate(raceDate).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function TimelineSummarySkeleton() {
@@ -129,6 +145,7 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
 
   const todayEntry = getTodayEntry(timelineData, todayStr);
   const selectedPlan = choosePlan(plans, selectedPlanId, todayStr);
+  const raceDate = planRaceDate(selectedPlan);
   const weeklyGoal = Math.max(overview?.weeklyGoal ?? 0, 1);
   const weeklyCompleted = overview?.weeklyCompletedWorkouts ?? 0;
   const streak = overview?.currentStreak ?? 0;
@@ -186,8 +203,8 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
         <SummaryItem
           icon={Flag}
           label="Race"
-          value={formatRaceCountdown(selectedPlan)}
-          detail={selectedPlan?.name}
+          value={formatRaceCountdown(raceDate)}
+          detail={formatRaceDate(raceDate) ?? selectedPlan?.name}
         />
       </CardContent>
     </Card>

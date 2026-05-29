@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { ErrorCode } from "../errors";
-import { executePlanGeneration } from "./planGenerationService";
+import { createPendingPlan, executePlanGeneration } from "./planGenerationService";
 
 const mocks = vi.hoisted(() => {
   const generateContent = vi.fn();
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
     trackUsageFromResponse: vi.fn(),
     plans: {
+      createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
       schedulePlan: vi.fn(),
       updateGenerationStatus: vi.fn(),
@@ -72,11 +73,14 @@ type GeneratedDayLike = {
   exercises?: unknown[];
 };
 
+// A 7-day span → a 1-week plan; individual tests widen endDate for longer plans.
 const baseInput: GeneratePlanInput = {
   goal: "Hyrox race prep",
-  totalWeeks: 1,
   daysPerWeek: 2,
   experienceLevel: "intermediate",
+  startDate: "2026-01-05",
+  endDate: "2026-01-12",
+  endDateIsRaceDate: true,
 };
 
 function makeExerciseDay(
@@ -183,7 +187,7 @@ describe("executePlanGeneration", () => {
   });
 
   it("splits an 8-week request into four two-week chunks and persists days in order", async () => {
-    const input = { ...baseInput, totalWeeks: 8 } as const;
+    const input = { ...baseInput, endDate: "2026-03-02" } as const; // 56-day span → 8 weeks
     const sortedDays = makeGeneratedWeeks(1, 8);
     setupPlanStorage(input, createPlanDaysFromGenerated(sortedDays));
     mockAiChunks(
@@ -325,7 +329,7 @@ describe("executePlanGeneration", () => {
   });
 
   it("rejects incomplete chunk coverage and marks plan failed", async () => {
-    const input = { ...baseInput, totalWeeks: 2 } as const;
+    const input = { ...baseInput, endDate: "2026-01-19" } as const; // 14-day span → 2 weeks
     mockAiChunks(makeGeneratedWeek(1));
 
     await expect(executePlanGeneration("plan-1", input, "user-1")).rejects.toMatchObject({
@@ -374,5 +378,83 @@ describe("executePlanGeneration", () => {
 
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.stringContaining("timed out"));
+  });
+
+  it("schedules the generated plan from the provided start date", async () => {
+    const generatedDays = makeGeneratedWeek(1);
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
+
+    await executePlanGeneration("plan-1", baseInput, "user-1");
+
+    expect(mocks.plans.schedulePlan).toHaveBeenCalledWith("plan-1", "2026-01-05", "user-1");
+  });
+
+  it("includes the race-date prompt line when the end date is the race date", async () => {
+    const generatedDays = makeGeneratedWeek(1);
+    setupPlanStorage(baseInput, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
+
+    await executePlanGeneration("plan-1", baseInput, "user-1");
+
+    expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Race Date: 2026-01-12");
+  });
+
+  it("omits the race-date prompt line when the end date is not the race date", async () => {
+    const input = { ...baseInput, endDateIsRaceDate: false };
+    const generatedDays = makeGeneratedWeek(1);
+    setupPlanStorage(input, createPlanDaysFromGenerated(generatedDays));
+    mockAiChunks(generatedDays);
+
+    await executePlanGeneration("plan-1", input, "user-1");
+
+    expect(getPromptText(mocks.generateContent.mock.calls[0])).not.toContain("Race Date");
+  });
+
+  it("still generates from a legacy queued payload (totalWeeks/raceDate)", async () => {
+    // Simulates an in-flight job enqueued before the start/end-date rename: the
+    // normalizer falls back to the old totalWeeks/raceDate fields.
+    const legacyInput = {
+      goal: "Hyrox race prep",
+      totalWeeks: 8,
+      daysPerWeek: 2,
+      experienceLevel: "intermediate",
+      raceDate: "2026-03-02",
+    } as unknown as GeneratePlanInput;
+    setupPlanStorage(legacyInput, createPlanDaysFromGenerated(makeGeneratedWeeks(1, 8)));
+    mockAiChunks(
+      [...makeGeneratedWeek(2), ...makeGeneratedWeek(1)],
+      [...makeGeneratedWeek(4), ...makeGeneratedWeek(3)],
+      [...makeGeneratedWeek(6), ...makeGeneratedWeek(5)],
+      [...makeGeneratedWeek(8), ...makeGeneratedWeek(7)],
+    );
+
+    await executePlanGeneration("plan-1", legacyInput, "user-1");
+
+    expect(mocks.generateContent).toHaveBeenCalledTimes(4);
+    expect(getPromptText(mocks.generateContent.mock.calls[0])).toContain("Race Date: 2026-03-02");
+  });
+});
+
+describe("createPendingPlan", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.plans.createTrainingPlan.mockResolvedValue({ id: "plan-1", name: "AI Plan: x", totalWeeks: 1 });
+  });
+
+  it("persists the race date when the end date is the athlete's race date", async () => {
+    await createPendingPlan(baseInput, "user-1");
+
+    expect(mocks.plans.createTrainingPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ raceDate: baseInput.endDate, totalWeeks: 1, goal: baseInput.goal }),
+    );
+  });
+
+  it("stores a null race date when the end date is not the race date", async () => {
+    await createPendingPlan({ ...baseInput, endDateIsRaceDate: false }, "user-1");
+
+    expect(mocks.plans.createTrainingPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ raceDate: null }),
+    );
   });
 });

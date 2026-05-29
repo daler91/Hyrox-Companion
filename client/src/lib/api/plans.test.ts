@@ -28,9 +28,11 @@ describe('plans API client', () => {
   it('generate() POSTs to the generate endpoint without a custom timeout (returns 202 immediately)', () => {
     const payload = {
       goal: 'Hyrox race prep',
-      totalWeeks: 8,
       daysPerWeek: 5,
       experienceLevel: 'intermediate',
+      startDate: '2026-05-04',
+      endDate: '2026-06-29',
+      endDateIsRaceDate: true,
     } as const;
 
     plans.generate(payload);

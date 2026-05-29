@@ -86,6 +86,10 @@ export const trainingPlans = pgTable("training_plans", {
   goal: text("goal"),
   startDate: date("start_date"),
   endDate: date("end_date"),
+  // The athlete's race day, captured when the end date is flagged as the race
+  // date. Stored separately from endDate because scheduling derives endDate from
+  // the Monday-aligned plan days, which can drift a few days off the true race day.
+  raceDate: date("race_date"),
   generationStatus: text("generation_status").notNull().default("ready"),
   generationError: text("generation_error"),
 }, (table) => [

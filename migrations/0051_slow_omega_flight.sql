@@ -1,0 +1,1 @@
+ALTER TABLE "training_plans" ADD COLUMN "race_date" date;

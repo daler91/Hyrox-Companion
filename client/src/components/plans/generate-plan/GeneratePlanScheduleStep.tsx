@@ -10,21 +10,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 import {
   DAY_NAMES,
   DEFAULT_DAYS_PER_WEEK,
-  DEFAULT_WEEKS,
   type ExperienceLevel,
   MAX_DAYS_PER_WEEK,
-  MAX_WEEKS,
   MIN_DAYS_PER_WEEK,
-  MIN_WEEKS,
 } from "./useGeneratePlanForm";
 
 interface GeneratePlanScheduleStepProps {
-  readonly totalWeeks: number;
-  readonly onTotalWeeksChange: (value: number) => void;
   readonly daysPerWeek: number;
   readonly onDaysPerWeekChange: (value: number) => void;
   readonly restDays: string[];
@@ -34,17 +30,18 @@ interface GeneratePlanScheduleStepProps {
   readonly onExperienceLevelChange: (value: ExperienceLevel) => void;
   readonly startDate: string;
   readonly onStartDateChange: (value: string) => void;
-  readonly raceDate: string;
-  readonly onRaceDateChange: (value: string) => void;
+  readonly endDate: string;
+  readonly onEndDateChange: (value: string) => void;
+  readonly endDateIsRaceDate: boolean;
+  readonly onEndDateIsRaceDateChange: (value: boolean) => void;
+  readonly planWeeks: number;
+  readonly dateError: string | null;
   readonly onBack: () => void;
   readonly onNext: () => void;
   readonly canProceed: boolean;
-  readonly isStartDateRequired?: boolean;
 }
 
 export function GeneratePlanScheduleStep({
-  totalWeeks,
-  onTotalWeeksChange,
   daysPerWeek,
   onDaysPerWeekChange,
   restDays,
@@ -54,47 +51,30 @@ export function GeneratePlanScheduleStep({
   onExperienceLevelChange,
   startDate,
   onStartDateChange,
-  raceDate,
-  onRaceDateChange,
+  endDate,
+  onEndDateChange,
+  endDateIsRaceDate,
+  onEndDateIsRaceDateChange,
+  planWeeks,
+  dateError,
   onBack,
   onNext,
   canProceed,
-  isStartDateRequired = false,
 }: GeneratePlanScheduleStepProps) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="weeks">Weeks</Label>
-          <Input
-            id="weeks"
-            type="number"
-            min={MIN_WEEKS}
-            max={MAX_WEEKS}
-            value={totalWeeks}
-            onChange={(event) =>
-              onTotalWeeksChange(
-                Math.min(
-                  MAX_WEEKS,
-                  Math.max(MIN_WEEKS, Number.parseInt(event.target.value) || DEFAULT_WEEKS),
-                ),
-              )
-            }
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="days">Days/Week</Label>
-          <Input
-            id="days"
-            type="number"
-            min={MIN_DAYS_PER_WEEK}
-            max={MAX_DAYS_PER_WEEK}
-            value={daysPerWeek}
-            onChange={(event) =>
-              onDaysPerWeekChange(Number.parseInt(event.target.value) || DEFAULT_DAYS_PER_WEEK)
-            }
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="days">Days/Week</Label>
+        <Input
+          id="days"
+          type="number"
+          min={MIN_DAYS_PER_WEEK}
+          max={MAX_DAYS_PER_WEEK}
+          value={daysPerWeek}
+          onChange={(event) =>
+            onDaysPerWeekChange(Number.parseInt(event.target.value) || DEFAULT_DAYS_PER_WEEK)
+          }
+        />
       </div>
 
       {daysPerWeek < 7 && (
@@ -138,30 +118,46 @@ export function GeneratePlanScheduleStep({
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="startDate">Start Date{isStartDateRequired ? " (required)" : ""}</Label>
-          <Input
-            id="startDate"
-            type="date"
-            value={startDate}
-            onChange={(event) => onStartDateChange(event.target.value)}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="startDate">Start Date</Label>
+            <Input
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={(event) => onStartDateChange(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="endDate">End Date</Label>
+            <Input
+              id="endDate"
+              type="date"
+              value={endDate}
+              min={startDate}
+              onChange={(event) => onEndDateChange(event.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="endDateIsRaceDate">This is my race date</Label>
+            <p className="text-xs text-muted-foreground">Structures phases to peak on this day.</p>
+          </div>
+          <Switch
+            id="endDateIsRaceDate"
+            checked={endDateIsRaceDate}
+            onCheckedChange={onEndDateIsRaceDateChange}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="raceDate">Race Date</Label>
-          <Input
-            id="raceDate"
-            type="date"
-            value={raceDate}
-            onChange={(event) => onRaceDateChange(event.target.value)}
-          />
-        </div>
-        <p className="col-span-2 text-xs text-muted-foreground -mt-2">
-          {isStartDateRequired
-            ? "Start date is required during onboarding so workouts can appear on your timeline."
-            : "Both optional. Race date structures phases to peak on that day."}
-        </p>
+
+        {dateError ? (
+          <p className="text-xs text-destructive">{dateError}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">{planWeeks}-week plan</p>
+        )}
       </div>
 
       <div className="flex justify-between">
