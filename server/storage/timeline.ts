@@ -9,7 +9,7 @@ import {
   workoutLogs,
   type WorkoutStatus,
 } from "@shared/schema";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 
 import { db } from "../db";
 import { toDateStr } from "../types";
@@ -161,7 +161,14 @@ function toUpcomingPlannedDay(
   };
 }
 
-function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
+// A workout not linked to a scheduled plan day. It may still carry its own
+// planId (e.g. logged inside a plan's window but on a date with no scheduled
+// day), in which case we surface the plan name so the timeline tags it and the
+// plan filter can scope it. planId is the source of truth — the day link is absent.
+function createStandaloneWorkoutEntry(
+  log: WorkoutLog,
+  planNameById: Map<string, string>,
+): TimelineEntry {
   return {
     id: `log-${log.id}`,
     date: log.date,
@@ -174,6 +181,8 @@ function createStandaloneWorkoutEntry(log: WorkoutLog): TimelineEntry {
     duration: log.duration,
     rpe: log.rpe,
     workoutLogId: log.id,
+    planId: log.planId ?? null,
+    planName: log.planId ? (planNameById.get(log.planId) ?? null) : null,
     ...mapWorkoutLogToTimelineFields(log),
   };
 }
@@ -351,11 +360,24 @@ export class TimelineStorage {
     return sortAndWindowTimelineEntries(entries, limit, offset);
   }
 
-  private async fetchStandaloneWorkouts(userId: string, sqlLimit?: number): Promise<WorkoutLog[]> {
+  private async fetchStandaloneWorkouts(
+    userId: string,
+    planId?: string,
+    sqlLimit?: number,
+  ): Promise<WorkoutLog[]> {
+    const conditions = [eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)];
+
+    // When scoping to a specific plan, hide standalone workouts that belong to a
+    // DIFFERENT plan, but keep unattached (no-plan) workouts and this plan's own.
+    // With no plan filter (All Plans), all planDayId-null workouts are returned.
+    if (planId !== undefined) {
+      conditions.push(or(isNull(workoutLogs.planId), eq(workoutLogs.planId, planId))!);
+    }
+
     let query = db
       .select()
       .from(workoutLogs)
-      .where(and(eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)))
+      .where(and(...conditions))
       .orderBy(desc(workoutLogs.date))
       .$dynamic();
 
@@ -366,11 +388,20 @@ export class TimelineStorage {
     return query;
   }
 
+  private async fetchUserPlanNameMap(userId: string): Promise<Map<string, string>> {
+    const userPlans = await db.query.trainingPlans.findMany({
+      where: eq(trainingPlans.userId, userId),
+      columns: { id: true, name: true },
+    });
+    return new Map(userPlans.map((p) => [p.id, p.name]));
+  }
+
   private buildTimelineEntries(
     scheduledDays: Awaited<ReturnType<TimelineStorage["fetchScheduledDays"]>>,
     linkedWorkouts: WorkoutLog[],
     standaloneWorkouts: WorkoutLog[],
     today: string,
+    planNameById: Map<string, string>,
   ): { entries: TimelineEntry[]; suppressedPlanDayIds: Set<string> } {
     const entries: TimelineEntry[] = [];
     const suppressedPlanDayIds = new Set<string>();
@@ -407,7 +438,7 @@ export class TimelineStorage {
     }
 
     for (const log of standaloneWorkouts) {
-      entries.push(createStandaloneWorkoutEntry(log));
+      entries.push(createStandaloneWorkoutEntry(log, planNameById));
     }
 
     return { entries, suppressedPlanDayIds };
@@ -425,14 +456,15 @@ export class TimelineStorage {
     const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
-    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
+    const [linkedWorkouts, standaloneWorkouts, planNameById] = await Promise.all([
       planDayIds.length > 0
         ? db
             .select()
             .from(workoutLogs)
             .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds)))
         : Promise.resolve([]),
-      this.fetchStandaloneWorkouts(userId, sqlOverFetch),
+      this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch),
+      this.fetchUserPlanNameMap(userId),
     ]);
 
     const { entries, suppressedPlanDayIds } = this.buildTimelineEntries(
@@ -440,6 +472,7 @@ export class TimelineStorage {
       linkedWorkouts,
       standaloneWorkouts,
       today,
+      planNameById,
     );
     await this.attachExerciseSets(entries, suppressedPlanDayIds);
 

@@ -164,3 +164,89 @@ describe("TimelineStorage race-day derivation", () => {
     expect(raceEntry.focus).toBe("Race effort"); // the athlete's logged workout, not "Race Day"
   });
 });
+
+function standaloneLog(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    planId: null,
+    planDayId: null,
+    date: "2026-06-01",
+    focus: "Easy Run",
+    mainWorkout: "30 min Z2",
+    accessory: null,
+    notes: null,
+    duration: 30,
+    rpe: 5,
+    source: "manual",
+    calories: null,
+    distanceMeters: null,
+    elevationGain: null,
+    avgHeartrate: null,
+    maxHeartrate: null,
+    avgSpeed: null,
+    maxSpeed: null,
+    avgCadence: null,
+    avgWatts: null,
+    sufferScore: null,
+    plannedSetCount: null,
+    actualSetCount: null,
+    matchedSetCount: null,
+    addedSetCount: null,
+    removedSetCount: null,
+    compliancePct: null,
+    ...overrides,
+  };
+}
+
+describe("TimelineStorage standalone workout plan association", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    linkedRows = [];
+    standaloneRows = [];
+    storage = new TimelineStorage(workoutStorage as never);
+    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
+      { id: "plan-1", name: "Plan One", raceDate: null },
+      { id: "plan-2", name: "Plan Two", raceDate: null },
+    ] as never);
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+  });
+
+  it("tags a standalone workout that carries its own planId with the plan name", async () => {
+    standaloneRows = [standaloneLog("x", { planId: "plan-1" })];
+
+    const entries = await storage.getTimeline("user-1");
+    const entry = entries.find((e) => e.id === "log-x")!;
+
+    expect(entry.planId).toBe("plan-1");
+    expect(entry.planName).toBe("Plan One");
+  });
+
+  it("leaves a truly unattached workout (no planId) untagged", async () => {
+    standaloneRows = [standaloneLog("y", { planId: null })];
+
+    const entries = await storage.getTimeline("user-1");
+    const entry = entries.find((e) => e.id === "log-y")!;
+
+    expect(entry.planId).toBeNull();
+    expect(entry.planName).toBeNull();
+  });
+
+  it("forwards the selected plan filter to the standalone query, and omits it for All Plans", async () => {
+    const spy = vi.spyOn(
+      storage as unknown as { fetchStandaloneWorkouts: (...a: unknown[]) => Promise<unknown[]> },
+      "fetchStandaloneWorkouts",
+    );
+
+    // Filtering by a specific plan must thread that planId into the standalone
+    // fetch so other-plan workouts can be excluded (the bug: it never was).
+    await storage.getTimeline("user-1", "plan-2");
+    expect(spy).toHaveBeenLastCalledWith("user-1", "plan-2", undefined);
+
+    // All Plans (no planId) leaves the standalone fetch unscoped.
+    await storage.getTimeline("user-1");
+    expect(spy).toHaveBeenLastCalledWith("user-1", undefined, undefined);
+  });
+});
