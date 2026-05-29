@@ -73,7 +73,7 @@ export function PrivacyConsentBanner() {
         <p className="text-muted-foreground">
           We use Sentry for error tracking (PII scrubbed), and you can opt into Strava, Garmin, and
           AI coaching, each off by default.{" "}
-          <Link to="/privacy" className="underline hover:text-foreground">
+          <Link to="/privacy" className="rounded underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             Read our privacy policy
           </Link>
           .

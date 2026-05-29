@@ -47,7 +47,7 @@ export function AIConsentDialog({ open, onAccept, onDecline }: AIConsentDialogPr
               </div>
               <p className="text-xs">
                 By enabling, you consent to this data processing.{" "}
-                <a href="/privacy" className="inline-flex items-center gap-1 underline hover:text-foreground">
+                <a href="/privacy" className="inline-flex items-center gap-1 rounded underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   Privacy Policy <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 </a>
               </p>
