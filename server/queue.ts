@@ -1,7 +1,7 @@
+import type { GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
 
-import type { GeneratePlanInput } from "@shared/schema";
 import { processMissedWorkoutReminder,processWeeklySummary } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";

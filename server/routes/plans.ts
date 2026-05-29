@@ -5,11 +5,11 @@ import { z } from "zod";
 import { isAuthenticated } from "../clerkAuth";
 import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
+import { sendJobNoRetry } from "../queue";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { regenerateCoachNoteForPlanDay } from "../services/coachService";
 import { createPendingPlan } from "../services/planGenerationService";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayWithCleanup } from "../services/planService";
-import { sendJobNoRetry } from "../queue";
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 import { deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
@@ -111,37 +111,6 @@ function sendPlanDayReparseError(
   });
 }
 
-function sendPlanGenerationError(
-  req: ExpressRequest,
-  res: Response,
-  error: unknown,
-  userId: string,
-): Response {
-  if (error instanceof AppError) {
-    reqLogger(req).error({ err: error, userId, code: error.code }, "Failed to generate AI training plan");
-    return res.status(error.status).json({ error: error.message, code: error.code });
-  }
-
-  if (hasStatusAndCode(error) && !isLikelyAiProviderFailure(error)) {
-    reqLogger(req).error({ err: error, userId, code: error.code }, "Failed to generate AI training plan with structured non-AI error");
-    return res.status(error.status).json({
-      error: error.message ?? "Failed to generate training plan. Please try again.",
-      code: error.code,
-    });
-  }
-
-  if (isLikelyAiProviderFailure(error)) {
-    const classified = classifyAiError(error);
-    reqLogger(req).error({ err: error, userId, code: classified.code }, "Failed to generate AI training plan");
-    return res.status(classified.status).json({
-      error: classified.message,
-      code: classified.code,
-    });
-  }
-
-  reqLogger(req).error({ err: error, userId }, "Failed to generate AI training plan");
-  return res.status(500).json({ error: "Failed to generate training plan. Please try again.", code: "GENERATION_FAILED" });
-}
 
 const updateStoredPlanDay = createUpdatePlanDayUseCase({
   updatePlanDay: (dayId, data, userId) => storage.plans.updatePlanDay(dayId, data, userId),

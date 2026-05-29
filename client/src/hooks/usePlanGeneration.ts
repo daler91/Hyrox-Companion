@@ -87,7 +87,7 @@ export function useGeneratePlan(): UseGeneratePlanResult {
           await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans });
           await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
           toast({ title: "Training plan generated successfully!" });
-          successCallback?.(fullPlan as TrainingPlanWithDays);
+          successCallback?.(fullPlan);
         } catch {
           toast({ title: "Plan ready, but failed to load it.", variant: "destructive" });
         } finally {
@@ -98,11 +98,13 @@ export function useGeneratePlan(): UseGeneratePlanResult {
     }
 
     if (generationStatus === "failed") {
-      const errMsg = statusQuery.data?.error ?? "Plan generation failed";
-      const toastContent = getGeneratePlanErrorToast(new Error(errMsg));
-      toast({ variant: "destructive", ...toastContent });
-      setPendingPlanId(null);
-      setSuccessCallback(null);
+      void (async () => {
+        const errMsg = statusQuery.data?.error ?? "Plan generation failed";
+        const toastContent = getGeneratePlanErrorToast(new Error(errMsg));
+        toast({ variant: "destructive", ...toastContent });
+        setPendingPlanId(null);
+        setSuccessCallback(null);
+      })();
     }
   // Only react when generationStatus changes, not on every render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
