@@ -27,6 +27,9 @@ export function configureObservability(deps: { init?: typeof Sentry.init; getCli
           delete event.request.headers.cookie;
           delete event.request.headers["x-csrf-token"];
           delete event.request.headers["x-idempotency-key"];
+          // Keep in sync with the pino redact list in server/logger.ts.
+          delete event.request.headers["x-cron-secret"];
+          delete event.request.headers["x-internal-analytics-secret"];
         }
       }
       if (event.user) {
