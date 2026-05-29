@@ -85,7 +85,7 @@ export function Breadcrumbs() {
         <li>
           <Link
             href="/"
-            className="hover:text-foreground transition-colors"
+            className="rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             data-testid="breadcrumb-home"
           >
             Training
