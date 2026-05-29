@@ -260,6 +260,12 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
   // historical artifact of the Strava-style row shape.
   const email = conn.encryptedEmail;
   const password = conn.encryptedPassword;
+  if (!email || !password) {
+    // Credentials are cleared when a connection fails (setGarminError), which
+    // also sets lastError — so a broken connection would have thrown above.
+    // Belt-and-suspenders so we never call login() with blank credentials.
+    throw new Error("Garmin credentials are no longer stored — disconnect and reconnect.");
+  }
 
   const client = new GarminConnect({ username: email, password });
 
