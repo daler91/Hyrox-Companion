@@ -55,16 +55,15 @@ Middleware is applied in the following order in `server/index.ts`:
 | 2 | Health check route | `GET /api/v1/health` -- registered **before CORS** so platform healthchecks (requests with no `Origin` header) always reach it. |
 | 3 | `cors()` | CORS with origin allowlist (see below) |
 | 4 | `cspNonceMiddleware` | Per-request CSP nonce generation (production only) |
-| 5 | `helmet()` | Security headers (CSP baseline, HSTS with preload, referrer policy, etc.) |
-| 6 | Custom CSP override | Replaces Helmet's CSP with a per-request nonce-based policy |
-| 7 | `Permissions-Policy` | Sets `camera=(), microphone=(self), geolocation=()` |
-| 8 | `express.json({ limit: "2mb" })` | Body parsing for `/api/v1/coaching-materials` only |
-| 9 | `express.json({ limit: "10mb" })` | Body parsing for image-parse routes only (base64 image payloads; matched via `isImageParsePath`) |
-| 10 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture |
-| 11 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
-| 12 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
-| 13 | `pino-http` | Structured request logging with request ID and user context |
-| 14 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId`/`userId` for logging |
+| 5 | `helmet()` | Security headers, including the full **Content-Security-Policy** (per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload and referrer policy. |
+| 6 | `Permissions-Policy` | Sets `camera=(), microphone=(self), geolocation=()` |
+| 7 | `express.json({ limit: "2mb" })` | Body parsing for `/api/v1/coaching-materials` only |
+| 8 | `express.json({ limit: "10mb" })` | Body parsing for image-parse routes only (base64 image payloads; matched via `isImageParsePath`) |
+| 9 | `express.json({ limit: "100kb" })` | Default JSON body parsing with raw body capture |
+| 10 | `express.urlencoded()` | URL-encoded body parsing (100 kb limit) |
+| 11 | `cookieParser()` | Cookie parsing -- required by the CSRF double-submit middleware mounted in `registerRoutes` |
+| 12 | `pino-http` | Structured request logging with request ID and user context |
+| 13 | request-context wiring | Runs the remainder of the request inside an async context carrying `requestId`/`userId` for logging |
 
 CSRF protection and idempotency are **not** part of this global chain. `csrfProtection` is mounted on `/api/v1` inside `registerRoutes()`; idempotency is applied per protected mutating route through the `protectedRouteBuilder` guards (`protectedMutationGuards = [isAuthenticated, idempotencyMiddleware]`).
 
@@ -73,10 +72,9 @@ CSRF protection and idempotency are **not** part of this global chain. `csrfProt
 Middleware is ordered intentionally:
 1. **compression** first -- compresses all responses including error pages, **except** `text/event-stream` responses. `compression`'s internal gzip buffer holds chunks indefinitely when the producer is slow (e.g. Gemini with `thinkingLevel: HIGH`), which breaks SSE. The filter in `server/index.ts` checks `res.getHeader("Content-Type")` for `text/event-stream` and falls through to `compression.filter` for everything else.
 2. **CORS** early -- rejects disallowed origins before any processing
-3. **CSP nonce + Helmet** before route handlers -- security headers on every response
-4. **Custom CSP override** -- refines Helmet defaults with Clerk domains and nonce
-5. **Body parsing** after security -- limits apply to parsed bodies only
-6. **pino-http** then **request-context** last in the pre-route stack -- logs after auth context is available (extracts userId from Clerk)
+3. **CSP nonce + Helmet** before route handlers -- security headers (including the nonce-based CSP from `buildCspDirectives()`) on every response
+4. **Body parsing** after security -- limits apply to parsed bodies only
+5. **pino-http** then **request-context** last in the pre-route stack -- logs after auth context is available (extracts userId from Clerk)
 
 ### CORS allowed origins
 
@@ -125,7 +123,7 @@ Route handlers follow a **thin controller** pattern -- they validate input, then
 
 ### Helmet
 
-Helmet is configured with a baseline CSP that is immediately overridden by a custom middleware to support per-request nonces. Additional settings:
+Helmet is configured with the application's full Content-Security-Policy via `buildCspDirectives()` (`server/middleware/csp.ts`), including a per-request nonce in `script-src` (production). Additional settings:
 
 - `crossOriginEmbedderPolicy: false`
 - `referrerPolicy: "strict-origin-when-cross-origin"`

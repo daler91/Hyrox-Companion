@@ -96,15 +96,14 @@ sequenceDiagram
 2. `GET /api/v1/health` -- health endpoint, registered **before CORS** so platform probes always reach it
 3. `cors()` -- origin allowlist with `credentials: true`
 4. CSP nonce middleware -- per-request nonce for `<script>` tags (production only)
-5. `helmet()` -- security headers (HSTS with preload, X-Frame-Options, etc.)
-6. Custom CSP override -- fine-grained Content-Security-Policy with Clerk and Strava domains
-7. Permissions-Policy header
-8. `express.json()` -- body parsing: 2mb for `/api/v1/coaching-materials`, 10mb for image-parse routes, 100kb default
-9. `express.urlencoded()` -- form body parsing (100kb limit)
-10. `cookieParser()` -- required by the CSRF double-submit middleware
-11. `pino-http` -- structured request logging with Clerk userId extraction
-12. request-context wiring -- async context carrying `requestId` / `userId`
-13. Route handlers (registered via `registerRoutes`)
+5. `helmet()` -- security headers, including the full Content-Security-Policy (Clerk/Strava/Sentry origins + per-request nonce) built by `buildCspDirectives()` in `server/middleware/csp.ts`, plus HSTS with preload, X-Frame-Options, etc.
+6. Permissions-Policy header
+7. `express.json()` -- body parsing: 2mb for `/api/v1/coaching-materials`, 10mb for image-parse routes, 100kb default
+8. `express.urlencoded()` -- form body parsing (100kb limit)
+9. `cookieParser()` -- required by the CSRF double-submit middleware
+10. `pino-http` -- structured request logging with Clerk userId extraction
+11. request-context wiring -- async context carrying `requestId` / `userId`
+12. Route handlers (registered via `registerRoutes`)
 
 `registerRoutes()` then mounts `csrfProtection` on `/api/v1`; idempotency runs per protected mutating route via the `protectedRouteBuilder` guards rather than as a global middleware.
 

@@ -4,7 +4,7 @@ Generated: 2026-05-29 (America/Chicago)
 Branch reviewed: `claude/happy-bohr-cNk7D`
 
 > **Status — 2026-05-29: historical baseline.** All findings below have been remediated
-> (PRs #1290–#1292); only the low-priority **L5** remains. See the Remediation Status
+> (PRs #1290–#1297) — all findings resolved. See the Remediation Status
 > matrix immediately below — the sections after it are retained as the original review
 > evidence, not a current open-issues list.
 
@@ -23,7 +23,7 @@ new dated report against the current checkout, not an edit of the prior baseline
 
 ## Remediation Status — 2026-05-29
 
-All findings in this report have since been **remediated** across PRs #1290–#1292. The
+All findings in this report have since been **remediated** across PRs #1290–#1297. The
 sections below (Executive Summary onward) are retained unedited as the original review
 evidence. This report is now a historical baseline; future reviews should start from the
 current checkout and create a new dated report.
@@ -36,18 +36,22 @@ current checkout and create a new dated report.
 | L2 | Sentry scrub list diverged from pino redact list | ✅ Resolved (#1290) | Added `x-cron-secret` / `x-internal-analytics-secret` to Sentry `beforeSend`. |
 | L3 | Retry helper skipped transient network / timeout errors | ✅ Resolved (#1291) | `retryWithJitter` now retries `TimeoutError` + transient socket codes (never 4xx or a deliberate `AbortError`); unit tests added. |
 | L4 | Prefix cache delete could sequential-scan | ✅ Resolved (#1291) | `text_pattern_ops` index on `server_runtime_cache.key` (migration `0052`). |
-| L5 | One oversized module (`trainingLoadService.ts`, 806 lines) | ⏳ Open | Deferred as low-priority; still the lone lint warning. |
+| L5 | One oversized module (`trainingLoadService.ts`, 806 lines) | ✅ Resolved (#1297) | Load Governor extracted to `server/services/trainingLoadGovernor.ts`; `trainingLoadService.ts` is now 669 lines and the lone lint warning is gone. |
 | L6 | `showAdherenceInsights` default-on inconsistency | ✅ Resolved (#1291) | Confirmed intentional (display toggle, matches the column default); documented with a comment. |
 | A1 | Reparse orchestration inline in route handlers | ✅ Resolved (#1291) | Extracted `server/services/parseWorkoutUseCases.ts`; handlers slimmed to validate-and-delegate; use-case unit tests added. |
 
-**Remaining:** only **L5** (split the oversized `trainingLoadService.ts`), plus the 14
-non-blocking SonarCloud maintainability issues introduced by the A1 refactor (relocated
-code re-counted as "new code"; the quality gate still passed). Both are low-priority and
-optional.
+**Remaining:** all findings (M1, M2, L1–L6, A1) are shipped. The only optional leftover is
+the broader batch of non-blocking SonarCloud maintainability nits surfaced on the A1 PR
+(#1291) — addressing them needs the private SonarCloud issue list.
 
 **Corrections surfaced during remediation:** **M2(a)** was a stale recommendation — the
 privacy policy already disclosed Garmin credential storage (`Privacy.tsx` §5), so only
 the auto-clear behavior (M2b) required work.
+
+**Follow-on improvements shipped (beyond the original findings):** a WCAG accessibility pass
+— chart text alternatives + toast/accordion fixes (#1294); a single `SENSITIVE_REQUEST_HEADERS`
+source of truth for log/Sentry header scrubbing plus a rate-limiter fail-closed doc note
+(#1295); and a SonarCloud nested-template-literal cleanup (#1296).
 
 ---
 
