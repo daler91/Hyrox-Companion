@@ -29,8 +29,10 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const weekStartStr = toDateStr(weekStart);
   const weekEndStr = toDateStr(weekEnd);
 
-  const stats = await storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr);
-  const timeline = await storage.timeline.getTimeline(user.id);
+  const [stats, timeline] = await Promise.all([
+    storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr),
+    storage.timeline.getTimeline(user.id),
+  ]);
   const completedDates = new Set(
     timeline
       .filter(e => e.status === "completed" && e.date)
