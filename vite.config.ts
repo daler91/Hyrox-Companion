@@ -119,10 +119,15 @@ export default defineConfig({
     sourcemap: "hidden",
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "wouter"],
-          "vendor-ui": ["lucide-react"],
-          "vendor-query": ["@tanstack/react-query"],
+        // Vite 8 (Rolldown) deprecated the object form of `manualChunks` in
+        // favour of `advancedChunks.groups`. Each group keeps the original
+        // chunk name and matches the package by its node_modules path.
+        advancedChunks: {
+          groups: [
+            { name: "vendor-react", test: /[\\/]node_modules[\\/](?:react-dom|react|wouter)[\\/]/ },
+            { name: "vendor-ui", test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+            { name: "vendor-query", test: /[\\/]node_modules[\\/]@tanstack[\\/]react-query[\\/]/ },
+          ],
         },
       },
     },
