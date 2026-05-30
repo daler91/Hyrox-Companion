@@ -2,6 +2,7 @@ import type { GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
 
+import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { processMissedWorkoutReminder,processWeeklySummary } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
@@ -15,7 +16,29 @@ if (!env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
 }
 
-export const queue = new PgBoss(env.DATABASE_URL);
+/**
+ * Build the pg-boss connection URL with a PG-side `statement_timeout` set on
+ * every session pg-boss opens (W12). pg-boss owns its own pool internally
+ * (separate from server/db.ts's request pool), so the
+ * `DB_STATEMENT_TIMEOUT_MS = 30s` configured there does NOT apply to job
+ * handlers — a hung DB query inside a job would otherwise wedge the
+ * connection until pg-boss's 60-min `expireInMinutes` reaper noticed.
+ *
+ * Done via the libpq `options` URL parameter (`-c statement_timeout=...`)
+ * because pg-boss's DatabaseOptions interface doesn't expose
+ * `statement_timeout` directly and the URL approach works without a
+ * custom IDatabase adapter.
+ */
+export function buildQueueConnectionString(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  // Preserve any existing `options` the operator may have set, prepended.
+  const existing = url.searchParams.get("options");
+  const ourOption = `-c statement_timeout=${PGBOSS_STATEMENT_TIMEOUT_MS}`;
+  url.searchParams.set("options", existing ? `${existing} ${ourOption}` : ourOption);
+  return url.toString();
+}
+
+export const queue = new PgBoss(buildQueueConnectionString(env.DATABASE_URL));
 
 /**
  * Default job options for idempotent handlers: retry up to 3 times with
