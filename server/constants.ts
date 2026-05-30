@@ -62,6 +62,18 @@ export const DB_IDLE_TIMEOUT_MS = 30_000;
 /** DB statement timeout */
 export const DB_STATEMENT_TIMEOUT_MS = 30_000;
 
+/**
+ * PG `statement_timeout` for pg-boss's internal pool (W12). Has to sit
+ * between the longest legitimate job query (plan-gen retries can take
+ * several minutes) and `JOB_TIMEOUT_MS = 50min` in server/queue.ts —
+ * 45min gives PG time to kill a hung query so the connection returns to
+ * pg-boss's pool before the JS-side timeout fires, instead of staying
+ * pinned to a wedged session until pg-boss's `expireInMinutes=60`
+ * reaper notices. Applied via the PG `options` URL parameter when
+ * constructing the queue.
+ */
+export const PGBOSS_STATEMENT_TIMEOUT_MS = 45 * 60 * 1000;
+
 /** The 8 functional fitness stations (matches hyrox-style racing) + running */
 export const FUNCTIONAL_STATIONS = [
   "skierg", "sled_push", "sled_pull", "burpee_broad_jump",
