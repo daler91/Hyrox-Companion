@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { IStorage } from '../storage';
-import { generateCSV } from './exportService';
+import { generateCSV, generateJSON } from './exportService';
 
 describe('exportService - generateCSV', () => {
   const mockUserId = 'user-1';
@@ -164,4 +164,172 @@ describe('exportService - generateCSV', () => {
     await expect(generateCSV(mockUserId, storage)).rejects.toThrow('Storage failure');
   });
 
+});
+
+describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
+  const mockUserId = 'user-1';
+
+  // Mock storage that satisfies every namespace `generateJSON` calls into.
+  // Defaults to empty results so individual tests can override only what
+  // they care about.
+  const createMockStorage = (overrides: Partial<{
+    user: unknown;
+    timeline: unknown[];
+    plans: unknown[];
+    exerciseSets: unknown[];
+    chatMessages: unknown[];
+    coachingMaterials: unknown[];
+    customExercises: unknown[];
+    timelineAnnotations: unknown[];
+    stravaConnection: unknown;
+    garminConnection: unknown;
+    pushSubscriptions: unknown[];
+    aiUsageLogs: unknown[];
+  }> = {}): IStorage => {
+    return {
+      users: {
+        getUser: vi.fn().mockResolvedValue(overrides.user ?? null),
+        getAllChatMessagesForExport: vi.fn().mockResolvedValue(overrides.chatMessages ?? []),
+        getCustomExercises: vi.fn().mockResolvedValue(overrides.customExercises ?? []),
+        getStravaConnection: vi.fn().mockResolvedValue(overrides.stravaConnection ?? undefined),
+        getGarminConnection: vi.fn().mockResolvedValue(overrides.garminConnection ?? undefined),
+      },
+      timeline: { getTimeline: vi.fn().mockResolvedValue(overrides.timeline ?? []) },
+      plans: { listTrainingPlans: vi.fn().mockResolvedValue(overrides.plans ?? []) },
+      analytics: { getAllExerciseSetsWithDates: vi.fn().mockResolvedValue(overrides.exerciseSets ?? []) },
+      coaching: { listCoachingMaterials: vi.fn().mockResolvedValue(overrides.coachingMaterials ?? []) },
+      timelineAnnotations: { list: vi.fn().mockResolvedValue(overrides.timelineAnnotations ?? []) },
+      push: { getSubscriptionsForUser: vi.fn().mockResolvedValue(overrides.pushSubscriptions ?? []) },
+      aiUsage: { listForUser: vi.fn().mockResolvedValue(overrides.aiUsageLogs ?? []) },
+    } as unknown as IStorage;
+  };
+
+  it('emits all GDPR-relevant top-level sections', async () => {
+    const result = await generateJSON(mockUserId, createMockStorage());
+
+    expect(result).toMatchObject({
+      exportFormatVersion: 1,
+      exportedAt: expect.any(String),
+      profile: null,
+      timeline: [],
+      plans: [],
+      exerciseSets: [],
+      chatMessages: [],
+      coachingMaterials: [],
+      customExercises: [],
+      timelineAnnotations: [],
+      connections: { strava: null, garmin: null },
+      pushSubscriptions: [],
+      aiUsageLogs: [],
+    });
+  });
+
+  it('returns an ISO-8601 timestamp for exportedAt', async () => {
+    const result = await generateJSON(mockUserId, createMockStorage());
+
+    // Parse-roundtrip; if exportedAt isn't ISO-8601, this throws.
+    expect(new Date(result.exportedAt).toISOString()).toBe(result.exportedAt);
+  });
+
+  it('includes the user profile when present', async () => {
+    const user = { id: mockUserId, email: 'athlete@example.com', firstName: 'Sam' };
+    const result = await generateJSON(mockUserId, createMockStorage({ user }));
+
+    expect(result.profile).toEqual(user);
+  });
+
+  it('strips Strava access and refresh tokens from the export', async () => {
+    const stravaConn = {
+      id: 'sc-1',
+      userId: mockUserId,
+      stravaAthleteId: '12345',
+      accessToken: 'sk-secret-access',
+      refreshToken: 'sk-secret-refresh',
+      expiresAt: new Date('2026-06-01T00:00:00Z'),
+      scope: 'read,activity:read',
+      lastSyncedAt: new Date('2026-05-30T12:00:00Z'),
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    const result = await generateJSON(mockUserId, createMockStorage({ stravaConnection: stravaConn }));
+
+    expect(result.connections.strava).toBeDefined();
+    expect(result.connections.strava).toMatchObject({
+      stravaAthleteId: '12345',
+      scope: 'read,activity:read',
+      tokensRedacted: true,
+    });
+    // Critical: tokens must not appear anywhere in the serialized export.
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('sk-secret-access');
+    expect(serialized).not.toContain('sk-secret-refresh');
+    expect(serialized).not.toContain('accessToken');
+    expect(serialized).not.toContain('refreshToken');
+  });
+
+  it('strips encrypted Garmin credentials and OAuth tokens from the export', async () => {
+    const garminConn = {
+      id: 'gc-1',
+      userId: mockUserId,
+      garminDisplayName: 'samrunner',
+      encryptedEmail: 'v1:iv:tag:ciphertext-email',
+      encryptedPassword: 'v1:iv:tag:ciphertext-pw',
+      encryptedOauth1Token: 'v1:iv:tag:ciphertext-oauth1',
+      encryptedOauth2Token: 'v1:iv:tag:ciphertext-oauth2',
+      tokenExpiresAt: new Date('2026-06-01T00:00:00Z'),
+      lastSyncedAt: new Date('2026-05-30T12:00:00Z'),
+      lastError: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    const result = await generateJSON(mockUserId, createMockStorage({ garminConnection: garminConn }));
+
+    expect(result.connections.garmin).toBeDefined();
+    expect(result.connections.garmin).toMatchObject({
+      garminDisplayName: 'samrunner',
+      credentialsRedacted: true,
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('ciphertext-email');
+    expect(serialized).not.toContain('ciphertext-pw');
+    expect(serialized).not.toContain('ciphertext-oauth1');
+    expect(serialized).not.toContain('ciphertext-oauth2');
+    expect(serialized).not.toContain('encryptedEmail');
+    expect(serialized).not.toContain('encryptedPassword');
+  });
+
+  it('reduces push subscriptions to endpoint only (no p256dh / auth keys)', async () => {
+    const subs = [
+      {
+        id: 'ps-1',
+        endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+        p256dh: 'BASE64_PUBLIC_KEY_p256dh',
+        auth: 'BASE64_AUTH_SECRET',
+      },
+    ];
+    const result = await generateJSON(mockUserId, createMockStorage({ pushSubscriptions: subs }));
+
+    expect(result.pushSubscriptions).toEqual([{ endpoint: 'https://fcm.googleapis.com/fcm/send/abc' }]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('BASE64_PUBLIC_KEY_p256dh');
+    expect(serialized).not.toContain('BASE64_AUTH_SECRET');
+    expect(serialized).not.toContain('p256dh');
+  });
+
+  it('includes chat messages, coaching materials, custom exercises, annotations, and AI usage logs verbatim', async () => {
+    const chatMessages = [{ id: 'm1', role: 'user', content: 'hello', timestamp: new Date() }];
+    const coachingMaterials = [{ id: 'cm1', title: 'My Programming', content: 'lift heavy', type: 'principles' }];
+    const customExercises = [{ id: 'ce1', name: 'Kettlebell Halo', category: 'conditioning' }];
+    const timelineAnnotations = [{ id: 'a1', startDate: '2026-04-01', endDate: '2026-04-07', type: 'travel', note: 'work trip' }];
+    const aiUsageLogs = [{ id: 'al1', model: 'gemini-2.0-flash', feature: 'chat', inputTokens: 100, outputTokens: 50, estimatedCostCents: 0.1, createdAt: new Date() }];
+
+    const result = await generateJSON(
+      mockUserId,
+      createMockStorage({ chatMessages, coachingMaterials, customExercises, timelineAnnotations, aiUsageLogs }),
+    );
+
+    expect(result.chatMessages).toEqual(chatMessages);
+    expect(result.coachingMaterials).toEqual(coachingMaterials);
+    expect(result.customExercises).toEqual(customExercises);
+    expect(result.timelineAnnotations).toEqual(timelineAnnotations);
+    expect(result.aiUsageLogs).toEqual(aiUsageLogs);
+  });
 });

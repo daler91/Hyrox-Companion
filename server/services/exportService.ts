@@ -1,3 +1,5 @@
+import type { GarminConnection,StravaConnection } from "@shared/schema";
+
 import type { IStorage } from "../storage";
 
 interface TimelineEntry {
@@ -104,16 +106,92 @@ function buildWorkoutLogTitles(timeline: TimelineEntry[]): Record<string, string
   return titles;
 }
 
+/**
+ * Strip third-party OAuth tokens from the Strava connection before export.
+ * Tokens stay encrypted at rest specifically so a backup or memory dump
+ * doesn't leak them; shipping the decrypted values out through the GDPR
+ * data-export endpoint would defeat that purpose. The user owns their
+ * Strava account directly — we hold tokens as a proxy, not as primary data.
+ */
+function scrubStravaConnection(conn: StravaConnection): Omit<StravaConnection, "accessToken" | "refreshToken"> & { tokensRedacted: true } {
+  // Pull the secrets out and discard them. Other tooling reads
+  // `tokensRedacted: true` as the marker that this object was scrubbed.
+  const { accessToken: _accessToken, refreshToken: _refreshToken, ...rest } = conn;
+  return { ...rest, tokensRedacted: true };
+}
+
+interface ScrubbedGarminConnection {
+  garminDisplayName: GarminConnection["garminDisplayName"];
+  lastSyncedAt: GarminConnection["lastSyncedAt"];
+  lastError: GarminConnection["lastError"];
+  tokenExpiresAt: GarminConnection["tokenExpiresAt"];
+  createdAt: GarminConnection["createdAt"];
+  credentialsRedacted: true;
+}
+
+/**
+ * Strip the encrypted email/password and OAuth1/OAuth2 token blobs from the
+ * Garmin connection before export. The user supplied these credentials
+ * directly, so we have them on record — but exporting the ciphertext serves
+ * no portability purpose (the key is not exported, by design) and is risky
+ * if the export file is later mishandled.
+ */
+function scrubGarminConnection(conn: GarminConnection): ScrubbedGarminConnection {
+  return {
+    garminDisplayName: conn.garminDisplayName,
+    lastSyncedAt: conn.lastSyncedAt,
+    lastError: conn.lastError,
+    tokenExpiresAt: conn.tokenExpiresAt,
+    createdAt: conn.createdAt,
+    credentialsRedacted: true,
+  };
+}
+
+interface ScrubbedPushSubscription {
+  endpoint: string;
+}
+
+/**
+ * Keep only the user-facing endpoint URL of each push subscription. The
+ * `p256dh` / `auth` keys are message-encryption secrets a malicious party
+ * could use to push notifications to the user; they're not data the user
+ * needs back, so we never include them in the export.
+ */
+function scrubPushSubscription(sub: { endpoint: string }): ScrubbedPushSubscription {
+  return { endpoint: sub.endpoint };
+}
+
 export async function generateJSON(userId: string, storage: IStorage) {
-  // ⚡ Bolt Performance Optimization:
-  // Parallelize independent database queries to reduce total latency.
-  // Previously these were executed sequentially, causing the total time
-  // to be the sum of all three queries rather than the maximum of them.
-  const [timeline, plans, allExerciseSets] = await Promise.all([
+  // Fetch everything in parallel — independent queries against tables the
+  // user owns. Each helper is already scoped to userId on its own.
+  const [
+    user,
+    timeline,
+    plans,
+    allExerciseSets,
+    chatMessages,
+    coachingMaterials,
+    customExercises,
+    timelineAnnotations,
+    stravaConn,
+    garminConn,
+    pushSubs,
+    aiUsageLogs,
+  ] = await Promise.all([
+    storage.users.getUser(userId),
     storage.timeline.getTimeline(userId),
     storage.plans.listTrainingPlans(userId),
-    storage.analytics.getAllExerciseSetsWithDates(userId)
+    storage.analytics.getAllExerciseSetsWithDates(userId),
+    storage.users.getAllChatMessagesForExport(userId),
+    storage.coaching.listCoachingMaterials(userId),
+    storage.users.getCustomExercises(userId),
+    storage.timelineAnnotations.list(userId),
+    storage.users.getStravaConnection(userId),
+    storage.users.getGarminConnection(userId),
+    storage.push.getSubscriptionsForUser(userId),
+    storage.aiUsage.listForUser(userId),
   ]);
+
   const workoutLogTitles = buildWorkoutLogTitles(timeline);
 
   const exerciseSetRows = allExerciseSets.map((s: ExerciseSetRow) => ({
@@ -130,7 +208,27 @@ export async function generateJSON(userId: string, storage: IStorage) {
     notes: s.notes,
   }));
 
-  return { timeline, plans, exerciseSets: exerciseSetRows, exportedAt: new Date().toISOString() };
+  return {
+    // Bump if a future change rearranges or renames top-level keys so
+    // downstream consumers (the user, GDPR portability tooling) can detect
+    // which schema they're reading.
+    exportFormatVersion: 1 as const,
+    exportedAt: new Date().toISOString(),
+    profile: user ?? null,
+    timeline,
+    plans,
+    exerciseSets: exerciseSetRows,
+    chatMessages,
+    coachingMaterials,
+    customExercises,
+    timelineAnnotations,
+    connections: {
+      strava: stravaConn ? scrubStravaConnection(stravaConn) : null,
+      garmin: garminConn ? scrubGarminConnection(garminConn) : null,
+    },
+    pushSubscriptions: pushSubs.map(scrubPushSubscription),
+    aiUsageLogs,
+  };
 }
 
 const CSV_FORMULA_CHARACTERS = /^[+\-=@|]/;

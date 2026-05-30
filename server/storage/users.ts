@@ -225,6 +225,18 @@ export class UserStorage {
     return true;
   }
 
+  // Used by the GDPR Art. 15 data export endpoint to dump every chat message
+  // for the user in chronological order. Deliberately uncapped — the export
+  // is a manual, rate-limited action (5/min), so the unbounded read is the
+  // right trade-off vs. the paginated getChatMessages used by the UI.
+  async getAllChatMessagesForExport(userId: string): Promise<ChatMessage[]> {
+    return await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.userId, userId))
+      .orderBy(chatMessages.timestamp, chatMessages.id);
+  }
+
   async getStravaConnection(
     userId: string,
   ): Promise<StravaConnection | undefined> {
