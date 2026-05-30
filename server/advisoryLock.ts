@@ -60,11 +60,17 @@ export async function withPgAdvisoryLock<T>(
         // we don't hold any other locks on this session.
         try {
           await client.query("SELECT pg_advisory_unlock_all()");
+          // bearer:disable javascript_lang_logger_leak — `lockName` and `lockKey`
+          // are operational constants (cron-job names + numeric advisory-lock
+          // keys defined in server/cron.ts CRON_LOCK_KEYS); no PII or secret
+          // material flows through this log line. Matches the existing
+          // unflagged pattern in cron.ts.
           logger.warn(
             { context: "advisory-lock", lockName: options.name, lockKey: key, recovered: true },
             "Targeted unlock failed; released all session locks as fallback",
           );
         } catch (fallbackErr) {
+          // bearer:disable javascript_lang_logger_leak — same rationale as above.
           logger.error(
             { context: "advisory-lock", err: fallbackErr, lockName: options.name, lockKey: key },
             "pg_advisory_unlock_all() fallback also failed; lock may remain held until PG session reap",
