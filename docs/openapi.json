@@ -158,7 +158,7 @@
           "reps": {
             "type": "number",
             "nullable": true,
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 10000
           },
           "weight": {
@@ -182,7 +182,7 @@
           "plannedReps": {
             "type": "number",
             "nullable": true,
-            "minimum": 0,
+            "minimum": 1,
             "maximum": 10000
           },
           "plannedWeight": {
@@ -1041,7 +1041,7 @@
                           "reps": {
                             "type": "number",
                             "nullable": true,
-                            "minimum": 0,
+                            "minimum": 1,
                             "maximum": 10000
                           },
                           "weight": {
@@ -1065,7 +1065,7 @@
                           "plannedReps": {
                             "type": "number",
                             "nullable": true,
-                            "minimum": 0,
+                            "minimum": 1,
                             "maximum": 10000
                           },
                           "plannedWeight": {
@@ -1484,7 +1484,7 @@
                           "reps": {
                             "type": "number",
                             "nullable": true,
-                            "minimum": 0,
+                            "minimum": 1,
                             "maximum": 10000
                           },
                           "weight": {
@@ -1508,7 +1508,7 @@
                           "plannedReps": {
                             "type": "number",
                             "nullable": true,
-                            "minimum": 0,
+                            "minimum": 1,
                             "maximum": 10000
                           },
                           "plannedWeight": {
