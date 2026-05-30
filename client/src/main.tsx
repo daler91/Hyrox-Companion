@@ -34,6 +34,13 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN as string,
     environment: import.meta.env.MODE,
+    // The Sentry Vite plugin injects SENTRY_RELEASE into the bundle at build
+    // time when SENTRY_AUTH_TOKEN is configured. VITE_SENTRY_RELEASE is an
+    // optional manual override; both resolve to undefined in dev/contributor
+    // builds (Sentry buckets such events as releaseless, which is fine).
+    release:
+      (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) ??
+      (import.meta.env.SENTRY_RELEASE as string | undefined),
     sendDefaultPii: false,
   });
 }

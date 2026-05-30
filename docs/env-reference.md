@@ -156,8 +156,14 @@ Sentry is fully optional. A missing DSN disables init without affecting anything
 |---|---|---|---|
 | `SENTRY_DSN` | Optional | — | Server (`@sentry/node` via `configureObservability()` in `server/bootstrap/observability.ts`). |
 | `VITE_SENTRY_DSN` | Optional | — | Client (`@sentry/react` in `client/src/main.tsx`). |
+| `SENTRY_AUTH_TOKEN` | Optional (build-time) | — | Build-time only. Read by `@sentry/vite-plugin` in `vite.config.ts` and `@sentry/esbuild-plugin` in `script/build.ts`. When unset, both plugins are explicitly disabled. |
+| `SENTRY_ORG` | Optional (build-time) | — | Sentry organization slug. Same consumers as `SENTRY_AUTH_TOKEN`. |
+| `SENTRY_PROJECT_CLIENT` | Optional (build-time) | — | Sentry project slug for the browser bundle. Read by `@sentry/vite-plugin`. |
+| `SENTRY_PROJECT_SERVER` | Optional (build-time) | — | Sentry project slug for the Node bundle. Read by `@sentry/esbuild-plugin`. |
 
 The Sentry `environment` tag is automatically derived from `NODE_ENV` on the server and from Vite's `MODE` on the client — there is no separate env var for it.
+
+The `release` tag is set explicitly in both inits and resolves in this order: (1) `process.env.SENTRY_RELEASE` (server) or `import.meta.env.SENTRY_RELEASE` (client) — injected at build time by the Sentry plugin when the build-time vars above are all set; (2) `VITE_SENTRY_RELEASE` (client only, manual override); (3) `fitai-coach@${npm_package_version}` (server only). See [Integrations → Sentry Sourcemap Upload](./integrations.md#sourcemap-upload-and-release-tagging-build-time) for the full flow and Railway setup notes.
 
 ---
 

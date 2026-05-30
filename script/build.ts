@@ -1,6 +1,9 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
+import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 import { rm } from "node:fs/promises";
+
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
 try {
   await rm("dist", { recursive: true, force: true });
@@ -21,8 +24,21 @@ try {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
+    sourcemap: true,
     packages: "external",
     logLevel: "info",
+    plugins: [
+      sentryEsbuildPlugin({
+        authToken: sentryAuthToken,
+        org: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT_SERVER,
+        telemetry: false,
+        disable: !sentryAuthToken,
+        sourcemaps: {
+          filesToDeleteAfterUpload: ["./dist/index.js.map"],
+        },
+      }),
+    ],
   });
 } catch (err) {
   console.error(err);
