@@ -126,6 +126,14 @@ export default function Privacy() {
             automatically and ask you to reconnect, so they are not kept for a connection that is no
             longer working.
           </p>
+          <p>
+            Because Garmin does not publish a token-revocation endpoint, disconnecting or deleting
+            your account removes your credentials and session tokens from fitai.coach but cannot
+            actively invalidate any tokens still cached on Garmin&rsquo;s side. Those tokens expire
+            naturally over time. If you want to invalidate them immediately, change your Garmin
+            password &mdash; that revokes all existing Garmin sessions, including any our system may
+            have held.
+          </p>
 
           <h2>6. Data Security</h2>
           <ul>
