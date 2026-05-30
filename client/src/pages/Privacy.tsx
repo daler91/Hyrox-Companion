@@ -126,6 +126,14 @@ export default function Privacy() {
             automatically and ask you to reconnect, so they are not kept for a connection that is no
             longer working.
           </p>
+          <p>
+            Because Garmin does not publish a token-revocation endpoint, disconnecting or deleting
+            your account removes your credentials and session tokens from fitai.coach but cannot
+            actively invalidate any tokens still cached on Garmin&rsquo;s side. Those tokens expire
+            naturally over time. If you want to invalidate them immediately, change your Garmin
+            password &mdash; that revokes all existing Garmin sessions, including any our system may
+            have held.
+          </p>
 
           <h2>6. Data Security</h2>
           <ul>
@@ -153,8 +161,14 @@ export default function Privacy() {
           <p>You have the right to:</p>
           <ul>
             <li>
-              <strong>Access</strong> your data via the export feature in Settings (JSON or CSV
-              format).
+              <strong>Access</strong> your data via the export feature in Settings. The JSON export
+              covers everything we hold for your account: profile, preferences, workout timeline,
+              training plans, exercise sets, chat history with the AI coach, uploaded coaching
+              materials, custom exercises, timeline annotations, AI usage logs, push-notification
+              endpoints, and metadata for connected Strava and Garmin accounts. OAuth tokens,
+              stored credentials, and push-message encryption keys are intentionally excluded so a
+              leaked export file cannot be used to act on your behalf with third parties. The CSV
+              export is workout-focused and intended for spreadsheet use.
             </li>
             <li>
               <strong>Delete</strong> your account and all associated data via Settings. Deletion is

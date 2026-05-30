@@ -6,7 +6,7 @@ import { sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import type { IStorage } from "./storage";
-import { toDateStr } from "./types";
+import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek } from "./timezone";
 
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
   // Re-fetch the user so an opt-out that happened between enqueue and this
@@ -15,19 +15,23 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   if (!fresh?.email || !wantsEmail(fresh, "weeklySummary")) return false;
   user = fresh;
 
-  const dayOfWeek = now.getDay();
-  if (dayOfWeek !== 1) return false;
+  // All day-of-week and "this week" math runs in the athlete's local time
+  // (C10). The daily cron still fires once a day in UTC, but each user's
+  // Monday is detected against THEIR userTimezone, so a Sydney user gets
+  // Monday morning local and a Hawaii user gets Monday evening local
+  // instead of either always firing or never firing depending on tz.
+  const tz = user.userTimezone;
+  if (getLocalDayOfWeek(now, tz) !== 1) return false;
 
   const lastSent = user.lastWeeklySummaryAt;
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   if (lastSent && lastSent >= sevenDaysAgo) return false;
 
-  const weekEnd = new Date(now);
-  weekEnd.setDate(weekEnd.getDate() - 1);
-  const weekStart = new Date(weekEnd);
-  weekStart.setDate(weekStart.getDate() - 6);
-  const weekStartStr = toDateStr(weekStart);
-  const weekEndStr = toDateStr(weekEnd);
+  // "Last week" = the seven calendar days ending yesterday in the user's
+  // local tz, i.e. last Monday through yesterday (Sunday) inclusive.
+  const todayStr = getLocalDateStr(now, tz);
+  const weekEndStr = addDaysLocal(todayStr, -1);
+  const weekStartStr = addDaysLocal(weekEndStr, -6);
 
   const [stats, timeline] = await Promise.all([
     storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr),
@@ -79,9 +83,11 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   if (lastMissedSent && lastMissedSent >= oneDayAgo) return false;
 
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = toDateStr(yesterday);
+  // "Yesterday" is the calendar date one day before today *in the user's
+  // local tz* (C10). A Pacific user checked at 02:00 UTC is still on the
+  // previous day locally; using server UTC here would skip their reminder.
+  const todayStr = getLocalDateStr(now, user.userTimezone);
+  const yesterdayStr = addDaysLocal(todayStr, -1);
   const missed = await storage.analytics.getMissedWorkoutsForDate(user.id, yesterdayStr);
   if (missed.length === 0) return false;
 
@@ -147,7 +153,6 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     logger.info({ context: "email" }, `Cron: Enqueuing email jobs for ${usersToCheck.length} user(s)`);
 
     const now = new Date();
-    const isMonday = now.getDay() === 1;
 
     // Await every enqueue so reported counts reflect what actually made it into
     // the queue (CODEBASE_AUDIT.md §5b). Fire-and-forget would overreport when
@@ -155,12 +160,15 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     type EnqueueMeta = { userId: string; jobName: string };
     const ops: Promise<unknown>[] = [];
     const meta: EnqueueMeta[] = [];
-    // Respect per-type email toggles when enqueueing. Users who have
-    // opted out of weekly summaries shouldn't get a job enqueued for
-    // them at all — avoids wasted queue capacity and downstream
-    // processing for an email that would immediately short-circuit.
+    // Respect per-type email toggles AND per-user timezone when enqueueing.
+    // The cron fires daily, so a Hawaii user's Monday (which occurs in
+    // UTC-Monday afternoon through UTC-Tuesday morning) is still covered:
+    // when the cron fires on UTC-Tuesday, getLocalDayOfWeek resolves to 1
+    // for Hawaii but 2 for UTC users — only the Hawaii user gets a
+    // weekly-summary job enqueued on that pass (C10).
     for (const user of usersToCheck) {
-      if (isMonday && wantsEmail(user, "weeklySummary")) {
+      const isUserLocalMonday = getLocalDayOfWeek(now, user.userTimezone) === 1;
+      if (isUserLocalMonday && wantsEmail(user, "weeklySummary")) {
         ops.push(sendJobNoRetry("send-weekly-summary", { userId: user.id }));
         meta.push({ userId: user.id, jobName: "send-weekly-summary" });
       }

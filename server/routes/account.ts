@@ -26,8 +26,11 @@ const router = Router();
  * 1. Delete Clerk identity first (hard fail if this fails, since
  *    ensureUserExists would re-provision the DB row on next request).
  * 2. Best-effort Strava deauthorization.
- * 3. Delete DB user row (cascades all child rows).
- * 4. Evict user from auth seen-cache to prevent stale session use.
+ * 3. Note: Garmin upstream revocation is intentionally NOT attempted —
+ *    see the comment block at the deletion step for the rationale.
+ * 4. Delete DB user row (cascades all child rows, including the encrypted
+ *    Garmin credentials and OAuth tokens in garmin_connections).
+ * 5. Evict user from auth seen-cache to prevent stale session use.
  */
 protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete", 3) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
@@ -65,13 +68,45 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       logger.warn({ err, userId }, "Strava deauthorization failed during account deletion");
     }
 
-    // Step 3: Delete the user row — all child rows cascade.
+    // Step 3: Garmin upstream revocation — intentionally NOT attempted.
+    //
+    // Garmin Connect uses an undocumented SSO flow scraped by
+    // @flow-js/garmin-connect; the SDK exposes no logout/signOut/revoke
+    // method, and Garmin's public API has no documented endpoint to
+    // invalidate the OAuth1 / OAuth2 tokens we hold. The only known
+    // alternatives are calling Garmin's browser-flow logout URL (which
+    // expects session cookies, not API tokens) or POSTing to an
+    // undocumented internal endpoint — both are brittle, version-coupled
+    // to Garmin's internals, and would create a false sense of upstream
+    // invalidation if they silently 401.
+    //
+    // What we DO guarantee on account deletion:
+    //   - The cascade in step 4 removes the garmin_connections row, so
+    //     no copy of the encrypted credentials or tokens remains in our
+    //     system after this request returns.
+    //   - The upstream OAuth1 tokens naturally expire (Garmin's tokens
+    //     are short-lived; password-derived session tokens last days).
+    //   - Users who need immediate upstream invalidation can change
+    //     their Garmin password — surfaced in the privacy page.
+    //
+    // If Garmin ever publishes a supported revocation API in the SDK,
+    // add the call here alongside the Strava deauth in step 2 above.
+    const hadGarminConnection = Boolean(await storage.users.getGarminConnection(userId));
+    if (hadGarminConnection) {
+      logger.info(
+        { userId, upstream: "garmin", revoked: false, reason: "no_sdk_revocation_method" },
+        "Garmin credentials removed from local storage; upstream tokens will expire naturally",
+      );
+    }
+
+    // Step 4: Delete the user row — all child rows cascade, including
+    // strava_connections and garmin_connections.
     const deleted = await storage.users.deleteUser(userId);
     if (!deleted) {
       return sendNotFound(res, "User not found");
     }
 
-    // Step 4: Evict from the auth seen-cache so stale sessions can't
+    // Step 5: Evict from the auth seen-cache so stale sessions can't
     // trigger ensureUserExists within the 5-minute TTL window.
     await evictUserFromSeenCache(userId);
 

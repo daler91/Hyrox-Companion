@@ -551,6 +551,12 @@
               "miles"
             ]
           },
+          "userTimezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[^\\s]+$"
+          },
           "weeklyGoal": {
             "type": "number",
             "minimum": 1,

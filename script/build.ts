@@ -1,9 +1,30 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
-import { rm } from "node:fs/promises";
+import { rm, stat } from "node:fs/promises";
 
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+
+// Catastrophic build regressions (vite plugin crash, esbuild emitting empty
+// output) currently slip past `pnpm run build` and only surface at production
+// startup. Floors are deliberately well below today's sizes (server ~444 KB,
+// index.html ~4 KB) so they catch zero-byte / truncated output without
+// flapping on legitimate size shrinks (S20).
+const BUILD_ARTIFACT_FLOORS: { path: string; minBytes: number }[] = [
+  { path: "dist/index.js", minBytes: 50_000 },
+  { path: "dist/public/index.html", minBytes: 200 },
+];
+
+async function assertBuildArtifacts(): Promise<void> {
+  for (const { path, minBytes } of BUILD_ARTIFACT_FLOORS) {
+    const { size } = await stat(path);
+    if (size < minBytes) {
+      throw new Error(
+        `build artifact ${path} is suspiciously small (${size} bytes < ${minBytes}); likely a silent build failure`,
+      );
+    }
+  }
+}
 
 try {
   await rm("dist", { recursive: true, force: true });
@@ -40,6 +61,9 @@ try {
       }),
     ],
   });
+
+  await assertBuildArtifacts();
+  console.log("build artifacts verified");
 } catch (err) {
   console.error(err);
   process.exit(1);
