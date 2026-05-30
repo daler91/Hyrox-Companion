@@ -20,12 +20,51 @@ import { logger } from "../logger";
 const FAILURE_THRESHOLD = 5;
 const COOLDOWN_MS = 30_000;
 
+/**
+ * If a half-open probe never resolves (e.g. the AI call hangs and the
+ * caller never reaches recordBreakerSuccess/Failure), `probeInFlight`
+ * stays true forever and the breaker can't half-open again on the next
+ * cooldown window — it stays stuck open until process restart (W15).
+ *
+ * 10 seconds is far below COOLDOWN_MS so a wedged probe self-heals well
+ * before the next cooldown attempt. The deadline is best-effort: if the
+ * wrapped call eventually does call record*, the deadlined-out probe is
+ * effectively a no-op (state is already "closed" or "open").
+ */
+const PROBE_TIMEOUT_MS = 10_000;
+
 type State = "closed" | "open" | "half-open";
 
 let state: State = "closed";
 let consecutiveFailures = 0;
 let openedAt = 0;
 let probeInFlight = false;
+let probeDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearProbeDeadline(): void {
+  if (probeDeadlineTimer) {
+    clearTimeout(probeDeadlineTimer);
+    probeDeadlineTimer = null;
+  }
+}
+
+function startProbeDeadline(): void {
+  clearProbeDeadline();
+  probeDeadlineTimer = setTimeout(() => {
+    probeDeadlineTimer = null;
+    if (probeInFlight) {
+      probeInFlight = false;
+      logger.warn(
+        { timeoutMs: PROBE_TIMEOUT_MS },
+        "[ai] circuit breaker probe deadline reached without success/failure — clearing probeInFlight",
+      );
+    }
+  }, PROBE_TIMEOUT_MS);
+  // Don't keep the event loop alive just for this probe-watchdog (matters
+  // for graceful shutdown — unref returns the timer untyped on some Node
+  // versions, hence the optional-chain).
+  probeDeadlineTimer.unref?.();
+}
 
 export class CircuitBreakerOpenError extends Error {
   constructor() {
@@ -40,6 +79,7 @@ export function assertBreakerClosed(): void {
     if (Date.now() - openedAt >= COOLDOWN_MS && !probeInFlight) {
       state = "half-open";
       probeInFlight = true;
+      startProbeDeadline();
       logger.info("[ai] circuit breaker -> half-open (probe)");
       return;
     }
@@ -55,6 +95,7 @@ export function recordBreakerSuccess(): void {
   state = "closed";
   consecutiveFailures = 0;
   probeInFlight = false;
+  clearProbeDeadline();
 }
 
 /** Called after a failed request. */
@@ -63,6 +104,7 @@ export function recordBreakerFailure(): void {
     state = "open";
     openedAt = Date.now();
     probeInFlight = false;
+    clearProbeDeadline();
     logger.warn("[ai] circuit breaker -> open (probe failed)");
     return;
   }
@@ -83,4 +125,12 @@ export function __resetCircuitBreakerForTests(): void {
   consecutiveFailures = 0;
   openedAt = 0;
   probeInFlight = false;
+  clearProbeDeadline();
 }
+
+/** Test-only readers for the probe-deadline behavior introduced for W15. */
+export const __circuitBreakerInternalsForTests = {
+  isProbeInFlight: () => probeInFlight,
+  hasProbeDeadlineTimer: () => probeDeadlineTimer !== null,
+  PROBE_TIMEOUT_MS,
+} as const;
