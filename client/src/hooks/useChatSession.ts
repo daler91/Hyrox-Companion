@@ -172,8 +172,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     messagesRef.current = messages;
   }, [messages]);
 
+  // Chat history is server-of-truth and bounded; useChatMutations.ts already
+  // invalidates this key on save/clear. Disable background refetches so we
+  // don't redo the fetch on every route change / focus / reconnect (W10).
   const { data: chatHistory = [], isLoading: historyLoading } = useQuery<DBChatMessage[]>({
     queryKey: QUERY_KEYS.chatHistory,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   useEffect(() => {

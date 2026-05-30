@@ -42,6 +42,13 @@ export const logger = pino({
     'req.body.*.password',
     'req.body.*.accessToken',
     'req.body.*.refreshToken',
+    // AI provider key fields on getTextAiConfig()'s return type. Caught at both
+    // top level and one nested level so `logger.info({ config }, "...")` and
+    // `logger.info(config, "...")` both redact (W1).
+    'openAiCompatibleApiKey',
+    'anthropicApiKey',
+    '*.openAiCompatibleApiKey',
+    '*.anthropicApiKey',
   ],
   transport: isDev
     ? {
