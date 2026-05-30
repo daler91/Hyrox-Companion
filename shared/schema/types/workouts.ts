@@ -168,14 +168,19 @@ export const exerciseSetSchema = withBlockStepPairing(
   z
     .object({
       setNumber: z.number().min(1).max(100).optional().nullable(),
-      reps: z.number().min(0).max(10_000).optional().nullable(),
+      // A logged set with 0 reps is meaningless — there's no such thing as
+      // "I did a set of zero reps". The parent-level incomingExerciseSchema
+      // already enforces .min(1) on reps; this tightens the per-set schema
+      // to match (W19). weight/distance/time stay at .min(0) because 0 is
+      // semantically valid for them (bodyweight = 0 kg, etc.).
+      reps: z.number().min(1).max(10_000).optional().nullable(),
       weight: z.number().min(0).max(2_000).optional().nullable(),
       distance: z.number().min(0).max(1_000_000).optional().nullable(),
       time: z.number().min(0).max(86_400).optional().nullable(),
       // Planned (prescribed) values, captured at log creation. Optional so
-      // ad-hoc logs without a prescription can simply omit them. Same numeric
-      // bounds as the actual fields to keep validation symmetric.
-      plannedReps: z.number().min(0).max(10_000).optional().nullable(),
+      // ad-hoc logs without a prescription can simply omit them. plannedReps
+      // tightened to match reps for consistency.
+      plannedReps: z.number().min(1).max(10_000).optional().nullable(),
       plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
       plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
       plannedTime: z.number().min(0).max(86_400).optional().nullable(),
@@ -456,7 +461,10 @@ export type StructureBlockInput = z.infer<typeof structureBlockSchema>;
 // prescription baseline after a log is created and corrupt downstream
 // plan-vs-actual adherence reporting.
 const measurableSetFields = {
-  reps: z.number().int().min(0).max(10_000).nullable().optional(),
+  // Same .min(1) tightening as exerciseSetSchema.reps (W19) — a logged set
+  // with 0 reps is meaningless. weight/distance/time stay at .min(0) because
+  // 0 is semantically valid (bodyweight, unmeasured distance, etc.).
+  reps: z.number().int().min(1).max(10_000).nullable().optional(),
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
   time: z.number().min(0).max(86_400).nullable().optional(),
