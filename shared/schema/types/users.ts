@@ -4,9 +4,17 @@ import { z } from "../zod";
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
+// IANA timezone validation. We keep the format check shallow here (any
+// non-empty string with no whitespace) and defer the authoritative check to
+// the route handler, which uses Intl.DateTimeFormat to reject names the
+// platform doesn't recognize — the schema layer doesn't have access to that
+// in the browser/edge runtime in a portable way.
+const ianaTimezoneSchema = z.string().min(1).max(64).regex(/^[^\s]+$/, "must be a non-whitespace IANA name");
+
 export const updateUserPreferencesSchema = z.object({
   weightUnit: z.enum(["kg", "lbs"]).optional(),
   distanceUnit: z.enum(["km", "miles"]).optional(),
+  userTimezone: ianaTimezoneSchema.optional(),
   weeklyGoal: z.number().min(1).max(14).optional(),
   // Master toggle — when false, no email is ever sent regardless of
   // the per-type flags below. Kept for backward compatibility with

@@ -29,6 +29,12 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url", { length: 255 }),
   weightUnit: varchar("weight_unit", { length: 255 }).default("kg"),
   distanceUnit: varchar("distance_unit", { length: 255 }).default("km"),
+  // IANA timezone name (e.g. "America/Chicago", "Europe/London") used by the
+  // email scheduler and any "this week" / "yesterday" math that must align
+  // with the athlete's local calendar rather than server UTC (review C10).
+  // Auto-detected on the client via Intl.DateTimeFormat after first sign-in;
+  // defaults to "UTC" so the column is non-null pre-detection.
+  userTimezone: varchar("user_timezone", { length: 64 }).default("UTC").notNull(),
   weeklyGoal: integer("weekly_goal").default(5),
   // Master email toggle. When false, no email is ever sent. When true,
   // the per-type toggles below decide which email categories actually
