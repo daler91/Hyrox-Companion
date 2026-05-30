@@ -123,6 +123,7 @@ export const planDays = pgTable("plan_days", {
   index("idx_plan_days_status").on(table.status),
   index("idx_plan_days_plan_week").on(table.planId, table.weekNumber),
   index("idx_plan_days_plan_status").on(table.planId, table.status),
+  index("idx_plan_days_plan_scheduled").on(table.planId, table.scheduledDate),
 ]);
 
 export const workoutLogs = pgTable("workout_logs", {

@@ -379,6 +379,13 @@
       "when": 1780078353069,
       "tag": "0053_dizzy_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1780165429616,
+      "tag": "0054_hot_roxanne_simpson",
+      "breakpoints": true
     }
   ]
 }
