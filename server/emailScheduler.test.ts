@@ -15,6 +15,33 @@ vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// Shared scheduler-fixture defaults. Tests pass only the fields they actually
+// care about (id, email, userTimezone overrides, flag toggles); everything
+// else falls through to the defaults below. Factored to keep the duplication
+// detector happy and to make per-test intent obvious.
+type SchedulerUserOverrides = {
+  id: string | number;
+  email: string;
+  userTimezone?: string;
+  emailNotifications?: boolean;
+  emailWeeklySummary?: boolean | null;
+  emailMissedReminder?: boolean | null;
+  lastWeeklySummaryAt?: Date | null;
+  lastMissedReminderAt?: Date | null;
+};
+
+function makeMockUser(overrides: SchedulerUserOverrides) {
+  return {
+    userTimezone: 'UTC',
+    emailNotifications: true,
+    emailWeeklySummary: true,
+    emailMissedReminder: true,
+    lastWeeklySummaryAt: null,
+    lastMissedReminderAt: null,
+    ...overrides,
+  };
+}
+
 describe('runEmailCronJob', () => {
   let mockStorage: IStorage;
 
@@ -27,16 +54,7 @@ describe('runEmailCronJob', () => {
       plans: { markMissedPlanDays: vi.fn().mockResolvedValue(0) },
       users: {
         getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
-          {
-            id: 1,
-            email: 'test@example.com',
-            userTimezone: 'UTC',
-            emailNotifications: true,
-            emailWeeklySummary: true,
-            emailMissedReminder: true,
-            lastWeeklySummaryAt: null,
-            lastMissedReminderAt: null,
-          },
+          makeMockUser({ id: 1, email: 'test@example.com' }),
         ]),
       },
     } as unknown as IStorage;
@@ -62,26 +80,8 @@ describe('runEmailCronJob', () => {
     const { sendJobNoRetry } = await import('./queue');
 
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-      {
-        id: 1,
-        email: 'user1@example.com',
-        userTimezone: 'UTC',
-        emailNotifications: true,
-        emailWeeklySummary: true,
-        emailMissedReminder: true,
-        lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null,
-      },
-      {
-        id: 2,
-        email: 'user2@example.com',
-        userTimezone: 'UTC',
-        emailNotifications: true,
-        emailWeeklySummary: true,
-        emailMissedReminder: true,
-        lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null,
-      },
+      makeMockUser({ id: 1, email: 'user1@example.com' }),
+      makeMockUser({ id: 2, email: 'user2@example.com' }),
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -119,16 +119,7 @@ describe('runEmailCronJob', () => {
   it('skips the weekly summary when the user has opted out via emailWeeklySummary=false', async () => {
     const { sendJobNoRetry } = await import('./queue');
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-      {
-        id: 'user-weekly-off',
-        email: 'weekly-off@example.com',
-        userTimezone: 'UTC',
-        emailNotifications: true,
-        emailWeeklySummary: false,
-        emailMissedReminder: true,
-        lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null,
-      },
+      makeMockUser({ id: 'user-weekly-off', email: 'weekly-off@example.com', emailWeeklySummary: false }),
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -143,16 +134,7 @@ describe('runEmailCronJob', () => {
   it('skips the missed reminder when the user has opted out via emailMissedReminder=false', async () => {
     const { sendJobNoRetry } = await import('./queue');
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-      {
-        id: 'user-missed-off',
-        email: 'missed-off@example.com',
-        userTimezone: 'UTC',
-        emailNotifications: true,
-        emailWeeklySummary: true,
-        emailMissedReminder: false,
-        lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null,
-      },
+      makeMockUser({ id: 'user-missed-off', email: 'missed-off@example.com', emailMissedReminder: false }),
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -165,16 +147,7 @@ describe('runEmailCronJob', () => {
 
   it('enqueues nothing for a user with both per-type flags off even if master is on', async () => {
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-      {
-        id: 'user-both-off',
-        email: 'both-off@example.com',
-        userTimezone: 'UTC',
-        emailNotifications: true,
-        emailWeeklySummary: false,
-        emailMissedReminder: false,
-        lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null,
-      },
+      makeMockUser({ id: 'user-both-off', email: 'both-off@example.com', emailWeeklySummary: false, emailMissedReminder: false }),
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -185,16 +158,7 @@ describe('runEmailCronJob', () => {
 
   it('treats null per-type email flags as not opted in', async () => {
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-      {
-        id: 'user-null-flags',
-        email: 'null-flags@example.com',
-        userTimezone: 'UTC',
-        emailNotifications: true,
-        emailWeeklySummary: null,
-        emailMissedReminder: null,
-        lastWeeklySummaryAt: null,
-        lastMissedReminderAt: null,
-      },
+      makeMockUser({ id: 'user-null-flags', email: 'null-flags@example.com', emailWeeklySummary: null, emailMissedReminder: null }),
     ]);
 
     const result = await runEmailCronJob(mockStorage);
@@ -210,26 +174,8 @@ describe('runEmailCronJob', () => {
       vi.setSystemTime(new Date('2026-05-31T23:00:00Z'));
 
       mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-        {
-          id: 'sydney-user',
-          email: 'sydney@example.com',
-          userTimezone: 'Australia/Sydney',
-          emailNotifications: true,
-          emailWeeklySummary: true,
-          emailMissedReminder: false,
-          lastWeeklySummaryAt: null,
-          lastMissedReminderAt: null,
-        },
-        {
-          id: 'utc-user',
-          email: 'utc@example.com',
-          userTimezone: 'UTC',
-          emailNotifications: true,
-          emailWeeklySummary: true,
-          emailMissedReminder: false,
-          lastWeeklySummaryAt: null,
-          lastMissedReminderAt: null,
-        },
+        makeMockUser({ id: 'sydney-user', email: 'sydney@example.com', userTimezone: 'Australia/Sydney', emailMissedReminder: false }),
+        makeMockUser({ id: 'utc-user', email: 'utc@example.com', emailMissedReminder: false }),
       ]);
 
       const result = await runEmailCronJob(mockStorage);
@@ -247,16 +193,7 @@ describe('runEmailCronJob', () => {
       vi.setSystemTime(new Date('2026-06-02T06:00:00Z'));
 
       mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-        {
-          id: 'hawaii-user',
-          email: 'hi@example.com',
-          userTimezone: 'Pacific/Honolulu',
-          emailNotifications: true,
-          emailWeeklySummary: true,
-          emailMissedReminder: false,
-          lastWeeklySummaryAt: null,
-          lastMissedReminderAt: null,
-        },
+        makeMockUser({ id: 'hawaii-user', email: 'hi@example.com', userTimezone: 'Pacific/Honolulu', emailMissedReminder: false }),
       ]);
 
       const result = await runEmailCronJob(mockStorage);
