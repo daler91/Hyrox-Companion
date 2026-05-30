@@ -3,6 +3,8 @@ import { and, eq, gt, sql, sum } from "drizzle-orm";
 
 import { db } from "../db";
 
+export type AiUsageLog = typeof aiUsageLogs.$inferSelect;
+
 export class AiUsageStorage {
   async insertUsageLog(log: {
     userId: string;
@@ -37,5 +39,18 @@ export class AiUsageStorage {
       .delete(aiUsageLogs)
       .where(sql`${aiUsageLogs.createdAt} < ${cutoff}`);
     return result.rowCount ?? 0;
+  }
+
+  /**
+   * Return every AI usage row for the user, oldest first. Used by the GDPR
+   * data export. The cron in server/cron.ts trims this table to the last 7
+   * days, so the unbounded read is naturally bounded by retention.
+   */
+  async listForUser(userId: string): Promise<AiUsageLog[]> {
+    return await db
+      .select()
+      .from(aiUsageLogs)
+      .where(eq(aiUsageLogs.userId, userId))
+      .orderBy(aiUsageLogs.createdAt);
   }
 }
