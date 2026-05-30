@@ -73,4 +73,55 @@ describe("withPgAdvisoryLock", () => {
     );
     expect(release).toHaveBeenCalledTimes(1);
   });
+
+  describe("unlock failure fallback (W16)", () => {
+    it("falls back to pg_advisory_unlock_all() when the targeted unlock rejects", async () => {
+      const query = vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ acquired: true }] }) // acquire OK
+        .mockRejectedValueOnce(new Error("network blip during unlock")) // targeted unlock fails
+        .mockResolvedValueOnce({ rows: [] }); // unlock_all succeeds
+      const release = vi.fn();
+      const pool: AdvisoryLockPool = { connect: vi.fn().mockResolvedValue({ query, release }) };
+      const run = vi.fn().mockResolvedValue("done");
+
+      const result = await withPgAdvisoryLock(pool, { key: 4_200_004n, name: "unlock-fail" }, run);
+
+      expect(result).toEqual({ acquired: true, value: "done" });
+      expect(query).toHaveBeenCalledTimes(3);
+      expect(query).toHaveBeenNthCalledWith(3, "SELECT pg_advisory_unlock_all()");
+      expect(release).toHaveBeenCalledTimes(1);
+    });
+
+    it("releases the client even when both the targeted unlock and the fallback fail", async () => {
+      const query = vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ acquired: true }] })
+        .mockRejectedValueOnce(new Error("targeted unlock failed"))
+        .mockRejectedValueOnce(new Error("unlock_all failed too"));
+      const release = vi.fn();
+      const pool: AdvisoryLockPool = { connect: vi.fn().mockResolvedValue({ query, release }) };
+      const run = vi.fn().mockResolvedValue("done");
+
+      const result = await withPgAdvisoryLock(pool, { key: 4_200_005n, name: "double-fail" }, run);
+
+      // The function must still resolve normally — unlock failures are
+      // logged but never thrown to the caller (would otherwise stomp on
+      // run()'s successful return value).
+      expect(result).toEqual({ acquired: true, value: "done" });
+      expect(query).toHaveBeenCalledTimes(3);
+      expect(release).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not call unlock_all when the targeted unlock succeeds", async () => {
+      const { pool, query, release } = makePool(true);
+      const run = vi.fn().mockResolvedValue("done");
+
+      await withPgAdvisoryLock(pool, { key: 4_200_006n, name: "happy-path" }, run);
+
+      expect(query).toHaveBeenCalledTimes(2);
+      expect(query).not.toHaveBeenCalledWith("SELECT pg_advisory_unlock_all()");
+      expect(release).toHaveBeenCalledTimes(1);
+    });
+  });
 });
