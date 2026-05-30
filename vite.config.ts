@@ -1,8 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
+
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
 export default defineConfig({
   plugins: [
@@ -90,6 +93,16 @@ export default defineConfig({
         ],
       },
     }),
+    sentryVitePlugin({
+      authToken: sentryAuthToken,
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT_CLIENT,
+      telemetry: false,
+      disable: !sentryAuthToken,
+      sourcemaps: {
+        filesToDeleteAfterUpload: ["./dist/public/**/*.map"],
+      },
+    }),
   ],
   resolve: {
     dedupe: ["react", "react-dom"],
@@ -103,6 +116,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    sourcemap: "hidden",
     rollupOptions: {
       output: {
         manualChunks: {

@@ -3,6 +3,16 @@ import * as Sentry from "@sentry/node";
 import { env } from "../env";
 import { logger, SENSITIVE_REQUEST_HEADERS } from "../logger";
 
+function resolveSentryRelease(): string | undefined {
+  // The Sentry esbuild plugin injects a release identifier into the bundle at
+  // build time when SENTRY_AUTH_TOKEN is configured. If absent (local dev,
+  // contributor builds), fall back to the package version so events still
+  // group sensibly by deployment.
+  if (process.env.SENTRY_RELEASE) return process.env.SENTRY_RELEASE;
+  const version = process.env.npm_package_version;
+  return version ? `fitai-coach@${version}` : undefined;
+}
+
 export function configureObservability(deps: { init?: typeof Sentry.init; getClient?: typeof Sentry.getClient } = {}): void {
   const init = deps.init ?? Sentry.init;
   const getClient = deps.getClient ?? Sentry.getClient;
@@ -15,6 +25,7 @@ export function configureObservability(deps: { init?: typeof Sentry.init; getCli
   init({
     dsn: env.SENTRY_DSN,
     environment: env.NODE_ENV || "development",
+    release: resolveSentryRelease(),
     sendDefaultPii: false,
     tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
     beforeSend(event) {
