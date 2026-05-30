@@ -161,8 +161,14 @@ export default function Privacy() {
           <p>You have the right to:</p>
           <ul>
             <li>
-              <strong>Access</strong> your data via the export feature in Settings (JSON or CSV
-              format).
+              <strong>Access</strong> your data via the export feature in Settings. The JSON export
+              covers everything we hold for your account: profile, preferences, workout timeline,
+              training plans, exercise sets, chat history with the AI coach, uploaded coaching
+              materials, custom exercises, timeline annotations, AI usage logs, push-notification
+              endpoints, and metadata for connected Strava and Garmin accounts. OAuth tokens,
+              stored credentials, and push-message encryption keys are intentionally excluded so a
+              leaked export file cannot be used to act on your behalf with third parties. The CSV
+              export is workout-focused and intended for spreadsheet use.
             </li>
             <li>
               <strong>Delete</strong> your account and all associated data via Settings. Deletion is
