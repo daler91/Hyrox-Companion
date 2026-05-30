@@ -1,0 +1,1 @@
+CREATE INDEX "idx_plan_days_plan_scheduled" ON "plan_days" USING btree ("plan_id","scheduled_date");
