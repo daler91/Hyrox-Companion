@@ -58,13 +58,25 @@ export function sumCoverageSets<T extends CoverageWork, K extends string>(
 }
 
 export function findTopCoverage<T extends CoverageWork>(items: readonly T[]): T | null {
-  return [...items]
-    .filter(hasCoverageWork)
-    .sort((a, b) => (
-      b.totalSets - a.totalSets ||
-      b.sessionCount - a.sessionCount ||
-      a.label.localeCompare(b.label)
-    ))[0] ?? null;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
+  // to avoid unnecessary intermediate allocations and overhead when finding a single maximum.
+  let top: T | null = null;
+  for (const item of items) {
+    if (!hasCoverageWork(item)) continue;
+    if (!top) {
+      top = item;
+      continue;
+    }
+    const cmp =
+      item.totalSets - top.totalSets ||
+      item.sessionCount - top.sessionCount ||
+      top.label.localeCompare(item.label);
+    if (cmp > 0) {
+      top = item;
+    }
+  }
+  return top;
 }
 
 export function findPriorityGap<T extends CoverageWork>(
@@ -79,9 +91,17 @@ export function findPriorityGap<T extends CoverageWork>(
     };
   }
 
-  const stale = [...items]
-    .filter((item) => item.daysSince !== null && item.daysSince > STALE_AFTER_DAYS)
-    .sort((a, b) => (b.daysSince ?? 0) - (a.daysSince ?? 0))[0];
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
+  // to avoid unnecessary intermediate allocations and overhead when finding a single extremum.
+  let stale: T | null = null;
+  for (const item of items) {
+    if (item.daysSince !== null && item.daysSince > STALE_AFTER_DAYS) {
+      if (!stale || item.daysSince > (stale.daysSince ?? 0)) {
+        stale = item;
+      }
+    }
+  }
   if (!stale) return null;
 
   return {

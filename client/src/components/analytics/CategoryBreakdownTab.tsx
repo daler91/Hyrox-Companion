@@ -78,8 +78,20 @@ function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage
     ),
   ];
   const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
-  const leastLoaded = [...trainedPatterns]
-    .sort((a, b) => a.totalSets - b.totalSets || a.label.localeCompare(b.label))[0] ?? null;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
+  // to avoid unnecessary intermediate allocations and overhead when finding a single minimum.
+  let leastLoaded: MovementPatternCoverage | null = null;
+  for (const item of trainedPatterns) {
+    if (!leastLoaded) {
+      leastLoaded = item;
+      continue;
+    }
+    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
+    if (cmp < 0) {
+      leastLoaded = item;
+    }
+  }
 
   const metrics: AnalysisMetric[] = [
     {
