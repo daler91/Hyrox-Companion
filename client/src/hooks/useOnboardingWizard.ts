@@ -24,6 +24,8 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const [step, setStep] = useState<OnboardingWizardStep>("welcome");
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [distanceUnit, setDistanceUnit] = useState<"km" | "miles">("km");
+  const [division, setDivision] = useState<"open" | "pro">("open");
+  const [gender, setGender] = useState<"male" | "female" | "prefer_not_to_say">("prefer_not_to_say");
   const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
   const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
   const [mafAge, setMafAge] = useState("");
@@ -117,7 +119,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
     if (step === "units") {
       try {
-        await prefsMutation.mutateAsync({ weightUnit, distanceUnit });
+        await prefsMutation.mutateAsync({ weightUnit, distanceUnit, division, gender });
       } catch {
         toast({
           title: "Could not save preferences",
@@ -207,6 +209,10 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     setWeightUnit,
     distanceUnit,
     setDistanceUnit,
+    division,
+    setDivision,
+    gender,
+    setGender,
     selectedGoal,
     setSelectedGoal,
     trainingStyleId,

@@ -27,7 +27,7 @@ const TITLES: Record<OnboardingWizardStep, string> = {
 };
 const DESCS: Record<OnboardingWizardStep, string> = {
   welcome: "Let's get you set up in just a few steps.",
-  units: "Choose your preferred measurement units.",
+  units: "Choose your measurement units and HYROX race profile.",
   goal: "This helps us tailor your experience.",
   plan: "How would you like to start training?",
   schedule: "Pick the first day of your 8-week program.",
@@ -44,6 +44,10 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setWeightUnit,
     distanceUnit,
     setDistanceUnit,
+    division,
+    setDivision,
+    gender,
+    setGender,
     selectedGoal,
     setSelectedGoal,
     trainingStyleId,
@@ -107,8 +111,12 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
         <UnitsStep
           weightUnit={weightUnit}
           distanceUnit={distanceUnit}
+          division={division}
+          gender={gender}
           onWeightUnitChange={setWeightUnit}
           onDistanceUnitChange={setDistanceUnit}
+          onDivisionChange={setDivision}
+          onGenderChange={setGender}
         />
       )}
       {step === "goal" && (

@@ -114,3 +114,52 @@ export interface TrainingOverview {
   trainingLoad: TrainingLoadOverview;
 }
 
+// Analytics — Race Predictor (predicted HYROX finish time)
+
+export type RacePredictionConfidence = "low" | "medium" | "high";
+/** Where a segment estimate came from: the athlete's logged splits, the
+ *  division/gender benchmark, or a blend of the two. */
+export type RacePredictionBasis = "logged" | "benchmark" | "blended";
+/** Why the AI estimate was not used (deterministic fallback returned instead). */
+export type RacePredictionAiUnavailableReason =
+  | "ai_disabled"
+  | "ai_consent_off"
+  | "ai_budget_exceeded"
+  | "ai_error";
+
+export interface RaceSegmentPrediction {
+  /** 1-based race order (1..16). */
+  index: number;
+  kind: "run" | "station";
+  /** Canonical exercise key (e.g. "skierg", "run_1k"). */
+  exerciseName: string;
+  label: string;
+  estimatedSeconds: number;
+  basis: RacePredictionBasis;
+  confidence: RacePredictionConfidence;
+  /** Number of logged sets that informed this segment (0 when benchmark-only). */
+  sampleSize: number;
+}
+
+export interface RacePredictionResponse {
+  totalFinishSeconds: number;
+  segments: RaceSegmentPrediction[];
+  /** True when the AI estimation layer produced this prediction. */
+  aiUsed: boolean;
+  aiUnavailableReason?: RacePredictionAiUnavailableReason | null;
+  overallConfidence: RacePredictionConfidence;
+  /** AI narrative (markdown). Null on the deterministic fallback path. */
+  narrative: string | null;
+  division: "open" | "pro";
+  gender: "male" | "female" | "prefer_not_to_say" | null;
+  /** True when gender was withheld and a neutral standard was assumed. */
+  genderAssumed: boolean;
+  dataCompleteness: {
+    stationsWithData: number;
+    totalStations: number;
+    hasRunData: boolean;
+  };
+  /** ISO timestamp the prediction was generated. */
+  generatedAt: string;
+}
+

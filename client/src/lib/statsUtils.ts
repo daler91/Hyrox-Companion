@@ -99,3 +99,22 @@ export function calculateStreak(completedDates: Set<string>): number {
 
   return streak;
 }
+
+/** Format a duration in seconds as "H:MM:SS" (e.g. 5732 → "1:35:32"). */
+export function formatSecondsToClock(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return `${hours}:${mm}:${ss}`;
+}
+
+/** Format a split in seconds as "M:SS" (e.g. 272 → "4:32"). */
+export function formatSecondsToMmSs(totalSeconds: number): string {
+  const safe = Math.max(0, Math.round(totalSeconds));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}

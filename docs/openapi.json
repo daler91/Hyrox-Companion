@@ -598,6 +598,23 @@
           "onboardingCompleted": {
             "type": "boolean"
           },
+          "division": {
+            "type": "string",
+            "enum": [
+              "open",
+              "pro"
+            ]
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "male",
+              "female",
+              "prefer_not_to_say",
+              null
+            ]
+          },
           "mafAge": {
             "type": "integer",
             "nullable": true,

@@ -62,6 +62,8 @@ interface PreferencesSnapshot
     "weeklyGoal" | "userTimezone" | "trainingStyleId" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
   > {
   weeklyGoal: string;
+  division: string;
+  gender: string;
   trainingStyleId: string;
   mafAge: number | null;
   mafConsistency: Exclude<MafConsistencyInput, ""> | null;
@@ -92,6 +94,8 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
   return {
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
+    division: preferences.division || "open",
+    gender: preferences.gender ?? "prefer_not_to_say",
     weeklyGoal: String(preferences.weeklyGoal || 5),
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
@@ -110,6 +114,8 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
   return {
     weightUnit: payload.weightUnit,
     distanceUnit: payload.distanceUnit,
+    division: payload.division ?? "open",
+    gender: payload.gender ?? "prefer_not_to_say",
     weeklyGoal: String(payload.weeklyGoal),
     emailNotifications: payload.emailNotifications,
     emailWeeklySummary: payload.emailWeeklySummary,
@@ -128,6 +134,8 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
   return {
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
+    division: snapshot.division,
+    gender: snapshot.gender,
     weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
@@ -149,6 +157,8 @@ export default function Settings() {
   const search = useSearch();
   const [weightUnit, setWeightUnit] = useState("kg");
   const [distanceUnit, setDistanceUnit] = useState("km");
+  const [division, setDivision] = useState("open");
+  const [gender, setGender] = useState("prefer_not_to_say");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [emailWeeklySummary, setEmailWeeklySummary] = useState(false);
@@ -178,6 +188,8 @@ export default function Settings() {
   const defaultSnapshotRef = useRef<PreferencesSnapshot>({
     weightUnit: "kg",
     distanceUnit: "km",
+    division: "open",
+    gender: "prefer_not_to_say",
     weeklyGoal: "5",
     emailNotifications: false,
     emailWeeklySummary: false,
@@ -209,6 +221,8 @@ export default function Settings() {
     (): PreferencesSnapshot => ({
       weightUnit,
       distanceUnit,
+      division,
+      gender,
       weeklyGoal,
       emailNotifications,
       emailWeeklySummary,
@@ -224,6 +238,8 @@ export default function Settings() {
     [
       weightUnit,
       distanceUnit,
+      division,
+      gender,
       weeklyGoal,
       emailNotifications,
       emailWeeklySummary,
@@ -282,6 +298,8 @@ export default function Settings() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setWeightUnit(preferences.weightUnit || "kg");
       setDistanceUnit(preferences.distanceUnit || "km");
+      setDivision(preferences.division || "open");
+      setGender(preferences.gender ?? "prefer_not_to_say");
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
       setEmailNotifications(preferences.emailNotifications ?? false);
       setEmailWeeklySummary(preferences.emailWeeklySummary ?? false);
@@ -336,6 +354,8 @@ export default function Settings() {
               // persistence completes.
               setWeightUnit(previous.weightUnit);
               setDistanceUnit(previous.distanceUnit);
+              setDivision(previous.division);
+              setGender(previous.gender);
               setWeeklyGoal(previous.weeklyGoal);
               setEmailNotifications(previous.emailNotifications);
               setEmailWeeklySummary(previous.emailWeeklySummary);
@@ -518,6 +538,8 @@ export default function Settings() {
       <PreferencesSection
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
+        division={division}
+        gender={gender}
         weeklyGoal={weeklyGoal}
         emailNotifications={emailNotifications}
         emailWeeklySummary={emailWeeklySummary}
@@ -529,6 +551,12 @@ export default function Settings() {
         }}
         onDistanceUnitChange={(v) => {
           setDistanceUnit(v);
+        }}
+        onDivisionChange={(v) => {
+          setDivision(v);
+        }}
+        onGenderChange={(v) => {
+          setGender(v);
         }}
         onWeeklyGoalChange={(v) => {
           setWeeklyGoal(v);
