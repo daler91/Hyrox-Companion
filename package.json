@@ -265,6 +265,8 @@
     "tmp": "^0.2.6"
   },
   "devDependencies": {
+    "@sentry/esbuild-plugin": "^5.3.0",
+    "@sentry/vite-plugin": "^5.3.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/jest-dom": "^6.9.1",

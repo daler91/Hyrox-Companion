@@ -535,6 +535,10 @@ Sentry provides centralized error tracking for both server and client. It is ent
 |---|---|---|
 | `SENTRY_DSN` | No | Server DSN. When absent, the `@sentry/node` init is skipped. |
 | `VITE_SENTRY_DSN` | No | Client DSN. When absent, `Sentry.init` on the client is skipped. |
+| `SENTRY_AUTH_TOKEN` | No (build-time) | Personal/organization auth token (scopes: `project:releases`, `org:read`). When set alongside `SENTRY_ORG` + `SENTRY_PROJECT_CLIENT` + `SENTRY_PROJECT_SERVER`, the build uploads sourcemaps and tags a release. |
+| `SENTRY_ORG` | No (build-time) | Sentry organization slug. |
+| `SENTRY_PROJECT_CLIENT` | No (build-time) | Sentry project slug for the browser bundle. |
+| `SENTRY_PROJECT_SERVER` | No (build-time) | Sentry project slug for the Node bundle. |
 
 The server Sentry environment tag derives from `NODE_ENV`; the client tag derives
 from Vite's `MODE`. There is no separate `SENTRY_ENVIRONMENT` variable. Because
@@ -547,6 +551,22 @@ unless the developer explicitly opts in by setting the DSN variables.
 - **Client**: render-time errors caught by `Sentry.ErrorBoundary` / `FeatureErrorBoundaryWrapper`, plus any explicit `Sentry.captureException` calls inside fetch wrappers.
 
 PII-sensitive payloads are scrubbed before being sent. The server `beforeSend` hook in `server/bootstrap/observability.ts` strips request body and query string, cookies, the `authorization`/`cookie`/`x-csrf-token`/`x-idempotency-key` headers, and the user's `email`, `username`, and `ip_address`. The server trace sample rate is `0.1` in production and `1.0` otherwise; `sendDefaultPii` is `false`.
+
+### Sourcemap Upload and Release Tagging (Build-Time)
+
+Both bundles emit hidden sourcemaps (`build.sourcemap: "hidden"` in `vite.config.ts`, `sourcemap: true` in `script/build.ts`) and run through the official Sentry build plugins:
+
+- `@sentry/vite-plugin` is the last plugin in `vite.config.ts` and handles the client bundle.
+- `@sentry/esbuild-plugin` is the only plugin in the esbuild call in `script/build.ts` and handles the server bundle.
+
+When `SENTRY_AUTH_TOKEN` is unset, both plugins are explicitly disabled (`disable: !sentryAuthToken`) and the build proceeds identically to today — sourcemaps are emitted locally but not uploaded. When the auth token is present alongside `SENTRY_ORG` and the appropriate `SENTRY_PROJECT_*` slugs, the plugins upload the sourcemaps to Sentry, create a release identified by the current git SHA, and delete the local `.map` files (`filesToDeleteAfterUpload`) so they are not shipped to the runtime artifact.
+
+Both Sentry inits also pass an explicit `release` field:
+
+- Server (`server/bootstrap/observability.ts`): reads `process.env.SENTRY_RELEASE` first (the value injected by the esbuild plugin at build time), then falls back to `fitai-coach@${npm_package_version}`.
+- Client (`client/src/main.tsx`): reads `import.meta.env.VITE_SENTRY_RELEASE` first (a manual override), then `import.meta.env.SENTRY_RELEASE` (the value injected by the Vite plugin at build time). Resolves to `undefined` in dev/contributor builds; Sentry buckets such events as releaseless, which is acceptable.
+
+**Railway:** the production build runs on Railway (`pnpm install --frozen-lockfile && pnpm run build` via `railway.toml`). To enable sourcemap upload, set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT_CLIENT`, and `SENTRY_PROJECT_SERVER` as build-time environment variables in the Railway service settings. They are not required at runtime.
 
 ---
 
