@@ -49,4 +49,43 @@ describe('ChatMessage', () => {
     const timestampElements = screen.queryByText(/AM|PM|\d{1,2}:\d{2}/);
     expect(timestampElements).not.toBeInTheDocument();
   });
+
+  describe('assistant XSS sanitization (C2)', () => {
+    it('does not render a <script> tag injected into AI markdown', () => {
+      const { container } = render(
+        <ChatMessage
+          role="assistant"
+          content={'before<script>window.__xssMarker = true;</script>after'}
+        />,
+      );
+      // rehype-sanitize must drop the script element entirely (react-markdown
+      // would already refuse to execute it, but the element shouldn't appear
+      // in the DOM either).
+      expect(container.querySelector('script')).toBeNull();
+      expect((window as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+    });
+
+    it('strips javascript: URLs from markdown links', () => {
+      const { container } = render(
+        <ChatMessage
+          role="assistant"
+          content={'[click me](javascript:alert(1))'}
+        />,
+      );
+      // The link element may or may not render; what matters is that no
+      // javascript:-scheme href survives in the rendered HTML.
+      expect(container.innerHTML).not.toMatch(/href=["']?javascript:/i);
+    });
+
+    it('strips inline event handlers from raw HTML in markdown', () => {
+      const { container } = render(
+        <ChatMessage
+          role="assistant"
+          content={'<img src=x onerror="window.__xssMarker = true">'}
+        />,
+      );
+      expect(container.innerHTML).not.toMatch(/onerror=/i);
+      expect((window as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+    });
+  });
 });

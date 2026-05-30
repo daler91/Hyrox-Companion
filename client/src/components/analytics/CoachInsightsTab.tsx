@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -166,7 +167,11 @@ export function CoachInsightsTab() {
                 className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-headings:my-3"
                 data-testid="text-coach-insights-content"
               >
-                <ReactMarkdown>{data.insights}</ReactMarkdown>
+                {/* AI output is rendered as markdown; rehype-sanitize strips
+                    script tags, event handlers, and javascript:/data: URLs so a
+                    compromised provider or prompt-injection attempt can't run
+                    arbitrary JS in the user's session (C2). */}
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{data.insights}</ReactMarkdown>
               </div>
               {generatedLabel && (
                 <p className="text-xs text-muted-foreground border-t pt-3">

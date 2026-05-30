@@ -1,6 +1,7 @@
 import { Bot,User } from "lucide-react";
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 
 import { RagDebugBadge } from "@/components/RagDebugBadge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -41,7 +42,11 @@ export const ChatMessage = memo(function ChatMessage({ role, content, timestamp,
             <p className="text-sm whitespace-pre-wrap">{content}</p>
           ) : (
             <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2">
-              <ReactMarkdown>{content}</ReactMarkdown>
+              {/* AI output is rendered as markdown; rehype-sanitize strips
+                  script tags, event handlers, and javascript:/data: URLs so a
+                  compromised provider or prompt-injection attempt can't run
+                  arbitrary JS in the user's session (C2). */}
+              <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{content}</ReactMarkdown>
             </div>
           )}
         </div>
