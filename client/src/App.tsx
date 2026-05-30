@@ -15,6 +15,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { useDetectTimezone } from "@/hooks/useDetectTimezone";
 import { useEmailCheck } from "@/hooks/useEmailCheck";
 import { useNavigationBreadcrumb } from "@/hooks/useNavigationBreadcrumb";
 import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
@@ -92,8 +93,9 @@ function getStoredSidebarOpen(): boolean {
 }
 
 function AuthenticatedLayout() {
-  const { isAuthenticated, isLoading, isAppUserLoaded } = useAuth();
+  const { user, isAuthenticated, isLoading, isAppUserLoaded } = useAuth();
   useEmailCheck(isAuthenticated, isAppUserLoaded);
+  useDetectTimezone(isAuthenticated, isAppUserLoaded, user?.userTimezone);
   useOfflineDropNotifier();
 
   // Lock html/body/#root so only #main-content scrolls. `overflow: clip`
