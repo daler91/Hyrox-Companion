@@ -16,6 +16,7 @@ export function mockEnabledUser(storage: StorageMock) {
     profileImageUrl: null,
     weightUnit: "kg",
     distanceUnit: "km",
+    userTimezone: "UTC",
     weeklyGoal: null,
     emailNotifications: null,
     emailWeeklySummary: null,

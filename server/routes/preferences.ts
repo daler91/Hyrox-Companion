@@ -4,6 +4,7 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
+import { isValidTimezone } from "../timezone";
 import { getUserId } from "../types";
 import { protectedPatch } from "./_helpers/protectedRouteBuilder";
 
@@ -38,6 +39,7 @@ function validateMafTransition(payload: UpdateUserPreferences, current: Awaited<
 function serializePreferences(user: {
   weightUnit: string | null;
   distanceUnit: string | null;
+  userTimezone: string;
   weeklyGoal: number | null;
   emailNotifications: boolean | null;
   emailWeeklySummary: boolean | null;
@@ -60,6 +62,7 @@ function serializePreferences(user: {
   return {
     weightUnit: user.weightUnit ?? "kg",
     distanceUnit: user.distanceUnit ?? "km",
+    userTimezone: user.userTimezone,
     weeklyGoal: user.weeklyGoal ?? 5,
     emailNotifications: user.emailNotifications ?? false,
     emailWeeklySummary: user.emailWeeklySummary ?? false,
@@ -121,6 +124,18 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
 
 protectedPatch(router, '/api/v1/preferences', { limiter: rateLimiter("preferences", 20), middleware: [validateBody(updateUserPreferencesSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, UpdateUserPreferences>, res: Response) => {
     const userId = getUserId(req);
+
+    // Authoritative IANA-name validation lives here (the Zod schema only
+    // shallow-checks shape; only the Node runtime knows which names the
+    // platform actually recognises). Returns a structured 400 so the client
+    // can surface a clear "your timezone wasn't recognised" message.
+    if (req.body.userTimezone !== undefined && !isValidTimezone(req.body.userTimezone)) {
+      return res.status(400).json({
+        error: "Invalid timezone",
+        code: "INVALID_TIMEZONE",
+        details: [{ field: "userTimezone", message: "must be a valid IANA timezone name (e.g. \"America/Chicago\")" }],
+      });
+    }
 
     const current = await storage.users.getUser(userId);
     const mafValidationError = validateMafTransition(req.body, current);

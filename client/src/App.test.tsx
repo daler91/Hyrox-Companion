@@ -13,7 +13,11 @@ vi.mock("@clerk/react", () => ({
 
 vi.mock("@/components/ThemeProvider", () => ({ ThemeProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="theme-provider">{children}</div> }));
 vi.mock("@/components/ui/tooltip", () => ({ TooltipProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="tooltip-provider">{children}</div> }));
-vi.mock("@tanstack/react-query", () => ({ QueryClientProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="query-provider">{children}</div> }));
+vi.mock("@tanstack/react-query", () => ({
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="query-provider">{children}</div>,
+  // Hooks needed by useDetectTimezone / other AuthenticatedLayout hooks; safe no-ops for provider-shape tests.
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+}));
 vi.mock("./lib/queryClient", () => ({ queryClient: {} }));
 
 vi.mock("@/components/ui/toaster", () => ({ Toaster: () => <div data-testid="toaster" /> }));
