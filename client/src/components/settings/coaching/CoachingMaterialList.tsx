@@ -1,5 +1,7 @@
 import { FileText, Plus, Trash2, Upload } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCoachingMaterials, useDeleteCoachingMaterial } from "@/hooks/useCoachingMaterials";
@@ -17,10 +19,9 @@ export function CoachingMaterialList({
 }: Readonly<CoachingMaterialListProps>) {
   const { data: materials, isLoading } = useCoachingMaterials();
   const deleteMutation = useDeleteCoachingMaterial();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
-  const handleDelete = (id: string) => {
-    deleteMutation.mutate(id);
-  };
+  const pendingMaterial = materials?.find((m) => m.id === pendingDeleteId);
 
   if (isLoading) {
     return (
@@ -51,7 +52,7 @@ export function CoachingMaterialList({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleDelete(material.id)}
+                onClick={() => setPendingDeleteId(material.id)}
                 disabled={deleteMutation.isPending}
                 aria-label={`Delete ${material.title}`}
               >
@@ -85,6 +86,21 @@ export function CoachingMaterialList({
           onChange={handleFileUpload}
         />
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}
+        title="Delete coaching material?"
+        description={`"${pendingMaterial?.title ?? ""}" will be permanently removed. The AI coach will no longer reference it.`}
+        confirmText="Delete"
+        onConfirm={() => {
+          if (pendingDeleteId) {
+            deleteMutation.mutate(pendingDeleteId, { onSettled: () => setPendingDeleteId(null) });
+          }
+        }}
+        isPending={deleteMutation.isPending}
+        isDestructive
+      />
     </>
   );
 }
