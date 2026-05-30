@@ -49,11 +49,17 @@ type Preferences = UserPreferences;
 // it as a string so the <Input type="number"> can hold a partially-typed
 // value. `PreferencesSnapshot` captures the form-state shape (weeklyGoal as
 // string) used for Undo + committed-state tracking.
-type SavePayload = Omit<UserPreferences, "weeklyGoal"> & { weeklyGoal: number };
+//
+// `userTimezone` is excluded everywhere here: Settings does not expose a
+// timezone editor — the value is auto-detected on the client and PATCHed
+// independently by useDetectTimezone (C10). Keeping it out of the snapshot
+// + save payload means a Settings save never overwrites the auto-detected
+// value with stale state.
+type SavePayload = Omit<UserPreferences, "weeklyGoal" | "userTimezone"> & { weeklyGoal: number };
 interface PreferencesSnapshot
   extends Omit<
     UserPreferences,
-    "weeklyGoal" | "trainingStyleId" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
+    "weeklyGoal" | "userTimezone" | "trainingStyleId" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
   > {
   weeklyGoal: string;
   trainingStyleId: string;

@@ -21,6 +21,8 @@ export const auth = {
 export interface UserPreferences {
   weightUnit: string;
   distanceUnit: string;
+  /** IANA timezone name (e.g. "America/Chicago"). Auto-detected on first sign-in. */
+  userTimezone: string;
   weeklyGoal: number;
   /** Master email toggle — when false, no emails are sent regardless of sub-toggles. */
   emailNotifications: boolean;
