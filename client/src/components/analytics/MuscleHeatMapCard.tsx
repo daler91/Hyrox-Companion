@@ -159,8 +159,20 @@ function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): AnalysisM
     CORE_FRESHNESS_MUSCLES.has(muscle.muscle)
   ));
   const trainedCore = coreMuscles.filter(hasCoverageWork);
-  const freshest = [...trainedCore]
-    .sort((a, b) => (a.daysSince ?? Number.POSITIVE_INFINITY) - (b.daysSince ?? Number.POSITIVE_INFINITY))[0] ?? null;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
+  // to avoid unnecessary intermediate allocations and overhead when finding a single minimum.
+  let freshest: MuscleCoverage | null = null;
+  for (const item of trainedCore) {
+    if (!freshest) {
+      freshest = item;
+      continue;
+    }
+    const cmp = (item.daysSince ?? Number.POSITIVE_INFINITY) - (freshest.daysSince ?? Number.POSITIVE_INFINITY);
+    if (cmp < 0) {
+      freshest = item;
+    }
+  }
   const staleOrMissing = coreMuscles.filter((muscle) => !hasCoverageWork(muscle) || muscle.daysSince === null || muscle.daysSince > STALE_AFTER_DAYS);
 
   if (!freshest) {
@@ -193,8 +205,15 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
     else if (muscle.bodyRegion === "lower") regionTotals.lower += muscle.totalSets;
   }
   const regionMix = `Upper ${formatPercent(regionTotals.upper, totalSets)} / Core ${formatPercent(regionTotals.core, totalSets)} / Lower ${formatPercent(regionTotals.lower, totalSets)}`;
-  const dominantRegion = (Object.entries(regionTotals) as Array<[keyof typeof regionTotals, number]>)
-    .sort((a, b) => b[1] - a[1])[0];
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
+  // to avoid unnecessary intermediate allocations and overhead when finding a single maximum.
+  let dominantRegion: [keyof typeof regionTotals, number] | undefined;
+  for (const entry of Object.entries(regionTotals) as Array<[keyof typeof regionTotals, number]>) {
+    if (!dominantRegion || entry[1] > dominantRegion[1]) {
+      dominantRegion = entry;
+    }
+  }
   const balances = [
     buildBalanceAnalysis(
       "Upper Push / Pull",
@@ -212,9 +231,21 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
     ),
   ];
   const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
-  const leastLoaded = [...muscles]
-    .filter(hasCoverageWork)
-    .sort((a, b) => a.totalSets - b.totalSets || a.label.localeCompare(b.label))[0] ?? null;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
+  // to avoid unnecessary intermediate allocations and overhead when finding a single minimum.
+  let leastLoaded: MuscleCoverage | null = null;
+  for (const item of muscles) {
+    if (!hasCoverageWork(item)) continue;
+    if (!leastLoaded) {
+      leastLoaded = item;
+      continue;
+    }
+    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
+    if (cmp < 0) {
+      leastLoaded = item;
+    }
+  }
 
   const metrics: AnalysisMetric[] = [
     {
