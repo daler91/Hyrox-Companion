@@ -30,6 +30,7 @@ describe('runEmailCronJob', () => {
           {
             id: 1,
             email: 'test@example.com',
+            userTimezone: 'UTC',
             emailNotifications: true,
             emailWeeklySummary: true,
             emailMissedReminder: true,
@@ -64,6 +65,7 @@ describe('runEmailCronJob', () => {
       {
         id: 1,
         email: 'user1@example.com',
+        userTimezone: 'UTC',
         emailNotifications: true,
         emailWeeklySummary: true,
         emailMissedReminder: true,
@@ -73,6 +75,7 @@ describe('runEmailCronJob', () => {
       {
         id: 2,
         email: 'user2@example.com',
+        userTimezone: 'UTC',
         emailNotifications: true,
         emailWeeklySummary: true,
         emailMissedReminder: true,
@@ -119,6 +122,7 @@ describe('runEmailCronJob', () => {
       {
         id: 'user-weekly-off',
         email: 'weekly-off@example.com',
+        userTimezone: 'UTC',
         emailNotifications: true,
         emailWeeklySummary: false,
         emailMissedReminder: true,
@@ -142,6 +146,7 @@ describe('runEmailCronJob', () => {
       {
         id: 'user-missed-off',
         email: 'missed-off@example.com',
+        userTimezone: 'UTC',
         emailNotifications: true,
         emailWeeklySummary: true,
         emailMissedReminder: false,
@@ -163,6 +168,7 @@ describe('runEmailCronJob', () => {
       {
         id: 'user-both-off',
         email: 'both-off@example.com',
+        userTimezone: 'UTC',
         emailNotifications: true,
         emailWeeklySummary: false,
         emailMissedReminder: false,
@@ -182,6 +188,7 @@ describe('runEmailCronJob', () => {
       {
         id: 'user-null-flags',
         email: 'null-flags@example.com',
+        userTimezone: 'UTC',
         emailNotifications: true,
         emailWeeklySummary: null,
         emailMissedReminder: null,
@@ -194,5 +201,69 @@ describe('runEmailCronJob', () => {
 
     expect(result.usersChecked).toBe(1);
     expect(result.emailsSent).toBe(0);
+  });
+
+  describe('per-user timezone (C10)', () => {
+    it('enqueues the weekly summary for a Sydney user when it is Monday in Sydney but still Sunday in UTC', async () => {
+      const { sendJobNoRetry } = await import('./queue');
+      // 2026-05-31 Sunday 23:00 UTC = 2026-06-01 Monday 09:00 in Australia/Sydney.
+      vi.setSystemTime(new Date('2026-05-31T23:00:00Z'));
+
+      mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+        {
+          id: 'sydney-user',
+          email: 'sydney@example.com',
+          userTimezone: 'Australia/Sydney',
+          emailNotifications: true,
+          emailWeeklySummary: true,
+          emailMissedReminder: false,
+          lastWeeklySummaryAt: null,
+          lastMissedReminderAt: null,
+        },
+        {
+          id: 'utc-user',
+          email: 'utc@example.com',
+          userTimezone: 'UTC',
+          emailNotifications: true,
+          emailWeeklySummary: true,
+          emailMissedReminder: false,
+          lastWeeklySummaryAt: null,
+          lastMissedReminderAt: null,
+        },
+      ]);
+
+      const result = await runEmailCronJob(mockStorage);
+
+      expect(result.usersChecked).toBe(2);
+      // Sydney is on Monday → weekly enqueued. UTC user is still on Sunday → not.
+      expect(result.emailsSent).toBe(1);
+      expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 'sydney-user' });
+      expect(sendJobNoRetry).not.toHaveBeenCalledWith('send-weekly-summary', { userId: 'utc-user' });
+    });
+
+    it('still enqueues the weekly summary for a Hawaii user when it is Monday in Hawaii but already Tuesday in UTC', async () => {
+      const { sendJobNoRetry } = await import('./queue');
+      // 2026-06-02 Tuesday 06:00 UTC = 2026-06-01 Monday 20:00 in Pacific/Honolulu (UTC-10).
+      vi.setSystemTime(new Date('2026-06-02T06:00:00Z'));
+
+      mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
+        {
+          id: 'hawaii-user',
+          email: 'hi@example.com',
+          userTimezone: 'Pacific/Honolulu',
+          emailNotifications: true,
+          emailWeeklySummary: true,
+          emailMissedReminder: false,
+          lastWeeklySummaryAt: null,
+          lastMissedReminderAt: null,
+        },
+      ]);
+
+      const result = await runEmailCronJob(mockStorage);
+
+      expect(result.usersChecked).toBe(1);
+      expect(result.emailsSent).toBe(1);
+      expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 'hawaii-user' });
+    });
   });
 });
