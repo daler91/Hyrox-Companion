@@ -47,7 +47,7 @@ describe("Workout Timeline Routes", () => {
           planId: "plan-1",
         },
       ];
-      vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries as never);
+      vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
 
       const response = await request(app).get("/api/v1/timeline");
 

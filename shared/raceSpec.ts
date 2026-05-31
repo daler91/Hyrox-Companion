@@ -62,23 +62,22 @@ export interface RaceSegment {
 }
 
 function buildSegments(): RaceSegment[] {
-  const segments: RaceSegment[] = [];
-  let index = 1;
-  HYROX_STATION_ORDER.forEach((station, i) => {
-    segments.push({
-      index: index++,
+  // Each station contributes a run then the station itself, so segment indices
+  // interleave 1..16 as run(1), station(2), run(3), station(4), …
+  return HYROX_STATION_ORDER.flatMap((station, i): RaceSegment[] => [
+    {
+      index: 2 * i + 1,
       kind: "run",
       exerciseName: RUN_EXERCISE_NAME,
       label: `Run ${i + 1}`,
-    });
-    segments.push({
-      index: index++,
+    },
+    {
+      index: 2 * i + 2,
       kind: "station",
       exerciseName: station,
       label: EXERCISE_DEFINITIONS[station].label,
-    });
-  });
-  return segments;
+    },
+  ]);
 }
 
 /** The full ordered 16-segment course (run, station, run, station, …). */

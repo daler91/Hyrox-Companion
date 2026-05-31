@@ -35,7 +35,7 @@ function mockUser(overrides: Record<string, unknown> = {}) {
     gender: "male",
     weightUnit: "kg",
     ...overrides,
-  } as never);
+  });
 }
 
 function validAiPayload(totalFinishSeconds = 3500): string {
@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   envState.AI_FEATURES_ENABLED = "true";
   getSets.mockResolvedValue([]);
-  mockBudget.mockResolvedValue({ allowed: true } as never);
+  mockBudget.mockResolvedValue({ allowed: true });
 });
 
 describe("generateRacePrediction — graceful degradation", () => {
@@ -85,7 +85,7 @@ describe("generateRacePrediction — graceful degradation", () => {
 
   it("returns ai_budget_exceeded when over budget", async () => {
     mockUser();
-    mockBudget.mockResolvedValue({ allowed: false } as never);
+    mockBudget.mockResolvedValue({ allowed: false });
 
     const result = await generateRacePrediction("u1");
 
@@ -106,7 +106,7 @@ describe("generateRacePrediction — graceful degradation", () => {
 describe("generateRacePrediction — AI path", () => {
   it("uses the AI estimate when consent + budget allow", async () => {
     mockUser();
-    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) } as never);
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
 
     const result = await generateRacePrediction("u1");
 
@@ -125,7 +125,7 @@ describe("generateRacePrediction — AI path", () => {
 
   it("never lets the headline drop below the sum of segment splits", async () => {
     mockUser();
-    mockGenerate.mockResolvedValue({ text: validAiPayload(100) } as never); // absurdly low
+    mockGenerate.mockResolvedValue({ text: validAiPayload(100) }); // absurdly low
 
     const result = await generateRacePrediction("u1");
     const segmentSum = result.segments.reduce((t, s) => t + s.estimatedSeconds, 0);
@@ -134,7 +134,7 @@ describe("generateRacePrediction — AI path", () => {
 
   it("falls back to deterministic on invalid AI JSON", async () => {
     mockUser();
-    mockGenerate.mockResolvedValue({ text: "not json" } as never);
+    mockGenerate.mockResolvedValue({ text: "not json" });
 
     const result = await generateRacePrediction("u1");
 
@@ -157,7 +157,7 @@ describe("generateRacePrediction — AI path", () => {
     mockUser();
     mockGenerate.mockResolvedValue({
       text: JSON.stringify({ segments: [{ index: 1 }], totalFinishSeconds: -5 }),
-    } as never);
+    });
 
     const result = await generateRacePrediction("u1");
 

@@ -4,8 +4,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("pg-boss", () => ({
-  default: class { on() {} },
-  PgBoss: class { on() {} },
+  default: class { on() { /* no-op: pg-boss event emitter stub */ } },
+  PgBoss: class { on() { /* no-op: pg-boss event emitter stub */ } },
 }));
 vi.mock("./logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock("./env", () => ({ env: { DATABASE_URL: "postgres://u:p@h:5432/db" } }));

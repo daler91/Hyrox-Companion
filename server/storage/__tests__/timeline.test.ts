@@ -236,7 +236,7 @@ describe("TimelineStorage standalone workout plan association", () => {
 
   it("forwards the selected plan filter to the standalone query, and omits it for All Plans", async () => {
     const spy = vi.spyOn(
-      storage as unknown as { fetchStandaloneWorkouts: (...a: unknown[]) => Promise<unknown[]> },
+      storage,
       "fetchStandaloneWorkouts",
     );
 

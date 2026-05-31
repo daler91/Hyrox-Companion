@@ -252,6 +252,14 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
   });
 });
 
+function mockUpdateReturning(rows: unknown[]) {
+  const returningMock = vi.fn().mockResolvedValue(rows);
+  const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+  const setMock = vi.fn().mockReturnValue({ where: whereMock });
+  vi.mocked(db.update).mockReturnValue({ set: setMock } as ReturnType<typeof db.update>);
+  return { returningMock, whereMock, setMock };
+}
+
 describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18)", () => {
   let storage: WorkoutStorage;
 
@@ -267,14 +275,6 @@ describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18
       planDayId: null,
       version,
     } as Awaited<ReturnType<WorkoutStorage["getExerciseSetOwned"]>>);
-  }
-
-  function mockUpdateReturning(rows: unknown[]) {
-    const returningMock = vi.fn().mockResolvedValue(rows);
-    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
-    const setMock = vi.fn().mockReturnValue({ where: whereMock });
-    vi.mocked(db.update).mockReturnValue({ set: setMock } as ReturnType<typeof db.update>);
-    return { returningMock, whereMock, setMock };
   }
 
   it("does a blind UPDATE when expectedVersion is omitted (back-compat)", async () => {

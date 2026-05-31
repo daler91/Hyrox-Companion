@@ -62,7 +62,7 @@ describe('ChatMessage', () => {
       // would already refuse to execute it, but the element shouldn't appear
       // in the DOM either).
       expect(container.querySelector('script')).toBeNull();
-      expect((window as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+      expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
     });
 
     it('strips javascript: URLs from markdown links', () => {
@@ -85,7 +85,7 @@ describe('ChatMessage', () => {
         />,
       );
       expect(container.innerHTML).not.toMatch(/onerror=/i);
-      expect((window as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
+      expect((globalThis as unknown as { __xssMarker?: boolean }).__xssMarker).toBeUndefined();
     });
   });
 });
