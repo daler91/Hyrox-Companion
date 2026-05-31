@@ -10,13 +10,20 @@ import { buildRacePredictionFeatures } from "./featureBuilder";
 
 function set(
   exerciseName: string,
-  fields: { time?: number | null; weight?: number | null; distance?: number | null; date?: string },
+  fields: {
+    time?: number | null;
+    weight?: number | null;
+    distance?: number | null;
+    reps?: number | null;
+    date?: string;
+  },
 ): LoggedExerciseSetWithDate {
   return {
     exerciseName,
     time: fields.time ?? null,
     weight: fields.weight ?? null,
     distance: fields.distance ?? null,
+    reps: fields.reps ?? null,
     date: fields.date ?? "2026-05-01",
   } as unknown as LoggedExerciseSetWithDate;
 }
@@ -121,5 +128,38 @@ describe("buildRacePredictionFeatures", () => {
       NOW,
     );
     expect(features.stationFeatures.sled_push.lastTrainedDaysAgo).toBe(5); // 2026-05-25 → 2026-05-30
+  });
+
+  it("normalizes a partial distance-based interval up to the full race station", () => {
+    // A 250 m SkiErg interval in 1:00 → projected to the full 1000 m: 4:00.
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 1, distance: 250, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBe(240); // 60s * (1000/250)
+  });
+
+  it("normalizes a partial rep-based set up to the full race station", () => {
+    // 50 wall balls in 2:30 → projected to the race's 100 reps: 5:00.
+    const features = buildRacePredictionFeatures(
+      [set("wall_balls", { time: 2.5, reps: 50, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.wall_balls.medianSeconds).toBe(300); // 150s * (100/50)
+  });
+
+  it("floors an impossibly fast logged split in the deterministic baseline", () => {
+    // A 0:48 SkiErg logged without a distance must not surface as a 1000 m split.
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 0.8, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg");
+    expect(ski?.basis).toBe("logged");
+    expect(ski?.estimatedSeconds).toBe(180); // floored to the world-class minimum
+    expect(ski?.floorSeconds).toBe(180);
   });
 });

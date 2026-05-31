@@ -10,8 +10,10 @@
  *
  * Unit handling (see the 🛡️ sentinel in shared/unitConversion.ts):
  *  - `time` is stored in MINUTES → multiply by 60 for seconds.
- *  - run_1k is a 1 km effort, so its logged time IS the per-km split — no
- *    distance conversion needed (which avoids the stored-unit m/ft pitfall).
+ *  - A logged set may be a *partial* effort (e.g. a 250 m SkiErg interval, not
+ *    the full 1000 m race station), so each set's time is normalized to the full
+ *    race-station amount using its logged distance/reps vs the station target
+ *    (linear pace). Without a logged distance/rep count we assume a full effort.
  *  - logged weights are in the athlete's unit; we never convert them. Instead
  *    we convert the canonical-kg standard INTO the athlete's unit
  *    (`kgToUserWeight`, the sanctioned direction) and compare there.
@@ -25,6 +27,7 @@ import {
   type RaceSegmentKind,
   resolveRaceReference,
   RUN_EXERCISE_NAME,
+  RUN_LEG_DISTANCE_METERS,
   type StoredGender,
   TOTAL_STATIONS,
 } from "@shared/raceSpec";
@@ -60,6 +63,8 @@ export interface BaselineSegmentEstimate {
   estimatedSeconds: number;
   basis: "logged" | "benchmark";
   sampleSize: number;
+  /** Fastest physically-plausible split for this segment (≈ world-class). */
+  floorSeconds: number;
 }
 
 export interface RacePredictionFeatures {
@@ -111,20 +116,50 @@ function loadAdjust(seconds: number, loadRatio: number | null): number {
   return seconds * factor;
 }
 
+/** The full race-station amount a logged set is normalized up/down to. */
+interface SegmentTarget {
+  distanceMeters?: number;
+  reps?: number;
+}
+
+// Bound how far a single set is extrapolated, so a tiny interval (or an
+// over-long endurance piece) can't be linearly projected into nonsense.
+const MIN_NORMALIZATION_FACTOR = 0.25;
+const MAX_NORMALIZATION_FACTOR = 6;
+
+/**
+ * Scale a logged partial effort to the full race-station amount via linear pace,
+ * so a 250 m SkiErg interval isn't mistaken for the whole 1000 m station. Uses
+ * logged distance for distance-based stations and logged reps for rep-based
+ * ones; falls back to 1 (assume a full effort) when neither was recorded.
+ */
+function normalizationFactor(set: LoggedExerciseSetWithDate, target: SegmentTarget): number {
+  if (target.distanceMeters != null && set.distance != null && set.distance > 0) {
+    return clamp(target.distanceMeters / set.distance, MIN_NORMALIZATION_FACTOR, MAX_NORMALIZATION_FACTOR);
+  }
+  if (target.reps != null && set.reps != null && set.reps > 0) {
+    return clamp(target.reps / set.reps, MIN_NORMALIZATION_FACTOR, MAX_NORMALIZATION_FACTOR);
+  }
+  return 1;
+}
+
 interface SegmentSetMetrics {
   timesSeconds: number[];
   loads: number[];
   mostRecent: string | null;
 }
 
-function accumulateSetMetrics(sets: LoggedExerciseSetWithDate[]): SegmentSetMetrics {
+function accumulateSetMetrics(
+  sets: LoggedExerciseSetWithDate[],
+  target: SegmentTarget,
+): SegmentSetMetrics {
   const timesSeconds: number[] = [];
   const loads: number[] = [];
   let mostRecent: string | null = null;
 
   for (const set of sets) {
     if (set.time != null && Number.isFinite(set.time)) {
-      timesSeconds.push(set.time * 60);
+      timesSeconds.push(set.time * 60 * normalizationFactor(set, target));
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
       loads.push(set.weight);
@@ -142,10 +177,11 @@ function buildSegmentFeature(
   kind: RaceSegmentKind,
   sets: LoggedExerciseSetWithDate[],
   standardLoadKg: number | undefined,
+  target: SegmentTarget,
   weightUnit: string,
   now: Date,
 ): SegmentFeature {
-  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets);
+  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets, target);
 
   const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
   const standardLoadUserUnit =
@@ -198,17 +234,20 @@ export function buildRacePredictionFeatures(
     "run",
     byExercise.get(RUN_EXERCISE_NAME) ?? [],
     undefined,
+    { distanceMeters: RUN_LEG_DISTANCE_METERS },
     weightUnit,
     now,
   );
 
   const stationFeatures = {} as Record<HyroxStation, SegmentFeature>;
   for (const station of HYROX_STATION_ORDER) {
+    const standard = reference.stations[station];
     stationFeatures[station] = buildSegmentFeature(
       station,
       "station",
       byExercise.get(station) ?? [],
-      reference.stations[station].loadKg,
+      standard.loadKg,
+      { distanceMeters: standard.distanceMeters, reps: standard.reps },
       weightUnit,
       now,
     );
@@ -218,12 +257,14 @@ export function buildRacePredictionFeatures(
   // stations), benchmark fallback otherwise. Summed across all 16 segments.
   const baselineSegments: BaselineSegmentEstimate[] = RACE_SEGMENTS.map((segment) => {
     if (segment.kind === "run") {
+      const floorSeconds = reference.runKmFloorSeconds;
       if (runFeature.medianSeconds != null) {
         return {
           ...segment,
-          estimatedSeconds: Math.round(runFeature.medianSeconds),
+          estimatedSeconds: Math.max(Math.round(runFeature.medianSeconds), floorSeconds),
           basis: "logged" as const,
           sampleSize: runFeature.sampleSize,
+          floorSeconds,
         };
       }
       return {
@@ -231,17 +272,23 @@ export function buildRacePredictionFeatures(
         estimatedSeconds: Math.round(reference.runKmBenchmarkSeconds),
         basis: "benchmark" as const,
         sampleSize: 0,
+        floorSeconds,
       };
     }
 
     const station = segment.exerciseName as HyroxStation;
     const feature = stationFeatures[station];
+    const floorSeconds = reference.stations[station].floorSeconds;
     if (feature.medianSeconds != null) {
       return {
         ...segment,
-        estimatedSeconds: Math.round(loadAdjust(feature.medianSeconds, feature.loadRatio)),
+        estimatedSeconds: Math.max(
+          Math.round(loadAdjust(feature.medianSeconds, feature.loadRatio)),
+          floorSeconds,
+        ),
         basis: "logged" as const,
         sampleSize: feature.sampleSize,
+        floorSeconds,
       };
     }
     return {
@@ -249,6 +296,7 @@ export function buildRacePredictionFeatures(
       estimatedSeconds: Math.round(reference.stations[station].benchmarkSeconds),
       basis: "benchmark" as const,
       sampleSize: 0,
+      floorSeconds,
     };
   });
 
