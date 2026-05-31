@@ -1,3 +1,4 @@
+import { env } from "../../env";
 import { recordAiUsage } from "../../services/aiUsageService";
 import { createAnthropicTextProvider } from "./anthropic";
 import {
@@ -43,6 +44,12 @@ function buildTextAiProvider(): TextAiProvider {
 }
 
 export function getTextAiProvider(): TextAiProvider {
+  // Defense-in-depth for the AI kill switch (W25): gate the provider entrypoint
+  // itself, not just the aiBudgetCheck HTTP middleware, so service/cron callers
+  // that bypass the middleware also honor AI_FEATURES_ENABLED=false.
+  if (env.AI_FEATURES_ENABLED === "false") {
+    throw new Error("AI features are disabled (AI_FEATURES_ENABLED=false)");
+  }
   textAiProvider ??= buildTextAiProvider();
   return textAiProvider;
 }

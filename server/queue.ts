@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
@@ -7,6 +9,7 @@ import { processMissedWorkoutReminder,processWeeklySummary } from "./emailSchedu
 import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
+import { getRequestContext, runWithRequestContext } from "./requestContext";
 import { triggerAutoCoach } from "./services/coachService";
 import { executePlanGeneration } from "./services/planGenerationService";
 import { embedCoachingMaterial } from "./services/ragService";
@@ -63,14 +66,24 @@ export const NO_RETRY_JOB_OPTIONS = {
   expireInMinutes: 60,
 } as const;
 
+// Reserved job-payload key carrying the originating request's correlation id
+// across the pg-boss boundary (S19) so async-job logs trace back to the request
+// that enqueued them.
+const TRACE_REQUEST_ID_KEY = "__requestId";
+
+function withTrace(data: Record<string, unknown>): Record<string, unknown> {
+  const requestId = getRequestContext()?.requestId;
+  return requestId ? { ...data, [TRACE_REQUEST_ID_KEY]: requestId } : data;
+}
+
 /** Send a job with default retry/expiry options (idempotent handlers). */
 export function sendJob(name: string, data: Record<string, unknown>) {
-  return queue.send(name, data, DEFAULT_JOB_OPTIONS);
+  return queue.send(name, withTrace(data), DEFAULT_JOB_OPTIONS);
 }
 
 /** Send a non-idempotent job (no retries). Use for email-send-like jobs. */
 export function sendJobNoRetry(name: string, data: Record<string, unknown>) {
-  return queue.send(name, data, NO_RETRY_JOB_OPTIONS);
+  return queue.send(name, withTrace(data), NO_RETRY_JOB_OPTIONS);
 }
 
 queue.on("error", (error: Error) => {
@@ -127,6 +140,14 @@ async function runWithTimeout<T>(
  * still sees the batch as failed when any job failed (and can retry only
  * the failed ones on the next poll, per pg-boss semantics for batch-work).
  */
+// Resolve the correlation id for a job: the propagated request id if the job
+// was enqueued within a request, else a fresh id so cron-originated jobs are
+// still self-correlated (S19).
+function jobRequestId(job: Job): string {
+  const fromPayload = (job.data as Record<string, unknown> | undefined)?.[TRACE_REQUEST_ID_KEY];
+  return typeof fromPayload === "string" && fromPayload.length > 0 ? fromPayload : randomUUID();
+}
+
 async function runBatch<T>(
   queueName: string,
   jobs: Job[],
@@ -134,7 +155,9 @@ async function runBatch<T>(
 ): Promise<void> {
   const limit = pLimit(IN_BATCH_CONCURRENCY);
   const results = await Promise.allSettled(
-    jobs.map((job) => limit(() => processJob(job))),
+    jobs.map((job) =>
+      limit(() => runWithRequestContext({ requestId: jobRequestId(job) }, () => processJob(job))),
+    ),
   );
   const failed = results.filter((r) => r.status === "rejected");
   if (failed.length > 0) {
