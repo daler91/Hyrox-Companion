@@ -24,16 +24,17 @@ const router = Router();
  *
  * `document_chunks` is the exception: it lives on the SEPARATE vector
  * database (`vectorPool`), which the main-DB FK cascade cannot reach, so the
- * user's RAG chunks are purged explicitly in step 4 below (GDPR Art. 17).
+ * user's RAG chunks are purged explicitly in step 1 below (GDPR Art. 17).
  *
  * Order of operations:
- * 1. Delete Clerk identity first (hard fail if this fails, since
- *    ensureUserExists would re-provision the DB row on next request).
- * 2. Best-effort Strava deauthorization.
- * 3. Note: Garmin upstream revocation is intentionally NOT attempted —
+ * 1. Purge RAG chunks from the separate vector DB FIRST — fail-loud and
+ *    before anything irreversible, so a vector-DB outage makes the whole
+ *    request retriable rather than orphaning PII or stranding erasure.
+ * 2. Delete Clerk identity (hard fail if this fails, since ensureUserExists
+ *    would re-provision the DB row on next request).
+ * 3. Best-effort Strava deauthorization.
+ * 4. Note: Garmin upstream revocation is intentionally NOT attempted —
  *    see the comment block at the deletion step for the rationale.
- * 4. Purge the user's RAG chunks from the separate vector DB (fail loud, so a
- *    vector-DB outage makes deletion retriable rather than orphaning PII).
  * 5. Delete DB user row (cascades all child rows, including the encrypted
  *    Garmin credentials and OAuth tokens in garmin_connections).
  * 6. Evict user from auth seen-cache to prevent stale session use.
@@ -41,7 +42,18 @@ const router = Router();
 protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete", 3) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
-    // Step 1: Delete Clerk identity first. If this fails the DB row must
+    // Step 1: Purge the user's RAG chunks from the SEPARATE vector DB FIRST,
+    // before any irreversible action. `document_chunks` lives on `vectorPool`
+    // (a separate Postgres instance in production), so the main-DB FK cascade
+    // in step 5 cannot reach it — without this the user's uploaded
+    // coaching-material text and embeddings are orphaned (GDPR Art. 17).
+    // Ordering it first is deliberate: it is fail-loud, so if the vector DB is
+    // unreachable the request fails with nothing yet deleted and the user can
+    // retry. This guarantees a vector outage can never strand the main-DB
+    // erasure behind an already-deleted Clerk identity.
+    await storage.coaching.deleteChunksByUserId(userId);
+
+    // Step 2: Delete the Clerk identity. If this fails the DB row must
     // stay intact — otherwise ensureUserExists re-creates it on the next
     // authenticated request, silently "undeleting" the account.
     // A 404 from Clerk means the identity was already removed (e.g. a
@@ -57,7 +69,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       }
     }
 
-    // Step 2: Best-effort Strava deauthorization before deleting the DB
+    // Step 3: Best-effort Strava deauthorization before deleting the DB
     // record (which cascades and removes the stored token).
     try {
       const stravaConn = await storage.users.getStravaConnection(userId);
@@ -74,7 +86,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       logger.warn({ err, userId }, "Strava deauthorization failed during account deletion");
     }
 
-    // Step 3: Garmin upstream revocation — intentionally NOT attempted.
+    // Step 4: Garmin upstream revocation — intentionally NOT attempted.
     //
     // Garmin Connect uses an undocumented SSO flow scraped by
     // @flow-js/garmin-connect; the SDK exposes no logout/signOut/revoke
@@ -87,7 +99,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
     // invalidation if they silently 401.
     //
     // What we DO guarantee on account deletion:
-    //   - The cascade in step 4 removes the garmin_connections row, so
+    //   - The cascade in step 5 removes the garmin_connections row, so
     //     no copy of the encrypted credentials or tokens remains in our
     //     system after this request returns.
     //   - The upstream OAuth1 tokens naturally expire (Garmin's tokens
@@ -96,7 +108,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
     //     their Garmin password — surfaced in the privacy page.
     //
     // If Garmin ever publishes a supported revocation API in the SDK,
-    // add the call here alongside the Strava deauth in step 2 above.
+    // add the call here alongside the Strava deauth in step 3 above.
     const hadGarminConnection = Boolean(await storage.users.getGarminConnection(userId));
     if (hadGarminConnection) {
       logger.info(
@@ -104,14 +116,6 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
         "Garmin credentials removed from local storage; upstream tokens will expire naturally",
       );
     }
-
-    // Step 4: Purge the user's RAG chunks from the SEPARATE vector DB. The
-    // main-DB FK cascade in step 5 cannot reach `document_chunks` (it lives on
-    // `vectorPool`), so without this the user's uploaded coaching-material text
-    // and embeddings are orphaned. Intentionally NOT wrapped in try/catch: if
-    // the vector DB is unreachable we want the whole deletion to fail and be
-    // retried, never to report success while leaving PII behind (GDPR Art. 17).
-    await storage.coaching.deleteChunksByUserId(userId);
 
     // Step 5: Delete the user row — all child rows cascade, including
     // strava_connections and garmin_connections.

@@ -4,8 +4,8 @@ import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 import { calculateStats } from "./statsUtils";
 
 // Set a fixed date for testing: May 15, 2024 is a Wednesday.
-// This means the start of the week (Sunday) is May 12, 2024.
-// End of the week (Saturday) is May 18, 2024.
+// Weeks are Monday-start (matching the server), so the start of the week is
+// Monday May 13, 2024 and the end of the week is Sunday May 19, 2024.
 const MOCK_TODAY = new Date("2024-05-15T12:00:00Z");
 
 function calculateStatsFor(timeline: Partial<TimelineEntry>[]) {
@@ -38,21 +38,20 @@ describe("calculateStats", () => {
   describe("weekly stats (workoutsThisWeek, completedThisWeek)", () => {
     it("should count entries within the current week correctly", () => {
       const timeline: Partial<TimelineEntry>[] = [
-        // Out of week (before)
-        { date: "2024-05-11", status: "completed" },
-        // In week
-        { date: "2024-05-12", status: "completed" }, // Sunday, start of week
+        // Out of week (before Monday May 13)
+        { date: "2024-05-11", status: "completed" }, // Saturday, prev week
+        { date: "2024-05-12", status: "completed" }, // Sunday, prev week
+        // In week (Mon May 13 – Sun May 19)
         { date: "2024-05-14", status: "planned" },   // Tuesday
         { date: "2024-05-16", status: "missed" },    // Thursday
-        { date: "2024-05-18", status: "completed" }, // Saturday, end of week
-        // Out of week (after)
-        { date: "2024-05-19", status: "planned" },
+        { date: "2024-05-18", status: "completed" }, // Saturday
+        { date: "2024-05-19", status: "planned" },   // Sunday, end of week
       ];
 
       const stats = calculateStatsFor(timeline);
 
-      expect(stats.workoutsThisWeek).toBe(4); // 12th, 14th, 16th, 18th
-      expect(stats.completedThisWeek).toBe(2); // 12th, 18th
+      expect(stats.workoutsThisWeek).toBe(4); // 14th, 16th, 18th, 19th
+      expect(stats.completedThisWeek).toBe(1); // 18th
     });
   });
 
