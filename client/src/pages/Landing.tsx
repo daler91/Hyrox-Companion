@@ -1,3 +1,5 @@
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+
 import { CtaSection, LandingFooter } from "./landing/CtaFooter";
 import { ExerciseShowcase } from "./landing/ExerciseShowcase";
 import { Faq } from "./landing/Faq";
@@ -7,6 +9,7 @@ import { HowItWorks } from "./landing/HowItWorks";
 import { useInView } from "./landing/useInView";
 
 export default function Landing() {
+  useDocumentTitle("");
   const sectionRef = useInView();
 
   return (

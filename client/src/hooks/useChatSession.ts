@@ -52,6 +52,7 @@ interface HandleStreamErrorArgs {
   assistantMessageId: string;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   saveAssistantMessage: (content: string) => void;
+  setStreamError: (message: string | null) => void;
 }
 
 /**
@@ -67,8 +68,14 @@ function handleStreamError({
   assistantMessageId,
   setMessages,
   saveAssistantMessage,
+  setStreamError,
 }: HandleStreamErrorArgs): void {
   const kind = classifyStreamError(err);
+
+  // Announce the interruption assertively (W8). STREAM_ERROR_BODY is already
+  // phrased for a human ("Your connection dropped…"), so it doubles as the
+  // spoken announcement regardless of whether a partial response survived.
+  setStreamError(STREAM_ERROR_BODY[kind]);
 
   if (fullResponse) {
     const finalContent = fullResponse + STREAM_ERROR_SUFFIX[kind];
@@ -155,6 +162,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  // Short, screen-reader-facing announcement for a stream interruption.
+  // Surfaced via an assertive live region so abort/network failures are read
+  // immediately rather than being buried in the polite conversation log (W8).
+  const [streamError, setStreamError] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -248,6 +259,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     setMessages((prev) => [...prev, userMessage]);
     shouldAutoScrollRef.current = true;
     setIsLoading(true);
+    // Clear any prior interruption announcement so the assertive region only
+    // fires on a fresh failure (W8).
+    setStreamError(null);
 
     saveMessageMutation.mutate({ role: "user", content });
 
@@ -329,6 +343,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setMessages,
         saveAssistantMessage: (content) =>
           saveMessageMutation.mutate({ role: "assistant", content }),
+        setStreamError,
       });
     } finally {
       streamControllerRef.current = null;
@@ -350,6 +365,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     messages,
     isLoading,
     isStreaming,
+    streamError,
     historyLoading,
     scrollRef,
     updateAutoScrollMode,

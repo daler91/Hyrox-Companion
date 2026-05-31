@@ -20,6 +20,7 @@ import { PageContainer } from "@/components/ui/PageContainer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { type AnalyticsExportFormat, api, QUERY_KEYS } from "@/lib/api";
 
@@ -34,6 +35,7 @@ function getExportFilename(response: Response, exportFormat: AnalyticsExportForm
 }
 
 export default function Analytics() {
+  useDocumentTitle("Analytics");
   const { toast } = useToast();
   const [dateRange, setDateRange] = useUrlQueryState<DateRange>(
     "range",

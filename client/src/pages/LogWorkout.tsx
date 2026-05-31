@@ -1,5 +1,6 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { LogWorkoutForm } from "@/pages/log-workout/LogWorkoutForm";
 
 /**
@@ -7,6 +8,7 @@ import { LogWorkoutForm } from "@/pages/log-workout/LogWorkoutForm";
  * inner form can load the real user's draft on its first render.
  */
 export default function LogWorkout() {
+  useDocumentTitle("Log Workout");
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
