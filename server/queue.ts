@@ -5,6 +5,7 @@ import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
+import { pool } from "./db";
 import { processMissedWorkoutReminder,processWeeklySummary } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
@@ -86,6 +87,19 @@ export function sendJobNoRetry(name: string, data: Record<string, unknown>) {
   return queue.send(name, withTrace(data), NO_RETRY_JOB_OPTIONS);
 }
 
+/**
+ * Best-effort deletion of a user's pending/active pg-boss jobs, used on account
+ * deletion so transient job payloads (userId, and plan-generation input) do not
+ * linger at rest after erasure. pg-boss exposes no "delete by data filter", so
+ * this deletes from its job table directly via the app pool (same database).
+ * `userId` is stored at the job-data top level for every queue (getUserIdFromJob).
+ * Every handler already no-ops for a deleted user, so callers may treat a
+ * failure here as non-fatal (W17).
+ */
+export async function purgeUserJobs(userId: string): Promise<void> {
+  await pool.query(`DELETE FROM pgboss.job WHERE data->>'userId' = $1`, [userId]);
+}
+
 queue.on("error", (error: Error) => {
   logger.error(error, "[pg-boss] error");
 });
@@ -148,6 +162,12 @@ function jobRequestId(job: Job): string {
   return typeof fromPayload === "string" && fromPayload.length > 0 ? fromPayload : randomUUID();
 }
 
+// Field names present on a job payload, for diagnostics — WITHOUT logging the
+// values, which carry userId and (for plan-generation) user input (W17).
+function jobDataKeys(job: Job): string[] {
+  return job.data && typeof job.data === "object" ? Object.keys(job.data) : [];
+}
+
 async function runBatch<T>(
   queueName: string,
   jobs: Job[],
@@ -174,7 +194,7 @@ async function runBatch<T>(
 async function requireUserFromJob(job: Job, queueName: string) {
   const userId = getUserIdFromJob(job);
   if (!userId) {
-    logger.warn({ jobId: job.id, data: job.data }, `[pg-boss] Missing userId on ${queueName} job, skipping`);
+    logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, `[pg-boss] Missing userId on ${queueName} job, skipping`);
     return null;
   }
 
@@ -245,11 +265,11 @@ export async function startQueue() {
 
   await queue.work("auto-coach", async (jobs: Job[]) => {
     await runBatch("auto-coach", jobs, async (job) => {
-      logger.info({ jobId: job.id, data: job.data }, "[pg-boss] Processing auto-coach job");
+      logger.info({ jobId: job.id }, "[pg-boss] Processing auto-coach job");
       try {
         const userId = getUserIdFromJob(job);
         if (!userId) {
-          logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing userId on auto-coach job, skipping");
+          logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing userId on auto-coach job, skipping");
           return;
         }
         const result = await runWithTimeout("auto-coach", () => triggerAutoCoach(userId));
@@ -267,7 +287,7 @@ export async function startQueue() {
     await runBatch("embed-coaching-material", jobs, async (job) => {
       const identifiers = getEmbedJobIdentifiers(job);
       if (!identifiers) {
-        logger.warn({ jobId: job.id, data: job.data }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
+        logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
         return;
       }
       const { materialId, userId } = identifiers;

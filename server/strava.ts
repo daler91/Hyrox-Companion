@@ -110,7 +110,10 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
           );
         }
         if (!response.ok) {
-          logger.error({ err: await response.text(), status: response.status }, "Failed to refresh Strava token:");
+          // Do NOT log the raw response body — Strava OAuth token-endpoint
+          // bodies can echo token/secret material and a hand-built `err` string
+          // bypasses pino's path-based redaction. Status is enough to triage.
+          logger.error({ status: response.status }, "Failed to refresh Strava token");
           return null;
         }
         return (await response.json()) as StravaTokenResponse;
@@ -238,7 +241,9 @@ async function handleStravaCallback(req: Request, res: Response) {
     }, { label: "strava.oauthToken", retries: 3 });
 
     if (!tokenResponse.ok) {
-      reqLogger(req).error({ err: await tokenResponse.text() }, "Token exchange failed:");
+      // Do NOT log the raw response body (see refreshToken above) — it can
+      // contain token/secret material and bypasses pino redaction. Status only.
+      reqLogger(req).error({ status: tokenResponse.status }, "Token exchange failed");
       return res.redirect("/settings?strava=error");
     }
 

@@ -14,9 +14,11 @@ vi.mock("./emailScheduler", () => ({ processMissedWorkoutReminder: vi.fn(), proc
 vi.mock("./services/coachService", () => ({ triggerAutoCoach: vi.fn() }));
 vi.mock("./services/planGenerationService", () => ({ executePlanGeneration: vi.fn() }));
 vi.mock("./services/ragService", () => ({ embedCoachingMaterial: vi.fn() }));
+vi.mock("./db", () => ({ pool: { query: vi.fn().mockResolvedValue({ rowCount: 0 }) } }));
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
-import { buildQueueConnectionString } from "./queue";
+import { pool } from "./db";
+import { buildQueueConnectionString, purgeUserJobs } from "./queue";
 
 describe("buildQueueConnectionString (W12)", () => {
   it("appends a PG statement_timeout option matching PGBOSS_STATEMENT_TIMEOUT_MS", () => {
@@ -51,5 +53,16 @@ describe("buildQueueConnectionString (W12)", () => {
     expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeLessThan(60 * 60 * 1000);
     // And above the longest legitimate job query (plan-gen retries ~5min).
     expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeGreaterThan(10 * 60 * 1000);
+  });
+});
+
+describe("purgeUserJobs (W17 — erase queued job payloads on account deletion)", () => {
+  it("deletes the user's pending pg-boss jobs filtered by data->>'userId'", async () => {
+    vi.mocked(pool.query).mockClear();
+    await purgeUserJobs("user-9");
+    expect(pool.query).toHaveBeenCalledWith(
+      "DELETE FROM pgboss.job WHERE data->>'userId' = $1",
+      ["user-9"],
+    );
   });
 });

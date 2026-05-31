@@ -5,6 +5,7 @@ import { evictUserFromSeenCache } from "../clerkAuth";
 import { EXTERNAL_API_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
+import { purgeUserJobs } from "../queue";
 import { rateLimiter, sendNotFound } from "../routeUtils";
 import { storage } from "../storage";
 import { getUserId } from "../types";
@@ -37,7 +38,8 @@ const router = Router();
  *    see the comment block at the deletion step for the rationale.
  * 5. Delete DB user row (cascades all child rows, including the encrypted
  *    Garmin credentials and OAuth tokens in garmin_connections).
- * 6. Evict user from auth seen-cache to prevent stale session use.
+ * 6. Best-effort purge of the user's pending pg-boss jobs (non-fatal).
+ * 7. Evict user from auth seen-cache to prevent stale session use.
  */
 protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete", 3) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
@@ -124,7 +126,17 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       return sendNotFound(res, "User not found");
     }
 
-    // Step 6: Evict from the auth seen-cache so stale sessions can't
+    // Step 6: Best-effort purge of any pending pg-boss jobs for this user, so
+    // transient job payloads (userId, plan-generation input) don't linger at
+    // rest after erasure. Non-fatal — every handler already no-ops for a
+    // deleted user, so a failure here is harmless (W17).
+    try {
+      await purgeUserJobs(userId);
+    } catch (err) {
+      logger.warn({ err, userId }, "Failed to purge queued jobs during account deletion");
+    }
+
+    // Step 7: Evict from the auth seen-cache so stale sessions can't
     // trigger ensureUserExists within the 5-minute TTL window.
     await evictUserFromSeenCache(userId);
 
