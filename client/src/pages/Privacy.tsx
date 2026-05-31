@@ -20,7 +20,7 @@ export default function Privacy() {
 
         <article className="prose prose-neutral dark:prose-invert max-w-none">
           <h1>Privacy Policy</h1>
-          <p className="text-muted-foreground">Last updated: April 12, 2026</p>
+          <p className="text-muted-foreground">Last updated: May 31, 2026</p>
 
           <h2>1. Data We Collect</h2>
           <p>
@@ -117,6 +117,16 @@ export default function Privacy() {
             responses. You must explicitly opt in before any data is sent, and you can disable the
             AI Coach at any time in Settings.
           </p>
+          <p>
+            Once your data reaches the AI provider, its handling is governed by that provider&rsquo;s
+            data-processing agreement (DPA) and retention policy rather than by fitai.coach.
+            fitai.coach&rsquo;s default provider is <strong>Google Gemini</strong>; an operator may
+            instead configure Anthropic or an OpenAI-compatible endpoint, in which case that
+            provider&rsquo;s terms apply. We do not authorize providers to use your data to train
+            their models, but we cannot control a provider&rsquo;s independent retention windows, so
+            we recommend reviewing the configured provider&rsquo;s privacy and data-retention policy
+            (for the default, see Google&rsquo;s Gemini API terms).
+          </p>
 
           <h2>5. Garmin Integration</h2>
           <p>
@@ -157,6 +167,9 @@ export default function Privacy() {
             <li>Offline workout-save queue entries stay on your device until they sync, expire,
               are dropped after retry limits, or you sign out/delete your account.</li>
             <li>AI usage logs are retained for 7 days.</li>
+            <li>Data sent to the configured AI provider (by default Google Gemini) is retained
+              according to that provider&rsquo;s data-processing terms, not by fitai.coach; consult
+              the provider&rsquo;s policy for specifics.</li>
           </ul>
 
           <h2>8. Your Rights</h2>
@@ -179,8 +192,9 @@ export default function Privacy() {
               current device.
             </li>
             <li>
-              <strong>Opt out</strong> of email notifications and AI coaching at any time in
-              Settings.
+              <strong>Opt out</strong> of email notifications, AI coaching, and error-diagnostics
+              reporting (Sentry) at any time in Settings. Each third-party processor can be disabled
+              independently.
             </li>
             <li>
               <strong>Disconnect</strong> Strava or Garmin integrations, which removes stored
