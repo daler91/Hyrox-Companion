@@ -1,101 +1,16 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { QueryClient } from "@tanstack/react-query";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api } from "@/lib/api";
-import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
-
-import Settings from "../Settings";
-
-const mocks = vi.hoisted(() => ({
-  setLocation: vi.fn(),
-}));
-
-vi.mock("wouter", () => ({
-  useLocation: () => ["/settings", mocks.setLocation],
-  useSearch: () => "",
-}));
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { firstName: "Test" } }) }));
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
-vi.mock("@/lib/queryClient", () => ({
-  queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
-}));
-vi.mock("@/lib/api", () => ({
-  QUERY_KEYS: {
-    preferences: ["preferences"],
-    stravaStatus: ["strava"],
-    garminStatus: ["garmin"],
-    authUser: ["auth"],
-  },
-  api: { preferences: { update: vi.fn() } },
-}));
-vi.mock("@/components/settings/AccountDangerZone", () => ({ AccountDangerZone: () => null }));
-vi.mock("@/components/settings/CoachingSection", () => ({ CoachingSection: () => null }));
-vi.mock("@/components/settings/DataToolsSection", () => ({ DataToolsSection: () => null }));
-vi.mock("@/components/settings/GarminSection", () => ({ GarminSection: () => null }));
-vi.mock("@/components/settings/ProfileSection", () => ({ ProfileSection: () => null }));
-vi.mock("@/components/settings/PushNotificationSection", () => ({
-  PushNotificationSection: () => null,
-}));
-vi.mock("@/components/settings/StravaSection", () => ({ StravaSection: () => null }));
-
-installRadixPointerMocks();
-
-function seedQuery<T>(qc: QueryClient, key: readonly string[], data: T) {
-  qc.setQueryDefaults(key, {
-    queryFn: () => Promise.resolve(data),
-    staleTime: Infinity,
-  });
-  qc.setQueryData(key, data);
-}
-
-function seedSettings(qc: QueryClient, preferences: Record<string, unknown>) {
-  seedQuery(qc, ["preferences"], preferences);
-  seedQuery(qc, ["strava"], null);
-  seedQuery(qc, ["garmin"], null);
-}
-
-function renderSettings(qc: QueryClient, children: ReactNode = <Settings />) {
-  return render(
-    <QueryClientProvider client={qc}>
-      {children}
-    </QueryClientProvider>,
-  );
-}
-
-async function chooseSelectOption(label: string, option: string) {
-  fireEvent.click(screen.getByLabelText(label));
-  fireEvent.click(await screen.findByRole("option", { name: option }));
-}
-
-function defaultSettings() {
-  return {
-    weightUnit: "kg",
-    distanceUnit: "km",
-    weeklyGoal: 5,
-    emailNotifications: false,
-    emailWeeklySummary: false,
-    emailMissedReminder: false,
-    showAdherenceInsights: true,
-    aiCoachEnabled: false,
-    trainingStyleId: "balanced_default",
-    onboardingCompleted: true,
-    mafAge: null,
-    mafConsistency: null,
-    mafTrend: null,
-  };
-}
-
-function seedDefaultSettings(qc: QueryClient) {
-  seedSettings(qc, defaultSettings());
-}
-
-async function makeSettingsDirty() {
-  fireEvent.click(await screen.findByTestId("select-weekly-goal"));
-  fireEvent.click(await screen.findByRole("option", { name: "6" }));
-  expect(await screen.findByTestId("button-save-settings")).toBeInTheDocument();
-}
+import {
+  chooseSelectOption,
+  defaultSettings,
+  makeSettingsDirty,
+  renderSettings,
+  seedDefaultSettings,
+  seedSettings,
+  settingsHarness,
+} from "./settingsTestHarness";
 
 describe("Settings MAF style switch", () => {
   beforeEach(() => {
@@ -189,9 +104,7 @@ describe("Settings MAF style switch", () => {
       mafHrDataAvailable: null,
     });
 
-    vi.mocked(api.preferences.update).mockResolvedValue({} as Awaited<
-      ReturnType<typeof api.preferences.update>
-    >);
+    vi.mocked(settingsHarness.updatePreferences).mockResolvedValue({});
 
     renderSettings(qc);
 
@@ -211,17 +124,17 @@ describe("Settings MAF style switch", () => {
     await chooseSelectOption("Trend", "Flat");
     await chooseSelectOption("HR data available", "Yes");
 
-    expect(api.preferences.update).not.toHaveBeenCalled();
+    expect(settingsHarness.updatePreferences).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Save MAF setup" }));
 
     expect(await screen.findByTestId("button-save-settings")).toBeInTheDocument();
-    expect(api.preferences.update).not.toHaveBeenCalled();
+    expect(settingsHarness.updatePreferences).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId("button-save-settings"));
 
     await waitFor(() => {
-      expect(api.preferences.update).toHaveBeenCalledWith(
+      expect(settingsHarness.updatePreferences).toHaveBeenCalledWith(
         expect.objectContaining({
           trainingStyleId: "maf_method",
           mafAge: 39,
@@ -243,21 +156,17 @@ describe("Settings MAF style switch", () => {
 
     fireEvent.click(await screen.findByTestId("button-rerun-onboarding"));
 
-    expect(mocks.setLocation).toHaveBeenCalledWith("/?onboarding=run", undefined);
-    expect(api.preferences.update).not.toHaveBeenCalledWith({ onboardingCompleted: false });
+    expect(settingsHarness.setLocation).toHaveBeenCalledWith("/?onboarding=run", undefined);
+    expect(settingsHarness.updatePreferences).not.toHaveBeenCalledWith({
+      onboardingCompleted: false,
+    });
   });
 
   it("prompts before following same-origin links with unsaved settings", async () => {
     const qc = new QueryClient();
     seedDefaultSettings(qc);
 
-    renderSettings(
-      qc,
-      <>
-        <Settings />
-        <a href="/analytics">Analytics link</a>
-      </>,
-    );
+    renderSettings(qc, <a href="/analytics">Analytics link</a>);
 
     await makeSettingsDirty();
 
@@ -266,7 +175,7 @@ describe("Settings MAF style switch", () => {
     expect(
       await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
     ).toBeInTheDocument();
-    expect(mocks.setLocation).not.toHaveBeenCalled();
+    expect(settingsHarness.setLocation).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -280,7 +189,7 @@ describe("Settings MAF style switch", () => {
     fireEvent.click(screen.getByText("Analytics link"));
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
-    expect(mocks.setLocation).toHaveBeenCalledWith("/analytics", undefined);
+    expect(settingsHarness.setLocation).toHaveBeenCalledWith("/analytics", undefined);
   }, 10_000);
 
   it("prompts before Settings-owned programmatic navigation while dirty", async () => {
@@ -296,7 +205,7 @@ describe("Settings MAF style switch", () => {
     expect(
       await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
     ).toBeInTheDocument();
-    expect(mocks.setLocation).not.toHaveBeenCalled();
+    expect(settingsHarness.setLocation).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -310,7 +219,7 @@ describe("Settings MAF style switch", () => {
     fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
-    expect(mocks.setLocation).toHaveBeenCalledWith("/?onboarding=run", undefined);
+    expect(settingsHarness.setLocation).toHaveBeenCalledWith("/?onboarding=run", undefined);
   }, 10_000);
 
   it("prompts on browser back or forward while settings are dirty", async () => {
@@ -333,6 +242,6 @@ describe("Settings MAF style switch", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 
-    expect(mocks.setLocation).toHaveBeenCalledWith("/analytics", undefined);
+    expect(settingsHarness.setLocation).toHaveBeenCalledWith("/analytics", undefined);
   }, 10_000);
 });
