@@ -114,6 +114,18 @@ protectedPost(router, "/api/v1/chat", { limiter: rateLimiter("chat", 10), middle
 //     actually expires so responses can't persist against a
 //     now-invalid session (Warning-12).
 const SSE_MAX_DURATION_MS = 5 * 60 * 1000;
+
+/**
+ * Grace period after a deadline-induced controller.abort() before we
+ * forcibly destroy the underlying socket (W4). controller.abort() stops
+ * the generator and res.end() tries to flush a final SSE event, but if
+ * the client is hung and not draining its read buffer, the TCP FIN may
+ * never be ACK'd and the file descriptor can linger up to the OS
+ * keepalive timeout (~2 hours on Linux defaults). 2 seconds is enough
+ * for a healthy client to ACK the FIN; anything still pending after
+ * that gets destroyed.
+ */
+const SSE_FORCE_CLOSE_GRACE_MS = 2_000;
 const SSE_EXPIRY_MARGIN_MS = 5_000;
 
 export type SseDeadlineReason = "auth-expired" | "timeout";
@@ -183,9 +195,26 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     // the client — only auth-expired is recoverable by re-authing. unref()
     // so the timer doesn't block process exit on an otherwise-idle server.
     const { deadlineMs, reason: deadlineReason } = computeSseDeadline(req);
+    let forceCloseTimer: ReturnType<typeof setTimeout> | null = null;
     const deadlineTimer = setTimeout(() => {
       abortState.reason = deadlineReason;
       controller.abort();
+      // After a short grace period, forcibly destroy the underlying socket
+      // if the response is still pending — a client that's hung past the
+      // hard cap would otherwise pin the TCP connection (and FD) until OS
+      // keepalive eventually reaps it (W4). Only fires on deadline-induced
+      // aborts; normal completion clears this timer in the finally block.
+      forceCloseTimer = setTimeout(() => {
+        forceCloseTimer = null;
+        if (!res.writableEnded) {
+          reqLogger(req).warn(
+            { context: "sse", reason: abortState.reason },
+            "SSE deadline grace expired with response still open — destroying socket",
+          );
+          res.socket?.destroy();
+        }
+      }, SSE_FORCE_CLOSE_GRACE_MS);
+      forceCloseTimer.unref();
     }, Math.max(0, deadlineMs - Date.now()));
     deadlineTimer.unref();
 
@@ -253,6 +282,7 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
       res.end();
     } finally {
       clearTimeout(deadlineTimer);
+      if (forceCloseTimer) clearTimeout(forceCloseTimer);
       unregister();
     }
   });

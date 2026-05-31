@@ -5,6 +5,8 @@ process.stderr.write(`[env] Validating environment pid=${process.pid} at=${new D
 
 import { z } from "zod";
 
+import { checkSafeOutboundUrl } from "./ssrfGuard";
+
 // Reject deterministic strings that appear in docs, CI, or tests. If a real
 // secret ever matches one of these it would be compromised anyway — they
 // leak in public CI logs and example configs (W10).
@@ -32,7 +34,17 @@ const envSchema = z.object({
   AI_TEXT_FAST_MODEL: z.string().optional(),
   AI_TEXT_REASONING_MODEL: z.string().optional(),
   AI_TEXT_REASONING_EFFORT: z.enum(["none", "low", "medium", "high"]).default("high"),
-  AI_TEXT_BASE_URL: z.url().optional(),
+  AI_TEXT_BASE_URL: z
+    .url()
+    .refine(
+      (url) => checkSafeOutboundUrl(url).ok,
+      // The refine callback can't pass through the reason from
+      // checkSafeOutboundUrl directly (Zod's message function gets just the
+      // value), so this message is intentionally generic. The detailed
+      // reason is what the underlying guard returns when used elsewhere.
+      "AI_TEXT_BASE_URL must not point at a loopback, private, or link-local address (W2 SSRF guard)",
+    )
+    .optional(),
   AI_TEXT_API_KEY: z.string().optional(),
   AI_TEXT_OPENAI_COMPATIBLE_PROFILE: z.enum(["openai", "xai", "groq", "together", "openrouter", "deepseek", "custom"]).default("openai"),
   OPENAI_API_KEY: z.string().optional(),
