@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
-import { ProgressTab } from "@/components/analytics/ProgressTab";
-import { setupUserEvent } from "@/components/settings/__tests__/setUserEvent";
+import { ProgressTab } from "../ProgressTab";
 
 vi.mock("@/components/analytics/PersonalRecordsTab", () => ({
   PersonalRecordsTab: ({ dateParams }: { dateParams: string }) => (
@@ -30,7 +30,7 @@ describe("ProgressTab", () => {
   });
 
   it("switches to the Progression view when the toggle is clicked", async () => {
-    const user = setupUserEvent();
+    const user = userEvent.setup();
     render(<ProgressTab dateParams="?from=2024-01-01" />);
 
     await user.click(screen.getByTestId("subtab-progression"));
