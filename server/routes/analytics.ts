@@ -94,14 +94,14 @@ export function validDate(val: unknown): string | undefined {
 type DateQuery = { from?: string; to?: string };
 type DateReq = ExpressRequest<Record<string, never>, unknown, unknown, DateQuery>;
 
-function todayUtcYyyyMmDd(): string {
+export function todayUtcYyyyMmDd(): string {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     .toISOString()
     .split("T")[0];
 }
 
-function addCalendarDays(date: string, delta: number): string {
+export function addCalendarDays(date: string, delta: number): string {
   const value = new Date(`${date}T00:00:00Z`);
   value.setUTCDate(value.getUTCDate() + delta);
   return value.toISOString().split("T")[0];
