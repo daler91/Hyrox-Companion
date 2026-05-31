@@ -437,6 +437,8 @@ export default function Settings() {
     saveMutation.mutate({
       weightUnit,
       distanceUnit,
+      division,
+      gender,
       weeklyGoal: Number.parseInt(weeklyGoal, 10),
       emailNotifications,
       emailWeeklySummary,
@@ -458,6 +460,8 @@ export default function Settings() {
     saveMutation,
     weightUnit,
     distanceUnit,
+    division,
+    gender,
     weeklyGoal,
     emailNotifications,
     emailWeeklySummary,
