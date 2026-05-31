@@ -1,5 +1,5 @@
 import type { PlanDay } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -73,8 +73,7 @@ export function WorkoutPlanDayPicker({
   });
   const planDetailQuery = useQuery({
     queryKey: selectedPlanId ? QUERY_KEYS.plan(selectedPlanId) : ["plan-detail-disabled"],
-    queryFn: () => api.plans.get(selectedPlanId!),
-    enabled: !!selectedPlanId,
+    queryFn: selectedPlanId ? () => api.plans.get(selectedPlanId) : skipToken,
   });
 
   const plans = plansQuery.data ?? [];
