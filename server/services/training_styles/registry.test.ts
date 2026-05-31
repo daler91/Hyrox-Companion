@@ -37,6 +37,17 @@ describe("training style prompt context", () => {
     expect(prompt).toContain("Analysis class template - non-compliant");
   });
 
+  it("threads the athlete's real MAF heart-rate ceiling into structured fields during aerobic base", () => {
+    const context: TrainingContext = { ...baseContext, mafHr: 142 };
+    const prompt =
+      resolveTrainingStyle("maf_method").strategy.buildPromptContext(context, []).promptSuffix ?? "";
+
+    // The actual ceiling is surfaced as a number the model can act on — not the
+    // old "use_user_profile_maf_hr" placeholder, which carried no value.
+    expect(prompt).toContain('"mafHr":142');
+    expect(prompt).not.toContain("use_user_profile_maf_hr");
+  });
+
   it("keeps style-specific divergence intentional for identical workouts (regression)", () => {
     const workouts = [{ id: "w-1", title: "Same workout" } as never];
     const mafPrompt = resolveTrainingStyle("maf_method").strategy.buildPromptContext(baseContext, workouts).promptSuffix ?? "";

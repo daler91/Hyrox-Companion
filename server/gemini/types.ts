@@ -10,6 +10,8 @@ export interface TrainingContext {
   skippedWorkouts: number;
   completionRate: number;
   currentStreak: number;
+  /** Persisted MAF aerobic heart-rate ceiling (bpm) from the user profile, when set. */
+  mafHr?: number | null;
   weeklyGoal?: number;
   weightUnit?: string;
   distanceUnit?: string;

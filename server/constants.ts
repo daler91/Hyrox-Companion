@@ -44,6 +44,20 @@ export const PLAN_GENERATION_AI_TIMEOUT_MS = 300_000; // 5 minutes
 /** Default timeline query limit */
 export const DEFAULT_TIMELINE_LIMIT = 500;
 
+/**
+ * Upper bound on timeline entries loaded when building AI coaching context
+ * (`buildTrainingContext`). Unlike the HTTP timeline route, that path has no
+ * caller-supplied limit, so without this it loads the user's ENTIRE history
+ * (every scheduled day + workout + hydrated exercise set) on every auto-coach
+ * run and chat turn — the heaviest read in the app, scaling with tenure.
+ * The coaching context only needs recent training (its sibling load/exercise
+ * reads use a 70-day window; the decision engine looks at the last 7 days and
+ * last 3 RPEs), so a generous recent-history window both fixes the unbounded
+ * read and keeps the derived stats focused on current form. 400 comfortably
+ * exceeds 70 days even for twice-daily athletes.
+ */
+export const AI_CONTEXT_TIMELINE_LIMIT = 400;
+
 /** Default pagination limit for list endpoints */
 export const DEFAULT_PAGE_LIMIT = 50;
 
