@@ -208,6 +208,16 @@ export function userDistanceToMeters(value: number, distanceUnit: string): numbe
   return value * 1000;
 }
 
+/**
+ * Convert a distance value stored in `exercise_sets` / `workout_logs` — which is
+ * in the user's stored unit (m for km users, ft for miles users) — into meters,
+ * for read-only computation. This does NOT write the value back, so the
+ * read-convert-write drift caveat in the unit-storage sentinel does not apply.
+ */
+export function storedDistanceToMeters(value: number, distanceUnit: string | undefined | null): number {
+  return getStoredDistanceUnit(distanceUnit) === "ft" ? value / M_TO_FT : value;
+}
+
 export function kgToUserWeight(kg: number, weightUnit: string): number {
   const standardUnit = standardizeWeightUnit(weightUnit);
   if (standardUnit === "lbs") {

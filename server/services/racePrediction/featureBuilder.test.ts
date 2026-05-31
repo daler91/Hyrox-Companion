@@ -10,13 +10,20 @@ import { buildRacePredictionFeatures } from "./featureBuilder";
 
 function set(
   exerciseName: string,
-  fields: { time?: number | null; weight?: number | null; distance?: number | null; date?: string },
+  fields: {
+    time?: number | null;
+    weight?: number | null;
+    distance?: number | null;
+    reps?: number | null;
+    date?: string;
+  },
 ): LoggedExerciseSetWithDate {
   return {
     exerciseName,
     time: fields.time ?? null,
     weight: fields.weight ?? null,
     distance: fields.distance ?? null,
+    reps: fields.reps ?? null,
     date: fields.date ?? "2026-05-01",
   } as unknown as LoggedExerciseSetWithDate;
 }
@@ -121,5 +128,68 @@ describe("buildRacePredictionFeatures", () => {
       NOW,
     );
     expect(features.stationFeatures.sled_push.lastTrainedDaysAgo).toBe(5); // 2026-05-25 → 2026-05-30
+  });
+
+  it("projects an in-band partial interval to the full station via the power law", () => {
+    // 500 m SkiErg in 2:00 → 1000 m via Riegel: 120s * 2^1.06 ≈ 250s
+    // (slightly slower than the naive linear 240s, as pace fades over distance).
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 2, distance: 500, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(250, 0);
+  });
+
+  it("drops an out-of-band tiny interval and falls back to the benchmark", () => {
+    // A 250 m SkiErg interval (0.25× the 1000 m station) is too short to trust,
+    // so it's dropped and the station uses its division benchmark instead.
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 1, distance: 250, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBeNull();
+    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg");
+    expect(ski?.basis).toBe("benchmark");
+    expect(ski?.estimatedSeconds).toBe(
+      getRaceReference("open", "male").stations.skierg.benchmarkSeconds,
+    );
+  });
+
+  it("projects an in-band partial rep set to the full station via the power law", () => {
+    // 50 wall balls in 2:30 → 100 reps via Riegel: 150s * 2^1.06 ≈ 313s.
+    const features = buildRacePredictionFeatures(
+      [set("wall_balls", { time: 2.5, reps: 50, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.wall_balls.medianSeconds).toBeCloseTo(150 * 2 ** 1.06, 1);
+  });
+
+  it("converts feet-stored distance for miles users before projecting", () => {
+    // A miles user's full 1 km SkiErg is stored as ~3281 ft. Converted to meters
+    // it's a full-station effort (~unchanged), NOT a 3281 m effort that would be
+    // dropped/understated. Logged 4:00 → stays ≈ 4:00.
+    const fullStationFeet = 1000 * 3.28084;
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 4, distance: fullStationFeet, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg", distanceUnit: "miles" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(240, 0);
+  });
+
+  it("floors an impossibly fast logged split in the deterministic baseline", () => {
+    // A 0:48 SkiErg logged without a distance must not surface as a 1000 m split.
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 0.8, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg");
+    expect(ski?.basis).toBe("logged");
+    expect(ski?.estimatedSeconds).toBe(180); // floored to the world-class minimum
+    expect(ski?.floorSeconds).toBe(180);
   });
 });

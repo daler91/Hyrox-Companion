@@ -34,13 +34,14 @@ type StoredGender = RacePredictionResponse["gender"];
 
 const RACE_PREDICTOR_SYSTEM_PROMPT = `You are an elite HYROX coach. Estimate an athlete's finish time for a full HYROX race: 8 x 1 km runs interleaved with 8 functional stations in a fixed order (16 segments total), plus the inevitable transition ("roxzone") time between segments.
 
-You are given, as JSON, the athlete's division, gender, and per-segment data derived from their logged training. For each of the 16 race segments you get a deterministic baseline split and, where available, their logged best/median split seconds, sample size, recency (days since last trained), and — for stations — the load they trained at vs the division-standard load (loadRatio = trained / standard, in the athlete's weight unit).
+You are given, as JSON, the athlete's division, gender, and per-segment data derived from their logged training. For each of the 16 race segments you get a deterministic baseline split, a floorSeconds (the fastest physically-plausible split for that segment), and, where available, their logged best/median split seconds, sample size, recency (days since last trained), and — for stations — the load they trained at vs the division-standard load (loadRatio = trained / standard, in the athlete's weight unit). Logged split seconds are already normalized to the full race-station distance/reps, so treat them as full-station efforts.
 
 Rules:
 - Anchor each estimate on the athlete's logged median where sampleSize > 0; trust it more as sampleSize grows.
 - For stations, scale for load: trained lighter than standard (loadRatio < 1) means slower at race load; heavier (loadRatio > 1) means faster. Stay conservative.
 - Model compromised running: race runs are slower than fresh 1 km efforts because they are run under fatigue between stations, and later runs degrade more.
 - Where sampleSize = 0, lean on the provided deterministic baseline / division benchmark.
+- NEVER output an estimatedSeconds below a segment's floorSeconds — that floor is the world-class limit and faster is physically impossible.
 - The total finish time must include realistic transition time and be at least the sum of your 16 segment estimates.
 
 Return ONLY a JSON object (no prose, no markdown fences) with exactly these fields:
@@ -104,6 +105,7 @@ function buildFeaturePromptPayload(features: RacePredictionFeatures): unknown {
         kind: segment.kind,
         deterministicBaselineSeconds: baseline.estimatedSeconds,
         baselineBasis: baseline.basis,
+        floorSeconds: baseline.floorSeconds,
       };
       if (segment.kind === "run") {
         const f = features.runFeature;
@@ -171,8 +173,10 @@ function buildAiResponse(
   let segmentSum = 0;
   const segments: RaceSegmentPrediction[] = features.baselineSegments.map((baseline) => {
     const aiSegment = aiByIndex.get(baseline.index);
+    // Clamp the model's split to a physically-plausible range: never below the
+    // world-class floor for this segment, never above the per-segment ceiling.
     const estimatedSeconds = aiSegment
-      ? clamp(Math.round(aiSegment.estimatedSeconds), 1, 3600)
+      ? clamp(Math.round(aiSegment.estimatedSeconds), baseline.floorSeconds, 3600)
       : baseline.estimatedSeconds;
     segmentSum += estimatedSeconds;
     return {
@@ -251,6 +255,7 @@ export async function generateRacePrediction(
     division: user?.division ?? null,
     gender: storedGender,
     weightUnit: user?.weightUnit ?? "kg",
+    distanceUnit: user?.distanceUnit ?? "km",
   });
 
   const blocker = await resolveAiBlocker(user, userId, log);

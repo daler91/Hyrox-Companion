@@ -96,11 +96,19 @@ export interface StationStandard {
   distanceMeters?: number;
   /** Approximate competitive split time in seconds — SEED, refined by AI. */
   benchmarkSeconds: number;
+  /**
+   * Fastest physically-plausible full-station split in seconds (≈ world-class).
+   * A hard floor the predictor never goes below, so a mis-logged partial effort
+   * (e.g. a short interval) can't surface as an elite-impossible split.
+   */
+  floorSeconds: number;
 }
 
 export interface RaceReference {
   /** Approximate per-1 km run split in seconds — SEED. */
   runKmBenchmarkSeconds: number;
+  /** Fastest physically-plausible per-1 km run split in seconds (≈ world-class). */
+  runKmFloorSeconds: number;
   stations: Record<HyroxStation, StationStandard>;
 }
 
@@ -162,6 +170,26 @@ const RUN_KM_BENCHMARK_SECONDS: Record<Division, Record<Gender, number>> = {
   pro: { male: 270, female: 300 }, // ~4:30 / ~5:00 per km (competitive)
 };
 
+/**
+ * Fastest physically-plausible full-station split seconds (≈ world-class). These
+ * are deliberately set at the edge of human possibility and are gender/division
+ * agnostic, so they only ever clamp impossible values (e.g. a partial-interval
+ * log mistaken for a full station) — never a merely fast, legitimate athlete.
+ */
+const STATION_FLOOR_SECONDS: Record<HyroxStation, number> = {
+  skierg: 180, // 3:00 / 1000 m
+  sled_push: 60,
+  sled_pull: 50,
+  burpee_broad_jump: 150,
+  rowing: 165, // 2:45 / 1000 m
+  farmers_carry: 50,
+  sandbag_lunges: 100,
+  wall_balls: 150, // 2:30 / 100 reps
+};
+
+/** Fastest physically-plausible per-1 km run split in seconds (≈ world-class). */
+const RUN_KM_FLOOR_SECONDS = 165; // 2:45 / km
+
 function buildReference(division: Division, gender: Gender): RaceReference {
   const stations = {} as Record<HyroxStation, StationStandard>;
   for (const station of HYROX_STATION_ORDER) {
@@ -169,9 +197,14 @@ function buildReference(division: Division, gender: Gender): RaceReference {
       ...STATION_DIMENSIONS[station],
       loadKg: STATION_LOADS_KG[division][gender][station],
       benchmarkSeconds: STATION_BENCHMARK_SECONDS[division][gender][station],
+      floorSeconds: STATION_FLOOR_SECONDS[station],
     };
   }
-  return { runKmBenchmarkSeconds: RUN_KM_BENCHMARK_SECONDS[division][gender], stations };
+  return {
+    runKmBenchmarkSeconds: RUN_KM_BENCHMARK_SECONDS[division][gender],
+    runKmFloorSeconds: RUN_KM_FLOOR_SECONDS,
+    stations,
+  };
 }
 
 export const RACE_REFERENCE: Record<Division, Record<Gender, RaceReference>> = {
@@ -197,10 +230,12 @@ function buildBlendedReference(division: Division): RaceReference {
       ...STATION_DIMENSIONS[station],
       loadKg: m.stations[station].loadKg,
       benchmarkSeconds: Math.round((m.stations[station].benchmarkSeconds + f.stations[station].benchmarkSeconds) / 2),
+      floorSeconds: m.stations[station].floorSeconds,
     };
   }
   return {
     runKmBenchmarkSeconds: Math.round((m.runKmBenchmarkSeconds + f.runKmBenchmarkSeconds) / 2),
+    runKmFloorSeconds: m.runKmFloorSeconds,
     stations,
   };
 }
