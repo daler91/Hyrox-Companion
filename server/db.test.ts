@@ -1,4 +1,4 @@
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("db.ts", () => {
   beforeEach(() => {
@@ -14,10 +14,10 @@ describe("db.ts", () => {
     await expect(import("./db")).rejects.toThrow("DATABASE_URL must be set");
   });
 
-  it("sets ssl.rejectUnauthorized = true for external production hosts", async () => {
-    let poolConfig: any;
-    vi.doMock("pg", () => {
-      return {
+  describe("SSL configuration", () => {
+    const setupSslTest = async (url: string, envNodeEnv: string) => {
+      let poolConfig: any;
+      vi.doMock("pg", () => ({
         default: {
           Pool: class Pool {
             constructor(config: any) {
@@ -26,115 +26,51 @@ describe("db.ts", () => {
             on = vi.fn();
           }
         }
-      };
-    });
+      }));
 
-    vi.doMock("./env", () => ({
-      env: {
-        DATABASE_URL: "postgres://user:pass@external-host.com:5432/db",
-        NODE_ENV: "production"
-      }
-    }));
-
-    await import("./db");
-
-    expect(poolConfig.ssl).toEqual({ rejectUnauthorized: true });
-  });
-
-  it("sets ssl = false for internal production hosts (.railway.internal)", async () => {
-    let poolConfig: any;
-    vi.doMock("pg", () => {
-      return {
-        default: {
-          Pool: class Pool {
-            constructor(config: any) {
-              poolConfig = config;
-            }
-            on = vi.fn();
-          }
+      vi.doMock("./env", () => ({
+        env: {
+          DATABASE_URL: url,
+          NODE_ENV: envNodeEnv
         }
-      };
+      }));
+
+      await import("./db");
+      return poolConfig.ssl;
+    };
+
+    it("sets ssl.rejectUnauthorized = true for external production hosts", async () => {
+      const ssl = await setupSslTest("postgres://user:pass@external-host.com:5432/db", "production");
+      expect(ssl).toEqual({ rejectUnauthorized: true });
     });
 
-    vi.doMock("./env", () => ({
-      env: {
-        DATABASE_URL: "postgres://user:pass@my-db.railway.internal:5432/db",
-        NODE_ENV: "production"
-      }
-    }));
-
-    await import("./db");
-
-    expect(poolConfig.ssl).toBe(false);
-  });
-
-  it("sets ssl = false in non-production environments", async () => {
-    let poolConfig: any;
-    vi.doMock("pg", () => {
-      return {
-        default: {
-          Pool: class Pool {
-            constructor(config: any) {
-              poolConfig = config;
-            }
-            on = vi.fn();
-          }
-        }
-      };
+    it("sets ssl = false for internal production hosts (.railway.internal)", async () => {
+      const ssl = await setupSslTest("postgres://user:pass@my-db.railway.internal:5432/db", "production");
+      expect(ssl).toBe(false);
     });
 
-    vi.doMock("./env", () => ({
-      env: {
-        DATABASE_URL: "postgres://user:pass@external-host.com:5432/db",
-        NODE_ENV: "development"
-      }
-    }));
-
-    await import("./db");
-
-    expect(poolConfig.ssl).toBe(false);
-  });
-
-  it("sets ssl.rejectUnauthorized = true if URL parsing fails in production (safe fallback)", async () => {
-    let poolConfig: any;
-    vi.doMock("pg", () => {
-      return {
-        default: {
-          Pool: class Pool {
-            constructor(config: any) {
-              poolConfig = config;
-            }
-            on = vi.fn();
-          }
-        }
-      };
+    it("sets ssl = false in non-production environments", async () => {
+      const ssl = await setupSslTest("postgres://user:pass@external-host.com:5432/db", "development");
+      expect(ssl).toBe(false);
     });
 
-    vi.doMock("./env", () => ({
-      env: {
-        // This will cause new URL() to throw and fall into the catch block returning false
-        // then `!isInternalHost` is true, so ssl = { rejectUnauthorized: true }
-        DATABASE_URL: "not-a-valid-url",
-        NODE_ENV: "production"
-      }
-    }));
-
-    await import("./db");
-
-    expect(poolConfig.ssl).toEqual({ rejectUnauthorized: true });
+    it("sets ssl.rejectUnauthorized = true if URL parsing fails in production (safe fallback)", async () => {
+      // This will cause new URL() to throw and fall into the catch block returning false
+      // then `!isInternalHost` is true, so ssl = { rejectUnauthorized: true }
+      const ssl = await setupSslTest("not-a-valid-url", "production");
+      expect(ssl).toEqual({ rejectUnauthorized: true });
+    });
   });
 
   it("handles pool error events", async () => {
     const onMock = vi.fn();
-    vi.doMock("pg", () => {
-      return {
-        default: {
-          Pool: class Pool {
-            on = onMock;
-          }
+    vi.doMock("pg", () => ({
+      default: {
+        Pool: class Pool {
+          on = onMock;
         }
-      };
-    });
+      }
+    }));
 
     vi.doMock("./env", () => ({
       env: {
