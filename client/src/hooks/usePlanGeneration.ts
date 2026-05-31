@@ -1,5 +1,5 @@
 import type { GeneratePlanInput, TrainingPlanWithDays } from "@shared/schema";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
@@ -43,8 +43,7 @@ export function useGeneratePlan(): UseGeneratePlanResult {
 
   const statusQuery = useQuery({
     queryKey: ["plan-generation-status", pendingPlanId],
-    queryFn: () => api.plans.getGenerationStatus(pendingPlanId!),
-    enabled: pendingPlanId !== null,
+    queryFn: pendingPlanId ? () => api.plans.getGenerationStatus(pendingPlanId) : skipToken,
     refetchInterval: (query) => {
       const s = query.state.data?.generationStatus;
       return s === "ready" || s === "failed" ? false : 3000;

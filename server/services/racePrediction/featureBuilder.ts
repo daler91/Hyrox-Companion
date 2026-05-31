@@ -94,7 +94,7 @@ export interface AthleteProfileInput {
   division: string | null | undefined;
   gender: StoredGender;
   weightUnit: string | null | undefined;
-  distanceUnit?: string | null | undefined;
+  distanceUnit?: string | null;
 }
 
 function median(values: number[]): number | null {
