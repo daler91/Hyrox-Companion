@@ -5,6 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { pool } from "./db";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
+import { loadPersistedBreakerState } from "./gemini/circuitBreaker";
 import { logger } from "./logger";
 import type { IStorage } from "./storage";
 import { vectorPool } from "./vectorDb";
@@ -178,4 +179,9 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Reset stale isAutoCoaching skipped");
   }
+  // Restore any persisted AI circuit-breaker state so a deploy mid-outage
+  // doesn't reset the breaker to "closed" and amplify load on a struggling
+  // upstream (W20). loadPersistedBreakerState swallows its own errors so
+  // this never blocks startup.
+  await loadPersistedBreakerState();
 }

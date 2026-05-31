@@ -1,10 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Mock the shared cache so tests don't touch a real DB pool. Returns null
+// from getRuntimeCache by default (no persisted state); individual W20 tests
+// override the resolved value to exercise the restore path.
+const mockGetRuntimeCache = vi.fn().mockResolvedValue(undefined);
+const mockSetRuntimeCache = vi.fn().mockResolvedValue(undefined);
+vi.mock("../sharedRuntimeState", () => ({
+  getRuntimeCache: (key: string) => mockGetRuntimeCache(key),
+  setRuntimeCache: (key: string, value: unknown, ttl: number) => mockSetRuntimeCache(key, value, ttl),
+}));
+
 import {
   __circuitBreakerInternalsForTests,
   __resetCircuitBreakerForTests,
   assertBreakerClosed,
   CircuitBreakerOpenError,
+  loadPersistedBreakerState,
   recordBreakerFailure,
   recordBreakerSuccess,
 } from "./circuitBreaker";
@@ -12,6 +23,8 @@ import {
 describe("circuit breaker", () => {
   beforeEach(() => {
     __resetCircuitBreakerForTests();
+    mockGetRuntimeCache.mockReset().mockResolvedValue(undefined);
+    mockSetRuntimeCache.mockReset().mockResolvedValue(undefined);
     vi.useFakeTimers();
   });
 
@@ -105,6 +118,107 @@ describe("circuit breaker", () => {
       // would still be stuck true from the first probe.
       expect(() => assertBreakerClosed()).not.toThrow();
       expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(true);
+    });
+  });
+
+  describe("persistence (W20)", () => {
+    function openBreaker(): void {
+      for (let i = 0; i < 5; i += 1) recordBreakerFailure();
+    }
+
+    it("persists a snapshot when the breaker opens via threshold", () => {
+      openBreaker();
+      expect(mockSetRuntimeCache).toHaveBeenCalledWith(
+        "ai-circuit-breaker:state",
+        expect.objectContaining({ state: "open", consecutiveFailures: 5 }),
+        expect.any(Number),
+      );
+    });
+
+    it("persists a snapshot when transitioning open → half-open", () => {
+      openBreaker();
+      mockSetRuntimeCache.mockClear();
+      vi.advanceTimersByTime(30_001);
+      assertBreakerClosed(); // transition to half-open
+      expect(mockSetRuntimeCache).toHaveBeenCalledWith(
+        "ai-circuit-breaker:state",
+        expect.objectContaining({ state: "half-open" }),
+        expect.any(Number),
+      );
+    });
+
+    it("persists a snapshot when half-open probe fails (back to open)", () => {
+      openBreaker();
+      vi.advanceTimersByTime(30_001);
+      assertBreakerClosed();
+      mockSetRuntimeCache.mockClear();
+      recordBreakerFailure();
+      expect(mockSetRuntimeCache).toHaveBeenCalledWith(
+        "ai-circuit-breaker:state",
+        expect.objectContaining({ state: "open" }),
+        expect.any(Number),
+      );
+    });
+
+    it("persists a snapshot when a successful probe closes the breaker", () => {
+      openBreaker();
+      vi.advanceTimersByTime(30_001);
+      assertBreakerClosed();
+      mockSetRuntimeCache.mockClear();
+      recordBreakerSuccess();
+      expect(mockSetRuntimeCache).toHaveBeenCalledWith(
+        "ai-circuit-breaker:state",
+        expect.objectContaining({ state: "closed", consecutiveFailures: 0 }),
+        expect.any(Number),
+      );
+    });
+
+    it("does NOT persist a snapshot on a routine in-closed-state success", () => {
+      mockSetRuntimeCache.mockClear();
+      recordBreakerSuccess(); // breaker was already closed
+      expect(mockSetRuntimeCache).not.toHaveBeenCalled();
+    });
+
+    it("loadPersistedBreakerState restores an open snapshot", async () => {
+      mockGetRuntimeCache.mockResolvedValue({
+        state: "open",
+        consecutiveFailures: 5,
+        openedAt: Date.now() - 1000, // recent — still within cooldown
+      });
+
+      await loadPersistedBreakerState();
+
+      // Throws because state is restored to open and we're within cooldown.
+      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+    });
+
+    it("loadPersistedBreakerState downgrades half-open → open on restore", async () => {
+      // A "half-open" snapshot from a previous process is meaningless on a
+      // fresh boot because the probe-in-flight + deadline timer don't carry
+      // across. We treat it as "open" so the next request triggers a fresh
+      // probe via the normal cooldown path.
+      mockGetRuntimeCache.mockResolvedValue({
+        state: "half-open",
+        consecutiveFailures: 5,
+        openedAt: Date.now() - 1000,
+      });
+
+      await loadPersistedBreakerState();
+
+      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+    });
+
+    it("loadPersistedBreakerState no-ops on empty cache", async () => {
+      mockGetRuntimeCache.mockResolvedValue(undefined);
+      await loadPersistedBreakerState();
+      // Default state is "closed" — calls pass through.
+      expect(() => assertBreakerClosed()).not.toThrow();
+    });
+
+    it("loadPersistedBreakerState swallows cache errors and stays closed", async () => {
+      mockGetRuntimeCache.mockRejectedValue(new Error("db unreachable"));
+      await expect(loadPersistedBreakerState()).resolves.toBeUndefined();
+      expect(() => assertBreakerClosed()).not.toThrow();
     });
   });
 });
