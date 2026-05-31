@@ -1,0 +1,36 @@
+name: Secret Scan
+
+# Fails the build if a secret (API key, token, private key, encryption key,
+# etc.) is committed. Added after a former `.replit` config leaked an
+# ENCRYPTION_KEY in a [userenv] block — this guards against any secret being
+# committed again, on every push and pull request.
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '23 1 * * 6'  # weekly sweep, matches the other security workflows
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          # gitleaks scans the entire git history, not just the latest commit.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: gitleaks-action is free for personal accounts and public repos.
+          # If this repo is ever moved under a GitHub *organization*, set the
+          # GITLEAKS_LICENSE secret (see github.com/gitleaks/gitleaks-action).

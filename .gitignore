@@ -12,6 +12,12 @@ cypress/downloads
 .env.*
 !.env.example
 
+# Replit config (project no longer uses Replit) — these embedded secrets in a
+# [userenv] block, so keep them out of the repo. Set secrets as host env vars.
+.replit
+replit.nix
+replit.md
+
 # Testing coverage
 coverage/
 
