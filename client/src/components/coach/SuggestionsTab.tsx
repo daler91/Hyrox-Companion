@@ -26,7 +26,11 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       setSuggestionsRagInfo(data.ragInfo);
       let responseContent: string;
       if (!data.suggestions || data.suggestions.length === 0) {
-        responseContent = "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
+        // Prefer a server-provided reason (e.g. the plan-rollover nudge when a
+        // plan has ended with no next one, S22) over the generic empty state.
+        responseContent = data.message?.trim()
+          ? data.message
+          : "Your upcoming workouts look well-balanced! I don't have any specific improvements to suggest right now.";
         setPendingSuggestions([]);
       } else {
         responseContent = `I have ${data.suggestions.length} suggestion${data.suggestions.length > 1 ? 's' : ''} for your upcoming workouts. Review them below and click Apply to add them to your plan.`;

@@ -65,8 +65,13 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
   const originalJson = res.json.bind(res);
   res.json = ((body: unknown) => {
     const statusCode = res.statusCode || 200;
-    // Only cache 2xx responses — replaying a cached 4xx/5xx would mask a
-    // transient error once the underlying issue is fixed.
+    // Idempotency semantics (S10): only 2xx responses are cached. A retry that
+    // carries the same X-Idempotency-Key after a non-2xx result intentionally
+    // re-executes the handler, so a transient failure (a 5xx, or a 404 from
+    // read-after-write lag) is retried rather than being pinned by a cached
+    // error. Caching 4xx for idempotent DELETEs with a short TTL was considered
+    // but rejected for the same reason — it would mask transient lag. Callers
+    // needing exactly-once on non-2xx must reconcile via their own state.
     if (statusCode >= 200 && statusCode < 300) {
       // Always persist the key on success — otherwise a retry with the
       // same X-Idempotency-Key re-executes the mutation (Codex P1 on

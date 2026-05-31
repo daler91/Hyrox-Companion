@@ -27,6 +27,14 @@ function createMessageUpdater(
 
 type StreamErrorKind = "abort" | "network" | "other";
 
+// S9 — the streaming path relies on fetch + Response.body (ReadableStream),
+// which is absent on very old WebKit (iOS Safari < 10.3). Feature-detect so
+// those clients fall back to the non-streaming /api/v1/chat request instead of
+// throwing "No response body".
+function supportsResponseStreaming(): boolean {
+  return typeof ReadableStream !== "undefined";
+}
+
 function classifyStreamError(err: unknown): StreamErrorKind {
   if (err instanceof DOMException && err.name === "AbortError") return "abort";
   // fetch surfaces network failures as TypeError
@@ -172,6 +180,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const messagesRef = useRef<Message[]>(messages);
   const isSubmittingRef = useRef(false);
   const streamControllerRef = useRef<AbortController | null>(null);
+  // Monotonic id bumped per send. A flush from a superseded stream (e.g. a
+  // requestAnimationFrame flush scheduled just before a disconnect/reconnect)
+  // carries a stale id and is ignored, so it can't overwrite the live stream's
+  // state (W14).
+  const streamGenerationRef = useRef(0);
 
   useEffect(() => () => {
     // Abort any in-flight stream on unmount so the rAF / setState in
@@ -248,6 +261,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const sendMessage = useCallback(async (content: string) => {
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
+    // Claim this send's stream generation; later flushes check it (W14).
+    const generationId = ++streamGenerationRef.current;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -276,7 +291,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           .slice(-MAX_HISTORY_MESSAGES)
       );
 
-      if (useStreaming) {
+      if (useStreaming && supportsResponseStreaming()) {
         const placeholderMessage: Message = {
           id: assistantMessageId,
           role: "assistant",
@@ -309,6 +324,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           metaKey: "ragInfo",
           signal: controller.signal,
           onFlush: (snapshot) => {
+            // Drop flushes from a superseded stream so a stale rAF flush after
+            // a reconnect can't clobber the current stream's state (W14).
+            if (streamGenerationRef.current !== generationId) return;
             fullResponse = snapshot.content;
             updateMessage(snapshot);
           },

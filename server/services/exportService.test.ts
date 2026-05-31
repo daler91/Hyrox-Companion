@@ -8,9 +8,11 @@ describe('exportService - generateCSV', () => {
 
   const createMockStorage = (
     timeline: unknown[] = [],
-    exerciseSets: unknown[] = []
+    exerciseSets: unknown[] = [],
+    user: unknown = null
   ): IStorage => {
     return {
+      users: { getUser: vi.fn().mockResolvedValue(user) },
       timeline: { getTimeline: vi.fn().mockResolvedValue(timeline) },
       analytics: { getAllExerciseSetsWithDates: vi.fn().mockResolvedValue(exerciseSets) },
     } as unknown as IStorage;
@@ -79,11 +81,36 @@ describe('exportService - generateCSV', () => {
       '2023-10-01,,,Strength,,,,,',
       '',
       '--- EXERCISE SETS (Per-Set Data) ---',
-      'Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes',
+      'Date,Workout,Exercise,Category,Set #,Reps,Weight (kg),Distance (m),Time (min),Notes',
       '2023-10-01,Strength,Squat,Lower Body,1,10,135,,,Warmup'
     ].join('\n');
 
     expect(csv).toBe(expectedRows);
+  });
+
+  // W26 — exports must carry the unit context of the stored values so a
+  // portability consumer can interpret them (values are in the user's preferred
+  // unit, not SI; see shared/unitConversion.ts).
+  it('labels the CSV Weight column with the user\'s weight unit', async () => {
+    const timeline = [{ workoutLogId: 'w-1', date: '2023-10-01', focus: 'Strength' }];
+    const exerciseSets = [
+      {
+        workoutLogId: 'w-1',
+        date: '2023-10-01',
+        exerciseName: 'Squat',
+        customLabel: null,
+        category: 'Lower Body',
+        setNumber: 1,
+        reps: 5,
+        weight: 225,
+        distance: null,
+        time: null,
+        notes: null,
+      },
+    ];
+    const storage = createMockStorage(timeline, exerciseSets, { weightUnit: 'lbs', distanceUnit: 'miles' });
+    const csv = await generateCSV(mockUserId, storage);
+    expect(csv).toContain('Reps,Weight (lbs),Distance (m)');
   });
 
   it('should correctly escape quotes, commas, and newlines in text fields', async () => {
@@ -116,7 +143,7 @@ describe('exportService - generateCSV', () => {
       '2023-10-01,,,"Line 1\nLine 2","A, B, and C",,"She said, ""Hello""",,',
       '',
       '--- EXERCISE SETS (Per-Set Data) ---',
-      'Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes',
+      'Date,Workout,Exercise,Category,Set #,Reps,Weight (kg),Distance (m),Time (min),Notes',
       '2023-10-01,"Line 1\nLine 2","My ""Custom"" Bench",Upper Body,1,5,,,,"Hard,\nheavy!"'
     ].join('\n');
 
@@ -236,6 +263,20 @@ describe('exportService - generateJSON (GDPR Art. 15 data export)', () => {
     const result = await generateJSON(mockUserId, createMockStorage({ user }));
 
     expect(result.profile).toEqual(user);
+  });
+
+  // W26 — the export must carry the unit context of stored weight/distance.
+  it('annotates the export with the user\'s unitPreferences', async () => {
+    const user = { id: mockUserId, weightUnit: 'lbs', distanceUnit: 'miles' };
+    const result = await generateJSON(mockUserId, createMockStorage({ user }));
+
+    expect(result.unitPreferences).toEqual({ weightUnit: 'lbs', distanceUnit: 'miles' });
+  });
+
+  it('defaults unitPreferences to kg/km when the user has no preference', async () => {
+    const result = await generateJSON(mockUserId, createMockStorage());
+
+    expect(result.unitPreferences).toEqual({ weightUnit: 'kg', distanceUnit: 'km' });
   });
 
   it('strips Strava access and refresh tokens from the export', async () => {

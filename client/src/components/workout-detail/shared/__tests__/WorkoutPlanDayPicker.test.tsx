@@ -91,4 +91,17 @@ describe("WorkoutPlanDayPicker", () => {
 
     expect(await screen.findByTestId("workout-plan-empty")).toBeTruthy();
   });
+
+  // S23 — deleting a plan sets workout.planId to null (FK onDelete:"set null").
+  // The picker must render that orphaned workout gracefully — defaulting to
+  // "No plan" with no dangling day sub-picker — rather than crashing on the
+  // missing reference.
+  it("renders an orphaned (planId null) workout without crashing", async () => {
+    renderPicker({ planId: null, planDayId: null, onChange: vi.fn() });
+
+    const planSelect = await screen.findByRole("combobox", { name: /select training plan/i });
+    expect(planSelect).toHaveTextContent(/no plan/i);
+    // The day sub-picker only appears once a plan is selected.
+    expect(screen.queryByRole("combobox", { name: /select plan day/i })).toBeNull();
+  });
 });

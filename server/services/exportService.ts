@@ -215,6 +215,14 @@ export async function generateJSON(userId: string, storage: IStorage) {
     exportFormatVersion: 1 as const,
     exportedAt: new Date().toISOString(),
     profile: user ?? null,
+    // W26 — make the unit context of the exported values explicit. Stored
+    // weight/distance are in the user's preferred units at write time (never
+    // SI; see the unit-storage sentinel in shared/unitConversion.ts), so a
+    // portability consumer needs these to interpret exerciseSets correctly.
+    unitPreferences: {
+      weightUnit: user?.weightUnit ?? "kg",
+      distanceUnit: user?.distanceUnit ?? "km",
+    },
     timeline,
     plans,
     exerciseSets: exerciseSetRows,
@@ -285,7 +293,8 @@ function generateExerciseSetsCsvRows(allExerciseSets: ExerciseSetRow[], workoutL
 }
 
 export async function generateCSV(userId: string, storage: IStorage): Promise<string> {
-  const [timeline, allExerciseSets] = await Promise.all([
+  const [user, timeline, allExerciseSets] = await Promise.all([
+    storage.users.getUser(userId),
     storage.timeline.getTimeline(userId),
     storage.analytics.getAllExerciseSetsWithDates(userId),
   ]);
@@ -295,10 +304,13 @@ export async function generateCSV(userId: string, storage: IStorage): Promise<st
 
   if (allExerciseSets.length > 0) {
     const workoutLogTitles = buildWorkoutLogTitles(timeline);
+    // W26 — label the Weight column with the user's stored unit so the spreadsheet
+    // export is self-describing. Distance on exercise sets is stored in metres.
+    const weightUnit = user?.weightUnit ?? "kg";
     csvRows.push(
       "",
       "--- EXERCISE SETS (Per-Set Data) ---",
-      "Date,Workout,Exercise,Category,Set #,Reps,Weight,Distance (m),Time (min),Notes",
+      `Date,Workout,Exercise,Category,Set #,Reps,Weight (${weightUnit}),Distance (m),Time (min),Notes`,
       ...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles)
     );
   }
