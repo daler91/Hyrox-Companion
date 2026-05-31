@@ -149,6 +149,7 @@ export function DraftExerciseTable({
           notes: s.notes ?? null,
           confidence: data.confidence ?? null,
           sortOrder,
+          version: 1, // draft rows haven't been persisted; placeholder version (W18)
         });
         sortOrder += 1;
       }

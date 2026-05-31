@@ -31,6 +31,7 @@ export function makeExerciseSet(overrides: Partial<ExerciseSet> = {}): ExerciseS
     notes: null,
     confidence: 95,
     sortOrder: 0,
+    version: 1,
     ...overrides,
   };
 }

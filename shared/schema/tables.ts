@@ -293,6 +293,12 @@ export const exerciseSets = pgTable("exercise_sets", {
   notes: text("notes"),
   confidence: integer("confidence"),
   sortOrder: integer("sort_order").default(0),
+  // Optimistic-lock version (W18). Bumped server-side on every UPDATE.
+  // Clients can opt into conflict detection by passing `expectedVersion`
+  // on the PATCH body; storage returns AppError(CONFLICT, 409) when the
+  // value doesn't match. Defaults to 1 so existing rows backfill without
+  // breaking writes from clients that don't yet send expectedVersion.
+  version: integer("version").notNull().default(1),
 }, (table) => [
   index("idx_exercise_sets_workout_log_id").on(table.workoutLogId),
   index("idx_exercise_sets_plan_day_id").on(table.planDayId),

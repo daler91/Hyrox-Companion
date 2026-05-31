@@ -15,6 +15,7 @@ import {
 import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
+import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
 
@@ -116,7 +117,17 @@ type MutationOwnerContext =
   | { kind: "planDay"; id: string; userId: string };
 
 type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">;
-type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId">>;
+
+/**
+ * Update payload accepted by updateExerciseSetNormalized. `version` is
+ * explicitly excluded because storage manages it (always bumps by one on
+ * every UPDATE). `expectedVersion` is a pseudo-field consumed by storage to
+ * gate the WHERE clause for optimistic-concurrency control (W18); it is
+ * extracted from the object before the SET clause is built.
+ */
+type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "version">> & {
+  readonly expectedVersion?: number;
+};
 
 type MutationOwnerAdapter = {
   getContainerId: (set: ExerciseSet) => string | null;
@@ -535,11 +546,36 @@ export class WorkoutStorage {
   ): Promise<ExerciseSet | undefined> {
     const owned = await this.getExerciseSetOwned(setId, context.userId);
     if (!owned || adapter.getContainerId(owned) !== context.id) return undefined;
+
+    // Optimistic concurrency control (W18). When the caller supplies
+    // `expectedVersion`, gate the UPDATE on it so a concurrent writer that
+    // already bumped the row produces a no-match instead of silently
+    // overwriting. Always bump `version` on success so the next read sees
+    // the new value and any client holding the stale version trips the
+    // check on its next write.
+    const { expectedVersion, ...setData } = updates;
+    const conditions = [eq(exerciseSets.id, setId)];
+    if (expectedVersion !== undefined) {
+      conditions.push(eq(exerciseSets.version, expectedVersion));
+    }
     const [updated] = await db
       .update(exerciseSets)
-      .set(updates)
-      .where(eq(exerciseSets.id, setId))
+      .set({ ...setData, version: sql`${exerciseSets.version} + 1` })
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
       .returning();
+
+    if (!updated && expectedVersion !== undefined) {
+      // Row exists (owned check passed above) but the version condition
+      // didn't match → another writer bumped it. Surface the current
+      // version in the error details so the client can refresh + retry.
+      throw new AppError(
+        ErrorCode.CONFLICT,
+        "Exercise set was modified by another request",
+        409,
+        { currentVersion: owned.version, expectedVersion },
+      );
+    }
+
     if (updated) await this.syncStructureStepMirror(updated);
     return updated;
   }
