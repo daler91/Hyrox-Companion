@@ -20,6 +20,11 @@
  *  - logged distances are in the athlete's stored unit (m for km users, ft for
  *    miles users); we convert to meters with `storedDistanceToMeters` (read-only,
  *    so the read-convert-write drift caveat does not apply) before comparing.
+ *    KNOWN LIMITATION (accepted): the sentinel also notes historical rows are not
+ *    migrated when a user changes unit preference, so a station logged before a
+ *    switch is read under the *current* unit. A mis-read effort simply falls
+ *    outside the trust band and degrades to the station benchmark — a graceful,
+ *    sane fallback, and the same mixed-unit trade-off the rest of the app accepts.
  *  - logged weights are in the athlete's unit; we never convert them. Instead
  *    we convert the canonical-kg standard INTO the athlete's unit
  *    (`kgToUserWeight`, the sanctioned direction) and compare there.
@@ -152,6 +157,11 @@ function trustedFactor(target: number, logged: number): number | null {
   return Math.pow(target / logged, RIEGEL_EXPONENT);
 }
 
+/** A logged measure (distance or reps) usable for projection, or null otherwise. */
+function usableMeasure(value: number | null): number | null {
+  return value != null && Number.isFinite(value) && value > 0 ? value : null;
+}
+
 /**
  * Factor that scales a logged partial effort's time to the full race-station
  * amount, or null when the effort is too far from the full amount to extrapolate
@@ -165,12 +175,14 @@ function projectionFactor(
   distanceUnit: string,
 ): number | null {
   if (target.distanceMeters != null) {
-    if (set.distance == null || !(set.distance > 0)) return 1;
-    return trustedFactor(target.distanceMeters, storedDistanceToMeters(set.distance, distanceUnit));
+    const distance = usableMeasure(set.distance);
+    if (distance == null) return 1;
+    return trustedFactor(target.distanceMeters, storedDistanceToMeters(distance, distanceUnit));
   }
   if (target.reps != null) {
-    if (set.reps == null || !(set.reps > 0)) return 1;
-    return trustedFactor(target.reps, set.reps);
+    const reps = usableMeasure(set.reps);
+    if (reps == null) return 1;
+    return trustedFactor(target.reps, reps);
   }
   return 1;
 }
