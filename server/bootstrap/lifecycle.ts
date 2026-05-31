@@ -3,7 +3,7 @@ import type { Server } from "node:http";
 import { logger } from "../logger";
 
 export interface ShutdownDeps {
-  stopCron: () => void;
+  stopCron: () => void | Promise<void>;
   drainSseStreams: (timeoutMs: number) => Promise<number>;
   stopQueue: () => Promise<void>;
   drainPools: () => Promise<void>;
@@ -15,7 +15,7 @@ const SHUTDOWN_TIMEOUT_MS = 60_000;
 
 async function runGracefulShutdown(httpServer: Server, deps: ShutdownDeps, forceExit: NodeJS.Timeout): Promise<void> {
   try {
-    deps.stopCron();
+    await deps.stopCron();
     await deps.drainSseStreams(5_000);
     await new Promise<void>((resolve, reject) => httpServer.close((err) => (err ? reject(err) : resolve())));
     await deps.stopQueue();
