@@ -1,8 +1,12 @@
+import { randomBytes } from "node:crypto";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// 64 hex chars = 32 bytes each, distinct, none in the weak-key denylist.
-const KEY_V1 = "1111111111111111111111111111111111111111111111111111111111111111";
-const KEY_V2 = "2222222222222222222222222222222222222222222222222222222222222222";
+// Generated at runtime rather than hardcoded so no key literal is committed to
+// source (DevSkim) — these are throwaway 32-byte test keys, distinct with
+// overwhelming probability and inherently outside the weak-key denylist.
+const KEY_V1 = randomBytes(32).toString("hex");
+const KEY_V2 = randomBytes(32).toString("hex");
 
 async function loadCrypto(envOverrides: Record<string, unknown>) {
   vi.resetModules();

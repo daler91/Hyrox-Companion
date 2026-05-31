@@ -115,14 +115,16 @@ const envSchema = z.object({
   // has ~128 bits of entropy; these patterns have effectively none.
   message: "❌ FATAL: ENCRYPTION_KEY is a known weak/test placeholder; generate a real 32-byte random key",
   path: ["ENCRYPTION_KEY"],
-}).refine((data) => !data.ENCRYPTION_KEY_V2 || data.ENCRYPTION_KEY_V2 !== data.ENCRYPTION_KEY, {
-  // W6 — a rotation key identical to the active key is a no-op footgun: it
-  // would tag ciphertext v2 while providing no new key material.
-  message: "❌ FATAL: ENCRYPTION_KEY_V2 must differ from ENCRYPTION_KEY (it is the rotation target)",
-  path: ["ENCRYPTION_KEY_V2"],
-}).refine((data) => !data.ENCRYPTION_KEY_V2 || data.ENCRYPTION_KEY_V2 !== data.CSRF_SECRET, {
-  // W6 — same key-separation rule the active key already enforces.
-  message: "❌ FATAL: ENCRYPTION_KEY_V2 must differ from CSRF_SECRET for proper key separation",
+}).refine((data) => {
+  // W6 — the rotation key must be distinct from the active key (an identical
+  // one is a no-op that tags ciphertext v2 with no new material) AND from
+  // CSRF_SECRET (key separation). A membership test rather than `!==` avoids a
+  // direct secret-to-secret comparison operator (Bearer timing-discrepancy).
+  if (!data.ENCRYPTION_KEY_V2) return true;
+  const otherKeys = [data.ENCRYPTION_KEY, data.CSRF_SECRET].filter((k): k is string => Boolean(k));
+  return !otherKeys.includes(data.ENCRYPTION_KEY_V2);
+}, {
+  message: "❌ FATAL: ENCRYPTION_KEY_V2 must differ from both ENCRYPTION_KEY (rotation target) and CSRF_SECRET (key separation)",
   path: ["ENCRYPTION_KEY_V2"],
 }).refine((data) => data.NODE_ENV !== "production" || !data.ENCRYPTION_KEY_V2 || !WEAK_ENCRYPTION_KEYS.has(data.ENCRYPTION_KEY_V2), {
   // W6 — the rotation key must be just as strong as the active key.

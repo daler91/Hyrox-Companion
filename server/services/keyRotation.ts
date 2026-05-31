@@ -121,12 +121,17 @@ export async function maybeReencryptOnBoot(): Promise<void> {
   try {
     const summary = await reencryptStoredCredentials();
     if (summary) {
+      // bearer:disable javascript_lang_logger_leak — only the key version and
+      // row counts (stravaUpdated/garminUpdated) are logged; no token plaintext
+      // ever reaches the logger (reencryptToken keeps it in local scope).
       logger.info(
         { context: "crypto", version: currentKeyVersion(), ...summary },
         "Re-encrypted stored credentials to current key version",
       );
     }
   } catch (error) {
+    // bearer:disable javascript_lang_logger_leak — the caught error is a DB /
+    // operational failure of the sweep, not credential material.
     logger.error({ context: "crypto", err: error }, "Credential re-encrypt sweep failed");
   }
 }

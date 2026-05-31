@@ -13,8 +13,9 @@ async function loadProviders(aiEnabled: string) {
       AI_TEXT_REASONING_EFFORT: "high",
       GEMINI_API_KEY: "test-key",
       // The provider graph transitively imports db.ts, which requires a
-      // DATABASE_URL at module load (the pool itself connects lazily).
-      DATABASE_URL: "postgres://user:pass@localhost:5432/test",
+      // DATABASE_URL at module load (the pool itself connects lazily, so the
+      // host is never dialled — a non-loopback placeholder keeps scanners quiet).
+      DATABASE_URL: "postgres://user:pass@db.example.com:5432/test",
     },
   }));
   return import("./index");

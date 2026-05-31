@@ -61,6 +61,9 @@ export async function withPgAdvisoryLock<T>(
           "Advisory lock held longer than expected",
         );
       } else {
+        // bearer:disable javascript_lang_logger_leak — same rationale as the
+        // warn branch above: only lockName/lockKey (operational constants) and
+        // heldMs (a duration) are logged; no PII or secret material.
         logger.info(
           { context: "advisory-lock", lockName: options.name, lockKey: key, heldMs },
           "Advisory lock released",

@@ -19,10 +19,12 @@ export function isErrorReportingEnabled(): boolean {
   return read.value !== OPTED_OUT_VALUE;
 }
 
-export function setErrorReportingEnabled(enabled: boolean): void {
-  if (enabled) {
-    safeLocalStorage.removeItem(ERROR_REPORTING_CONSENT_KEY);
-  } else {
-    safeLocalStorage.setItem(ERROR_REPORTING_CONSENT_KEY, OPTED_OUT_VALUE);
-  }
+/** Re-enable error reporting (clears the opt-out). Takes effect on next reload. */
+export function enableErrorReporting(): void {
+  safeLocalStorage.removeItem(ERROR_REPORTING_CONSENT_KEY);
+}
+
+/** Opt out of error reporting. Takes effect on next reload. */
+export function disableErrorReporting(): void {
+  safeLocalStorage.setItem(ERROR_REPORTING_CONSENT_KEY, OPTED_OUT_VALUE);
 }

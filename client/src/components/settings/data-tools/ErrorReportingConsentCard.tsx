@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  disableErrorReporting,
+  enableErrorReporting,
   isErrorReportingEnabled,
-  setErrorReportingEnabled,
 } from "@/lib/errorReportingConsent";
 
 // S11 — per-processor consent toggle for error reporting (Sentry). Stored
@@ -16,7 +17,11 @@ export function ErrorReportingConsentCard() {
   const [enabled, setEnabled] = useState<boolean>(() => isErrorReportingEnabled());
 
   const handleChange = (next: boolean) => {
-    setErrorReportingEnabled(next);
+    if (next) {
+      enableErrorReporting();
+    } else {
+      disableErrorReporting();
+    }
     setEnabled(next);
   };
 
