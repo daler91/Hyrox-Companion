@@ -1,0 +1,41 @@
+name: Secret Scan
+
+# Fails the build if a secret (API key, token, private key, encryption key,
+# etc.) is committed. Added after a former `.replit` config leaked an
+# ENCRYPTION_KEY in a [userenv] block.
+#
+# Scans incrementally — only the commits a pull request or push introduces —
+# so it blocks NEW secrets without re-flagging already-revoked secrets that
+# live deep in old history (e.g. the former Replit `.replit` checkpoints).
+# Actions are pinned to a full commit SHA to match the rest of the repo's
+# workflows (and satisfy the SonarCloud "pin actions" security hotspot).
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Full history so the action can diff the PR / push commit range.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        # v3 runs on Node 24; v2 is Node 20 and stops working on GitHub-hosted
+        # runners from 2026-09-16. Drop-in upgrade — same inputs and behaviour.
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # gitleaks-action is free for personal accounts and public repos.
+          # If this repo ever moves under a GitHub *organization*, set the
+          # GITLEAKS_LICENSE secret (see github.com/gitleaks/gitleaks-action).
