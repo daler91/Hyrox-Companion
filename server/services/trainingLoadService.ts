@@ -85,6 +85,10 @@ export interface LoadGovernorSuggestion {
   suggestion: WorkoutSuggestion;
   structuredSetRows?: InsertExerciseSet[];
   rationaleCode: string;
+  // New workout title for the converted day. Only the governor supplies this
+  // (it knows it is downshifting to a recovery run), so the AI-provider path
+  // never renames a workout's title.
+  focusOverride?: string;
 }
 
 export interface DailyTrainingLoad {

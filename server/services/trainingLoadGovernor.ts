@@ -100,6 +100,11 @@ function easyRunRecommendation(workout: UpcomingWorkoutForLoad): string {
   return `${details.join(" - ")}. Keep effort conversational and avoid hills, sprints, track work, and downhill braking.`;
 }
 
+// Every governor downshift swaps the session for a flat, low-intensity
+// recovery run, so the converted day's title becomes this. Used to rename the
+// `focus` (title) field and to contrast against the original prescription.
+const RECOVERY_RUN_FOCUS = "Recovery Run";
+
 function buildSuggestion(
   workout: UpcomingWorkoutForLoad,
   rationale: string,
@@ -108,6 +113,7 @@ function buildSuggestion(
 ): LoadGovernorSuggestion {
   return {
     rationaleCode,
+    focusOverride: RECOVERY_RUN_FOCUS,
     suggestion: {
       workoutId: workout.id,
       workoutDate: workout.date,

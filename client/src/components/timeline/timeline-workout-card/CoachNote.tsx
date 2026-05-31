@@ -181,6 +181,17 @@ export function CoachNote({
           >
             {rationale}
           </p>
+          {inputsUsed?.replacedPrescription && (
+            <p
+              className="text-xs text-muted-foreground italic"
+              data-testid={`coach-note-original-${entryId}`}
+            >
+              Originally planned: {inputsUsed.replacedPrescription.focus}
+              {inputsUsed.replacedPrescription.mainWorkout
+                ? ` — ${inputsUsed.replacedPrescription.mainWorkout}`
+                : ""}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
               variant="outline"

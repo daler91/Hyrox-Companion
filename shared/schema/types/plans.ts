@@ -99,6 +99,19 @@ export const coachNoteInputsSchema = z.object({
     .optional(),
   lastModification: coachModificationMetadataSchema.optional(),
   lastFatigueReduction: coachFatigueReductionMetadataSchema.optional(),
+  // Snapshot of the prescription that was swapped out when the coach converted
+  // this day to a different session (e.g. a strength day downshifted to a
+  // recovery run). Surfaced as an "Originally planned" reference on the coach
+  // note so the athlete can still see what was replaced.
+  replacedPrescription: z
+    .object({
+      focus: z.string(),
+      mainWorkout: z.string(),
+      accessory: z.string().nullable().optional(),
+      notes: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 export type CoachNoteInputs = z.infer<typeof coachNoteInputsSchema>;
 

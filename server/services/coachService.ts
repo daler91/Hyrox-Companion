@@ -1,4 +1,9 @@
-import { type CoachNoteInputs, type InsertExerciseSet, type PlanDay } from "@shared/schema";
+import {
+  type CoachNoteInputs,
+  type InsertExerciseSet,
+  type PlanDay,
+  type UpdatePlanDay,
+} from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
 import { db, type DbExecutor } from "../db";
@@ -57,12 +62,29 @@ function buildUpdateValue(suggestion: WorkoutSuggestion, entry: UpcomingWorkout)
     : `[AI Coach] ${suggestion.recommendation}`;
 }
 
+/**
+ * Preserve the "Originally planned" snapshot across coach-note rewrites.
+ * `aiInputsUsed` is rebuilt from scratch on every coach run (and by review
+ * notes / manual refreshes), so without this the record captured when a day
+ * was converted would be wiped the next time the coach touches that day. Only
+ * carries the prior value forward when the fresh inputs don't already set one —
+ * a genuine new conversion always wins.
+ */
+function carryReplacedPrescription(
+  next: CoachNoteInputs,
+  prior: CoachNoteInputs | null | undefined,
+): CoachNoteInputs {
+  if (next.replacedPrescription || !prior?.replacedPrescription) return next;
+  return { ...next, replacedPrescription: prior.replacedPrescription };
+}
+
 interface PreparedSuggestion {
   readonly suggestion: WorkoutSuggestion;
   readonly structuredSetRows?: InsertExerciseSet[];
   readonly aiSourceOverride?: AutoCoachAiSource;
   readonly requiresStructuredWrite?: boolean;
   readonly rationaleCode?: string;
+  readonly focusOverride?: string;
 }
 
 interface AppliedSuggestionResult {
@@ -160,6 +182,7 @@ function prepareLoadGovernorSuggestion(suggestion: LoadGovernorSuggestion): Prep
     aiSourceOverride: "load_governor",
     requiresStructuredWrite: Boolean(suggestion.structuredSetRows?.length),
     rationaleCode: suggestion.rationaleCode,
+    focusOverride: suggestion.focusOverride,
   };
 }
 
@@ -170,9 +193,10 @@ async function applyStructuredSuggestion(
   aiSource: AutoCoachAiSource,
   inputsUsed: CoachNoteInputs,
   coachSignals: CoachModificationSignals,
+  unitPreferences: UnitPreferences,
   tx: DbExecutor,
 ): Promise<AppliedSuggestionResult> {
-  const { suggestion, structuredSetRows } = prepared;
+  const { suggestion, structuredSetRows, focusOverride } = prepared;
   if (!structuredSetRows || structuredSetRows.length === 0) {
     return { applied: false };
   }
@@ -181,7 +205,7 @@ async function applyStructuredSuggestion(
     suggestion.action,
     structuredSetRows,
   );
-  const suggestionInputs = withCoachModificationMetadata(
+  let suggestionInputs = withCoachModificationMetadata(
     inputsUsed,
     suggestion,
     coachSignals,
@@ -195,17 +219,47 @@ async function applyStructuredSuggestion(
     tx,
   );
 
-  await storage.plans.updatePlanDay(
-    suggestion.workoutId,
-    {
-      aiSource: aiSource ?? null,
-      aiRationale: suggestion.rationale.slice(0, 400),
-      aiNoteUpdatedAt: new Date(),
-      aiInputsUsed: suggestionInputs,
-    },
-    userId,
-    tx,
-  );
+  const updates: UpdatePlanDay = {
+    aiSource: aiSource ?? null,
+    aiRationale: suggestion.rationale.slice(0, 400),
+    aiNoteUpdatedAt: new Date(),
+  };
+
+  // A structured "replace" swaps the day's entire prescription, so the
+  // free-text fields and title that described the old exercises are now stale
+  // (and contradict the new rows). Reconcile them to the new session: drop the
+  // recommendation into mainWorkout (unit-normalized like the text path) and
+  // clear accessory/notes — the replace already deleted every prior set row, so
+  // nothing they described survives. "append" leaves the prescription intact.
+  if (suggestion.action === "replace") {
+    const rawMain = suggestion.recommendation;
+    updates.mainWorkout = normalizeWorkoutTextUnits(rawMain, unitPreferences) ?? rawMain;
+    updates.accessory = null;
+    updates.notes = null;
+
+    // Only the governor supplies a new title, and we rename — capturing the
+    // original prescription once — only when it actually changes the title.
+    // A repeat coach pass on an already-converted day sees the same title and
+    // skips, so the recovery run is never recorded as the "original".
+    const newFocus = focusOverride?.trim();
+    if (newFocus && newFocus.toLowerCase() !== entry.focus.trim().toLowerCase()) {
+      updates.focus = newFocus;
+      suggestionInputs = {
+        ...suggestionInputs,
+        replacedPrescription: {
+          focus: entry.focus,
+          mainWorkout: entry.mainWorkout,
+          accessory: entry.accessory ?? null,
+          notes: entry.notes ?? null,
+        },
+      };
+    }
+  }
+
+  suggestionInputs = carryReplacedPrescription(suggestionInputs, entry.aiInputsUsed);
+  updates.aiInputsUsed = suggestionInputs;
+
+  await storage.plans.updatePlanDay(suggestion.workoutId, updates, userId, tx);
   return { applied: true, inputsUsed: suggestionInputs };
 }
 
@@ -295,6 +349,7 @@ async function applySuggestion(
       resolvedSource,
       inputsUsed,
       coachSignals,
+      unitPreferences,
       tx,
     );
   }
@@ -303,11 +358,14 @@ async function applySuggestion(
   // all-or-nothing semantics for the auto-coach apply loop (C2).
   const rawUpdateValue = buildUpdateValue(suggestion, entry);
   const updateValue = normalizeWorkoutTextUnits(rawUpdateValue, unitPreferences) ?? rawUpdateValue;
-  const suggestionInputs = withCoachModificationMetadata(
-    inputsUsed,
-    suggestion,
-    coachSignals,
-    buildTextResultingWorkout(entry, suggestion.targetField, updateValue),
+  const suggestionInputs = carryReplacedPrescription(
+    withCoachModificationMetadata(
+      inputsUsed,
+      suggestion,
+      coachSignals,
+      buildTextResultingWorkout(entry, suggestion.targetField, updateValue),
+    ),
+    entry.aiInputsUsed,
   );
   await storage.plans.updatePlanDay(
     suggestion.workoutId,
@@ -329,6 +387,7 @@ async function applyReviewNote(
   note: string,
   userId: string,
   inputsUsed: CoachNoteInputs,
+  priorInputs: CoachNoteInputs | null | undefined,
   tx: DbExecutor,
 ): Promise<boolean> {
   if (!workoutId || !note) return false;
@@ -341,7 +400,9 @@ async function applyReviewNote(
       aiSource: "review",
       aiRationale: note.slice(0, 400),
       aiNoteUpdatedAt: new Date(),
-      aiInputsUsed: inputsUsed,
+      // A review note on a previously-converted day must not erase its
+      // "Originally planned" record.
+      aiInputsUsed: carryReplacedPrescription(inputsUsed, priorInputs),
     },
     userId,
     tx,
@@ -479,8 +540,18 @@ async function applyAutoCoachChanges({
         inputsByWorkoutId.set(prepared.suggestion.workoutId, result.inputsUsed);
       }
     }
+    const workoutById = new Map(upcomingWorkouts.map((workout) => [workout.id, workout]));
     const noteResults = await Promise.all(
-      reviewNotes.map((note) => applyReviewNote(note.workoutId, note.note, userId, inputsUsed, tx)),
+      reviewNotes.map((note) =>
+        applyReviewNote(
+          note.workoutId,
+          note.note,
+          userId,
+          inputsUsed,
+          workoutById.get(note.workoutId)?.aiInputsUsed,
+          tx,
+        ),
+      ),
     );
 
     let adjustedCount = 0;
@@ -784,7 +855,9 @@ export async function regenerateCoachNoteForPlanDay(
       aiSource: "review",
       aiRationale: note.note.slice(0, 400),
       aiNoteUpdatedAt,
-      aiInputsUsed: inputsUsed,
+      // Don't drop a prior conversion's "Originally planned" record when the
+      // athlete manually refreshes the coach note.
+      aiInputsUsed: carryReplacedPrescription(inputsUsed, day.aiInputsUsed),
     },
     userId,
   );

@@ -253,11 +253,22 @@ describe("coachService triggerAutoCoach suggestion application", () => {
       }),
     ]);
     expectPlanDayUpdate("day-1", {
+      // Title, main, and accessory/notes are all reconciled to the recovery run
+      // so no remnants of the original "Run" session linger.
+      focus: "Recovery Run",
+      mainWorkout: expect.stringContaining("aerobic run"),
+      accessory: null,
+      notes: null,
       aiSource: "load_governor",
       aiRationale: expect.stringContaining("posterior-chain"),
       aiInputsUsed: expect.objectContaining({
         loadGovernorAcwrZone: "sweet_spot",
         loadGovernorFlaggedVectors: ["posterior_chain"],
+        // The original prescription is kept as an "Originally planned" record.
+        replacedPrescription: expect.objectContaining({
+          focus: "Run",
+          mainWorkout: HILL_REPEATS_WORKOUT,
+        }),
       }),
     });
     expect(storage.plans.updatePlanDay).not.toHaveBeenCalledWith(
@@ -266,6 +277,45 @@ describe("coachService triggerAutoCoach suggestion application", () => {
       "user-1",
       expect.anything(),
     );
+  });
+
+  it("does not rename or re-snapshot when converting an already-converted day", async () => {
+    const base = loadGovernorTrainingContext();
+    const context: TrainingContext = {
+      ...base,
+      upcomingWorkouts: [
+        {
+          ...base.upcomingWorkouts[0],
+          focus: "Recovery Run",
+          aiInputsUsed: {
+            replacedPrescription: { focus: "Run", mainWorkout: "Original hill session" },
+          },
+        },
+      ],
+    };
+    mockBaseAutoCoachDeps(storage, buildTrainingContext, [hillRepeatTimelineEntry()]);
+    vi.mocked(buildTrainingContext).mockResolvedValue(context);
+    vi.mocked(generateWorkoutSuggestions).mockResolvedValue([]);
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue({});
+
+    expect(await triggerAutoCoach("user-1")).toEqual({ adjusted: 1 });
+
+    const updatePayload = vi.mocked(storage.plans.updatePlanDay).mock.calls[0][1] as Record<
+      string,
+      unknown
+    >;
+    // Title already equals the override → no rename.
+    expect(updatePayload).not.toHaveProperty("focus");
+    // The first conversion's record is preserved, not overwritten with the run.
+    expect(updatePayload.aiInputsUsed).toEqual(
+      expect.objectContaining({
+        replacedPrescription: { focus: "Run", mainWorkout: "Original hill session" },
+      }),
+    );
+    // Free text is still re-reconciled to the recovery run on every apply.
+    expect(updatePayload.mainWorkout).toEqual(expect.stringContaining("aerobic run"));
+    expect(updatePayload.accessory).toBeNull();
+    expect(updatePayload.notes).toBeNull();
   });
 
   it("does not fall back to text when a load-governor structured write fails", async () => {
