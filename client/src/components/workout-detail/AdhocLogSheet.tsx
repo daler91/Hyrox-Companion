@@ -94,6 +94,7 @@ function makeAdhocRow(seed: RowSeed): ExerciseSet {
     notes: seed.notes ?? null,
     confidence: seed.confidence ?? null,
     sortOrder: seed.sortOrder,
+    version: 1, // draft rows haven't been persisted; placeholder version (W18)
   };
 }
 
