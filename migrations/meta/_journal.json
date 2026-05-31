@@ -393,6 +393,13 @@
       "when": 1780171827683,
       "tag": "0055_next_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1780182015182,
+      "tag": "0056_magical_marvex",
+      "breakpoints": true
     }
   ]
 }

@@ -51,6 +51,12 @@ export const users = pgTable("users", {
   trainingStyleChangedAt: timestamp("training_style_changed_at", { withTimezone: true }),
   trainingStyleRecomputeNow: boolean("training_style_recompute_now").default(false),
   onboardingCompleted: boolean("onboarding_completed").default(false).notNull(),
+  // Athlete competition profile — drives HYROX station load standards and the
+  // benchmark fallbacks used by the Race Predictor. `division` defaults to the
+  // recreational "open" standard; `gender` is nullable (null ≡ not yet
+  // answered, treated as "prefer_not_to_say" by the predictor).
+  division: varchar("division", { length: 16 }).default("open"),
+  gender: varchar("gender", { length: 16 }),
   mafAge: integer("maf_age"),
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
   mafConsistency: text("maf_consistency"),

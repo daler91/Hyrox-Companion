@@ -38,6 +38,10 @@ export interface UserPreferences {
   trainingStyleChangedAt?: string | null;
   trainingStyleRecomputeNow?: boolean;
   onboardingCompleted?: boolean;
+  /** HYROX competition division ("open" | "pro") — drives Race Predictor load standards. */
+  division?: string;
+  /** HYROX gender category ("male" | "female" | "prefer_not_to_say") or null when unset. */
+  gender?: string | null;
   mafAge?: number | null;
   mafInjuryIllnessMedication?: boolean | null;
   mafConsistency?: "low" | "moderate" | "high" | null;

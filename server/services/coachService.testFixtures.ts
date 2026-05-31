@@ -28,6 +28,8 @@ export function mockEnabledUser(storage: StorageMock) {
     trainingStyleChangedAt: null,
     trainingStyleRecomputeNow: null,
     onboardingCompleted: false,
+    division: "open",
+    gender: null,
     mafAge: null,
     mafInjuryIllnessMedication: null,
     mafConsistency: null,

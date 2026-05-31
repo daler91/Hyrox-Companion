@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 interface SelectOption {
   readonly value: string;
@@ -23,6 +24,8 @@ interface PreferenceSelectRowProps {
   readonly options: readonly SelectOption[];
   readonly testId: string;
   readonly ariaLabel: string;
+  /** Override the default narrow (w-24) trigger width for longer option labels. */
+  readonly triggerClassName?: string;
 }
 
 export function PreferenceSelectRow({
@@ -33,6 +36,7 @@ export function PreferenceSelectRow({
   options,
   testId,
   ariaLabel,
+  triggerClassName,
 }: PreferenceSelectRowProps) {
   return (
     <div className="flex items-center justify-between gap-4">
@@ -41,7 +45,7 @@ export function PreferenceSelectRow({
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className="w-24" data-testid={testId} aria-label={ariaLabel}>
+        <SelectTrigger className={cn("w-24", triggerClassName)} data-testid={testId} aria-label={ariaLabel}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

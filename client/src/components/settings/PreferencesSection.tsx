@@ -1,4 +1,5 @@
 import { AiCoachCard } from "./preferences/AiCoachCard";
+import { AthleteProfileCard } from "./preferences/AthleteProfileCard";
 import { EmailNotificationsCard } from "./preferences/EmailNotificationsCard";
 import { TrainingGoalsCard } from "./preferences/TrainingGoalsCard";
 import { UnitsPreferencesCard } from "./preferences/UnitsPreferencesCard";
@@ -7,6 +8,8 @@ import { WorkoutReviewCard } from "./preferences/WorkoutReviewCard";
 interface PreferencesSectionProps {
   readonly weightUnit: string;
   readonly distanceUnit: string;
+  readonly division: string;
+  readonly gender: string;
   readonly weeklyGoal: string;
   readonly emailNotifications: boolean;
   readonly emailWeeklySummary: boolean;
@@ -15,6 +18,8 @@ interface PreferencesSectionProps {
   readonly aiCoachEnabled: boolean;
   readonly onWeightUnitChange: (value: string) => void;
   readonly onDistanceUnitChange: (value: string) => void;
+  readonly onDivisionChange: (value: string) => void;
+  readonly onGenderChange: (value: string) => void;
   readonly onWeeklyGoalChange: (value: string) => void;
   readonly onEmailNotificationsChange: (checked: boolean) => void;
   readonly onEmailWeeklySummaryChange: (checked: boolean) => void;
@@ -26,6 +31,8 @@ interface PreferencesSectionProps {
 export function PreferencesSection({
   weightUnit,
   distanceUnit,
+  division,
+  gender,
   weeklyGoal,
   emailNotifications,
   emailWeeklySummary,
@@ -34,6 +41,8 @@ export function PreferencesSection({
   aiCoachEnabled,
   onWeightUnitChange,
   onDistanceUnitChange,
+  onDivisionChange,
+  onGenderChange,
   onWeeklyGoalChange,
   onEmailNotificationsChange,
   onEmailWeeklySummaryChange,
@@ -48,6 +57,12 @@ export function PreferencesSection({
         distanceUnit={distanceUnit}
         onWeightUnitChange={onWeightUnitChange}
         onDistanceUnitChange={onDistanceUnitChange}
+      />
+      <AthleteProfileCard
+        division={division}
+        gender={gender}
+        onDivisionChange={onDivisionChange}
+        onGenderChange={onGenderChange}
       />
       <TrainingGoalsCard weeklyGoal={weeklyGoal} onWeeklyGoalChange={onWeeklyGoalChange} />
       <EmailNotificationsCard

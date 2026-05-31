@@ -1,4 +1,4 @@
-import type { PersonalRecord, TimelineEntry, TrainingOverview } from "@shared/schema";
+import type { PersonalRecord, RacePredictionResponse, TimelineEntry, TrainingOverview } from "@shared/schema";
 
 import { rawRequest, typedRequest } from "./client";
 import type { RagInfo } from "./coaching";
@@ -38,6 +38,13 @@ export const analytics = {
 
   getTrainingOverview: (dateParams?: string) =>
     typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams ?? ""}`),
+
+  getRacePrediction: () =>
+    typedRequest<RacePredictionResponse>("GET", "/api/v1/race-prediction", undefined, {
+      // May invoke a reasoning AI model server-side; allow well past the
+      // default 15s timeout (matches the suggestions pattern).
+      timeoutMs: 90_000,
+    }),
 
   exportData: (format: AnalyticsExportFormat) =>
     rawRequest("GET", `/api/v1/export?format=${format}`),

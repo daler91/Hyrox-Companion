@@ -8,8 +8,10 @@ import { isAuthenticated } from "../clerkAuth";
 import { ANALYTICS_CACHE_TTL_MS } from "../constants";
 import { db } from "../db";
 import { env } from "../env";
+import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
+import { generateRacePrediction } from "../services/racePrediction/racePredictionService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -158,6 +160,16 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics
 
     const allSets = await getExerciseSetsCoalesced(userId, dates.from, dates.to);
     res.json(calculateExerciseAnalytics(allSets));
+  }));
+
+// Race Predictor — predicted HYROX finish time from the athlete's logged
+// history. No aiConsentCheck: the endpoint degrades gracefully to a
+// deterministic estimate when AI is disabled/unconsented/over budget, and only
+// calls the model when consent + budget allow (handled inside the service).
+router.get("/api/v1/race-prediction", isAuthenticated, rateLimiter("race-prediction", 12), asyncHandler(async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    const prediction = await generateRacePrediction(userId, reqLogger(req));
+    res.json(prediction);
   }));
 
 // Workout-logs cache — same coalescing pattern as above, namespaced with a

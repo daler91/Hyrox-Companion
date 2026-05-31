@@ -180,6 +180,7 @@ describe("Analytics tabs", () => {
       "Progression",
       "Records",
       "Coach Insights",
+      "Race Predictor",
     ]);
   });
 });
