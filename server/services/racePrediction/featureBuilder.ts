@@ -129,6 +129,12 @@ interface SegmentTarget {
   reps?: number;
 }
 
+/** The athlete's stored units, used to interpret logged weights and distances. */
+interface AthleteUnits {
+  weightUnit: string;
+  distanceUnit: string;
+}
+
 // Riegel's endurance power law (T2 = T1·(D2/D1)^EXP) projects a partial effort
 // to the full race amount slightly worse than linear, matching how pace fades
 // over distance/reps. 1.06 is Riegel's widely-used exponent.
@@ -207,15 +213,14 @@ function buildSegmentFeature(
   sets: LoggedExerciseSetWithDate[],
   standardLoadKg: number | undefined,
   target: SegmentTarget,
-  weightUnit: string,
-  distanceUnit: string,
+  units: AthleteUnits,
   now: Date,
 ): SegmentFeature {
-  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets, target, distanceUnit);
+  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets, target, units.distanceUnit);
 
   const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
   const standardLoadUserUnit =
-    standardLoadKg == null ? null : kgToUserWeight(standardLoadKg, weightUnit);
+    standardLoadKg == null ? null : kgToUserWeight(standardLoadKg, units.weightUnit);
   const loadRatio =
     loggedLoadUserUnit != null && standardLoadUserUnit != null && standardLoadUserUnit > 0
       ? loggedLoadUserUnit / standardLoadUserUnit
@@ -245,6 +250,7 @@ export function buildRacePredictionFeatures(
 ): RacePredictionFeatures {
   const weightUnit = profile.weightUnit || "kg";
   const distanceUnit = profile.distanceUnit || "km";
+  const units: AthleteUnits = { weightUnit, distanceUnit };
   const { division, resolvedGender, genderAssumed, reference } = resolveRaceReference(
     profile.division,
     profile.gender,
@@ -266,8 +272,7 @@ export function buildRacePredictionFeatures(
     byExercise.get(RUN_EXERCISE_NAME) ?? [],
     undefined,
     { distanceMeters: RUN_LEG_DISTANCE_METERS },
-    weightUnit,
-    distanceUnit,
+    units,
     now,
   );
 
@@ -280,8 +285,7 @@ export function buildRacePredictionFeatures(
       byExercise.get(station) ?? [],
       standard.loadKg,
       { distanceMeters: standard.distanceMeters, reps: standard.reps },
-      weightUnit,
-      distanceUnit,
+      units,
       now,
     );
   }
