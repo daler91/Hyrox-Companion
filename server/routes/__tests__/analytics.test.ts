@@ -6,7 +6,7 @@ import { db } from "../../db";
 import { env } from "../../env";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
 import { storage } from "../../storage";
-import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting, validDate } from "../analytics";
+import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting, addCalendarDays,todayUtcYyyyMmDd, validDate } from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
@@ -50,6 +50,57 @@ vi.mock("../../services/analyticsService", () => ({
 }));
 
 describe("Analytics Routes", () => {
+
+  describe("todayUtcYyyyMmDd", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should return today's date in YYYY-MM-DD format (UTC)", () => {
+      // Set to exactly midnight UTC
+      vi.setSystemTime(new Date("2024-05-15T00:00:00Z"));
+      expect(todayUtcYyyyMmDd()).toBe("2024-05-15");
+
+      // Set to late evening UTC
+      vi.setSystemTime(new Date("2024-05-15T23:59:59Z"));
+      expect(todayUtcYyyyMmDd()).toBe("2024-05-15");
+    });
+
+    it("should handle leap years correctly", () => {
+      vi.setSystemTime(new Date("2024-02-29T12:00:00Z"));
+      expect(todayUtcYyyyMmDd()).toBe("2024-02-29");
+    });
+  });
+
+  describe("addCalendarDays", () => {
+    it("should add days to a date string", () => {
+      expect(addCalendarDays("2024-05-15", 5)).toBe("2024-05-20");
+    });
+
+    it("should subtract days from a date string", () => {
+      expect(addCalendarDays("2024-05-15", -5)).toBe("2024-05-10");
+    });
+
+    it("should handle month boundaries", () => {
+      expect(addCalendarDays("2024-05-31", 1)).toBe("2024-06-01");
+      expect(addCalendarDays("2024-05-01", -1)).toBe("2024-04-30");
+    });
+
+    it("should handle leap years", () => {
+      expect(addCalendarDays("2024-02-28", 1)).toBe("2024-02-29");
+      expect(addCalendarDays("2024-02-29", 1)).toBe("2024-03-01");
+    });
+
+    it("should handle year boundaries", () => {
+      expect(addCalendarDays("2024-12-31", 1)).toBe("2025-01-01");
+      expect(addCalendarDays("2025-01-01", -1)).toBe("2024-12-31");
+    });
+  });
+
   describe("validDate", () => {
     it("should return undefined for falsy values", () => {
       expect(validDate(undefined)).toBeUndefined();
