@@ -56,12 +56,12 @@ describe("registerRoutes", () => {
   });
 
   it("should setup authentication", async () => {
-    await registerRoutes(httpServer, app as Express);
+    await registerRoutes(httpServer, app);
     expect(setupAuth).toHaveBeenCalledWith(app);
   });
 
   it("should mount CSRF protection correctly", async () => {
-    await registerRoutes(httpServer, app as Express);
+    await registerRoutes(httpServer, app);
 
     // CSRF token handler should be mounted BEFORE csrfProtection
     expect(app.get).toHaveBeenCalledWith("/api/v1/csrf-token", csrfTokenHandler);
@@ -71,14 +71,14 @@ describe("registerRoutes", () => {
   });
 
   it("should register third-party integration routes", async () => {
-    await registerRoutes(httpServer, app as Express);
+    await registerRoutes(httpServer, app);
 
     expect(registerStravaRoutes).toHaveBeenCalledWith(app);
     expect(registerGarminRoutes).toHaveBeenCalledWith(app);
   });
 
   it("should mount all application routers", async () => {
-    await registerRoutes(httpServer, app as Express);
+    await registerRoutes(httpServer, app);
 
     expect(app.use).toHaveBeenCalledWith(accountRoutes);
     expect(app.use).toHaveBeenCalledWith(authRoutes);
@@ -94,7 +94,7 @@ describe("registerRoutes", () => {
   });
 
   it("should return the provided HTTP server instance", async () => {
-    const result = await registerRoutes(httpServer, app as Express);
+    const result = await registerRoutes(httpServer, app);
     expect(result).toBe(httpServer);
   });
 });

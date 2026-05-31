@@ -371,7 +371,10 @@ export class TimelineStorage {
     // DIFFERENT plan, but keep unattached (no-plan) workouts and this plan's own.
     // With no plan filter (All Plans), all planDayId-null workouts are returned.
     if (planId !== undefined) {
-      conditions.push(or(isNull(workoutLogs.planId), eq(workoutLogs.planId, planId))!);
+      // or() is only undefined for an empty arg list; with two conditions it is
+      // always defined, but narrow explicitly so we never push undefined.
+      const planScope = or(isNull(workoutLogs.planId), eq(workoutLogs.planId, planId));
+      if (planScope) conditions.push(planScope);
     }
 
     let query = db

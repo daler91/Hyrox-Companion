@@ -111,14 +111,13 @@ function loadAdjust(seconds: number, loadRatio: number | null): number {
   return seconds * factor;
 }
 
-function buildSegmentFeature(
-  exerciseName: ExerciseName,
-  kind: RaceSegmentKind,
-  sets: LoggedExerciseSetWithDate[],
-  standardLoadKg: number | undefined,
-  weightUnit: string,
-  now: Date,
-): SegmentFeature {
+interface SegmentSetMetrics {
+  timesSeconds: number[];
+  loads: number[];
+  mostRecent: string | null;
+}
+
+function accumulateSetMetrics(sets: LoggedExerciseSetWithDate[]): SegmentSetMetrics {
   const timesSeconds: number[] = [];
   const loads: number[] = [];
   let mostRecent: string | null = null;
@@ -135,9 +134,22 @@ function buildSegmentFeature(
     }
   }
 
+  return { timesSeconds, loads, mostRecent };
+}
+
+function buildSegmentFeature(
+  exerciseName: ExerciseName,
+  kind: RaceSegmentKind,
+  sets: LoggedExerciseSetWithDate[],
+  standardLoadKg: number | undefined,
+  weightUnit: string,
+  now: Date,
+): SegmentFeature {
+  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets);
+
   const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
   const standardLoadUserUnit =
-    standardLoadKg != null ? kgToUserWeight(standardLoadKg, weightUnit) : null;
+    standardLoadKg == null ? null : kgToUserWeight(standardLoadKg, weightUnit);
   const loadRatio =
     loggedLoadUserUnit != null && standardLoadUserUnit != null && standardLoadUserUnit > 0
       ? loggedLoadUserUnit / standardLoadUserUnit

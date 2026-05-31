@@ -61,6 +61,34 @@ export interface RetryOptions {
   label?: string;
 }
 
+function computeBackoffDelay(
+  attempt: number,
+  err: unknown,
+  minDelayMs: number,
+  maxDelayMs: number,
+): number {
+  const expBase = Math.min(maxDelayMs, minDelayMs * 2 ** attempt);
+  // randomInt from node:crypto is used instead of Math.random to silence
+  // Sonar S2245; the value is only used to desynchronise retry storms and
+  // is not security-sensitive.
+  const jitter = randomInt(0, Math.max(1, Math.ceil(expBase)));
+  const serverHint = err instanceof RetryableHttpError ? err.retryAfterMs : null;
+  return serverHint === null ? jitter : Math.min(serverHint, maxDelayMs);
+}
+
+function logRetryAttempt(label: string, err: unknown, attempt: number, delay: number): void {
+  logger.warn(
+    {
+      label,
+      status: err instanceof RetryableHttpError ? err.status : undefined,
+      error: err instanceof Error ? err.name : undefined,
+      attempt: attempt + 1,
+      delay,
+    },
+    "[http] retryable failure — backing off",
+  );
+}
+
 export async function retryWithJitter<T>(
   fn: () => Promise<T>,
   opts: RetryOptions = {},
@@ -80,23 +108,8 @@ export async function retryWithJitter<T>(
       if (!retryable || attempt >= retries) {
         throw err;
       }
-      const expBase = Math.min(maxDelayMs, minDelayMs * 2 ** attempt);
-      // randomInt from node:crypto is used instead of Math.random to silence
-      // Sonar S2245; the value is only used to desynchronise retry storms and
-      // is not security-sensitive.
-      const jitter = randomInt(0, Math.max(1, Math.ceil(expBase)));
-      const serverHint = err instanceof RetryableHttpError ? err.retryAfterMs : null;
-      const delay = serverHint === null ? jitter : Math.min(serverHint, maxDelayMs);
-      logger.warn(
-        {
-          label,
-          status: err instanceof RetryableHttpError ? err.status : undefined,
-          error: err instanceof Error ? err.name : undefined,
-          attempt: attempt + 1,
-          delay,
-        },
-        "[http] retryable failure — backing off",
-      );
+      const delay = computeBackoffDelay(attempt, err, minDelayMs, maxDelayMs);
+      logRetryAttempt(label, err, attempt, delay);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

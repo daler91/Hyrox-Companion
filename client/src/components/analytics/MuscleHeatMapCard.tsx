@@ -192,28 +192,72 @@ function buildCoreFreshnessMetric(muscles: readonly MuscleCoverage[]): AnalysisM
   };
 }
 
-function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
-  const totalSets = muscles.reduce((sum, muscle) => sum + muscle.totalSets, 0);
-  const topMuscle = findTopCoverage(muscles);
-  const priorityGap = findPriorityGap(muscles, "it has no logged sets in this range");
-      // Replaced chained .filter().reduce() with a single for...of loop
-  // to avoid intermediate array allocations and reduce overhead.
-  const regionTotals = { upper: 0, core: 0, lower: 0 };
+type RegionTotals = { upper: number; core: number; lower: number };
+
+function computeRegionTotals(muscles: readonly MuscleCoverage[]): RegionTotals {
+  // Single for...of accumulation avoids the intermediate arrays a chained
+  // .filter().reduce() would allocate.
+  const regionTotals: RegionTotals = { upper: 0, core: 0, lower: 0 };
   for (const muscle of muscles) {
     if (muscle.bodyRegion === "upper") regionTotals.upper += muscle.totalSets;
     else if (muscle.bodyRegion === "core") regionTotals.core += muscle.totalSets;
     else if (muscle.bodyRegion === "lower") regionTotals.lower += muscle.totalSets;
   }
-  const regionMix = `Upper ${formatPercent(regionTotals.upper, totalSets)} / Core ${formatPercent(regionTotals.core, totalSets)} / Lower ${formatPercent(regionTotals.lower, totalSets)}`;
-  // ⚡ Bolt Performance Optimization:
-  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
-  // to avoid unnecessary intermediate allocations and overhead when finding a single maximum.
-  let dominantRegion: [keyof typeof regionTotals, number] | undefined;
-  for (const entry of Object.entries(regionTotals) as Array<[keyof typeof regionTotals, number]>) {
+  return regionTotals;
+}
+
+function findDominantRegion(regionTotals: RegionTotals): [keyof RegionTotals, number] | undefined {
+  // O(N) linear scan instead of O(N log N) sort()[0] when finding a single maximum.
+  let dominantRegion: [keyof RegionTotals, number] | undefined;
+  for (const entry of Object.entries(regionTotals) as Array<[keyof RegionTotals, number]>) {
     if (!dominantRegion || entry[1] > dominantRegion[1]) {
       dominantRegion = entry;
     }
   }
+  return dominantRegion;
+}
+
+function findLeastLoadedMuscle(muscles: readonly MuscleCoverage[]): MuscleCoverage | null {
+  // O(N) linear scan instead of O(N log N) sort()[0] when finding a single minimum.
+  let leastLoaded: MuscleCoverage | null = null;
+  for (const item of muscles) {
+    if (!hasCoverageWork(item)) continue;
+    if (!leastLoaded) {
+      leastLoaded = item;
+      continue;
+    }
+    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
+    if (cmp < 0) {
+      leastLoaded = item;
+    }
+  }
+  return leastLoaded;
+}
+
+function determineNextFocus(
+  priorityGap: ReturnType<typeof findPriorityGap>,
+  nextBalance: ReturnType<typeof buildBalanceAnalysis> | undefined,
+  leastLoaded: MuscleCoverage | null,
+): string {
+  if (priorityGap) {
+    return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
+  }
+  if (nextBalance?.recommendation) {
+    return `Next focus: ${nextBalance.recommendation}`;
+  }
+  if (leastLoaded) {
+    return `Next focus: Keep ${leastLoaded.label} in rotation; it is the lowest loaded trained muscle group.`;
+  }
+  return "Next focus: Log mapped strength or functional sets so muscle coverage analysis can start.";
+}
+
+function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
+  const totalSets = muscles.reduce((sum, muscle) => sum + muscle.totalSets, 0);
+  const topMuscle = findTopCoverage(muscles);
+  const priorityGap = findPriorityGap(muscles, "it has no logged sets in this range");
+  const regionTotals = computeRegionTotals(muscles);
+  const regionMix = `Upper ${formatPercent(regionTotals.upper, totalSets)} / Core ${formatPercent(regionTotals.core, totalSets)} / Lower ${formatPercent(regionTotals.lower, totalSets)}`;
+  const dominantRegion = findDominantRegion(regionTotals);
   const balances = [
     buildBalanceAnalysis(
       "Upper Push / Pull",
@@ -231,21 +275,7 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
     ),
   ];
   const nextBalance = balances.find((balance) => balance.tone !== "good" && balance.recommendation);
-  // ⚡ Bolt Performance Optimization:
-  // Replaced O(N log N) array sorting (.sort()[0]) with an O(N) linear scan
-  // to avoid unnecessary intermediate allocations and overhead when finding a single minimum.
-  let leastLoaded: MuscleCoverage | null = null;
-  for (const item of muscles) {
-    if (!hasCoverageWork(item)) continue;
-    if (!leastLoaded) {
-      leastLoaded = item;
-      continue;
-    }
-    const cmp = item.totalSets - leastLoaded.totalSets || item.label.localeCompare(leastLoaded.label);
-    if (cmp < 0) {
-      leastLoaded = item;
-    }
-  }
+  const leastLoaded = findLeastLoadedMuscle(muscles);
 
   const metrics: AnalysisMetric[] = [
     {
@@ -271,18 +301,7 @@ function buildMuscleHeatMapAnalysis(muscles: readonly MuscleCoverage[]) {
     buildCoreFreshnessMetric(muscles),
   ];
 
-  const nextFocus = (() => {
-    if (priorityGap) {
-      return `Next focus: Add ${priorityGap.item.label}; ${priorityGap.reason}.`;
-    }
-    if (nextBalance?.recommendation) {
-      return `Next focus: ${nextBalance.recommendation}`;
-    }
-    if (leastLoaded) {
-      return `Next focus: Keep ${leastLoaded.label} in rotation; it is the lowest loaded trained muscle group.`;
-    }
-    return "Next focus: Log mapped strength or functional sets so muscle coverage analysis can start.";
-  })();
+  const nextFocus = determineNextFocus(priorityGap, nextBalance, leastLoaded);
 
   return { metrics, balances, nextFocus, totalSets };
 }

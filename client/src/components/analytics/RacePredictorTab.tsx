@@ -29,7 +29,7 @@ const BASIS_LABELS: Record<RacePredictionBasis, string> = {
   blended: "Blended",
 };
 
-function ConfidenceBadge({ confidence }: { confidence: RacePredictionConfidence }) {
+function ConfidenceBadge({ confidence }: Readonly<{ confidence: RacePredictionConfidence }>) {
   const style = CONFIDENCE_STYLES[confidence];
   return (
     <Badge className={cn("border-transparent", style.className)} data-testid="race-prediction-confidence">
@@ -63,7 +63,7 @@ function aiUnavailableCopy(reason: RacePredictionResponse["aiUnavailableReason"]
   }
 }
 
-function SegmentRow({ segment }: { segment: RaceSegmentPrediction }) {
+function SegmentRow({ segment }: Readonly<{ segment: RaceSegmentPrediction }>) {
   const isRun = segment.kind === "run";
   return (
     <div

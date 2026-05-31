@@ -17,7 +17,7 @@ describe("isTransientNetworkError", () => {
   });
 
   it("flags errno codes directly or via cause", () => {
-    expect(isTransientNetworkError(Object.assign(new Error(), { code: "ECONNRESET" }))).toBe(true);
+    expect(isTransientNetworkError(Object.assign(new Error("ECONNRESET"), { code: "ECONNRESET" }))).toBe(true);
     expect(isTransientNetworkError(new TypeError("fetch failed", { cause: { code: "ETIMEDOUT" } }))).toBe(true);
     expect(
       isTransientNetworkError(new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } })),
@@ -30,7 +30,7 @@ describe("isTransientNetworkError", () => {
 
   it("does NOT flag generic errors or non-objects", () => {
     expect(isTransientNetworkError(new Error("boom"))).toBe(false);
-    expect(isTransientNetworkError(Object.assign(new Error(), { code: "EACCES" }))).toBe(false);
+    expect(isTransientNetworkError(Object.assign(new Error("EACCES"), { code: "EACCES" }))).toBe(false);
     expect(isTransientNetworkError(null)).toBe(false);
     expect(isTransientNetworkError("nope")).toBe(false);
   });

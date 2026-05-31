@@ -26,6 +26,46 @@ function stripUrlQuery(url: unknown): unknown {
   return `${url.slice(0, queryStart)}?[redacted]`;
 }
 
+type SentryRequest = NonNullable<Sentry.Event["request"]>;
+type SentryUser = NonNullable<Sentry.Event["user"]>;
+type SentryBreadcrumbs = NonNullable<Sentry.Event["breadcrumbs"]>;
+type SentryContexts = NonNullable<Sentry.Event["contexts"]>;
+
+function scrubRequest(request: SentryRequest): void {
+  delete request.data;
+  delete request.query_string;
+  delete request.cookies;
+  const headers = request.headers;
+  if (headers) {
+    // Scrub the same sensitive headers the pino logger redacts.
+    for (const header of SENSITIVE_REQUEST_HEADERS) {
+      Reflect.deleteProperty(headers, header);
+    }
+  }
+}
+
+function scrubUser(user: SentryUser): void {
+  delete user.email;
+  delete user.username;
+  delete user.ip_address;
+}
+
+function scrubBreadcrumbs(breadcrumbs: SentryBreadcrumbs): void {
+  for (const crumb of breadcrumbs) {
+    if (!crumb || typeof crumb !== "object" || !crumb.data) continue;
+    const data = crumb.data as Record<string, unknown>;
+    for (const key of BREADCRUMB_PAYLOAD_KEYS) {
+      if (key in data) delete data[key];
+    }
+    if ("url" in data) data.url = stripUrlQuery(data.url);
+  }
+}
+
+function scrubContexts(contexts: SentryContexts): void {
+  delete contexts.request;
+  delete contexts.response;
+}
+
 /**
  * Pure scrubber used by Sentry's `beforeSend` hook. Removes PII and
  * request/response bodies from every part of the event the SDK assembles —
@@ -34,45 +74,20 @@ function stripUrlQuery(url: unknown): unknown {
  * exercise it without booting the SDK.
  */
 export function scrubSentryEvent<T extends Sentry.Event>(event: T): T {
-  if (event.request) {
-    delete event.request.data;
-    delete event.request.query_string;
-    delete event.request.cookies;
-    const headers = event.request.headers;
-    if (headers) {
-      // Scrub the same sensitive headers the pino logger redacts.
-      for (const header of SENSITIVE_REQUEST_HEADERS) {
-        Reflect.deleteProperty(headers, header);
-      }
-    }
-  }
-  if (event.user) {
-    delete event.user.email;
-    delete event.user.username;
-    delete event.user.ip_address;
-  }
+  // Request: drop the body, query string, cookies, and sensitive headers.
+  if (event.request) scrubRequest(event.request);
+  // User: strip directly identifying fields.
+  if (event.user) scrubUser(event.user);
   // Breadcrumbs are the primary leak channel post-C3: Sentry's http/fetch/xhr
   // integrations attach request and response bodies, and URL query strings can
   // carry user identifiers or tokens.
-  if (event.breadcrumbs) {
-    for (const crumb of event.breadcrumbs) {
-      if (!crumb || typeof crumb !== "object" || !crumb.data) continue;
-      const data = crumb.data as Record<string, unknown>;
-      for (const key of BREADCRUMB_PAYLOAD_KEYS) {
-        if (key in data) delete data[key];
-      }
-      if ("url" in data) data.url = stripUrlQuery(data.url);
-    }
-  }
+  if (event.breadcrumbs) scrubBreadcrumbs(event.breadcrumbs);
   // Contexts are the secondary leak channel — Sentry's express integration
   // mirrors request/response objects here when `sendDefaultPii` is on, and
   // misconfigured user code can set anything. Drop the well-known body-bearing
   // keys; leave the rest (runtime, os, device, etc.) so we keep the diagnostic
   // value.
-  if (event.contexts) {
-    delete event.contexts.request;
-    delete event.contexts.response;
-  }
+  if (event.contexts) scrubContexts(event.contexts);
   return event;
 }
 

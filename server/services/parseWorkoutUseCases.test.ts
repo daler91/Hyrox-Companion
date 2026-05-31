@@ -33,7 +33,7 @@ const OK_RESPONSE = { exercises: PARSE_OK.exercises, saved: true, setCount: 5, r
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" } as never);
+  getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
   getCustomExercises.mockResolvedValue([] as never);
   updateWorkoutLog.mockResolvedValue(undefined);
 });
@@ -47,7 +47,7 @@ describe("reparseWorkoutUseCase", () => {
   });
 
   it("returns parse_failed and does NOT persist overrides when the parse yields no rows", async () => {
-    getWorkoutLog.mockResolvedValue(WORKOUT as never);
+    getWorkoutLog.mockResolvedValue(WORKOUT);
     mockReparse.mockResolvedValue(null);
     const outcome = await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: { prescribedMainWorkout: "new text" } });
     expect(outcome).toEqual({ status: "parse_failed" });
@@ -55,15 +55,15 @@ describe("reparseWorkoutUseCase", () => {
   });
 
   it("treats setCount 0 as parse_failed", async () => {
-    getWorkoutLog.mockResolvedValue(WORKOUT as never);
-    mockReparse.mockResolvedValue({ ...PARSE_OK, setCount: 0 } as never);
+    getWorkoutLog.mockResolvedValue(WORKOUT);
+    mockReparse.mockResolvedValue({ ...PARSE_OK, setCount: 0 });
     const outcome = await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: {} });
     expect(outcome.status).toBe("parse_failed");
   });
 
   it("persists prescribed-text overrides only on success and reparses the override text", async () => {
-    getWorkoutLog.mockResolvedValue(WORKOUT as never);
-    mockReparse.mockResolvedValue(PARSE_OK as never);
+    getWorkoutLog.mockResolvedValue(WORKOUT);
+    mockReparse.mockResolvedValue(PARSE_OK);
     const outcome = await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: { prescribedMainWorkout: "new text" } });
     expect(outcome).toEqual({ status: "ok", response: OK_RESPONSE });
     expect(updateWorkoutLog).toHaveBeenCalledWith("w1", { prescribedMainWorkout: "new text" }, "u1");
@@ -71,8 +71,8 @@ describe("reparseWorkoutUseCase", () => {
   });
 
   it("does NOT call updateWorkoutLog when no overrides are supplied", async () => {
-    getWorkoutLog.mockResolvedValue(WORKOUT as never);
-    mockReparse.mockResolvedValue(PARSE_OK as never);
+    getWorkoutLog.mockResolvedValue(WORKOUT);
+    mockReparse.mockResolvedValue(PARSE_OK);
     const outcome = await reparseWorkoutUseCase({ userId: "u1", workoutId: "w1", payload: {} });
     expect(outcome.status).toBe("ok");
     expect(updateWorkoutLog).not.toHaveBeenCalled();
@@ -90,14 +90,14 @@ describe("reparseWorkoutFromImageUseCase", () => {
   });
 
   it("returns the response on success", async () => {
-    getWorkoutLog.mockResolvedValue(WORKOUT as never);
-    mockReparseImage.mockResolvedValue(PARSE_OK as never);
+    getWorkoutLog.mockResolvedValue(WORKOUT);
+    mockReparseImage.mockResolvedValue(PARSE_OK);
     const outcome = await reparseWorkoutFromImageUseCase({ userId: "u1", workoutId: "w1", image });
     expect(outcome).toEqual({ status: "ok", response: OK_RESPONSE });
   });
 
   it("returns parse_failed when the image parse yields no rows", async () => {
-    getWorkoutLog.mockResolvedValue(WORKOUT as never);
+    getWorkoutLog.mockResolvedValue(WORKOUT);
     mockReparseImage.mockResolvedValue(null);
     const outcome = await reparseWorkoutFromImageUseCase({ userId: "u1", workoutId: "w1", image });
     expect(outcome.status).toBe("parse_failed");

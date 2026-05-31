@@ -20,6 +20,11 @@ import {
   recordBreakerSuccess,
 } from "./circuitBreaker";
 
+// Trip the breaker open by exhausting the failure threshold (5 consecutive).
+function openBreaker(): void {
+  for (let i = 0; i < 5; i += 1) recordBreakerFailure();
+}
+
 describe("circuit breaker", () => {
   beforeEach(() => {
     __resetCircuitBreakerForTests();
@@ -53,10 +58,6 @@ describe("circuit breaker", () => {
   });
 
   describe("half-open probe deadline (W15)", () => {
-    function openBreaker(): void {
-      for (let i = 0; i < 5; i += 1) recordBreakerFailure();
-    }
-
     it("starts a deadline timer when transitioning to half-open", () => {
       openBreaker();
       vi.advanceTimersByTime(30_001); // past COOLDOWN_MS
@@ -122,10 +123,6 @@ describe("circuit breaker", () => {
   });
 
   describe("persistence (W20)", () => {
-    function openBreaker(): void {
-      for (let i = 0; i < 5; i += 1) recordBreakerFailure();
-    }
-
     it("persists a snapshot when the breaker opens via threshold", () => {
       openBreaker();
       expect(mockSetRuntimeCache).toHaveBeenCalledWith(

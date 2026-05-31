@@ -124,7 +124,7 @@ function buildFeaturePromptPayload(features: RacePredictionFeatures): unknown {
         lastTrainedDaysAgo: f.lastTrainedDaysAgo,
         loggedLoad: f.loggedLoadUserUnit,
         standardLoad: f.standardLoadUserUnit,
-        loadRatio: f.loadRatio != null ? Number(f.loadRatio.toFixed(2)) : null,
+        loadRatio: f.loadRatio == null ? null : Number(f.loadRatio.toFixed(2)),
       };
     }),
   };
