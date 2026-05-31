@@ -57,6 +57,7 @@ describe("buildTrainingContext", () => {
       skippedWorkouts: 0,
       completionRate: 0,
       currentStreak: 0,
+      mafHr: null,
       weeklyGoal: undefined,
       recentWorkouts: [],
       upcomingWorkouts: [],

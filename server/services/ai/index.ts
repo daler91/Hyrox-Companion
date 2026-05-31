@@ -1,3 +1,4 @@
+import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
 import type { TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
@@ -53,7 +54,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const today = todayUtcDate();
   const loadHistoryStart = addDays(today, -70);
   const [timeline, activePlanRecord, user, upcomingDays, loadWorkoutLogs, loadExerciseSets, loadTags] = await Promise.all([
-    storage.timeline.getTimeline(userId),
+    // Bound to recent history: this internal caller has no caller-supplied
+    // limit, so an unbounded getTimeline() would hydrate the user's entire
+    // history (all exercise sets) on every coach/chat context build. See
+    // AI_CONTEXT_TIMELINE_LIMIT.
+    storage.timeline.getTimeline(userId, undefined, AI_CONTEXT_TIMELINE_LIMIT),
     storage.plans.getActivePlan(userId),
     storage.users.getUser(userId),
     storage.timeline.getUpcomingPlannedDays(userId, 7),
@@ -176,6 +181,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     skippedWorkouts,
     completionRate,
     currentStreak,
+    mafHr: user?.mafHr ?? null,
     weeklyGoal: user?.weeklyGoal ?? undefined,
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),

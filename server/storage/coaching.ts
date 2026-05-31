@@ -91,6 +91,17 @@ export class CoachingStorage {
     await vectorPool.query(`DELETE FROM document_chunks WHERE material_id = $1`, [materialId]);
   }
 
+  /**
+   * Delete ALL of a user's RAG chunks from the vector database. Required on
+   * account deletion: `document_chunks` lives on `vectorPool`, a SEPARATE
+   * Postgres instance in production (VECTOR_DATABASE_URL), so the main-DB FK
+   * cascade on `users` cannot reach it — without this call the user's uploaded
+   * coaching-material text and embeddings are orphaned (GDPR Art. 17).
+   */
+  async deleteChunksByUserId(userId: string): Promise<void> {
+    await vectorPool.query(`DELETE FROM document_chunks WHERE user_id = $1`, [userId]);
+  }
+
   async replaceChunks(materialId: string, chunks: InsertDocumentChunk[]): Promise<DocumentChunk[]> {
     const client = await vectorPool.connect();
     try {

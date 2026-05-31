@@ -61,9 +61,14 @@ function buildStructuredFields(
     trainingStyleId: styleId,
     phase,
     computed: {
+      // Surface the athlete's actual MAF aerobic ceiling (bpm) to the coach
+      // during aerobic-base phases. Previously this emitted the placeholder
+      // string "use_user_profile_maf_hr", which the model could not act on —
+      // the computed ceiling was never passed through. Null when no ceiling is
+      // set or when the phase doesn't call for ceiling discipline.
       mafHr:
         trainingContext.coachingInsights?.decisionTree?.currentPhase === "aerobic_base"
-          ? "use_user_profile_maf_hr"
+          ? (trainingContext.mafHr ?? null)
           : null,
       complianceStats: {
         completionRatePct: completionRate,
