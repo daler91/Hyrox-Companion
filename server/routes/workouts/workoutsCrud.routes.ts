@@ -73,7 +73,7 @@ const updateBlockScoreBodySchema = z.object({
   score: structureBlockScoreSchema.nullable(),
 });
 
-function uniqueIds(ids: readonly string[]): string[] {
+export function uniqueIds(ids: readonly string[]): string[] {
   return Array.from(new Set(ids));
 }
 
