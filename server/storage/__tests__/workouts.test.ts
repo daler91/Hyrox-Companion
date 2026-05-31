@@ -251,3 +251,92 @@ describe("WorkoutStorage.createWorkoutLogs", () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 });
+
+describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18)", () => {
+  let storage: WorkoutStorage;
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  function mockOwned(version = 3) {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue({
+      id: "set-1",
+      workoutLogId: "workout-1",
+      planDayId: null,
+      version,
+    } as Awaited<ReturnType<WorkoutStorage["getExerciseSetOwned"]>>);
+  }
+
+  function mockUpdateReturning(rows: unknown[]) {
+    const returningMock = vi.fn().mockResolvedValue(rows);
+    const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+    const setMock = vi.fn().mockReturnValue({ where: whereMock });
+    vi.mocked(db.update).mockReturnValue({ set: setMock } as ReturnType<typeof db.update>);
+    return { returningMock, whereMock, setMock };
+  }
+
+  it("does a blind UPDATE when expectedVersion is omitted (back-compat)", async () => {
+    mockOwned(3);
+    const updatedRow = { id: "set-1", workoutLogId: "workout-1", version: 4, blockId: null, stepNumber: null };
+    const { setMock } = mockUpdateReturning([updatedRow]);
+
+    const result = await storage.updateExerciseSetNormalized(
+      { kind: "workout", id: "workout-1", userId: "user-1" },
+      "set-1",
+      { reps: 10 },
+    );
+
+    expect(result).toEqual(updatedRow);
+    // The SET clause always bumps version, even on blind updates.
+    const setArg = setMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg.reps).toBe(10);
+    expect("version" in setArg).toBe(true);
+  });
+
+  it("bumps version and returns the new row when expectedVersion matches", async () => {
+    mockOwned(3);
+    const updatedRow = { id: "set-1", workoutLogId: "workout-1", version: 4, blockId: null, stepNumber: null };
+    mockUpdateReturning([updatedRow]);
+
+    const result = await storage.updateExerciseSetNormalized(
+      { kind: "workout", id: "workout-1", userId: "user-1" },
+      "set-1",
+      { reps: 12, expectedVersion: 3 },
+    );
+
+    expect(result).toEqual(updatedRow);
+  });
+
+  it("throws AppError(CONFLICT, 409) when expectedVersion is stale", async () => {
+    mockOwned(5); // server has v5; client thought it was v3
+    mockUpdateReturning([]); // WHERE didn't match because version=3 ≠ 5
+
+    await expect(
+      storage.updateExerciseSetNormalized(
+        { kind: "workout", id: "workout-1", userId: "user-1" },
+        "set-1",
+        { reps: 8, expectedVersion: 3 },
+      ),
+    ).rejects.toMatchObject({
+      name: "AppError",
+      status: 409,
+      message: expect.stringContaining("modified"),
+      details: { currentVersion: 5, expectedVersion: 3 },
+    });
+  });
+
+  it("does NOT throw when expectedVersion is omitted and no rows match (set was deleted)", async () => {
+    mockOwned(3);
+    mockUpdateReturning([]); // e.g. the set was deleted between getExerciseSetOwned and the UPDATE
+
+    const result = await storage.updateExerciseSetNormalized(
+      { kind: "workout", id: "workout-1", userId: "user-1" },
+      "set-1",
+      { reps: 8 },
+    );
+
+    expect(result).toBeUndefined();
+  });
+});

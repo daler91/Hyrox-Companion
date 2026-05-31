@@ -516,6 +516,11 @@ export const patchExerciseSetBodySchema = disallowLegacyEmomRowName(
         setNumber: z.number().int().min(1).max(100).optional(),
         ...measurableSetFields,
         sortOrder: z.number().int().nullable().optional(),
+        // Optional optimistic-lock version (W18). When omitted, the update
+        // is a blind UPDATE (last-write-wins, the historical behaviour).
+        // When provided, storage compares against the stored version and
+        // returns 409 if another writer bumped it in between.
+        expectedVersion: z.number().int().min(1).optional(),
       }),
     ),
   ),
