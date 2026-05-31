@@ -52,6 +52,7 @@ export function WorkoutDateFields({
           variant={date === today ? "default" : "outline"}
           size="sm"
           onClick={() => setDate(today)}
+          aria-pressed={date === today}
           data-testid="button-date-today"
         >
           Today
@@ -61,6 +62,7 @@ export function WorkoutDateFields({
           variant={date === yesterday ? "default" : "outline"}
           size="sm"
           onClick={() => setDate(yesterday)}
+          aria-pressed={date === yesterday}
           data-testid="button-date-yesterday"
         >
           Yesterday

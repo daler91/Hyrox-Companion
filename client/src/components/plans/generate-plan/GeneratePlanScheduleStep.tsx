@@ -91,6 +91,7 @@ export function GeneratePlanScheduleStep({
                 size="sm"
                 className="text-xs px-2 py-1 h-7"
                 onClick={() => onRestDayToggle(day)}
+                aria-pressed={restDays.includes(day)}
                 disabled={!restDays.includes(day) && restDays.length >= requiredRestDays}
                 type="button"
               >

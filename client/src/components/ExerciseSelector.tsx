@@ -129,6 +129,7 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
                   key={name}
                   variant={isSelected ? "default" : "outline"}
                   size="sm"
+                  aria-pressed={allowDuplicates ? undefined : isSelected}
                   onClick={() => {
                     if (allowDuplicates && onAdd) {
                       onAdd(name);
