@@ -39,6 +39,7 @@ export function GeneratePlanDetailsStep({
               variant={focusAreas.includes(option.value) ? "default" : "outline"}
               size="sm"
               onClick={() => onFocusToggle(option.value)}
+              aria-pressed={focusAreas.includes(option.value)}
               type="button"
             >
               {option.label}

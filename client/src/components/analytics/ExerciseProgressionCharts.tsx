@@ -149,6 +149,7 @@ export function ExerciseProgressionCharts({
           size="sm"
           onClick={() => setChartMode("bar")}
           aria-label="Bar chart view"
+          aria-pressed={chartMode === "bar"}
         >
           <BarChart3 className="h-4 w-4" />
         </Button>
@@ -157,6 +158,7 @@ export function ExerciseProgressionCharts({
           size="sm"
           onClick={() => setChartMode("line")}
           aria-label="Line chart view"
+          aria-pressed={chartMode === "line"}
         >
           <LineChartIcon className="h-4 w-4" />
         </Button>
