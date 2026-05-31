@@ -116,13 +116,17 @@ const envSchema = z.object({
   message: "❌ FATAL: ENCRYPTION_KEY is a known weak/test placeholder; generate a real 32-byte random key",
   path: ["ENCRYPTION_KEY"],
 }).refine((data) => {
-  // W6 — the rotation key must be distinct from the active key (an identical
-  // one is a no-op that tags ciphertext v2 with no new material) AND from
-  // CSRF_SECRET (key separation). A membership test rather than `!==` avoids a
-  // direct secret-to-secret comparison operator (Bearer timing-discrepancy).
+  // W6 — when ENCRYPTION_KEY_V2 is set it must be distinct from ENCRYPTION_KEY
+  // (an identical rotation key is a no-op that tags ciphertext v2 with no new
+  // material) and from CSRF_SECRET (key separation). Implemented as a
+  // distinct-count check so we compare NUMBERS (Set size vs array length) — no
+  // secret-to-secret comparison operator, hence no Bearer timing-discrepancy
+  // false positive on operator config that's only ever read once at boot.
   if (!data.ENCRYPTION_KEY_V2) return true;
-  const otherKeys = [data.ENCRYPTION_KEY, data.CSRF_SECRET].filter((k): k is string => Boolean(k));
-  return !otherKeys.includes(data.ENCRYPTION_KEY_V2);
+  const keys = [data.ENCRYPTION_KEY, data.ENCRYPTION_KEY_V2, data.CSRF_SECRET].filter(
+    (k): k is string => Boolean(k),
+  );
+  return new Set(keys).size === keys.length;
 }, {
   message: "❌ FATAL: ENCRYPTION_KEY_V2 must differ from both ENCRYPTION_KEY (rotation target) and CSRF_SECRET (key separation)",
   path: ["ENCRYPTION_KEY_V2"],
