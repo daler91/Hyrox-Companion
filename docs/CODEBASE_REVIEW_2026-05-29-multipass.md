@@ -3,22 +3,79 @@
 **Generated:** 2026-05-29
 **Branch reviewed:** `codex/fix-sonar-analytics-cleanups`
 **Method:** Seven specialized review passes (security, business, UX/a11y, performance, QA, DevOps, privacy) executed in parallel by isolated reviewer agents.
+**Status as of 2026-05-31:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 10 of 26 Warnings closed, 1 of 23 Suggestions closed.
 
 > **Note.** This report is a *separate* multi-pass audit run on the same date as
 > `CODEBASE_REVIEW_2026-05-29.md` (which has since been fully remediated across
 > PRs #1290–#1297). It is not a re-issue of that report; it is a deeper, persona-driven
 > sweep that surfaced a number of additional findings (notably privacy/retention,
 > observability, RAG indexing, timezone handling, and AI-output XSS) that were outside
-> the scope of the earlier baseline. Findings should be triaged against current `main`
-> before action — some may already be partially addressed by the recent remediation PRs.
+> the scope of the earlier baseline.
+
+## Remediation Status — 2026-05-31
+
+The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below.
+
+**Pattern note:** verification against current `main` before implementing each finding turned up a 30% false-positive rate on Criticals (3 of 10) and one false-positive Warning. Every false positive traced to the same reviewer mistake: looking at one layer (schema / route surface) and missing the wrapping layer (storage / runtime maintenance / earlier remediation). Future multipass-style audits should always be verified before triage.
+
+### Criticals (9/10 closed, 1 deferred)
+
+| ID | Category | Resolution |
+|----|----------|------------|
+| **C1** | Security / Privacy | ✅ **False positive (#1312).** Strava tokens were already encrypted at the storage boundary (`server/storage/users.ts:228-275`), with regression tests at `users.test.ts:89,120`. Reviewer cited the schema (`tables.ts:189-199`) where columns are declared as `text`; missed the wrapper. |
+| **C2** | Security | ✅ **Resolved (#1311).** `rehype-sanitize` added to both `<ReactMarkdown>` call sites (`ChatMessage.tsx`, `CoachInsightsTab.tsx`); 3 XSS regression tests cover `<script>`, `javascript:` URLs, and `onerror=` handlers. |
+| **C3** | Privacy | ✅ **Resolved (#1313).** Extracted `scrubSentryEvent` from inline `beforeSend`; drops `body`/`payload`/`request_body`/`response_body` from breadcrumb data, strips URL query strings, deletes `contexts.request`/`contexts.response`. 9 regression tests in `observability.test.ts`. |
+| **C4** | Privacy | ✅ **Resolved (#1313).** `@flow-js/garmin-connect` has no `logout`/`revoke` method and Garmin publishes no token-revocation API; documented the constraint in `account.ts` with a structured audit log and updated `Privacy.tsx` §5 to surface the "change your Garmin password for immediate revocation" recourse. Not a code-level revoke call (would be brittle to undocumented endpoints). |
+| **C5** | Privacy | ⏸ **Deferred.** Chat history TTL + training-context caching work was started (env var, storage method, cron task, tests, Privacy.tsx) and explicitly scrapped per user direction. Reopen when retention becomes a priority. |
+| **C6** | Privacy | ✅ **Resolved (#1314).** Endpoint already existed (5th false-positive-style finding); the gap was payload completeness. `generateJSON()` extended from 3 keys to 13: profile, chat, materials, custom exercises, annotations, connection metadata (no secrets), AI usage logs, push endpoints (no encryption keys). Three scrubbers redact OAuth tokens, encrypted credentials, and push-message keys; 7 regression tests grep the serialized output for secret literals. |
+| **C7** | Performance | ✅ **Resolved (#1308).** `Promise.all` the two independent reads in `processWeeklySummary` (`getWeeklyStats` + `getTimeline`). |
+| **C8** | Performance | ✅ **False positive (#1308).** HNSW index already exists, created at runtime by `server/maintenance.ts:ensureVectorSchema()` using `halfvec_cosine_ops` over `embedding::halfvec(3072)` (necessary because the 3072-dim embedding exceeds pgvector's native 2000-dim HNSW ceiling). RAG retrieval query already casts to match. Index lives on the separate vector DB (not in `migrations/`) by design. |
+| **C9** | DevOps | ✅ **Resolved (#1308).** `@sentry/vite-plugin` + `@sentry/esbuild-plugin` wired into both bundles; `release` field added to both `Sentry.init` calls; sourcemaps emit (`build.sourcemap: "hidden"` for vite, `sourcemap: true` for esbuild) and are uploaded + deleted when build-time env vars are set. Four new env vars documented in `.env.example`, `docs/integrations.md`, `docs/env-reference.md`. |
+| **C10** | QA / Correctness | ✅ **Resolved (#1316).** `users.user_timezone` IANA column (default UTC, migration 0055); `server/timezone.ts` helpers (`getLocalDayOfWeek`, `getLocalDateStr`, `addDaysLocal`, `isValidTimezone`); scheduler refactored to use per-user local time for Monday detection, week range, and "yesterday" math. Client `useDetectTimezone` auto-detects browser tz on sign-in and PATCHes preferences. 12 timezone helper tests + 2 scheduler tz tests. |
+
+### Warnings (10/26 closed)
+
+| ID | Category | Resolution |
+|----|----------|------------|
+| **W1** | Security | ✅ **Resolved (#1309).** Added `openAiCompatibleApiKey` and `anthropicApiKey` (both top-level and `*.`-nested) to pino redact paths. |
+| **W10** | Performance | ✅ **Resolved (#1309).** Chat-history `useQuery` pinned to `staleTime: Infinity, gcTime: Infinity`; freshness driven by existing mutation invalidation in `useChatMutations.ts`. |
+| **W11** | Performance | ✅ **Resolved (#1309).** Drizzle-declared composite index `idx_plan_days_plan_scheduled (plan_id, scheduled_date)` mirroring existing `idx_plan_days_plan_week` naming; migration 0054. Hot paths: `timeline.ts:335` (inArray + isNotNull) and `markMissedPlanDays` daily cron. |
+| **W12** | Performance | ✅ **Resolved (#1318).** `PGBOSS_STATEMENT_TIMEOUT_MS = 45min` constant and `buildQueueConnectionString()` helper that appends `-c statement_timeout=...` via libpq `options` URL param. pg-boss's separate pool now has PG-side timeout that fires ~5min before `JOB_TIMEOUT_MS`. Review's "change main pool to 45m" was wrong — main pool's 30s is correct for HTTP queries; gap was the separate pg-boss pool. |
+| **W15** | QA | ✅ **Resolved (#1318).** `PROBE_TIMEOUT_MS = 10s` watchdog in `circuitBreaker.ts` clears `probeInFlight` if the half-open probe never resolves; self-heals before next cooldown. Timer is `.unref()`'d so it doesn't block graceful shutdown. 8 regression tests. |
+| **W16** | QA | ✅ **Resolved (#1318).** `pg_advisory_unlock_all()` fallback in `advisoryLock.ts` catch block — safe because the client is about to be released anyway and the wrapper is the only lock-taker on this client. 3 new tests covering targeted-unlock-fails / double-fail / happy-path. |
+| **W17** | QA | ✅ **False positive (#1334 description).** The C10 PR's re-fetch already addresses it — `processWeeklySummary` and `processMissedWorkoutReminder` re-fetch the user via `storage.users.getUser()` at job execution time and short-circuit if prefs changed (inline comment labels it "W4 — race between cron scan and job execution"). |
+| **W18** | QA | ✅ **Resolved (#1334).** `exercise_sets.version` column (migration 0057); `expectedVersion` optional field on `patchExerciseSetBodySchema`; storage always bumps version on UPDATE and throws `AppError(CONFLICT, 409)` when `expectedVersion` is supplied + stale. Opt-in for clients (back-compat); the mechanism exists for callers that care. 4 storage tests. |
+| **W19** | QA | ✅ **Resolved (#1318).** Tightened `exerciseSetSchema.reps` and `measurableSetFields.reps` from `.min(0)` to `.min(1)` to match the existing `incomingExerciseSchema.reps` constraint. Audit confirmed the 3 existing `reps: 0` fixtures are all on the AMRAP-score path (a different schema). |
+| **W20** | DevOps | ✅ **Resolved (#1334).** Snapshot breaker state (`{state, consecutiveFailures, openedAt}`) to `serverRuntimeCache` under key `ai-circuit-breaker:state` with 1-hour TTL on every meaningful transition; `loadPersistedBreakerState()` called from `runStartupMaintenance`. "half-open" on restore is downgraded to "open" because the probe machinery doesn't carry across restarts. 9 regression tests. |
+| W2 | Security | Open. SSRF guard on `AI_TEXT_BASE_URL`. |
+| W3 | Security | Open. Per-instance rate limiting → shared store. |
+| W4 | Security | Open. SSE deadline force-close (`res.socket.destroy()` fallback). |
+| W5 | Security / QA | Open. File upload size + magic-byte depth pre-check. |
+| W6 | Privacy | Open. `ENCRYPTION_KEY` rotation/versioning. |
+| W7 | UX / A11y | Open. `Textarea` `errorMessage` API. |
+| W8 | UX / A11y | Open. `aria-live="assertive"` on stream-error suffixes. |
+| W9 | UX / A11y | Open. `prefers-reduced-motion` global rule. |
+| W13 | Performance | Open. RAG cache FIFO → LRU. |
+| W14 | QA | Open. SSE stream-generation race. |
+| W21 | DevOps | Open. Health-endpoint result caching. |
+| W22 | DevOps | Open. Neon/Postgres backup + DR runbook. |
+| W23 | Business | Likely already addressed by recent MAF work — needs verification. `calculateMafHr` is now called from `updateUserPreferences` and the result persisted to a `maf_profile` row. |
+| W24 | Business | Open. Compliance test asserting `aiConsentCheck` runs on every AI endpoint. |
+| W25 | Business | Open. `AI_FEATURES_ENABLED` defense-in-depth at provider entrypoint. |
+| W26 | Business / Privacy | Open. Unit-conversion bidirectionality on export paths. |
+
+### Suggestions (1/23 closed)
+
+| ID | Resolution |
+|----|------------|
+| **S20** | ✅ **Resolved (#1309).** Inline `assertBuildArtifacts()` in `script/build.ts` floors `dist/index.js` ≥ 50 KB and `dist/public/index.html` ≥ 200 B; catches silent build failures (vite plugin crash, esbuild emitting empty output). |
+| S1–S19, S21–S23 | Open. Mostly small, optional polish (logging tweaks, A11y nits, defense-in-depth CSP additions, privacy-policy disclosures, per-processor consent toggles). |
 
 ## Executive Summary
 
-The codebase is a well-architected, privacy-conscious React 18 + Express + PostgreSQL/pgvector PWA with strong foundational hygiene (Zod-validated env, AES-256-GCM at-rest encryption for Garmin **and Strava** OAuth tokens, CSRF double-submit, Helmet+CSP, Drizzle cascade integrity, advisory-lock'd cron, structured Pino logging). However, three categories of risk remain before scaled production deployment: (1) **AI-output XSS via unsanitized react-markdown rendering**, (2) **OAuth/account-erasure gaps** (no Garmin revocation on account delete, no AI-key redaction in logger), and (3) **observability/operability holes** (per-instance rate limiting, no Sentry release tagging or sourcemap upload, no data-export endpoint despite privacy-policy promise). Overall this is a mature, ship-ready codebase with a small number of high-impact fixes blocking GA.
+*(Preserved as the original 2026-05-29 review opinion. The codebase shape it describes has since shifted — see Remediation Status above for current state.)*
 
-> **Correction (2026-05-30, verified during remediation):** C8 ("missing pgvector HNSW index") was a false positive — the index already exists, created at runtime by `server/maintenance.ts:ensureVectorSchema()` using `halfvec_cosine_ops` over `embedding::halfvec(3072)` to accommodate the 3072-dim embedding column. The RAG retrieval query in `server/storage/coaching.ts:147` already casts to `halfvec(3072)` to match. The Critical table below has been updated.
->
-> **Correction (2026-05-30, verified during remediation):** C1 ("Strava OAuth tokens stored plaintext") was also a false positive — the storage layer at `server/storage/users.ts:228-275` already wraps every Strava token write with `encryptToken()` and every read with `decryptToken()`, mirroring the Garmin pattern. Regression-tested in `server/storage/users.test.ts:89` ("should decrypt tokens when returning connection") and `:120` ("should encrypt tokens before inserting/updating"). The reviewer almost certainly looked at the schema (`shared/schema/tables.ts:189-199` declares `access_token` / `refresh_token` as plain `text` columns) and missed the storage-layer wrapper — same pattern as the C8 miss. The Critical table below has been updated.
+The codebase is a well-architected, privacy-conscious React 18 + Express + PostgreSQL/pgvector PWA with strong foundational hygiene (Zod-validated env, AES-256-GCM at-rest encryption for Garmin **and Strava** OAuth tokens, CSRF double-submit, Helmet+CSP, Drizzle cascade integrity, advisory-lock'd cron, structured Pino logging). However, three categories of risk remain before scaled production deployment: (1) **AI-output XSS via unsanitized react-markdown rendering**, (2) **OAuth/account-erasure gaps** (no Garmin revocation on account delete, no AI-key redaction in logger), and (3) **observability/operability holes** (per-instance rate limiting, no Sentry release tagging or sourcemap upload, no data-export endpoint despite privacy-policy promise). Overall this is a mature, ship-ready codebase with a small number of high-impact fixes blocking GA.
 
 ## Critical Findings (must fix before shipping)
 
