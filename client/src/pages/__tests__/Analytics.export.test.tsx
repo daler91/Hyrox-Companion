@@ -177,8 +177,7 @@ describe("Analytics tabs", () => {
     expect(getTabLabels()).toEqual([
       "Overview",
       "Breakdown",
-      "Progression",
-      "Records",
+      "PRs & Trends",
       "Coach Insights",
       "Race Predictor",
     ]);
