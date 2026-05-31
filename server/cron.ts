@@ -244,32 +244,32 @@ export function startCron(storage: IStorage): void {
 
 export function stopCron(): void {
   if (task) {
-    const _stop = task.stop(); // result intentionally unused; stop is best-effort during shutdown
+    void task.stop(); // stop is best-effort during shutdown
     task = null;
     logger.info({ context: "cron" }, "Cron stopped");
   }
   if (idempotencyCleanupTask) {
-    const _stop = idempotencyCleanupTask.stop();
+    void idempotencyCleanupTask.stop();
     idempotencyCleanupTask = null;
   }
   if (aiUsageCleanupTask) {
-    const _stop = aiUsageCleanupTask.stop();
+    void aiUsageCleanupTask.stop();
     aiUsageCleanupTask = null;
   }
   if (staleAutoCoachTask) {
-    const _stop = staleAutoCoachTask.stop();
+    void staleAutoCoachTask.stop();
     staleAutoCoachTask = null;
   }
   if (queueDepthTask) {
-    const _stop = queueDepthTask.stop();
+    void queueDepthTask.stop();
     queueDepthTask = null;
   }
   if (structuredExerciseRollupTask) {
-    const _stop = structuredExerciseRollupTask.stop();
+    void structuredExerciseRollupTask.stop();
     structuredExerciseRollupTask = null;
   }
   if (sharedRuntimeCleanupTask) {
-    const _stop = sharedRuntimeCleanupTask.stop();
+    void sharedRuntimeCleanupTask.stop();
     sharedRuntimeCleanupTask = null;
   }
 }
