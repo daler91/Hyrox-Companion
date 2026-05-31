@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { Activity, BarChart3, Download, FileJson, FileSpreadsheet, Loader2, PieChart, Sparkles, Target, Timer, Trophy } from "lucide-react";
+import { BarChart3, Download, FileJson, FileSpreadsheet, Loader2, PieChart, Sparkles, Target, Timer, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
-import { ExerciseProgressionTab } from "@/components/analytics/ExerciseProgressionTab";
-import { PersonalRecordsTab } from "@/components/analytics/PersonalRecordsTab";
+import { ProgressTab } from "@/components/analytics/ProgressTab";
 import { RacePredictorTab } from "@/components/analytics/RacePredictorTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
 import { Badge } from "@/components/ui/badge";
@@ -148,7 +147,7 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:grid-cols-6 sm:gap-0 sm:overflow-visible">
+        <TabsList className="mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:grid-cols-5 sm:gap-0 sm:overflow-visible">
           <TabsTrigger value="overview" className="shrink-0 sm:shrink" data-testid="tab-overview">
             <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
             Overview
@@ -157,13 +156,9 @@ export default function Analytics() {
             <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
             Breakdown
           </TabsTrigger>
-          <TabsTrigger value="trends" className="shrink-0 sm:shrink" data-testid="tab-trends">
-            <Activity className="h-4 w-4 mr-2 hidden sm:block" />
-            Progression
-          </TabsTrigger>
-          <TabsTrigger value="prs" className="shrink-0 sm:shrink" data-testid="tab-prs">
+          <TabsTrigger value="progress" className="shrink-0 sm:shrink" data-testid="tab-progress">
             <Trophy className="h-4 w-4 mr-2 hidden sm:block" />
-            Records
+            PRs &amp; Trends
           </TabsTrigger>
           <TabsTrigger value="insights" className="shrink-0 sm:shrink" data-testid="tab-coach-insights">
             <Sparkles className="h-4 w-4 mr-2 hidden sm:block" />
@@ -183,12 +178,8 @@ export default function Analytics() {
           <CategoryBreakdownTab dateParams={dateParams} />
         </TabsContent>
 
-        <TabsContent value="trends" className="space-y-6">
-          <ExerciseProgressionTab dateParams={dateParams} />
-        </TabsContent>
-
-        <TabsContent value="prs" className="space-y-6">
-          <PersonalRecordsTab dateParams={dateParams} />
+        <TabsContent value="progress" className="space-y-6">
+          <ProgressTab dateParams={dateParams} />
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">
