@@ -4,9 +4,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { pool } from "./db";
-import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { loadPersistedBreakerState } from "./gemini/circuitBreaker";
+import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
+import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { vectorPool } from "./vectorDb";
 
@@ -184,4 +185,7 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   // upstream (W20). loadPersistedBreakerState swallows its own errors so
   // this never blocks startup.
   await loadPersistedBreakerState();
+  // Opt-in encryption-key rotation sweep (W6). No-op unless ENCRYPTION_KEY_V2
+  // is set and ENCRYPTION_REENCRYPT_ON_BOOT=true; swallows its own errors.
+  await maybeReencryptOnBoot();
 }

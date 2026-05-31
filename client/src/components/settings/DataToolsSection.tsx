@@ -1,3 +1,4 @@
+import { ErrorReportingConsentCard } from "./data-tools/ErrorReportingConsentCard";
 import { ExportDataCard } from "./data-tools/ExportDataCard";
 import { StructureOldWorkoutsCard } from "./data-tools/StructureOldWorkoutsCard";
 import { useWorkoutReparseTools } from "./data-tools/useWorkoutReparseTools";
@@ -18,6 +19,7 @@ export function DataToolsSection() {
         onReset={reset}
       />
       <ExportDataCard />
+      <ErrorReportingConsentCard />
     </>
   );
 }

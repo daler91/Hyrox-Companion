@@ -8,6 +8,7 @@ import { generateWorkoutSuggestions, type UpcomingWorkout } from "../gemini/inde
 import { logger as defaultLogger } from "../logger";
 import { buildWorkoutSearchText } from "../prompts/exerciseSetFormatter";
 import { storage } from "../storage";
+import { getLocalDateStr } from "../timezone";
 import { buildAIContext, extractCoachingMaterialsText } from "./aiContextService";
 import {
   buildSignalsFromCoachInputs,
@@ -264,6 +265,25 @@ async function getStructuredApplyBlocker(
  * stays thin and the orchestration — multiple storage calls + context
  * build + AI call + response shaping — lives next to other services.
  */
+// S22 — explain an empty upcoming-workouts list. When the user's plan has ended
+// and nothing is scheduled next, nudge them to start a new block rather than
+// falling through to the client's generic "well-balanced" empty state. Any
+// lookup failure degrades to a neutral message.
+async function buildNoUpcomingWorkoutsMessage(userId: string, timezone: string): Promise<string> {
+  try {
+    const plans = await storage.plans.listTrainingPlans(userId);
+    const today = getLocalDateStr(new Date(), timezone);
+    const hasFuturePlan = plans.some((p) => p.startDate != null && p.startDate > today);
+    const hasEndedPlan = plans.some((p) => p.endDate != null && p.endDate < today);
+    if (hasEndedPlan && !hasFuturePlan) {
+      return "Your training plan has ended and there's no next one scheduled. Ready to start a new block? Head to Plans to generate or import your next plan.";
+    }
+  } catch (error) {
+    defaultLogger.warn({ err: error, userId }, "[suggestions] plan-rollover check failed");
+  }
+  return "You have no upcoming planned workouts. Schedule some or start a new plan and I'll suggest improvements.";
+}
+
 export async function generateTimelineAiSuggestions(
   userId: string,
   log: TimelineSuggestionLogger,
@@ -302,7 +322,8 @@ export async function generateTimelineAiSuggestions(
   }));
 
   if (upcomingWorkouts.length === 0) {
-    return { suggestions: [], message: "No upcoming planned workouts found" };
+    const message = await buildNoUpcomingWorkoutsMessage(userId, user?.userTimezone ?? "UTC");
+    return { suggestions: [], message };
   }
 
   const suggestionQuery = upcomingWorkouts

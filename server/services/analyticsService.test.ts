@@ -18,6 +18,22 @@ function makeSet(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// S21 — fresh user, zero workouts: the overview must degrade to safe zero/null
+// defaults (no NaN, no crash) so the analytics page renders an honest empty
+// state. The per-metric empty cases are covered in their own blocks below.
+describe("computeOverviewStats (fresh-user / zero-workout state)", () => {
+  it("returns zeroed defaults for no weekly summaries", () => {
+    expect(computeOverviewStats([])).toEqual({
+      totalWorkouts: 0,
+      avgPerWeek: 0,
+      totalDuration: 0,
+      avgDuration: 0,
+      avgRpe: null,
+      avgCompliancePct: null,
+    });
+  });
+});
+
 describe("calculatePersonalRecords", () => {
   it("returns empty object for empty input", () => {
     const result = calculatePersonalRecords([]);

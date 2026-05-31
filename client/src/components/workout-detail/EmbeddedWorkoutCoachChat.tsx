@@ -55,6 +55,7 @@ export function EmbeddedWorkoutCoachChat({
     messages,
     isLoading,
     isStreaming,
+    streamError,
     scrollRef,
     updateAutoScrollMode,
     sendMessage,
@@ -106,6 +107,7 @@ export function EmbeddedWorkoutCoachChat({
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
+        streamError={streamError}
         className={cn("min-h-0 max-h-none flex-1", chatAreaClassName)}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={noopSuggestion}

@@ -65,6 +65,15 @@ export const logger = pino({
       return { level: label };
     },
   },
+  // Inject the async-local requestId into every log line emitted within a
+  // request or background-job context (S19). This carries request lineage into
+  // pg-boss job handlers, which log via the module logger rather than a bound
+  // child. Only requestId (a correlation id, not PII) is mixed in — userId is
+  // deliberately omitted to keep PII out of the high-volume logs (S2).
+  mixin() {
+    const ctx = getRequestContext();
+    return ctx?.requestId ? { requestId: ctx.requestId } : {};
+  },
 });
 
 export function getContextLogger() {

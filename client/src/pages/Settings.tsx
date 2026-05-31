@@ -38,6 +38,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
@@ -151,6 +152,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
 }
 
 export default function Settings() {
+  useDocumentTitle("Settings");
   const { toast } = useToast();
   const { user } = useAuth();
   const [location, setLocation] = useLocation();

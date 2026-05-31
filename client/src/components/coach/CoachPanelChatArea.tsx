@@ -13,6 +13,7 @@ interface CoachPanelChatAreaProps {
   readonly applyingId: string | null;
   readonly suggestionsRagInfo?: RagInfo;
   readonly isProcessing: boolean;
+  readonly streamError?: string | null;
   readonly className?: string;
   readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
@@ -27,6 +28,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       applyingId,
       suggestionsRagInfo,
       isProcessing,
+      streamError,
       className,
       onViewportScroll,
       onApplySuggestion,
@@ -35,11 +37,18 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
     ref
   ) => {
     return (
-      <ScrollArea
-        className={cn("min-h-0 flex-1 p-3", className)}
-        viewportRef={ref}
-        viewportProps={{ onScroll: onViewportScroll }}
-      >
+      <>
+        {/* Dedicated assertive region for stream interruptions (W8). Kept
+            mounted and empty so the announcement fires the moment its text
+            changes, instead of being deferred inside the polite log below. */}
+        <div role="alert" aria-live="assertive" aria-atomic="true" className="sr-only">
+          {streamError ?? ""}
+        </div>
+        <ScrollArea
+          className={cn("min-h-0 flex-1 p-3", className)}
+          viewportRef={ref}
+          viewportProps={{ onScroll: onViewportScroll }}
+        >
         <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
           {messages.map((message) => (
             <ChatMessage
@@ -77,7 +86,8 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
             </div>
           )}
         </div>
-      </ScrollArea>
+        </ScrollArea>
+      </>
     );
   }
 );

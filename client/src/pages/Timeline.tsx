@@ -27,6 +27,7 @@ import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching, useIsOnboardingCompleted } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useTimelineState } from "@/hooks/useTimelineState";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
@@ -38,6 +39,7 @@ import { useTimelinePageController } from "@/pages/timeline/useTimelinePageContr
 import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
 
 export default function Timeline() {
+  useDocumentTitle("Timeline");
   // Keep Timeline off the full auth object while auto-coach polling is active.
   const aiCoachEnabled = useIsAiCoachEnabled();
   const isAutoCoaching = useIsAutoCoaching();

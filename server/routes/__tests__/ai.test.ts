@@ -60,6 +60,7 @@ vi.mock("../../storage", () => ({
     plans: {
       getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
+      listTrainingPlans: vi.fn().mockResolvedValue([]),
     },
     workouts: {
       getExerciseSetsByPlanDay: vi.fn(),
@@ -782,14 +783,28 @@ describe("POST /api/timeline/ai-suggestions", () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     // DB returns empty when no upcoming planned days exist
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
+    vi.mocked(storage.plans.listTrainingPlans).mockResolvedValue([]);
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      suggestions: [],
-      message: "No upcoming planned workouts found",
-    });
+    expect(response.body.suggestions).toEqual([]);
+    expect(response.body.message).toContain("no upcoming planned workouts");
+  });
+
+  it("nudges to start a new plan when the active plan has ended with no next (S22)", async () => {
+    vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
+    vi.mocked(storage.plans.listTrainingPlans).mockResolvedValue([
+      // Ended last year, nothing scheduled in the future.
+      { id: "p1", userId: "test_user_id", startDate: "2025-01-01", endDate: "2025-03-01" },
+    ] as never);
+
+    const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
+
+    expect(response.status).toBe(200);
+    expect(response.body.suggestions).toEqual([]);
+    expect(response.body.message).toMatch(/training plan has ended/i);
   });
 
 

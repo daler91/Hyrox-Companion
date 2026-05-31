@@ -44,5 +44,9 @@ export function buildCspDirectives({ isDev }: { isDev: boolean }): CspDirectives
     frameSrc: ["'self'", ...CLERK_DOMAINS],
     frameAncestors: ["'none'"],
     workerSrc: ["'self'", "blob:"],
+    // Defense-in-depth: upgrade any stray http:// subresource to https in
+    // production (HSTS already forces the top-level navigation over TLS).
+    // Omitted in dev so local http://localhost asset loads still work (S16).
+    ...(isDev ? {} : { upgradeInsecureRequests: [] }),
   };
 }

@@ -1,5 +1,10 @@
 import { logger } from "./logger";
 
+// S18 — a lock held longer than this likely means a job is hung (a blocked
+// worker, a stuck query). Surface it at warn so alerting can catch jobs that
+// pin the lock and starve subsequent runs.
+const LOCK_HOLD_WARN_MS = 5 * 60 * 1000;
+
 interface AdvisoryLockClient {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
@@ -24,6 +29,7 @@ export async function withPgAdvisoryLock<T>(
   const client = await dbPool.connect();
   const key = options.key.toString();
   let acquired = false;
+  let heldStart = 0;
 
   try {
     const lockResult = await client.query<{ acquired: boolean }>(
@@ -40,9 +46,29 @@ export async function withPgAdvisoryLock<T>(
       return { acquired: false, value: undefined };
     }
 
+    heldStart = Date.now();
     return { acquired: true, value: await run() };
   } finally {
     if (acquired) {
+      // S18: record how long the protected work held the lock; escalate past
+      // the threshold so a hung job is visible to alerting.
+      const heldMs = Date.now() - heldStart;
+      if (heldMs > LOCK_HOLD_WARN_MS) {
+        // bearer:disable javascript_lang_logger_leak — lockName/lockKey are
+        // operational constants and heldMs is a duration; no PII or secrets.
+        logger.warn(
+          { context: "advisory-lock", lockName: options.name, lockKey: key, heldMs },
+          "Advisory lock held longer than expected",
+        );
+      } else {
+        // bearer:disable javascript_lang_logger_leak — same rationale as the
+        // warn branch above: only lockName/lockKey (operational constants) and
+        // heldMs (a duration) are logged; no PII or secret material.
+        logger.info(
+          { context: "advisory-lock", lockName: options.name, lockKey: key, heldMs },
+          "Advisory lock released",
+        );
+      }
       try {
         await client.query("SELECT pg_advisory_unlock($1::bigint) AS released", [key]);
       } catch (err) {

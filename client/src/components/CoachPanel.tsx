@@ -62,6 +62,7 @@ export function CoachPanel({
     messages: hookMessages,
     isLoading,
     isStreaming,
+    streamError,
     scrollRef,
     updateAutoScrollMode,
     scrollToBottomIfPinned,
@@ -181,6 +182,7 @@ export function CoachPanel({
         applyingId={applyingId}
         suggestionsRagInfo={suggestionsRagInfo}
         isProcessing={isProcessing}
+        streamError={streamError}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={handleApplySuggestion}
         onDismissSuggestion={handleDismissSuggestion}

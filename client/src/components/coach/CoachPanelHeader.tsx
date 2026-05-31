@@ -48,7 +48,8 @@ export function CoachPanelHeader({
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-touch"
+                  className="md:h-9 md:w-9"
                   onClick={() => setConfirmOpen(true)}
                   disabled={isClearingHistory}
                   aria-label="Clear chat history"
@@ -70,7 +71,8 @@ export function CoachPanelHeader({
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size="icon-touch"
+                className="md:h-9 md:w-9"
                 onClick={onClose}
                 aria-label="Close coach panel"
                 data-testid="button-close-coach"

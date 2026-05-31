@@ -232,7 +232,7 @@ app.use(pinoHttp({
     }
     return randomUUID();
   },
-  customProps: (req, _res) => {
+  customProps: (req, res) => {
     let userId = 'anonymous';
     try {
       const auth = getAuth(req as Request);
@@ -243,9 +243,19 @@ app.use(pinoHttp({
       userId = 'anonymous';
     }
 
+    // S2: keep the raw user id out of the high-volume success-path access log
+    // to limit PII in log sinks. The real id is attached only when the request
+    // failed (>= 400), where it's needed to triage the error; successful
+    // requests log a non-identifying 'authenticated'/'anonymous' marker.
+    // Per-request app logs still bind the real userId via runWithRequestContext
+    // for warn/error correlation.
+    const isErrorResponse = (res?.statusCode ?? 0) >= 400;
+    const loggedUserId =
+      isErrorResponse || userId === 'anonymous' ? userId : 'authenticated';
+
     return {
       context: 'http',
-      userId,
+      userId: loggedUserId,
       requestId: req.id,
       route: req.url?.split('?')[0] || req.originalUrl?.split('?')[0],
     };

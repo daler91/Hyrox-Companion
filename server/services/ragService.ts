@@ -194,11 +194,31 @@ type CachedRagResult = { chunks: string[]; at: number };
 const ragCache = new Map<string, CachedRagResult>();
 
 function setRagCache(key: string, chunks: string[]) {
+  // Delete-then-set so an existing key moves to the tail (most-recently-used).
+  ragCache.delete(key);
   if (ragCache.size >= MAX_RAG_CACHE_ENTRIES) {
+    // The head is the least-recently-used entry because getRagCache re-inserts
+    // on every hit (LRU, W13) — not merely the oldest-inserted (FIFO).
     const oldestKey = ragCache.keys().next().value;
     if (oldestKey) ragCache.delete(oldestKey);
   }
   ragCache.set(key, { chunks, at: Date.now() });
+}
+
+// Read with TTL enforcement + LRU bookkeeping: on a live hit, re-insert the
+// entry so it becomes most-recently-used and survives eviction under churn
+// (W13). `at` is the cache time for TTL and is intentionally not refreshed on
+// access, so a hot key still expires on schedule.
+function getRagCache(key: string): string[] | undefined {
+  const entry = ragCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.at >= RAG_CACHE_TTL_MS) {
+    ragCache.delete(key);
+    return undefined;
+  }
+  ragCache.delete(key);
+  ragCache.set(key, entry);
+  return entry.chunks;
 }
 
 function ragCacheKey(userId: string, query: string, topK: number): string {
@@ -241,10 +261,10 @@ export async function retrieveRelevantChunks(
   topK: number = TOP_K,
 ): Promise<string[]> {
   const key = ragCacheKey(userId, query, topK);
-  const cached = ragCache.get(key);
-  if (cached && Date.now() - cached.at < RAG_CACHE_TTL_MS) {
+  const cached = getRagCache(key);
+  if (cached) {
     logger.debug({ userId, topK, cacheHit: true }, "[rag] Returning cached chunks");
-    return cached.chunks;
+    return cached;
   }
 
   if (env.NODE_ENV !== "test") {

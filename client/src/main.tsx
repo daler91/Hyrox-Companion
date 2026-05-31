@@ -18,6 +18,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
+import { isErrorReportingEnabled } from "./lib/errorReportingConsent";
 import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
@@ -30,7 +31,9 @@ if (!import.meta.env.PROD) {
   });
 }
 
-if (import.meta.env.VITE_SENTRY_DSN) {
+// Gate on the user's per-processor error-reporting consent (S11) in addition to
+// the DSN. Read once here; toggling it in Settings takes effect on next reload.
+if (import.meta.env.VITE_SENTRY_DSN && isErrorReportingEnabled()) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN as string,
     environment: import.meta.env.MODE,

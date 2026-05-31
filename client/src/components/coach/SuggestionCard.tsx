@@ -71,6 +71,7 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
       <div className="flex items-center gap-2 pt-1">
         <Button
           size="sm"
+          className="min-h-11 md:min-h-8"
           onClick={onApply}
           disabled={isApplying}
           data-testid={`button-apply-${suggestion.workoutId}`}
@@ -85,6 +86,7 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
         <Button
           size="sm"
           variant="ghost"
+          className="min-h-11 md:min-h-8"
           onClick={onDismiss}
           disabled={isApplying}
           data-testid={`button-dismiss-${suggestion.workoutId}`}

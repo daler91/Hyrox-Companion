@@ -42,6 +42,49 @@ export async function probePool(pool: Pool): Promise<boolean> {
   }
 }
 
+// W21 — cache the two DB probes for a few seconds so high-frequency liveness
+// checks don't open a fresh DB connection on every call. In-process (not the
+// DB-backed shared cache, which would defeat the purpose) and per-instance,
+// which is correct: each replica reports its own health. Concurrent misses
+// share a single in-flight probe round.
+const HEALTH_CACHE_TTL_MS = 5000;
+
+interface ProbeResult {
+  dbOk: boolean;
+  vectorDbOk: boolean;
+}
+
+interface HealthProbeDeps {
+  probeDatabase: () => Promise<boolean>;
+  probeVectorDatabase: () => Promise<boolean>;
+}
+
+let cachedProbe: { at: number; result: ProbeResult } | null = null;
+let inFlightProbe: Promise<ProbeResult> | null = null;
+
+function getCachedProbeResult(deps: HealthProbeDeps): Promise<ProbeResult> {
+  if (cachedProbe && Date.now() - cachedProbe.at < HEALTH_CACHE_TTL_MS) {
+    return Promise.resolve(cachedProbe.result);
+  }
+  if (inFlightProbe) return inFlightProbe;
+  inFlightProbe = Promise.all([deps.probeDatabase(), deps.probeVectorDatabase()])
+    .then(([dbOk, vectorDbOk]) => {
+      const result: ProbeResult = { dbOk, vectorDbOk };
+      cachedProbe = { at: Date.now(), result };
+      return result;
+    })
+    .finally(() => {
+      inFlightProbe = null;
+    });
+  return inFlightProbe;
+}
+
+// Exposed for tests to clear the per-process cache between cases.
+export function __resetHealthCacheForTests(): void {
+  cachedProbe = null;
+  inFlightProbe = null;
+}
+
 export function registerHealthEndpoint(app: Express, deps: { state: StartupHealthState; probeDatabase: () => Promise<boolean>; probeVectorDatabase: () => Promise<boolean>; }): void {
   app.get("/api/v1/health", (_req, res) => {
     const uptimeMs = Date.now() - deps.state.startupBeganAt;
@@ -53,7 +96,7 @@ export function registerHealthEndpoint(app: Express, deps: { state: StartupHealt
       res.status(503).json({ status: "starting", phase: deps.state.startupPhase, uptimeMs, timestamp: Date.now() });
       return;
     }
-    Promise.all([deps.probeDatabase(), deps.probeVectorDatabase()]).then(([dbOk, vectorDbOk]) => {
+    getCachedProbeResult(deps).then(({ dbOk, vectorDbOk }) => {
       if (!dbOk || !vectorDbOk) {
         res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
         return;

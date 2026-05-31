@@ -23,6 +23,14 @@ const envSchema = z.object({
   CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
   ENCRYPTION_KEY: z.string().min(32, "Encryption key must be at least 32 characters long"),
+  // Optional second key enabling zero-downtime ENCRYPTION_KEY rotation (W6).
+  // When set, new ciphertext is tagged `v2` and encrypted with this key while
+  // the v1 ENCRYPTION_KEY stays available to decrypt and migrate existing data.
+  ENCRYPTION_KEY_V2: z.string().min(32, "Encryption key must be at least 32 characters long").optional(),
+  // Opt-in: when "true" (and ENCRYPTION_KEY_V2 is set), the server re-encrypts
+  // all stored Strava/Garmin credentials to the active key version on boot.
+  // Defaults "false" so a normal deploy never rewrites the credential tables.
+  ENCRYPTION_REENCRYPT_ON_BOOT: z.enum(["true", "false"]).default("false"),
   CSRF_SECRET: z.string().min(32, "CSRF secret must be at least 32 characters long").optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.string().default("5000"),
@@ -107,6 +115,21 @@ const envSchema = z.object({
   // has ~128 bits of entropy; these patterns have effectively none.
   message: "❌ FATAL: ENCRYPTION_KEY is a known weak/test placeholder; generate a real 32-byte random key",
   path: ["ENCRYPTION_KEY"],
+}).refine((data) => {
+  // W6 — the rotation key must be distinct from the active key (an identical
+  // one is a no-op that tags ciphertext v2 with no new material) AND from
+  // CSRF_SECRET (key separation). A membership test rather than `!==` avoids a
+  // direct secret-to-secret comparison operator (Bearer timing-discrepancy).
+  if (!data.ENCRYPTION_KEY_V2) return true;
+  const otherKeys = [data.ENCRYPTION_KEY, data.CSRF_SECRET].filter((k): k is string => Boolean(k));
+  return !otherKeys.includes(data.ENCRYPTION_KEY_V2);
+}, {
+  message: "❌ FATAL: ENCRYPTION_KEY_V2 must differ from both ENCRYPTION_KEY (rotation target) and CSRF_SECRET (key separation)",
+  path: ["ENCRYPTION_KEY_V2"],
+}).refine((data) => data.NODE_ENV !== "production" || !data.ENCRYPTION_KEY_V2 || !WEAK_ENCRYPTION_KEYS.has(data.ENCRYPTION_KEY_V2), {
+  // W6 — the rotation key must be just as strong as the active key.
+  message: "❌ FATAL: ENCRYPTION_KEY_V2 is a known weak/test placeholder; generate a real 32-byte random key",
+  path: ["ENCRYPTION_KEY_V2"],
 }).refine(
   // Suggestion-10 — catch the most common prod misconfiguration: a deploy
   // that provisioned live Clerk keys but forgot NODE_ENV=production.
