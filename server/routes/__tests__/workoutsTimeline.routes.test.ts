@@ -29,6 +29,7 @@ vi.mock("../../storage", () => ({
 
 describe("GET /api/v1/timeline", () => {
   let app: ReturnType<typeof createTestApp>;
+  const mockEntries = [{ id: "entry-1", type: "workout", date: "2024-01-01" }];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,102 +39,67 @@ describe("GET /api/v1/timeline", () => {
     app = createTestApp(router);
   });
 
-  it("should return timeline with default limit and no offset", async () => {
-    const mockEntries = [{ id: "entry-1", type: "workout", date: "2024-01-01" }];
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
+  describe("Success cases", () => {
+    beforeEach(() => {
+      vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
+    });
 
-    const res = await request(app).get("/api/v1/timeline");
+    it.each([
+      {
+        name: "default limit and no offset",
+        query: "",
+        expectedArgs: ["test_user_id", undefined, DEFAULT_TIMELINE_LIMIT, undefined],
+      },
+      {
+        name: "explicit valid limit and offset",
+        query: "?limit=10&offset=5",
+        expectedArgs: ["test_user_id", undefined, 10, 5],
+      },
+      {
+        name: "explicit planId",
+        query: "?planId=test_plan_id",
+        expectedArgs: ["test_user_id", "test_plan_id", DEFAULT_TIMELINE_LIMIT, undefined],
+      },
+      {
+        name: "capped limit when exceeding max",
+        query: `?limit=${DEFAULT_TIMELINE_LIMIT + 100}`,
+        expectedArgs: ["test_user_id", undefined, DEFAULT_TIMELINE_LIMIT, undefined],
+      },
+    ])("should return 200 and entries for $name", async ({ query, expectedArgs }) => {
+      const res = await request(app).get(`/api/v1/timeline${query}`);
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual(mockEntries);
-    expect(storage.timeline.getTimeline).toHaveBeenCalledWith(
-      "test_user_id",
-      undefined,
-      DEFAULT_TIMELINE_LIMIT,
-      undefined
-    );
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(mockEntries);
+      expect(storage.timeline.getTimeline).toHaveBeenCalledWith(...expectedArgs);
+    });
+
+    it("should handle storage returning empty array correctly", async () => {
+      vi.mocked(storage.timeline.getTimeline).mockResolvedValue([]);
+      const res = await request(app).get("/api/v1/timeline");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
   });
 
-  it("should pass limit and offset to storage when valid query params are provided", async () => {
-    const mockEntries = [{ id: "entry-2", type: "workout", date: "2024-01-02" }];
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
+  describe("Error cases", () => {
+    it.each([
+      { name: "invalid limit", query: "?limit=-5", expectedError: "Invalid limit" },
+      { name: "invalid offset", query: "?offset=-5", expectedError: "Invalid offset" },
+    ])("should return 400 for $name", async ({ query, expectedError }) => {
+      const res = await request(app).get(`/api/v1/timeline${query}`);
 
-    const res = await request(app).get("/api/v1/timeline?limit=10&offset=5");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: expectedError, code: "BAD_REQUEST" });
+      expect(storage.timeline.getTimeline).not.toHaveBeenCalled();
+    });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual(mockEntries);
-    expect(storage.timeline.getTimeline).toHaveBeenCalledWith(
-      "test_user_id",
-      undefined,
-      10,
-      5
-    );
-  });
+    it("should pass error properly if storage throws an error", async () => {
+      vi.mocked(storage.timeline.getTimeline).mockRejectedValue(new Error("Database connection failed"));
 
-  it("should pass planId to storage when provided in query params", async () => {
-    const mockEntries = [{ id: "entry-3", type: "workout", date: "2024-01-03" }];
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
+      const res = await request(app).get("/api/v1/timeline");
 
-    const res = await request(app).get("/api/v1/timeline?planId=test_plan_id");
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual(mockEntries);
-    expect(storage.timeline.getTimeline).toHaveBeenCalledWith(
-      "test_user_id",
-      "test_plan_id",
-      DEFAULT_TIMELINE_LIMIT,
-      undefined
-    );
-  });
-
-  it("should cap the requested limit at DEFAULT_TIMELINE_LIMIT", async () => {
-    const mockEntries = [{ id: "entry-4", type: "workout", date: "2024-01-04" }];
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
-
-    const excessiveLimit = DEFAULT_TIMELINE_LIMIT + 100;
-    const res = await request(app).get(`/api/v1/timeline?limit=${excessiveLimit}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual(mockEntries);
-    expect(storage.timeline.getTimeline).toHaveBeenCalledWith(
-      "test_user_id",
-      undefined,
-      DEFAULT_TIMELINE_LIMIT,
-      undefined
-    );
-  });
-
-  it("should return 400 when invalid limit is provided", async () => {
-    const res = await request(app).get("/api/v1/timeline?limit=-5");
-
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: "Invalid limit", code: "BAD_REQUEST" });
-    expect(storage.timeline.getTimeline).not.toHaveBeenCalled();
-  });
-
-  it("should return 400 when invalid offset is provided", async () => {
-    const res = await request(app).get("/api/v1/timeline?offset=-5");
-
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: "Invalid offset", code: "BAD_REQUEST" });
-    expect(storage.timeline.getTimeline).not.toHaveBeenCalled();
-  });
-
-  it("should handle storage returning empty array correctly", async () => {
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([]);
-
-    const res = await request(app).get("/api/v1/timeline");
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
-  });
-
-  it("should pass error properly if storage throws an error", async () => {
-    vi.mocked(storage.timeline.getTimeline).mockRejectedValue(new Error("Database connection failed"));
-
-    const res = await request(app).get("/api/v1/timeline");
-
-    expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+    });
   });
 });
