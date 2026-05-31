@@ -130,24 +130,54 @@ describe("buildRacePredictionFeatures", () => {
     expect(features.stationFeatures.sled_push.lastTrainedDaysAgo).toBe(5); // 2026-05-25 → 2026-05-30
   });
 
-  it("normalizes a partial distance-based interval up to the full race station", () => {
-    // A 250 m SkiErg interval in 1:00 → projected to the full 1000 m: 4:00.
+  it("projects an in-band partial interval to the full station via the power law", () => {
+    // 500 m SkiErg in 2:00 → 1000 m via Riegel: 120s * 2^1.06 ≈ 250s
+    // (slightly slower than the naive linear 240s, as pace fades over distance).
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 2, distance: 500, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(250, 0);
+  });
+
+  it("drops an out-of-band tiny interval and falls back to the benchmark", () => {
+    // A 250 m SkiErg interval (0.25× the 1000 m station) is too short to trust,
+    // so it's dropped and the station uses its division benchmark instead.
     const features = buildRacePredictionFeatures(
       [set("skierg", { time: 1, distance: 250, date: "2026-05-20" })],
       { division: "open", gender: "male", weightUnit: "kg" },
       NOW,
     );
-    expect(features.stationFeatures.skierg.medianSeconds).toBe(240); // 60s * (1000/250)
+    expect(features.stationFeatures.skierg.medianSeconds).toBeNull();
+    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg");
+    expect(ski?.basis).toBe("benchmark");
+    expect(ski?.estimatedSeconds).toBe(
+      getRaceReference("open", "male").stations.skierg.benchmarkSeconds,
+    );
   });
 
-  it("normalizes a partial rep-based set up to the full race station", () => {
-    // 50 wall balls in 2:30 → projected to the race's 100 reps: 5:00.
+  it("projects an in-band partial rep set to the full station via the power law", () => {
+    // 50 wall balls in 2:30 → 100 reps via Riegel: 150s * 2^1.06 ≈ 313s.
     const features = buildRacePredictionFeatures(
       [set("wall_balls", { time: 2.5, reps: 50, date: "2026-05-20" })],
       { division: "open", gender: "male", weightUnit: "kg" },
       NOW,
     );
-    expect(features.stationFeatures.wall_balls.medianSeconds).toBe(300); // 150s * (100/50)
+    expect(features.stationFeatures.wall_balls.medianSeconds).toBeCloseTo(150 * 2 ** 1.06, 1);
+  });
+
+  it("converts feet-stored distance for miles users before projecting", () => {
+    // A miles user's full 1 km SkiErg is stored as ~3281 ft. Converted to meters
+    // it's a full-station effort (~unchanged), NOT a 3281 m effort that would be
+    // dropped/understated. Logged 4:00 → stays ≈ 4:00.
+    const fullStationFeet = 1000 * 3.28084;
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 4, distance: fullStationFeet, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg", distanceUnit: "miles" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(240, 0);
   });
 
   it("floors an impossibly fast logged split in the deterministic baseline", () => {

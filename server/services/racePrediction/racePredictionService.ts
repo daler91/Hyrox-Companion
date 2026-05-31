@@ -255,6 +255,7 @@ export async function generateRacePrediction(
     division: user?.division ?? null,
     gender: storedGender,
     weightUnit: user?.weightUnit ?? "kg",
+    distanceUnit: user?.distanceUnit ?? "km",
   });
 
   const blocker = await resolveAiBlocker(user, userId, log);

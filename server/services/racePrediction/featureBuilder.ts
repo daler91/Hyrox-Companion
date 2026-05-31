@@ -10,10 +10,16 @@
  *
  * Unit handling (see the 🛡️ sentinel in shared/unitConversion.ts):
  *  - `time` is stored in MINUTES → multiply by 60 for seconds.
- *  - A logged set may be a *partial* effort (e.g. a 250 m SkiErg interval, not
- *    the full 1000 m race station), so each set's time is normalized to the full
- *    race-station amount using its logged distance/reps vs the station target
- *    (linear pace). Without a logged distance/rep count we assume a full effort.
+ *  - A logged set may be a *partial* effort (e.g. a 500 m SkiErg interval, not
+ *    the full 1000 m race station), so each set's time is projected to the full
+ *    race-station amount with Riegel's endurance power law (T2 = T1·(D2/D1)^1.06)
+ *    over the logged distance/reps vs the station target. We only trust efforts
+ *    within 0.5×–2× of the full amount; further-out efforts are too unreliable to
+ *    extrapolate and are dropped (the station then falls back to its benchmark).
+ *    A set with no logged distance/reps is assumed to be a full effort.
+ *  - logged distances are in the athlete's stored unit (m for km users, ft for
+ *    miles users); we convert to meters with `storedDistanceToMeters` (read-only,
+ *    so the read-convert-write drift caveat does not apply) before comparing.
  *  - logged weights are in the athlete's unit; we never convert them. Instead
  *    we convert the canonical-kg standard INTO the athlete's unit
  *    (`kgToUserWeight`, the sanctioned direction) and compare there.
@@ -32,7 +38,7 @@ import {
   TOTAL_STATIONS,
 } from "@shared/raceSpec";
 import { type ExerciseName,normalizeExerciseName } from "@shared/schema";
-import { kgToUserWeight } from "@shared/unitConversion";
+import { kgToUserWeight, storedDistanceToMeters } from "@shared/unitConversion";
 
 import type { LoggedExerciseSetWithDate } from "../../storage/shared";
 
@@ -83,6 +89,7 @@ export interface AthleteProfileInput {
   division: string | null | undefined;
   gender: StoredGender;
   weightUnit: string | null | undefined;
+  distanceUnit?: string | null | undefined;
 }
 
 function median(values: number[]): number | null {
@@ -122,23 +129,42 @@ interface SegmentTarget {
   reps?: number;
 }
 
-// Bound how far a single set is extrapolated, so a tiny interval (or an
-// over-long endurance piece) can't be linearly projected into nonsense.
-const MIN_NORMALIZATION_FACTOR = 0.25;
-const MAX_NORMALIZATION_FACTOR = 6;
+// Riegel's endurance power law (T2 = T1·(D2/D1)^EXP) projects a partial effort
+// to the full race amount slightly worse than linear, matching how pace fades
+// over distance/reps. 1.06 is Riegel's widely-used exponent.
+const RIEGEL_EXPONENT = 1.06;
+// Only trust an effort for projection when it covers between this fraction and
+// this multiple of the full race amount; further out, extrapolation is too
+// unreliable, so the set is dropped and the station falls back to its benchmark.
+const MIN_TRUST_RATIO = 0.5;
+const MAX_TRUST_RATIO = 2;
+
+/** Power-law factor (target → logged), or null when logged is outside the trust band. */
+function trustedFactor(target: number, logged: number): number | null {
+  const ratio = logged / target;
+  if (ratio < MIN_TRUST_RATIO || ratio > MAX_TRUST_RATIO) return null;
+  return Math.pow(target / logged, RIEGEL_EXPONENT);
+}
 
 /**
- * Scale a logged partial effort to the full race-station amount via linear pace,
- * so a 250 m SkiErg interval isn't mistaken for the whole 1000 m station. Uses
- * logged distance for distance-based stations and logged reps for rep-based
- * ones; falls back to 1 (assume a full effort) when neither was recorded.
+ * Factor that scales a logged partial effort's time to the full race-station
+ * amount, or null when the effort is too far from the full amount to extrapolate
+ * (the caller drops the set). Distance-based stations use the logged distance
+ * (converted from the athlete's stored unit to meters); rep-based stations use
+ * logged reps. A set with no usable distance/rep count is assumed full (1).
  */
-function normalizationFactor(set: LoggedExerciseSetWithDate, target: SegmentTarget): number {
-  if (target.distanceMeters != null && set.distance != null && set.distance > 0) {
-    return clamp(target.distanceMeters / set.distance, MIN_NORMALIZATION_FACTOR, MAX_NORMALIZATION_FACTOR);
+function projectionFactor(
+  set: LoggedExerciseSetWithDate,
+  target: SegmentTarget,
+  distanceUnit: string,
+): number | null {
+  if (target.distanceMeters != null) {
+    if (set.distance == null || !(set.distance > 0)) return 1;
+    return trustedFactor(target.distanceMeters, storedDistanceToMeters(set.distance, distanceUnit));
   }
-  if (target.reps != null && set.reps != null && set.reps > 0) {
-    return clamp(target.reps / set.reps, MIN_NORMALIZATION_FACTOR, MAX_NORMALIZATION_FACTOR);
+  if (target.reps != null) {
+    if (set.reps == null || !(set.reps > 0)) return 1;
+    return trustedFactor(target.reps, set.reps);
   }
   return 1;
 }
@@ -152,6 +178,7 @@ interface SegmentSetMetrics {
 function accumulateSetMetrics(
   sets: LoggedExerciseSetWithDate[],
   target: SegmentTarget,
+  distanceUnit: string,
 ): SegmentSetMetrics {
   const timesSeconds: number[] = [];
   const loads: number[] = [];
@@ -159,7 +186,9 @@ function accumulateSetMetrics(
 
   for (const set of sets) {
     if (set.time != null && Number.isFinite(set.time)) {
-      timesSeconds.push(set.time * 60 * normalizationFactor(set, target));
+      const factor = projectionFactor(set, target, distanceUnit);
+      // null → effort too far from the full station to trust; drop this split.
+      if (factor != null) timesSeconds.push(set.time * 60 * factor);
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
       loads.push(set.weight);
@@ -179,9 +208,10 @@ function buildSegmentFeature(
   standardLoadKg: number | undefined,
   target: SegmentTarget,
   weightUnit: string,
+  distanceUnit: string,
   now: Date,
 ): SegmentFeature {
-  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets, target);
+  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets, target, distanceUnit);
 
   const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
   const standardLoadUserUnit =
@@ -214,6 +244,7 @@ export function buildRacePredictionFeatures(
   now: Date = new Date(),
 ): RacePredictionFeatures {
   const weightUnit = profile.weightUnit || "kg";
+  const distanceUnit = profile.distanceUnit || "km";
   const { division, resolvedGender, genderAssumed, reference } = resolveRaceReference(
     profile.division,
     profile.gender,
@@ -236,6 +267,7 @@ export function buildRacePredictionFeatures(
     undefined,
     { distanceMeters: RUN_LEG_DISTANCE_METERS },
     weightUnit,
+    distanceUnit,
     now,
   );
 
@@ -249,6 +281,7 @@ export function buildRacePredictionFeatures(
       standard.loadKg,
       { distanceMeters: standard.distanceMeters, reps: standard.reps },
       weightUnit,
+      distanceUnit,
       now,
     );
   }
