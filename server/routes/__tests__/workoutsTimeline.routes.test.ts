@@ -6,6 +6,7 @@ import { DEFAULT_TIMELINE_LIMIT } from "../../constants";
 import { clearRateLimitBuckets } from "../../routeUtils";
 import { storage } from "../../storage";
 import { registerWorkoutTimelineRoutes } from "../workouts/workoutsTimeline.routes";
+import { createTestApp } from "./testUtils";
 
 vi.mock("../../clerkAuth", () => ({
   isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
@@ -26,21 +27,15 @@ vi.mock("../../storage", () => ({
   },
 }));
 
-function createTestApp() {
-  const app = express();
-  const router = express.Router();
-  registerWorkoutTimelineRoutes(router);
-  app.use(router);
-  return app;
-}
-
 describe("GET /api/v1/timeline", () => {
-  let app: express.Express;
+  let app: ReturnType<typeof createTestApp>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     clearRateLimitBuckets();
-    app = createTestApp();
+    const router = express.Router();
+    registerWorkoutTimelineRoutes(router);
+    app = createTestApp(router);
   });
 
   it("should return timeline with default limit and no offset", async () => {
@@ -136,20 +131,9 @@ describe("GET /api/v1/timeline", () => {
   it("should pass error properly if storage throws an error", async () => {
     vi.mocked(storage.timeline.getTimeline).mockRejectedValue(new Error("Database connection failed"));
 
-    // Create test app with our shared error handler logic from testUtils to catch it correctly
-    // or we can test that it throws 500 when error handler kicks in
-    const appWithErrorHandling = express();
-    appWithErrorHandling.use(express.json());
-    const router = express.Router();
-    registerWorkoutTimelineRoutes(router);
-    appWithErrorHandling.use(router);
-    appWithErrorHandling.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-      res.status(500).json({ error: "Internal Server Error" });
-    });
-
-    const res = await request(appWithErrorHandling).get("/api/v1/timeline");
+    const res = await request(app).get("/api/v1/timeline");
 
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: "Internal Server Error" });
+    expect(res.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
   });
 });
