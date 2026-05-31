@@ -120,6 +120,34 @@ describe("CoachNote", () => {
     expect(screen.queryByText(/^Next:/)).toBeNull();
   });
 
+  it("surfaces the original prescription on a converted day", () => {
+    render(
+      <CoachNote
+        {...baseProps}
+        source="load_governor"
+        inputsUsed={{
+          ...baseProps.inputsUsed,
+          replacedPrescription: {
+            focus: "Lower Body Strength",
+            mainWorkout: "Back squat 4x6 at 185 lbs",
+            accessory: null,
+            notes: null,
+          },
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    const original = screen.getByTestId("coach-note-original-plan-day-1");
+    expect(original).toHaveTextContent("Originally planned: Lower Body Strength");
+    expect(original).toHaveTextContent("Back squat 4x6 at 185 lbs");
+  });
+
+  it("omits the original-prescription line when none was recorded", () => {
+    render(<CoachNote {...baseProps} source="rag" />);
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.queryByTestId("coach-note-original-plan-day-1")).toBeNull();
+  });
+
   it("is keyboard-toggleable via Enter/Space on the button", () => {
     render(<CoachNote {...baseProps} source="rag" />);
     const toggle = screen.getByTestId("coach-note-toggle-plan-day-1");

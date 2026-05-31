@@ -73,8 +73,16 @@ describe("coachService triggerAutoCoach structured exercise writes", () => {
       string,
       unknown
     >;
-    expect(updatePayload).not.toHaveProperty("mainWorkout");
-    expect(updatePayload).not.toHaveProperty("accessory");
+    // A structured replace reconciles the now-stale free text: the new
+    // prescription lands in mainWorkout and accessory/notes are cleared so the
+    // text no longer contradicts the replaced exercise rows.
+    expect(updatePayload.mainWorkout).toEqual(expect.stringContaining("Back squat 3x5"));
+    expect(updatePayload.accessory).toBeNull();
+    expect(updatePayload.notes).toBeNull();
+    // The AI-provider path carries no title override, so the title is left
+    // untouched and nothing is recorded as "originally planned".
+    expect(updatePayload).not.toHaveProperty("focus");
+    expect(updatePayload.aiInputsUsed).not.toHaveProperty("replacedPrescription");
     expect(updatePayload).toEqual(expect.objectContaining({ aiRationale: "Progressive overload" }));
   });
 
