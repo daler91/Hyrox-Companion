@@ -3,7 +3,7 @@
 **Generated:** 2026-05-29
 **Branch reviewed:** `codex/fix-sonar-analytics-cleanups`
 **Method:** Seven specialized review passes (security, business, UX/a11y, performance, QA, DevOps, privacy) executed in parallel by isolated reviewer agents.
-**Status as of 2026-05-31:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 10 of 26 Warnings closed, 1 of 23 Suggestions closed.
+**Status as of 2026-05-31:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 12 of 26 Warnings closed (+1 partially mitigated), 1 of 23 Suggestions closed.
 
 > **Note.** This report is a *separate* multi-pass audit run on the same date as
 > `CODEBASE_REVIEW_2026-05-29.md` (which has since been fully remediated across
@@ -14,7 +14,7 @@
 
 ## Remediation Status — 2026-05-31
 
-The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below.
+The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below. Updated each time a remediation PR lands; latest update reflects PR #1336 (W2 + W4).
 
 **Pattern note:** verification against current `main` before implementing each finding turned up a 30% false-positive rate on Criticals (3 of 10) and one false-positive Warning. Every false positive traced to the same reviewer mistake: looking at one layer (schema / route surface) and missing the wrapping layer (storage / runtime maintenance / earlier remediation). Future multipass-style audits should always be verified before triage.
 
@@ -33,11 +33,14 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | **C9** | DevOps | ✅ **Resolved (#1308).** `@sentry/vite-plugin` + `@sentry/esbuild-plugin` wired into both bundles; `release` field added to both `Sentry.init` calls; sourcemaps emit (`build.sourcemap: "hidden"` for vite, `sourcemap: true` for esbuild) and are uploaded + deleted when build-time env vars are set. Four new env vars documented in `.env.example`, `docs/integrations.md`, `docs/env-reference.md`. |
 | **C10** | QA / Correctness | ✅ **Resolved (#1316).** `users.user_timezone` IANA column (default UTC, migration 0055); `server/timezone.ts` helpers (`getLocalDayOfWeek`, `getLocalDateStr`, `addDaysLocal`, `isValidTimezone`); scheduler refactored to use per-user local time for Monday detection, week range, and "yesterday" math. Client `useDetectTimezone` auto-detects browser tz on sign-in and PATCHes preferences. 12 timezone helper tests + 2 scheduler tz tests. |
 
-### Warnings (10/26 closed)
+### Warnings (12/26 closed; +1 partially mitigated)
 
 | ID | Category | Resolution |
 |----|----------|------------|
 | **W1** | Security | ✅ **Resolved (#1309).** Added `openAiCompatibleApiKey` and `anthropicApiKey` (both top-level and `*.`-nested) to pino redact paths. |
+| **W2** | Security | ✅ **Resolved (#1336).** New `server/ssrfGuard.ts` exports `checkSafeOutboundUrl()` rejecting loopback / private / link-local IPv4 + IPv6 patterns (incl. WHATWG-normalised IPv4-mapped IPv6 hex form `::ffff:7f00:1`). Wired in as a Zod refinement on `AI_TEXT_BASE_URL` — server refuses to boot if the operator points it at `127.0.0.1`, `localhost`, `169.254.169.254` (EC2 metadata), etc. 30 unit tests cover public hostnames, every loopback/private pattern, IPv4 172.x boundary cases, and malformed inputs. Defense-in-depth follow-up: async DNS-resolution-time check for hostnames that aren't IP literals — separate PR. |
+| **W4** | Security | ✅ **Resolved (#1336).** `SSE_FORCE_CLOSE_GRACE_MS = 2s` post-deadline watchdog in `server/routes/ai.ts` calls `res.socket.destroy()` if `res.writableEnded === false` after the deadline-induced abort. Catches hung clients that would otherwise pin the TCP file descriptor up to the OS keepalive timeout (~2hr). Timer is `.unref()`'d and cleared on normal completion. |
+| **W5** | Security / QA | ⚠ **Partially mitigated — no code change shipped.** The original DoS concern is already addressed by existing controls: client-side 10 MB pre-magic size cap (`useCoachingUpload.ts`), 30 s `withParseTimeout` wrapping `mammoth` + `pdfjs`, and client-only parsing (no server-side re-parse, so the server isn't exposed). Deepening the 4–5 byte magic check (e.g. PDF version line, ZIP central-directory structure) would be additional defense-in-depth but doesn't close a specific gap. Documented in PR #1336's description. |
 | **W10** | Performance | ✅ **Resolved (#1309).** Chat-history `useQuery` pinned to `staleTime: Infinity, gcTime: Infinity`; freshness driven by existing mutation invalidation in `useChatMutations.ts`. |
 | **W11** | Performance | ✅ **Resolved (#1309).** Drizzle-declared composite index `idx_plan_days_plan_scheduled (plan_id, scheduled_date)` mirroring existing `idx_plan_days_plan_week` naming; migration 0054. Hot paths: `timeline.ts:335` (inArray + isNotNull) and `markMissedPlanDays` daily cron. |
 | **W12** | Performance | ✅ **Resolved (#1318).** `PGBOSS_STATEMENT_TIMEOUT_MS = 45min` constant and `buildQueueConnectionString()` helper that appends `-c statement_timeout=...` via libpq `options` URL param. pg-boss's separate pool now has PG-side timeout that fires ~5min before `JOB_TIMEOUT_MS`. Review's "change main pool to 45m" was wrong — main pool's 30s is correct for HTTP queries; gap was the separate pg-boss pool. |
@@ -47,10 +50,7 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | **W18** | QA | ✅ **Resolved (#1334).** `exercise_sets.version` column (migration 0057); `expectedVersion` optional field on `patchExerciseSetBodySchema`; storage always bumps version on UPDATE and throws `AppError(CONFLICT, 409)` when `expectedVersion` is supplied + stale. Opt-in for clients (back-compat); the mechanism exists for callers that care. 4 storage tests. |
 | **W19** | QA | ✅ **Resolved (#1318).** Tightened `exerciseSetSchema.reps` and `measurableSetFields.reps` from `.min(0)` to `.min(1)` to match the existing `incomingExerciseSchema.reps` constraint. Audit confirmed the 3 existing `reps: 0` fixtures are all on the AMRAP-score path (a different schema). |
 | **W20** | DevOps | ✅ **Resolved (#1334).** Snapshot breaker state (`{state, consecutiveFailures, openedAt}`) to `serverRuntimeCache` under key `ai-circuit-breaker:state` with 1-hour TTL on every meaningful transition; `loadPersistedBreakerState()` called from `runStartupMaintenance`. "half-open" on restore is downgraded to "open" because the probe machinery doesn't carry across restarts. 9 regression tests. |
-| W2 | Security | Open. SSRF guard on `AI_TEXT_BASE_URL`. |
 | W3 | Security | Open. Per-instance rate limiting → shared store. |
-| W4 | Security | Open. SSE deadline force-close (`res.socket.destroy()` fallback). |
-| W5 | Security / QA | Open. File upload size + magic-byte depth pre-check. |
 | W6 | Privacy | Open. `ENCRYPTION_KEY` rotation/versioning. |
 | W7 | UX / A11y | Open. `Textarea` `errorMessage` API. |
 | W8 | UX / A11y | Open. `aria-live="assertive"` on stream-error suffixes. |
