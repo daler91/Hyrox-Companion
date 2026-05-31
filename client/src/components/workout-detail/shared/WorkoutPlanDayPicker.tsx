@@ -71,10 +71,7 @@ export function WorkoutPlanDayPicker({
     queryKey: QUERY_KEYS.plans,
     queryFn: () => api.plans.list(),
   });
-  const planDetailQuery = useQuery({
-    queryKey: selectedPlanId ? QUERY_KEYS.plan(selectedPlanId) : ["plan-detail-disabled"],
-    queryFn: selectedPlanId ? () => api.plans.get(selectedPlanId) : skipToken,
-  });
+  const planDetailQuery = usePlanDetailQuery(selectedPlanId);
 
   const plans = plansQuery.data ?? [];
   const scheduledDays = (planDetailQuery.data?.days ?? []).filter((day) => day.scheduledDate != null);
@@ -162,6 +159,17 @@ export function WorkoutPlanDayPicker({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Loads the selected plan's days. Idle (skipToken) until a plan is chosen, which
+ * keeps the cascading picker's dependent-query wiring out of the component body.
+ */
+function usePlanDetailQuery(selectedPlanId: string | null) {
+  return useQuery({
+    queryKey: selectedPlanId ? QUERY_KEYS.plan(selectedPlanId) : ["plan-detail-disabled"],
+    queryFn: selectedPlanId ? () => api.plans.get(selectedPlanId) : skipToken,
+  });
 }
 
 function formatDayLabel(day: PlanDay): string {

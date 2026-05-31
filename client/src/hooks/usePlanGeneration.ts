@@ -43,7 +43,7 @@ export function useGeneratePlan(): UseGeneratePlanResult {
 
   const statusQuery = useQuery({
     queryKey: ["plan-generation-status", pendingPlanId],
-    queryFn: pendingPlanId !== null ? () => api.plans.getGenerationStatus(pendingPlanId) : skipToken,
+    queryFn: pendingPlanId ? () => api.plans.getGenerationStatus(pendingPlanId) : skipToken,
     refetchInterval: (query) => {
       const s = query.state.data?.generationStatus;
       return s === "ready" || s === "failed" ? false : 3000;
