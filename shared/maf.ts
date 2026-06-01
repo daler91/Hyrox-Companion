@@ -49,3 +49,80 @@ export function calculateMafHr(input: MafInput): MafResult {
 
   return { base, adjustment, ceiling, reasonCodes, explanation, warning };
 }
+
+export type MafComplianceClass = "compliant" | "mostly_compliant" | "over_ceiling";
+
+export interface MafComplianceInput {
+  /** Average heart rate held over the effort (bpm). */
+  avgHeartRate: number;
+  /** Peak heart rate, when available (bpm). */
+  maxHeartRate?: number | null;
+  /** The athlete's MAF aerobic ceiling (bpm). */
+  ceiling: number;
+}
+
+export interface MafComplianceResult {
+  /** 0–100. 100 = held at/under the ceiling; drops as the average runs over it. */
+  compliancePct: number;
+  classification: MafComplianceClass;
+  /** Short, actionable coaching cue for the athlete. */
+  nextAction: string;
+  details: {
+    avgHeartRate: number;
+    maxHeartRate: number | null;
+    ceiling: number;
+    /** avgHeartRate − ceiling (positive = over). */
+    avgOverBy: number;
+    /** maxHeartRate − ceiling, or null when peak HR is unknown. */
+    maxOverBy: number | null;
+  };
+}
+
+// How far the average HR can run over the ceiling before compliance hits 0.
+// 6 points per bpm means ~17 bpm over → 0%, which matches how quickly aerobic
+// benefit falls off once you push past the MAF ceiling.
+const COMPLIANCE_PENALTY_PER_BPM = 6;
+// Peak HR is allowed to brush a little over the ceiling (hills, surges) before
+// a sub-ceiling average is downgraded from "compliant" to "mostly_compliant".
+const PEAK_DRIFT_TOLERANCE_BPM = 5;
+
+/**
+ * Score how well a single effort respected the MAF heart-rate ceiling, from the
+ * average (and optional peak) HR the app stores per workout. This is the basis
+ * for `maf_workout_analysis` rows when a run is logged as a MAF test.
+ */
+export function computeMafCompliance(input: MafComplianceInput): MafComplianceResult {
+  const { avgHeartRate, ceiling } = input;
+  const maxHeartRate = input.maxHeartRate ?? null;
+  const avgOverBy = avgHeartRate - ceiling;
+  const maxOverBy = maxHeartRate != null ? maxHeartRate - ceiling : null;
+
+  let compliancePct: number;
+  let classification: MafComplianceClass;
+  let nextAction: string;
+
+  if (avgOverBy <= 0) {
+    const driftedAtPeaks = maxOverBy != null && maxOverBy > PEAK_DRIFT_TOLERANCE_BPM;
+    if (driftedAtPeaks) {
+      compliancePct = 85;
+      classification = "mostly_compliant";
+      nextAction =
+        "Your average stayed under the ceiling, but heart rate spiked above it — ease off on climbs and surges to keep the peaks in check.";
+    } else {
+      compliancePct = 100;
+      classification = "compliant";
+      nextAction = "On target — keep building aerobic volume at this effort.";
+    }
+  } else {
+    compliancePct = Math.max(0, Math.round(100 - avgOverBy * COMPLIANCE_PENALTY_PER_BPM));
+    classification = "over_ceiling";
+    nextAction = `Your average was ${avgOverBy} bpm over your MAF ceiling — slow down (walk the hills if you need to) so the effort trains the aerobic system.`;
+  }
+
+  return {
+    compliancePct,
+    classification,
+    nextAction,
+    details: { avgHeartRate, maxHeartRate, ceiling, avgOverBy, maxOverBy },
+  };
+}

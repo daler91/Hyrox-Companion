@@ -3,6 +3,7 @@ import { AnalyticsStorage } from "./analytics";
 import { CoachingStorage } from "./coaching";
 import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
+import { MafTestStorage } from "./mafTests";
 import { PlanStorage } from "./plans";
 import { PushStorage } from "./push";
 import { TimelineStorage } from "./timeline";
@@ -25,4 +26,5 @@ export const storage: IStorage = {
   idempotency: new IdempotencyStorage(),
   aiUsage: new AiUsageStorage(),
   push: new PushStorage(),
+  mafTests: new MafTestStorage(),
 };
