@@ -67,7 +67,7 @@ export type LoggedExerciseSetWithDate = Omit<ExerciseSet, "workoutLogId"> & {
 // analytics response memory bounded even when the user supplies no date
 // range. When the cap is hit the query log emits a warning so we can
 // detect users pushing past the limit and proactively offer pagination.
-const MAX_WORKOUT_LOGS_PER_QUERY = 5000;
+export const MAX_WORKOUT_LOGS_PER_QUERY = 5000;
 
 export async function queryExerciseSetsWithDates(
   userId: string,
