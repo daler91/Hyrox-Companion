@@ -27,7 +27,9 @@ function parseOptionalInt(value: string | undefined): number | null {
  * Convert an optional distance field — entered in the user's display unit — into
  * SI meters for the `distance_meters` column (which stores canonical meters, the
  * same unit Strava/Garmin sync writes). Blank, non-numeric, or negative input
- * means "not entered" → null.
+ * means "not entered" → null. Uses Number (not parseFloat) so the whole string
+ * must be numeric — consistent with the heart-rate fields and rejecting partial
+ * parses like "5xyz".
  */
 function parseOptionalDistanceMeters(
   value: string | undefined,
@@ -36,7 +38,7 @@ function parseOptionalDistanceMeters(
   if (value == null) return null;
   const trimmed = value.trim();
   if (trimmed === "") return null;
-  const userValue = Number.parseFloat(trimmed);
+  const userValue = Number(trimmed);
   if (!Number.isFinite(userValue) || userValue < 0) return null;
   return Math.round(userDistanceToMeters(userValue, distanceUnit));
 }

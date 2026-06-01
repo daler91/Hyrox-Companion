@@ -159,6 +159,18 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.description).toMatch(/distance/i);
   });
 
+  it("parses full numeric distance input including exponent notation", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      distance: "1e1", // 10 km
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBe(10000);
+  });
+
   it("rejects a fractional heart rate instead of truncating it", () => {
     const result = buildWorkoutSavePayload({
       ...baseInput,
