@@ -194,6 +194,8 @@ async function runBatch<T>(
 async function requireUserFromJob(job: Job, queueName: string) {
   const userId = getUserIdFromJob(job);
   if (!userId) {
+    // bearer:disable javascript_lang_logger_leak — jobId is a pg-boss UUID and
+    // dataKeys are payload field NAMES (not values); no PII or secrets.
     logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, `[pg-boss] Missing userId on ${queueName} job, skipping`);
     return null;
   }
@@ -265,10 +267,14 @@ export async function startQueue() {
 
   await queue.work("auto-coach", async (jobs: Job[]) => {
     await runBatch("auto-coach", jobs, async (job) => {
+      // bearer:disable javascript_lang_logger_leak — only the pg-boss jobId
+      // (a UUID) is logged; no payload, PII, or secrets.
       logger.info({ jobId: job.id }, "[pg-boss] Processing auto-coach job");
       try {
         const userId = getUserIdFromJob(job);
         if (!userId) {
+          // bearer:disable javascript_lang_logger_leak — jobId is a UUID and
+          // dataKeys are field names (not values); no PII or secrets.
           logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing userId on auto-coach job, skipping");
           return;
         }
@@ -287,6 +293,8 @@ export async function startQueue() {
     await runBatch("embed-coaching-material", jobs, async (job) => {
       const identifiers = getEmbedJobIdentifiers(job);
       if (!identifiers) {
+        // bearer:disable javascript_lang_logger_leak — jobId is a UUID and
+        // dataKeys are field names (not values); no PII or secrets.
         logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
         return;
       }

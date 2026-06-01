@@ -113,6 +113,8 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
           // Do NOT log the raw response body — Strava OAuth token-endpoint
           // bodies can echo token/secret material and a hand-built `err` string
           // bypasses pino's path-based redaction. Status is enough to triage.
+          // bearer:disable javascript_lang_logger_leak — only the HTTP status
+          // code is logged; the raw body was deliberately dropped above (W1).
           logger.error({ status: response.status }, "Failed to refresh Strava token");
           return null;
         }

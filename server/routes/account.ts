@@ -133,6 +133,9 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
     try {
       await purgeUserJobs(userId);
     } catch (err) {
+      // bearer:disable javascript_lang_logger_leak — userId is the app-wide
+      // correlation id (logged throughout this handler) and err is a DB error;
+      // no secrets, no new PII beyond the handler's existing pattern.
       logger.warn({ err, userId }, "Failed to purge queued jobs during account deletion");
     }
 
