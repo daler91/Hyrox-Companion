@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 import { api } from "@/lib/api";
 
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+const mockToast = vi.fn();
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mockToast }) }));
 vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: vi.fn().mockResolvedValue(undefined) },
 }));
@@ -159,5 +160,53 @@ describe("useOnboardingWizard", () => {
     });
     expect(localStorage.getItem("fitai-onboarding-complete")).toBe("true");
     expect(api.preferences.update).toHaveBeenCalledWith({ onboardingCompleted: true });
+  });
+
+  it("shows an error toast if prefsMutation fails on 'units' step, but still advances to 'goal' step", async () => {
+    vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error("Failed to update"));
+    const { result } = renderOnboardingWizard();
+
+    await act(async () => {
+      await result.current.handleNext();
+    }); // welcome -> units
+
+    expect(result.current.step).toBe("units");
+
+    await act(async () => {
+      await result.current.handleNext();
+    }); // units -> goal (attempt)
+
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Could not save preferences",
+      description: "You can update them later in settings.",
+      variant: "destructive",
+    });
+    // Even if it fails, the current logic advances to "goal" step
+    expect(result.current.step).toBe("goal");
+  });
+
+  it("shows an error toast and does not advance to 'plan' if prefsMutation fails on 'goal' step", async () => {
+    const { result } = renderOnboardingWizard();
+
+    await act(async () => {
+      await result.current.handleNext();
+    }); // welcome -> units
+    await act(async () => {
+      await result.current.handleNext();
+    }); // units -> goal
+
+    vi.mocked(api.preferences.update).mockRejectedValueOnce(new Error("Failed to update"));
+
+    await act(async () => {
+      await result.current.handleNext();
+    }); // goal -> plan (attempt)
+
+    expect(mockToast).toHaveBeenCalledWith({
+      title: "Could not save training style",
+      description: "Please try again. You can also update this later in settings.",
+      variant: "destructive",
+    });
+    // the code does NOT set step to "plan" if mutation fails
+    expect(result.current.step).toBe("goal");
   });
 });
