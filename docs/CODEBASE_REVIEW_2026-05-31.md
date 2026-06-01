@@ -3,6 +3,7 @@
 **Generated:** 2026-05-31
 **Branch:** `claude/bold-goodall-gdCm7`
 **Method:** Seven specialized passes (security, business, UX/a11y, performance, QA, DevOps, privacy) run in parallel by isolated reviewer agents, with the highest-stakes findings re-verified against source by the orchestrator.
+**Status as of 2026-06-01:** all 3 Criticals and all 18 Warnings closed; 5 of 13 Suggestions closed (S1 reverted). See Remediation Status below.
 
 > **Context.** The repo already self-ran this exact 7-persona framework on 2026-05-29
 > (`CODEBASE_REVIEW_2026-05-29-multipass.md`), and 133 commits since have closed nearly
@@ -12,6 +13,53 @@
 > (reviewers reading the schema/route surface while missing the storage/runtime wrapper) —
 > one agent's "migrations aren't applied" Critical was indeed a false positive and has been
 > reframed accordingly (W5).
+
+## Remediation Status — 2026-06-01
+
+This review was generated on `claude/bold-goodall-gdCm7` (PR #1347, which also shipped the C3 fix). The matrix below is the authoritative current state; the finding tables further down are preserved as the original review evidence. Each closure was verified against `main` before triage (the repo's own ~30% schema-layer false-positive rate applies, so commit claims were source-checked where ambiguous).
+
+### Criticals (3/3 closed)
+
+| ID | Category | Resolution |
+|----|----------|------------|
+| **C1** | Privacy / Erasure | ✅ **Resolved (#1348).** Account-deletion flow reordered to purge `document_chunks` on the vector DB (`deleteChunksByUserId` on `vectorPool`) before the main-DB delete, so a deleted user's coaching-material text + embeddings no longer persist on the separate pgvector instance. |
+| **C2** | Business Correctness | ✅ **Resolved (#1353/#1354).** MAF ceiling threaded into the training context as a real number, with a per-workout HR-vs-ceiling compliance signal feeding the coach (MAF Phases 1–4). The `"use_user_profile_maf_hr"` placeholder is gone. |
+| **C3** | Performance | ✅ **Resolved (#1347).** `buildTrainingContext` now passes an explicit `AI_CONTEXT_TIMELINE_LIMIT` to `getTimeline` (`server/services/ai/index.ts:62`, `server/constants.ts`), bounding the previously-unbounded full-history hydrate on every auto-coach run / chat turn. |
+
+### Warnings (18/18 closed)
+
+| ID | Category | Resolution |
+|----|----------|------------|
+| **W1** | Privacy / Logging | ✅ **Resolved (#1348).** Strava OAuth error path logs status + a static message instead of the raw response body. |
+| **W2** | Business Correctness | ✅ **Resolved (#1348).** `updateBestTime` branches on time-direction so duration-held / AMRAP exercises (plank, hollow_hold, dead_hang, amrap…) score longer-is-better. |
+| **W3** | Business Consistency | ✅ **Resolved (#1348).** Week boundary unified to Monday across Coach Panel / server / Timeline. |
+| **W4** | Data Model / Scope | ✅ **Resolved (#1353/#1354).** MAF test + analysis write paths and the baseline-reminder consumer implemented — no more dead `mafTestResults` / `mafWorkoutAnalysis` schema. |
+| **W5** | DevOps / Migration | ✅ **Resolved (#1348).** Migrations re-throw on non-benign errors ("loud migrations"); the "already exists" match was narrowed so the app no longer boots on an inconsistent schema. |
+| **W6** | DevOps / Degradation | ✅ **Resolved (#1351).** Hybrid rate-limit posture: fail-open for non-sensitive reads on a store error, with the coupling documented. |
+| **W7** | DevOps / Health | ✅ **Resolved (#1351).** Dependency-free liveness split from readiness; Railway `on_failure` repointed to liveness so a transient DB blip no longer triggers a restart loop. |
+| **W8** | DevOps / Migration | ✅ **Resolved (#1351).** Documented out-of-band `CREATE INDEX CONCURRENTLY` guidance for large-table index builds. |
+| **W9** | DevOps / Ops accuracy | ✅ **Resolved (#1348).** Misleading "in-memory store — per-instance only" startup log corrected to reflect the shared Postgres store. |
+| **W10** | Performance | ✅ **Resolved (#1350).** `getWorkoutLogsByDateRange` bounded with a `LIMIT` + truncation warning. |
+| **W11** | Performance | ✅ **Resolved (#1350).** RAG retrieval probes parallelized / cache-short-circuited before the vector-DB round-trips. |
+| **W12** | QA / Race | ✅ **Resolved (#1350, follow-up #1352).** `flushQueue()` coalesced behind a module-level in-flight guard; the mid-flush enqueue data-loss edge was also fixed. |
+| **W13** | QA / Race | ✅ **Resolved (#1350).** Per-set cell PATCHes now guard stale writes (`expectedVersion` + 409 handling). |
+| **W14** | UX / Error | ✅ **Resolved (#1349).** `humanizeApiError()` default replaces raw `"500: {…}"` toasts. |
+| **W15** | UX / Forms | ✅ **Resolved (#1349).** Workout-logging form wires the existing `errorMessage` field API and explains disabled state via `aria-describedby`. |
+| **W16** | UX / A11y | ✅ **Resolved (#1349).** RPE swatches darkened to ≥4.5:1 contrast; numeric + text label retained. |
+| **W17** | Privacy / Retention | ✅ **Resolved (#1348).** Pending pg-boss jobs purged on account deletion; full `job.data` no longer logged. |
+| **W18** | DevOps / Env | ✅ **Resolved (#1351).** Optional-secret blind spots made visible (loud signal when `SENTRY_DSN` / `CRON_SECRET` are absent in prod). |
+
+### Suggestions (5/13 closed; S1 reverted)
+
+| ID | Resolution |
+|----|------------|
+| **S5** | ✅ **Resolved (#1352).** `formatSecondsToClock` guards non-finite input (returns `0:00:00`). |
+| **S8** | ✅ **Resolved (#1352).** `useUnitPreferences()` return value memoized. |
+| **S10** | ✅ **Resolved (#1352).** `ExerciseWarnings` advisory hints downgraded from `aria-live="assertive"` to `role="status"`/polite. |
+| **S12** | ✅ **Resolved (#1352).** Cascade-test allowlist extended to the Art. 9 MAF health tables. |
+| **S13** | ✅ **Resolved (#1352).** Stray root artifacts removed; `.jules/` vs `.Jules/` case-collision consolidated. |
+| **S1** | ⏸ **Reverted (#1352).** Idempotency `method`/`path` lookup needs a coordinated PK migration; the change was backed out and remains open. |
+| S2–S4, S6, S7, S9, S11 | Open. Optional hardening: startup DNS-time SSRF check (S2), hashed/nonce styles (S3), MAF-snapshot change-detection (S4), socket-abort on Gemini/Garmin timeout (S6), atomic chat-turn persistence (S7), larger icon touch targets (S9), opt-in / deferred client error reporting (S11). |
 
 ## Executive Summary
 
