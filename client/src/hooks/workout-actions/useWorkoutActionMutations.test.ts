@@ -1,127 +1,87 @@
 import type { TimelineEntry } from '@shared/schema';
-import { describe, expect,it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildLoggedTimelineEntry, type CreatedWorkout } from './useWorkoutActionMutations';
 
+function createBaseWorkout(overrides?: Partial<CreatedWorkout>): CreatedWorkout {
+  return {
+    id: 'mock-workout',
+    date: '2023-10-27',
+    focus: 'Strength',
+    mainWorkout: 'Deadlift',
+    accessory: 'Rows',
+    notes: 'Felt good',
+    duration: 60,
+    rpe: 8,
+    planDayId: 'pd-1',
+    userId: 'user-1',
+    createdAt: '2023-10-27',
+    updatedAt: '2023-10-27',
+    planId: null,
+    source: 'manual',
+    ...overrides,
+  };
+}
+
+function createExpectedEntry(workout: CreatedWorkout, overrides?: Partial<TimelineEntry>): TimelineEntry {
+  return {
+    id: `log-${workout.id}`,
+    date: workout.date,
+    type: 'logged',
+    status: 'completed',
+    focus: workout.focus,
+    mainWorkout: workout.mainWorkout,
+    accessory: workout.accessory,
+    notes: workout.notes,
+    duration: workout.duration,
+    rpe: workout.rpe,
+    planDayId: workout.planDayId,
+    workoutLogId: workout.id,
+    weekNumber: undefined,
+    dayName: undefined,
+    planName: undefined,
+    planId: workout.planId,
+    source: workout.source,
+    aiSource: undefined,
+    aiRationale: undefined,
+    aiNoteUpdatedAt: undefined,
+    aiInputsUsed: undefined,
+    exerciseSets: workout.exerciseSets ?? [],
+    calories: workout.calories,
+    distanceMeters: workout.distanceMeters,
+    ...overrides,
+  } as TimelineEntry;
+}
+
 describe('buildLoggedTimelineEntry', () => {
   it('correctly maps properties when sourceEntry is null', () => {
-    const mockWorkout: CreatedWorkout = {
-      id: 'mock-workout-1',
-      date: '2023-10-27',
-      focus: 'Strength',
-      mainWorkout: 'Deadlift',
-      accessory: 'Rows',
-      notes: 'Felt good',
-      duration: 60,
-      rpe: 8,
-      planDayId: null,
-      userId: 'user-1',
-      createdAt: '2023-10-27',
-      updatedAt: '2023-10-27',
-      planId: null,
-      source: 'manual',
-    };
-
+    const mockWorkout = createBaseWorkout();
     const result = buildLoggedTimelineEntry(mockWorkout, null);
-
-    expect(result).toMatchObject({
-      id: `log-${mockWorkout.id}`,
-      date: mockWorkout.date,
-      type: 'logged',
-      status: 'completed',
-      focus: mockWorkout.focus,
-      mainWorkout: mockWorkout.mainWorkout,
-      accessory: mockWorkout.accessory,
-      notes: mockWorkout.notes,
-      duration: mockWorkout.duration,
-      rpe: mockWorkout.rpe,
-      planDayId: mockWorkout.planDayId,
-      workoutLogId: mockWorkout.id,
-      weekNumber: undefined,
-      dayName: undefined,
-      planName: undefined,
-      planId: null,
-      source: 'manual',
-      aiSource: undefined,
-      aiRationale: undefined,
-      aiNoteUpdatedAt: undefined,
-      aiInputsUsed: undefined,
-      exerciseSets: [],
-      calories: undefined,
-      distanceMeters: undefined,
-    });
+    expect(result).toMatchObject(createExpectedEntry(mockWorkout));
   });
 
   it('correctly maps properties when sourceEntry is undefined', () => {
-    const mockWorkout: CreatedWorkout = {
-      id: 'mock-workout-2',
-      date: '2023-10-28',
-      focus: 'Endurance',
-      mainWorkout: 'Run',
-      accessory: null,
-      notes: null,
-      duration: 45,
-      rpe: 7,
-      planDayId: 'plan-day-2',
-      userId: 'user-1',
-      createdAt: '2023-10-28',
-      updatedAt: '2023-10-28',
-      planId: null,
-      source: 'manual',
-    };
-
+    const mockWorkout = createBaseWorkout({ id: 'mock-2' });
     const result = buildLoggedTimelineEntry(mockWorkout);
-
-    expect(result).toMatchObject({
-      id: `log-${mockWorkout.id}`,
-      date: mockWorkout.date,
-      type: 'logged',
-      status: 'completed',
-      focus: mockWorkout.focus,
-      mainWorkout: mockWorkout.mainWorkout,
-      accessory: mockWorkout.accessory,
-      notes: mockWorkout.notes,
-      duration: mockWorkout.duration,
-      rpe: mockWorkout.rpe,
-      planDayId: mockWorkout.planDayId,
-      workoutLogId: mockWorkout.id,
-      weekNumber: undefined,
-      dayName: undefined,
-      planName: undefined,
-      planId: null,
-      source: 'manual',
-      aiSource: undefined,
-      aiRationale: undefined,
-      aiNoteUpdatedAt: undefined,
-      aiInputsUsed: undefined,
-      exerciseSets: [],
-      calories: undefined,
-      distanceMeters: undefined,
-    });
+    expect(result).toMatchObject(createExpectedEntry(mockWorkout));
   });
 
   it('correctly falls back to sourceEntry properties when workout properties are missing or falsy', () => {
-    const mockWorkout: CreatedWorkout = {
-      id: 'mock-workout-3',
-      date: '', // empty date string, falls back to sourceEntry.date in logic or not?
-      // Wait, date is `workout.date ?? sourceEntry?.date ?? ""`
-      // `workout.date` is "", which is NOT nullish. It is falsy, but ?? checks for nullish.
-      // `workout.focus || sourceEntry?.focus || "Workout"` uses ||, so it checks falsy.
-      focus: '', // falsy focus, uses ||
-      mainWorkout: '', // ?? uses nullish, so it uses "" if provided as ""
+    const mockWorkout = createBaseWorkout({
+      id: 'mock-3',
+      date: null as any,
+      focus: '',
+      mainWorkout: null as any,
       accessory: null,
       notes: null,
       duration: null,
       rpe: null,
       planDayId: null,
-      userId: 'user-1',
-      createdAt: '2023-10-29',
-      updatedAt: '2023-10-29',
       planId: null,
-      source: 'manual',
-    };
+      source: null,
+    });
 
-    const mockSourceEntry: TimelineEntry = {
+    const mockSourceEntry = {
       id: 'source-1',
       date: '2023-10-29',
       type: 'planned',
@@ -136,46 +96,22 @@ describe('buildLoggedTimelineEntry', () => {
       dayName: 'Leg Day',
       planId: 'plan-1',
       planName: 'My Plan',
-    };
+    } as TimelineEntry;
 
-    // Fix the mock to properly test ?? vs ||
-    // For date and mainWorkout, it uses ?? so we should pass undefined/null to test fallback
-    const mockWorkoutFixed: CreatedWorkout = {
-      id: 'mock-workout-3',
-      date: null as any,
-      focus: '',
-      mainWorkout: null as any,
-      accessory: null,
-      notes: null,
-      duration: null,
-      rpe: null,
-      planDayId: null,
-      userId: 'user-1',
-      createdAt: '2023-10-29',
-      updatedAt: '2023-10-29',
-      planId: null,
-      source: null,
-    };
+    const result = buildLoggedTimelineEntry(mockWorkout, mockSourceEntry);
 
-    const result = buildLoggedTimelineEntry(mockWorkoutFixed, mockSourceEntry);
-
-    expect(result).toMatchObject({
-      id: `log-${mockWorkoutFixed.id}`,
+    expect(result).toMatchObject(createExpectedEntry(mockWorkout, {
       date: mockSourceEntry.date,
-      type: 'logged',
-      status: 'completed',
       focus: mockSourceEntry.focus,
       mainWorkout: mockSourceEntry.mainWorkout,
       accessory: mockSourceEntry.accessory,
       notes: mockSourceEntry.notes,
-      duration: mockWorkoutFixed.duration, // workout duration is null
-      rpe: mockWorkoutFixed.rpe,         // workout rpe is null
       planDayId: mockSourceEntry.planDayId,
-      workoutLogId: mockWorkoutFixed.id,
       weekNumber: mockSourceEntry.weekNumber,
       dayName: mockSourceEntry.dayName,
       planId: mockSourceEntry.planId,
       planName: mockSourceEntry.planName,
-    });
+      source: 'manual', // falls back to 'manual' if both missing or if workout source is missing and sourceEntry source is missing
+    }));
   });
 });
