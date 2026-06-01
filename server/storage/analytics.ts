@@ -38,6 +38,9 @@ export class AnalyticsStorage {
       .limit(MAX_WORKOUT_LOGS_PER_QUERY);
 
     if (logs.length >= MAX_WORKOUT_LOGS_PER_QUERY) {
+      // bearer:disable javascript_lang_logger_leak — userId is the app-wide
+      // correlation id; limit is a constant and from/to are date strings. No
+      // PII or secrets (mirrors the sibling warn in storage/shared.ts).
       logger.warn(
         { userId, limit: MAX_WORKOUT_LOGS_PER_QUERY, from, to },
         "getWorkoutLogsByDateRange hit row cap — analytics may be truncated; consider narrowing the date range",
