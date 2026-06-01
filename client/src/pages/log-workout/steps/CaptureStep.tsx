@@ -98,14 +98,13 @@ export function CaptureStep({
       </Card>
 
       {continueBlockedReason && (
-        <p
+        <output
           id="capture-continue-hint"
-          role="status"
-          className="text-center text-xs text-muted-foreground"
+          className="block text-center text-xs text-muted-foreground"
           data-testid="text-continue-blocked-reason"
         >
           {continueBlockedReason}
-        </p>
+        </output>
       )}
 
       <StepFooter>

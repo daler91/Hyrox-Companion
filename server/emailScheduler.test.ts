@@ -228,20 +228,20 @@ describe('runEmailCronJob', () => {
   });
 });
 
+function storageFor(user: Record<string, unknown>, claimed = true): IStorage {
+  return {
+    users: {
+      getUser: vi.fn().mockResolvedValue(user),
+      claimMafBaselineTest: vi.fn().mockResolvedValue(claimed),
+    },
+  } as unknown as IStorage;
+}
+
 describe('processMafTestReminder', () => {
   const now = new Date('2026-06-01T12:00:00Z');
   const dueAt = new Date('2026-05-30T12:00:00Z'); // in the past → due
 
   beforeEach(() => vi.clearAllMocks());
-
-  function storageFor(user: Record<string, unknown>, claimed = true): IStorage {
-    return {
-      users: {
-        getUser: vi.fn().mockResolvedValue(user),
-        claimMafBaselineTest: vi.fn().mockResolvedValue(claimed),
-      },
-    } as unknown as IStorage;
-  }
 
   it('claims the one-shot schedule and emails when the claim wins + opted in', async () => {
     const { sendMafTestReminder } = await import('./email');
