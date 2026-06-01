@@ -141,14 +141,13 @@ export function ReflectStep({
       />
 
       {saveBlockedReason && (
-        <p
+        <output
           id="reflect-save-hint"
-          role="status"
-          className="text-center text-xs text-muted-foreground"
+          className="block text-center text-xs text-muted-foreground"
           data-testid="text-save-blocked-reason"
         >
           {saveBlockedReason}
-        </p>
+        </output>
       )}
 
       <StepFooter>

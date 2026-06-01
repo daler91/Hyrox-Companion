@@ -59,11 +59,11 @@ export function MafTrendTab() {
           <Activity className="h-3 w-3" aria-hidden="true" />
           {rows.length} MAF test{rows.length === 1 ? "" : "s"}
         </Badge>
-        {latest.compliancePct != null ? (
+        {latest.compliancePct != null && (
           <Badge variant="outline" className={`gap-1.5 ${TONE_BADGE_CLASS[latestMeta.tone]}`} data-testid="maf-trend-latest">
             Latest: {latest.compliancePct}% · {latestMeta.label}
           </Badge>
-        ) : null}
+        )}
       </div>
 
       {trend.length >= 2 ? (

@@ -95,7 +95,7 @@ export function computeMafCompliance(input: MafComplianceInput): MafComplianceRe
   const { avgHeartRate, ceiling } = input;
   const maxHeartRate = input.maxHeartRate ?? null;
   const avgOverBy = avgHeartRate - ceiling;
-  const maxOverBy = maxHeartRate != null ? maxHeartRate - ceiling : null;
+  const maxOverBy = maxHeartRate == null ? null : maxHeartRate - ceiling;
 
   let compliancePct: number;
   let classification: MafComplianceClass;

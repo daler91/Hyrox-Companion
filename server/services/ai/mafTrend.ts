@@ -25,9 +25,9 @@ export function summarizeMafTrend(
   }, null);
 
   const lastTestDaysAgo =
-    lastTestAt != null
-      ? Math.max(0, Math.floor((now.getTime() - lastTestAt.getTime()) / DAY_MS))
-      : null;
+    lastTestAt == null
+      ? null
+      : Math.max(0, Math.floor((now.getTime() - lastTestAt.getTime()) / DAY_MS));
 
   // Oldest → newest, keeping only analyses we can score.
   const scored = analyses
@@ -36,14 +36,14 @@ export function summarizeMafTrend(
     )
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-  const latest = scored.length > 0 ? scored[scored.length - 1] : null;
+  const latest = scored.at(-1) ?? null;
   const latestCompliancePct = latest?.compliancePct ?? null;
   const latestClassification =
     (latest?.classification as MafTrendSummary["latestClassification"]) ?? null;
 
   let complianceTrend: MafTrendSummary["complianceTrend"] = "insufficient_data";
-  if (scored.length >= 2) {
-    const delta = scored[scored.length - 1].compliancePct - scored[0].compliancePct;
+  if (latest && scored.length >= 2) {
+    const delta = latest.compliancePct - scored[0].compliancePct;
     if (delta > COMPLIANCE_TREND_THRESHOLD_PCT) complianceTrend = "improving";
     else if (delta < -COMPLIANCE_TREND_THRESHOLD_PCT) complianceTrend = "declining";
     else complianceTrend = "flat";

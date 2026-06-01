@@ -189,13 +189,10 @@ function prepareLoadGovernorSuggestion(suggestion: LoadGovernorSuggestion): Prep
 async function applyStructuredSuggestion(
   prepared: PreparedSuggestion,
   entry: UpcomingWorkout,
-  userId: string,
-  aiSource: AutoCoachAiSource,
-  inputsUsed: CoachNoteInputs,
-  coachSignals: CoachModificationSignals,
-  unitPreferences: UnitPreferences,
-  tx: DbExecutor,
+  resolvedSource: AutoCoachAiSource,
+  context: SuggestionApplyContext,
 ): Promise<AppliedSuggestionResult> {
+  const { userId, inputsUsed, coachSignals, unitPreferences, tx } = context;
   const { suggestion, structuredSetRows, focusOverride } = prepared;
   if (!structuredSetRows || structuredSetRows.length === 0) {
     return { applied: false };
@@ -220,7 +217,7 @@ async function applyStructuredSuggestion(
   );
 
   const updates: UpdatePlanDay = {
-    aiSource: aiSource ?? null,
+    aiSource: resolvedSource ?? null,
     aiRationale: suggestion.rationale.slice(0, 400),
     aiNoteUpdatedAt: new Date(),
   };
@@ -342,16 +339,7 @@ async function applySuggestion(
     return { applied: false };
   }
   if (prepared.structuredSetRows && prepared.structuredSetRows.length > 0) {
-    return applyStructuredSuggestion(
-      prepared,
-      entry,
-      userId,
-      resolvedSource,
-      inputsUsed,
-      coachSignals,
-      unitPreferences,
-      tx,
-    );
+    return applyStructuredSuggestion(prepared, entry, resolvedSource, context);
   }
 
   // Let errors propagate so the enclosing transaction rolls back — we want
