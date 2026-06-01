@@ -18,7 +18,7 @@
   <p>
     <img src="https://img.shields.io/badge/TypeScript-6.0-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6">
     <img src="https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 18">
-    <img src="https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 6">
+    <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8">
     <img src="https://img.shields.io/badge/Node.js-%3E%3D20-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=20">
     <img src="https://img.shields.io/badge/PostgreSQL-pgvector-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
     <img src="https://img.shields.io/badge/pnpm-9.12-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 9.12">
@@ -35,9 +35,9 @@ fitai.coach helps athletes plan structured training, log complex workouts, under
 ### Unified Training Experience
 
 - **Interactive timeline** - View past, current, and upcoming training with planned, completed, missed, and skipped states.
-- **Structured workout logging** - Log free-text, voice-entered, table-backed, or block-based sessions with sets, reps, loads, distances, times, custom exercise names, notes, and scores.
+- **Structured workout logging** - Log free-text, voice-entered, table-backed, or block-based sessions with sets, reps, loads, distances, times, custom exercise names, notes, and scores, plus optional session-level distance and average/max heart rate for athletes logging manually without a synced wearable.
 - **Training plans** - Import CSV plans, start from built-in programming, or generate a plan with AI.
-- **Training styles** - Choose balanced programming or MAF Method constraints, with MAF setup fields used to calculate and persist the athlete's heart-rate ceiling.
+- **Training styles** - Choose balanced programming or MAF Method constraints, with MAF setup fields used to calculate and persist the athlete's heart-rate ceiling. MAF athletes can tag any logged workout, including synced Strava runs, as a MAF test to track pace at the same heart rate over time.
 - **Timeline annotations** - Mark injury, illness, travel, rest, or other date ranges so analytics and training gaps have context.
 - **Guided onboarding** - Configure profile, units, goals, schedule, and initial plan setup before landing in the main app.
 
@@ -65,6 +65,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, under
 - **Training overview** - Track volume, duration, average workouts per week, completion rate, streaks, and week-over-week changes.
 - **Exercise progression** - See personal records, set history, category breakdowns, and progression trends.
 - **Coach insights** - Surface RPE trends, plan phase, weekly volume, station gaps, fatigue flags, and progression flags.
+- **MAF Trend** - For MAF Method athletes, chart per-test compliance and pace-at-ceiling progression with classification badges across tagged MAF tests.
 - **Data export** - Download workout timeline and exercise sets as CSV or JSON.
 - **Email and push notifications** - Send opt-in weekly summaries and missed-day reminders through pg-boss, Resend, and Web Push when configured.
 
@@ -89,7 +90,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Frontend
 
-- **Framework**: React 18, Vite 6, TypeScript 6
+- **Framework**: React 18, Vite 8, TypeScript 6
 - **Styling**: Tailwind CSS 4 with shadcn/ui-style Radix primitives
 - **State management**: TanStack Query for server state and cache invalidation
 - **Routing**: wouter
@@ -382,7 +383,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The current suite includes 187 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
+The current suite includes 237 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 
