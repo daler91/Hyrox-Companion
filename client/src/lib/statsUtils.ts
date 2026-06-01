@@ -18,8 +18,11 @@ export interface TrainingStats {
 
 export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   const todayStr = getTodayString();
-  const startOfWeekStr = getStartOfWeekString();
-  const endOfWeekStr = getEndOfWeekString();
+  // Monday-start week to match the server (analyticsService / weeklyProgress
+  // use Monday) and plan import, so the Coach Panel's weekly counts agree with
+  // Analytics and the Timeline instead of splitting on Sunday.
+  const startOfWeekStr = getStartOfWeekString(new Date(), 1);
+  const endOfWeekStr = getEndOfWeekString(new Date(), 1);
 
   // ⚡ Bolt Performance Optimization:
   // Instead of multiple O(N) array filters to compute stats, we iterate

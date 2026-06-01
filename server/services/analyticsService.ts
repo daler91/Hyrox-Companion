@@ -56,8 +56,32 @@ function updateMaxDistance(pr: PersonalRecord, set: ExerciseSetWithDate): void {
   }
 }
 
+// For most timed exercises `time` is completion/effort time where a LOWER value
+// is the better result. Two exceptions, handled below:
+//   - Isometric holds / time-under-tension (sets+time only): a LONGER hold is
+//     the better result, so "best time" must track the MAX. Without this, a
+//     shorter plank would wrongly register as a new "best time" PR.
+//   - AMRAP/EMOM: `time` is a prescribed cap, not a performance metric, so a
+//     "best time" PR is meaningless and is not recorded (reps/rounds is the
+//     score for those).
+const TIME_LONGER_IS_BETTER = new Set<string>([
+  "plank",
+  "side_plank",
+  "hollow_hold",
+  "battle_ropes",
+]);
+const TIME_NOT_A_PR_METRIC = new Set<string>(["amrap", "emom"]);
+
 function updateBestTime(pr: PersonalRecord, set: ExerciseSetWithDate): void {
-  if (set.time && set.time > 0 && (!pr.bestTime || set.time < pr.bestTime.value)) {
+  if (!set.time || set.time <= 0) return;
+  if (TIME_NOT_A_PR_METRIC.has(set.exerciseName)) return;
+
+  const longerIsBetter = TIME_LONGER_IS_BETTER.has(set.exerciseName);
+  const isImprovement =
+    !pr.bestTime ||
+    (longerIsBetter ? set.time > pr.bestTime.value : set.time < pr.bestTime.value);
+
+  if (isImprovement) {
     pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
   }
 }

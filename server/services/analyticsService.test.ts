@@ -75,6 +75,30 @@ describe("calculatePersonalRecords", () => {
     });
   });
 
+  it("tracks bestTime as the LONGEST hold for isometric exercises (higher is better)", () => {
+    const sets = [
+      makeSet({ exerciseName: "plank", category: "strength", time: 60, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "plank", category: "strength", time: 120, date: "2026-01-15", workoutLogId: "w2" }),
+      makeSet({ exerciseName: "plank", category: "strength", time: 90, date: "2026-01-20", workoutLogId: "w3" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    // The 120s hold is the PR — the later 90s hold must NOT register as a new best.
+    expect(prs["plank"].bestTime).toEqual({
+      value: 120,
+      date: "2026-01-15",
+      workoutLogId: "w2",
+    });
+  });
+
+  it("does not record a bestTime PR for AMRAP/EMOM (time is a prescribed cap, not a metric)", () => {
+    const sets = [
+      makeSet({ exerciseName: "amrap", category: "conditioning", time: 1200, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "amrap", category: "conditioning", time: 600, date: "2026-01-15", workoutLogId: "w2" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["amrap"].bestTime).toBeUndefined();
+  });
+
   it("tracks maxDistance PR", () => {
     const sets = [
       makeSet({ exerciseName: "skierg", category: "functional", distance: 1000, workoutLogId: "w1" }),

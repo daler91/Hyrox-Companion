@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import * as Sentry from "@sentry/node";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 
@@ -35,13 +36,30 @@ async function runDrizzleMigrations() {
     await migrate(migrator, { migrationsFolder });
     logger.info({ context: "db" }, "Drizzle migrations applied successfully");
   } catch (error) {
-    // In CI/production, drizzle-kit push is used to manage the schema, so
-    // migration failures (e.g. "already exists") are expected and non-fatal.
-    const errStr = String((error as { message?: string })?.message ?? error);
-    if (errStr.includes("already exists")) {
+    // The schema source of truth in CI/production is `drizzle-kit push`, not
+    // this in-process migrate(). So when migrate() runs against an already-pushed
+    // schema it is EXPECTED to hit idempotency errors (a table/column/constraint,
+    // or a backfilled row, "already exists"/"duplicate") — those are benign and
+    // logged at info. Anything else is a genuine migration failure. We do NOT
+    // hard-crash on it (that would false-alarm a healthy push-managed boot), but
+    // we escalate to error + Sentry so it is loud and alertable instead of
+    // silently swallowed at warn (W5) — the operator can reconcile before the
+    // inconsistent schema surfaces as runtime errors.
+    const errStr = String((error as { message?: string })?.message ?? error).toLowerCase();
+    const isBenignIdempotencyError =
+      errStr.includes("already exists") ||
+      errStr.includes("duplicate key") ||
+      errStr.includes("duplicate object");
+    if (isBenignIdempotencyError) {
       logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
     } else {
-      logger.warn({ context: "db", err: error }, "Drizzle migration failed (non-fatal, continuing startup)");
+      // bearer:disable javascript_lang_logger_leak — `err` is a DB/migration
+      // error describing schema state, not user data; no PII or secrets logged.
+      logger.error(
+        { context: "db", err: error },
+        "Drizzle migration failed — schema may be inconsistent; startup is continuing but this needs operator attention",
+      );
+      Sentry.captureException(error);
     }
   }
 }

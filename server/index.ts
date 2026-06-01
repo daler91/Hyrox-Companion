@@ -380,7 +380,9 @@ try {
   }
 
   if (env.NODE_ENV === "production") {
-    logger.warn({ context: "ratelimit" }, "Rate limiter uses in-memory store — limits are per-instance only. Consider rate-limit-redis for multi-instance deployments.");
+    // bearer:disable javascript_lang_logger_leak — static operational message;
+    // only a constant `context` tag is logged, no PII or secrets.
+    logger.info({ context: "ratelimit" }, "Rate limiter uses the Postgres-backed shared store (rate_limit_buckets) — limits are enforced across all instances.");
   }
 
   startupState.startupPhase = "ready";
