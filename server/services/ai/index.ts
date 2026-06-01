@@ -12,6 +12,7 @@ import {
   computeRpeTrend,
   computeWeeklyVolume,
 } from "./coachingInsights";
+import { summarizeMafTrend } from "./mafTrend";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
@@ -173,6 +174,18 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     );
   }
 
+  // MAF athletes get a compact test-trend summary so the coach can validate
+  // aerobic progress and nudge test cadence. The two reads are scoped to this
+  // style and skipped entirely for everyone else.
+  let mafTrend: TrainingContext["mafTrend"];
+  if (user?.trainingStyleId === "maf_method") {
+    const [mafTestRows, mafAnalysisRows] = await Promise.all([
+      storage.mafTests.listTestResults(userId),
+      storage.mafTests.listWorkoutAnalysis(userId),
+    ]);
+    mafTrend = summarizeMafTrend(mafTestRows, mafAnalysisRows);
+  }
+
   return {
     totalWorkouts,
     completedWorkouts,
@@ -182,6 +195,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     completionRate,
     currentStreak,
     mafHr: user?.mafHr ?? null,
+    ...(mafTrend ? { mafTrend } : {}),
     weeklyGoal: user?.weeklyGoal ?? undefined,
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),

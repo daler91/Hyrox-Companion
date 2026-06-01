@@ -70,6 +70,12 @@ function buildStructuredFields(
         trainingContext.coachingInsights?.decisionTree?.currentPhase === "aerobic_base"
           ? (trainingContext.mafHr ?? null)
           : null,
+      // MAF test trend (cadence + ceiling compliance over time) so the coach can
+      // validate aerobic progress and nudge the monthly test. Only emitted for
+      // the MAF style, where the context populates it.
+      ...(styleId === "maf_method" && trainingContext.mafTrend
+        ? { mafTrend: trainingContext.mafTrend }
+        : {}),
       complianceStats: {
         completionRatePct: completionRate,
         currentStreak: trainingContext.currentStreak,

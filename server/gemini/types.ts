@@ -2,6 +2,26 @@ import type { CoachNoteInputs } from "@shared/schema";
 
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
 
+/**
+ * Compact summary of an athlete's MAF test history for the coaching context.
+ * Surfaced only for MAF-method athletes. The trend is compliance/cadence-based
+ * (how well recent tests held the MAF ceiling, and how recently the athlete
+ * tested) — pace-at-fixed-HR isn't included because logged runs don't yet
+ * carry distance.
+ */
+export interface MafTrendSummary {
+  /** Total MAF tests the athlete has logged. */
+  testCount: number;
+  /** Whole days since the most recent MAF test, or null when none logged. */
+  lastTestDaysAgo: number | null;
+  /** Compliance classification of the most recent test, or null. */
+  latestClassification: "compliant" | "mostly_compliant" | "over_ceiling" | null;
+  /** Compliance percentage of the most recent test (0-100), or null. */
+  latestCompliancePct: number | null;
+  /** Direction of the compliance trend across logged tests. */
+  complianceTrend: "improving" | "flat" | "declining" | "insufficient_data";
+}
+
 export interface TrainingContext {
   totalWorkouts: number;
   completedWorkouts: number;
@@ -12,6 +32,8 @@ export interface TrainingContext {
   currentStreak: number;
   /** Persisted MAF aerobic heart-rate ceiling (bpm) from the user profile, when set. */
   mafHr?: number | null;
+  /** MAF test history/trend summary; present only for MAF-method athletes. */
+  mafTrend?: MafTrendSummary;
   weeklyGoal?: number;
   weightUnit?: string;
   distanceUnit?: string;
