@@ -86,6 +86,24 @@ export function __resetHealthCacheForTests(): void {
 }
 
 export function registerHealthEndpoint(app: Express, deps: { state: StartupHealthState; probeDatabase: () => Promise<boolean>; probeVectorDatabase: () => Promise<boolean>; }): void {
+  // Liveness probe (W7): dependency-free. Returns 200 whenever the process is up
+  // and the event loop can serve HTTP — it deliberately does NOT probe the DB,
+  // so a transient runtime DB blip cannot make a healthy instance look dead and
+  // trigger a restart loop. The one exception is a definitive startup failure,
+  // where a restart can legitimately retry boot (e.g. DB unreachable at boot).
+  // Point the platform's restart healthcheck at THIS, and use /api/v1/health
+  // (readiness, below) only for load-balancer traffic gating.
+  app.get("/api/v1/health/live", (_req, res) => {
+    if (deps.state.startupError) {
+      res.status(503).json({ status: "startup_failed", message: deps.state.startupError, timestamp: Date.now() });
+      return;
+    }
+    res.json({ status: "alive", uptimeMs: Date.now() - deps.state.startupBeganAt, timestamp: Date.now() });
+  });
+
+  // Readiness probe: gates on startup state + DB/vector-DB health. A 503 here
+  // means "don't route traffic to me right now" — it should NOT be wired to a
+  // restart policy (see the liveness probe above).
   app.get("/api/v1/health", (_req, res) => {
     const uptimeMs = Date.now() - deps.state.startupBeganAt;
     if (deps.state.startupError) {

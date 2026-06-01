@@ -1067,6 +1067,32 @@ In addition to Drizzle Kit migrations, `runStartupMaintenance()` in `server/main
 4. Bootstrap the vector schema (`ensureVectorSchema`)
 5. Mark past planned days as missed and reset stale `isAutoCoaching` flags
 
+### Adding Indexes on Large Tables
+
+`CREATE INDEX` takes a lock that blocks writes to the table for the duration of
+the build. On small tables this is instant; on large/hot tables (`workout_logs`,
+`exercise_sets`, `plan_days`) it can stall writes during a deploy, because the
+in-process `runDrizzleMigrations()` applies migrations at startup while the new
+instance boots.
+
+Drizzle Kit cannot emit `CREATE INDEX CONCURRENTLY` — it wraps migrations in a
+transaction, and `CONCURRENTLY` cannot run inside one. So for an index on a
+large table, apply it **out-of-band** as a non-transactional step in a
+low-traffic window rather than letting a generated migration build it inline:
+
+```sql
+-- Run manually (psql / one-off job), NOT inside a drizzle migration:
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_workout_logs_user_date
+  ON workout_logs (user_id, date DESC);
+```
+
+Keep the index declared in `shared/schema/tables.ts` so the schema stays the
+source of truth and `db:check` passes. The generated migration's plain
+`CREATE INDEX` is then harmless: the concurrent build already created the index,
+and `runDrizzleMigrations()` treats the resulting "already exists" as a benign,
+non-fatal skip (see `server/maintenance.ts`). Small-table indexes need none of
+this — leave them inline in the normal generated migration.
+
 ---
 
 ## Transaction Patterns
