@@ -10,25 +10,16 @@ export interface IdempotencyRecord {
 
 /**
  * Storage for cached responses to mutating requests, keyed by
- * (userId, X-Idempotency-Key, method, path). Backs the idempotency middleware
- * (CODEBASE_AUDIT.md §2). Matching on method+path as well as the key prevents a
- * client that reuses one key across two endpoints from getting the first
- * endpoint's cached response back for the second (S1). Entries TTL via
- * `expiresAt`; stale rows are pruned by `cleanupExpired` on a daily cron.
+ * (userId, X-Idempotency-Key). Backs the idempotency middleware
+ * (CODEBASE_AUDIT.md §2). Entries TTL via `expiresAt`; stale rows are pruned
+ * by `cleanupExpired` which runs from a daily cron.
  */
 export class IdempotencyStorage {
-  async get(userId: string, key: string, method: string, path: string): Promise<IdempotencyRecord | undefined> {
+  async get(userId: string, key: string): Promise<IdempotencyRecord | undefined> {
     const [row] = await db
       .select()
       .from(idempotencyKeys)
-      .where(
-        and(
-          eq(idempotencyKeys.userId, userId),
-          eq(idempotencyKeys.key, key),
-          eq(idempotencyKeys.method, method),
-          eq(idempotencyKeys.path, path),
-        ),
-      );
+      .where(and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, key)));
     if (!row) return undefined;
     if (row.expiresAt.getTime() <= Date.now()) return undefined;
     return { statusCode: row.statusCode, responseBody: row.responseBody };

@@ -49,7 +49,7 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
   }
 
   try {
-    const prior = await storage.idempotency.get(userId, key, req.method, req.path);
+    const prior = await storage.idempotency.get(userId, key);
     if (prior) {
       res.status(prior.statusCode).json(prior.responseBody);
       return;
