@@ -1,1 +1,0 @@
-🎯 **What:** The testing gap addressed: Added tests to `server/routes/workouts/workoutsExport.routes.ts`.\n📊 **Coverage:** Tests cover default CSV export, explicit CSV export, JSON export and handling errors from the export service properly.\n✨ **Result:** The improvement in test coverage allows for confident refactoring without risk of regress in the data export route.

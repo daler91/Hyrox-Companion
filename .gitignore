@@ -7,6 +7,11 @@ vite.config.ts.*
 cypress/videos
 cypress/screenshots
 cypress/downloads
+
+# Stray CLI output / drafts occasionally captured during reviews (S13)
+tsc_utf8.txt
+eslint_utf8.txt
+pr_desc.md
 # Environment variables
 .env
 .env.*

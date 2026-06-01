@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
 
@@ -20,12 +21,17 @@ export function useUnitPreferences(): UnitPreferences {
   const distanceUnit = (preferences?.distanceUnit || "km") as "km" | "miles";
   const showAdherenceInsights = preferences?.showAdherenceInsights ?? true;
 
-  return {
-    weightUnit,
-    distanceUnit,
-    weightLabel: weightUnit === "kg" ? "kg" : "lbs",
-    distanceLabel: distanceUnit === "km" ? "km" : "miles",
-    showAdherenceInsights,
-    isLoading,
-  };
+  // Memoize so consumers (e.g. one observer per timeline card) get a stable
+  // object reference across renders when the prefs haven't changed (S8).
+  return useMemo(
+    () => ({
+      weightUnit,
+      distanceUnit,
+      weightLabel: weightUnit === "kg" ? "kg" : "lbs",
+      distanceLabel: distanceUnit === "km" ? "km" : "miles",
+      showAdherenceInsights,
+      isLoading,
+    }),
+    [weightUnit, distanceUnit, showAdherenceInsights, isLoading],
+  );
 }
