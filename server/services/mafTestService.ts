@@ -7,6 +7,8 @@ import type { MafTestResult, MafWorkoutAnalysis } from "../storage/mafTests";
 export interface MafTestRecord {
   testResult: MafTestResult;
   analysis: MafWorkoutAnalysis | null;
+  /** False when this workout was already tagged and the existing record was returned. */
+  created: boolean;
 }
 
 function inferProtocolType(workout: { duration: number | null }): string {
@@ -36,6 +38,19 @@ export async function recordMafTestFromWorkout(
 
   const workout = await storage.workouts.getWorkoutLog(workoutId, userId);
   if (!workout) throw new AppError(ErrorCode.NOT_FOUND, "Workout not found", 404);
+
+  // Idempotency (Codex P2): tagging the same workout twice — a double-click,
+  // a client retry, or the athlete revisiting the action — must not append
+  // duplicate test/analysis rows that would double-count the effort in the MAF
+  // trend. If this workout is already tagged, return the existing record
+  // untouched. (A DB unique constraint would also close the rare simultaneous
+  // double-submit race, but workoutLogId lives in the conditions JSONB; this
+  // read-check covers the realistic cases without a schema migration.)
+  const existing = await storage.mafTests.getTestResultByWorkoutLogId(userId, workout.id);
+  if (existing) {
+    const existingAnalysis = await storage.mafTests.getWorkoutAnalysisByWorkoutLogId(userId, workout.id);
+    return { testResult: existing, analysis: existingAnalysis ?? null, created: false };
+  }
 
   const ceiling = user.mafHr;
   const testResult = await storage.mafTests.createTestResult({
@@ -70,5 +85,5 @@ export async function recordMafTestFromWorkout(
     });
   }
 
-  return { testResult, analysis };
+  return { testResult, analysis, created: true };
 }

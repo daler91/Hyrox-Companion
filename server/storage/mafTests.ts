@@ -1,5 +1,5 @@
 import { mafTestResults, mafWorkoutAnalysis } from "@shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "../db";
 
@@ -22,6 +22,49 @@ export class MafTestStorage {
 
   async createWorkoutAnalysis(data: InsertMafWorkoutAnalysis): Promise<MafWorkoutAnalysis> {
     const [row] = await db.insert(mafWorkoutAnalysis).values(data).returning();
+    return row;
+  }
+
+  /**
+   * The existing MAF test for a tagged workout, if any. `workoutLogId` lives in
+   * the `conditions` JSONB (the table also serves untagged tests), so the lookup
+   * matches on `conditions->>'workoutLogId'`. Returns the earliest row so a
+   * re-tag resolves to the original record. Used to keep tagging idempotent.
+   */
+  async getTestResultByWorkoutLogId(
+    userId: string,
+    workoutLogId: string,
+  ): Promise<MafTestResult | undefined> {
+    const [row] = await db
+      .select()
+      .from(mafTestResults)
+      .where(
+        and(
+          eq(mafTestResults.userId, userId),
+          sql`${mafTestResults.conditions}->>'workoutLogId' = ${workoutLogId}`,
+        ),
+      )
+      .orderBy(asc(mafTestResults.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  /** The earliest compliance analysis for a tagged workout, if any. */
+  async getWorkoutAnalysisByWorkoutLogId(
+    userId: string,
+    workoutLogId: string,
+  ): Promise<MafWorkoutAnalysis | undefined> {
+    const [row] = await db
+      .select()
+      .from(mafWorkoutAnalysis)
+      .where(
+        and(
+          eq(mafWorkoutAnalysis.userId, userId),
+          eq(mafWorkoutAnalysis.workoutLogId, workoutLogId),
+        ),
+      )
+      .orderBy(asc(mafWorkoutAnalysis.createdAt))
+      .limit(1);
     return row;
   }
 

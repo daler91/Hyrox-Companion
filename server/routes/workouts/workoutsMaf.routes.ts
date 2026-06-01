@@ -22,8 +22,9 @@ export function registerWorkoutMafRoutes(router: Router): void {
     { limiter: rateLimiter("mafTest", 20), middleware: [validateBody(mafTestBodySchema)] },
     async (req: Request<{ id: string }, unknown, z.infer<typeof mafTestBodySchema>>, res: Response) => {
       const userId = getUserId(req);
-      const record = await recordMafTestFromWorkout(userId, req.params.id, req.body);
-      res.status(201).json(record);
+      const { created, ...record } = await recordMafTestFromWorkout(userId, req.params.id, req.body);
+      // 201 on first tag; 200 when an already-tagged workout is returned idempotently.
+      res.status(created ? 201 : 200).json(record);
     },
   );
 
