@@ -52,17 +52,22 @@ export function humanizeApiError(error: unknown): string {
     return raw.trim() || "Something went wrong. Please try again.";
   }
   const status = Number(head);
+  // Never surface 5xx bodies — they can carry internals and the server already
+  // masks them to "Internal Server Error".
+  if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
+  // For 4xx, prefer the server's own actionable message — these are crafted to
+  // be shown (Strava "not connected or token expired", AI-consent "enable it in
+  // Settings", Zod validation errors). Fall back to friendly status-specific
+  // copy only for plain/empty bodies (e.g. a bare "Unauthorized"/"Forbidden").
   const body = raw.slice(colonIdx + 1).trimStart();
-  // Prefer a specific server message for non-session 401s (e.g. Strava sync
-  // returns 401 `{error:"Strava not connected or token expired"}`); fall back to
-  // the session-expiry copy for generic Unauthorized responses.
-  if (status === 401) return extractServerMessage(body) ?? "Your session has expired. Please sign in again.";
+  const serverMessage = extractServerMessage(body);
+  if (serverMessage) return serverMessage;
+  if (status === 401) return "Your session has expired. Please sign in again.";
   if (status === 403) return "You don't have permission to do that.";
   if (status === 404) return "We couldn't find that — it may have already been removed.";
   if (status === 409) return "That conflicts with a more recent change. Refresh and try again.";
   if (status === 413) return "That upload is too large. Try a smaller file or split it up.";
-  if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
-  return extractServerMessage(body) ?? "That didn't work — please check your input and try again.";
+  return "That didn't work — please check your input and try again.";
 }
 
 // CSRF token cache — the server issues a token via GET /api/v1/csrf-token

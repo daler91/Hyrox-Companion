@@ -140,11 +140,19 @@ describe("humanizeApiError", () => {
     expect(humanizeApiError(new Error("413: too big"))).toMatch(/too large/i);
   });
 
-  it("prefers a specific server message for non-session 401s, else the session copy", () => {
+  it("prefers the actionable server message for auth 4xx (401/403), else friendly copy", () => {
+    // 401 — Strava sync "not connected", not an app-session failure.
     expect(
       humanizeApiError(new Error('401: {"error":"Strava not connected or token expired","code":"UNAUTHORIZED"}')),
     ).toBe("Strava not connected or token expired");
     expect(humanizeApiError(new Error("401: Unauthorized"))).toMatch(/session has expired/i);
+    // 403 — AI-consent gate tells the user how to recover.
+    expect(
+      humanizeApiError(
+        new Error('403: {"error":"AI coaching is disabled for this account. Enable it in Settings before using AI features.","code":"AI_COACH_DISABLED"}'),
+      ),
+    ).toBe("AI coaching is disabled for this account. Enable it in Settings before using AI features.");
+    expect(humanizeApiError(new Error("403: Forbidden"))).toMatch(/permission/i);
   });
 
   it("surfaces the server's `error` field for other 4xx (e.g. validation)", () => {
