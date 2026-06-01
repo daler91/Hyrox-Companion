@@ -84,6 +84,27 @@ describe("offlineQueue", () => {
     expect(getPendingCount()).toBe(0);
   });
 
+  it("preserves a mutation enqueued during an active flush instead of dropping it (P2)", async () => {
+    let resolveA!: (res: Response) => void;
+    vi.mocked(apiRequest).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveA = resolve;
+      }),
+    );
+    enqueueMutation("POST", "/api/v1/a", { n: "a" }, { id: "A" });
+    const flush = flushQueue(); // snapshots [A], awaits A's request
+
+    // B is enqueued AFTER doFlushQueue took its snapshot but before it saves.
+    enqueueMutation("POST", "/api/v1/b", { n: "b" }, { id: "B" });
+
+    resolveA(new Response(JSON.stringify({ id: "ok" })));
+    await flush;
+
+    // A synced and removed; B must survive the snapshot-only save so it drains
+    // on the next flush rather than being silently overwritten away.
+    expect(readStoredQueue().map((m) => m.id)).toEqual(["B"]);
+  });
+
   it("dispatches queue-change and sync-complete events", async () => {
     const queueChange = vi.fn();
     const syncComplete = vi.fn();

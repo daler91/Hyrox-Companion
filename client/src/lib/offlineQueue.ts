@@ -178,18 +178,31 @@ export function clearOfflineQueue(): void {
 }
 
 let flushInFlight: Promise<{ synced: number; failed: number; dropped: number }> | null = null;
+let flushRequestedDuringRun = false;
 
 /**
- * Flush the offline queue, coalescing concurrent callers (W12). The `online`
- * event can fire repeatedly during connection flapping; without this guard two
- * overlapping flushes load the same queue snapshot, replay the same mutations,
- * and race on saveQueue — resurrecting already-synced entries. All callers
- * share the single in-flight run.
+ * Flush the offline queue, coalescing concurrent callers (W12) while still
+ * draining mutations enqueued mid-flush (P2). `doFlushQueue` snapshots the queue
+ * at its start, so it can't replay anything queued after — those entries are
+ * preserved (not overwritten) by its merge, and if a caller triggered a flush
+ * during the run we schedule one follow-up drain so they are sent promptly
+ * rather than waiting for the next `online` event. Sharing the in-flight run
+ * also avoids two overlapping flushes racing on saveQueue during flapping.
  */
 export function flushQueue(): Promise<{ synced: number; failed: number; dropped: number }> {
-  if (flushInFlight) return flushInFlight;
+  if (flushInFlight) {
+    flushRequestedDuringRun = true;
+    return flushInFlight;
+  }
+  flushRequestedDuringRun = false;
   flushInFlight = doFlushQueue().finally(() => {
     flushInFlight = null;
+    // A caller triggered a flush mid-run (its mutations weren't in this run's
+    // snapshot). They're preserved in the queue; drain once more to send them.
+    if (flushRequestedDuringRun && getPendingCount() > 0) {
+      flushRequestedDuringRun = false;
+      void flushQueue();
+    }
   });
   return flushInFlight;
 }
@@ -234,7 +247,12 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
     }
   }
 
-  saveQueue(remaining);
+  // Preserve mutations enqueued during this flush: they weren't in our snapshot
+  // so they weren't replayed, and writing back only `remaining` would drop
+  // them. Merge the failed retries with any entries that appeared since (P2).
+  const processedIds = new Set(queue.map((m) => m.id));
+  const enqueuedDuringFlush = getQueue().filter((m) => !processedIds.has(m.id));
+  saveQueue([...remaining, ...enqueuedDuringFlush]);
   if (synced > 0 || dropped > 0) {
     notifySyncComplete({ synced, failed, dropped });
   }

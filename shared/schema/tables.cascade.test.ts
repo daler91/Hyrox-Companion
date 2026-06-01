@@ -10,12 +10,16 @@ import {
   exerciseSets,
   garminConnections,
   idempotencyKeys,
+  mafProfile,
+  mafTestResults,
+  mafWorkoutAnalysis,
   planDays,
   pushSubscriptions,
   stravaConnections,
   timelineAnnotations,
   trainingPlans,
   users,
+  userTrainingStyle,
   workoutLogs,
 } from "./tables";
 
@@ -45,6 +49,11 @@ describe("user-owned tables cascade on DELETE", () => {
     documentChunks,
     aiUsageLogs,
     pushSubscriptions,
+    // Art. 9 health data + training-style history — guard their cascade too (S12).
+    userTrainingStyle,
+    mafProfile,
+    mafTestResults,
+    mafWorkoutAnalysis,
   } as const;
 
   // Tables that are user-scoped transitively through a parent table rather

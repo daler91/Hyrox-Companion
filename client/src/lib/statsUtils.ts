@@ -105,6 +105,7 @@ export function calculateStreak(completedDates: Set<string>): number {
 
 /** Format a duration in seconds as "H:MM:SS" (e.g. 5732 → "1:35:32"). */
 export function formatSecondsToClock(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds)) return "0:00:00";
   const safe = Math.max(0, Math.round(totalSeconds));
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
@@ -116,6 +117,7 @@ export function formatSecondsToClock(totalSeconds: number): string {
 
 /** Format a split in seconds as "M:SS" (e.g. 272 → "4:32"). */
 export function formatSecondsToMmSs(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds)) return "0:00";
   const safe = Math.max(0, Math.round(totalSeconds));
   const minutes = Math.floor(safe / 60);
   const seconds = safe % 60;
