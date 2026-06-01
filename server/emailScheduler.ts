@@ -182,6 +182,8 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications or due MAF tests"] };
     }
 
+    // bearer:disable javascript_lang_logger_leak — logs only enqueue counts
+    // (integers) and a static context tag; no PII or secrets.
     logger.info({ context: "email" }, `Cron: Enqueuing jobs for ${usersToCheck.length} email user(s) + ${dueMafUsers.length} due MAF test(s)`);
 
     // Await every enqueue so reported counts reflect what actually made it into
