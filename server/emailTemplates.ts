@@ -240,9 +240,9 @@ export function buildMafTestReminderEmail(user: User): { subject: string; html: 
   </div>
   <div class="content">
     <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, it's time for a MAF test.</p>
-    <p style="font-size:14px;color:#475569;">Run a fixed distance or time holding your heart rate at or just under your MAF ceiling, then log it and tag it as a MAF test. Comparing your pace at the same heart rate over time is how you'll see your aerobic base improving.</p>
+    <p style="font-size:14px;color:#475569;">Run a fixed distance or time holding your heart rate at or just under your MAF ceiling, then log the run. Comparing your pace at the same heart rate over time is how you'll see your aerobic base improving.</p>
     <div style="margin-top: 24px; text-align: center;">
-      <a href="${getAppUrl()}/log" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">Log your MAF test</a>
+      <a href="${getAppUrl()}/log" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">Log your run</a>
     </div>
   </div>
   <div class="footer">

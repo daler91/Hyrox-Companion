@@ -120,23 +120,23 @@ export async function processMafTestReminder(storage: IStorage, user: User, now:
   if (!fresh) return false;
   user = fresh;
 
-  const dueAt = user.mafBaselineTestScheduledAt;
-  if (user.trainingStyleId !== "maf_method" || dueAt == null || dueAt.getTime() > now.getTime()) {
-    return false;
-  }
+  if (user.trainingStyleId !== "maf_method") return false;
 
-  // One-shot reminder: clear the schedule FIRST so it can't re-fire on the next
-  // cron tick or an overlapping job (the baseline test is scheduled once, on MAF
-  // activation). A transient delivery failure forgoes this nudge rather than
-  // risking duplicate spam.
-  await storage.users.clearMafBaselineTestSchedule(user.id);
+  // Atomically claim the one-shot reminder. The conditional UPDATE clears the
+  // schedule only if it is still set and due, and reports whether THIS run won
+  // the claim. Two overlapping jobs (or a cron re-tick before the first job
+  // finishes) can't both send — only the winner proceeds (Codex P2). A
+  // claimed-but-undelivered reminder is forgone rather than risking duplicate
+  // spam, since the baseline test is scheduled just once on MAF activation.
+  const claimed = await storage.users.claimMafBaselineTest(user.id, now);
+  if (!claimed) return false;
 
   const emailSent = user.emailNotifications ? await sendMafTestReminder(user) : false;
 
   // Push is fire-and-forget and no-ops when the user has no subscription.
   void sendPushToUser(user.id, {
     title: "Time for your MAF test",
-    body: "Run a fixed distance or time at your MAF heart-rate ceiling and log it as a MAF test to track your aerobic progress.",
+    body: "Run a fixed distance or time at your MAF heart-rate ceiling, then log the run to track your aerobic progress.",
     url: "/log",
   });
 

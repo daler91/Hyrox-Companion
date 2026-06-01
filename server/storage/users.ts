@@ -496,11 +496,24 @@ export class UserStorage {
       );
   }
 
-  /** Clear the baseline-test schedule once the reminder has fired (one-shot). */
-  async clearMafBaselineTestSchedule(userId: string): Promise<void> {
-    await db
+  /**
+   * Atomically claim a due baseline-test reminder: clears the schedule only if
+   * it is still set and due, and reports whether THIS call won the claim. Lets
+   * concurrent/duplicate reminder jobs avoid double-sending (Codex P2) — only
+   * the job whose conditional UPDATE affects a row sees `true`.
+   */
+  async claimMafBaselineTest(userId: string, now: Date): Promise<boolean> {
+    const claimed = await db
       .update(users)
       .set({ mafBaselineTestScheduledAt: null })
-      .where(eq(users.id, userId));
+      .where(
+        and(
+          eq(users.id, userId),
+          isNotNull(users.mafBaselineTestScheduledAt),
+          lte(users.mafBaselineTestScheduledAt, now),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
   }
 }

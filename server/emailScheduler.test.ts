@@ -234,16 +234,16 @@ describe('processMafTestReminder', () => {
 
   beforeEach(() => vi.clearAllMocks());
 
-  function storageFor(user: Record<string, unknown>): IStorage {
+  function storageFor(user: Record<string, unknown>, claimed = true): IStorage {
     return {
       users: {
         getUser: vi.fn().mockResolvedValue(user),
-        clearMafBaselineTestSchedule: vi.fn().mockResolvedValue(undefined),
+        claimMafBaselineTest: vi.fn().mockResolvedValue(claimed),
       },
     } as unknown as IStorage;
   }
 
-  it('clears the one-shot schedule and emails when due + opted in', async () => {
+  it('claims the one-shot schedule and emails when the claim wins + opted in', async () => {
     const { sendMafTestReminder } = await import('./email');
     const storage = storageFor({
       id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
@@ -252,26 +252,40 @@ describe('processMafTestReminder', () => {
 
     const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
 
-    expect(storage.users.clearMafBaselineTestSchedule).toHaveBeenCalledWith('u1');
+    expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
     expect(sendMafTestReminder).toHaveBeenCalled();
     expect(sent).toBe(true);
   });
 
-  it('does nothing when the schedule is not yet due', async () => {
+  it('does not email when the claim is lost (not due, or already claimed by another run)', async () => {
     const { sendMafTestReminder } = await import('./email');
     const storage = storageFor({
       id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
       mafBaselineTestScheduledAt: new Date('2026-06-10T12:00:00Z'), emailNotifications: true,
+    }, false);
+
+    const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
+
+    expect(sent).toBe(false);
+    expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
+    expect(sendMafTestReminder).not.toHaveBeenCalled();
+  });
+
+  it('returns false without claiming when the user is no longer on MAF', async () => {
+    const { sendMafTestReminder } = await import('./email');
+    const storage = storageFor({
+      id: 'u1', email: 'a@b.com', trainingStyleId: 'hyrox',
+      mafBaselineTestScheduledAt: dueAt, emailNotifications: true,
     });
 
     const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
 
     expect(sent).toBe(false);
-    expect(storage.users.clearMafBaselineTestSchedule).not.toHaveBeenCalled();
+    expect(storage.users.claimMafBaselineTest).not.toHaveBeenCalled();
     expect(sendMafTestReminder).not.toHaveBeenCalled();
   });
 
-  it('clears but does not email when the user has opted out of email', async () => {
+  it('claims but does not email when the user has opted out of email', async () => {
     const { sendMafTestReminder } = await import('./email');
     const storage = storageFor({
       id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
@@ -280,7 +294,7 @@ describe('processMafTestReminder', () => {
 
     const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
 
-    expect(storage.users.clearMafBaselineTestSchedule).toHaveBeenCalledWith('u1');
+    expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
     expect(sendMafTestReminder).not.toHaveBeenCalled();
     expect(sent).toBe(false);
   });
