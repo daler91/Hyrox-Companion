@@ -203,6 +203,19 @@ describe("rateLimiter", () => {
     apiLimiter(req, res as Response, next); // 2nd api request (blocked)
     expect(res.status).toHaveBeenCalledWith(429);
   });
+
+  it("builds a fail-open limiter for safe-method reads but fail-closed for mutations (W6)", () => {
+    vi.mocked(rateLimit).mockClear();
+    const limiter = rateLimiter("analytics", 5, DEFAULT_WINDOW_MS);
+    limiter({ ...req, method: "GET" } as unknown as Request, res as Response, next); // read → fail-open
+    limiter({ ...req, method: "POST" } as unknown as Request, res as Response, next); // mutation → fail-closed
+
+    const passOnStoreError = vi
+      .mocked(rateLimit)
+      .mock.calls.map((c) => (c[0] as { passOnStoreError?: boolean }).passOnStoreError);
+    expect(passOnStoreError).toContain(true); // GET → fail-open
+    expect(passOnStoreError).toContain(false); // POST → fail-closed
+  });
 });
 
 

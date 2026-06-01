@@ -25,55 +25,62 @@ function createRateLimitStore(category: string, windowMs: number) {
   return new PostgresRateLimitStore(category, windowMs);
 }
 
+// Reads (safe HTTP methods) fail OPEN if the Postgres rate-limit store errors,
+// so a transient store/DB blip can't 500 the read surface; everything else —
+// mutations, and therefore all auth / AI-spend / write routes — fails CLOSED,
+// where allowing unbounded requests during a store outage is the bigger risk.
+// The limiter is selected per request by method (W6). Counts stay unified per
+// category because both instances share the same Postgres store key.
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function buildLimiter(category: string, maxRequests: number, windowMs: number, failOpen: boolean) {
+  const retryAfterSec = Math.ceil(windowMs / 1000);
+  return rateLimit({
+    windowMs,
+    max: maxRequests,
+    store: createRateLimitStore(category, windowMs),
+    passOnStoreError: failOpen,
+    validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
+    // Per-user key, namespaced by category so limits are independent per route group.
+    // Explicit user:/ip: prefixes prevent collision between a userId that
+    // happens to equal a client IP (CODEBASE_AUDIT.md §2).
+    keyGenerator: (req: Request) => {
+      const authReq = req as AuthenticatedRequest;
+      if (authReq.auth?.userId) return `${category}:user:${authReq.auth.userId}`;
+      if (req.ip) return `${category}:ip:${req.ip}`;
+      return "";
+    },
+    // Skip rate-limiting entirely when there is no identifier.
+    skip: (req: Request) => {
+      const authReq = req as AuthenticatedRequest;
+      return !authReq.auth?.userId && !req.ip;
+    },
+    standardHeaders: true,   // RateLimit-* headers (RFC 6585)
+    legacyHeaders: false,     // Disable X-RateLimit-* headers
+    handler: (_req: Request, res: Response) => {
+      res.setHeader("Retry-After", String(retryAfterSec));
+      res.status(429).json({
+        error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
+        code: "RATE_LIMITED",
+      });
+    },
+  });
+}
+
 export function rateLimiter(
   category: string,
   maxRequests: number,
   windowMs: number = DEFAULT_WINDOW_MS,
 ) {
-  const retryAfterSec = Math.ceil(windowMs / 1000);
-  const cacheKey = `${category}:${maxRequests}:${windowMs}`;
-
-  // Return a wrapper closure so that the limiter is evaluated at request time.
-  // This is crucial for test environments where `clearRateLimitBuckets` is called:
-  // routers capture this wrapper at module load, but the inner rateLimit instance
-  // can be destroyed and recreated cleanly.
+  // Return a wrapper closure so the limiter is evaluated at request time. This
+  // is crucial for tests (where `clearRateLimitBuckets` recreates instances)
+  // and lets us pick the fail-open vs fail-closed limiter per request method.
   return (req: Request, res: Response, next: NextFunction) => {
+    const failOpen = SAFE_METHODS.has(req.method);
+    const cacheKey = `${category}:${maxRequests}:${windowMs}:${failOpen ? "open" : "closed"}`;
     if (!limiterCache.has(cacheKey)) {
-      limiterCache.set(
-        cacheKey,
-        rateLimit({
-          windowMs,
-          max: maxRequests,
-          store: createRateLimitStore(category, windowMs),
-          passOnStoreError: false,
-          validate: { default: false }, // Suppress dynamic creation warning since we use it intentionally for tests
-          // Per-user key, namespaced by category so limits are independent per route group.
-          // Explicit user:/ip: prefixes prevent collision between a userId that
-          // happens to equal a client IP (CODEBASE_AUDIT.md §2).
-          keyGenerator: (req: Request) => {
-            const authReq = req as AuthenticatedRequest;
-            if (authReq.auth?.userId) return `${category}:user:${authReq.auth.userId}`;
-            if (req.ip) return `${category}:ip:${req.ip}`;
-            return "";
-          },
-          // Skip rate-limiting entirely when there is no identifier.
-          skip: (req: Request) => {
-            const authReq = req as AuthenticatedRequest;
-            return !authReq.auth?.userId && !req.ip;
-          },
-          standardHeaders: true,   // RateLimit-* headers (RFC 6585)
-          legacyHeaders: false,     // Disable X-RateLimit-* headers
-          handler: (_req: Request, res: Response) => {
-            res.setHeader("Retry-After", String(retryAfterSec));
-            res.status(429).json({
-              error: `Too many requests. Please wait ${retryAfterSec} seconds before trying again.`,
-              code: "RATE_LIMITED",
-            });
-          },
-        }),
-      );
+      limiterCache.set(cacheKey, buildLimiter(category, maxRequests, windowMs, failOpen));
     }
-
     const limiter = limiterCache.get(cacheKey);
     if (!limiter) throw new Error(`Rate limiter not found for ${category}`);
     return limiter(req, res, next);
