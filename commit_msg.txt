@@ -1,0 +1,5 @@
+🧪 [testing improvement] Add tests for useWorkoutReparseTools hook
+
+🎯 What: Added a comprehensive unit test suite for the `useWorkoutReparseTools` hook which handles unstructured workout parsing state and mutations.
+📊 Coverage: Achieved 100% statement and branch coverage by mocking the TanStack React Query `useMutation` hooks, API client responses, and toast notifications. Specifically tested initialization, find unstructured mutations (success and failure), batch reparse mutations (success and failure with cache invalidation handling), and state reset logic.
+✨ Result: Enhanced the reliability of the data-tools setting page components and removed a testing gap.
