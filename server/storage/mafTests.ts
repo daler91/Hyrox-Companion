@@ -15,14 +15,26 @@ export type InsertMafWorkoutAnalysis = typeof mafWorkoutAnalysis.$inferInsert;
  * time.
  */
 export class MafTestStorage {
-  async createTestResult(data: InsertMafTestResult): Promise<MafTestResult> {
-    const [row] = await db.insert(mafTestResults).values(data).returning();
-    return row;
-  }
-
-  async createWorkoutAnalysis(data: InsertMafWorkoutAnalysis): Promise<MafWorkoutAnalysis> {
-    const [row] = await db.insert(mafWorkoutAnalysis).values(data).returning();
-    return row;
+  /**
+   * Persist a MAF test and (when HR data produced one) its compliance analysis
+   * in a single transaction. Either both rows commit or neither does, so a
+   * tagged workout can never be left with a test row but no analysis — a partial
+   * state that would silently drop it from the compliance trend on a later
+   * idempotent re-tag (Codex P2). Pass `analysisData: null` to record a test
+   * with no analysis (e.g. a run logged without heart-rate data).
+   */
+  async createTestWithAnalysis(
+    testData: InsertMafTestResult,
+    analysisData: InsertMafWorkoutAnalysis | null,
+  ): Promise<{ testResult: MafTestResult; analysis: MafWorkoutAnalysis | null }> {
+    return db.transaction(async (tx) => {
+      const [testResult] = await tx.insert(mafTestResults).values(testData).returning();
+      let analysis: MafWorkoutAnalysis | null = null;
+      if (analysisData) {
+        [analysis] = await tx.insert(mafWorkoutAnalysis).values(analysisData).returning();
+      }
+      return { testResult, analysis };
+    });
   }
 
   /**

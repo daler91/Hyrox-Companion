@@ -2,7 +2,7 @@ import { computeMafCompliance } from "@shared/maf";
 
 import { AppError, ErrorCode } from "../errors";
 import { storage } from "../storage";
-import type { MafTestResult, MafWorkoutAnalysis } from "../storage/mafTests";
+import type { InsertMafWorkoutAnalysis, MafTestResult, MafWorkoutAnalysis } from "../storage/mafTests";
 
 export interface MafTestRecord {
   testResult: MafTestResult;
@@ -53,37 +53,44 @@ export async function recordMafTestFromWorkout(
   }
 
   const ceiling = user.mafHr;
-  const testResult = await storage.mafTests.createTestResult({
-    userId,
-    protocolType: opts?.protocolType?.trim() || inferProtocolType(workout),
-    conditions: { source: "tagged_workout", workoutLogId: workout.id },
-    metrics: {
-      durationSeconds: workout.duration ?? null,
-      avgHeartRate: workout.avgHeartrate ?? null,
-      maxHeartRate: workout.maxHeartrate ?? null,
-      mafCeilingUsed: ceiling,
-    },
-    notes: opts?.notes?.trim() || null,
-  });
 
-  // Compliance scoring needs the average HR; record the test either way but
-  // only add an analysis row when HR data is present.
-  let analysis: MafWorkoutAnalysis | null = null;
+  // Compliance scoring needs the average HR; compute an analysis row only when
+  // HR data is present so it can be written together with the test below.
+  let analysisData: InsertMafWorkoutAnalysis | null = null;
   if (workout.avgHeartrate != null) {
     const compliance = computeMafCompliance({
       avgHeartRate: workout.avgHeartrate,
       maxHeartRate: workout.maxHeartrate,
       ceiling,
     });
-    analysis = await storage.mafTests.createWorkoutAnalysis({
+    analysisData = {
       userId,
       workoutLogId: workout.id,
       compliancePct: compliance.compliancePct,
       classification: compliance.classification,
       nextAction: compliance.nextAction,
       analysisDetails: compliance.details,
-    });
+    };
   }
+
+  // Write the test and its analysis atomically so a tagged workout never lands
+  // in a partial state (test row but no analysis) that a later idempotent
+  // re-tag would return as-is, dropping it from the trend (Codex P2).
+  const { testResult, analysis } = await storage.mafTests.createTestWithAnalysis(
+    {
+      userId,
+      protocolType: opts?.protocolType?.trim() || inferProtocolType(workout),
+      conditions: { source: "tagged_workout", workoutLogId: workout.id },
+      metrics: {
+        durationSeconds: workout.duration ?? null,
+        avgHeartRate: workout.avgHeartrate ?? null,
+        maxHeartRate: workout.maxHeartrate ?? null,
+        mafCeilingUsed: ceiling,
+      },
+      notes: opts?.notes?.trim() || null,
+    },
+    analysisData,
+  );
 
   return { testResult, analysis, created: true };
 }

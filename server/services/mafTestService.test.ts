@@ -5,15 +5,13 @@ import { AppError } from "../errors";
 const {
   getUser,
   getWorkoutLog,
-  createTestResult,
-  createWorkoutAnalysis,
+  createTestWithAnalysis,
   getTestResultByWorkoutLogId,
   getWorkoutAnalysisByWorkoutLogId,
 } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getWorkoutLog: vi.fn(),
-  createTestResult: vi.fn(),
-  createWorkoutAnalysis: vi.fn(),
+  createTestWithAnalysis: vi.fn(),
   getTestResultByWorkoutLogId: vi.fn(),
   getWorkoutAnalysisByWorkoutLogId: vi.fn(),
 }));
@@ -23,8 +21,7 @@ vi.mock("../storage", () => ({
     users: { getUser },
     workouts: { getWorkoutLog },
     mafTests: {
-      createTestResult,
-      createWorkoutAnalysis,
+      createTestWithAnalysis,
       getTestResultByWorkoutLogId,
       getWorkoutAnalysisByWorkoutLogId,
     },
@@ -41,8 +38,13 @@ describe("recordMafTestFromWorkout", () => {
     // Default: workout not yet tagged, so the insert path runs.
     getTestResultByWorkoutLogId.mockResolvedValue(undefined);
     getWorkoutAnalysisByWorkoutLogId.mockResolvedValue(undefined);
-    createTestResult.mockImplementation((d) => Promise.resolve({ id: "t1", ...d }));
-    createWorkoutAnalysis.mockImplementation((d) => Promise.resolve({ id: "a1", ...d }));
+    // Echo the persisted rows back, mirroring the atomic write.
+    createTestWithAnalysis.mockImplementation((testData, analysisData) =>
+      Promise.resolve({
+        testResult: { id: "t1", ...testData },
+        analysis: analysisData ? { id: "a1", ...analysisData } : null,
+      }),
+    );
   });
 
   it("rejects when the user isn't on MAF / has no ceiling", async () => {
@@ -57,16 +59,14 @@ describe("recordMafTestFromWorkout", () => {
     await expect(recordMafTestFromWorkout("u1", "w1")).rejects.toMatchObject({ status: 404 });
   });
 
-  it("records a test result + a compliance analysis when HR is present", async () => {
+  it("writes the test + a compliance analysis atomically when HR is present", async () => {
     getUser.mockResolvedValue(mafUser);
     getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: 150, maxHeartrate: 165 });
 
     const result = await recordMafTestFromWorkout("u1", "w1", { notes: "5k test" });
 
-    expect(createTestResult).toHaveBeenCalledWith(
+    expect(createTestWithAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "u1", protocolType: "fixed_time_run", notes: "5k test" }),
-    );
-    expect(createWorkoutAnalysis).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "u1",
         workoutLogId: "w1",
@@ -78,19 +78,18 @@ describe("recordMafTestFromWorkout", () => {
     expect(result.created).toBe(true);
   });
 
-  it("records the test but skips analysis when the workout has no HR data", async () => {
+  it("writes the test with no analysis when the workout has no HR data", async () => {
     getUser.mockResolvedValue(mafUser);
     getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: null, maxHeartrate: null });
 
     const result = await recordMafTestFromWorkout("u1", "w1");
 
-    expect(createTestResult).toHaveBeenCalledOnce();
-    expect(createWorkoutAnalysis).not.toHaveBeenCalled();
+    expect(createTestWithAnalysis).toHaveBeenCalledWith(expect.objectContaining({ userId: "u1" }), null);
     expect(result.analysis).toBeNull();
     expect(result.created).toBe(true);
   });
 
-  it("is idempotent: returns the existing record and inserts nothing when already tagged", async () => {
+  it("is idempotent: returns the existing record and writes nothing when already tagged", async () => {
     getUser.mockResolvedValue(mafUser);
     getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: 150, maxHeartrate: 165 });
     getTestResultByWorkoutLogId.mockResolvedValue({ id: "t-existing", userId: "u1" });
@@ -98,8 +97,7 @@ describe("recordMafTestFromWorkout", () => {
 
     const result = await recordMafTestFromWorkout("u1", "w1", { notes: "retry" });
 
-    expect(createTestResult).not.toHaveBeenCalled();
-    expect(createWorkoutAnalysis).not.toHaveBeenCalled();
+    expect(createTestWithAnalysis).not.toHaveBeenCalled();
     expect(result.created).toBe(false);
     expect(result.testResult).toMatchObject({ id: "t-existing" });
     expect(result.analysis).toMatchObject({ id: "a-existing" });
