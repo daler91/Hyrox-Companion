@@ -121,4 +121,12 @@ describe("usePlanDayExercises parse state scoping", () => {
     expect(toast).toEqual({ title: "Parse failed — try rewording and retry." });
   });
 
+
+  it("handles invalid JSON gracefully when parsing error messages", () => {
+    renderHook(() => usePlanDayExercises("day-1"));
+    const textMutationCfg = mutationConfigs[0] as { errorToast?: (error: unknown) => { title?: string; description?: string } };
+    const toast = textMutationCfg.errorToast?.(new Error('422: {"error":"bad json"'));
+    expect(toast).toEqual({ title: "Parse failed — try rewording and retry." });
+  });
+
 });
