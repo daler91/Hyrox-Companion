@@ -1,6 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import { useIsMutating } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
@@ -42,19 +42,35 @@ export function useExerciseSetsForOwner<TSnapshot>({
   const [activeOwnerId, setActiveOwnerId] = useState(ownerId);
   const markSaved = () => setLastSavedAt(Date.now());
 
+  // Per-set sequence guard (W13): each set PATCH bumps its set's counter on
+  // mutate; onSuccess only writes the server row back if its PATCH is still the
+  // latest in-flight one for that set, so a slower earlier PATCH landing last
+  // can't revert a newer edit's optimistic value.
+  const setPatchSeqRef = useRef<Map<string, number>>(new Map());
+
   const updateSet = useApiMutation({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
     mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
       updateSetRequest(ownerId!, setId, data),
     onMutate: async ({ setId, data }) => {
       if (!ownerId) return undefined;
+      const seq = (setPatchSeqRef.current.get(setId) ?? 0) + 1;
+      setPatchSeqRef.current.set(setId, seq);
       await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });
       const prev = getSnapshot(ownerId);
       patchCachedSets((sets) => sets.map((s) => (s.id === setId ? ({ ...s, ...data }) : s)));
-      return { prev };
+      return { prev, seq, setId };
     },
-    onSuccess: (serverSet) => {
-      patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
+    onSuccess: (serverSet, _vars, ctx) => {
+      const context = ctx as { seq?: number; setId?: string } | undefined;
+      // Ignore a stale response: if a newer PATCH for this set has since been
+      // issued, its optimistic value is the source of truth — don't overwrite
+      // it with this older server row (W13).
+      const isLatestPatch =
+        context?.setId !== undefined && context.seq === setPatchSeqRef.current.get(context.setId);
+      if (isLatestPatch) {
+        patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
+      }
       markSaved();
     },
     onError: (_err, _vars, ctx) => {

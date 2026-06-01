@@ -9,7 +9,8 @@ import {
 import { and, desc, eq, gte, lte, type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
-import { type LoggedExerciseSetWithDate, queryExerciseSetsWithDates } from "./shared";
+import { logger } from "../logger";
+import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates } from "./shared";
 
 export class AnalyticsStorage {
   async getExerciseLoadTags(): Promise<ExerciseLoadTag[]> {
@@ -25,11 +26,28 @@ export class AnalyticsStorage {
     if (from) conditions.push(gte(workoutLogs.date, from));
     if (to) conditions.push(lte(workoutLogs.date, to));
 
-    return await db
+    // Cap the result like its sibling queryExerciseSetsWithDates (W10): the
+    // "all time" analytics view passes no date range, so without a limit this
+    // returns the user's entire workout_logs table. 5000 covers ~14 years of
+    // daily training; warn on truncation so we can offer pagination if hit.
+    const logs = await db
       .select()
       .from(workoutLogs)
       .where(and(...conditions))
-      .orderBy(desc(workoutLogs.date));
+      .orderBy(desc(workoutLogs.date))
+      .limit(MAX_WORKOUT_LOGS_PER_QUERY);
+
+    if (logs.length >= MAX_WORKOUT_LOGS_PER_QUERY) {
+      // bearer:disable javascript_lang_logger_leak — userId is the app-wide
+      // correlation id; limit is a constant and from/to are date strings. No
+      // PII or secrets (mirrors the sibling warn in storage/shared.ts).
+      logger.warn(
+        { userId, limit: MAX_WORKOUT_LOGS_PER_QUERY, from, to },
+        "getWorkoutLogsByDateRange hit row cap — analytics may be truncated; consider narrowing the date range",
+      );
+    }
+
+    return logs;
   }
 
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {

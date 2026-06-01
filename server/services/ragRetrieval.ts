@@ -41,10 +41,15 @@ export async function retrieveCoachingContext(
   let fallbackReason: string | undefined;
 
   try {
-    const hasChunks = await storage.coaching.hasChunksForUser(userId);
+    // Probe chunk presence and stored embedding dimension in parallel (W11):
+    // they're independent reads and the common (has-chunks) RAG path needs
+    // both, so serial probing added a needless round trip on every chat turn.
+    const [hasChunks, storedDim] = await Promise.all([
+      storage.coaching.hasChunksForUser(userId),
+      storage.coaching.getStoredEmbeddingDimension(userId),
+    ]);
 
     if (hasChunks) {
-      const storedDim = await storage.coaching.getStoredEmbeddingDimension(userId);
       if (storedDim !== null && storedDim !== EMBEDDING_DIMENSIONS) {
         log.warn(
           { userId, storedDim, expectedDim: EMBEDDING_DIMENSIONS },

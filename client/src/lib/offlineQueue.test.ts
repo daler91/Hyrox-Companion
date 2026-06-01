@@ -60,6 +60,30 @@ describe("offlineQueue", () => {
     expect(getPendingCount()).toBe(0);
   });
 
+  it("coalesces concurrent flushes into a single in-flight run (W12)", async () => {
+    let resolveRequest!: (res: Response) => void;
+    vi.mocked(apiRequest).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRequest = resolve;
+      }),
+    );
+    enqueueMutation("POST", "/api/v1/workouts", { title: "Queued" }, { id: "coalesce-id" });
+
+    // Two overlapping flushes (e.g. rapid online/online events during flapping)
+    // must share one run, not load the same snapshot and replay twice.
+    const first = flushQueue();
+    const second = flushQueue();
+    expect(second).toBe(first); // same in-flight promise
+
+    resolveRequest(new Response(JSON.stringify({ id: "workout-1" })));
+    const [r1, r2] = await Promise.all([first, second]);
+
+    expect(apiRequest).toHaveBeenCalledTimes(1); // replayed once — no double-send
+    expect(r1).toEqual({ synced: 1, failed: 0, dropped: 0 });
+    expect(r2).toEqual(r1);
+    expect(getPendingCount()).toBe(0);
+  });
+
   it("dispatches queue-change and sync-complete events", async () => {
     const queueChange = vi.fn();
     const syncComplete = vi.fn();

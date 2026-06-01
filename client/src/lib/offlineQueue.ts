@@ -177,7 +177,24 @@ export function clearOfflineQueue(): void {
   notifyQueueChanged();
 }
 
-export async function flushQueue(): Promise<{ synced: number; failed: number; dropped: number }> {
+let flushInFlight: Promise<{ synced: number; failed: number; dropped: number }> | null = null;
+
+/**
+ * Flush the offline queue, coalescing concurrent callers (W12). The `online`
+ * event can fire repeatedly during connection flapping; without this guard two
+ * overlapping flushes load the same queue snapshot, replay the same mutations,
+ * and race on saveQueue — resurrecting already-synced entries. All callers
+ * share the single in-flight run.
+ */
+export function flushQueue(): Promise<{ synced: number; failed: number; dropped: number }> {
+  if (flushInFlight) return flushInFlight;
+  flushInFlight = doFlushQueue().finally(() => {
+    flushInFlight = null;
+  });
+  return flushInFlight;
+}
+
+async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped: number }> {
   const now = Date.now();
   const queue = getQueue();
   if (queue.length === 0) return { synced: 0, failed: 0, dropped: 0 };
