@@ -74,6 +74,13 @@ vi.mock("../AthleteNoteInput", () => ({
   AthleteNoteInput: () => <textarea aria-label="Athlete note" />,
 }));
 
+// Self-contained child with its own auth/query dependencies (covered by
+// mafTrend.helpers.test). Stub it out so these composition tests don't need a
+// QueryClientProvider — it renders nothing for non-MAF users in any case.
+vi.mock("../MafTestTagSection", () => ({
+  MafTestTagSection: () => null,
+}));
+
 afterAll(() => {
   vi.unstubAllGlobals();
 });

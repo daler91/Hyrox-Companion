@@ -6,6 +6,8 @@ export type { ReparseResponse } from "./constants";
 export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
 export type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "./exercises";
 export { exercises } from "./exercises";
+export type { MafTagResponse, MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "./mafTests";
+export { mafTests } from "./mafTests";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
@@ -20,6 +22,7 @@ export { workouts } from "./workouts";
 import { analytics, timeline } from "./analytics";
 import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
+import { mafTests } from "./mafTests";
 import { plans } from "./plans";
 import { timelineAnnotations } from "./timelineAnnotations";
 import { auth, email, garmin, preferences, strava } from "./user";
@@ -39,6 +42,7 @@ export const api = {
   strava,
   garmin,
   email,
+  mafTests,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -65,6 +69,7 @@ export const QUERY_KEYS = {
   customExercises: ["/api/v1/custom-exercises"] as const,
   stravaStatus: ["/api/v1/strava/status"] as const,
   garminStatus: ["/api/v1/garmin/status"] as const,
+  mafTests: ["/api/v1/maf-tests"] as const,
 } as const;
 
 export type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./exerciseSetMutations";

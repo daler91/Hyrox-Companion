@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { BarChart3, Download, FileJson, FileSpreadsheet, Loader2, PieChart, Sparkles, Target, Timer, Trophy } from "lucide-react";
+import { BarChart3, Download, FileJson, FileSpreadsheet, HeartPulse, Loader2, PieChart, Sparkles, Target, Timer, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
+import { MafTrendTab } from "@/components/analytics/MafTrendTab";
 import { ProgressTab } from "@/components/analytics/ProgressTab";
 import { RacePredictorTab } from "@/components/analytics/RacePredictorTab";
 import { TrainingOverviewTab } from "@/components/analytics/TrainingOverviewTab";
@@ -20,6 +21,7 @@ import { PageContainer } from "@/components/ui/PageContainer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { type AnalyticsExportFormat, api, QUERY_KEYS } from "@/lib/api";
@@ -37,6 +39,8 @@ function getExportFilename(response: Response, exportFormat: AnalyticsExportForm
 export default function Analytics() {
   useDocumentTitle("Analytics");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isMaf = user?.trainingStyleId === "maf_method";
   const [dateRange, setDateRange] = useUrlQueryState<DateRange>(
     "range",
     "90",
@@ -149,7 +153,7 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:grid-cols-5 sm:gap-0 sm:overflow-visible">
+        <TabsList className={`mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:gap-0 sm:overflow-visible ${isMaf ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
           <TabsTrigger value="overview" className="shrink-0 sm:shrink" data-testid="tab-overview">
             <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
             Overview
@@ -170,6 +174,12 @@ export default function Analytics() {
             <Timer className="h-4 w-4 mr-2 hidden sm:block" />
             Race Predictor
           </TabsTrigger>
+          {isMaf ? (
+            <TabsTrigger value="maf" className="shrink-0 sm:shrink" data-testid="tab-maf-trend">
+              <HeartPulse className="h-4 w-4 mr-2 hidden sm:block" />
+              MAF Trend
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -191,6 +201,12 @@ export default function Analytics() {
         <TabsContent value="predictor" className="space-y-6">
           <RacePredictorTab />
         </TabsContent>
+
+        {isMaf ? (
+          <TabsContent value="maf" className="space-y-6">
+            <MafTrendTab />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </PageContainer>
   );
