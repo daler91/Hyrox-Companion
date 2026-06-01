@@ -71,162 +71,88 @@ describe("useSuggestions error handling", () => {
   };
 
   describe("getSuggestions error handling", () => {
-    it("handles AiBudgetExceededError correctly", async () => {
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(
-        new AiBudgetExceededError("Budget exceeded", 100, 100)
-      );
-
+    const runMutationTest = async (mockError: Error, expectedMessage: string) => {
+      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(mockError);
       const { result } = renderSuggestionsHook();
       act(() => {
         result.current.suggestionsMutation.mutate();
       });
-
       await waitFor(() => {
         expect(mockAddLocalMessage).toHaveBeenCalledWith(
           expect.objectContaining({
             role: "assistant",
-            content: "You've reached your daily AI usage limit. Please try again later.",
+            content: expectedMessage,
           })
         );
       });
+    };
+
+    it("handles AiBudgetExceededError correctly", async () => {
+      await runMutationTest(
+        new AiBudgetExceededError("Budget exceeded", 100, 100),
+        "You've reached your daily AI usage limit. Please try again later."
+      );
     });
 
     it("handles RateLimitError with retryAfter correctly", async () => {
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(
-        new RateLimitError("Rate limited", 30)
+      await runMutationTest(
+        new RateLimitError("Rate limited", 30),
+        "You're sending requests too quickly. Please wait about 30 seconds and try again."
       );
-
-      const { result } = renderSuggestionsHook();
-      act(() => {
-        result.current.suggestionsMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockAddLocalMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            role: "assistant",
-            content: "You're sending requests too quickly. Please wait about 30 seconds and try again.",
-          })
-        );
-      });
     });
 
     it("handles RateLimitError without retryAfter correctly", async () => {
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(
-        new RateLimitError("Rate limited", null)
+      await runMutationTest(
+        new RateLimitError("Rate limited", null),
+        "You're sending requests too quickly. Please wait a moment and try again."
       );
-
-      const { result } = renderSuggestionsHook();
-      act(() => {
-        result.current.suggestionsMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockAddLocalMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            role: "assistant",
-            content: "You're sending requests too quickly. Please wait a moment and try again.",
-          })
-        );
-      });
     });
 
     it("handles AbortError/TimeoutError correctly", async () => {
-      const abortError = new DOMException("The operation was aborted", "AbortError");
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(abortError);
-
-      const { result } = renderSuggestionsHook();
-      act(() => {
-        result.current.suggestionsMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockAddLocalMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            role: "assistant",
-            content: "Suggestions are taking longer than expected. Please try again in a moment.",
-          })
-        );
-      });
+      await runMutationTest(
+        new DOMException("The operation was aborted", "AbortError"),
+        "Suggestions are taking longer than expected. Please try again in a moment."
+      );
     });
 
     it("handles generic timeout Error correctly", async () => {
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(
-        new Error("The request timed out")
+      await runMutationTest(
+        new Error("The request timed out"),
+        "Suggestions are taking longer than expected. Please try again in a moment."
       );
-
-      const { result } = renderSuggestionsHook();
-      act(() => {
-        result.current.suggestionsMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockAddLocalMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            role: "assistant",
-            content: "Suggestions are taking longer than expected. Please try again in a moment.",
-          })
-        );
-      });
     });
 
     it("handles network Error correctly", async () => {
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(
-        new Error("Failed to fetch data")
+      await runMutationTest(
+        new Error("Failed to fetch data"),
+        "Network error — please check your connection and try again."
       );
-
-      const { result } = renderSuggestionsHook();
-      act(() => {
-        result.current.suggestionsMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockAddLocalMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            role: "assistant",
-            content: "Network error — please check your connection and try again.",
-          })
-        );
-      });
     });
 
     it("handles generic Error correctly", async () => {
-      vi.mocked(api.timeline.getSuggestions).mockRejectedValueOnce(
-        new Error("Something went wrong")
+      await runMutationTest(
+        new Error("Something went wrong"),
+        "Sorry, I couldn't analyze your workouts right now. Please try again."
       );
-
-      const { result } = renderSuggestionsHook();
-      act(() => {
-        result.current.suggestionsMutation.mutate();
-      });
-
-      await waitFor(() => {
-        expect(mockAddLocalMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            role: "assistant",
-            content: "Sorry, I couldn't analyze your workouts right now. Please try again.",
-          })
-        );
-      });
     });
   });
 
   describe("handleApplySuggestion error handling", () => {
+    const mockSuggestion: Suggestion = {
+      workoutId: "workout-1",
+      focus: "Leg Day",
+      date: "2024-01-01",
+      priority: "medium",
+      action: "append",
+      targetField: "mainWorkout",
+      recommendation: "Add squats",
+      rationale: "Good for legs",
+    };
+
     it("handles error when applying suggestion fails", async () => {
       vi.mocked(api.timeline.applySuggestion).mockRejectedValueOnce(
         new Error("Failed to apply")
       );
-
-      const mockSuggestion: Suggestion = {
-        workoutId: "workout-1",
-        focus: "Leg Day",
-        date: "2024-01-01",
-        priority: "medium",
-        action: "append",
-        targetField: "mainWorkout",
-        recommendation: "Add squats",
-        rationale: "Good for legs",
-      };
 
       // Mock timeline with the workout
       const timeline: any = [
@@ -249,17 +175,6 @@ describe("useSuggestions error handling", () => {
     });
 
     it("handles error when workout is not found in timeline", async () => {
-      const mockSuggestion: Suggestion = {
-        workoutId: "workout-1",
-        focus: "Leg Day",
-        date: "2024-01-01",
-        priority: "medium",
-        action: "append",
-        targetField: "mainWorkout",
-        recommendation: "Add squats",
-        rationale: "Good for legs",
-      };
-
       // Empty timeline
       const { result } = renderSuggestionsHook([]);
 
@@ -280,17 +195,6 @@ describe("useSuggestions error handling", () => {
         applied: false,
         message: "Server rejected the suggestion",
       } as any);
-
-      const mockSuggestion: Suggestion = {
-        workoutId: "workout-1",
-        focus: "Leg Day",
-        date: "2024-01-01",
-        priority: "medium",
-        action: "append",
-        targetField: "mainWorkout",
-        recommendation: "Add squats",
-        rationale: "Good for legs",
-      };
 
       const timeline: any = [
         { planDayId: "workout-1" }
