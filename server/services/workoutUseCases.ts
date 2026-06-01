@@ -6,6 +6,7 @@ import { AppError, ErrorCode } from "../errors";
 import { parseExercisesFromText } from "../gemini";
 import { logger } from "../logger";
 import { storage } from "../storage";
+import { findInconsistentHeartRate } from "./heartRateConsistency";
 import { findPersonalRecordAchievements } from "./personalRecordAchievements";
 import { assignWorkoutPlanDay, createWorkoutAndScheduleCoaching, updateWorkout } from "./workoutService";
 
@@ -88,6 +89,20 @@ export async function updateWorkoutUseCase(input: {
   const updateLint = lintWorkoutStructure(structureBlocks, structured);
   if (updateLint.schemaErrors.length > 0) {
     throw new AppError(ErrorCode.VALIDATION_ERROR, updateLint.schemaErrors[0]?.message ?? "Structured workout has schema errors.", 400);
+  }
+
+  // The update route schema can only compare HR fields present in the same
+  // PATCH body, so a one-sided change (e.g. only maxHeartrate) could otherwise
+  // persist an impossible pair against the stored counterpart. Merge the patch
+  // over the existing values and reject an inconsistent result.
+  if ("avgHeartrate" in updateData || "maxHeartrate" in updateData) {
+    const existing = await storage.workouts.getWorkoutLog(input.workoutId, input.userId);
+    if (existing) {
+      const heartRateError = findInconsistentHeartRate(updateData, existing);
+      if (heartRateError) {
+        throw new AppError(ErrorCode.VALIDATION_ERROR, heartRateError, 400);
+      }
+    }
   }
 
   return updateWorkout(input.workoutId, updateData, structured, input.userId, structureBlocks);
