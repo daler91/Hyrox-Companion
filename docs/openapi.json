@@ -86,8 +86,8 @@
           "distanceMeters": {
             "type": "number",
             "nullable": true,
-            "minimum": -8388608,
-            "maximum": 8388607
+            "minimum": 0,
+            "maximum": 1000000
           },
           "elevationGain": {
             "type": "number",
@@ -98,14 +98,14 @@
           "avgHeartrate": {
             "type": "integer",
             "nullable": true,
-            "minimum": -2147483648,
-            "maximum": 2147483647
+            "minimum": 20,
+            "maximum": 250
           },
           "maxHeartrate": {
             "type": "integer",
             "nullable": true,
-            "minimum": -2147483648,
-            "maximum": 2147483647
+            "minimum": 20,
+            "maximum": 250
           },
           "avgSpeed": {
             "type": "number",
@@ -832,8 +832,8 @@
               "distanceMeters": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 1000000
               },
               "elevationGain": {
                 "type": "number",
@@ -844,14 +844,14 @@
               "avgHeartrate": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 20,
+                "maximum": 250
               },
               "maxHeartrate": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 20,
+                "maximum": 250
               },
               "avgSpeed": {
                 "type": "number",
@@ -1268,8 +1268,8 @@
               "distanceMeters": {
                 "type": "number",
                 "nullable": true,
-                "minimum": -8388608,
-                "maximum": 8388607
+                "minimum": 0,
+                "maximum": 1000000
               },
               "elevationGain": {
                 "type": "number",
@@ -1280,14 +1280,14 @@
               "avgHeartrate": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 20,
+                "maximum": 250
               },
               "maxHeartrate": {
                 "type": "integer",
                 "nullable": true,
-                "minimum": -2147483648,
-                "maximum": 2147483647
+                "minimum": 20,
+                "maximum": 250
               },
               "avgSpeed": {
                 "type": "number",
