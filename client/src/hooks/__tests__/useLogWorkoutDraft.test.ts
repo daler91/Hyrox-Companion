@@ -106,6 +106,58 @@ describe("useLogWorkoutDraft", () => {
     expect(loaded?.step).toBe(3);
   });
 
+  it("round-trips manual distance and heart-rate fields", () => {
+    saveLogWorkoutDraft(userKey, {
+      title: "Zone 2 run",
+      date: "2026-04-11",
+      freeText: "",
+      notes: "",
+      rpe: 4,
+      durationMinutes: "50",
+      distance: "8.5",
+      avgHeartrate: "142",
+      maxHeartrate: "151",
+      useTextMode: false,
+      exerciseBlocks: ["run__1"],
+      exerciseData: {},
+      blockCounter: 1,
+    });
+
+    const loaded = loadLogWorkoutDraft(userKey);
+    expect(loaded?.distance).toBe("8.5");
+    expect(loaded?.avgHeartrate).toBe("142");
+    expect(loaded?.maxHeartrate).toBe("151");
+  });
+
+  it("loads v3 drafts with blank distance and heart rate", () => {
+    globalThis.window.localStorage.setItem(
+      `fitai-log-workout-draft:${userKey}`,
+      JSON.stringify({
+        version: 3,
+        userKey,
+        savedAt: Date.now(),
+        title: "Older draft",
+        date: "2026-04-11",
+        freeText: "Run 30 minutes",
+        notes: "",
+        rpe: null,
+        durationMinutes: "30",
+        useTextMode: true,
+        exerciseBlocks: [],
+        exerciseData: {},
+        structureBlocks: [],
+        blockCounter: 0,
+        step: 3,
+      }),
+    );
+
+    const loaded = loadLogWorkoutDraft(userKey);
+    expect(loaded?.durationMinutes).toBe("30");
+    expect(loaded?.distance).toBe("");
+    expect(loaded?.avgHeartrate).toBe("");
+    expect(loaded?.maxHeartrate).toBe("");
+  });
+
   it("isolates drafts per userKey", () => {
     saveLogWorkoutDraft("user-a", {
       title: "A's workout",

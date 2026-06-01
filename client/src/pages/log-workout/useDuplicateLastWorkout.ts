@@ -11,6 +11,9 @@ interface UseDuplicateLastWorkoutOptions {
   readonly setDate: (value: string) => void;
   readonly setRpe: (value: number | null) => void;
   readonly setDurationMinutes: (value: string) => void;
+  readonly setDistance: (value: string) => void;
+  readonly setAvgHeartrate: (value: string) => void;
+  readonly setMaxHeartrate: (value: string) => void;
   readonly setTitle: (value: string) => void;
   readonly setNotes: (value: string) => void;
   readonly setFreeText: (value: string) => void;
@@ -29,6 +32,9 @@ export function useDuplicateLastWorkout({
   setDate,
   setRpe,
   setDurationMinutes,
+  setDistance,
+  setAvgHeartrate,
+  setMaxHeartrate,
   setTitle,
   setNotes,
   setFreeText,
@@ -43,6 +49,11 @@ export function useDuplicateLastWorkout({
       setDate(format(new Date(), "yyyy-MM-dd"));
       setRpe(null);
       setDurationMinutes("");
+      // Distance/HR are per-session measurements (like RPE and duration), so
+      // clear them rather than carrying yesterday's numbers into today's copy.
+      setDistance("");
+      setAvgHeartrate("");
+      setMaxHeartrate("");
       // The server stores the user-facing title in `focus`; the form's
       // "title" input binds to the same field on save.
       setTitle(latest.focus ?? "");

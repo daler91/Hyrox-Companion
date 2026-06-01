@@ -56,6 +56,133 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.payload.duration).toBe(47);
   });
 
+  it("converts a manually entered distance (km) to meters", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      distance: "5",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBe(5000);
+  });
+
+  it("converts a manually entered distance (miles) to meters", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      distanceUnit: "miles",
+      freeText: "easy run",
+      distance: "3.1",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBe(4989);
+  });
+
+  it("parses manually entered average and max heart rate", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "145",
+      maxHeartrate: "178",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.avgHeartrate).toBe(145);
+    expect(result.payload.maxHeartrate).toBe(178);
+  });
+
+  it("omits distance and heart rate when not entered", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBeUndefined();
+    expect(result.payload.avgHeartrate).toBeUndefined();
+    expect(result.payload.maxHeartrate).toBeUndefined();
+  });
+
+  it("treats non-numeric or negative distance as not entered", () => {
+    for (const distance of ["abc", "-5"]) {
+      const result = buildWorkoutSavePayload({
+        ...baseInput,
+        freeText: "easy run",
+        distance,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload.distanceMeters).toBeUndefined();
+    }
+  });
+
+  it("rejects an out-of-range heart rate before saving", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "300",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/heart rate/i);
+  });
+
+  it("rejects a max heart rate below the average before saving", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "180",
+      maxHeartrate: "150",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/max heart rate/i);
+  });
+
+  it("rejects a distance above the server cap before saving", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      distance: "2000", // 2000 km -> 2,000,000 m, over the 1,000,000 m cap
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/distance/i);
+  });
+
+  it("parses full numeric distance input including exponent notation", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      distance: "1e1", // 10 km
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBe(10000);
+  });
+
+  it("rejects a fractional heart rate instead of truncating it", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "145.9",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/whole number/i);
+  });
+
   it("uses structured blocks and reports missing-field warnings", () => {
     const exercise: StructuredExercise = {
       exerciseName: "custom",

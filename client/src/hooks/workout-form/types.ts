@@ -9,6 +9,9 @@ export interface WorkoutFormInitialValues {
   notes?: string;
   rpe?: number | null;
   durationMinutes?: string;
+  distance?: string;
+  avgHeartrate?: string;
+  maxHeartrate?: string;
   planId?: string | null;
   planDayId?: string | null;
 }

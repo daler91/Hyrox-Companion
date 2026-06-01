@@ -26,6 +26,13 @@ interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerci
   readonly setRpe: (value: number | null) => void;
   readonly durationMinutes: string;
   readonly setDurationMinutes: (value: string) => void;
+  readonly distance: string;
+  readonly setDistance: (value: string) => void;
+  readonly avgHeartrate: string;
+  readonly setAvgHeartrate: (value: string) => void;
+  readonly maxHeartrate: string;
+  readonly setMaxHeartrate: (value: string) => void;
+  readonly distanceLabel: string;
   readonly planId: string | null;
   readonly setPlanId: (value: string | null) => void;
   readonly planDayId: string | null;
@@ -68,6 +75,13 @@ export function LogWorkoutStepperLayout({
   setRpe,
   durationMinutes,
   setDurationMinutes,
+  distance,
+  setDistance,
+  avgHeartrate,
+  setAvgHeartrate,
+  maxHeartrate,
+  setMaxHeartrate,
+  distanceLabel,
   planId,
   setPlanId,
   planDayId,
@@ -203,6 +217,13 @@ export function LogWorkoutStepperLayout({
             setRpe={setRpe}
             durationMinutes={durationMinutes}
             setDurationMinutes={setDurationMinutes}
+            distance={distance}
+            setDistance={setDistance}
+            avgHeartrate={avgHeartrate}
+            setAvgHeartrate={setAvgHeartrate}
+            maxHeartrate={maxHeartrate}
+            setMaxHeartrate={setMaxHeartrate}
+            distanceLabel={distanceLabel}
             planId={planId}
             setPlanId={setPlanId}
             planDayId={planDayId}

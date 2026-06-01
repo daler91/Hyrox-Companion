@@ -49,6 +49,9 @@ describe("useDuplicateLastWorkout", () => {
     const setPlanId = vi.fn();
     const setPlanDayId = vi.fn();
     const setDurationMinutes = vi.fn();
+    const setDistance = vi.fn();
+    const setAvgHeartrate = vi.fn();
+    const setMaxHeartrate = vi.fn();
 
     const { result } = renderHook(
       () =>
@@ -56,6 +59,9 @@ describe("useDuplicateLastWorkout", () => {
           setDate: vi.fn(),
           setRpe: vi.fn(),
           setDurationMinutes,
+          setDistance,
+          setAvgHeartrate,
+          setMaxHeartrate,
           setTitle: vi.fn(),
           setNotes: vi.fn(),
           setFreeText: vi.fn(),
@@ -75,6 +81,9 @@ describe("useDuplicateLastWorkout", () => {
       expect(setPlanId).toHaveBeenCalledWith(null);
       expect(setPlanDayId).toHaveBeenCalledWith(null);
       expect(setDurationMinutes).toHaveBeenCalledWith("");
+      expect(setDistance).toHaveBeenCalledWith("");
+      expect(setAvgHeartrate).toHaveBeenCalledWith("");
+      expect(setMaxHeartrate).toHaveBeenCalledWith("");
     });
   });
 });

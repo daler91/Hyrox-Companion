@@ -4,6 +4,7 @@ import {
   generatePlanInputSchema,
   importPlanRequestSchema,
   parseExercisesFromImageRequestSchema,
+  updateWorkoutLogSchema,
 } from "./schema";
 
 describe("importPlanRequestSchema validation", () => {
@@ -140,5 +141,23 @@ describe("generatePlanInputSchema validation", () => {
       startDate: "2026-05-04",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("workout log manual distance/heart-rate bounds", () => {
+  it("rejects out-of-range heart rates", () => {
+    expect(updateWorkoutLogSchema.safeParse({ avgHeartrate: 300 }).success).toBe(false);
+    expect(updateWorkoutLogSchema.safeParse({ avgHeartrate: 10 }).success).toBe(false);
+    expect(updateWorkoutLogSchema.safeParse({ maxHeartrate: 251 }).success).toBe(false);
+  });
+
+  it("accepts physiological heart rates and allows clearing via null", () => {
+    expect(updateWorkoutLogSchema.safeParse({ avgHeartrate: 145, maxHeartrate: 178 }).success).toBe(true);
+    expect(updateWorkoutLogSchema.safeParse({ avgHeartrate: null }).success).toBe(true);
+  });
+
+  it("rejects a negative distance and accepts a valid one", () => {
+    expect(updateWorkoutLogSchema.safeParse({ distanceMeters: -1 }).success).toBe(false);
+    expect(updateWorkoutLogSchema.safeParse({ distanceMeters: 5000 }).success).toBe(true);
   });
 });
