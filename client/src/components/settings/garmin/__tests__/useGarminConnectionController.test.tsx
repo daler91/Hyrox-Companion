@@ -113,7 +113,7 @@ describe("useGarminConnectionController", () => {
     it("should clear email and password on successful connection", () => {
       // Setup mutation to immediately call onSuccess callback
       mockConnectGarminMutation.mutate.mockImplementation((_: any, options: any) => {
-        if (options && options.onSuccess) {
+        if (options?.onSuccess) {
           options.onSuccess();
         }
       });

@@ -2,7 +2,7 @@ import type { InsertTimelineAnnotation, TimelineAnnotationType } from "@shared/s
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useTimelineAnnotationMutations, useTimelineAnnotations } from "./useTimelineAnnotationMutations";
 

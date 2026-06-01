@@ -50,7 +50,7 @@ function createExpectedEntry(workout: CreatedWorkout, overrides?: Partial<Timeli
     calories: workout.calories,
     distanceMeters: workout.distanceMeters,
     ...overrides,
-  } as TimelineEntry;
+  };
 }
 
 describe('buildLoggedTimelineEntry', () => {
