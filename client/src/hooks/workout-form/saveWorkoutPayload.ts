@@ -40,6 +40,40 @@ function parseOptionalDistanceMeters(
   return Math.round(userDistanceToMeters(userValue, distanceUnit));
 }
 
+// Mirror the server bounds in insertWorkoutLogSchema so out-of-range manual
+// metrics are caught before we mutate or queue a save — otherwise online users
+// only see a generic failure after the request, and offline users get a
+// queued-success toast for a save that will be rejected on replay.
+const MIN_HEART_RATE = 20;
+const MAX_HEART_RATE = 250;
+const MAX_DISTANCE_METERS = 1_000_000;
+
+function validateManualMetrics(
+  distance: string | undefined,
+  avgHeartrate: string | undefined,
+  maxHeartrate: string | undefined,
+  distanceUnit: string,
+): string | null {
+  const distanceMeters = parseOptionalDistanceMeters(distance, distanceUnit);
+  if (distanceMeters != null && distanceMeters > MAX_DISTANCE_METERS) {
+    return "That distance looks too large — please double-check it.";
+  }
+  const avg = parseOptionalInt(avgHeartrate);
+  const max = parseOptionalInt(maxHeartrate);
+  for (const [value, label] of [
+    [avg, "Average"],
+    [max, "Max"],
+  ] as const) {
+    if (value != null && (value < MIN_HEART_RATE || value > MAX_HEART_RATE)) {
+      return `${label} heart rate must be between ${MIN_HEART_RATE} and ${MAX_HEART_RATE} bpm.`;
+    }
+  }
+  if (avg != null && max != null && max < avg) {
+    return "Max heart rate can't be lower than average heart rate.";
+  }
+  return null;
+}
+
 interface BuildWorkoutSavePayloadInput {
   readonly title: string;
   readonly date: string;
@@ -312,6 +346,10 @@ export function buildWorkoutSavePayload({
   distanceUnit,
 }: BuildWorkoutSavePayloadInput): SavePayloadResult {
   const effectiveTitle = title.trim() || "Workout";
+  const metricsError = validateManualMetrics(distance, avgHeartrate, maxHeartrate, distanceUnit);
+  if (metricsError) {
+    return { ok: false, description: metricsError };
+  }
   const hasStructured = exerciseBlocks.length > 0 || incomingStructureBlocks.length > 0;
   const basePayload = buildBasePayload({
     title: effectiveTitle,

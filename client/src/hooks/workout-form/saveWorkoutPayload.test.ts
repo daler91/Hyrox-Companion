@@ -122,6 +122,43 @@ describe("buildWorkoutSavePayload", () => {
     }
   });
 
+  it("rejects an out-of-range heart rate before saving", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "300",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/heart rate/i);
+  });
+
+  it("rejects a max heart rate below the average before saving", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "180",
+      maxHeartrate: "150",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/max heart rate/i);
+  });
+
+  it("rejects a distance above the server cap before saving", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      distance: "2000", // 2000 km -> 2,000,000 m, over the 1,000,000 m cap
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/distance/i);
+  });
+
   it("uses structured blocks and reports missing-field warnings", () => {
     const exercise: StructuredExercise = {
       exerciseName: "custom",
