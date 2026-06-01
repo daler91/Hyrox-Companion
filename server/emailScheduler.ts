@@ -1,6 +1,6 @@
 import type { User } from "@shared/schema";
 
-import { type MissedWorkoutData,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
+import { type MissedWorkoutData, sendMafTestReminder,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
 import { logger } from "./logger";
 import { sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
@@ -113,6 +113,36 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   return success;
 }
 
+export async function processMafTestReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
+  // Re-fetch so a style switch / reschedule between enqueue and run is honoured
+  // (W4 — race between cron scan and job execution).
+  const fresh = await storage.users.getUser(user.id);
+  if (!fresh) return false;
+  user = fresh;
+
+  const dueAt = user.mafBaselineTestScheduledAt;
+  if (user.trainingStyleId !== "maf_method" || dueAt == null || dueAt.getTime() > now.getTime()) {
+    return false;
+  }
+
+  // One-shot reminder: clear the schedule FIRST so it can't re-fire on the next
+  // cron tick or an overlapping job (the baseline test is scheduled once, on MAF
+  // activation). A transient delivery failure forgoes this nudge rather than
+  // risking duplicate spam.
+  await storage.users.clearMafBaselineTestSchedule(user.id);
+
+  const emailSent = user.emailNotifications ? await sendMafTestReminder(user) : false;
+
+  // Push is fire-and-forget and no-ops when the user has no subscription.
+  void sendPushToUser(user.id, {
+    title: "Time for your MAF test",
+    body: "Run a fixed distance or time at your MAF heart-rate ceiling and log it as a MAF test to track your aerobic progress.",
+    url: "/log",
+  });
+
+  return emailSent;
+}
+
 function wantsEmail(user: User, kind: "weeklySummary" | "missedReminder"): boolean {
   if (!user.emailNotifications) return false;
   if (kind === "weeklySummary") return user.emailWeeklySummary === true;
@@ -145,14 +175,14 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
       logger.info({ context: "email" }, `Marked ${markedMissed} past planned day(s) as missed`);
     }
 
+    const now = new Date();
     const usersToCheck = await storage.users.getUsersWithEmailNotifications();
-    if (usersToCheck.length === 0) {
-      return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications enabled"] };
+    const dueMafUsers = await storage.users.getUsersWithDueMafBaselineTest(now);
+    if (usersToCheck.length === 0 && dueMafUsers.length === 0) {
+      return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications or due MAF tests"] };
     }
 
-    logger.info({ context: "email" }, `Cron: Enqueuing email jobs for ${usersToCheck.length} user(s)`);
-
-    const now = new Date();
+    logger.info({ context: "email" }, `Cron: Enqueuing jobs for ${usersToCheck.length} email user(s) + ${dueMafUsers.length} due MAF test(s)`);
 
     // Await every enqueue so reported counts reflect what actually made it into
     // the queue (CODEBASE_AUDIT.md §5b). Fire-and-forget would overreport when
@@ -176,6 +206,13 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
         ops.push(sendJobNoRetry("send-missed-reminder", { userId: user.id }));
         meta.push({ userId: user.id, jobName: "send-missed-reminder" });
       }
+    }
+
+    // MAF baseline-test reminders — a separate scan since due users may be
+    // push-only (not in the email-notifications set above).
+    for (const user of dueMafUsers) {
+      ops.push(sendJobNoRetry("send-maf-test-reminder", { userId: user.id }));
+      meta.push({ userId: user.id, jobName: "send-maf-test-reminder" });
     }
 
     const settled = await Promise.allSettled(ops);

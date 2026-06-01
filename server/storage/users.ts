@@ -18,7 +18,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lt, lte, or } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -480,5 +480,27 @@ export class UserStorage {
       .select()
       .from(users)
       .where(and(eq(users.emailNotifications, true), isNotNull(users.email)));
+  }
+
+  /** Users whose one-time baseline MAF test reminder is due (still on MAF). */
+  async getUsersWithDueMafBaselineTest(now: Date): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.trainingStyleId, "maf_method"),
+          isNotNull(users.mafBaselineTestScheduledAt),
+          lte(users.mafBaselineTestScheduledAt, now),
+        ),
+      );
+  }
+
+  /** Clear the baseline-test schedule once the reminder has fired (one-shot). */
+  async clearMafBaselineTestSchedule(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ mafBaselineTestScheduledAt: null })
+      .where(eq(users.id, userId));
   }
 }

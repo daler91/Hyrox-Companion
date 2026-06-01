@@ -6,7 +6,7 @@ import { type Job,PgBoss } from "pg-boss";
 
 import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
 import { pool } from "./db";
-import { processMissedWorkoutReminder,processWeeklySummary } from "./emailScheduler";
+import { processMafTestReminder,processMissedWorkoutReminder, processWeeklySummary } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
@@ -213,7 +213,7 @@ async function registerUserEmailWorker({
   queueName,
   process,
 }: {
-  readonly queueName: "send-weekly-summary" | "send-missed-reminder";
+  readonly queueName: "send-weekly-summary" | "send-missed-reminder" | "send-maf-test-reminder";
   readonly process: (context: Awaited<ReturnType<typeof requireUserFromJob>>) => Promise<boolean>;
 }) {
   await queue.createQueue(queueName);
@@ -325,6 +325,12 @@ export async function startQueue() {
     queueName: "send-missed-reminder",
     process: async (context) =>
       context ? processMissedWorkoutReminder(storage, context.user, new Date()) : false,
+  });
+
+  await registerUserEmailWorker({
+    queueName: "send-maf-test-reminder",
+    process: async (context) =>
+      context ? processMafTestReminder(storage, context.user, new Date()) : false,
   });
 
   await queue.createQueue("plan-generation");

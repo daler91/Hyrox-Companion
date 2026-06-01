@@ -216,3 +216,40 @@ ${workoutItems}
 
   return { subject, html };
 }
+
+export function buildMafTestReminderEmail(user: User): { subject: string; html: string } {
+  const name = getUserName(user);
+  const subject = "Time for your MAF test";
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #0f172a; max-width: 600px; margin: 0 auto; padding: 20px; }
+  .header { text-align: center; margin-bottom: 30px; }
+  .header h1 { color: #0f172a; margin-bottom: 5px; }
+  .header p { color: #64748b; margin-top: 0; }
+  .content { background: #f8fafc; padding: 24px; border-radius: 8px; }
+  .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Time for your MAF test</h1>
+    <p>Check in on your aerobic progress</p>
+  </div>
+  <div class="content">
+    <p style="font-size:16px;color:#334155;">Hey ${sanitizeHtml(name)}, it's time for a MAF test.</p>
+    <p style="font-size:14px;color:#475569;">Run a fixed distance or time holding your heart rate at or just under your MAF ceiling, then log it and tag it as a MAF test. Comparing your pace at the same heart rate over time is how you'll see your aerobic base improving.</p>
+    <div style="margin-top: 24px; text-align: center;">
+      <a href="${getAppUrl()}/log" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">Log your MAF test</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p>You're receiving this because you enabled email reminders in your fitai.coach preferences.</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, html };
+}
