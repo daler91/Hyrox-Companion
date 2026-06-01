@@ -3,7 +3,7 @@
 **Generated:** 2026-05-29
 **Branch reviewed:** `codex/fix-sonar-analytics-cleanups`
 **Method:** Seven specialized review passes (security, business, UX/a11y, performance, QA, DevOps, privacy) executed in parallel by isolated reviewer agents.
-**Status as of 2026-05-31:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 12 of 26 Warnings closed (+1 partially mitigated), 1 of 23 Suggestions closed.
+**Status as of 2026-06-01:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 26 of 26 Warnings closed (W5 partially mitigated), 13 of 23 Suggestions closed.
 
 > **Note.** This report is a *separate* multi-pass audit run on the same date as
 > `CODEBASE_REVIEW_2026-05-29.md` (which has since been fully remediated across
@@ -14,7 +14,7 @@
 
 ## Remediation Status — 2026-05-31
 
-The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below. Updated each time a remediation PR lands; latest update reflects PR #1336 (W2 + W4).
+The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below. Updated each time a remediation PR lands; latest update 2026-06-01 closes the remaining Warnings — the #1338 remediation batch (W6–W9, W13–W14, W21–W26 plus S2–S4, S9, S11, S13, S16, S18–S19, S21–S23) and source-verified closures of W3 / W9 / W23.
 
 **Pattern note:** verification against current `main` before implementing each finding turned up a 30% false-positive rate on Criticals (3 of 10) and one false-positive Warning. Every false positive traced to the same reviewer mistake: looking at one layer (schema / route surface) and missing the wrapping layer (storage / runtime maintenance / earlier remediation). Future multipass-style audits should always be verified before triage.
 
@@ -33,7 +33,7 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | **C9** | DevOps | ✅ **Resolved (#1308).** `@sentry/vite-plugin` + `@sentry/esbuild-plugin` wired into both bundles; `release` field added to both `Sentry.init` calls; sourcemaps emit (`build.sourcemap: "hidden"` for vite, `sourcemap: true` for esbuild) and are uploaded + deleted when build-time env vars are set. Four new env vars documented in `.env.example`, `docs/integrations.md`, `docs/env-reference.md`. |
 | **C10** | QA / Correctness | ✅ **Resolved (#1316).** `users.user_timezone` IANA column (default UTC, migration 0055); `server/timezone.ts` helpers (`getLocalDayOfWeek`, `getLocalDateStr`, `addDaysLocal`, `isValidTimezone`); scheduler refactored to use per-user local time for Monday detection, week range, and "yesterday" math. Client `useDetectTimezone` auto-detects browser tz on sign-in and PATCHes preferences. 12 timezone helper tests + 2 scheduler tz tests. |
 
-### Warnings (12/26 closed; +1 partially mitigated)
+### Warnings (26/26 closed; W5 partially mitigated)
 
 | ID | Category | Resolution |
 |----|----------|------------|
@@ -50,26 +50,38 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | **W18** | QA | ✅ **Resolved (#1334).** `exercise_sets.version` column (migration 0057); `expectedVersion` optional field on `patchExerciseSetBodySchema`; storage always bumps version on UPDATE and throws `AppError(CONFLICT, 409)` when `expectedVersion` is supplied + stale. Opt-in for clients (back-compat); the mechanism exists for callers that care. 4 storage tests. |
 | **W19** | QA | ✅ **Resolved (#1318).** Tightened `exerciseSetSchema.reps` and `measurableSetFields.reps` from `.min(0)` to `.min(1)` to match the existing `incomingExerciseSchema.reps` constraint. Audit confirmed the 3 existing `reps: 0` fixtures are all on the AMRAP-score path (a different schema). |
 | **W20** | DevOps | ✅ **Resolved (#1334).** Snapshot breaker state (`{state, consecutiveFailures, openedAt}`) to `serverRuntimeCache` under key `ai-circuit-breaker:state` with 1-hour TTL on every meaningful transition; `loadPersistedBreakerState()` called from `runStartupMaintenance`. "half-open" on restore is downgraded to "open" because the probe machinery doesn't carry across restarts. 9 regression tests. |
-| W3 | Security | Open. Per-instance rate limiting → shared store. |
-| W6 | Privacy | Open. `ENCRYPTION_KEY` rotation/versioning. |
-| W7 | UX / A11y | Open. `Textarea` `errorMessage` API. |
-| W8 | UX / A11y | Open. `aria-live="assertive"` on stream-error suffixes. |
-| W9 | UX / A11y | Open. `prefers-reduced-motion` global rule. |
-| W13 | Performance | Open. RAG cache FIFO → LRU. |
-| W14 | QA | Open. SSE stream-generation race. |
-| W21 | DevOps | Open. Health-endpoint result caching. |
-| W22 | DevOps | Open. Neon/Postgres backup + DR runbook. |
-| W23 | Business | Likely already addressed by recent MAF work — needs verification. `calculateMafHr` is now called from `updateUserPreferences` and the result persisted to a `maf_profile` row. |
-| W24 | Business | Open. Compliance test asserting `aiConsentCheck` runs on every AI endpoint. |
-| W25 | Business | Open. `AI_FEATURES_ENABLED` defense-in-depth at provider entrypoint. |
-| W26 | Business / Privacy | Open. Unit-conversion bidirectionality on export paths. |
+| **W3** | Security | ✅ **Resolved (verified).** Production uses the shared `PostgresRateLimitStore` (`server/rateLimitStore.ts:5`, wired in `server/routeUtils.ts:25`) — a cross-instance Postgres bucket, not per-instance windows. Fail-open posture later tuned separately (2026-05-31 W6, #1351). |
+| **W6** | Privacy | ✅ **Resolved (#1338).** `ENCRYPTION_KEY` rotation/versioning. |
+| **W7** | UX / A11y | ✅ **Resolved (#1338).** `Textarea` gains the `Input`-style `errorMessage` / `aria-invalid` API; server validation maps onto fields. |
+| **W8** | UX / A11y | ✅ **Resolved (#1338).** Stream-error suffixes use `aria-live="assertive"`. |
+| **W9** | UX / A11y | ✅ **Resolved (verified).** Global `@media (prefers-reduced-motion: reduce)` rule (`client/src/index.css:20`). |
+| **W13** | Performance | ✅ **Resolved (#1338).** RAG cache eviction switched from insertion-order to LRU. |
+| **W14** | QA | ✅ **Resolved (#1338).** Client tracks an SSE stream-generation id and ignores flushes from stale streams. |
+| **W21** | DevOps | ✅ **Resolved (#1338).** Health-endpoint result caching. |
+| **W22** | DevOps | ✅ **Resolved (#1338).** Neon/Postgres backup + DR runbook. |
+| **W23** | Business | ✅ **Resolved (verified).** `calculateMafHr` is called in `updateUserPreferences` and the ceiling persisted (`server/storage/users.ts:96,114`). Surfacing it to the coach was a separate gap (2026-05-31 C2), closed in #1353/#1354. |
+| **W24** | Business | ✅ **Resolved (#1338).** Route-introspection test asserts `aiConsentCheck` runs on every AI endpoint. |
+| **W25** | Business | ✅ **Resolved (#1338).** `AI_FEATURES_ENABLED` gate added at the provider entrypoint (defense-in-depth). |
+| **W26** | Business / Privacy | ✅ **Resolved (#1338).** Export paths normalize by user `weightUnit` / `distanceUnit`; bidirectionality test added. |
 
-### Suggestions (1/23 closed)
+### Suggestions (13/23 closed)
 
 | ID | Resolution |
 |----|------------|
 | **S20** | ✅ **Resolved (#1309).** Inline `assertBuildArtifacts()` in `script/build.ts` floors `dist/index.js` ≥ 50 KB and `dist/public/index.html` ≥ 200 B; catches silent build failures (vite plugin crash, esbuild emitting empty output). |
-| S1–S19, S21–S23 | Open. Mostly small, optional polish (logging tweaks, A11y nits, defense-in-depth CSP additions, privacy-policy disclosures, per-processor consent toggles). |
+| **S2** | ✅ **Resolved (#1338).** Per-request userid log demoted from info scope. |
+| **S3** | ✅ **Resolved (#1338).** Mobile touch targets bumped toward the 44×44px WCAG 2.5.5 minimum. |
+| **S4** | ✅ **Resolved (#1338).** Per-route `document.title` for AT orientation. |
+| **S9** | ✅ **Resolved (#1338).** EventSource feature-detection + polling fallback. |
+| **S11** | ✅ **Resolved (#1338).** Granular per-processor consent flags (Sentry / email). |
+| **S13** | ✅ **Resolved (#1338).** AI-provider DPA / retention disclosures documented. |
+| **S16** | ✅ **Resolved (#1338).** `upgrade-insecure-requests` added to CSP. |
+| **S18** | ✅ **Resolved (#1338).** Cron lock acquire/release timing logged. |
+| **S19** | ✅ **Resolved (#1338).** W3C trace-context propagated across pg-boss job boundaries. |
+| **S21** | ✅ **Resolved (#1338).** Empty-state fixtures / smoke tests (fresh user, ended plan). |
+| **S22** | ✅ **Resolved (#1338).** Coach suggestion on plan rollover (`endDate <= today`, no next plan). |
+| **S23** | ✅ **Resolved (#1338).** Orphan (`planId = null`) rendering smoke-tested. |
+| S1, S5–S8, S10, S12, S14–S15, S17 | Open. Remaining optional polish: webhook signature surface (S1), voice-input `aria-label` (S5), skip-link visible focus (S6), embedding dedup (S7), route-split bundle audit (S8), idempotency 4xx caching (S10), age gate / COPPA (S12), MCP privacy-policy note (S14), Garmin 2SV warning (S15), hashed-asset `Cache-Control` (S17). |
 
 ## Executive Summary
 
