@@ -159,6 +159,18 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.description).toMatch(/distance/i);
   });
 
+  it("rejects a fractional heart rate instead of truncating it", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "145.9",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.description).toMatch(/whole number/i);
+  });
+
   it("uses structured blocks and reports missing-field warnings", () => {
     const exercise: StructuredExercise = {
       exerciseName: "custom",

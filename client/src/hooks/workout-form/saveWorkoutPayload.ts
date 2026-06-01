@@ -11,15 +11,16 @@ import type { SaveWorkoutInput } from "./types";
 
 /**
  * Parse an optional integer field (e.g. heart rate) from a form string.
- * Blank or non-numeric input means "not entered" → null, so we never coerce an
- * empty field to a meaningful 0 bpm.
+ * Blank, non-numeric, or fractional input means "not entered" → null. Using
+ * Number (not parseInt) avoids silently truncating a value like "145.9" → 145,
+ * and we never coerce an empty field to a meaningful 0 bpm.
  */
 function parseOptionalInt(value: string | undefined): number | null {
   if (value == null) return null;
   const trimmed = value.trim();
   if (trimmed === "") return null;
-  const parsed = Number.parseInt(trimmed, 10);
-  return Number.isFinite(parsed) ? parsed : null;
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) ? parsed : null;
 }
 
 /**
@@ -58,16 +59,24 @@ function validateManualMetrics(
   if (distanceMeters != null && distanceMeters > MAX_DISTANCE_METERS) {
     return "That distance looks too large — please double-check it.";
   }
-  const avg = parseOptionalInt(avgHeartrate);
-  const max = parseOptionalInt(maxHeartrate);
-  for (const [value, label] of [
-    [avg, "Average"],
-    [max, "Max"],
+  for (const [raw, label] of [
+    [avgHeartrate, "Average"],
+    [maxHeartrate, "Max"],
   ] as const) {
-    if (value != null && (value < MIN_HEART_RATE || value > MAX_HEART_RATE)) {
+    if (raw == null || raw.trim() === "") continue;
+    const parsed = Number(raw.trim());
+    // Reject fractional/non-numeric input rather than letting it be silently
+    // truncated (e.g. 145.9 -> 145), which would persist a value the user
+    // never entered.
+    if (!Number.isInteger(parsed)) {
+      return `${label} heart rate must be a whole number.`;
+    }
+    if (parsed < MIN_HEART_RATE || parsed > MAX_HEART_RATE) {
       return `${label} heart rate must be between ${MIN_HEART_RATE} and ${MAX_HEART_RATE} bpm.`;
     }
   }
+  const avg = parseOptionalInt(avgHeartrate);
+  const max = parseOptionalInt(maxHeartrate);
   if (avg != null && max != null && max < avg) {
     return "Max heart rate can't be lower than average heart rate.";
   }
