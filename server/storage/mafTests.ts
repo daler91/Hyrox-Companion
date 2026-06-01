@@ -80,6 +80,36 @@ export class MafTestStorage {
     return row;
   }
 
+  /**
+   * Remove the MAF test (and its compliance analysis) recorded for a tagged
+   * workout, in a single transaction — the inverse of `createTestWithAnalysis`
+   * for a `tagged_workout` source. The analysis carries `workoutLogId` as a
+   * column; the test keeps it inside the `conditions` JSONB, so match it exactly
+   * as `getTestResultByWorkoutLogId` does. Returns true when a test row was
+   * removed, false when the workout wasn't tagged (so the route can 404).
+   */
+  async deleteTestForWorkout(userId: string, workoutLogId: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      await tx
+        .delete(mafWorkoutAnalysis)
+        .where(
+          and(
+            eq(mafWorkoutAnalysis.userId, userId),
+            eq(mafWorkoutAnalysis.workoutLogId, workoutLogId),
+          ),
+        );
+      const result = await tx
+        .delete(mafTestResults)
+        .where(
+          and(
+            eq(mafTestResults.userId, userId),
+            sql`${mafTestResults.conditions}->>'workoutLogId' = ${workoutLogId}`,
+          ),
+        );
+      return result.rowCount != null && result.rowCount > 0;
+    });
+  }
+
   async listTestResults(userId: string, limit = 20): Promise<MafTestResult[]> {
     return db
       .select()

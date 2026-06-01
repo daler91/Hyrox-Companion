@@ -26,6 +26,11 @@ export const mafTests = {
       ? typedRequest<MafTagResponse>("POST", `/api/v1/workouts/${workoutId}/maf-test`)
       : typedRequest<MafTagResponse>("POST", `/api/v1/workouts/${workoutId}/maf-test`, payload),
 
+  // Untag a workout: removes its MAF test (and compliance analysis). The inverse
+  // of `tagWorkout`, for undoing an accidental tag.
+  untagWorkout: (workoutId: string) =>
+    typedRequest<{ success: true }>("DELETE", `/api/v1/workouts/${workoutId}/maf-test`),
+
   // MAF test history + per-test compliance analysis for the trend view.
   list: () => typedRequest<MafTestsListResponse>("GET", "/api/v1/maf-tests"),
 } as const;

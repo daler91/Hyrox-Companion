@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, CheckCircle2, Loader2 } from "lucide-react";
+import { Activity, CheckCircle2, Loader2, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { isWorkoutTagged } from "@/components/analytics/mafTrend.helpers";
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useApiMutation } from "@/hooks/useApiMutation";
@@ -32,6 +34,15 @@ export function MafTestTagSection({ workoutLogId }: { readonly workoutLogId: str
     errorToast: "Couldn't tag as MAF test",
   });
 
+  const untagMutation = useApiMutation({
+    mutationFn: () => api.mafTests.untagWorkout(workoutLogId as string),
+    invalidateQueries: [QUERY_KEYS.mafTests],
+    successToast: "Removed from MAF trend",
+    errorToast: "Couldn't remove MAF test",
+  });
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   if (!isMaf || !workoutLogId) return null;
 
   const alreadyTagged = isWorkoutTagged(data, workoutLogId);
@@ -42,9 +53,26 @@ export function MafTestTagSection({ workoutLogId }: { readonly workoutLogId: str
       <section className="space-y-2" data-testid={`maf-test-tag-${workoutLogId}`}>
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">MAF test</p>
         {alreadyTagged ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`maf-test-tagged-${workoutLogId}`}>
-            <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-            Tracked in your MAF trend
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`maf-test-tagged-${workoutLogId}`}>
+              <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+              Tracked in your MAF trend
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmOpen(true)}
+              disabled={untagMutation.isPending}
+              data-testid={`maf-test-untag-button-${workoutLogId}`}
+            >
+              {untagMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              Remove
+            </Button>
           </div>
         ) : (
           <>
@@ -68,6 +96,17 @@ export function MafTestTagSection({ workoutLogId }: { readonly workoutLogId: str
           </>
         )}
       </section>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Remove MAF test?"
+        description="This removes the workout from your MAF trend, including its compliance score. You can tag it again later."
+        confirmText="Remove"
+        onConfirm={() => untagMutation.mutate()}
+        isPending={untagMutation.isPending}
+        isDestructive
+        confirmTestId={`maf-test-untag-confirm-${workoutLogId}`}
+      />
     </>
   );
 }
