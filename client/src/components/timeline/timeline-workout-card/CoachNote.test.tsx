@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CoachNote } from "./CoachNote";
 
@@ -155,5 +155,73 @@ describe("CoachNote", () => {
     expect(toggle).toHaveFocus();
     fireEvent.click(toggle); // <button> handles Enter/Space via native click
     expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+  it("handles invalid updatedAt gracefully by returning null for updatedText", () => {
+    render(<CoachNote {...baseProps} source="rag" updatedAt="invalid-date" />);
+    // When date is invalid, it should fall back to not rendering the updated time
+    const toggle = screen.getByTestId("coach-note-toggle-plan-day-1");
+    expect(toggle).not.toHaveTextContent(/updated/);
+  });
+  it("handles station gaps correctly with truncation", () => {
+    render(
+      <CoachNote
+        {...baseProps}
+        source="rag"
+        inputsUsed={{
+          ...baseProps.inputsUsed,
+          stationGaps: ["Gap 1", "Gap 2", "Gap 3"]
+        }}
+      />
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByText("Gaps: Gap 1, Gap 2…")).toBeInTheDocument();
+  });
+
+  it("handles progression flags correctly (single and multiple)", () => {
+    const { unmount } = render(
+      <CoachNote
+        {...baseProps}
+        source="rag"
+        inputsUsed={{
+          ...baseProps.inputsUsed,
+          progressionFlags: ["Flag 1"]
+        }}
+      />
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByText("Progression: 1 flag")).toBeInTheDocument();
+    unmount();
+
+    render(
+      <CoachNote
+        {...baseProps}
+        source="rag"
+        inputsUsed={{
+          ...baseProps.inputsUsed,
+          progressionFlags: ["Flag 1", "Flag 2"]
+        }}
+      />
+    );
+    fireEvent.click(screen.getByTestId("coach-note-toggle-plan-day-1"));
+    expect(screen.getByText("Progression: 2 flags")).toBeInTheDocument();
+  });
+
+  it("stops propagation on key down", () => {
+    render(<CoachNote {...baseProps} source="rag" />);
+    const toggle = screen.getByTestId("coach-note-toggle-plan-day-1");
+    toggle.focus();
+    const spy = vi.fn();
+    toggle.addEventListener('keydown', (e) => { e.stopPropagation = spy; });
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("handles stopPropagation on wrapper button click", () => {
+    render(<CoachNote {...baseProps} source="rag" />);
+    const toggle = screen.getByTestId("coach-note-toggle-plan-day-1");
+    const spy = vi.fn();
+    toggle.addEventListener('click', (e) => { e.stopPropagation = spy; });
+    fireEvent.click(toggle);
+    expect(spy).toHaveBeenCalled();
   });
 });
