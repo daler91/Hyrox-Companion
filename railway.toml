@@ -4,7 +4,11 @@ buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
 
 [deploy]
 startCommand = "node script/start.js"
-healthcheckPath = "/api/v1/health"
+# Liveness probe (W7): dependency-free, so a transient DB blip can't fail the
+# healthcheck and churn restarts under restartPolicyType=on_failure. The
+# readiness probe (/api/v1/health, which 503s on DB/vector-DB failure) is for
+# load-balancer traffic gating, not restarts.
+healthcheckPath = "/api/v1/health/live"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3

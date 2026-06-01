@@ -96,7 +96,14 @@ export function configureObservability(deps: { init?: typeof Sentry.init; getCli
   const getClient = deps.getClient ?? Sentry.getClient;
 
   if (!env.SENTRY_DSN) {
-    logger.info({ context: "sentry" }, "SENTRY_DSN not set — error reports disabled");
+    // In production a missing DSN is a real observability blind spot — errors go
+    // unreported — so surface it at warn; in dev/test it's expected (info). W18.
+    const msg = "SENTRY_DSN not set — error reports disabled";
+    if (env.NODE_ENV === "production") {
+      logger.warn({ context: "sentry" }, msg);
+    } else {
+      logger.info({ context: "sentry" }, msg);
+    }
     return;
   }
 
