@@ -1,4 +1,5 @@
 import { lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureLintIssue } from "@shared/schema";
+import { userDistanceToMeters } from "@shared/unitConversion";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { configToStructureBlock } from "@/components/workout-structure";
@@ -8,6 +9,37 @@ import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 
 import type { SaveWorkoutInput } from "./types";
 
+/**
+ * Parse an optional integer field (e.g. heart rate) from a form string.
+ * Blank or non-numeric input means "not entered" → null, so we never coerce an
+ * empty field to a meaningful 0 bpm.
+ */
+function parseOptionalInt(value: string | undefined): number | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Convert an optional distance field — entered in the user's display unit — into
+ * SI meters for the `distance_meters` column (which stores canonical meters, the
+ * same unit Strava/Garmin sync writes). Blank, non-numeric, or negative input
+ * means "not entered" → null.
+ */
+function parseOptionalDistanceMeters(
+  value: string | undefined,
+  distanceUnit: string,
+): number | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const userValue = Number.parseFloat(trimmed);
+  if (!Number.isFinite(userValue) || userValue < 0) return null;
+  return Math.round(userDistanceToMeters(userValue, distanceUnit));
+}
+
 interface BuildWorkoutSavePayloadInput {
   readonly title: string;
   readonly date: string;
@@ -15,6 +47,9 @@ interface BuildWorkoutSavePayloadInput {
   readonly notes: string;
   readonly rpe: number | null;
   readonly durationMinutes?: string;
+  readonly distance?: string;
+  readonly avgHeartrate?: string;
+  readonly maxHeartrate?: string;
   readonly planDayId?: string | null;
   readonly exerciseBlocks: string[];
   readonly exerciseData: Record<string, StructuredExercise>;
@@ -42,6 +77,10 @@ interface PayloadBaseInput {
   readonly notes: string;
   readonly rpe: number | null;
   readonly durationMinutes?: string;
+  readonly distance?: string;
+  readonly avgHeartrate?: string;
+  readonly maxHeartrate?: string;
+  readonly distanceUnit: string;
   readonly planDayId?: string | null;
 }
 
@@ -51,16 +90,28 @@ function buildBasePayload({
   notes,
   rpe,
   durationMinutes,
+  distance,
+  avgHeartrate,
+  maxHeartrate,
+  distanceUnit,
   planDayId,
 }: PayloadBaseInput): Omit<SaveWorkoutInput, "mainWorkout"> {
   const normalizedDuration = normalizeDurationMinutes(durationMinutes);
+  const distanceMeters = parseOptionalDistanceMeters(distance, distanceUnit);
+  const avgHr = parseOptionalInt(avgHeartrate);
+  const maxHr = parseOptionalInt(maxHeartrate);
   return {
     title,
     date,
     focus: title,
     notes: notes || null,
     rpe: rpe || null,
+    // Optional fields are omitted when not entered (same convention as
+    // `duration`) so the create payload stays minimal.
     ...(normalizedDuration == null ? {} : { duration: normalizedDuration }),
+    ...(distanceMeters == null ? {} : { distanceMeters }),
+    ...(avgHr == null ? {} : { avgHeartrate: avgHr }),
+    ...(maxHr == null ? {} : { maxHeartrate: maxHr }),
     ...(planDayId ? { planDayId } : {}),
   };
 }
@@ -250,6 +301,9 @@ export function buildWorkoutSavePayload({
   notes,
   rpe,
   durationMinutes,
+  distance,
+  avgHeartrate,
+  maxHeartrate,
   planDayId,
   exerciseBlocks,
   exerciseData,
@@ -265,6 +319,10 @@ export function buildWorkoutSavePayload({
     notes,
     rpe,
     durationMinutes,
+    distance,
+    avgHeartrate,
+    maxHeartrate,
+    distanceUnit,
     planDayId,
   });
 
@@ -275,6 +333,10 @@ export function buildWorkoutSavePayload({
       notes,
       rpe,
       durationMinutes,
+      distance,
+      avgHeartrate,
+      maxHeartrate,
+      distanceUnit,
       planDayId,
       freeText,
     });

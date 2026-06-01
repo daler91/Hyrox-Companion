@@ -39,6 +39,29 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
       .max(10, "RPE must be at most 10")
       .optional()
       .nullable(),
+    // Manual distance/HR entry. distanceMeters is canonical meters (matching
+    // Strava/Garmin sync); HR bounds reject obvious typos while covering all
+    // physiological values.
+    distanceMeters: z
+      .number()
+      .min(0, "Distance must be at least 0")
+      .max(1_000_000, "Distance is too large")
+      .optional()
+      .nullable(),
+    avgHeartrate: z
+      .number()
+      .int()
+      .min(20, "Average heart rate looks too low")
+      .max(250, "Average heart rate looks too high")
+      .optional()
+      .nullable(),
+    maxHeartrate: z
+      .number()
+      .int()
+      .min(20, "Max heart rate looks too low")
+      .max(250, "Max heart rate looks too high")
+      .optional()
+      .nullable(),
   });
 
 export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({

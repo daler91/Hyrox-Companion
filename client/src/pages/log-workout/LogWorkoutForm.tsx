@@ -29,7 +29,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const handleCancel = useCallback(() => setLocation("/"), [setLocation]);
-  const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
+  const { weightUnit, distanceUnit, weightLabel, distanceLabel } = useUnitPreferences();
   const initialDraft = useInitialLogWorkoutDraft(userKey);
 
   const {
@@ -70,6 +70,12 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setRpe,
     durationMinutes,
     setDurationMinutes,
+    distance,
+    setDistance,
+    avgHeartrate,
+    setAvgHeartrate,
+    maxHeartrate,
+    setMaxHeartrate,
     planId,
     setPlanId,
     planDayId,
@@ -93,6 +99,9 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           notes: initialDraft.notes,
           rpe: initialDraft.rpe,
           durationMinutes: initialDraft.durationMinutes,
+          distance: initialDraft.distance,
+          avgHeartrate: initialDraft.avgHeartrate,
+          maxHeartrate: initialDraft.maxHeartrate,
           planId: initialDraft.planId,
           planDayId: initialDraft.planDayId,
         }
@@ -114,6 +123,9 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setDate,
     setRpe,
     setDurationMinutes,
+    setDistance,
+    setAvgHeartrate,
+    setMaxHeartrate,
     setTitle,
     setNotes,
     setFreeText,
@@ -134,6 +146,9 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     notes,
     rpe,
     durationMinutes,
+    distance,
+    avgHeartrate,
+    maxHeartrate,
     planId,
     planDayId,
     useTextMode,
@@ -167,6 +182,13 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       setRpe={setRpe}
       durationMinutes={durationMinutes}
       setDurationMinutes={setDurationMinutes}
+      distance={distance}
+      setDistance={setDistance}
+      avgHeartrate={avgHeartrate}
+      setAvgHeartrate={setAvgHeartrate}
+      maxHeartrate={maxHeartrate}
+      setMaxHeartrate={setMaxHeartrate}
+      distanceLabel={distanceLabel}
       planId={planId}
       setPlanId={setPlanId}
       planDayId={planDayId}

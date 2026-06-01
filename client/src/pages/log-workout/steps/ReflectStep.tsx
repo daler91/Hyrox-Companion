@@ -16,6 +16,13 @@ interface ReflectStepProps {
   readonly setRpe: (value: number | null) => void;
   readonly durationMinutes: string;
   readonly setDurationMinutes: (value: string) => void;
+  readonly distance: string;
+  readonly setDistance: (value: string) => void;
+  readonly avgHeartrate: string;
+  readonly setAvgHeartrate: (value: string) => void;
+  readonly maxHeartrate: string;
+  readonly setMaxHeartrate: (value: string) => void;
+  readonly distanceLabel: string;
   readonly planId: string | null;
   readonly setPlanId: (value: string | null) => void;
   readonly planDayId: string | null;
@@ -42,6 +49,13 @@ export function ReflectStep({
   setRpe,
   durationMinutes,
   setDurationMinutes,
+  distance,
+  setDistance,
+  avgHeartrate,
+  setAvgHeartrate,
+  maxHeartrate,
+  setMaxHeartrate,
+  distanceLabel,
   planId,
   setPlanId,
   planDayId,
@@ -96,6 +110,50 @@ export function ReflectStep({
               value={durationMinutes}
               onChange={(event) => setDurationMinutes(event.target.value)}
               data-testid="input-duration-minutes"
+            />
+          </div>
+          <div className="space-y-2 pt-3">
+            <Label htmlFor="workout-distance">Distance ({distanceLabel})</Label>
+            <Input
+              id="workout-distance"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              placeholder={distanceLabel === "miles" ? "3.1" : "5"}
+              value={distance}
+              onChange={(event) => setDistance(event.target.value)}
+              data-testid="input-distance"
+            />
+          </div>
+          <div className="space-y-2 pt-3">
+            <Label htmlFor="workout-avg-heartrate">Average heart rate (bpm)</Label>
+            <Input
+              id="workout-avg-heartrate"
+              type="number"
+              inputMode="numeric"
+              min={20}
+              max={250}
+              step={1}
+              placeholder="145"
+              value={avgHeartrate}
+              onChange={(event) => setAvgHeartrate(event.target.value)}
+              data-testid="input-avg-heartrate"
+            />
+          </div>
+          <div className="space-y-2 pt-3">
+            <Label htmlFor="workout-max-heartrate">Max heart rate (bpm)</Label>
+            <Input
+              id="workout-max-heartrate"
+              type="number"
+              inputMode="numeric"
+              min={20}
+              max={250}
+              step={1}
+              placeholder="178"
+              value={maxHeartrate}
+              onChange={(event) => setMaxHeartrate(event.target.value)}
+              data-testid="input-max-heartrate"
             />
           </div>
         </CardContent>

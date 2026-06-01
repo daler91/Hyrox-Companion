@@ -30,6 +30,9 @@ interface UseLogWorkoutDraftPersistenceOptions {
   readonly notes: string;
   readonly rpe: number | null;
   readonly durationMinutes: string;
+  readonly distance: string;
+  readonly avgHeartrate: string;
+  readonly maxHeartrate: string;
   readonly planId?: string | null;
   readonly planDayId?: string | null;
   readonly useTextMode: boolean;
@@ -49,6 +52,9 @@ export function useLogWorkoutDraftPersistence({
   notes,
   rpe,
   durationMinutes,
+  distance,
+  avgHeartrate,
+  maxHeartrate,
   planId,
   planDayId,
   useTextMode,
@@ -79,6 +85,9 @@ export function useLogWorkoutDraftPersistence({
         notes,
         rpe,
         durationMinutes,
+        distance,
+        avgHeartrate,
+        maxHeartrate,
         planId,
         planDayId,
         useTextMode,
@@ -98,6 +107,9 @@ export function useLogWorkoutDraftPersistence({
     notes,
     rpe,
     durationMinutes,
+    distance,
+    avgHeartrate,
+    maxHeartrate,
     planId,
     planDayId,
     useTextMode,

@@ -13,6 +13,13 @@ export function useWorkoutFormState(initialValues?: WorkoutFormInitialValues) {
   const [notes, setNotes] = useState(initialValues?.notes ?? "");
   const [rpe, setRpe] = useState<number | null>(initialValues?.rpe ?? null);
   const [durationMinutes, setDurationMinutes] = useState(initialValues?.durationMinutes ?? "");
+  // Optional post-workout metrics entered by hand (manual loggers without a
+  // synced wearable). Stored as strings so "" cleanly means "not entered" and
+  // number/null coercion happens once at payload-build time. Distance is held
+  // in the user's display unit and converted to meters on save.
+  const [distance, setDistance] = useState(initialValues?.distance ?? "");
+  const [avgHeartrate, setAvgHeartrate] = useState(initialValues?.avgHeartrate ?? "");
+  const [maxHeartrate, setMaxHeartrate] = useState(initialValues?.maxHeartrate ?? "");
   const [planId, setPlanId] = useState<string | null>(initialValues?.planId ?? null);
   const [planDayId, setPlanDayId] = useState<string | null>(initialValues?.planDayId ?? null);
 
@@ -29,6 +36,12 @@ export function useWorkoutFormState(initialValues?: WorkoutFormInitialValues) {
     setRpe,
     durationMinutes,
     setDurationMinutes,
+    distance,
+    setDistance,
+    avgHeartrate,
+    setAvgHeartrate,
+    maxHeartrate,
+    setMaxHeartrate,
     planId,
     setPlanId,
     planDayId,

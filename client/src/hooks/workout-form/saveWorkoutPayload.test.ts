@@ -56,6 +56,72 @@ describe("buildWorkoutSavePayload", () => {
     expect(result.payload.duration).toBe(47);
   });
 
+  it("converts a manually entered distance (km) to meters", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      distance: "5",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBe(5000);
+  });
+
+  it("converts a manually entered distance (miles) to meters", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      distanceUnit: "miles",
+      freeText: "easy run",
+      distance: "3.1",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBe(4989);
+  });
+
+  it("parses manually entered average and max heart rate", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+      avgHeartrate: "145",
+      maxHeartrate: "178",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.avgHeartrate).toBe(145);
+    expect(result.payload.maxHeartrate).toBe(178);
+  });
+
+  it("omits distance and heart rate when not entered", () => {
+    const result = buildWorkoutSavePayload({
+      ...baseInput,
+      freeText: "easy run",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.distanceMeters).toBeUndefined();
+    expect(result.payload.avgHeartrate).toBeUndefined();
+    expect(result.payload.maxHeartrate).toBeUndefined();
+  });
+
+  it("treats non-numeric or negative distance as not entered", () => {
+    for (const distance of ["abc", "-5"]) {
+      const result = buildWorkoutSavePayload({
+        ...baseInput,
+        freeText: "easy run",
+        distance,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.payload.distanceMeters).toBeUndefined();
+    }
+  });
+
   it("uses structured blocks and reports missing-field warnings", () => {
     const exercise: StructuredExercise = {
       exerciseName: "custom",
