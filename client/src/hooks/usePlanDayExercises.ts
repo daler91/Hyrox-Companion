@@ -316,6 +316,8 @@ export function usePlanDayExercises(planDayId: string | null) {
     structureBlocks,
     getExerciseSetsWithPendingPatches,
     isLoading: exercisesQuery.isLoading,
+    isError: exercisesQuery.isError,
+    error: exercisesQuery.error,
     isSaving,
     lastSavedAt,
     updateSet,
