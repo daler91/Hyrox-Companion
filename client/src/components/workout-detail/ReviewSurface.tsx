@@ -17,6 +17,7 @@ import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
+import { MafTestTagSection } from "./MafTestTagSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
@@ -337,6 +338,7 @@ function ReviewDetailsColumn({
         showPlannedDiffs={showPlannedDiffs}
       />
       <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
+      <MafTestTagSection workoutLogId={workoutLogId} />
       <ReviewEffortNotes
         isStrava={isStrava}
         rpe={rpe}
