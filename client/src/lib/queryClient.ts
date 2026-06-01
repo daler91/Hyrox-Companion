@@ -42,18 +42,27 @@ function extractServerMessage(body: string): string | null {
  */
 export function humanizeApiError(error: unknown): string {
   const raw = error instanceof Error ? error.message : "";
-  const match = /^(\d{3}):\s*([\s\S]*)$/.exec(raw);
-  if (!match) {
+  // apiRequest throws `${status}: ${body}` where status is a 3-digit HTTP code.
+  // Parse it without a regex (string ops only) so this stays off SonarCloud's
+  // "regex is security-sensitive" hotspot rule — equivalent and ReDoS-free.
+  const colonIdx = raw.indexOf(":");
+  const head = colonIdx >= 0 ? raw.slice(0, colonIdx) : "";
+  const isHttpStatus = head.length === 3 && [...head].every((c) => c >= "0" && c <= "9");
+  if (!isHttpStatus) {
     return raw.trim() || "Something went wrong. Please try again.";
   }
-  const status = Number(match[1]);
-  if (status === 401) return "Your session has expired. Please sign in again.";
+  const status = Number(head);
+  const body = raw.slice(colonIdx + 1).trimStart();
+  // Prefer a specific server message for non-session 401s (e.g. Strava sync
+  // returns 401 `{error:"Strava not connected or token expired"}`); fall back to
+  // the session-expiry copy for generic Unauthorized responses.
+  if (status === 401) return extractServerMessage(body) ?? "Your session has expired. Please sign in again.";
   if (status === 403) return "You don't have permission to do that.";
   if (status === 404) return "We couldn't find that — it may have already been removed.";
   if (status === 409) return "That conflicts with a more recent change. Refresh and try again.";
   if (status === 413) return "That upload is too large. Try a smaller file or split it up.";
   if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
-  return extractServerMessage(match[2]) ?? "That didn't work — please check your input and try again.";
+  return extractServerMessage(body) ?? "That didn't work — please check your input and try again.";
 }
 
 // CSRF token cache — the server issues a token via GET /api/v1/csrf-token

@@ -140,6 +140,13 @@ describe("humanizeApiError", () => {
     expect(humanizeApiError(new Error("413: too big"))).toMatch(/too large/i);
   });
 
+  it("prefers a specific server message for non-session 401s, else the session copy", () => {
+    expect(
+      humanizeApiError(new Error('401: {"error":"Strava not connected or token expired","code":"UNAUTHORIZED"}')),
+    ).toBe("Strava not connected or token expired");
+    expect(humanizeApiError(new Error("401: Unauthorized"))).toMatch(/session has expired/i);
+  });
+
   it("surfaces the server's `error` field for other 4xx (e.g. validation)", () => {
     const msg = humanizeApiError(new Error('400: {"error":"Title is required","code":"BAD_REQUEST"}'));
     expect(msg).toBe("Title is required");
