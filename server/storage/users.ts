@@ -18,7 +18,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, isNotNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lt, lte, or } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -480,5 +480,40 @@ export class UserStorage {
       .select()
       .from(users)
       .where(and(eq(users.emailNotifications, true), isNotNull(users.email)));
+  }
+
+  /** Users whose one-time baseline MAF test reminder is due (still on MAF). */
+  async getUsersWithDueMafBaselineTest(now: Date): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.trainingStyleId, "maf_method"),
+          isNotNull(users.mafBaselineTestScheduledAt),
+          lte(users.mafBaselineTestScheduledAt, now),
+        ),
+      );
+  }
+
+  /**
+   * Atomically claim a due baseline-test reminder: clears the schedule only if
+   * it is still set and due, and reports whether THIS call won the claim. Lets
+   * concurrent/duplicate reminder jobs avoid double-sending (Codex P2) — only
+   * the job whose conditional UPDATE affects a row sees `true`.
+   */
+  async claimMafBaselineTest(userId: string, now: Date): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ mafBaselineTestScheduledAt: null })
+      .where(
+        and(
+          eq(users.id, userId),
+          isNotNull(users.mafBaselineTestScheduledAt),
+          lte(users.mafBaselineTestScheduledAt, now),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
   }
 }

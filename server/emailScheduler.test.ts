@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { runEmailCronJob } from './emailScheduler';
+import { processMafTestReminder, runEmailCronJob } from './emailScheduler';
 import type { IStorage } from './storage';
 
 vi.mock('./queue', () => ({
@@ -13,6 +13,16 @@ vi.mock('./queue', () => ({
 
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('./email', () => ({
+  sendMafTestReminder: vi.fn().mockResolvedValue(true),
+  sendWeeklySummary: vi.fn().mockResolvedValue(true),
+  sendMissedWorkoutReminder: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('./pushNotifications', () => ({
+  sendPushToUser: vi.fn().mockResolvedValue(0),
 }));
 
 // Shared scheduler-fixture defaults. Tests pass only the fields they actually
@@ -56,6 +66,7 @@ describe('runEmailCronJob', () => {
         getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
           makeMockUser({ id: 1, email: 'test@example.com' }),
         ]),
+        getUsersWithDueMafBaselineTest: vi.fn().mockResolvedValue([]),
       },
     } as unknown as IStorage;
   });
@@ -74,6 +85,17 @@ describe('runEmailCronJob', () => {
     expect(result.emailsSent).toBe(2);
     expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 1 });
     expect(sendJobNoRetry).toHaveBeenCalledWith('send-missed-reminder', { userId: 1 });
+  });
+
+  it('enqueues a MAF test reminder for users whose baseline test is due', async () => {
+    const { sendJobNoRetry } = await import('./queue');
+    mockStorage.users.getUsersWithDueMafBaselineTest = vi
+      .fn()
+      .mockResolvedValue([makeMockUser({ id: 7, email: 'maf@example.com' })]);
+
+    await runEmailCronJob(mockStorage);
+
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-maf-test-reminder', { userId: 7 });
   });
 
   it('should enqueue jobs for multiple users independently', async () => {
@@ -106,14 +128,15 @@ describe('runEmailCronJob', () => {
     expect(sendJobNoRetry).not.toHaveBeenCalledWith('send-weekly-summary', expect.anything());
   });
 
-  it('should return early when no users have notifications', async () => {
+  it('should return early when no users have notifications or due MAF tests', async () => {
     mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([]);
+    mockStorage.users.getUsersWithDueMafBaselineTest = vi.fn().mockResolvedValue([]);
 
     const result = await runEmailCronJob(mockStorage);
 
     expect(result.usersChecked).toBe(0);
     expect(result.emailsSent).toBe(0);
-    expect(result.details).toContain('No users with email notifications enabled');
+    expect(result.details).toContain('No users with email notifications or due MAF tests');
   });
 
   it('skips the weekly summary when the user has opted out via emailWeeklySummary=false', async () => {
@@ -202,5 +225,77 @@ describe('runEmailCronJob', () => {
       expect(result.emailsSent).toBe(1);
       expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 'hawaii-user' });
     });
+  });
+});
+
+describe('processMafTestReminder', () => {
+  const now = new Date('2026-06-01T12:00:00Z');
+  const dueAt = new Date('2026-05-30T12:00:00Z'); // in the past → due
+
+  beforeEach(() => vi.clearAllMocks());
+
+  function storageFor(user: Record<string, unknown>, claimed = true): IStorage {
+    return {
+      users: {
+        getUser: vi.fn().mockResolvedValue(user),
+        claimMafBaselineTest: vi.fn().mockResolvedValue(claimed),
+      },
+    } as unknown as IStorage;
+  }
+
+  it('claims the one-shot schedule and emails when the claim wins + opted in', async () => {
+    const { sendMafTestReminder } = await import('./email');
+    const storage = storageFor({
+      id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
+      mafBaselineTestScheduledAt: dueAt, emailNotifications: true,
+    });
+
+    const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
+
+    expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
+    expect(sendMafTestReminder).toHaveBeenCalled();
+    expect(sent).toBe(true);
+  });
+
+  it('does not email when the claim is lost (not due, or already claimed by another run)', async () => {
+    const { sendMafTestReminder } = await import('./email');
+    const storage = storageFor({
+      id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
+      mafBaselineTestScheduledAt: new Date('2026-06-10T12:00:00Z'), emailNotifications: true,
+    }, false);
+
+    const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
+
+    expect(sent).toBe(false);
+    expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
+    expect(sendMafTestReminder).not.toHaveBeenCalled();
+  });
+
+  it('returns false without claiming when the user is no longer on MAF', async () => {
+    const { sendMafTestReminder } = await import('./email');
+    const storage = storageFor({
+      id: 'u1', email: 'a@b.com', trainingStyleId: 'hyrox',
+      mafBaselineTestScheduledAt: dueAt, emailNotifications: true,
+    });
+
+    const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
+
+    expect(sent).toBe(false);
+    expect(storage.users.claimMafBaselineTest).not.toHaveBeenCalled();
+    expect(sendMafTestReminder).not.toHaveBeenCalled();
+  });
+
+  it('claims but does not email when the user has opted out of email', async () => {
+    const { sendMafTestReminder } = await import('./email');
+    const storage = storageFor({
+      id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
+      mafBaselineTestScheduledAt: dueAt, emailNotifications: false,
+    });
+
+    const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
+
+    expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
+    expect(sendMafTestReminder).not.toHaveBeenCalled();
+    expect(sent).toBe(false);
   });
 });

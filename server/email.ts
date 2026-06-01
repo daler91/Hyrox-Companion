@@ -2,6 +2,7 @@ import type { User } from "@shared/schema";
 import { Resend } from "resend";
 
 import {
+  buildMafTestReminderEmail,
   buildMissedWorkoutEmail,
   buildWeeklySummaryEmail,
   type MissedWorkoutData,
@@ -64,5 +65,11 @@ export async function sendMissedWorkoutReminder(
 ): Promise<boolean> {
   if (!user.email || missed.length === 0) return false;
   const { subject, html } = buildMissedWorkoutEmail(user, missed);
+  return sendEmail(user.email, subject, html);
+}
+
+export async function sendMafTestReminder(user: User): Promise<boolean> {
+  if (!user.email) return false;
+  const { subject, html } = buildMafTestReminderEmail(user);
   return sendEmail(user.email, subject, html);
 }
