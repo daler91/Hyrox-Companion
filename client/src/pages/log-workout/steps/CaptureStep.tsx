@@ -54,6 +54,12 @@ export function CaptureStep({
   const hasBlocks = exerciseBlocks.length > 0;
   const isWorking = autoParsing || isParsingImage;
   const canContinue = hasText || hasBlocks;
+  // Explain why Continue is disabled so it isn't a dead, unexplained button
+  // (WCAG 3.3.2 Labels or Instructions). Suppressed while a parse is in flight.
+  const continueBlockedReason =
+    !isWorking && !canContinue
+      ? "Add your workout above — type it, dictate it, or snap a photo — to continue."
+      : null;
 
   return (
     <div className="space-y-6">
@@ -91,6 +97,17 @@ export function CaptureStep({
         </CardContent>
       </Card>
 
+      {continueBlockedReason && (
+        <p
+          id="capture-continue-hint"
+          role="status"
+          className="text-center text-xs text-muted-foreground"
+          data-testid="text-continue-blocked-reason"
+        >
+          {continueBlockedReason}
+        </p>
+      )}
+
       <StepFooter>
         <Button
           type="button"
@@ -107,6 +124,7 @@ export function CaptureStep({
           size="lg"
           onClick={onContinue}
           disabled={!canContinue || isWorking}
+          aria-describedby={continueBlockedReason ? "capture-continue-hint" : undefined}
           data-testid="button-step-continue"
           className="flex-1 sm:flex-none sm:min-w-40"
         >

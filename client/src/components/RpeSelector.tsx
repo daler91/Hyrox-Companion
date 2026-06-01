@@ -9,10 +9,14 @@ function getRpeLabel(rpe: number): string {
 }
 
 function getRpeColor(value: number): string {
-  if (value <= 3) return "bg-green-500 text-white";
-  if (value <= 6) return "bg-yellow-500 text-white";
-  if (value <= 8) return "bg-orange-500 text-white";
-  return "bg-red-500 text-white";
+  // Foregrounds meet WCAG 1.4.3 (>=4.5:1) on each fill: white on the darker
+  // green/orange/red, dark text on the light yellow (white-on-yellow/orange was
+  // ~1.9:1/2.9:1). Effort is also conveyed by the always-visible number and the
+  // text label below, so color is not the sole cue (1.4.1).
+  if (value <= 3) return "bg-green-700 text-white";
+  if (value <= 6) return "bg-yellow-400 text-black";
+  if (value <= 8) return "bg-orange-700 text-white";
+  return "bg-red-600 text-white";
 }
 
 interface RpeSelectorProps {
