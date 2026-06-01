@@ -1,7 +1,7 @@
 import { QueryFunctionContext } from "@tanstack/react-query";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
-import { apiRequest, getQueryFn } from "./queryClient";
+import { apiRequest, getQueryFn, humanizeApiError } from "./queryClient";
 
 describe("queryClient", () => {
   const originalFetch = globalThis.fetch;
@@ -121,5 +121,36 @@ describe("queryClient", () => {
         expect(await queryFn(queryArgs)).toBe(expected);
       }
     });
+  });
+});
+
+describe("humanizeApiError", () => {
+  it("maps 5xx to a generic server-error message (no raw status/body leaks)", () => {
+    const msg = humanizeApiError(new Error('500: {"error":"boom","code":"INTERNAL_SERVER_ERROR"}'));
+    expect(msg).toBe("Something went wrong on our end. Please try again in a moment.");
+    expect(msg).not.toContain("500");
+    expect(msg).not.toContain("boom");
+  });
+
+  it("maps common 4xx statuses to friendly copy", () => {
+    expect(humanizeApiError(new Error("401: Unauthorized"))).toMatch(/session has expired/i);
+    expect(humanizeApiError(new Error("403: Forbidden"))).toMatch(/permission/i);
+    expect(humanizeApiError(new Error("404: Not Found"))).toMatch(/couldn't find/i);
+    expect(humanizeApiError(new Error("409: conflict"))).toMatch(/more recent change/i);
+    expect(humanizeApiError(new Error("413: too big"))).toMatch(/too large/i);
+  });
+
+  it("surfaces the server's `error` field for other 4xx (e.g. validation)", () => {
+    const msg = humanizeApiError(new Error('400: {"error":"Title is required","code":"BAD_REQUEST"}'));
+    expect(msg).toBe("Title is required");
+  });
+
+  it("falls back to a generic message for a 4xx with no parseable server message", () => {
+    expect(humanizeApiError(new Error("400: not json"))).toMatch(/check your input/i);
+  });
+
+  it("passes through non-API error messages and handles non-Error input", () => {
+    expect(humanizeApiError(new Error("You're offline"))).toBe("You're offline");
+    expect(humanizeApiError("weird")).toBe("Something went wrong. Please try again.");
   });
 });

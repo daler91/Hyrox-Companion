@@ -22,6 +22,40 @@ export class AiBudgetExceededError extends Error {
   }
 }
 
+function extractServerMessage(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown; message?: unknown };
+    const msg = parsed.error ?? parsed.message;
+    return typeof msg === "string" && msg.trim().length > 0 ? msg : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turn a thrown API error into a short, human-readable message for toasts.
+ * `apiRequest` throws `new Error(`${status}: ${body}`)` for non-ok responses;
+ * surfacing that raw string (e.g. `500: {"error":...}`) to users is confusing,
+ * so map status ranges to friendly copy and, for other 4xx, prefer the server's
+ * own `error` message when present. Non-API errors (network/abort) fall back to
+ * their own message or a generic line.
+ */
+export function humanizeApiError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "";
+  const match = /^(\d{3}):\s*([\s\S]*)$/.exec(raw);
+  if (!match) {
+    return raw.trim() || "Something went wrong. Please try again.";
+  }
+  const status = Number(match[1]);
+  if (status === 401) return "Your session has expired. Please sign in again.";
+  if (status === 403) return "You don't have permission to do that.";
+  if (status === 404) return "We couldn't find that — it may have already been removed.";
+  if (status === 409) return "That conflicts with a more recent change. Refresh and try again.";
+  if (status === 413) return "That upload is too large. Try a smaller file or split it up.";
+  if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
+  return extractServerMessage(match[2]) ?? "That didn't work — please check your input and try again.";
+}
+
 // CSRF token cache — the server issues a token via GET /api/v1/csrf-token
 // paired with a signed cookie. We fetch once, reuse, and refetch on 403 so
 // the first mutation after login (which rebinds the session id) recovers

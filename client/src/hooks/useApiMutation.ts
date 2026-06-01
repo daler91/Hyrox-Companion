@@ -1,7 +1,7 @@
 import { useMutation, type UseMutationOptions } from "@tanstack/react-query";
 
 import { useToast } from "@/hooks/use-toast";
-import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
+import { AiBudgetExceededError, humanizeApiError, queryClient, RateLimitError } from "@/lib/queryClient";
 
 type QueryKeyList = readonly (readonly unknown[])[];
 
@@ -73,7 +73,7 @@ export function useApiMutation<
         } else {
           toast({
             title: errorToast,
-            description: error instanceof Error ? error.message : "An error occurred",
+            description: humanizeApiError(error),
             variant: "destructive",
           });
         }

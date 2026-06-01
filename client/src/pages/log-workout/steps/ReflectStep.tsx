@@ -60,6 +60,16 @@ export function ReflectStep({
   const [rpeSkipped, setRpeSkipped] = useState(false);
   const rpeOk = rpe !== null || rpeSkipped;
   const canSave = hasWorkoutDetails && rpeOk && !isSaving;
+  // Explain why Save is disabled rather than leaving a dead button
+  // (WCAG 3.3.2 / 3.3.1). Suppressed while a save is in flight.
+  let saveBlockedReason: string | null = null;
+  if (!isSaving) {
+    if (!hasWorkoutDetails) {
+      saveBlockedReason = "Add workout details on the previous step before saving.";
+    } else if (!rpeOk) {
+      saveBlockedReason = 'Rate your effort above, or tap "Skip RPE", to save.';
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -130,6 +140,17 @@ export function ReflectStep({
         notesInterim={notesInterim}
       />
 
+      {saveBlockedReason && (
+        <p
+          id="reflect-save-hint"
+          role="status"
+          className="text-center text-xs text-muted-foreground"
+          data-testid="text-save-blocked-reason"
+        >
+          {saveBlockedReason}
+        </p>
+      )}
+
       <StepFooter>
         <Button
           type="button"
@@ -148,6 +169,7 @@ export function ReflectStep({
           size="lg"
           onClick={handleSave}
           disabled={!canSave}
+          aria-describedby={saveBlockedReason ? "reflect-save-hint" : undefined}
           data-testid="button-save-workout"
           className="flex-1 sm:flex-none sm:min-w-40 shadow-lg"
         >
