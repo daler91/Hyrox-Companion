@@ -9,9 +9,9 @@ describe('csv-utils', () => {
 
   beforeEach(() => {
     // Save originals
-    originalCreateObjectURL = global.URL.createObjectURL;
-    originalRevokeObjectURL = global.URL.revokeObjectURL;
-    originalBlob = global.Blob;
+    originalCreateObjectURL = globalThis.URL.createObjectURL;
+    originalRevokeObjectURL = globalThis.URL.revokeObjectURL;
+    originalBlob = globalThis.Blob;
 
     // Create spies rather than direct overrides for elements
     vi.spyOn(document, 'createElement');
@@ -21,11 +21,11 @@ describe('csv-utils', () => {
     // but save it to restore later
 
     // Mock the global URLs safely
-    global.URL.createObjectURL = vi.fn().mockReturnValue('blob:fake-url');
-    global.URL.revokeObjectURL = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:fake-url');
+    globalThis.URL.revokeObjectURL = vi.fn();
 
     // Proper Mock constructor for Blob
-    global.Blob = vi.fn(function(this: any, content: any[], options: any) {
+    globalThis.Blob = vi.fn(function(this: any, content: any[], options: any) {
       this.content = content;
       this.options = options;
     }) as any;
@@ -36,9 +36,9 @@ describe('csv-utils', () => {
     vi.restoreAllMocks();
 
     // Restore manual assignments safely to prevent test pollution
-    global.URL.createObjectURL = originalCreateObjectURL;
-    global.URL.revokeObjectURL = originalRevokeObjectURL;
-    global.Blob = originalBlob;
+    globalThis.URL.createObjectURL = originalCreateObjectURL;
+    globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+    globalThis.Blob = originalBlob;
   });
 
   it('downloadTemplate creates a blob with correct content and triggers download', () => {
@@ -58,10 +58,10 @@ describe('csv-utils', () => {
     downloadTemplate();
 
     // Verify Blob creation
-    expect(global.Blob).toHaveBeenCalledWith([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
+    expect(globalThis.Blob).toHaveBeenCalledWith([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
 
     // Verify URL creation
-    expect(global.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Object));
+    expect(globalThis.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Object));
 
     // Verify link element creation and properties
     expect(document.createElement).toHaveBeenCalledWith('a');
@@ -76,6 +76,6 @@ describe('csv-utils', () => {
     expect(removeSpy).toHaveBeenCalled();
 
     // Verify URL was revoked to prevent memory leaks
-    expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
+    expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
   });
 });
