@@ -106,6 +106,7 @@ describe("useWorkoutReparseTools", () => {
     vi.mocked(api.workouts.batchReparse).mockResolvedValueOnce({
       parsed: 5,
       failed: 1,
+      total: 6,
     });
     // Trigger catch block in invalidateQueries
     vi.mocked(mockQueryClient.invalidateQueries).mockRejectedValue(new Error("Cache Error"));
@@ -156,6 +157,7 @@ describe("useWorkoutReparseTools", () => {
     vi.mocked(api.workouts.batchReparse).mockResolvedValueOnce({
       parsed: 1,
       failed: 0,
+      total: 1,
     });
     vi.mocked(mockQueryClient.invalidateQueries).mockResolvedValue(undefined);
 
