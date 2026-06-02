@@ -73,7 +73,6 @@ describe("MafTestStorage.updateTestWithAnalysis", () => {
     vi.clearAllMocks();
   });
 
-  type Mock = ReturnType<typeof vi.fn>;
   const metrics = {
     durationSeconds: 1710,
     distanceMeters: 5000,
@@ -84,20 +83,22 @@ describe("MafTestStorage.updateTestWithAnalysis", () => {
 
   // Wire the update().set().where().returning() chain, the analysis delete, and
   // the analysis insert().values().returning() chain so the transaction body
-  // resolves end to end.
+  // resolves end to end. Assigning fresh mocks onto `db` (rather than casting
+  // db.* to a mock type) keeps the typed-mock references local and cast-free.
   function mockChains(testRow: object, insertedAnalysis: object | null) {
     const updReturning = vi.fn().mockResolvedValue([testRow]);
     const updWhere = vi.fn().mockReturnValue({ returning: updReturning });
     const updSet = vi.fn().mockReturnValue({ where: updWhere });
-    (db.update as Mock).mockReturnValue({ set: updSet });
+    const update = vi.fn().mockReturnValue({ set: updSet });
 
     const delWhere = vi.fn().mockResolvedValue({ rowCount: 1 });
-    (db.delete as Mock).mockReturnValue({ where: delWhere });
+    const del = vi.fn().mockReturnValue({ where: delWhere });
 
     const insReturning = vi.fn().mockResolvedValue([insertedAnalysis ?? { id: "a1" }]);
     const insValues = vi.fn().mockReturnValue({ returning: insReturning });
-    (db.insert as Mock).mockReturnValue({ values: insValues });
+    const insert = vi.fn().mockReturnValue({ values: insValues });
 
+    Object.assign(db, { update, delete: del, insert });
     return { updSet, delWhere, insValues };
   }
 

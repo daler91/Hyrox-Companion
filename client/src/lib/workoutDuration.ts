@@ -33,7 +33,7 @@ export function parseDurationToSeconds(value: string | null | undefined): number
   }
   // Reject "12:75" style overflow on the smallest unit so a typo isn't silently
   // re-normalized into a different time.
-  const smallest = Number(parts[parts.length - 1]);
+  const smallest = Number(parts.at(-1));
   if (smallest >= 60) return null;
   if (parts.length === 3 && Number(parts[1]) >= 60) return null;
   return total;

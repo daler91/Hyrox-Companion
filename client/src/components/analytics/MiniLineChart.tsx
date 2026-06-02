@@ -29,8 +29,10 @@ function LineChartTooltip({ active, payload, chartLabel, formatValue }: Readonly
   const rawDate = firstPayload?.date ?? firstPayload?.weekStart ?? "";
   const dateStr = typeof rawDate === "string" ? rawDate : "";
   const rawValue = payload[0]?.value;
-  const displayValue =
-    rawValue == null ? "N/A" : formatValue ? formatValue(rawValue) : Math.round(rawValue * 10) / 10;
+  let displayValue: string | number = "N/A";
+  if (rawValue != null) {
+    displayValue = formatValue ? formatValue(rawValue) : Math.round(rawValue * 10) / 10;
+  }
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">

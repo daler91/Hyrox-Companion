@@ -104,11 +104,10 @@ export function MafTrendTab() {
           {rows.map((row) => {
             const meta = classificationMeta(row.classification);
             const mps = metersPerSecond(row.distanceMeters, row.durationSeconds);
-            const detailParts = [
-              mps != null ? formatPace(mps, distanceUnit) : null,
-              row.durationSeconds != null ? formatSecondsToMmSs(row.durationSeconds) : null,
-              row.avgHeartRate != null ? `${row.avgHeartRate} bpm` : null,
-            ].filter((part): part is string => part != null);
+            const detailParts: string[] = [];
+            if (mps != null) detailParts.push(formatPace(mps, distanceUnit));
+            if (row.durationSeconds != null) detailParts.push(formatSecondsToMmSs(row.durationSeconds));
+            if (row.avgHeartRate != null) detailParts.push(`${row.avgHeartRate} bpm`);
             return (
               <div
                 key={row.id}

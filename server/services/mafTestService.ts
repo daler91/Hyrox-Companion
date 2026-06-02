@@ -36,7 +36,7 @@ function inferProtocolType(durationSeconds: number | null): string {
 
 /** An explicit override (including a deliberate `null` clear) wins; an omitted field keeps the base. */
 function pickMetric(override: number | null | undefined, base: number | null): number | null {
-  return override !== undefined ? override : base;
+  return override === undefined ? base : override;
 }
 
 /**
@@ -201,7 +201,7 @@ export async function updateMafTestForWorkout(
       // Keep the protocol consistent with the (possibly edited) duration unless
       // an explicit value is supplied.
       protocolType: opts.protocolType?.trim() || inferProtocolType(metrics.durationSeconds),
-      ...(opts.notes !== undefined ? { notes: opts.notes.trim() || null } : {}),
+      ...(opts.notes === undefined ? {} : { notes: opts.notes.trim() || null }),
     },
     analysisData,
   );
