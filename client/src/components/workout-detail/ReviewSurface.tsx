@@ -338,7 +338,7 @@ function ReviewDetailsColumn({
         showPlannedDiffs={showPlannedDiffs}
       />
       <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
-      <MafTestTagSection workoutLogId={workoutLogId} />
+      <MafTestTagSection workoutLogId={workoutLogId} workout={detail.workout ?? null} />
       <ReviewEffortNotes
         isStrava={isStrava}
         rpe={rpe}

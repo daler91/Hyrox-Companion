@@ -1,3 +1,6 @@
+import { type MafTestMetrics, metersPerSecond } from "@shared/maf";
+import { paceSecondsPerUnit } from "@shared/unitConversion";
+
 import type { MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "@/lib/api";
 
 /** Display metadata for the three compliance classifications the server emits. */
@@ -65,11 +68,16 @@ export interface MafTestRow {
   compliancePct: number | null;
   classification: string | null;
   protocolType: string;
+  /** Snapshot metrics (canonical seconds/meters/bpm), for pace + duration display. */
+  durationSeconds: number | null;
+  distanceMeters: number | null;
+  avgHeartRate: number | null;
 }
 
 /**
  * Pair each test (newest first) with its compliance analysis (matched by
- * workoutLogId) for the history list.
+ * workoutLogId) for the history list, surfacing the stored metrics so the UI can
+ * show pace, duration, and heart rate alongside the compliance score.
  */
 export function buildTestRows(data: MafTestsListResponse | undefined): MafTestRow[] {
   if (!data) return [];
@@ -82,12 +90,39 @@ export function buildTestRows(data: MafTestsListResponse | undefined): MafTestRo
     .map((t) => {
       const workoutLogId = testWorkoutLogId(t);
       const analysis = workoutLogId ? analysisByWorkout.get(workoutLogId) : undefined;
+      const metrics: Partial<MafTestMetrics> | null = t.metrics ?? null;
       return {
         id: t.id,
         date: isoDateOnly(t.createdAt),
         compliancePct: analysis?.compliancePct ?? null,
         classification: analysis?.classification ?? null,
         protocolType: t.protocolType,
+        durationSeconds: metrics?.durationSeconds ?? null,
+        distanceMeters: metrics?.distanceMeters ?? null,
+        avgHeartRate: metrics?.avgHeartRate ?? null,
       };
     });
+}
+
+export interface PacePoint {
+  date: string;
+  secondsPerUnit: number;
+}
+
+/**
+ * Pace (seconds per the athlete's distance unit) over time, oldest → newest, for
+ * the pace trend chart. Derived from each test's stored distance + duration;
+ * drops rows without a usable pace or timestamp. Lower is faster — the whole
+ * point of MAF testing is watching this fall while heart rate stays fixed.
+ */
+export function buildPaceTrendData(rows: readonly MafTestRow[], distanceUnit: string): PacePoint[] {
+  return rows
+    .map((row) => {
+      const mps = metersPerSecond(row.distanceMeters, row.durationSeconds);
+      const secondsPerUnit = mps == null ? null : paceSecondsPerUnit(mps, distanceUnit);
+      if (secondsPerUnit == null || row.date == null) return null;
+      return { date: row.date, secondsPerUnit };
+    })
+    .filter((p): p is PacePoint => p !== null)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }

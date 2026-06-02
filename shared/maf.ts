@@ -126,3 +126,33 @@ export function computeMafCompliance(input: MafComplianceInput): MafComplianceRe
     details: { avgHeartRate, maxHeartRate, ceiling, avgOverBy, maxOverBy },
   };
 }
+
+/**
+ * The metrics snapshot stored on a `maf_test_results` row. Distances are
+ * canonical meters and durations canonical seconds — the UI converts to the
+ * athlete's preferred km/miles only at the input/display edges, so these never
+ * carry a unit preference and the stored-unit drift that `workout_logs` is
+ * subject to does not apply here.
+ */
+export interface MafTestMetrics {
+  durationSeconds: number | null;
+  distanceMeters: number | null;
+  avgHeartRate: number | null;
+  maxHeartRate: number | null;
+  mafCeilingUsed: number;
+}
+
+/**
+ * Average speed (m/s) from a canonical distance + duration, or null when either
+ * is missing or non-positive. Pace shown in the MAF trend is derived from this
+ * via `formatPace`; it is display-only and never feeds compliance scoring.
+ */
+export function metersPerSecond(
+  distanceMeters: number | null,
+  durationSeconds: number | null,
+): number | null {
+  if (!distanceMeters || !durationSeconds || distanceMeters <= 0 || durationSeconds <= 0) {
+    return null;
+  }
+  return distanceMeters / durationSeconds;
+}

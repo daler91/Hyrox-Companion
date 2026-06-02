@@ -1,12 +1,16 @@
+import { metersPerSecond } from "@shared/maf";
+import { formatPace } from "@shared/unitConversion";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, HeartPulse } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api, type MafTestsListResponse, QUERY_KEYS } from "@/lib/api";
+import { formatSecondsToMmSs } from "@/lib/statsUtils";
 
-import { buildComplianceTrendData, buildTestRows, classificationMeta } from "./mafTrend.helpers";
+import { buildComplianceTrendData, buildPaceTrendData, buildTestRows, classificationMeta } from "./mafTrend.helpers";
 import { MiniLineChart } from "./MiniLineChart";
 
 const TONE_BADGE_CLASS: Record<"green" | "amber" | "red", string> = {
@@ -38,6 +42,7 @@ function EmptyState() {
 }
 
 export function MafTrendTab() {
+  const { distanceUnit } = useUnitPreferences();
   const { data, isLoading } = useQuery<MafTestsListResponse>({
     queryKey: QUERY_KEYS.mafTests,
     queryFn: () => api.mafTests.list(),
@@ -49,6 +54,8 @@ export function MafTrendTab() {
   if (rows.length === 0) return <EmptyState />;
 
   const trend = buildComplianceTrendData(data?.analysis ?? []);
+  const paceTrend = buildPaceTrendData(rows, distanceUnit);
+  const paceUnit = distanceUnit === "miles" ? "mi" : "km";
   const latest = rows[0];
   const latestMeta = classificationMeta(latest.classification);
 
@@ -79,6 +86,16 @@ export function MafTrendTab() {
         </p>
       )}
 
+      {paceTrend.length >= 2 && (
+        <MiniLineChart
+          data={paceTrend}
+          valueKey="secondsPerUnit"
+          color="blue"
+          label={`Pace (min/${paceUnit}) — lower is faster`}
+          valueFormatter={(seconds) => formatSecondsToMmSs(seconds)}
+        />
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Test history</CardTitle>
@@ -86,13 +103,26 @@ export function MafTrendTab() {
         <CardContent className="divide-y">
           {rows.map((row) => {
             const meta = classificationMeta(row.classification);
+            const mps = metersPerSecond(row.distanceMeters, row.durationSeconds);
+            const detailParts = [
+              mps != null ? formatPace(mps, distanceUnit) : null,
+              row.durationSeconds != null ? formatSecondsToMmSs(row.durationSeconds) : null,
+              row.avgHeartRate != null ? `${row.avgHeartRate} bpm` : null,
+            ].filter((part): part is string => part != null);
             return (
               <div
                 key={row.id}
                 className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                 data-testid={`maf-test-row-${row.id}`}
               >
-                <span className="text-sm font-medium">{formatTestDate(row.date)}</span>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{formatTestDate(row.date)}</span>
+                  {detailParts.length > 0 && (
+                    <p className="mt-0.5 text-xs text-muted-foreground tabular-nums" data-testid={`maf-test-row-detail-${row.id}`}>
+                      {detailParts.join(" · ")}
+                    </p>
+                  )}
+                </div>
                 {row.compliancePct == null ? (
                   <span className="text-xs text-muted-foreground">No HR data</span>
                 ) : (

@@ -182,6 +182,17 @@ export function formatPace(metersPerSecond: number, distanceUnit: string): strin
   return `${minutes}:${seconds.toString().padStart(2, "0")}${unitLabel}`;
 }
 
+/**
+ * Pace as seconds per the user's distance unit (km or mile), or null when speed
+ * is non-positive. Numeric counterpart to `formatPace`, for plotting a pace
+ * trend (lower = faster).
+ */
+export function paceSecondsPerUnit(metersPerSecond: number, distanceUnit: string): number | null {
+  if (!metersPerSecond || Number.isNaN(metersPerSecond) || metersPerSecond <= 0) return null;
+  const secondsPerKm = 1000 / metersPerSecond;
+  return standardizeDistanceUnit(distanceUnit) === "miles" ? secondsPerKm / KM_TO_MILES : secondsPerKm;
+}
+
 export function formatSpeed(metersPerSecond: number, distanceUnit: string): string {
   if (metersPerSecond <= 0) return "N/A";
   const standardUnit = standardizeDistanceUnit(distanceUnit);

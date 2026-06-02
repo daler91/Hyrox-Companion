@@ -6,7 +6,7 @@ export type { ReparseResponse } from "./constants";
 export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
 export type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "./exercises";
 export { exercises } from "./exercises";
-export type { MafTagResponse, MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "./mafTests";
+export type { MafTagResponse, MafTestMetricsInput, MafTestMutationPayload, MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "./mafTests";
 export { mafTests } from "./mafTests";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
