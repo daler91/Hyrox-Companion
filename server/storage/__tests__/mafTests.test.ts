@@ -17,6 +17,38 @@ vi.mock("../../db", () => {
   return { db };
 });
 
+// Two `delete(table).where(...)` calls run in order: first the analysis rows
+// (result ignored), then the test rows (whose rowCount drives the boolean).
+function mockDeletes(testRowCount: number | null) {
+  const analysisWhere = vi.fn().mockResolvedValue({ rowCount: 0 });
+  const testWhere = vi.fn().mockResolvedValue({ rowCount: testRowCount });
+  vi.mocked(db.delete)
+    .mockReturnValueOnce({ where: analysisWhere })
+    .mockReturnValueOnce({ where: testWhere });
+  return { analysisWhere, testWhere };
+}
+
+// Wire the update().set().where().returning() chain, the analysis delete, and
+// the analysis insert().values().returning() chain so the transaction body
+// resolves end to end. Assigning fresh mocks onto `db` (rather than casting
+// db.* to a mock type) keeps the typed-mock references local and cast-free.
+function mockChains(testRow: object, insertedAnalysis: object | null) {
+  const updReturning = vi.fn().mockResolvedValue([testRow]);
+  const updWhere = vi.fn().mockReturnValue({ returning: updReturning });
+  const updSet = vi.fn().mockReturnValue({ where: updWhere });
+  const update = vi.fn().mockReturnValue({ set: updSet });
+
+  const delWhere = vi.fn().mockResolvedValue({ rowCount: 1 });
+  const del = vi.fn().mockReturnValue({ where: delWhere });
+
+  const insReturning = vi.fn().mockResolvedValue([insertedAnalysis ?? { id: "a1" }]);
+  const insValues = vi.fn().mockReturnValue({ returning: insReturning });
+  const insert = vi.fn().mockReturnValue({ values: insValues });
+
+  Object.assign(db, { update, delete: del, insert });
+  return { updSet, delWhere, insValues };
+}
+
 describe("MafTestStorage.deleteTestForWorkout", () => {
   let storage: MafTestStorage;
 
@@ -24,17 +56,6 @@ describe("MafTestStorage.deleteTestForWorkout", () => {
     storage = new MafTestStorage();
     vi.clearAllMocks();
   });
-
-  // Two `delete(table).where(...)` calls run in order: first the analysis rows
-  // (result ignored), then the test rows (whose rowCount drives the boolean).
-  function mockDeletes(testRowCount: number | null) {
-    const analysisWhere = vi.fn().mockResolvedValue({ rowCount: 0 });
-    const testWhere = vi.fn().mockResolvedValue({ rowCount: testRowCount });
-    (db.delete as ReturnType<typeof vi.fn>)
-      .mockReturnValueOnce({ where: analysisWhere })
-      .mockReturnValueOnce({ where: testWhere });
-    return { analysisWhere, testWhere };
-  }
 
   it("deletes analysis then test rows in one transaction and returns true when a test was removed", async () => {
     const { analysisWhere, testWhere } = mockDeletes(1);
@@ -80,27 +101,6 @@ describe("MafTestStorage.updateTestWithAnalysis", () => {
     maxHeartRate: 150,
     mafCeilingUsed: 145,
   };
-
-  // Wire the update().set().where().returning() chain, the analysis delete, and
-  // the analysis insert().values().returning() chain so the transaction body
-  // resolves end to end. Assigning fresh mocks onto `db` (rather than casting
-  // db.* to a mock type) keeps the typed-mock references local and cast-free.
-  function mockChains(testRow: object, insertedAnalysis: object | null) {
-    const updReturning = vi.fn().mockResolvedValue([testRow]);
-    const updWhere = vi.fn().mockReturnValue({ returning: updReturning });
-    const updSet = vi.fn().mockReturnValue({ where: updWhere });
-    const update = vi.fn().mockReturnValue({ set: updSet });
-
-    const delWhere = vi.fn().mockResolvedValue({ rowCount: 1 });
-    const del = vi.fn().mockReturnValue({ where: delWhere });
-
-    const insReturning = vi.fn().mockResolvedValue([insertedAnalysis ?? { id: "a1" }]);
-    const insValues = vi.fn().mockReturnValue({ returning: insReturning });
-    const insert = vi.fn().mockReturnValue({ values: insValues });
-
-    Object.assign(db, { update, delete: del, insert });
-    return { updSet, delWhere, insValues };
-  }
 
   it("updates the test metrics and replaces the analysis in one transaction", async () => {
     const { updSet, delWhere, insValues } = mockChains({ id: "t1", metrics }, { id: "a1", compliancePct: 100 });
