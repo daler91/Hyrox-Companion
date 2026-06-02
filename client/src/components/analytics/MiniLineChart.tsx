@@ -22,12 +22,17 @@ const getStrokeColor = (colorStr: string): string => {
   return "#64748b";
 };
 
-function LineChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string }>) {
+function LineChartTooltip({ active, payload, chartLabel, formatValue }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string; formatValue?: (value: number) => string }>) {
   if (!active || !payload?.length) return null;
 
   const firstPayload = payload[0]?.payload;
   const rawDate = firstPayload?.date ?? firstPayload?.weekStart ?? "";
   const dateStr = typeof rawDate === "string" ? rawDate : "";
+  const rawValue = payload[0]?.value;
+  let displayValue: string | number = "N/A";
+  if (rawValue != null) {
+    displayValue = formatValue ? formatValue(rawValue) : Math.round(rawValue * 10) / 10;
+  }
 
   return (
     <div className="bg-popover text-popover-foreground border px-3 py-2 rounded shadow-md text-sm">
@@ -36,7 +41,7 @@ function LineChartTooltip({ active, payload, chartLabel }: Readonly<{ active?: b
       </p>
       <p>
         <span className="text-muted-foreground mr-2">{chartLabel}:</span>
-        <span className="font-medium">{payload[0]?.value == null ? "N/A" : Math.round(payload[0].value * 10) / 10}</span>
+        <span className="font-medium">{displayValue}</span>
       </p>
     </div>
   );
@@ -51,6 +56,7 @@ export const MiniLineChart = memo(function MiniLineChart({
   color,
   label,
   referenceLine,
+  valueFormatter,
 }: Readonly<{
   data: readonly object[];
   xKey?: string;
@@ -58,6 +64,8 @@ export const MiniLineChart = memo(function MiniLineChart({
   color: string;
   label: string;
   referenceLine?: { value: number; label: string };
+  /** Format the y-value for the axis ticks and tooltip (e.g. pace seconds → "m:ss"). */
+  valueFormatter?: (value: number) => string;
 }>) {
   if (data.length === 0) return null;
 
@@ -72,7 +80,7 @@ export const MiniLineChart = memo(function MiniLineChart({
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
-            margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
+            margin={{ top: 5, right: 5, left: valueFormatter ? 0 : -20, bottom: 5 }}
           >
             <CartesianGrid
               strokeDasharray={GRID_DASH}
@@ -92,10 +100,11 @@ export const MiniLineChart = memo(function MiniLineChart({
               tickLine={false}
               axisLine={false}
               tick={{ fill: MUTED_FG }}
+              tickFormatter={valueFormatter ? (v: number) => valueFormatter(Number(v)) : undefined}
             />
             <Tooltip
               cursor={{ stroke: MUTED_FG, strokeDasharray: GRID_DASH }}
-              content={<LineChartTooltip chartLabel={label} />}
+              content={<LineChartTooltip chartLabel={label} formatValue={valueFormatter} />}
             />
             {referenceLine && (
               <ReferenceLine

@@ -1,3 +1,4 @@
+import { type MafTestMetrics } from "@shared/maf";
 import { mafTestResults, mafWorkoutAnalysis } from "@shared/schema";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
@@ -29,6 +30,52 @@ export class MafTestStorage {
   ): Promise<{ testResult: MafTestResult; analysis: MafWorkoutAnalysis | null }> {
     return db.transaction(async (tx) => {
       const [testResult] = await tx.insert(mafTestResults).values(testData).returning();
+      let analysis: MafWorkoutAnalysis | null = null;
+      if (analysisData) {
+        [analysis] = await tx.insert(mafWorkoutAnalysis).values(analysisData).returning();
+      }
+      return { testResult, analysis };
+    });
+  }
+
+  /**
+   * Apply manual metric edits to an already-tagged workout's MAF test and
+   * replace its compliance analysis, in a single transaction. The metrics
+   * snapshot is overwritten wholesale; the analysis is deleted and re-inserted
+   * (mirroring `deleteTestForWorkout` + `createTestWithAnalysis`) so a cleared
+   * average HR cleanly drops the row (`analysisData: null`). Matches the test by
+   * `conditions->>'workoutLogId'` exactly as `getTestResultByWorkoutLogId` does.
+   */
+  async updateTestWithAnalysis(
+    userId: string,
+    workoutLogId: string,
+    patch: { metrics: MafTestMetrics; protocolType?: string; notes?: string | null },
+    analysisData: InsertMafWorkoutAnalysis | null,
+  ): Promise<{ testResult: MafTestResult; analysis: MafWorkoutAnalysis | null }> {
+    return db.transaction(async (tx) => {
+      const setValues: Partial<InsertMafTestResult> = { metrics: patch.metrics };
+      if (patch.protocolType !== undefined) setValues.protocolType = patch.protocolType;
+      if (patch.notes !== undefined) setValues.notes = patch.notes;
+
+      const [testResult] = await tx
+        .update(mafTestResults)
+        .set(setValues)
+        .where(
+          and(
+            eq(mafTestResults.userId, userId),
+            sql`${mafTestResults.conditions}->>'workoutLogId' = ${workoutLogId}`,
+          ),
+        )
+        .returning();
+
+      await tx
+        .delete(mafWorkoutAnalysis)
+        .where(
+          and(
+            eq(mafWorkoutAnalysis.userId, userId),
+            eq(mafWorkoutAnalysis.workoutLogId, workoutLogId),
+          ),
+        );
       let analysis: MafWorkoutAnalysis | null = null;
       if (analysisData) {
         [analysis] = await tx.insert(mafWorkoutAnalysis).values(analysisData).returning();

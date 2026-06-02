@@ -3,14 +3,30 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
-import { recordMafTestFromWorkout } from "../../services/mafTestService";
+import { recordMafTestFromWorkout, updateMafTestForWorkout } from "../../services/mafTestService";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
-import { protectedDelete, protectedPost } from "../_helpers/protectedRouteBuilder";
+import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
+
+// Manual metric corrections. All optional/nullable: an omitted field keeps the
+// auto-pulled (or previously stored) value, an explicit null clears it. Bounds
+// mirror the manual-metrics validation in the client workout form.
+const mafTestMetricsSchema = z
+  .object({
+    avgHeartRate: z.number().int().min(20).max(250).nullable().optional(),
+    maxHeartRate: z.number().int().min(20).max(250).nullable().optional(),
+    durationSeconds: z.number().int().positive().max(86_400).nullable().optional(),
+    distanceMeters: z.number().nonnegative().max(1_000_000).nullable().optional(),
+  })
+  .refine(
+    (m) => m.avgHeartRate == null || m.maxHeartRate == null || m.maxHeartRate >= m.avgHeartRate,
+    { message: "Max heart rate can't be lower than average heart rate." },
+  );
 
 const mafTestBodySchema = z.object({
   protocolType: z.string().max(120).optional(),
   notes: z.string().max(2000).optional(),
+  metrics: mafTestMetricsSchema.optional(),
 });
 
 export function registerWorkoutMafRoutes(router: Router): void {
@@ -25,6 +41,20 @@ export function registerWorkoutMafRoutes(router: Router): void {
       const { created, ...record } = await recordMafTestFromWorkout(userId, req.params.id, req.body);
       // 201 on first tag; 200 when an already-tagged workout is returned idempotently.
       res.status(created ? 201 : 200).json(record);
+    },
+  );
+
+  // Edit an already-tagged MAF test: apply manual HR / duration / distance
+  // corrections and recompute the compliance analysis against the athlete's
+  // current ceiling. 404 when the workout wasn't tagged.
+  protectedPatch(
+    router,
+    "/api/v1/workouts/:id/maf-test",
+    { limiter: rateLimiter("mafTest", 20), middleware: [validateBody(mafTestBodySchema)] },
+    async (req: Request<{ id: string }, unknown, z.infer<typeof mafTestBodySchema>>, res: Response) => {
+      const userId = getUserId(req);
+      const { testResult, analysis } = await updateMafTestForWorkout(userId, req.params.id, req.body);
+      res.json({ testResult, analysis });
     },
   );
 

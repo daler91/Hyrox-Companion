@@ -4,6 +4,7 @@ import type { MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "@/
 
 import {
   buildComplianceTrendData,
+  buildPaceTrendData,
   buildTestRows,
   classificationMeta,
   isWorkoutTagged,
@@ -15,6 +16,10 @@ function analysis(partial: Partial<MafWorkoutAnalysis>): MafWorkoutAnalysis {
 
 function test(partial: Partial<MafTestResult>): MafTestResult {
   return partial as MafTestResult;
+}
+
+function metricsRow(durationSeconds: number | null, distanceMeters: number | null) {
+  return { durationSeconds, distanceMeters, avgHeartRate: 142, maxHeartRate: 150, mafCeilingUsed: 145 };
 }
 
 describe("buildComplianceTrendData", () => {
@@ -72,6 +77,52 @@ describe("buildTestRows", () => {
 
   it("returns an empty list when there is no data", () => {
     expect(buildTestRows(undefined)).toEqual([]);
+  });
+
+  it("surfaces stored duration / distance / avg HR for pace display", () => {
+    const data: MafTestsListResponse = {
+      tests: [
+        test({
+          id: "t1",
+          conditions: { workoutLogId: "w1" },
+          createdAt: "2026-05-01T00:00:00Z" as unknown as Date,
+          metrics: metricsRow(1710, 5000),
+        }),
+      ],
+      analysis: [],
+    };
+    expect(buildTestRows(data)[0]).toMatchObject({ durationSeconds: 1710, distanceMeters: 5000, avgHeartRate: 142 });
+  });
+
+  it("defaults metric fields to null for legacy rows without a metrics snapshot", () => {
+    const data: MafTestsListResponse = {
+      tests: [test({ id: "t1", conditions: { workoutLogId: "w1" }, createdAt: "2026-05-01T00:00:00Z" as unknown as Date })],
+      analysis: [],
+    };
+    expect(buildTestRows(data)[0]).toMatchObject({ durationSeconds: null, distanceMeters: null, avgHeartRate: null });
+  });
+});
+
+describe("buildPaceTrendData", () => {
+  const rows = buildTestRows({
+    tests: [
+      test({ id: "t-old", conditions: { workoutLogId: "w1" }, createdAt: "2026-03-01T00:00:00Z" as unknown as Date, metrics: metricsRow(1800, 5000) }),
+      test({ id: "t-new", conditions: { workoutLogId: "w2" }, createdAt: "2026-05-01T00:00:00Z" as unknown as Date, metrics: metricsRow(1710, 5000) }),
+      test({ id: "t-nopace", conditions: { workoutLogId: "w3" }, createdAt: "2026-06-01T00:00:00Z" as unknown as Date, metrics: metricsRow(null, 5000) }),
+    ],
+    analysis: [],
+  });
+
+  it("computes seconds per km, oldest → newest, dropping rows without a pace", () => {
+    const points = buildPaceTrendData(rows, "km");
+    expect(points.map((p) => p.date)).toEqual(["2026-03-01", "2026-05-01"]);
+    expect(Math.round(points[0].secondsPerUnit)).toBe(360); // 5000 m / 1800 s → 360 s/km
+    expect(Math.round(points[1].secondsPerUnit)).toBe(342); // 5000 m / 1710 s → 342 s/km
+  });
+
+  it("converts to seconds per mile for mile users", () => {
+    const [first] = buildPaceTrendData(rows, "miles");
+    expect(Math.round(first.secondsPerUnit)).toBe(579); // 360 s/km ÷ 0.621371 ≈ 579 s/mi
   });
 });
 
