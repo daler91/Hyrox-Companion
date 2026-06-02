@@ -278,6 +278,7 @@ export default function Settings() {
   const {
     data: preferences,
     isLoading,
+    isFetching,
     isError,
     error,
     refetch,
@@ -511,8 +512,13 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{errorMessage}</p>
-            <Button onClick={() => refetch()} data-testid="button-retry-load-settings">
-              Retry
+            <Button onClick={() => refetch()} disabled={isFetching} data-testid="button-retry-load-settings">
+              {isFetching ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+              ) : (
+                <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
+              )}
+              {isFetching ? "Retrying…" : "Retry"}
             </Button>
           </CardContent>
         </Card>
