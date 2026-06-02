@@ -7,13 +7,15 @@
  * misconfiguration patterns that would point the AI provider client at a
  * service on the same host or LAN.
  *
- * Limitation (documented as defense-in-depth follow-up): the check is
- * synchronous and only catches literal IP / hostname patterns. A non-literal
- * hostname that resolves to a private IP at DNS-resolution time would still
- * slip past. A full fix would do an async DNS lookup at startup and refuse
- * to boot if the resolved address is private. That's a separate W2-follow-up
- * PR; this guard closes the bulk of accidental misconfigurations.
+ * `checkSafeOutboundUrl` is synchronous and only catches literal IP / hostname
+ * patterns. A non-literal hostname that resolves to a private IP at DNS-
+ * resolution time would slip past it. `assertResolvedHostIsPublic` closes that
+ * gap (S2 / W2 follow-up): it resolves a host's A/AAAA records at startup and
+ * refuses to boot if any resolved address is private. DNS errors are treated as
+ * non-fatal so a transient resolver hiccup doesn't block an otherwise-healthy boot.
  */
+
+import { promises as dnsPromises } from "node:dns";
 
 /** Literal hostnames that are always rejected. */
 const REJECTED_HOSTNAMES = new Set<string>(["localhost"]);
@@ -107,4 +109,77 @@ export function checkSafeOutboundUrl(url: string): SsrfCheckResult {
     return { ok: false, reason: `${hostname} is an IPv6 loopback/ULA/link-local address` };
   }
   return { ok: true };
+}
+
+/**
+ * Check a resolved IP address literal (IPv4 or IPv6, brackets tolerated)
+ * against the same loopback/private/link-local ranges as checkSafeOutboundUrl.
+ * Used by the startup DNS-resolution guard on each address a hostname resolves to.
+ */
+export function isPrivateAddress(address: string): boolean {
+  const host = address.toLowerCase().replace(/^\[|\]$/g, "");
+  const v4 = parseIpv4(host);
+  if (v4) return isPrivateIpv4(v4);
+  return isPrivateIpv6(host);
+}
+
+/** Minimal DNS resolver surface, injectable so the startup guard is testable. */
+export interface DnsResolver {
+  resolve4(hostname: string): Promise<string[]>;
+  resolve6(hostname: string): Promise<string[]>;
+}
+
+const DNS_RESOLVE_TIMEOUT_MS = 2_000;
+
+function withDnsTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      const timer = setTimeout(() => reject(new Error("DNS resolution timed out")), timeoutMs);
+      // Don't let a pending resolver promise keep the event loop alive.
+      timer.unref();
+    }),
+  ]);
+}
+
+/**
+ * Defense-in-depth SSRF guard (S2 / W2 follow-up): resolve a non-literal
+ * hostname's A/AAAA records and throw if ANY resolved address is private /
+ * loopback / link-local. Literal IPs and `localhost` are already rejected by
+ * checkSafeOutboundUrl at env-parse time, so they're skipped here.
+ *
+ * Throws on a private resolution so the caller can refuse to boot. DNS errors
+ * (NXDOMAIN, timeout, no records) are non-fatal — they don't indicate an SSRF
+ * target and shouldn't block startup over a transient resolver hiccup.
+ */
+export async function assertResolvedHostIsPublic(
+  rawUrl: string,
+  opts: { resolver?: DnsResolver; timeoutMs?: number } = {},
+): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return; // URL syntax is validated elsewhere (Zod .url()).
+  }
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  // Literal IPv4/IPv6 and localhost are already covered synchronously at env
+  // time; only a non-literal hostname needs a DNS round-trip here.
+  if (host === "localhost" || parseIpv4(host) !== null || host.includes(":")) {
+    return;
+  }
+
+  const resolver = opts.resolver ?? dnsPromises;
+  const timeoutMs = opts.timeoutMs ?? DNS_RESOLVE_TIMEOUT_MS;
+
+  const [v4, v6] = await Promise.all([
+    withDnsTimeout(resolver.resolve4(host), timeoutMs).catch(() => [] as string[]),
+    withDnsTimeout(resolver.resolve6(host), timeoutMs).catch(() => [] as string[]),
+  ]);
+  const privateHit = [...v4, ...v6].find((addr) => isPrivateAddress(addr));
+  if (privateHit) {
+    throw new Error(
+      `Outbound URL host "${host}" resolves to a private/loopback address (${privateHit}) — refusing to start (SSRF guard S2)`,
+    );
+  }
 }

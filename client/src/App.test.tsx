@@ -75,7 +75,7 @@ describe("App providers", () => {
     expect(screen.getByTestId("theme-provider")).toBeInTheDocument();
     expect(screen.getByTestId("tooltip-provider")).toBeInTheDocument();
     expect(screen.queryByTestId("clerk-provider")).not.toBeInTheDocument();
-    expect(screen.getByTestId("timeline-page")).toBeInTheDocument();
+    expect(await screen.findByTestId("timeline-page")).toBeInTheDocument();
     expect(screen.getByTestId("toaster")).toBeInTheDocument();
     expect(screen.getByTestId("offline-indicator")).toBeInTheDocument();
   });
@@ -90,7 +90,7 @@ describe("App providers", () => {
     expect(screen.getByTestId("query-provider")).toBeInTheDocument();
     expect(screen.getByTestId("theme-provider")).toBeInTheDocument();
     expect(screen.getByTestId("tooltip-provider")).toBeInTheDocument();
-    expect(screen.getByTestId("timeline-page")).toBeInTheDocument();
+    expect(await screen.findByTestId("timeline-page")).toBeInTheDocument();
     expect(screen.getByTestId("toaster")).toBeInTheDocument();
     expect(screen.getByTestId("offline-indicator")).toBeInTheDocument();
     expect(showSpy).toHaveBeenCalledWith("signed-in");

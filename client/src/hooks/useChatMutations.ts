@@ -5,8 +5,8 @@ import { api, QUERY_KEYS } from "@/lib/api";
 export function useSaveMessageMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (msg: { role: string; content: string }) =>
-      api.chat.saveMessage(msg),
+    mutationFn: (msg: { role: string; content: string; idempotencyKey?: string }) =>
+      api.chat.saveMessage({ role: msg.role, content: msg.content }, msg.idempotencyKey),
     onSuccess: () => {
       // Invalidate the chat-history query so the next surface that
       // mounts useChatSession (e.g. the in-dialog chat after the

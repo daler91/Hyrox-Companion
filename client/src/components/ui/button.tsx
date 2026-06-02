@@ -29,11 +29,12 @@ const buttonVariants = cva(
         default: "min-h-9 px-4 py-2",
         sm: "min-h-8 rounded-md px-3 text-xs",
         lg: "min-h-10 rounded-md px-8",
-        icon: "h-9 w-9",
-        // 44x44 CSS px target for touch (WCAG 2.5.5 / Apple HIG).
-        // Use on icon-only controls in dense mobile surfaces (sticky header,
-        // RPE compact, etc.). Pair with `md:h-9 md:w-9` if you want a denser
-        // pointer-only desktop sibling.
+        // 44x44 CSS px on mobile (WCAG 2.5.5 / Apple HIG touch target), denser
+        // 36px from md up on pointer-rich desktop (S9). The SVG glyph stays
+        // size-4 either way — only the tappable box grows on small screens.
+        icon: "h-11 w-11 md:h-9 md:w-9",
+        // Always-44px variant for icon-only controls that must stay a full touch
+        // target even on desktop (e.g. a sticky mobile-first header reused there).
         "icon-touch": "h-11 w-11",
       },
     },

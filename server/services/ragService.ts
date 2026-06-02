@@ -145,8 +145,17 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
           : chunk,
     );
 
-    const embeddings = await generateEmbeddings(textsToEmbed);
-    trackEmbeddingUsage(material.userId, textsToEmbed.length);
+    // S7: de-duplicate identical chunk texts before embedding so repeated
+    // boilerplate (or content pasted twice) is embedded once and the vector
+    // reused for every position. The generateEmbedding cache collapses repeats
+    // across calls, but identical strings inside a single parallel batch would
+    // otherwise each hit the provider. Usage tracking reflects the deduped count.
+    const uniqueTexts = [...new Set(textsToEmbed)];
+    const uniqueEmbeddings = await generateEmbeddings(uniqueTexts);
+    const embeddingByText = new Map(uniqueTexts.map((text, i) => [text, uniqueEmbeddings[i]]));
+    trackEmbeddingUsage(material.userId, uniqueTexts.length);
+
+    const embeddings = textsToEmbed.map((text) => embeddingByText.get(text)!);
 
     // Replace old chunks with new ones transactionally, so a failure
     // doesn't leave the material with zero chunks or in an inconsistent state.

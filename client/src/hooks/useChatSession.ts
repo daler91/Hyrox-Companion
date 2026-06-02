@@ -278,7 +278,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     // fires on a fresh failure (W8).
     setStreamError(null);
 
-    saveMessageMutation.mutate({ role: "user", content });
+    // Pass each message's stable client id as an idempotency key so a retried
+    // save (React Query retry, double-fire, offline replay) doesn't persist the
+    // turn twice; the user/assistant ids differ so the pair stays ordered (S7).
+    saveMessageMutation.mutate({ role: "user", content, idempotencyKey: userMessage.id });
 
     const assistantMessageId = crypto.randomUUID();
     let fullResponse = "";
@@ -334,7 +337,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         fullResponse = result.content;
 
         if (fullResponse) {
-          saveMessageMutation.mutate({ role: "assistant", content: fullResponse });
+          saveMessageMutation.mutate({ role: "assistant", content: fullResponse, idempotencyKey: assistantMessageId });
         }
       } else {
         const data = await api.chat.send({
@@ -351,7 +354,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
-        saveMessageMutation.mutate({ role: "assistant", content: data.response });
+        saveMessageMutation.mutate({ role: "assistant", content: data.response, idempotencyKey: assistantMessageId });
       }
     } catch (err) {
       handleStreamError({
@@ -360,7 +363,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         assistantMessageId,
         setMessages,
         saveAssistantMessage: (content) =>
-          saveMessageMutation.mutate({ role: "assistant", content }),
+          saveMessageMutation.mutate({ role: "assistant", content, idempotencyKey: assistantMessageId }),
         setStreamError,
       });
     } finally {

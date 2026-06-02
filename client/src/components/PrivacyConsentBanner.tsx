@@ -4,24 +4,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { useHasBlockingModalLayer } from "@/components/ui/modal-layer";
-import { safeLocalStorage } from "@/lib/safeStorage";
-
-const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
-const CONSENT_CHANGED_EVENT = "fitai:privacy-consent-changed";
-
-function hasStoredConsent(): boolean {
-  if (globalThis.window === undefined) return true;
-  const consent = safeLocalStorage.tryGetItem(CONSENT_STORAGE_KEY);
-  return !consent.ok || consent.value !== null;
-}
-
-function recordConsent(): void {
-  safeLocalStorage.setItem(CONSENT_STORAGE_KEY, String(Date.now()));
-  // Notify same-tab listeners — the native `storage` event only fires
-  // across tabs, so we need a custom channel for our own listener below
-  // (and for tests that set the key imperatively after mount).
-  globalThis.window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
-}
+import { hasAcknowledgedPrivacyNotice, onPrivacyConsentChange, recordPrivacyConsent } from "@/lib/privacyConsent";
 
 /**
  * Minimal first-load notice listing the third-party services that process
@@ -35,32 +18,26 @@ export function PrivacyConsentBanner() {
   // Lazy initializer reads localStorage once on mount rather than triggering
   // a cascading setState inside useEffect. hasStoredConsent() already guards
   // against missing window / denied storage.
-  const [visible, setVisible] = useState<boolean>(() => !hasStoredConsent());
+  const [visible, setVisible] = useState<boolean>(() => !hasAcknowledgedPrivacyNotice());
 
   // Self-hide if consent is recorded AFTER mount (our own dismiss button,
   // another tab, or a Cypress command that seeds the key post-visit). The
   // lazy initializer snapshots localStorage once, so without this listener
   // the banner sticks around and can overlay fixed-bottom interactive UI.
   useEffect(() => {
-    if (globalThis.window === undefined) return;
     const check = () => {
-      if (hasStoredConsent()) setVisible(false);
+      if (hasAcknowledgedPrivacyNotice()) setVisible(false);
     };
     // Re-check on mount in case the key was set between render-time snapshot
     // and effect commit (covers the Cypress `window:before:load` race).
     check();
-    globalThis.window.addEventListener(CONSENT_CHANGED_EVENT, check);
-    globalThis.window.addEventListener("storage", check);
-    return () => {
-      globalThis.window.removeEventListener(CONSENT_CHANGED_EVENT, check);
-      globalThis.window.removeEventListener("storage", check);
-    };
+    return onPrivacyConsentChange(check);
   }, []);
 
   if (!visible || hasBlockingModalLayer) return null;
 
   const dismiss = () => {
-    recordConsent();
+    recordPrivacyConsent();
     setVisible(false);
   };
 
@@ -71,8 +48,8 @@ export function PrivacyConsentBanner() {
     >
       <div className="mx-auto flex max-w-4xl flex-col gap-3 p-4 text-sm md:flex-row md:items-center md:justify-between">
         <p className="text-muted-foreground">
-          We use Sentry for error tracking (PII scrubbed), and you can opt into Strava, Garmin, and
-          AI coaching, each off by default.{" "}
+          We use Sentry for error tracking (PII scrubbed; turn it off anytime in Settings), and you
+          can opt into Strava, Garmin, and AI coaching, each off by default.{" "}
           <Link to="/privacy" className="rounded underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             Read our privacy policy
           </Link>

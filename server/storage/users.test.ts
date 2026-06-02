@@ -1,4 +1,5 @@
-import { type InsertStravaConnection,users } from '@shared/schema';
+import { calculateMafHr } from '@shared/maf';
+import { type InsertStravaConnection, type UpdateUserPreferences, type User,users } from '@shared/schema';
 import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import * as crypto from '../crypto';
@@ -190,6 +191,69 @@ describe('UserStorage', () => {
         firstName: 'Test',
       }));
       expect(secondValuesMock.mock.calls[0][0]).not.toHaveProperty('email');
+    });
+  });
+
+  describe('updateUserPreferences MAF snapshot (S4)', () => {
+    const mafUser = {
+      id: 'user-1',
+      trainingStyleId: 'maf_method',
+      mafAge: 30,
+      mafConsistency: 'high',
+      mafTrend: 'improving',
+      mafInjuryIllnessMedication: false,
+      trainingStyleChangedAt: null,
+    } as unknown as User;
+
+    const prefs = { trainingStyleId: 'maf_method' } as unknown as UpdateUserPreferences;
+    const expectedMaf = calculateMafHr({ age: 30, injuryIllnessMedication: false, consistency: 'high', trend: 'improving' });
+
+    // getUser() + the UPDATE both resolve to mafUser; the snapshot SELECT is
+    // wired per-test. db.select is called twice (getUser, then latest snapshot).
+    function wireBaseMocks(latestSnapshotRows: unknown[]) {
+      const getUserFrom = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([mafUser]) });
+      const snapshotFrom = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue(latestSnapshotRows) }),
+        }),
+      });
+      vi.mocked(db.select)
+        .mockReturnValueOnce({ from: getUserFrom } as never)
+        .mockReturnValueOnce({ from: snapshotFrom } as never);
+
+      const returningMock = vi.fn().mockResolvedValue([mafUser]);
+      vi.mocked(db.update).mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: returningMock }) }),
+      } as never);
+
+      const insertValues = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(db.insert).mockReturnValue({ values: insertValues } as never);
+      return insertValues;
+    }
+
+    it('does not insert a new snapshot when MAF inputs are unchanged', async () => {
+      const reason = JSON.stringify({
+        reasonCodes: expectedMaf.reasonCodes,
+        explanation: expectedMaf.explanation,
+        warning: expectedMaf.warning,
+      });
+      const insertValues = wireBaseMocks([
+        { baseHr: expectedMaf.base, adjustment: expectedMaf.adjustment, finalHr: expectedMaf.ceiling, reason },
+      ]);
+
+      await userStorage.updateUserPreferences('user-1', prefs);
+
+      expect(insertValues).not.toHaveBeenCalled();
+    });
+
+    it('inserts a snapshot when none exists yet', async () => {
+      const insertValues = wireBaseMocks([]);
+
+      await userStorage.updateUserPreferences('user-1', prefs);
+
+      expect(insertValues).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', finalHr: expectedMaf.ceiling }),
+      );
     });
   });
 });

@@ -77,10 +77,10 @@ export async function callGeminiParseImage(
     buildUnitNote(units) +
     buildCustomNote(customExerciseNames);
   const response = await retryWithBackoff(
-    () =>
+    (signal) =>
       getAiClient().models.generateContent({
         model: GEMINI_VISION_MODEL,
-        config: { systemInstruction, responseMimeType: "application/json" },
+        config: { systemInstruction, responseMimeType: "application/json", abortSignal: signal },
         contents: [
           {
             role: "user",

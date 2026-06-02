@@ -56,8 +56,16 @@ export const chat = {
   send: (data: { message: string; history?: Array<{ role: string; content: string }> }) =>
     typedRequest<ChatResponse>("POST", "/api/v1/chat", data),
 
-  saveMessage: (msg: { role: string; content: string }) =>
-    typedRequest<ChatMessage>("POST", "/api/v1/chat/message", msg),
+  // The per-message idempotencyKey (the client message id) is sent as
+  // X-Idempotency-Key so a retried/duplicated save is de-duplicated by the
+  // existing idempotency middleware rather than persisting the turn twice (S7).
+  saveMessage: (msg: { role: string; content: string }, idempotencyKey?: string) =>
+    typedRequest<ChatMessage>(
+      "POST",
+      "/api/v1/chat/message",
+      msg,
+      idempotencyKey ? { headers: { "X-Idempotency-Key": idempotencyKey } } : undefined,
+    ),
 
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
 
