@@ -104,9 +104,9 @@ describe("assertResolvedHostIsPublic (S2 / W2 follow-up)", () => {
       resolve4: async () => { throw new Error("should not be called"); },
       resolve6: async () => { throw new Error("should not be called"); },
     };
-    await expect(assertResolvedHostIsPublic("http://10.0.0.1", { resolver: throwingResolver })).resolves.toBeUndefined();
-    await expect(assertResolvedHostIsPublic("http://localhost", { resolver: throwingResolver })).resolves.toBeUndefined();
-    await expect(assertResolvedHostIsPublic("http://[::1]", { resolver: throwingResolver })).resolves.toBeUndefined();
+    await expect(assertResolvedHostIsPublic("https://10.0.0.1", { resolver: throwingResolver })).resolves.toBeUndefined();
+    await expect(assertResolvedHostIsPublic("https://localhost", { resolver: throwingResolver })).resolves.toBeUndefined();
+    await expect(assertResolvedHostIsPublic("https://[::1]", { resolver: throwingResolver })).resolves.toBeUndefined();
   });
 
   it("is non-fatal when DNS resolution fails (transient resolver hiccup)", async () => {

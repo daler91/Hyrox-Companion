@@ -4,7 +4,7 @@ import { safeLocalStorage } from "./safeStorage";
 // the banner and the error-reporting gate (main.tsx / errorReporting.ts) share
 // one source of truth for the key + change event (S11) — no drift between
 // "banner dismissed" and "OK to start Sentry".
-const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
+const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1"; // gitleaks:allow — a localStorage key name, not a secret
 const CONSENT_CHANGED_EVENT = "fitai:privacy-consent-changed";
 
 /** True once the user has seen + acknowledged the privacy notice banner. */

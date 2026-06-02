@@ -132,14 +132,13 @@ export class UserStorage {
           finalHr: maf.ceiling,
           reason,
         });
+        // Operational telemetry only — the derived HR values are Art. 9 health
+        // data and are intentionally kept out of the log message (Bearer leak).
         logger.info({
           context: "health-metrics",
           event: "maf_hr_calculated",
           userId,
           trainingStyleId: user.trainingStyleId,
-          mafHr: maf.ceiling,
-          mafBaseHr: maf.base,
-          mafAdjustment: maf.adjustment,
         }, "MAF HR calculated and persisted");
       }
     } else if (user?.trainingStyleId === "maf_method") {
