@@ -33,13 +33,24 @@ function geminiContents(request: ResolvedTextAiRequest) {
   }));
 }
 
-function geminiConfig(request: ResolvedTextAiRequest) {
+/** Combine the caller's cancel signal with the per-call timeout signal (S6). */
+function combineSignals(...signals: (AbortSignal | undefined)[]): AbortSignal | undefined {
+  const present = signals.filter((s): s is AbortSignal => s != null);
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return AbortSignal.any(present);
+}
+
+function geminiConfig(request: ResolvedTextAiRequest, timeoutSignal?: AbortSignal) {
   const thinkingLevel = geminiThinkingLevel(request);
+  // Merge the external cancel signal (request.signal) with the timeout-driven
+  // signal from retryWithBackoff so a hung call aborts the socket (S6).
+  const abortSignal = combineSignals(request.signal, timeoutSignal);
   return {
     ...(request.systemInstruction ? { systemInstruction: request.systemInstruction } : {}),
     ...(request.json ? { responseMimeType: "application/json" } : {}),
     ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
-    ...(request.signal ? { abortSignal: request.signal } : {}),
+    ...(abortSignal ? { abortSignal } : {}),
   };
 }
 
@@ -53,10 +64,10 @@ export const geminiTextProvider: TextAiProvider = {
 
   async generateText(request): Promise<TextAiResponse> {
     const response = await retryWithBackoff(
-      () =>
+      (signal) =>
         getAiClient().models.generateContent({
           model: request.model,
-          config: geminiConfig(request),
+          config: geminiConfig(request, signal),
           contents: geminiContents(request),
         }),
       request.label,

@@ -99,22 +99,49 @@ export class UserStorage {
         consistency: user.mafConsistency as "low" | "moderate" | "high",
         trend: user.mafTrend as "improving" | "flat" | "declining",
       });
-      await db.insert(mafProfile).values({
-        userId,
-        baseHr: maf.base,
-        adjustment: maf.adjustment,
-        finalHr: maf.ceiling,
-        reason: JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning }),
-      });
-      logger.info({
-        context: "health-metrics",
-        event: "maf_hr_calculated",
-        userId,
-        trainingStyleId: user.trainingStyleId,
-        mafHr: maf.ceiling,
-        mafBaseHr: maf.base,
-        mafAdjustment: maf.adjustment,
-      }, "MAF HR calculated and persisted");
+      const reason = JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning });
+
+      // S4: updateUserPreferences runs on every settings save, so snapshot the
+      // MAF profile only when it actually changes — otherwise an unchanged
+      // profile appends a duplicate maf_profile row on each save. baseHr +
+      // adjustment + finalHr + reason together capture the input-derived result.
+      const [latestSnapshot] = await db
+        .select({
+          baseHr: mafProfile.baseHr,
+          adjustment: mafProfile.adjustment,
+          finalHr: mafProfile.finalHr,
+          reason: mafProfile.reason,
+        })
+        .from(mafProfile)
+        .where(eq(mafProfile.userId, userId))
+        .orderBy(desc(mafProfile.calculatedAt))
+        .limit(1);
+
+      const mafProfileUnchanged =
+        latestSnapshot != null &&
+        latestSnapshot.baseHr === maf.base &&
+        latestSnapshot.adjustment === maf.adjustment &&
+        latestSnapshot.finalHr === maf.ceiling &&
+        latestSnapshot.reason === reason;
+
+      if (!mafProfileUnchanged) {
+        await db.insert(mafProfile).values({
+          userId,
+          baseHr: maf.base,
+          adjustment: maf.adjustment,
+          finalHr: maf.ceiling,
+          reason,
+        });
+        logger.info({
+          context: "health-metrics",
+          event: "maf_hr_calculated",
+          userId,
+          trainingStyleId: user.trainingStyleId,
+          mafHr: maf.ceiling,
+          mafBaseHr: maf.base,
+          mafAdjustment: maf.adjustment,
+        }, "MAF HR calculated and persisted");
+      }
     } else if (user?.trainingStyleId === "maf_method") {
       logger.warn({
         context: "health-alert",

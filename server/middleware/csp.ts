@@ -31,6 +31,11 @@ export function buildCspDirectives({ isDev }: { isDev: boolean }): CspDirectives
   return {
     defaultSrc: ["'self'"],
     scriptSrc,
+    // style-src keeps 'unsafe-inline' as an accepted trade-off (S3). Recharts
+    // injects <style> tags and Radix UI primitives set inline `style` attributes
+    // for runtime positioning; a nonce/hash-based style-src would require
+    // replacing or forking those libraries. script-src stays nonce-based in
+    // production, so the primary XSS vector (script injection) is still closed.
     styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", ...CLERK_DOMAINS],
     fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
     imgSrc: ["'self'", "data:", "https://img.clerk.com", "https://*.clerk.com", "https://*.strava.com"],

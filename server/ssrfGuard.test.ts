@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { checkSafeOutboundUrl } from "./ssrfGuard";
+import { assertResolvedHostIsPublic, checkSafeOutboundUrl, type DnsResolver, isPrivateAddress } from "./ssrfGuard";
+
+/** Build a stub resolver returning fixed A/AAAA records. */
+function stubResolver(v4: string[], v6: string[] = []): DnsResolver {
+  return { resolve4: async () => v4, resolve6: async () => v6 };
+}
 
 describe("checkSafeOutboundUrl (W2)", () => {
   describe("public hostnames pass", () => {
@@ -62,5 +67,53 @@ describe("checkSafeOutboundUrl (W2)", () => {
       const result = checkSafeOutboundUrl(url);
       expect(result.ok).toBe(false);
     });
+  });
+});
+
+describe("isPrivateAddress", () => {
+  it.each(["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.0.1", "169.254.169.254", "::1", "fc00::1", "fe80::1"])(
+    "%s → private",
+    (addr) => expect(isPrivateAddress(addr)).toBe(true),
+  );
+  it.each(["8.8.8.8", "203.0.113.42", "2001:db8::1"])("%s → public", (addr) =>
+    expect(isPrivateAddress(addr)).toBe(false),
+  );
+});
+
+describe("assertResolvedHostIsPublic (S2 / W2 follow-up)", () => {
+  it("rejects a hostname that resolves to a private IPv4", async () => {
+    await expect(
+      assertResolvedHostIsPublic("https://ai.internal.corp", { resolver: stubResolver(["10.0.0.5"]) }),
+    ).rejects.toThrow(/private\/loopback/);
+  });
+
+  it("rejects a hostname that resolves to a private IPv6", async () => {
+    await expect(
+      assertResolvedHostIsPublic("https://ai.internal.corp", { resolver: stubResolver([], ["fd00::1"]) }),
+    ).rejects.toThrow(/private\/loopback/);
+  });
+
+  it("allows a hostname that resolves only to public addresses", async () => {
+    await expect(
+      assertResolvedHostIsPublic("https://api.example.com", { resolver: stubResolver(["93.184.216.34"]) }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("skips DNS for IP-literal and localhost hosts (already covered at env time)", async () => {
+    const throwingResolver: DnsResolver = {
+      resolve4: async () => { throw new Error("should not be called"); },
+      resolve6: async () => { throw new Error("should not be called"); },
+    };
+    await expect(assertResolvedHostIsPublic("http://10.0.0.1", { resolver: throwingResolver })).resolves.toBeUndefined();
+    await expect(assertResolvedHostIsPublic("http://localhost", { resolver: throwingResolver })).resolves.toBeUndefined();
+    await expect(assertResolvedHostIsPublic("http://[::1]", { resolver: throwingResolver })).resolves.toBeUndefined();
+  });
+
+  it("is non-fatal when DNS resolution fails (transient resolver hiccup)", async () => {
+    const failing: DnsResolver = {
+      resolve4: async () => { throw new Error("ENOTFOUND"); },
+      resolve6: async () => { throw new Error("ENOTFOUND"); },
+    };
+    await expect(assertResolvedHostIsPublic("https://api.example.com", { resolver: failing })).resolves.toBeUndefined();
   });
 });

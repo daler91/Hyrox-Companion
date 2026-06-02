@@ -191,6 +191,38 @@ describe("embedCoachingMaterial", () => {
     });
   });
 
+  it("de-duplicates identical chunk texts before embedding (S7)", async () => {
+    // Pure repeated content produces identical interior chunks (same-size slices),
+    // so dedup should embed each distinct text once and reuse the vector.
+    const repetitiveMaterial = { ...mockMaterial, content: "a".repeat(3000) };
+    vi.mocked(generateEmbeddings).mockImplementation(async (texts) => texts.map((t) => [t.length]));
+    vi.mocked(storage.coaching.replaceChunks).mockResolvedValue([]);
+
+    await embedCoachingMaterial(repetitiveMaterial);
+
+    const passedTexts = vi.mocked(generateEmbeddings).mock.calls[0][0];
+    const insertedChunks = vi.mocked(storage.coaching.replaceChunks).mock.calls[0][1];
+
+    // Only unique texts are embedded, but every chunk still gets an embedding.
+    expect(new Set(passedTexts).size).toBe(passedTexts.length);
+    expect(passedTexts.length).toBeLessThan(insertedChunks.length);
+    insertedChunks.forEach((chunk) => expect(chunk.embedding).toBeDefined());
+
+    // Identical-content chunks reuse the same vector (size-agnostic check).
+    // Skip chunk 0: it's embedded with a title prefix, so its embedding text
+    // differs from same-content interior chunks by design.
+    const interior = insertedChunks.slice(1);
+    const byContent = new Map<string, typeof interior>();
+    for (const chunk of interior) {
+      byContent.set(chunk.content, [...(byContent.get(chunk.content) ?? []), chunk]);
+    }
+    const repeated = [...byContent.values()].find((list) => list.length > 1);
+    expect(repeated).toBeDefined();
+    for (const chunk of repeated!) {
+      expect(chunk.embedding).toEqual(repeated![0].embedding);
+    }
+  });
+
   it("should throw when embedding fails (callers handle errors)", async () => {
     vi.mocked(generateEmbeddings).mockRejectedValue(new Error("API error"));
 

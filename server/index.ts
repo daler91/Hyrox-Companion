@@ -28,6 +28,7 @@ import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
 import { drainSseStreams } from "./sseRegistry";
+import { assertResolvedHostIsPublic } from "./ssrfGuard";
 import { serveStatic } from "./static";
 import { storage } from "./storage";
 import { isVectorDbSeparate, vectorPool } from "./vectorDb";
@@ -288,6 +289,17 @@ await new Promise<void>((resolve, reject) => {
 logger.info({ port }, `HTTP server listening on port ${port} — running startup tasks...`);
 
 try {
+  // Defense-in-depth SSRF guard (S2 / W2 follow-up). The env-time guard only
+  // rejects IP-literal hosts; here we resolve a non-literal AI_TEXT_BASE_URL
+  // host and refuse to become ready if it points at a private/loopback address
+  // (e.g. an internal hostname → 10.x). DNS errors are non-fatal so a transient
+  // resolver hiccup doesn't block an otherwise-healthy boot.
+  if (env.AI_TEXT_BASE_URL) {
+    startupState.startupPhase = "ssrf_guard";
+    logger.info("Startup phase: ssrf_guard");
+    await assertResolvedHostIsPublic(env.AI_TEXT_BASE_URL);
+  }
+
   startupState.startupPhase = "db_maintenance";
   logger.info("Startup phase: db_maintenance");
   await runStartupMaintenance(storage);

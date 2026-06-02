@@ -24,7 +24,7 @@ vi.mock("@google/genai", () => ({
   }),
 }));
 
-import { __resetEmbeddingCacheForTests, generateEmbedding } from "./client";
+import { __resetEmbeddingCacheForTests, generateEmbedding, retryWithBackoff, withTimeout } from "./client";
 
 function mockEmbedding(values: number[]) {
   embedContentSpy.mockResolvedValueOnce({ embeddings: [{ values }] });
@@ -71,5 +71,39 @@ describe("generateEmbedding cache", () => {
 
     expect(refreshed).toEqual([2, 2, 2]);
     expect(embedContentSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("withTimeout (S6)", () => {
+  it("resolves with the value when the promise settles before the timeout", async () => {
+    await expect(withTimeout(Promise.resolve("ok"), 1000, "fast")).resolves.toBe("ok");
+  });
+
+  it("rejects and fires onTimeout when the timer wins", async () => {
+    const onTimeout = vi.fn();
+    const never = new Promise<never>(() => {});
+    await expect(withTimeout(never, 10, "slow", onTimeout)).rejects.toThrow(/timed out/);
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+});
+
+describe("retryWithBackoff abort plumbing (S6)", () => {
+  it("aborts the signal handed to fn when the call times out", async () => {
+    let captured: AbortSignal | undefined;
+    const result = retryWithBackoff(
+      (signal) => {
+        captured = signal;
+        return new Promise<never>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted by signal")));
+        });
+      },
+      "abort-test",
+      0, // maxRetries — fail fast
+      1, // baseDelayMs
+      1000, // budgetMs
+      15, // callTimeoutMs — short so the timeout fires
+    );
+    await expect(result).rejects.toThrow();
+    expect(captured?.aborted).toBe(true);
   });
 });

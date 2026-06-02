@@ -36,13 +36,20 @@ export function getAiClient(): GoogleGenAI {
   return _ai;
 }
 
-/** Race a promise against a timeout; rejects with a descriptive error on expiry. */
-export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+/**
+ * Race a promise against a timeout; rejects with a descriptive error on expiry.
+ * `onTimeout` (S6) fires when the timer wins so callers can abort the underlying
+ * request — the race alone only rejects the wrapper, leaving the socket in flight.
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string, onTimeout?: () => void): Promise<T> {
   let timerId: ReturnType<typeof setTimeout>;
   return Promise.race([
     promise.finally(() => clearTimeout(timerId)),
     new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => reject(new Error(`AI call timed out after ${ms}ms (${label})`)), ms);
+      timerId = setTimeout(() => {
+        onTimeout?.();
+        reject(new Error(`AI call timed out after ${ms}ms (${label})`));
+      }, ms);
     }),
   ]);
 }
@@ -78,7 +85,7 @@ function shouldRetry(error: unknown, attempt: number, maxRetries: number, baseDe
 }
 
 export async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
+  fn: (signal: AbortSignal) => Promise<T>,
   label: string,
   maxRetries: number = 4,
   baseDelayMs: number = 2000,
@@ -98,7 +105,17 @@ export async function retryWithBackoff<T>(
     }
     try {
       const remaining = deadline - Date.now();
-      const result = await withTimeout(fn(), Math.min(remaining, callTimeoutMs), label);
+      // S6: drive an AbortController off the per-call timeout and hand its
+      // signal to fn so a hung provider request actually releases its socket
+      // (where the SDK honors the signal) instead of lingering until the OS
+      // keepalive — the Promise.race below only rejects the wrapper.
+      const controller = new AbortController();
+      const result = await withTimeout(
+        fn(controller.signal),
+        Math.min(remaining, callTimeoutMs),
+        label,
+        () => controller.abort(new Error(`AI call timed out (${label})`)),
+      );
       recordBreakerSuccess();
       return result;
     } catch (error) {
@@ -208,10 +225,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   if (cached) return cached;
 
   const response = await retryWithBackoff(
-    () =>
+    (signal) =>
       getAiClient().models.embedContent({
         model: EMBEDDING_MODEL,
         contents: text,
+        config: { abortSignal: signal },
       }),
     "embedding",
   );

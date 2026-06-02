@@ -156,6 +156,11 @@ function looksLike429(err: unknown): boolean {
  * something that looks like a 429, we trip the breaker BEFORE re-throwing so
  * the error reaches the route handler with the breaker already armed.
  */
+// S6 note: unlike the Gemini/Strava paths, the @flow-js/garmin-connect SDK
+// does not expose an AbortSignal (or a per-call timeout) on its high-level
+// methods, so we can't abort the underlying socket on a hung call here. The
+// circuit breaker below plus the per-user in-flight mutex contain a stuck
+// Garmin call from amplifying; revisit if the SDK adds signal support.
 async function withCircuitBreaker<T>(label: string, fn: () => Promise<T>): Promise<T> {
   if (garminCircuitBreaker.isOpen()) {
     throw new Error(

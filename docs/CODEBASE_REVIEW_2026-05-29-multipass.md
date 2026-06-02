@@ -3,7 +3,7 @@
 **Generated:** 2026-05-29
 **Branch reviewed:** `codex/fix-sonar-analytics-cleanups`
 **Method:** Seven specialized review passes (security, business, UX/a11y, performance, QA, DevOps, privacy) executed in parallel by isolated reviewer agents.
-**Status as of 2026-06-01:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 26 of 26 Warnings closed (W5 partially mitigated), 13 of 23 Suggestions closed.
+**Status as of 2026-06-02:** historical baseline. See Remediation Status below — 9 of 10 Criticals closed (1 deferred), 26 of 26 Warnings closed (W5 partially mitigated), 22 of 23 Suggestions closed (S12 deferred).
 
 > **Note.** This report is a *separate* multi-pass audit run on the same date as
 > `CODEBASE_REVIEW_2026-05-29.md` (which has since been fully remediated across
@@ -14,7 +14,7 @@
 
 ## Remediation Status — 2026-05-31
 
-The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below. Updated each time a remediation PR lands; latest update 2026-06-01 closes the remaining Warnings — the #1338 remediation batch (W6–W9, W13–W14, W21–W26 plus S2–S4, S9, S11, S13, S16, S18–S19, S21–S23) and source-verified closures of W3 / W9 / W23.
+The original Critical / Warning / Suggestion tables further down are preserved verbatim as the original review evidence. This matrix is the authoritative current state. Reader looking for "what shipped" reads here; reader looking for "what was originally flagged" reads the tables below. Updated each time a remediation PR lands; latest update 2026-06-01 closes the remaining Warnings — the #1338 remediation batch (W6–W9, W13–W14, W21–W26 plus S2–S4, S9, S11, S13, S16, S18–S19, S21–S23) and source-verified closures of W3 / W9 / W23. **2026-06-02 update** closes the remaining Suggestions: S5/S6/S15/S17 were verified already-shipped, S1/S10/S14 closed as not-applicable / by-design, S7 (embedding dedup) and S8 (route-split) implemented; S12 (age gate) deferred as a product/compliance decision. The async DNS-resolution follow-up flagged under W2 also shipped (see the 2026-05-31 report's S2).
 
 **Pattern note:** verification against current `main` before implementing each finding turned up a 30% false-positive rate on Criticals (3 of 10) and one false-positive Warning. Every false positive traced to the same reviewer mistake: looking at one layer (schema / route surface) and missing the wrapping layer (storage / runtime maintenance / earlier remediation). Future multipass-style audits should always be verified before triage.
 
@@ -38,7 +38,7 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | ID | Category | Resolution |
 |----|----------|------------|
 | **W1** | Security | ✅ **Resolved (#1309).** Added `openAiCompatibleApiKey` and `anthropicApiKey` (both top-level and `*.`-nested) to pino redact paths. |
-| **W2** | Security | ✅ **Resolved (#1336).** New `server/ssrfGuard.ts` exports `checkSafeOutboundUrl()` rejecting loopback / private / link-local IPv4 + IPv6 patterns (incl. WHATWG-normalised IPv4-mapped IPv6 hex form `::ffff:7f00:1`). Wired in as a Zod refinement on `AI_TEXT_BASE_URL` — server refuses to boot if the operator points it at `127.0.0.1`, `localhost`, `169.254.169.254` (EC2 metadata), etc. 30 unit tests cover public hostnames, every loopback/private pattern, IPv4 172.x boundary cases, and malformed inputs. Defense-in-depth follow-up: async DNS-resolution-time check for hostnames that aren't IP literals — separate PR. |
+| **W2** | Security | ✅ **Resolved (#1336).** New `server/ssrfGuard.ts` exports `checkSafeOutboundUrl()` rejecting loopback / private / link-local IPv4 + IPv6 patterns (incl. WHATWG-normalised IPv4-mapped IPv6 hex form `::ffff:7f00:1`). Wired in as a Zod refinement on `AI_TEXT_BASE_URL` — server refuses to boot if the operator points it at `127.0.0.1`, `localhost`, `169.254.169.254` (EC2 metadata), etc. 30 unit tests cover public hostnames, every loopback/private pattern, IPv4 172.x boundary cases, and malformed inputs. Defense-in-depth follow-up: async DNS-resolution-time check for hostnames that aren't IP literals — separate PR. **Shipped 2026-06-02:** `assertResolvedHostIsPublic` resolves the host at startup and refuses to boot on a private/loopback result (see the 2026-05-31 report's S2). |
 | **W4** | Security | ✅ **Resolved (#1336).** `SSE_FORCE_CLOSE_GRACE_MS = 2s` post-deadline watchdog in `server/routes/ai.ts` calls `res.socket.destroy()` if `res.writableEnded === false` after the deadline-induced abort. Catches hung clients that would otherwise pin the TCP file descriptor up to the OS keepalive timeout (~2hr). Timer is `.unref()`'d and cleared on normal completion. |
 | **W5** | Security / QA | ⚠ **Partially mitigated — no code change shipped.** The original DoS concern is already addressed by existing controls: client-side 10 MB pre-magic size cap (`useCoachingUpload.ts`), 30 s `withParseTimeout` wrapping `mammoth` + `pdfjs`, and client-only parsing (no server-side re-parse, so the server isn't exposed). Deepening the 4–5 byte magic check (e.g. PDF version line, ZIP central-directory structure) would be additional defense-in-depth but doesn't close a specific gap. Documented in PR #1336's description. |
 | **W10** | Performance | ✅ **Resolved (#1309).** Chat-history `useQuery` pinned to `staleTime: Infinity, gcTime: Infinity`; freshness driven by existing mutation invalidation in `useChatMutations.ts`. |
@@ -64,7 +64,7 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | **W25** | Business | ✅ **Resolved (#1338).** `AI_FEATURES_ENABLED` gate added at the provider entrypoint (defense-in-depth). |
 | **W26** | Business / Privacy | ✅ **Resolved (#1338).** Export paths normalize by user `weightUnit` / `distanceUnit`; bidirectionality test added. |
 
-### Suggestions (13/23 closed)
+### Suggestions (22/23 closed; S12 deferred)
 
 | ID | Resolution |
 |----|------------|
@@ -81,7 +81,16 @@ The original Critical / Warning / Suggestion tables further down are preserved v
 | **S21** | ✅ **Resolved (#1338).** Empty-state fixtures / smoke tests (fresh user, ended plan). |
 | **S22** | ✅ **Resolved (#1338).** Coach suggestion on plan rollover (`endDate <= today`, no next plan). |
 | **S23** | ✅ **Resolved (#1338).** Orphan (`planId = null`) rendering smoke-tested. |
-| S1, S5–S8, S10, S12, S14–S15, S17 | Open. Remaining optional polish: webhook signature surface (S1), voice-input `aria-label` (S5), skip-link visible focus (S6), embedding dedup (S7), route-split bundle audit (S8), idempotency 4xx caching (S10), age gate / COPPA (S12), MCP privacy-policy note (S14), Garmin 2SV warning (S15), hashed-asset `Cache-Control` (S17). |
+| **S1** | ✅ **Closed — not applicable.** No inbound webhook endpoints exist (Strava/Garmin sync is pull-based; only an OAuth callback). If push webhooks are added later, verify HMAC/Svix signatures before processing. |
+| **S5** | ✅ **Resolved (verified).** Voice-input control already exposes `aria-label` + `aria-pressed` + an SR-only live region for listening-state changes (`client/src/components/VoiceButton.tsx:50,78-79,97-99`). |
+| **S6** | ✅ **Resolved (verified).** Skip-to-content link pops into view on keyboard focus (`client/src/index.css:31-58`, `client/src/App.tsx:180-182`). |
+| **S7** | ✅ **Resolved (2026-06-02).** `embedCoachingMaterial` de-duplicates identical chunk texts (via a `Set`) before the embeddings API call and reuses the vector for each position; usage tracking counts the deduped set. Migration-free (`server/services/ragService.ts`). |
+| **S8** | ✅ **Resolved (2026-06-02).** `Timeline` route converted to `React.lazy` like the sibling routes, so it splits into its own chunk instead of riding in the main bundle (`client/src/App.tsx`). |
+| **S10** | ✅ **Closed — by design.** Idempotency intentionally caches only 2xx so a transient non-2xx (e.g. a 404 from read-after-write lag) re-executes on retry rather than being pinned by a cached error; documented inline in `server/middleware/idempotency.ts`. |
+| **S14** | ✅ **Closed — not applicable.** No MCP integration ships in the app (no MCP code or feature). Revisit `Privacy.tsx` if/when MCP is added. |
+| **S15** | ✅ **Resolved (verified).** Garmin no-OAuth / 2-step-verification warning already surfaced in the connect form (`client/src/components/settings/garmin/GarminConnectForm.tsx:29-42`) and `Privacy.tsx`. |
+| **S17** | ✅ **Resolved (verified).** Hashed assets are served `max-age=1y, immutable` and `index.html` `no-cache` (`server/static.ts:21-40`). |
+| **S12** | ⏸ **Deferred.** Age gate / COPPA / GDPR Art. 8 is a product/compliance decision (depends on target jurisdictions; needs Clerk + policy/legal input). A minimal gate would add a self-declared birth-year confirmation at onboarding, an under-13 block, a stored flag, and a Children's-Data clause in `Privacy.tsx`. Reopen when targeting markets that require it. |
 
 ## Executive Summary
 

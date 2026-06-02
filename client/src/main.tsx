@@ -18,7 +18,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { FallbackErrorBoundary } from "./components/FallbackErrorBoundary";
-import { isErrorReportingEnabled } from "./lib/errorReportingConsent";
+import { setupErrorReporting } from "./lib/errorReporting";
 import { migrateLegacyKeys } from "./lib/storageMigration";
 
 migrateLegacyKeys();
@@ -31,22 +31,10 @@ if (!import.meta.env.PROD) {
   });
 }
 
-// Gate on the user's per-processor error-reporting consent (S11) in addition to
-// the DSN. Read once here; toggling it in Settings takes effect on next reload.
-if (import.meta.env.VITE_SENTRY_DSN && isErrorReportingEnabled()) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN as string,
-    environment: import.meta.env.MODE,
-    // The Sentry Vite plugin injects SENTRY_RELEASE into the bundle at build
-    // time when SENTRY_AUTH_TOKEN is configured. VITE_SENTRY_RELEASE is an
-    // optional manual override; both resolve to undefined in dev/contributor
-    // builds (Sentry buckets such events as releaseless, which is fine).
-    release:
-      (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) ??
-      (import.meta.env.SENTRY_RELEASE as string | undefined),
-    sendDefaultPii: false,
-  });
-}
+// S11: defer Sentry.init until the user has acknowledged the privacy notice
+// banner (and honor the per-processor opt-out). Nothing is captured before the
+// notice is seen; the Settings toggle applies immediately. See errorReporting.ts.
+setupErrorReporting();
 
 import { registerSW } from "virtual:pwa-register";
 

@@ -3,7 +3,7 @@
 **Generated:** 2026-05-31
 **Branch:** `claude/bold-goodall-gdCm7`
 **Method:** Seven specialized passes (security, business, UX/a11y, performance, QA, DevOps, privacy) run in parallel by isolated reviewer agents, with the highest-stakes findings re-verified against source by the orchestrator.
-**Status as of 2026-06-01:** all 3 Criticals and all 18 Warnings closed; 5 of 13 Suggestions closed (S1 reverted). See Remediation Status below.
+**Status as of 2026-06-02:** all 3 Criticals and all 18 Warnings closed; 12 of 13 Suggestions closed (S1 reverted/open). See Remediation Status below.
 
 > **Context.** The repo already self-ran this exact 7-persona framework on 2026-05-29
 > (`CODEBASE_REVIEW_2026-05-29-multipass.md`), and 133 commits since have closed nearly
@@ -16,7 +16,7 @@
 
 ## Remediation Status — 2026-06-01
 
-This review was generated on `claude/bold-goodall-gdCm7` (PR #1347, which also shipped the C3 fix). The matrix below is the authoritative current state; the finding tables further down are preserved as the original review evidence. Each closure was verified against `main` before triage (the repo's own ~30% schema-layer false-positive rate applies, so commit claims were source-checked where ambiguous).
+This review was generated on `claude/bold-goodall-gdCm7` (PR #1347, which also shipped the C3 fix). The matrix below is the authoritative current state; the finding tables further down are preserved as the original review evidence. Each closure was verified against `main` before triage (the repo's own ~30% schema-layer false-positive rate applies, so commit claims were source-checked where ambiguous). **2026-06-02 update** closes the remaining Suggestions — S2 (startup DNS-time SSRF check, which also completes the W2 follow-up from the 2026-05-29 multipass report), S3 (CSP `style-src` accepted-and-documented), S4 (mafProfile change-detection), S6 (AbortSignal timeouts on Gemini; Garmin SDK limitation documented), S7 (idempotent + ordered chat-turn saves), S9 (mobile touch targets), and S11 (Sentry init deferred until consent). Only S1 (idempotency PK migration) remains open.
 
 ### Criticals (3/3 closed)
 
@@ -49,7 +49,7 @@ This review was generated on `claude/bold-goodall-gdCm7` (PR #1347, which also s
 | **W17** | Privacy / Retention | ✅ **Resolved (#1348).** Pending pg-boss jobs purged on account deletion; full `job.data` no longer logged. |
 | **W18** | DevOps / Env | ✅ **Resolved (#1351).** Optional-secret blind spots made visible (loud signal when `SENTRY_DSN` / `CRON_SECRET` are absent in prod). |
 
-### Suggestions (5/13 closed; S1 reverted)
+### Suggestions (12/13 closed; S1 reverted/open)
 
 | ID | Resolution |
 |----|------------|
@@ -59,7 +59,13 @@ This review was generated on `claude/bold-goodall-gdCm7` (PR #1347, which also s
 | **S12** | ✅ **Resolved (#1352).** Cascade-test allowlist extended to the Art. 9 MAF health tables. |
 | **S13** | ✅ **Resolved (#1352).** Stray root artifacts removed; `.jules/` vs `.Jules/` case-collision consolidated. |
 | **S1** | ⏸ **Reverted (#1352).** Idempotency `method`/`path` lookup needs a coordinated PK migration; the change was backed out and remains open. |
-| S2–S4, S6, S7, S9, S11 | Open. Optional hardening: startup DNS-time SSRF check (S2), hashed/nonce styles (S3), MAF-snapshot change-detection (S4), socket-abort on Gemini/Garmin timeout (S6), atomic chat-turn persistence (S7), larger icon touch targets (S9), opt-in / deferred client error reporting (S11). |
+| **S2** | ✅ **Resolved (2026-06-02).** Async startup DNS check resolves `AI_TEXT_BASE_URL` (when the host isn't an IP literal) and refuses to boot if any resolved address is private/loopback, reusing `isPrivateIpv4`/`isPrivateIpv6` (`server/ssrfGuard.ts`, wired in `server/index.ts`). Completes the W2 DNS follow-up from the 2026-05-29 multipass report. |
+| **S3** | ✅ **Closed — accepted & documented.** Removing `style-src 'unsafe-inline'` is infeasible without replacing Recharts (injected `<style>`) and Radix (inline `style` attrs); documented as an accepted trade-off with a code comment in `server/middleware/csp.ts`. script-src stays nonce-based, so the primary (script-injection) XSS vector is still closed. |
+| **S4** | ✅ **Resolved (2026-06-02).** `updateUserPreferences` inserts a `mafProfile` snapshot only when an MAF input or the computed `finalHr` differs from the latest snapshot — no more duplicate rows per save (`server/storage/users.ts`). |
+| **S6** | ✅ **Resolved (2026-06-02).** The per-call timeout in `retryWithBackoff`/`withTimeout` now drives an `AbortController` whose signal is passed into the Gemini SDK (`config.abortSignal`), so a hung call releases its socket. The `@flow-js/garmin-connect` SDK exposes no signal; that limitation is documented at the `withCircuitBreaker` wrapper (`server/gemini/client.ts`, `server/ai/providers/gemini.ts`, `server/garmin.ts`). |
+| **S7** | ✅ **Resolved (2026-06-02).** Chat user/assistant saves send the client message id as `X-Idempotency-Key`, so a retried/duplicated save is de-duplicated by the existing idempotency middleware instead of persisting the turn twice; the differing ids keep the pair ordered. No new endpoint or migration (`client/src/hooks/useChatSession.ts`, `useChatMutations.ts`, `lib/api/coaching.ts`). |
+| **S9** | ✅ **Resolved (2026-06-02).** The shared `Input` and the base `icon` `Button` are 44px on mobile (WCAG 2.5.5) and the denser 36px from `md` up, so icon controls/inputs meet the touch-target minimum on small screens without desktop churn (`client/src/components/ui/input.tsx`, `button.tsx`). |
+| **S11** | ✅ **Resolved (2026-06-02).** `Sentry.init` is deferred until the privacy-notice banner is acknowledged (nothing captured before then), and the Settings opt-out now takes effect immediately (start/close in place) rather than on next reload (`client/src/lib/errorReporting.ts`, `privacyConsent.ts`, `main.tsx`, `PrivacyConsentBanner.tsx`, `ErrorReportingConsentCard.tsx`). |
 
 ## Executive Summary
 

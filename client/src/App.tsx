@@ -20,10 +20,13 @@ import { useEmailCheck } from "@/hooks/useEmailCheck";
 import { useNavigationBreadcrumb } from "@/hooks/useNavigationBreadcrumb";
 import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
 import NotFound from "@/pages/not-found";
-import Timeline from "@/pages/Timeline";
 
 import { queryClient } from "./lib/queryClient";
 
+// Lazy-loaded like the other routes (S8) so the Timeline page splits into its
+// own chunk instead of riding in the main bundle. It's wrapped by the same
+// Suspense fallback below, so first authenticated paint shows the spinner briefly.
+const Timeline = lazy(() => import("@/pages/Timeline"));
 const LogWorkout = lazy(() => import("@/pages/LogWorkout"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Analytics = lazy(() => import("@/pages/Analytics"));

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { applyErrorReportingPreference } from "@/lib/errorReporting";
 import {
   disableErrorReporting,
   enableErrorReporting,
@@ -11,8 +12,8 @@ import {
 } from "@/lib/errorReportingConsent";
 
 // S11 — per-processor consent toggle for error reporting (Sentry). Stored
-// browser-local; Sentry initializes once at boot, so a change applies on the
-// next reload (surfaced in the helper text).
+// browser-local; the change is applied immediately (Sentry is started/closed in
+// place) rather than waiting for a reload.
 export function ErrorReportingConsentCard() {
   const [enabled, setEnabled] = useState<boolean>(() => isErrorReportingEnabled());
 
@@ -22,6 +23,9 @@ export function ErrorReportingConsentCard() {
     } else {
       disableErrorReporting();
     }
+    // Persisted above; apply to the live Sentry client now so the toggle takes
+    // effect without a reload.
+    applyErrorReportingPreference(next);
     setEnabled(next);
   };
 
@@ -44,8 +48,7 @@ export function ErrorReportingConsentCard() {
               Send error diagnostics
             </Label>
             <p className="text-sm text-muted-foreground">
-              No personal data or request bodies are included. Changes take effect after you reload
-              the app.
+              No personal data or request bodies are included. Changes take effect immediately.
             </p>
           </div>
           <Switch
