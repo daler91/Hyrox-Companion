@@ -1,6 +1,7 @@
 import { getRaceReference, RACE_SEGMENTS } from "@shared/raceSpec";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MIN_PERSONAL_FRACTION } from "./featureBuilder";
 import { generateRacePrediction } from "./racePredictionService";
 
 const envState = vi.hoisted(() => ({ AI_FEATURES_ENABLED: "true" }));
@@ -226,7 +227,7 @@ describe("generateRacePrediction — AI clamp guardrail", () => {
   it("clamps an implausibly fast AI split up to the cohort-relative floor, not 2:30", async () => {
     mockUser(); // open male, no logged data → wall balls uses the cohort benchmark
     const benchmark = getRaceReference("open", "male").stations.wall_balls.benchmarkSeconds;
-    const expectedFloor = Math.max(150, Math.round(0.6 * benchmark));
+    const expectedFloor = Math.max(150, Math.round(MIN_PERSONAL_FRACTION * benchmark));
     mockGenerate.mockResolvedValue({ text: aiPayloadWithWallBalls(60) }); // absurd 1:00
 
     const result = await generateRacePrediction("u1");

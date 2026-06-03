@@ -27,7 +27,12 @@ import { env } from "../../env";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { checkAiBudget } from "../aiUsageService";
-import { buildRacePredictionFeatures, type RacePredictionFeatures } from "./featureBuilder";
+import {
+  buildRacePredictionFeatures,
+  MAX_PERSONAL_FRACTION,
+  MIN_PERSONAL_FRACTION,
+  type RacePredictionFeatures,
+} from "./featureBuilder";
 import { computeRanking } from "./ranking";
 
 type RacePredictionLogger = Pick<Logger, "warn" | "error">;
@@ -205,11 +210,6 @@ function buildDeterministicResponse(
   };
 }
 
-/** A refined per-segment split may be at most this fraction below the cohort
- *  median — a guardrail so a model error can't surface a world-class-elite
- *  split (e.g. 2:30 wall balls) for a normal athlete. */
-const AI_MIN_SEGMENT_FRACTION = 0.6;
-
 function buildAiResponse(
   features: RacePredictionFeatures,
   storedGender: StoredGender,
@@ -220,17 +220,18 @@ function buildAiResponse(
   let segmentSum = 0;
   const segments: RaceSegmentPrediction[] = features.baselineSegments.map((baseline) => {
     const aiSegment = aiByIndex.get(baseline.index);
-    // Clamp the model's split to a plausible range. The lower bound is a soft,
-    // cohort-relative floor — the model may predict at most ~40% faster than the
-    // real cohort median for this segment — so a model error can't surface the
-    // world-class floor (e.g. 2:30 wall balls) as a normal athlete's split. The
-    // absolute world-class floor still applies where it is the higher of the two.
+    // Bound the model to the SAME field-anchored band as the deterministic
+    // baseline: within [0.8, 1.5] × the cohort median for this segment (never
+    // below the world-class floor, never above a sane ceiling). A model slip
+    // therefore can't surface an implausible split (e.g. 2:30 wall balls) or
+    // break consistency with the benchmark-based segments.
     const lower = Math.max(
       baseline.floorSeconds,
-      Math.round(AI_MIN_SEGMENT_FRACTION * baseline.benchmarkSeconds),
+      Math.round(MIN_PERSONAL_FRACTION * baseline.benchmarkSeconds),
     );
+    const upper = Math.min(3600, Math.round(MAX_PERSONAL_FRACTION * baseline.benchmarkSeconds));
     const estimatedSeconds = aiSegment
-      ? clamp(Math.round(aiSegment.estimatedSeconds), lower, 3600)
+      ? clamp(Math.round(aiSegment.estimatedSeconds), lower, upper)
       : baseline.estimatedSeconds;
     segmentSum += estimatedSeconds;
     return {

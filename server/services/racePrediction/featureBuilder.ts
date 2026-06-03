@@ -126,6 +126,20 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+// --- Race-realism model -----------------------------------------------------
+// Logged efforts are FRESH gym efforts, but race splits are run under
+// cumulative fatigue. So we (a) discount fresh efforts toward race pace, and
+// (b) anchor every split on the real cohort median, letting the athlete's
+// logged data move it only within a bounded band. This keeps the breakdown
+// realistic and internally consistent — a fast gym time can't surface as a
+// world-class race split next to field-median benchmark segments.
+const RUN_FATIGUE_FACTOR = 1.15; // a fresh 1 km maps to a ~15% slower race run
+const STATION_FATIGUE_FACTOR = 1.1; // a fresh station effort maps to ~10% slower
+/** A personalized split stays within [MIN, MAX] × the cohort median: at most
+ *  20% faster than the field median, up to 50% slower. */
+export const MIN_PERSONAL_FRACTION = 0.8;
+export const MAX_PERSONAL_FRACTION = 1.5;
+
 /**
  * Adjust a logged station split for the gap between the load the athlete
  * trained at and the division-standard load. Conservative and clamped: trained
@@ -324,10 +338,17 @@ export function buildRacePredictionFeatures(
       const position = (segment.index - 1) / 2; // 1,3,…,15 → 0..7
       const curve = reference.runLegBenchmarkSeconds;
       if (runFeature.medianSeconds != null) {
-        // Personalize: scale the curve so its mean matches the athlete's logged
-        // 1 km median, keeping the real degradation shape (later runs slower).
+        // Convert the athlete's FRESH 1 km median to a race-pace average, then
+        // express it as a BOUNDED scale vs the cohort's average run and apply it
+        // to the fatigue curve. Bounding keeps run splits anchored to real race
+        // pacing (a fresh 4:30 can't become a 3:44 race run) while preserving
+        // the athlete's relative speed and the curve's degradation shape.
         const curveMean = curve.reduce((t, v) => t + v, 0) / curve.length;
-        const scale = curveMean > 0 ? runFeature.medianSeconds / curveMean : 1;
+        const raceEquivMean = runFeature.medianSeconds * RUN_FATIGUE_FACTOR;
+        const scale =
+          curveMean > 0
+            ? clamp(raceEquivMean / curveMean, MIN_PERSONAL_FRACTION, MAX_PERSONAL_FRACTION)
+            : 1;
         return {
           ...segment,
           estimatedSeconds: Math.max(Math.round(curve[position] * scale), floorSeconds),
@@ -351,15 +372,23 @@ export function buildRacePredictionFeatures(
     const feature = stationFeatures[station];
     const floorSeconds = reference.stations[station].floorSeconds;
     if (feature.medianSeconds != null) {
+      const benchmark = reference.stations[station].benchmarkSeconds;
+      // Fresh logged effort → race-equivalent (load-adjusted + fatigue), then
+      // bound to a band around the cohort median so a fast gym set stays a
+      // realistic race split rather than surfacing the world-class floor.
+      const raceEquiv =
+        loadAdjust(feature.medianSeconds, feature.loadRatio) * STATION_FATIGUE_FACTOR;
+      const bounded = clamp(
+        raceEquiv,
+        MIN_PERSONAL_FRACTION * benchmark,
+        MAX_PERSONAL_FRACTION * benchmark,
+      );
       return {
         ...segment,
-        estimatedSeconds: Math.max(
-          Math.round(loadAdjust(feature.medianSeconds, feature.loadRatio)),
-          floorSeconds,
-        ),
+        estimatedSeconds: Math.max(Math.round(bounded), floorSeconds),
         basis: "logged" as const,
         sampleSize: feature.sampleSize,
-        benchmarkSeconds: reference.stations[station].benchmarkSeconds,
+        benchmarkSeconds: benchmark,
         floorSeconds,
       };
     }
