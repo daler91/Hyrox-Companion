@@ -92,6 +92,7 @@ export default tseslint.config(
       "migrations/**",
       "*.config.js",
       "*.config.ts",
+      "**/*.generated.ts",
       "script/**",
       "scripts/**",
       "attached_assets/**",

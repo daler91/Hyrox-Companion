@@ -7,3 +7,7 @@ attached_assets
 *.json
 *.txt
 *.png
+
+# Generated artifacts (emitted by script/race-benchmarks) — not hand-edited
+*.generated.ts
+script/race-benchmarks/output

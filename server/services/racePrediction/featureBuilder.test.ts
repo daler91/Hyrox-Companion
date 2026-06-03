@@ -1,8 +1,4 @@
-import {
-  getRaceReference,
-  HYROX_STATION_ORDER,
-  RACE_RUN_LEGS,
-} from "@shared/raceSpec";
+import { getRaceReference, HYROX_STATION_ORDER } from "@shared/raceSpec";
 import { describe, expect, it } from "vitest";
 
 import type { LoggedExerciseSetWithDate } from "../../storage/shared";
@@ -32,8 +28,13 @@ const NOW = new Date("2026-05-30T00:00:00Z");
 
 function expectedBenchmarkFinish(division: "open" | "pro", gender: "male" | "female"): number {
   const ref = getRaceReference(division, gender);
-  const stations = HYROX_STATION_ORDER.reduce((sum, s) => sum + ref.stations[s].benchmarkSeconds, 0);
-  return RACE_RUN_LEGS * ref.runKmBenchmarkSeconds + stations;
+  const stations = HYROX_STATION_ORDER.reduce(
+    (sum, s) => sum + ref.stations[s].benchmarkSeconds,
+    0,
+  );
+  const runs = ref.runLegBenchmarkSeconds.reduce((sum, v) => sum + v, 0);
+  // Finish now includes the modeled transition (roxzone) total.
+  return runs + stations + ref.transitionTotalSeconds;
 }
 
 describe("buildRacePredictionFeatures", () => {
@@ -71,7 +72,13 @@ describe("buildRacePredictionFeatures", () => {
 
     const runSegments = features.baselineSegments.filter((s) => s.kind === "run");
     expect(runSegments).toHaveLength(8);
-    expect(runSegments.every((s) => s.estimatedSeconds === 270 && s.basis === "logged")).toBe(true);
+    expect(runSegments.every((s) => s.basis === "logged")).toBe(true);
+    // The cohort fatigue curve is scaled so its mean matches the logged median…
+    const runMean = runSegments.reduce((t, s) => t + s.estimatedSeconds, 0) / runSegments.length;
+    expect(runMean).toBeGreaterThan(265);
+    expect(runMean).toBeLessThan(275);
+    // …while keeping the real shape: later runs stay slower than earlier ones.
+    expect(runSegments[7].estimatedSeconds).toBeGreaterThan(runSegments[0].estimatedSeconds);
   });
 
   it("computes loadRatio from the standard converted into the athlete's unit", () => {
@@ -191,5 +198,34 @@ describe("buildRacePredictionFeatures", () => {
     expect(ski?.basis).toBe("logged");
     expect(ski?.estimatedSeconds).toBe(180); // floored to the world-class minimum
     expect(ski?.floorSeconds).toBe(180);
+  });
+
+  it("includes the cohort transition (roxzone) total in the deterministic finish", () => {
+    const features = buildRacePredictionFeatures([], {
+      division: "open",
+      gender: "male",
+      weightUnit: "kg",
+    });
+    const segmentSum = features.baselineSegments.reduce((t, s) => t + s.estimatedSeconds, 0);
+    expect(features.transitionSeconds).toBeGreaterThan(0);
+    expect(features.deterministicFinishSeconds).toBe(segmentSum + features.transitionSeconds);
+  });
+
+  it("uses the athlete's age-group cohort when it exists, else falls back to all ages", () => {
+    const withAge = buildRacePredictionFeatures(
+      [],
+      { division: "open", gender: "male", weightUnit: "kg", ageGroup: "30-34" },
+      NOW,
+    );
+    expect(withAge.resolvedAgeGroup).toBe("30-34");
+    expect(withAge.ageGroupAssumed).toBe(false);
+
+    const noAge = buildRacePredictionFeatures(
+      [],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(noAge.resolvedAgeGroup).toBeNull();
+    expect(noAge.ageGroupAssumed).toBe(true);
   });
 });

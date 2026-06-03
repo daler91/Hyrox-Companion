@@ -165,3 +165,44 @@ describe("generateRacePrediction — AI path", () => {
     expect(result.aiUnavailableReason).toBe("ai_error");
   });
 });
+
+describe("generateRacePrediction — transition & ranking", () => {
+  it("includes a transition allowance that reconciles the headline with the breakdown", async () => {
+    mockUser();
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.transitionSeconds).toBeGreaterThan(0);
+    const segmentSum = result.segments.reduce((t, s) => t + s.estimatedSeconds, 0);
+    expect(result.totalFinishSeconds).toBe(segmentSum + result.transitionSeconds);
+
+    expect(result.percentile).not.toBeNull();
+    expect(result.percentile!.fasterThanPct).toBeGreaterThanOrEqual(1);
+    expect(result.percentile!.fasterThanPct).toBeLessThanOrEqual(99);
+    expect(result.percentile!.cohortLabel).toContain("Open Men");
+  });
+
+  it("omits the percentile (and assumes age) when gender is withheld", async () => {
+    mockUser({ gender: null });
+    mockGenerate.mockRejectedValue(new Error("no ai"));
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.percentile).toBeNull();
+    expect(result.ageGroupAssumed).toBe(true);
+    expect(result.transitionSeconds).toBeGreaterThan(0);
+  });
+
+  it("ranks against the athlete's age-group cohort when MAF age is set", async () => {
+    mockUser({ mafAge: 32 });
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.ageGroup).toBe("30-34");
+    expect(result.ageGroupAssumed).toBe(false);
+    expect(result.percentile?.basis).toBe("age_group");
+    expect(result.percentile?.cohortLabel).toContain("30-34");
+  });
+});

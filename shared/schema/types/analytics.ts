@@ -141,9 +141,23 @@ export interface RaceSegmentPrediction {
   sampleSize: number;
 }
 
+/** Where the athlete's predicted finish would rank within the real field. */
+export interface RacePredictionPercentile {
+  /** Percent of the cohort the predicted finish would beat (1..99). */
+  fasterThanPct: number;
+  /** Human label for the cohort, e.g. "Open Men 40-44" or "Open Men (all ages)". */
+  cohortLabel: string;
+  /** Number of real results the rank was computed against. */
+  cohortSize: number;
+  /** Whether ranked against an age-specific cohort or division×gender. */
+  basis: "age_group" | "division_gender";
+}
+
 export interface RacePredictionResponse {
   totalFinishSeconds: number;
   segments: RaceSegmentPrediction[];
+  /** Modeled total transition (roxzone) time included in the finish, in seconds. */
+  transitionSeconds: number;
   /** True when the AI estimation layer produced this prediction. */
   aiUsed: boolean;
   aiUnavailableReason?: RacePredictionAiUnavailableReason | null;
@@ -154,6 +168,12 @@ export interface RacePredictionResponse {
   gender: "male" | "female" | "prefer_not_to_say" | null;
   /** True when gender was withheld and a neutral standard was assumed. */
   genderAssumed: boolean;
+  /** Canonical age band used for benchmarks/ranking, or null when all-ages. */
+  ageGroup: string | null;
+  /** True when the athlete's specific age group was not applied (unknown or too thin). */
+  ageGroupAssumed: boolean;
+  /** Where the finish ranks vs the real field, or null when no cohort applies. */
+  percentile: RacePredictionPercentile | null;
   dataCompleteness: {
     stationsWithData: number;
     totalStations: number;
@@ -162,4 +182,3 @@ export interface RacePredictionResponse {
   /** ISO timestamp the prediction was generated. */
   generatedAt: string;
 }
-
