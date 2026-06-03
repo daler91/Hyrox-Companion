@@ -228,4 +228,18 @@ describe("buildRacePredictionFeatures", () => {
     expect(noAge.resolvedAgeGroup).toBeNull();
     expect(noAge.ageGroupAssumed).toBe(true);
   });
+
+  it("exposes the cohort benchmark on every baseline segment", () => {
+    const features = buildRacePredictionFeatures(
+      [],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.baselineSegments).toHaveLength(16);
+    expect(features.baselineSegments.every((s) => s.benchmarkSeconds > 0)).toBe(true);
+    const wallBalls = features.baselineSegments.find((s) => s.exerciseName === "wall_balls")!;
+    expect(wallBalls.benchmarkSeconds).toBe(
+      getRaceReference("open", "male").stations.wall_balls.benchmarkSeconds,
+    );
+  });
 });

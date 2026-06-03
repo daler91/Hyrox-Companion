@@ -1,4 +1,4 @@
-import { RACE_SEGMENTS } from "@shared/raceSpec";
+import { getRaceReference, RACE_SEGMENTS } from "@shared/raceSpec";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { generateRacePrediction } from "./racePredictionService";
@@ -204,5 +204,44 @@ describe("generateRacePrediction — transition & ranking", () => {
     expect(result.ageGroupAssumed).toBe(false);
     expect(result.percentile?.basis).toBe("age_group");
     expect(result.percentile?.cohortLabel).toContain("30-34");
+  });
+});
+
+describe("generateRacePrediction — AI clamp guardrail", () => {
+  // Wall balls is the final station (segment index 16).
+  function aiPayloadWithWallBalls(wallBallsSeconds: number): string {
+    return JSON.stringify({
+      segments: RACE_SEGMENTS.map((s) => ({
+        index: s.index,
+        estimatedSeconds: s.index === 16 ? wallBallsSeconds : 200,
+        confidence: "medium",
+        basis: "benchmark",
+      })),
+      totalFinishSeconds: 4000,
+      overallConfidence: "medium",
+      narrative: "ok",
+    });
+  }
+
+  it("clamps an implausibly fast AI split up to the cohort-relative floor, not 2:30", async () => {
+    mockUser(); // open male, no logged data → wall balls uses the cohort benchmark
+    const benchmark = getRaceReference("open", "male").stations.wall_balls.benchmarkSeconds;
+    const expectedFloor = Math.max(150, Math.round(0.6 * benchmark));
+    mockGenerate.mockResolvedValue({ text: aiPayloadWithWallBalls(60) }); // absurd 1:00
+
+    const result = await generateRacePrediction("u1");
+
+    const wallBalls = result.segments.find((s) => s.index === 16)!;
+    expect(wallBalls.estimatedSeconds).toBe(expectedFloor);
+    expect(wallBalls.estimatedSeconds).toBeGreaterThan(150); // not the world-class floor
+  });
+
+  it("passes a plausible AI split through unchanged", async () => {
+    mockUser();
+    mockGenerate.mockResolvedValue({ text: aiPayloadWithWallBalls(350) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.segments.find((s) => s.index === 16)!.estimatedSeconds).toBe(350);
   });
 });

@@ -74,6 +74,9 @@ export interface BaselineSegmentEstimate {
   estimatedSeconds: number;
   basis: "logged" | "benchmark";
   sampleSize: number;
+  /** Cohort reference split (station p50 / run-leg curve value), independent of
+   *  the athlete's logged data — used as the anchor for the AI clamp. */
+  benchmarkSeconds: number;
   /** Fastest physically-plausible split for this segment (≈ world-class). */
   floorSeconds: number;
 }
@@ -330,6 +333,7 @@ export function buildRacePredictionFeatures(
           estimatedSeconds: Math.max(Math.round(curve[position] * scale), floorSeconds),
           basis: "logged" as const,
           sampleSize: runFeature.sampleSize,
+          benchmarkSeconds: curve[position],
           floorSeconds,
         };
       }
@@ -338,6 +342,7 @@ export function buildRacePredictionFeatures(
         estimatedSeconds: Math.max(Math.round(curve[position]), floorSeconds),
         basis: "benchmark" as const,
         sampleSize: 0,
+        benchmarkSeconds: curve[position],
         floorSeconds,
       };
     }
@@ -354,6 +359,7 @@ export function buildRacePredictionFeatures(
         ),
         basis: "logged" as const,
         sampleSize: feature.sampleSize,
+        benchmarkSeconds: reference.stations[station].benchmarkSeconds,
         floorSeconds,
       };
     }
@@ -362,6 +368,7 @@ export function buildRacePredictionFeatures(
       estimatedSeconds: Math.round(reference.stations[station].benchmarkSeconds),
       basis: "benchmark" as const,
       sampleSize: 0,
+      benchmarkSeconds: reference.stations[station].benchmarkSeconds,
       floorSeconds,
     };
   });

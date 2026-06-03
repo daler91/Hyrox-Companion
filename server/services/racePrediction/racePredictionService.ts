@@ -43,7 +43,8 @@ Rules:
 - For stations, scale for load: trained lighter than standard (loadRatio < 1) means slower at race load; heavier (loadRatio > 1) means faster. Stay conservative.
 - Model compromised running: race runs are slower than fresh 1 km efforts because they are run under fatigue between stations, and later runs degrade more.
 - Where sampleSize = 0, lean on the provided deterministic baseline, which already reflects this cohort's real per-run-leg fatigue curve (later runs are slower) and median station splits.
-- NEVER output an estimatedSeconds below a segment's floorSeconds — that floor is the world-class limit and faster is physically impossible.
+- Keep each estimate close to the segment's deterministicBaselineSeconds — a refinement, not a rewrite. Only go much faster than it when the athlete's own logged data clearly justifies it.
+- floorSeconds is an EXTREME world-class limit, not a target: never output below it, and do not approach it unless logged data proves that athlete is near-elite on that segment.
 - transitionTotalSeconds is the real median total "roxzone" (transition) time for this athlete's cohort. Your totalFinishSeconds must equal the sum of your 16 segment estimates PLUS a transition allowance close to transitionTotalSeconds (stay within roughly ±50% of it), and never less than the segment sum.
 
 Return ONLY a JSON object (no prose, no markdown fences) with exactly these fields:
@@ -204,6 +205,11 @@ function buildDeterministicResponse(
   };
 }
 
+/** A refined per-segment split may be at most this fraction below the cohort
+ *  median — a guardrail so a model error can't surface a world-class-elite
+ *  split (e.g. 2:30 wall balls) for a normal athlete. */
+const AI_MIN_SEGMENT_FRACTION = 0.6;
+
 function buildAiResponse(
   features: RacePredictionFeatures,
   storedGender: StoredGender,
@@ -214,10 +220,17 @@ function buildAiResponse(
   let segmentSum = 0;
   const segments: RaceSegmentPrediction[] = features.baselineSegments.map((baseline) => {
     const aiSegment = aiByIndex.get(baseline.index);
-    // Clamp the model's split to a physically-plausible range: never below the
-    // world-class floor for this segment, never above the per-segment ceiling.
+    // Clamp the model's split to a plausible range. The lower bound is a soft,
+    // cohort-relative floor — the model may predict at most ~40% faster than the
+    // real cohort median for this segment — so a model error can't surface the
+    // world-class floor (e.g. 2:30 wall balls) as a normal athlete's split. The
+    // absolute world-class floor still applies where it is the higher of the two.
+    const lower = Math.max(
+      baseline.floorSeconds,
+      Math.round(AI_MIN_SEGMENT_FRACTION * baseline.benchmarkSeconds),
+    );
     const estimatedSeconds = aiSegment
-      ? clamp(Math.round(aiSegment.estimatedSeconds), baseline.floorSeconds, 3600)
+      ? clamp(Math.round(aiSegment.estimatedSeconds), lower, 3600)
       : baseline.estimatedSeconds;
     segmentSum += estimatedSeconds;
     return {
