@@ -3,7 +3,7 @@ import { Dumbbell, Target, Trophy } from "lucide-react";
 export function WelcomeStep() {
   return (
     <div className="text-center space-y-4">
-      <div className="flex justify-center gap-3">
+      <div className="flex justify-center gap-3" aria-hidden="true">
         <div className="p-3 rounded-full bg-primary/10">
           <Target className="h-6 w-6 text-primary" />
         </div>

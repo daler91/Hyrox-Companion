@@ -28,7 +28,7 @@ function TimelineMockup() {
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-success" />
               <span className="text-sm font-medium">Upper Body Strength</span>
-              <Badge className="text-[10px] px-1.5 py-0 bg-success/20 text-success border-0 ml-auto">Completed</Badge>
+              <Badge className="text-[10px] px-1.5 py-0 bg-success/10 text-success border-0 ml-auto">Completed</Badge>
             </div>
             <p className="text-xs text-muted-foreground pl-6">Sled Push 4x50m, Wall Balls 4x15, Farmers Carry 3x100m</p>
             <div className="flex gap-1.5 pl-6">
@@ -167,7 +167,9 @@ export function Hero() {
               </a>
             </div>
           </div>
-          <div className="fade-up float-animation lg:block">
+          {/* Decorative illustration — its badges/text duplicate the hero copy,
+              so hide the whole subtree from assistive tech (WCAG 1.3.3). */}
+          <div className="fade-up float-animation lg:block" aria-hidden="true">
             <TimelineMockup />
           </div>
         </div>
