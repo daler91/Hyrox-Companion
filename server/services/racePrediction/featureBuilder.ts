@@ -42,7 +42,7 @@ import {
   type StoredGender,
   TOTAL_STATIONS,
 } from "@shared/raceSpec";
-import { type ExerciseName,normalizeExerciseName } from "@shared/schema";
+import { type ExerciseName, normalizeExerciseName } from "@shared/schema";
 import { kgToUserWeight, storedDistanceToMeters } from "@shared/unitConversion";
 
 import type { LoggedExerciseSetWithDate } from "../../storage/shared";
@@ -82,10 +82,16 @@ export interface RacePredictionFeatures {
   division: Division;
   resolvedGender: Gender | null;
   genderAssumed: boolean;
+  /** Canonical age band actually used, or null when an all-ages cohort was used. */
+  resolvedAgeGroup: string | null;
+  /** True when the athlete's specific age group was not applied (unknown or too thin). */
+  ageGroupAssumed: boolean;
   weightUnit: string;
   runFeature: SegmentFeature;
   stationFeatures: Record<HyroxStation, SegmentFeature>;
   baselineSegments: BaselineSegmentEstimate[];
+  /** Modeled total transition (roxzone) time included in the finish, in seconds. */
+  transitionSeconds: number;
   deterministicFinishSeconds: number;
   dataCompleteness: { stationsWithData: number; totalStations: number; hasRunData: boolean };
 }
@@ -95,6 +101,8 @@ export interface AthleteProfileInput {
   gender: StoredGender;
   weightUnit: string | null | undefined;
   distanceUnit?: string | null;
+  /** Raw or canonical age-group label; resolved/normalized downstream. */
+  ageGroup?: string | null;
 }
 
 function median(values: number[]): number | null {
@@ -228,7 +236,11 @@ function buildSegmentFeature(
   units: AthleteUnits,
   now: Date,
 ): SegmentFeature {
-  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(sets, target, units.distanceUnit);
+  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(
+    sets,
+    target,
+    units.distanceUnit,
+  );
 
   const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
   const standardLoadUserUnit =
@@ -263,10 +275,8 @@ export function buildRacePredictionFeatures(
   const weightUnit = profile.weightUnit || "kg";
   const distanceUnit = profile.distanceUnit || "km";
   const units: AthleteUnits = { weightUnit, distanceUnit };
-  const { division, resolvedGender, genderAssumed, reference } = resolveRaceReference(
-    profile.division,
-    profile.gender,
-  );
+  const { division, resolvedGender, genderAssumed, resolvedAgeGroup, ageGroupAssumed, reference } =
+    resolveRaceReference(profile.division, profile.gender, profile.ageGroup);
 
   // Bucket logged sets by canonical exercise key.
   const byExercise = new Map<ExerciseName, LoggedExerciseSetWithDate[]>();
@@ -307,10 +317,17 @@ export function buildRacePredictionFeatures(
   const baselineSegments: BaselineSegmentEstimate[] = RACE_SEGMENTS.map((segment) => {
     if (segment.kind === "run") {
       const floorSeconds = reference.runKmFloorSeconds;
+      // Run legs follow the cohort's real fatigue curve (run_1..run_8 get slower).
+      const position = (segment.index - 1) / 2; // 1,3,…,15 → 0..7
+      const curve = reference.runLegBenchmarkSeconds;
       if (runFeature.medianSeconds != null) {
+        // Personalize: scale the curve so its mean matches the athlete's logged
+        // 1 km median, keeping the real degradation shape (later runs slower).
+        const curveMean = curve.reduce((t, v) => t + v, 0) / curve.length;
+        const scale = curveMean > 0 ? runFeature.medianSeconds / curveMean : 1;
         return {
           ...segment,
-          estimatedSeconds: Math.max(Math.round(runFeature.medianSeconds), floorSeconds),
+          estimatedSeconds: Math.max(Math.round(curve[position] * scale), floorSeconds),
           basis: "logged" as const,
           sampleSize: runFeature.sampleSize,
           floorSeconds,
@@ -318,7 +335,7 @@ export function buildRacePredictionFeatures(
       }
       return {
         ...segment,
-        estimatedSeconds: Math.round(reference.runKmBenchmarkSeconds),
+        estimatedSeconds: Math.max(Math.round(curve[position]), floorSeconds),
         basis: "benchmark" as const,
         sampleSize: 0,
         floorSeconds,
@@ -349,10 +366,14 @@ export function buildRacePredictionFeatures(
     };
   });
 
-  const deterministicFinishSeconds = baselineSegments.reduce(
+  // Sum the 16 segments PLUS the modeled transition (roxzone) time. The latter
+  // is the key fix: the old deterministic finish omitted it entirely and so
+  // systematically underestimated by several minutes.
+  const segmentSum = baselineSegments.reduce(
     (total, segment) => total + segment.estimatedSeconds,
     0,
   );
+  const deterministicFinishSeconds = segmentSum + reference.transitionTotalSeconds;
 
   const stationsWithData = HYROX_STATION_ORDER.reduce(
     (count, station) => count + (stationFeatures[station].sampleSize > 0 ? 1 : 0),
@@ -363,10 +384,13 @@ export function buildRacePredictionFeatures(
     division,
     resolvedGender,
     genderAssumed,
+    resolvedAgeGroup,
+    ageGroupAssumed,
     weightUnit,
     runFeature,
     stationFeatures,
     baselineSegments,
+    transitionSeconds: reference.transitionTotalSeconds,
     deterministicFinishSeconds,
     dataCompleteness: {
       stationsWithData,

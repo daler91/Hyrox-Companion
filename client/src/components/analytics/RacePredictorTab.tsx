@@ -4,7 +4,16 @@ import type {
   RacePredictionResponse,
   RaceSegmentPrediction,
 } from "@shared/schema";
-import { AlertTriangle, Dumbbell, Footprints, Info, Loader2, RefreshCw, Timer } from "lucide-react";
+import {
+  AlertTriangle,
+  Dumbbell,
+  Footprints,
+  Info,
+  Loader2,
+  RefreshCw,
+  Timer,
+  Trophy,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import { Link } from "wouter";
@@ -18,8 +27,14 @@ import { cn } from "@/lib/utils";
 import { useRacePrediction } from "./useRacePrediction";
 
 const CONFIDENCE_STYLES: Record<RacePredictionConfidence, { label: string; className: string }> = {
-  high: { label: "High confidence", className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  medium: { label: "Medium confidence", className: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  high: {
+    label: "High confidence",
+    className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  },
+  medium: {
+    label: "Medium confidence",
+    className: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  },
   low: { label: "Low confidence", className: "bg-muted text-muted-foreground" },
 };
 
@@ -32,7 +47,10 @@ const BASIS_LABELS: Record<RacePredictionBasis, string> = {
 function ConfidenceBadge({ confidence }: Readonly<{ confidence: RacePredictionConfidence }>) {
   const style = CONFIDENCE_STYLES[confidence];
   return (
-    <Badge className={cn("border-transparent", style.className)} data-testid="race-prediction-confidence">
+    <Badge
+      className={cn("border-transparent", style.className)}
+      data-testid="race-prediction-confidence"
+    >
       {style.label}
     </Badge>
   );
@@ -85,7 +103,10 @@ function SegmentRow({ segment }: Readonly<{ segment: RaceSegmentPrediction }>) {
           {segment.sampleSize > 0 ? ` · ${segment.sampleSize}` : ""}
         </Badge>
       </div>
-      <span className="shrink-0 font-mono text-sm tabular-nums" data-testid="race-prediction-segment-split">
+      <span
+        className="shrink-0 font-mono text-sm tabular-nums"
+        data-testid="race-prediction-segment-split"
+      >
         {formatSecondsToMmSs(segment.estimatedSeconds)}
       </span>
     </div>
@@ -109,7 +130,12 @@ export function RacePredictorTab() {
       <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/20 py-12 text-center text-muted-foreground">
         <AlertTriangle className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
         <p>Couldn't load your race prediction. Please try again.</p>
-        <Button variant="outline" size="sm" onClick={() => query.refetch()} data-testid="race-prediction-retry">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => query.refetch()}
+          data-testid="race-prediction-retry"
+        >
           <RefreshCw className="mr-2 h-4 w-4" />
           Retry
         </Button>
@@ -140,8 +166,10 @@ export function RacePredictorTab() {
                 Predicted finish
               </CardTitle>
               <CardDescription>
-                {divisionLabel(data.division)} · {genderLabel(data.gender)} ·{" "}
-                {data.dataCompleteness.stationsWithData}/{data.dataCompleteness.totalStations} stations logged
+                {divisionLabel(data.division)} · {genderLabel(data.gender)}
+                {data.ageGroup ? ` · ${data.ageGroup}` : ""} ·{" "}
+                {data.dataCompleteness.stationsWithData}/{data.dataCompleteness.totalStations}{" "}
+                stations logged
               </CardDescription>
             </div>
             <Button
@@ -158,7 +186,10 @@ export function RacePredictorTab() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-            <span className="font-mono text-4xl font-bold tabular-nums" data-testid="race-prediction-total">
+            <span
+              className="font-mono text-4xl font-bold tabular-nums"
+              data-testid="race-prediction-total"
+            >
               {formatSecondsToClock(data.totalFinishSeconds)}
             </span>
             <ConfidenceBadge confidence={data.overallConfidence} />
@@ -168,6 +199,25 @@ export function RacePredictorTab() {
               </Badge>
             )}
           </div>
+          {data.percentile && (
+            <p
+              className="flex items-center gap-1.5 text-sm text-muted-foreground"
+              data-testid="race-prediction-percentile"
+            >
+              <Trophy className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+              <span>
+                Faster than{" "}
+                <span className="font-semibold text-foreground">
+                  {data.percentile.fasterThanPct}%
+                </span>{" "}
+                of {data.percentile.cohortLabel}
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {data.percentile.cohortSize.toLocaleString()} athletes
+                </span>
+              </span>
+            </p>
+          )}
           {data.genderAssumed && (
             <p className="text-xs text-muted-foreground">
               Gender not set — using a neutral standard.{" "}
@@ -216,6 +266,20 @@ export function RacePredictorTab() {
           {data.segments.map((segment) => (
             <SegmentRow key={segment.index} segment={segment} />
           ))}
+          {data.transitionSeconds > 0 && (
+            <div
+              className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2"
+              data-testid="race-prediction-transition"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Timer className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="truncate text-sm font-medium">Transitions (roxzone)</span>
+              </div>
+              <span className="shrink-0 font-mono text-sm tabular-nums">
+                {formatSecondsToMmSs(data.transitionSeconds)}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

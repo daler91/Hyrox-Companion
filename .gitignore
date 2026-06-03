@@ -57,6 +57,9 @@ tmp_*.txt
 attached_assets/
 pr_description.md
 node_modules/
+
+# Regenerable race-benchmark reports (the *.generated.ts artifacts ARE committed; these are not)
+script/race-benchmarks/output/
 node_modules/
 node_modules/
 node_modules/

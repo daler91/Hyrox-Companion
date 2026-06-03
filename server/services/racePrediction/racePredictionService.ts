@@ -11,10 +11,11 @@
  * (generateJsonText + zod safeParse + sanitize) and the gating order in
  * server/services/aiSuggestionService.ts.
  */
-import { type HyroxStation,RACE_SEGMENTS } from "@shared/raceSpec";
+import { deriveAgeGroupFromAge, type HyroxStation, RACE_SEGMENTS } from "@shared/raceSpec";
 import type {
   RacePredictionAiUnavailableReason,
   RacePredictionConfidence,
+  RacePredictionPercentile,
   RacePredictionResponse,
   RaceSegmentPrediction,
 } from "@shared/schema";
@@ -27,6 +28,7 @@ import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { checkAiBudget } from "../aiUsageService";
 import { buildRacePredictionFeatures, type RacePredictionFeatures } from "./featureBuilder";
+import { computeRanking } from "./ranking";
 
 type RacePredictionLogger = Pick<Logger, "warn" | "error">;
 
@@ -40,9 +42,9 @@ Rules:
 - Anchor each estimate on the athlete's logged median where sampleSize > 0; trust it more as sampleSize grows.
 - For stations, scale for load: trained lighter than standard (loadRatio < 1) means slower at race load; heavier (loadRatio > 1) means faster. Stay conservative.
 - Model compromised running: race runs are slower than fresh 1 km efforts because they are run under fatigue between stations, and later runs degrade more.
-- Where sampleSize = 0, lean on the provided deterministic baseline / division benchmark.
+- Where sampleSize = 0, lean on the provided deterministic baseline, which already reflects this cohort's real per-run-leg fatigue curve (later runs are slower) and median station splits.
 - NEVER output an estimatedSeconds below a segment's floorSeconds — that floor is the world-class limit and faster is physically impossible.
-- The total finish time must include realistic transition time and be at least the sum of your 16 segment estimates.
+- transitionTotalSeconds is the real median total "roxzone" (transition) time for this athlete's cohort. Your totalFinishSeconds must equal the sum of your 16 segment estimates PLUS a transition allowance close to transitionTotalSeconds (stay within roughly ±50% of it), and never less than the segment sum.
 
 Return ONLY a JSON object (no prose, no markdown fences) with exactly these fields:
 {
@@ -90,12 +92,47 @@ function deterministicOverallConfidence(
   return "low";
 }
 
+/** Human label for the ranking cohort, e.g. "Open Men 40-44" / "Open Women (all ages)". */
+function cohortLabel(
+  division: RacePredictionFeatures["division"],
+  gender: "male" | "female",
+  ageGroup: string | null,
+): string {
+  const div = division === "pro" ? "Pro" : "Open";
+  const g = gender === "male" ? "Men" : "Women";
+  return ageGroup ? `${div} ${g} ${ageGroup}` : `${div} ${g} (all ages)`;
+}
+
+/** Percentile rank of a finish time vs the athlete's real-field cohort, or null
+ *  when gender is withheld (no gendered field) or the cohort is missing. */
+function buildPercentile(
+  features: RacePredictionFeatures,
+  totalFinishSeconds: number,
+): RacePredictionPercentile | null {
+  if (!features.resolvedGender) return null;
+  const ranking = computeRanking(
+    features.division,
+    features.resolvedGender,
+    features.resolvedAgeGroup,
+    totalFinishSeconds,
+  );
+  if (!ranking) return null;
+  return {
+    fasterThanPct: ranking.fasterThanPct,
+    cohortLabel: cohortLabel(features.division, features.resolvedGender, ranking.ageGroup),
+    cohortSize: ranking.cohortSize,
+    basis: ranking.basis,
+  };
+}
+
 function buildFeaturePromptPayload(features: RacePredictionFeatures): unknown {
   return {
     division: features.division,
     gender: features.resolvedGender ?? "unspecified",
     genderAssumed: features.genderAssumed,
+    ageGroup: features.resolvedAgeGroup ?? "all",
     weightUnit: features.weightUnit,
+    transitionTotalSeconds: features.transitionSeconds,
     deterministicBaselineFinishSeconds: features.deterministicFinishSeconds,
     segments: RACE_SEGMENTS.map((segment, i) => {
       const baseline = features.baselineSegments[i];
@@ -151,6 +188,7 @@ function buildDeterministicResponse(
   return {
     totalFinishSeconds: features.deterministicFinishSeconds,
     segments,
+    transitionSeconds: features.transitionSeconds,
     aiUsed: false,
     aiUnavailableReason: reason,
     overallConfidence: deterministicOverallConfidence(features.dataCompleteness),
@@ -158,6 +196,9 @@ function buildDeterministicResponse(
     division: features.division,
     gender: storedGender,
     genderAssumed: features.genderAssumed,
+    ageGroup: features.resolvedAgeGroup,
+    ageGroupAssumed: features.ageGroupAssumed,
+    percentile: buildPercentile(features, features.deterministicFinishSeconds),
     dataCompleteness: features.dataCompleteness,
     generatedAt: new Date().toISOString(),
   };
@@ -193,18 +234,22 @@ function buildAiResponse(
     };
   });
 
-  // Keep the headline consistent with the breakdown: allow the model to add
-  // transition overhead on top of the segment sum, but never less than the sum
-  // and never more than a sane ceiling.
+  // Anchor the headline on the cohort's real transition budget: the model may
+  // add between 0.5× and 1.5× the data-derived transition total on top of its
+  // 16-segment sum, but never less than the sum itself.
+  const transition = features.transitionSeconds;
   const totalFinishSeconds = clamp(
     Math.round(ai.totalFinishSeconds),
-    segmentSum,
-    Math.round(segmentSum * 1.4),
+    segmentSum + Math.round(0.5 * transition),
+    segmentSum + Math.round(1.5 * transition),
   );
 
   return {
     totalFinishSeconds,
     segments,
+    // The transition portion implied by THIS headline, so the breakdown
+    // (16 splits + transition) always reconciles to the total.
+    transitionSeconds: totalFinishSeconds - segmentSum,
     aiUsed: true,
     aiUnavailableReason: null,
     overallConfidence: ai.overallConfidence,
@@ -214,6 +259,9 @@ function buildAiResponse(
     division: features.division,
     gender: storedGender,
     genderAssumed: features.genderAssumed,
+    ageGroup: features.resolvedAgeGroup,
+    ageGroupAssumed: features.ageGroupAssumed,
+    percentile: buildPercentile(features, totalFinishSeconds),
     dataCompleteness: features.dataCompleteness,
     generatedAt: new Date().toISOString(),
   };
@@ -256,6 +304,9 @@ export async function generateRacePrediction(
     gender: storedGender,
     weightUnit: user?.weightUnit ?? "kg",
     distanceUnit: user?.distanceUnit ?? "km",
+    // Age group drives the cohort benchmarks/ranking; derived from MAF age when
+    // set, else null (falls back to the all-ages division×gender cohort).
+    ageGroup: deriveAgeGroupFromAge(user?.mafAge ?? null),
   });
 
   const blocker = await resolveAiBlocker(user, userId, log);
@@ -278,7 +329,10 @@ export async function generateRacePrediction(
     try {
       raw = JSON.parse(response.text || "{}");
     } catch (parseErr) {
-      log.warn({ err: parseErr }, "[race-predictor] AI JSON.parse failed; using deterministic baseline");
+      log.warn(
+        { err: parseErr },
+        "[race-predictor] AI JSON.parse failed; using deterministic baseline",
+      );
       return buildDeterministicResponse(features, storedGender, "ai_error");
     }
 
@@ -293,7 +347,10 @@ export async function generateRacePrediction(
 
     return buildAiResponse(features, storedGender, parsed.data);
   } catch (err) {
-    log.error({ err, userId }, "[race-predictor] AI generation failed; using deterministic baseline");
+    log.error(
+      { err, userId },
+      "[race-predictor] AI generation failed; using deterministic baseline",
+    );
     return buildDeterministicResponse(features, storedGender, "ai_error");
   }
 }

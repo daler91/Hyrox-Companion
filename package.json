@@ -23,7 +23,9 @@
     "docs:openapi": "tsx script/generate-openapi.ts",
     "postinstall": "node script/patch-cypress-deps.js",
     "bench:timeline": "tsx script/timeline-benchmark.ts",
-    "bench:timeline:check": "tsx script/timeline-benchmark-check.ts"
+    "bench:timeline:check": "tsx script/timeline-benchmark-check.ts",
+    "data:race-benchmarks": "tsx script/race-benchmarks/generate.ts",
+    "data:race-benchmarks:backtest": "tsx script/race-benchmarks/backtest.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",

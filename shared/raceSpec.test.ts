@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deriveAgeGroupFromAge,
   getRaceReference,
   HYROX_STATION_ORDER,
+  normalizeAgeGroup,
   RACE_REFERENCE,
   RACE_SEGMENTS,
   resolveRaceReference,
@@ -42,7 +44,13 @@ describe("RACE_REFERENCE", () => {
       for (const gender of ["male", "female"] as const) {
         const ref = RACE_REFERENCE[division][gender];
         expect(ref.runKmBenchmarkSeconds).toBeGreaterThan(0);
-        for (const station of ["sled_push", "sled_pull", "farmers_carry", "sandbag_lunges", "wall_balls"] as const) {
+        for (const station of [
+          "sled_push",
+          "sled_pull",
+          "farmers_carry",
+          "sandbag_lunges",
+          "wall_balls",
+        ] as const) {
           expect(ref.stations[station].loadKg).toBeGreaterThan(0);
         }
         // Erg stations have no external load.
@@ -90,5 +98,76 @@ describe("resolveRaceReference", () => {
       // Conservative (heavier, male) load standard.
       expect(resolved.reference.stations.sled_push.loadKg).toBe(male.stations.sled_push.loadKg);
     }
+  });
+});
+
+describe("RaceReference real-data fields", () => {
+  it("exposes an 8-leg run fatigue curve and a positive transition total", () => {
+    const ref = getRaceReference("open", "male");
+    expect(ref.runLegBenchmarkSeconds).toHaveLength(8);
+    expect(ref.transitionTotalSeconds).toBeGreaterThan(0);
+    // Later runs are slower than the first (fatigue).
+    expect(ref.runLegBenchmarkSeconds[7]).toBeGreaterThan(ref.runLegBenchmarkSeconds[0]);
+    // runKmBenchmarkSeconds stays the mean of the curve (back-compat).
+    const mean = Math.round(ref.runLegBenchmarkSeconds.reduce((t, v) => t + v, 0) / 8);
+    expect(ref.runKmBenchmarkSeconds).toBe(mean);
+  });
+
+  it("clamps every data-derived benchmark at or above its world-class floor", () => {
+    for (const division of ["open", "pro"] as const) {
+      for (const gender of ["male", "female"] as const) {
+        const ref = getRaceReference(division, gender);
+        for (const station of HYROX_STATION_ORDER) {
+          expect(ref.stations[station].benchmarkSeconds).toBeGreaterThanOrEqual(
+            ref.stations[station].floorSeconds,
+          );
+        }
+        for (const leg of ref.runLegBenchmarkSeconds) {
+          expect(leg).toBeGreaterThanOrEqual(ref.runKmFloorSeconds);
+        }
+      }
+    }
+  });
+});
+
+describe("resolveRaceReference — age group", () => {
+  it("uses an age-specific cohort when present", () => {
+    const resolved = resolveRaceReference("open", "male", "30-34");
+    expect(resolved.resolvedAgeGroup).toBe("30-34");
+    expect(resolved.ageGroupAssumed).toBe(false);
+  });
+
+  it("falls back to all ages for an unknown/too-thin age band", () => {
+    const resolved = resolveRaceReference("open", "male", "80-84");
+    expect(resolved.resolvedAgeGroup).toBeNull();
+    expect(resolved.ageGroupAssumed).toBe(true);
+    expect(resolved.reference).toBe(getRaceReference("open", "male"));
+  });
+
+  it("ignores age group when gender is withheld (blended path)", () => {
+    const resolved = resolveRaceReference("open", null, "30-34");
+    expect(resolved.genderAssumed).toBe(true);
+    expect(resolved.resolvedAgeGroup).toBeNull();
+    expect(resolved.ageGroupAssumed).toBe(true);
+  });
+});
+
+describe("age-band helpers", () => {
+  it("normalizes only canonical 5-year bands, rolling coarse/blank labels to null", () => {
+    expect(normalizeAgeGroup("40-44")).toBe("40-44");
+    expect(normalizeAgeGroup("M40-44")).toBe("40-44");
+    expect(normalizeAgeGroup("30-39")).toBeNull(); // coarse 10-year band
+    expect(normalizeAgeGroup("U40")).toBeNull();
+    expect(normalizeAgeGroup("")).toBeNull();
+    expect(normalizeAgeGroup(null)).toBeNull();
+  });
+
+  it("maps an athlete's age to its 5-year band", () => {
+    expect(deriveAgeGroupFromAge(22)).toBe("16-24");
+    expect(deriveAgeGroupFromAge(29)).toBe("25-29");
+    expect(deriveAgeGroupFromAge(30)).toBe("30-34");
+    expect(deriveAgeGroupFromAge(44)).toBe("40-44");
+    expect(deriveAgeGroupFromAge(90)).toBe("80-84");
+    expect(deriveAgeGroupFromAge(null)).toBeNull();
   });
 });
