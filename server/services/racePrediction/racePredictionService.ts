@@ -27,7 +27,12 @@ import { env } from "../../env";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { checkAiBudget } from "../aiUsageService";
-import { buildRacePredictionFeatures, type RacePredictionFeatures } from "./featureBuilder";
+import {
+  buildRacePredictionFeatures,
+  MAX_PERSONAL_FRACTION,
+  MIN_PERSONAL_FRACTION,
+  type RacePredictionFeatures,
+} from "./featureBuilder";
 import { computeRanking } from "./ranking";
 
 type RacePredictionLogger = Pick<Logger, "warn" | "error">;
@@ -43,7 +48,8 @@ Rules:
 - For stations, scale for load: trained lighter than standard (loadRatio < 1) means slower at race load; heavier (loadRatio > 1) means faster. Stay conservative.
 - Model compromised running: race runs are slower than fresh 1 km efforts because they are run under fatigue between stations, and later runs degrade more.
 - Where sampleSize = 0, lean on the provided deterministic baseline, which already reflects this cohort's real per-run-leg fatigue curve (later runs are slower) and median station splits.
-- NEVER output an estimatedSeconds below a segment's floorSeconds — that floor is the world-class limit and faster is physically impossible.
+- Keep each estimate close to the segment's deterministicBaselineSeconds — a refinement, not a rewrite. Only go much faster than it when the athlete's own logged data clearly justifies it.
+- floorSeconds is an EXTREME world-class limit, not a target: never output below it, and do not approach it unless logged data proves that athlete is near-elite on that segment.
 - transitionTotalSeconds is the real median total "roxzone" (transition) time for this athlete's cohort. Your totalFinishSeconds must equal the sum of your 16 segment estimates PLUS a transition allowance close to transitionTotalSeconds (stay within roughly ±50% of it), and never less than the segment sum.
 
 Return ONLY a JSON object (no prose, no markdown fences) with exactly these fields:
@@ -214,10 +220,18 @@ function buildAiResponse(
   let segmentSum = 0;
   const segments: RaceSegmentPrediction[] = features.baselineSegments.map((baseline) => {
     const aiSegment = aiByIndex.get(baseline.index);
-    // Clamp the model's split to a physically-plausible range: never below the
-    // world-class floor for this segment, never above the per-segment ceiling.
+    // Bound the model to the SAME field-anchored band as the deterministic
+    // baseline: within [0.8, 1.5] × the cohort median for this segment (never
+    // below the world-class floor, never above a sane ceiling). A model slip
+    // therefore can't surface an implausible split (e.g. 2:30 wall balls) or
+    // break consistency with the benchmark-based segments.
+    const lower = Math.max(
+      baseline.floorSeconds,
+      Math.round(MIN_PERSONAL_FRACTION * baseline.benchmarkSeconds),
+    );
+    const upper = Math.min(3600, Math.round(MAX_PERSONAL_FRACTION * baseline.benchmarkSeconds));
     const estimatedSeconds = aiSegment
-      ? clamp(Math.round(aiSegment.estimatedSeconds), baseline.floorSeconds, 3600)
+      ? clamp(Math.round(aiSegment.estimatedSeconds), lower, upper)
       : baseline.estimatedSeconds;
     segmentSum += estimatedSeconds;
     return {

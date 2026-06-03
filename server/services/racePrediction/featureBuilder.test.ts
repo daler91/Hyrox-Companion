@@ -2,7 +2,7 @@ import { getRaceReference, HYROX_STATION_ORDER } from "@shared/raceSpec";
 import { describe, expect, it } from "vitest";
 
 import type { LoggedExerciseSetWithDate } from "../../storage/shared";
-import { buildRacePredictionFeatures } from "./featureBuilder";
+import { buildRacePredictionFeatures, MIN_PERSONAL_FRACTION } from "./featureBuilder";
 
 function set(
   exerciseName: string,
@@ -73,10 +73,11 @@ describe("buildRacePredictionFeatures", () => {
     const runSegments = features.baselineSegments.filter((s) => s.kind === "run");
     expect(runSegments).toHaveLength(8);
     expect(runSegments.every((s) => s.basis === "logged")).toBe(true);
-    // The cohort fatigue curve is scaled so its mean matches the logged median…
+    // Race runs are anchored to real pacing: slower on average than the athlete's
+    // FRESH 1 km median (fatigue), not faster than it.
     const runMean = runSegments.reduce((t, s) => t + s.estimatedSeconds, 0) / runSegments.length;
-    expect(runMean).toBeGreaterThan(265);
-    expect(runMean).toBeLessThan(275);
+    expect(runMean).toBeGreaterThan(270); // slower than the fresh 4:30 median
+    expect(runMean).toBeLessThan(270 * 1.3);
     // …while keeping the real shape: later runs stay slower than earlier ones.
     expect(runSegments[7].estimatedSeconds).toBeGreaterThan(runSegments[0].estimatedSeconds);
   });
@@ -111,8 +112,9 @@ describe("buildRacePredictionFeatures", () => {
 
     const lighterWallBalls = lighter.baselineSegments.find((s) => s.exerciseName === "wall_balls")!;
     const heavierWallBalls = heavier.baselineSegments.find((s) => s.exerciseName === "wall_balls")!;
-    expect(lighterWallBalls.estimatedSeconds).toBeGreaterThan(300); // 5 min logged → slower
-    expect(heavierWallBalls.estimatedSeconds).toBeLessThan(300); // → faster
+    // Training lighter than standard predicts slower at race load than training
+    // heavier (both stay bounded to the field-anchored band).
+    expect(lighterWallBalls.estimatedSeconds).toBeGreaterThan(heavierWallBalls.estimatedSeconds);
   });
 
   it("flags genderAssumed and uses a blended reference when gender is withheld", () => {
@@ -187,17 +189,19 @@ describe("buildRacePredictionFeatures", () => {
     expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(240, 0);
   });
 
-  it("floors an impossibly fast logged split in the deterministic baseline", () => {
+  it("bounds an impossibly fast logged split to the field-anchored floor", () => {
     // A 0:48 SkiErg logged without a distance must not surface as a 1000 m split.
     const features = buildRacePredictionFeatures(
       [set("skierg", { time: 0.8, date: "2026-05-20" })],
       { division: "open", gender: "male", weightUnit: "kg" },
       NOW,
     );
-    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg");
-    expect(ski?.basis).toBe("logged");
-    expect(ski?.estimatedSeconds).toBe(180); // floored to the world-class minimum
-    expect(ski?.floorSeconds).toBe(180);
+    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg")!;
+    expect(ski.basis).toBe("logged");
+    // Bounded to MIN_PERSONAL_FRACTION × the cohort median (a realistic fast
+    // split), which sits above the world-class floor — not at it.
+    expect(ski.estimatedSeconds).toBe(Math.round(MIN_PERSONAL_FRACTION * ski.benchmarkSeconds));
+    expect(ski.estimatedSeconds).toBeGreaterThan(ski.floorSeconds);
   });
 
   it("includes the cohort transition (roxzone) total in the deterministic finish", () => {
@@ -227,5 +231,19 @@ describe("buildRacePredictionFeatures", () => {
     );
     expect(noAge.resolvedAgeGroup).toBeNull();
     expect(noAge.ageGroupAssumed).toBe(true);
+  });
+
+  it("exposes the cohort benchmark on every baseline segment", () => {
+    const features = buildRacePredictionFeatures(
+      [],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.baselineSegments).toHaveLength(16);
+    expect(features.baselineSegments.every((s) => s.benchmarkSeconds > 0)).toBe(true);
+    const wallBalls = features.baselineSegments.find((s) => s.exerciseName === "wall_balls")!;
+    expect(wallBalls.benchmarkSeconds).toBe(
+      getRaceReference("open", "male").stations.wall_balls.benchmarkSeconds,
+    );
   });
 });
