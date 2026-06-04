@@ -25,10 +25,12 @@ type GarminConnect = GarminConnectType;
 
 import { isAuthenticated } from "./clerkAuth";
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
+import { env } from "./env";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "./routeUtils";
 import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
+import { getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getUserId } from "./types";
 
@@ -86,6 +88,13 @@ const GARMIN_ACTIVITIES_PER_SYNC = 20;
 // than to keep poking and extend the ban.
 const GLOBAL_429_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
+// C4 — the @flow-js/garmin-connect SDK exposes no AbortSignal, so we can't
+// abort a hung socket. We race every Garmin call against this wall-clock budget
+// instead: generous enough for a healthy multi-step SSO login, but far below
+// the 50-min pg-boss job timeout, so a network stall can't pin a worker (and
+// the per-user mutex it holds) for the full job window.
+const GARMIN_CALL_TIMEOUT_MS = 60 * 1000; // 60 seconds
+
 // Minimum gap between successful /sync calls for one user. The Sync button
 // has no value in being clicked faster than this.
 const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -128,6 +137,8 @@ const garminCircuitBreaker = {
       { context: LOG_CTX, reason, until: new Date(this.blockedUntil).toISOString() },
       "Garmin circuit breaker tripped — freezing all Garmin operations",
     );
+    // W14: share the trip so sibling instances freeze too.
+    persistBreakerBlock(this.blockedUntil);
   },
 
   isOpen(): boolean {
@@ -144,6 +155,56 @@ const garminCircuitBreaker = {
   },
 };
 
+// =============================================================================
+// W14 — cross-instance breaker state
+// =============================================================================
+// The breaker above is per-process. Persisting each trip to
+// server_runtime_cache and refreshing from it before every gated call means a
+// 429 seen by ANY instance freezes them all — so a partial ban can't be
+// amplified into a wider one by siblings that never saw the 429. Best-effort:
+// the in-process timestamp stays authoritative if the shared store is down, and
+// the whole path is skipped under test to keep unit tests DB-free.
+const GARMIN_BREAKER_CACHE_KEY = "garmin:breaker";
+
+function persistBreakerBlock(blockedUntil: number): void {
+  if (env.NODE_ENV === "test") return;
+  void setRuntimeCache(GARMIN_BREAKER_CACHE_KEY, { blockedUntil }, GLOBAL_429_COOLDOWN_MS).catch(
+    (err: unknown) => {
+      logger.debug({ context: LOG_CTX, err }, "Failed to persist Garmin breaker state");
+    },
+  );
+}
+
+async function refreshBreakerFromShared(): Promise<void> {
+  if (env.NODE_ENV === "test") return;
+  try {
+    const shared = await getRuntimeCache<{ blockedUntil: number }>(GARMIN_BREAKER_CACHE_KEY);
+    if (shared && shared.blockedUntil > garminCircuitBreaker.blockedUntil) {
+      garminCircuitBreaker.blockedUntil = shared.blockedUntil;
+    }
+  } catch (err) {
+    logger.debug({ context: LOG_CTX, err }, "Failed to read shared Garmin breaker state");
+  }
+}
+
+/**
+ * Race a promise against a wall-clock timeout. The timer is cleared once the
+ * promise settles and unref'd so a pending timer can't keep the event loop (or
+ * the shutdown window) alive.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Garmin ${label} timed out after ${ms}ms`)), ms);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** Sniffs an unknown error to decide if it's a Garmin 429. */
 function looksLike429(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -156,19 +217,22 @@ function looksLike429(err: unknown): boolean {
  * something that looks like a 429, we trip the breaker BEFORE re-throwing so
  * the error reaches the route handler with the breaker already armed.
  */
-// S6 note: unlike the Gemini/Strava paths, the @flow-js/garmin-connect SDK
-// does not expose an AbortSignal (or a per-call timeout) on its high-level
-// methods, so we can't abort the underlying socket on a hung call here. The
-// circuit breaker below plus the per-user in-flight mutex contain a stuck
-// Garmin call from amplifying; revisit if the SDK adds signal support.
+// C4 + S6: the @flow-js/garmin-connect SDK exposes no AbortSignal on its
+// high-level methods, so we can't abort the underlying socket on a hung call.
+// Instead we race each call against GARMIN_CALL_TIMEOUT_MS: the socket may
+// linger, but the app-level promise — and the per-user mutex it's holding — is
+// freed within the budget instead of pinning a worker for the full job timeout.
+// A timeout is not a 429, so it never trips the breaker.
 async function withCircuitBreaker<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  // W14: adopt any block a sibling instance recorded before gating this call.
+  await refreshBreakerFromShared();
   if (garminCircuitBreaker.isOpen()) {
     throw new Error(
       `Garmin temporarily blocked us due to rate limits. Please try again in about ${Math.ceil(garminCircuitBreaker.remainingMs() / 60_000)} minutes.`,
     );
   }
   try {
-    return await fn();
+    return await withTimeout(fn(), GARMIN_CALL_TIMEOUT_MS, label);
   } catch (err) {
     if (looksLike429(err)) {
       garminCircuitBreaker.trip(`${label} returned 429`);
@@ -628,7 +692,10 @@ export function registerGarminRoutes(router: Router): void {
 export const __testing = {
   garminCircuitBreaker,
   inFlightUsers,
+  withCircuitBreaker,
+  withTimeout,
   GLOBAL_429_COOLDOWN_MS,
+  GARMIN_CALL_TIMEOUT_MS,
   MIN_SYNC_INTERVAL_MS,
   TOKEN_EXPIRY_BUFFER_MS,
   GARMIN_ACTIVITIES_PER_SYNC,
