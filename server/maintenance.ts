@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/node";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 
+import { withPgAdvisoryLock } from "./advisoryLock";
 import { pool } from "./db";
 import { loadPersistedBreakerState } from "./gemini/circuitBreaker";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
@@ -25,6 +26,9 @@ async function ensurePgvectorExtension() {
   }
 }
 
+// Distinct from CRON_LOCK_KEYS (…001–008) and KEY_ROTATION_LOCK_KEY (…009).
+const MIGRATION_ADVISORY_LOCK_KEY = 42_010_010n;
+
 async function runDrizzleMigrations() {
   try {
     const migrationsFolder = path.resolve(import.meta.dirname, "..", "migrations");
@@ -33,8 +37,24 @@ async function runDrizzleMigrations() {
     // `db` export here because it's bound to the full schema; the migrator only
     // needs a minimal drizzle client.
     const migrator = drizzle(pool);
-    await migrate(migrator, { migrationsFolder });
-    logger.info({ context: "db" }, "Drizzle migrations applied successfully");
+    // C3: serialize migrations across instances. On a rolling deploy or
+    // APP_INSTANCE_COUNT>1, two boots would otherwise run DDL concurrently and
+    // race on duplicate-key / partial-index states. pg_try_advisory_lock is
+    // non-blocking — if another instance holds the lock we skip, since it
+    // applies the same idempotent (drizzle-kit push-managed) migrations.
+    const result = await withPgAdvisoryLock(
+      pool,
+      { key: MIGRATION_ADVISORY_LOCK_KEY, name: "drizzleMigrations" },
+      () => migrate(migrator, { migrationsFolder }),
+    );
+    if (result.acquired) {
+      logger.info({ context: "db" }, "Drizzle migrations applied successfully");
+    } else {
+      logger.info(
+        { context: "db" },
+        "Another instance holds the migration lock; skipping migrate() (it applies the same idempotent migrations)",
+      );
+    }
   } catch (error) {
     // The schema source of truth in CI/production is `drizzle-kit push`, not
     // this in-process migrate(). So when migrate() runs against an already-pushed

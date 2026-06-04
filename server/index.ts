@@ -423,4 +423,6 @@ registerProcessErrorHandlers({
   setStartupError: (message) => {
     if (!startupState.startupError) startupState.startupError = message;
   },
+  flush: (timeoutMs) => Sentry.flush(timeoutMs),
+  exit: (code) => process.exit(code),
 });

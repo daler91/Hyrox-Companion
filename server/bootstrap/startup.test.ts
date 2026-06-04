@@ -35,20 +35,31 @@ describe("bootstrap startup parity", () => {
     expect(failedRes.body.status).toBe("startup_failed");
   });
 
-  it("registers process error handlers and sets startup error", () => {
+  it("registers process error handlers, sets startup error, and exits after flushing (C2)", async () => {
     let uncaught: ((e: Error) => void) | undefined;
     let unhandled: ((e: unknown) => void) | undefined;
     let startupError = "";
+    const exit = vi.fn();
+    const flush = vi.fn<(timeoutMs?: number) => Promise<boolean>>().mockResolvedValue(true);
     registerProcessErrorHandlers({
       onUncaught: (cb) => { uncaught = cb; },
       onUnhandled: (cb) => { unhandled = cb; },
       setStartupError: (v) => { startupError = v; },
       captureException: vi.fn(),
+      flush,
+      exit,
     });
+
     uncaught?.(new Error("boom"));
     expect(startupError).toContain("uncaught_exception");
+
     unhandled?.("bad");
     expect(startupError).toContain("unhandled_rejection");
+
+    // A fatal must flush Sentry and then cycle the process (exit non-zero) so
+    // the platform restart policy fires instead of leaving it wedged.
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+    expect(flush).toHaveBeenCalled();
   });
 
   it("runs shutdown hooks in order", async () => {
