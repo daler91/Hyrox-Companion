@@ -165,6 +165,15 @@ protectedPost(router, "/api/v1/plans/sample", { limiter: rateLimiter("planSample
 
 protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGenerate", 3), aiConsent: true, aiBudget: true, validation: [validateBody(generatePlanInputSchema)] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
+    // W13: refuse a new generation while one is already in flight for this user,
+    // so rapid re-submits (triple-clicks, retries) don't enqueue parallel jobs
+    // that each burn AI budget and race to write the same user's plans.
+    if (await storage.plans.hasInFlightPlanGeneration(userId)) {
+      return res.status(409).json({
+        error: "A plan is already being generated. Please wait for it to finish.",
+        code: "PLAN_GENERATION_IN_PROGRESS",
+      });
+    }
     const stub = await createPendingPlan(req.body as GeneratePlanInput, userId);
     await sendJobNoRetry("plan-generation", { planId: stub.id, userId, input: req.body });
     return res.status(202).json(stub);

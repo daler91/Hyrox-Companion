@@ -48,6 +48,7 @@ vi.mock("../../storage", () => ({
       deleteTrainingPlan: vi.fn(),
       schedulePlan: vi.fn(),
       deletePlanDay: vi.fn(),
+      hasInFlightPlanGeneration: vi.fn(),
     },
     users: {
       getUser: vi.fn(),
@@ -171,6 +172,7 @@ describe("POST /api/v1/plans/generate", () => {
     vi.clearAllMocks();
     clearRateLimitBuckets();
     vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "kg", distanceUnit: "km" });
+    vi.mocked(storage.plans.hasInFlightPlanGeneration).mockResolvedValue(false);
     app = createTestApp(plansRouter);
   });
 
@@ -204,6 +206,21 @@ describe("POST /api/v1/plans/generate", () => {
       "plan-generation",
       expect.objectContaining({ planId: "plan-1", userId: "test_user_id" }),
     );
+  });
+
+  it("returns 409 and does not enqueue a job when a generation is already in flight (W13)", async () => {
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    vi.mocked(storage.plans.hasInFlightPlanGeneration).mockResolvedValue(true);
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("PLAN_GENERATION_IN_PROGRESS");
+    expect(createPendingPlan).not.toHaveBeenCalled();
+    expect(sendJobNoRetry).not.toHaveBeenCalled();
   });
 });
 
