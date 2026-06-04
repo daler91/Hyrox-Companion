@@ -1,6 +1,13 @@
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
 import { Gauge, X } from "lucide-react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 function getRpeLabel(rpe: number): string {
   if (rpe <= 3) return "Easy";
   if (rpe <= 6) return "Moderate";
@@ -72,15 +79,22 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
           })}
         </RadioGroupPrimitive.Root>
         {value !== null && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            aria-label="Clear RPE selection"
-            className={`${buttonSize} rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
-            data-testid="button-rpe-clear"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onChange(null)}
+                  aria-label="Clear RPE selection"
+                  className={`${buttonSize} rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
+                  data-testid="button-rpe-clear"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Clear RPE selection</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
       {value && (
