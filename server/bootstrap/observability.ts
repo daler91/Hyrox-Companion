@@ -120,16 +120,44 @@ export function configureObservability(deps: { init?: typeof Sentry.init; getCli
   logger.info({ context: "sentry", clientReady: Boolean(client) }, "Sentry error reporting initialised");
 }
 
-export function registerProcessErrorHandlers(deps: { onUncaught: (cb: (err: Error) => void) => void; onUnhandled: (cb: (reason: unknown) => void) => void; setStartupError: (message: string) => void; captureException?: (err: unknown) => void; }): void {
+// After a fatal error the process is in an undefined state (Node's own
+// guidance for uncaughtException), so we flush the pending Sentry event within
+// a bounded window and then exit non-zero. Bounded so a hung transport can't
+// keep a wedged process alive indefinitely.
+const FATAL_FLUSH_TIMEOUT_MS = 2_000;
+
+export function registerProcessErrorHandlers(deps: {
+  onUncaught: (cb: (err: Error) => void) => void;
+  onUnhandled: (cb: (reason: unknown) => void) => void;
+  setStartupError: (message: string) => void;
+  captureException?: (err: unknown) => void;
+  flush?: (timeoutMs?: number) => Promise<boolean>;
+  exit?: (code: number) => void;
+}): void {
   const captureException = deps.captureException ?? Sentry.captureException;
+  const flush = deps.flush ?? Sentry.flush;
+  const exit = deps.exit ?? ((code: number) => process.exit(code));
+
+  // C2: flush Sentry (best-effort, bounded) then exit(1) so the platform's
+  // restart policy cycles the process instead of leaving it running in a
+  // corrupted state holding DB/SSE handles. setStartupError above also flips
+  // the liveness probe to 503, so the restart fires even before exit lands.
+  const flushThenExit = () => {
+    void Promise.resolve(flush(FATAL_FLUSH_TIMEOUT_MS))
+      .catch(() => false)
+      .finally(() => exit(1));
+  };
+
   deps.onUncaught((err) => {
     logger.fatal({ err }, "Uncaught exception in server process");
     deps.setStartupError(`uncaught_exception: ${err.message}`);
     captureException(err);
+    flushThenExit();
   });
   deps.onUnhandled((reason) => {
     logger.fatal({ err: reason }, "Unhandled rejection in server process");
     deps.setStartupError(`unhandled_rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
     captureException(reason);
+    flushThenExit();
   });
 }

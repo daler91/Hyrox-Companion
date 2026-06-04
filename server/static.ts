@@ -3,9 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import express, { type Express } from "express";
-import rateLimit from "express-rate-limit";
 
 import { RATE_LIMIT_WINDOW_15M_MS } from "./constants";
+import { rateLimiter } from "./routeUtils";
 
 const currentFilename = fileURLToPath(import.meta.url);
 const currentDirname = path.dirname(currentFilename);
@@ -31,10 +31,11 @@ export function serveStatic(app: Express) {
   // Read HTML once at startup — inject per-request nonce for CSP
   const indexHtml = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
 
-  const fallbackLimiter = rateLimit({
-    windowMs: RATE_LIMIT_WINDOW_15M_MS,
-    max: 100,
-  });
+  // W14: Postgres-backed so the limit holds across instances (the previous
+  // in-memory store let a client hit 100×N requests before any single instance
+  // blocked). The "staticFallback" category keys by IP and fails open on GET,
+  // so a transient DB blip can't stop the SPA shell from serving.
+  const fallbackLimiter = rateLimiter("staticFallback", 100, RATE_LIMIT_WINDOW_15M_MS);
 
   app.use("*", fallbackLimiter, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
