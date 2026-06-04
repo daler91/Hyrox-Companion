@@ -13,9 +13,14 @@ declare global {
 
 /**
  * Generates a per-request cryptographic nonce for CSP script-src.
- * 128 bits of entropy, base64-encoded.
+ * 128 bits of entropy, base64url-encoded.
+ *
+ * S8: base64url (not base64) drops `+`, `/`, and `=`. The nonce is injected
+ * into the HTML as an unescaped attribute value (server/static.ts); base64
+ * never emits `"`, but base64url removes the whole class of attribute-breaking
+ * characters so the injection stays safe even if that emit site changes.
  */
 export function cspNonceMiddleware(_req: Request, res: Response, next: NextFunction) {
-  res.locals.cspNonce = randomBytes(16).toString("base64");
+  res.locals.cspNonce = randomBytes(16).toString("base64url");
   next();
 }
