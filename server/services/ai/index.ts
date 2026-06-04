@@ -150,11 +150,13 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     },
   };
 
+  // W6: omit userId from these info-level health lines. The logger's requestId
+  // mixin already carries correlation, so we don't put a user identifier next
+  // to health-derived phase/intensity status (matches the logger.ts S2 rule).
   logger.info(
     {
       context: "health-metrics",
       event: "phase_state_evaluated",
-      userId,
       phase: decisionTree.phase,
       intensityPermitted: decisionTree.intensityPermitted,
       rationaleCodes: decisionTree.rationaleCodes,
@@ -167,7 +169,6 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       {
         context: "health-metrics",
         event: "strict_phase_intensity_blocked",
-        userId,
         phase: decisionTree.phase,
       },
       "Intensity recommendation blocked in strict phase",
