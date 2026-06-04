@@ -27,18 +27,22 @@
             "type": "string"
           },
           "focus": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 50000
           },
           "mainWorkout": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 50000
           },
           "accessory": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "maxLength": 50000
           },
           "notes": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "maxLength": 50000
           },
           "duration": {
             "type": "integer",
@@ -773,18 +777,22 @@
                 "type": "string"
               },
               "focus": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 50000
               },
               "mainWorkout": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 50000
               },
               "accessory": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               },
               "notes": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               },
               "duration": {
                 "type": "integer",
@@ -1209,18 +1217,22 @@
                 "type": "string"
               },
               "focus": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 50000
               },
               "mainWorkout": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 50000
               },
               "accessory": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               },
               "notes": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               },
               "duration": {
                 "type": "integer",
@@ -1321,15 +1333,18 @@
               },
               "prescribedMainWorkout": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               },
               "prescribedAccessory": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               },
               "prescribedNotes": {
                 "type": "string",
-                "nullable": true
+                "nullable": true,
+                "maxLength": 50000
               }
             }
           },
