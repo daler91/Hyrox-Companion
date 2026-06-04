@@ -127,6 +127,8 @@ export default defineConfig({
             { name: "vendor-react", test: /[\\/]node_modules[\\/](?:react-dom|react|wouter)[\\/]/ },
             { name: "vendor-ui", test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
             { name: "vendor-query", test: /[\\/]node_modules[\\/]@tanstack[\\/]react-query[\\/]/ },
+            { name: "vendor-charts", test: /[\\/]node_modules[\\/]recharts[\\/]/ },
+            { name: "vendor-dnd", test: /[\\/]node_modules[\\/]@dnd-kit[\\/]/ },
           ],
         },
       },
