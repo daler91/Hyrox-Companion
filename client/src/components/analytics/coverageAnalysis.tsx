@@ -51,10 +51,17 @@ export function sumCoverageSets<T extends CoverageWork, K extends string>(
   targetIds: readonly K[],
   getId: (item: T) => K,
 ): number {
-  return items.reduce(
-    (sum, item) => sum + (targetIds.includes(getId(item)) ? item.totalSets : 0),
-    0,
-  );
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N*M) array.reduce/includes with an O(N+M) Set and linear scan.
+  // This avoids O(N*M) lookups.
+  const targetSet = new Set(targetIds);
+  let sum = 0;
+  for (const item of items) {
+    if (targetSet.has(getId(item))) {
+      sum += item.totalSets;
+    }
+  }
+  return sum;
 }
 
 export function findTopCoverage<T extends CoverageWork>(items: readonly T[]): T | null {
