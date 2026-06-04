@@ -1,5 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+import { timeoutSignal } from "./timeoutSignal";
+
 export class RateLimitError extends Error {
   readonly retryAfter: number | null;
 
@@ -78,7 +80,12 @@ let csrfTokenPromise: Promise<string> | null = null;
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 async function fetchCsrfToken(): Promise<string> {
-  const res = await fetch("/api/v1/csrf-token", { credentials: "include" });
+  // W15: bound the request so a stalled network doesn't hang the first mutation
+  // after load indefinitely (the caller surfaces the failure to the user).
+  const res = await fetch("/api/v1/csrf-token", {
+    credentials: "include",
+    signal: timeoutSignal(10_000),
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch CSRF token: ${res.status}`);
   }

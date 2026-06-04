@@ -7,6 +7,11 @@ import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
+// S10: client-side ceiling for plan CSV uploads. The server caps the stored
+// content well below this; the edge guard just stops a multi-MB file from being
+// read into memory (file.text()) and freezing the tab.
+const MAX_PLAN_CSV_BYTES = 200_000;
+
 interface UsePlanImportOptions {
   fileInputRef?: RefObject<HTMLInputElement>;
   onPlanImported?: (planId: string) => void;
@@ -143,6 +148,18 @@ export function usePlanImport({
 
       if (!file.name.endsWith(".csv")) {
         toast({ title: "Please upload a CSV file", variant: "destructive" });
+        return;
+      }
+
+      // S10: reject oversized files before reading the whole thing into memory.
+      // The server caps CSV content well below this; guarding at the edge keeps
+      // a multi-MB file from freezing the tab on file.text() (mobile especially).
+      if (file.size > MAX_PLAN_CSV_BYTES) {
+        toast({
+          title: "That CSV is too large",
+          description: "Plan imports are limited to 200 KB.",
+          variant: "destructive",
+        });
         return;
       }
 

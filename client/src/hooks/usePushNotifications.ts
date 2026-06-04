@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { apiRequest } from "@/lib/queryClient";
+import { timeoutSignal } from "@/lib/timeoutSignal";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -53,9 +54,11 @@ export function usePushNotifications() {
       setPermission(perm);
       if (perm !== "granted") return false;
 
-      // Fetch VAPID public key from server
+      // Fetch VAPID public key from server (W15: timeout so a stalled response
+      // can't hang the "Enable notifications" flow indefinitely).
       const keyRes = await fetch("/api/v1/push/vapid-key", {
         credentials: "include",
+        signal: timeoutSignal(10_000),
       });
       if (!keyRes.ok) return false;
       const { publicKey } = (await keyRes.json()) as { publicKey: string };
