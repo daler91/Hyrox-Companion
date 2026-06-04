@@ -524,12 +524,19 @@ export class WorkoutStorage {
     set: NormalizedSetCreateInput,
     adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
   ): Promise<ExerciseSet | undefined> {
-    if (!(await adapter.ownsContainer(context.id, context.userId))) return undefined;
-    const [max] = await db
-      .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
-      .from(exerciseSets)
-      .where(adapter.scopeWhere(context.id));
-    const nextOrder = (max?.maxOrder ?? -1) + 1;
+    // W10: the ownership check and the next-sort-order lookup are independent
+    // reads on the pool (`db`, not a transaction), so run them concurrently —
+    // one round-trip instead of two — before the INSERT. Each acquires its own
+    // pooled connection, so this is safe (unlike parallelizing within a `tx`).
+    const [owns, maxRows] = await Promise.all([
+      adapter.ownsContainer(context.id, context.userId),
+      db
+        .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
+        .from(exerciseSets)
+        .where(adapter.scopeWhere(context.id)),
+    ]);
+    if (!owns) return undefined;
+    const nextOrder = (maxRows[0]?.maxOrder ?? -1) + 1;
     const [created] = await db
       .insert(exerciseSets)
       .values(adapter.buildInsertValues(context.id, set, nextOrder))
