@@ -202,6 +202,10 @@ export const stravaConnections = pgTable("strava_connections", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 255 }).notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   stravaAthleteId: varchar("strava_athlete_id", { length: 255 }).notNull(),
+  // S4: these tokens are encrypted at rest (AES-256-GCM via server/crypto.ts) by
+  // the storage layer and decrypted on read — despite the plain column names,
+  // which lack the `encrypted_` prefix the garmin_connections columns use, for
+  // historical reasons. Do not assume the stored values are plaintext.
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token").notNull(),
   expiresAt: timestamp("expires_at").notNull(),

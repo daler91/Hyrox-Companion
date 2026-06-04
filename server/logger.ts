@@ -39,6 +39,9 @@ export const logger = pino({
     'req.body.token',
     'req.body.apiKey',
     'req.body.clientSecret',
+    // Workout-photo base64 can carry PII (faces, gym signage). pino-http doesn't
+    // serialize req.body today, but redact it declaratively as a safety net (S5).
+    'req.body.imageBase64',
     'req.body.*.password',
     'req.body.*.accessToken',
     'req.body.*.refreshToken',
