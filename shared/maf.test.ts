@@ -21,6 +21,13 @@ describe("calculateMafHr", () => {
     expect(result.adjustment).toBe(-10);
     expect(result.warning).toMatch(/Under-16/);
   });
+
+  it("applies the conservative -5 at exactly age 65, not +5 (S1 boundary)", () => {
+    const result = calculateMafHr({ age: 65, injuryIllnessMedication: false, consistency: "high", trend: "improving" });
+    expect(result.adjustment).toBe(-5);
+    expect(result.ceiling).toBe(110); // base 180-65=115, -5 = 110
+    expect(result.reasonCodes).toContain("age_over_65_conservative_default");
+  });
 });
 
 describe("computeMafCompliance", () => {

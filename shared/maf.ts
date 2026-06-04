@@ -30,9 +30,12 @@ export function calculateMafHr(input: MafInput): MafResult {
   } else if (input.injuryIllnessMedication) {
     adjustment = -10;
     reasonCodes.push("injury_illness_medication", "adjustment_-10");
-  } else if (input.age > 65) {
+  } else if (input.age >= 65) {
+    // S1: Maffetone applies the conservative adjustment from 65, not 66, so the
+    // boundary is inclusive — otherwise a healthy 65-year-old falls through to
+    // the consistency/trend branch and can be handed +5.
     adjustment = -5;
-    warning = "Over-65 athletes should confirm with clinician; conservative default applied.";
+    warning = "Athletes aged 65 and older should confirm with clinician; conservative default applied.";
     reasonCodes.push("age_over_65_conservative_default", "adjustment_-5");
   } else if (input.consistency === "low" || input.trend === "declining") {
     adjustment = -5;
