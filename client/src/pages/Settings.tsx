@@ -511,7 +511,13 @@ export default function Settings() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{errorMessage}</p>
+            {/* Raw error text is dev-only — the CardDescription above carries the
+                user-facing message. Surfacing `error.message` (e.g. "500: …") in
+                production is confusing and can leak internals (matches
+                FallbackErrorBoundary's NODE_ENV gate). */}
+            {import.meta.env.DEV && (
+              <p className="text-sm text-muted-foreground">{errorMessage}</p>
+            )}
             <Button onClick={() => refetch()} disabled={isFetching} data-testid="button-retry-load-settings">
               {isFetching ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />

@@ -55,33 +55,38 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
         {ONBOARDING_GOALS.map((goal) => {
           const Icon = goalIcons[goal.id];
           return (
-            <button
-              type="button"
+            // A <label> wrapping the radio replaces the previous
+            // <button><RadioGroupItem/></button> (a <button> nested inside the
+            // Radix radio's own <button>), which was invalid HTML and gave
+            // undefined keyboard/AT behavior. Selection now flows through the
+            // RadioGroup (onValueChange), and focus-within rings the card while
+            // the inner radio is focused. (WCAG 4.1.2 / 1.3.1)
+            <label
               key={goal.id}
-              className={`w-full text-left flex items-center space-x-3 p-3 rounded-md border cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+              htmlFor={goal.id}
+              className={`w-full text-left flex items-center space-x-3 p-3 rounded-md border cursor-pointer transition-colors focus-within:outline-none focus-within:ring-1 focus-within:ring-ring ${
                 selectedGoal === goal.id
                   ? "border-primary bg-primary/5"
                   : "border-border hover:bg-muted/50"
               }`}
-              onClick={() => onGoalChange(goal.id)}
             >
               <RadioGroupItem value={goal.id} id={goal.id} />
-              <Icon className="h-5 w-5 text-muted-foreground" />
+              <Icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               <div className="flex-1">
-                <Label htmlFor={goal.id} className="cursor-pointer font-medium">
-                  {goal.label}
-                </Label>
+                <span className="font-medium">{goal.label}</span>
                 <p className="text-xs text-muted-foreground">{goal.description}</p>
               </div>
-              {selectedGoal === goal.id && <Check className="h-4 w-4 text-primary" />}
-            </button>
+              {selectedGoal === goal.id && (
+                <Check className="h-4 w-4 text-primary" aria-hidden="true" />
+              )}
+            </label>
           );
         })}
       </RadioGroup>
       <div className="space-y-2">
-        <Label>Training style</Label>
+        <Label htmlFor="onboarding-training-style">Training style</Label>
         <Select value={trainingStyleId} onValueChange={props.onTrainingStyleChange}>
-          <SelectTrigger>
+          <SelectTrigger id="onboarding-training-style">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -92,21 +97,24 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
       </div>
       {trainingStyleId === "maf_method" && (
         <div className="space-y-3 rounded-md border p-3">
-          <Label>MAF onboarding</Label>
+          <p className="text-sm font-medium">MAF onboarding</p>
           <Input
+            id="onboarding-maf-age"
             placeholder="Age"
+            aria-label="Age"
             value={props.mafAge}
             onChange={(e) => props.onMafAgeChange(e.target.value)}
           />
           <div className="flex items-center justify-between">
-            <Label>Injury/illness/medication?</Label>
+            <Label htmlFor="onboarding-maf-injury">Injury/illness/medication?</Label>
             <Switch
+              id="onboarding-maf-injury"
               checked={props.mafInjuryIllnessMedication}
               onCheckedChange={props.onMafInjuryIllnessMedicationChange}
             />
           </div>
           <Select value={props.mafConsistency} onValueChange={props.onMafConsistencyChange}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Training consistency">
               <SelectValue placeholder="Training consistency" />
             </SelectTrigger>
             <SelectContent>
@@ -116,7 +124,7 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
             </SelectContent>
           </Select>
           <Select value={props.mafTrend} onValueChange={props.onMafTrendChange}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Recent trend">
               <SelectValue placeholder="Recent trend" />
             </SelectTrigger>
             <SelectContent>
@@ -126,8 +134,9 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
             </SelectContent>
           </Select>
           <div className="flex items-center justify-between">
-            <Label>HR data available?</Label>
+            <Label htmlFor="onboarding-maf-hr">HR data available?</Label>
             <Switch
+              id="onboarding-maf-hr"
               checked={props.mafHrDataAvailable}
               onCheckedChange={props.onMafHrDataAvailableChange}
             />

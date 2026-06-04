@@ -94,7 +94,10 @@
   --accent-foreground: 0 0% 4%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 45%;
+  /* WCAG 1.4.3 AA: 142 71% 27% as text-success on white = ~5.73:1, and on the
+     bg-success/10 status badge = ~4.97:1 (was 45%, ~2.30:1 / ~2.11:1 — failed).
+     Dark mode keeps 45% (≈8:1 on the ink surface). */
+  --success: 142 71% 27%;
   --success-foreground: 0 0% 100%;
   /* WCAG 1.4.11 AA: 0% 65% lightness on white = ~3.03:1 (was 83%, ~1.48:1) */
   --input: 0 0% 65%;
