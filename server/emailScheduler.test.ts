@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { processMafTestReminder, runEmailCronJob } from './emailScheduler';
+import { processMafTestReminder, processWeeklySummary, runEmailCronJob } from './emailScheduler';
 import type { IStorage } from './storage';
 
 vi.mock('./queue', () => ({
@@ -297,5 +297,82 @@ describe('processMafTestReminder', () => {
     expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
     expect(sendMafTestReminder).not.toHaveBeenCalled();
     expect(sent).toBe(false);
+  });
+});
+
+describe('processWeeklySummary', () => {
+  // 2023-10-16 is a Monday in UTC, so the summary proceeds and the "week in
+  // review" is 2023-10-09 (Mon) … 2023-10-15 (Sun).
+  const monday = new Date('2023-10-16T12:00:00Z');
+
+  // A logged set is mostly null columns; PR detection only reads the few below,
+  // and the storage mock is untyped, so we spell out just what matters.
+  function loggedSet(fields: { exerciseName: string; category: string; date: string; workoutLogId: string; time?: number; weight?: number; reps?: number; distance?: number }) {
+    return {
+      exerciseName: fields.exerciseName, customLabel: null, category: fields.category,
+      time: fields.time ?? null, weight: fields.weight ?? null, reps: fields.reps ?? null,
+      distance: fields.distance ?? null, workoutLogId: fields.workoutLogId, date: fields.date,
+    };
+  }
+
+  function weeklyStorage(opts: { sets?: unknown[] | (() => Promise<unknown[]>) } = {}): IStorage {
+    const getAllExerciseSetsWithDates =
+      typeof opts.sets === 'function'
+        ? vi.fn().mockImplementation(opts.sets)
+        : vi.fn().mockResolvedValue(opts.sets ?? []);
+    return {
+      users: {
+        getUser: vi.fn().mockResolvedValue({
+          id: 'u1', email: 'a@b.com', userTimezone: 'UTC',
+          emailNotifications: true, emailWeeklySummary: true, lastWeeklySummaryAt: null,
+        }),
+        updateLastWeeklySummaryAt: vi.fn().mockResolvedValue(undefined),
+      },
+      analytics: {
+        getWeeklyStats: vi.fn().mockResolvedValue({
+          completedCount: 3, plannedCount: 4, missedCount: 1, skippedCount: 0, totalDuration: 120,
+        }),
+        getAllExerciseSetsWithDates,
+      },
+      timeline: { getTimeline: vi.fn().mockResolvedValue([]) },
+    } as unknown as IStorage;
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('computes prsThisWeek from the set history and passes it to the email', async () => {
+    const { sendWeeklySummary } = await import('./email');
+    const storage = weeklyStorage({
+      sets: [
+        // Prior best: a 30-min run before the window.
+        loggedSet({ exerciseName: 'easy_run', category: 'running', time: 30, workoutLogId: 'before', date: '2023-09-01' }),
+        // A faster run inside the window → one new best-time PR.
+        loggedSet({ exerciseName: 'easy_run', category: 'running', time: 25, workoutLogId: 'in', date: '2023-10-12' }),
+      ],
+    });
+
+    const sent = await processWeeklySummary(storage, { id: 'u1' } as never, monday);
+
+    expect(sent).toBe(true);
+    expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith('u1');
+    expect(sendWeeklySummary).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ prsThisWeek: 1, weekStartDate: '2023-10-09', weekEndDate: '2023-10-15' }),
+    );
+  });
+
+  it('degrades prsThisWeek to 0 and still sends when the set-history query fails', async () => {
+    const { sendWeeklySummary } = await import('./email');
+    const { logger } = await import('./logger');
+    const storage = weeklyStorage({ sets: () => Promise.reject(new Error('db down')) });
+
+    const sent = await processWeeklySummary(storage, { id: 'u1' } as never, monday);
+
+    expect(sent).toBe(true);
+    expect(sendWeeklySummary).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ prsThisWeek: 0 }),
+    );
+    expect(logger.warn).toHaveBeenCalled();
   });
 });

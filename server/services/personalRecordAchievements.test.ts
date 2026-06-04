@@ -2,7 +2,7 @@ import type { ExerciseSet, WorkoutLog } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
 import type { ExerciseSetWithDate } from "./analyticsService";
-import { findPersonalRecordAchievements } from "./personalRecordAchievements";
+import { countPersonalRecordsInRange, findPersonalRecordAchievements } from "./personalRecordAchievements";
 
 function makeSet(overrides: Partial<ExerciseSetWithDate> = {}): ExerciseSetWithDate {
   return {
@@ -153,5 +153,67 @@ describe("findPersonalRecordAchievements", () => {
         previousValue: 25,
       }),
     ]);
+  });
+});
+
+describe("countPersonalRecordsInRange", () => {
+  const run = (overrides: Partial<ExerciseSetWithDate>) =>
+    makeSet({ exerciseName: "easy_run", category: "running", ...overrides });
+
+  it("counts a metric whose in-range best beats the prior best", () => {
+    const sets = [
+      run({ time: 30, workoutLogId: "before", date: "2026-05-01" }),
+      run({ time: 22, workoutLogId: "in", date: "2026-05-05" }),
+    ];
+
+    expect(countPersonalRecordsInRange(sets, "2026-05-04", "2026-05-10")).toBe(1);
+  });
+
+  it("does not count a first-ever record (no prior best to beat)", () => {
+    const sets = [
+      makeSet({ exerciseName: "skierg", category: "functional", distance: 1000, date: "2026-05-05" }),
+    ];
+
+    expect(countPersonalRecordsInRange(sets, "2026-05-04", "2026-05-10")).toBe(0);
+  });
+
+  it("does not count a record that was set before the range", () => {
+    const sets = [
+      run({ time: 30, workoutLogId: "old", date: "2026-04-20" }),
+      run({ time: 22, workoutLogId: "pr-before-range", date: "2026-05-01" }),
+      run({ time: 24, workoutLogId: "in-but-slower", date: "2026-05-05" }),
+    ];
+
+    // The 22-min PR predates the window; the in-range run (24) is slower than it.
+    expect(countPersonalRecordsInRange(sets, "2026-05-04", "2026-05-10")).toBe(0);
+  });
+
+  it("collapses repeated improvements of one metric within the range to a single PR", () => {
+    const sets = [
+      run({ time: 30, workoutLogId: "before", date: "2026-04-20" }),
+      run({ time: 25, workoutLogId: "in-1", date: "2026-05-05" }),
+      run({ time: 22, workoutLogId: "in-2", date: "2026-05-07" }),
+    ];
+
+    expect(countPersonalRecordsInRange(sets, "2026-05-04", "2026-05-10")).toBe(1);
+  });
+
+  it("ignores sets logged after the range", () => {
+    const sets = [
+      run({ time: 30, workoutLogId: "before", date: "2026-05-01" }),
+      run({ time: 20, workoutLogId: "after-range", date: "2026-05-20" }),
+    ];
+
+    // The only faster run happened after the window, so it is not a PR "this week".
+    expect(countPersonalRecordsInRange(sets, "2026-05-04", "2026-05-10")).toBe(0);
+  });
+
+  it("counts both maxWeight and estimated-1RM for a heavier strength lift", () => {
+    const sets = [
+      makeSet({ exerciseName: "back_squat", category: "strength", weight: 100, reps: 5, workoutLogId: "before", date: "2026-05-01" }),
+      makeSet({ exerciseName: "back_squat", category: "strength", weight: 110, reps: 5, workoutLogId: "in", date: "2026-05-06" }),
+    ];
+
+    expect(countPersonalRecordsInRange(sets, "2026-05-04", "2026-05-10")).toBe(2);
   });
 });

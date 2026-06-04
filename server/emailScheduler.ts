@@ -5,8 +5,32 @@ import { logger } from "./logger";
 import { sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
+import { countPersonalRecordsInRange } from "./services/personalRecordAchievements";
 import type { IStorage } from "./storage";
 import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek } from "./timezone";
+
+// PRs This Week is a secondary enhancement to the summary, and it is fed by the
+// largest query we run here (the user's full set history, to establish each
+// all-time prior best). A transient failure of that one query shouldn't sink
+// the whole email, so it degrades to 0 — the template simply omits the section
+// — instead of throwing.
+async function computeWeeklyPrCount(
+  storage: IStorage,
+  userId: string,
+  weekStartStr: string,
+  weekEndStr: string,
+): Promise<number> {
+  try {
+    const allSets = await storage.analytics.getAllExerciseSetsWithDates(userId);
+    return countPersonalRecordsInRange(allSets, weekStartStr, weekEndStr);
+  } catch (err) {
+    logger.warn(
+      { context: "email", userId, err },
+      "Failed to compute weekly PR count; defaulting to 0",
+    );
+    return 0;
+  }
+}
 
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
   // Re-fetch the user so an opt-out that happened between enqueue and this
@@ -33,9 +57,10 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const weekEndStr = addDaysLocal(todayStr, -1);
   const weekStartStr = addDaysLocal(weekEndStr, -6);
 
-  const [stats, timeline] = await Promise.all([
+  const [stats, timeline, prsThisWeek] = await Promise.all([
     storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr),
     storage.timeline.getTimeline(user.id),
+    computeWeeklyPrCount(storage, user.id, weekStartStr, weekEndStr),
   ]);
   const completedDates = new Set(
     timeline
@@ -52,7 +77,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     skippedCount: stats.skippedCount,
     completionRate: total > 0 ? Math.round((stats.completedCount / total) * 100) : 0,
     currentStreak: streak,
-    prsThisWeek: 0,
+    prsThisWeek,
     totalDuration: stats.totalDuration,
     weekStartDate: weekStartStr,
     weekEndDate: weekEndStr,
