@@ -191,7 +191,6 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
             <TimelineCardHeader
               entry={entry}
               canMove={Boolean(canMove)}
-              isTargetedByCoach={Boolean(isTargetedByCoach)}
               adherenceBadge={adherenceBadge}
             />
             <TimelineCardWorkoutBody
@@ -446,29 +445,20 @@ function TimelineCardLeadingAction({
 interface TimelineCardHeaderProps {
   readonly entry: TimelineWorkoutEntry;
   readonly canMove: boolean;
-  readonly isTargetedByCoach: boolean;
   readonly adherenceBadge: ReturnType<typeof getAdherenceBadge>;
 }
 
 function TimelineCardHeader({
   entry,
   canMove,
-  isTargetedByCoach,
   adherenceBadge,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
       {getStatusBadge(entry.status, entry.focus)}
-      {isTargetedByCoach && (
-        <Badge
-          variant="outline"
-          className="border-primary text-primary bg-primary/5 animate-pulse"
-          data-testid={`badge-ai-coach-${entry.id}`}
-        >
-          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-          AI Modifying
-        </Badge>
-      )}
+      {/* The "AI Modifying" badge is rendered once, by FloatingAiCoachBadge at
+          the card root (W9). A second copy here produced a duplicate DOM node
+          and a duplicate data-testid="badge-ai-coach-${id}". */}
       {entry.source === "strava" && (
         <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
           <StravaIcon className="h-3 w-3 mr-1" />

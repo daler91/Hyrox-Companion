@@ -89,6 +89,10 @@ function useClerkAuthImpl() {
     enabled: !!isSignedIn,
     retry: false,
     refetchInterval: coachingPollInterval,
+    // S7: keep the cached user across brief unmounts (route changes) so a page
+    // remounting useAuth >5 min later doesn't garbage-collect <5-min-stale data
+    // and flash a reload. The coaching poll still refreshes it while mounted.
+    gcTime: 30 * 60 * 1000,
   });
 
   useAutoCoachWatcher(dbUser);
