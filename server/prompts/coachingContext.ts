@@ -1,4 +1,5 @@
 import type { TrainingContext } from "../gemini/types";
+import { sanitizeUserInput } from "../utils/sanitize";
 import { formatExerciseSetsForPrompt } from "./exerciseSetFormatter";
 
 export function buildOverallStats(trainingContext: TrainingContext): string {
@@ -12,9 +13,9 @@ export function buildOverallStats(trainingContext: TrainingContext): string {
 - Current streak: ${trainingContext.currentStreak} day${trainingContext.currentStreak === 1 ? "" : "s"}`;
 
   if (trainingContext.activePlan) {
-    section += `\n\nActive Training Plan: "${trainingContext.activePlan.name}" (${trainingContext.activePlan.totalWeeks} weeks)`;
+    section += `\n\nActive Training Plan: "${sanitizeUserInput(trainingContext.activePlan.name)}" (${trainingContext.activePlan.totalWeeks} weeks)`;
     if (trainingContext.activePlan.goal) {
-      section += `\nPlan Goal: ${trainingContext.activePlan.goal}`;
+      section += `\nPlan Goal: ${sanitizeUserInput(trainingContext.activePlan.goal)}`;
     }
   }
   return section;
@@ -56,9 +57,9 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
     });
     const workoutDetails = exerciseSummary
       ? `Exercises: ${exerciseSummary}`
-      : workout.mainWorkout || "No details";
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - ${workoutDetails} (${workout.status})`;
-    if (workout.athleteNote?.trim()) line += ` | Athlete note: ${workout.athleteNote.trim()}`;
+      : sanitizeUserInput(workout.mainWorkout || "No details");
+    let line = `\n- ${workout.date}: ${sanitizeUserInput(workout.focus || "General")} - ${workoutDetails} (${workout.status})`;
+    if (workout.athleteNote?.trim()) line += ` | Athlete note: ${sanitizeUserInput(workout.athleteNote.trim())}`;
     section += line;
   }
   return section;
@@ -73,13 +74,13 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
       weightUnit: trainingContext.weightUnit,
       distanceUnit: trainingContext.distanceUnit,
     });
-    let line = `\n- ${workout.date}: ${workout.focus || "General"} - `;
+    let line = `\n- ${workout.date}: ${sanitizeUserInput(workout.focus || "General")} - `;
     if (exerciseSummary) {
       line += `Exercises: ${exerciseSummary}`;
     } else {
-      line += workout.mainWorkout || "No details";
-      if (workout.accessory) line += ` | Accessory: ${workout.accessory}`;
-      if (workout.notes) line += ` | Notes: ${workout.notes}`;
+      line += sanitizeUserInput(workout.mainWorkout || "No details");
+      if (workout.accessory) line += ` | Accessory: ${sanitizeUserInput(workout.accessory)}`;
+      if (workout.notes) line += ` | Notes: ${sanitizeUserInput(workout.notes)}`;
     }
     section += line;
   }

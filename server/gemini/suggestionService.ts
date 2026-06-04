@@ -8,6 +8,7 @@ import {
   formatExerciseSetsForPrompt,
   type PromptExerciseSet,
 } from "../prompts/exerciseSetFormatter";
+import { sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
 export interface SuggestionPromptOptions {
@@ -128,13 +129,13 @@ function formatRecentWorkout(
     weightUnit: trainingContext.weightUnit,
     distanceUnit: trainingContext.distanceUnit,
   });
-  const workoutDetails = exerciseSummary ? `Exercises: ${exerciseSummary}` : workout.mainWorkout;
-  let line = `- ${workout.date}: ${workout.focus} - ${workoutDetails}`;
+  const workoutDetails = exerciseSummary ? `Exercises: ${exerciseSummary}` : sanitizeUserInput(workout.mainWorkout);
+  let line = `- ${workout.date}: ${sanitizeUserInput(workout.focus)} - ${workoutDetails}`;
   const meta: string[] = [];
   if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
   if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);
   if (meta.length > 0) line += ` (${meta.join(", ")})`;
-  if (workout.athleteNote?.trim()) line += ` | Athlete note: ${workout.athleteNote.trim()}`;
+  if (workout.athleteNote?.trim()) line += ` | Athlete note: ${sanitizeUserInput(workout.athleteNote.trim())}`;
   return line;
 }
 
@@ -202,11 +203,11 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
   });
   const priorAiContext = formatPriorAiContext(workout);
   if (exerciseSummary) {
-    return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Exercises: ${exerciseSummary}${priorAiContext}`;
+    return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
   }
-  let line = `ID: ${workout.id}, Date: ${workout.date}, Focus: ${workout.focus}, Main: ${workout.mainWorkout}`;
-  if (workout.accessory) line += `, Accessory: ${workout.accessory}`;
-  if (workout.notes) line += `, Notes: ${workout.notes}`;
+  let line = `ID: ${workout.id}, Date: ${workout.date}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
+  if (workout.accessory) line += `, Accessory: ${sanitizeUserInput(workout.accessory)}`;
+  if (workout.notes) line += `, Notes: ${sanitizeUserInput(workout.notes)}`;
   line += priorAiContext;
   return line;
 }
@@ -302,7 +303,7 @@ function formatCoachingAnalysis(
   }
 
   if (planGoal) {
-    lines.push(`ATHLETE'S GOAL: "${planGoal}"`);
+    lines.push(`ATHLETE'S GOAL: "${sanitizeUserInput(planGoal)}"`);
   }
 
   lines.push(`--- END COACHING ANALYSIS ---`);
@@ -325,7 +326,7 @@ function buildPromptDataSections(
 ): string[] {
   const header = [
     `--- ATHLETE'S TRAINING DATA ---`,
-    ...(planGoal ? [`Athlete's goal: ${planGoal}`] : []),
+    ...(planGoal ? [`Athlete's goal: ${sanitizeUserInput(planGoal)}`] : []),
     `Completion rate: ${trainingContext.completionRate}%`,
     `Current streak: ${trainingContext.currentStreak} days`,
     `Completed workouts: ${trainingContext.completedWorkouts}`,

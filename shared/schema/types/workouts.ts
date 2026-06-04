@@ -16,6 +16,11 @@ const workoutDateNotFuture = z.string().refine(
   { message: "Workout date cannot be in the future" },
 );
 
+// W12: cap free-text workout fields. Without a bound, a multi-MB blob passes
+// Zod, lands in the DB, and later inflates AI token cost/latency when fed to the
+// coach. Exported so the reparse route applies the same ceiling.
+export const MAX_WORKOUT_TEXT_LEN = 50_000;
+
 export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
   .omit({
     id: true,
@@ -62,12 +67,18 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
       .max(250, "Max heart rate looks too high")
       .optional()
       .nullable(),
+    // W12 — bound the free-text columns (focus/mainWorkout are NOT NULL;
+    // accessory/notes are nullable, matching the table).
+    focus: z.string().max(MAX_WORKOUT_TEXT_LEN),
+    mainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN),
+    accessory: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
+    notes: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
   });
 
 export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
-  prescribedMainWorkout: z.string().optional().nullable(),
-  prescribedAccessory: z.string().optional().nullable(),
-  prescribedNotes: z.string().optional().nullable(),
+  prescribedMainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN).optional().nullable(),
+  prescribedAccessory: z.string().max(MAX_WORKOUT_TEXT_LEN).optional().nullable(),
+  prescribedNotes: z.string().max(MAX_WORKOUT_TEXT_LEN).optional().nullable(),
 });
 
 export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
