@@ -1,0 +1,1 @@
+ALTER TABLE "training_plans" ADD COLUMN "generation_started_at" timestamp DEFAULT now();

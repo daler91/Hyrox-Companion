@@ -35,6 +35,7 @@ const samplePlan = {
   raceDate: null,
   generationStatus: "ready",
   generationError: null,
+  generationStartedAt: null,
 };
 
 function mockSamplePlanCreation() {

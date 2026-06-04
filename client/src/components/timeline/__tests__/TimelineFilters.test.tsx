@@ -32,6 +32,7 @@ describe("TimelineFilters", () => {
         raceDate: null,
         generationStatus: "ready",
         generationError: null,
+        generationStartedAt: null,
       },
       {
         id: "plan-2",
@@ -47,6 +48,7 @@ describe("TimelineFilters", () => {
         raceDate: null,
         generationStatus: "ready",
         generationError: null,
+        generationStartedAt: null,
       },
     ],
     plansLoading: false,

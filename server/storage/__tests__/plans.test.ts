@@ -45,6 +45,7 @@ function mockUpdateChain(result: unknown[]) {
   const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
   const setMock = vi.fn().mockReturnValue({ where: whereMock });
   vi.mocked(db.update).mockReturnValue({ set: setMock });
+  return { setMock, whereMock, returningMock };
 }
 
 // -- Tests --------------------------------------------------------------------
@@ -200,6 +201,25 @@ describe("PlanStorage", () => {
       vi.mocked(db.delete).mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) });
 
       expect(await storage.deletePlanDay("d1", "u1")).toBe(true);
+    });
+  });
+
+  describe("failStalePlanGenerations", () => {
+    it("flips stuck plans to failed and returns the count", async () => {
+      const { setMock } = mockUpdateChain([{ id: "plan-1" }, { id: "plan-2" }]);
+
+      const count = await storage.failStalePlanGenerations(60 * 60 * 1000);
+
+      expect(count).toBe(2);
+      expect(db.update).toHaveBeenCalledTimes(1);
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ generationStatus: "failed" }),
+      );
+    });
+
+    it("returns 0 when no plan generation is stale", async () => {
+      mockUpdateChain([]);
+      expect(await storage.failStalePlanGenerations(60 * 60 * 1000)).toBe(0);
     });
   });
 });
