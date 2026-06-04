@@ -36,6 +36,26 @@ export class PlanStorage {
       .where(eq(trainingPlans.id, planId));
   }
 
+  /**
+   * True when the user already has a plan whose AI generation is in flight
+   * (`pending` or `generating`). Used to reject duplicate `/plans/generate`
+   * requests (W13). Best-effort, not airtight against two simultaneous requests
+   * — an airtight guard would need a unique partial index, which is a migration.
+   */
+  async hasInFlightPlanGeneration(userId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: trainingPlans.id })
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          inArray(trainingPlans.generationStatus, ["pending", "generating"]),
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+
   async listTrainingPlans(userId: string): Promise<TrainingPlan[]> {
     return await db.select().from(trainingPlans).where(eq(trainingPlans.userId, userId));
   }

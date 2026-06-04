@@ -112,6 +112,10 @@ export function useGeneratePlan(): UseGeneratePlanResult {
   const isPending = mutation.isPending || pendingPlanId !== null;
 
   const mutate = (input: GeneratePlanInput, callbacks?: { onSuccess?: (plan: TrainingPlanWithDays) => void }) => {
+    // W13: ignore re-submits while a generation is already in flight, so a
+    // double-click can't start a second job before isPending propagates to the
+    // button (the server also rejects this with 409 as the authoritative guard).
+    if (isPending) return;
     if (callbacks?.onSuccess) {
       setSuccessCallback(() => callbacks.onSuccess!);
     }
