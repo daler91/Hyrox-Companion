@@ -111,7 +111,7 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
       </div>
 
       {filteredExercisesByCategory.length === 0 && (
-        <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground" data-testid="exercise-selector-empty">
+        <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground" role="status" aria-live="polite" data-testid="exercise-selector-empty">
           No matching exercises
         </div>
       )}

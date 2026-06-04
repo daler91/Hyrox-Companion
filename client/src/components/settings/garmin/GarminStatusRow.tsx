@@ -54,6 +54,7 @@ export function GarminStatusRow({
             size="sm"
             onClick={onSync}
             disabled={isSyncing}
+            aria-busy={isSyncing}
             data-testid="button-sync-garmin"
           >
             {isSyncing ? (
@@ -61,14 +62,15 @@ export function GarminStatusRow({
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            <span className="ml-1.5">Sync</span>
+            <span className="ml-1.5">{isSyncing ? "Syncing…" : "Sync"}</span>
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={onDisconnect}
             disabled={isDisconnecting}
-            aria-label="Disconnect Garmin"
+            aria-label={isDisconnecting ? "Disconnecting Garmin…" : "Disconnect Garmin"}
+            aria-busy={isDisconnecting}
             data-testid="button-disconnect-garmin"
           >
             {isDisconnecting ? (
