@@ -53,7 +53,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pnpm i
+          pnpm install --frozen-lockfile
           npx cypress install
 
       - name: Cache Cypress binary

@@ -34,6 +34,9 @@ jobs:
         # Commonly enabled options, see https://github.com/actions/dependency-review-action#configuration-options for all available options.
         with:
           comment-summary-in-pr: always
-        #   fail-on-severity: moderate
+          # Fail the PR on a newly-introduced dependency with a known
+          # moderate-or-higher advisory (W16). Catches transitive upgrades that
+          # a non-frozen install could otherwise pull in unnoticed.
+          fail-on-severity: moderate
         #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
         #   retry-on-snapshot-warnings: true
