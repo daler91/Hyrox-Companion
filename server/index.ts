@@ -45,6 +45,19 @@ if (env.ALLOW_DEV_AUTH_BYPASS === "true") {
 
 configureObservability();
 
+// W2: CRON_SECRET / INTERNAL_ANALYTICS_SECRET gate operator-facing endpoints.
+// When unset they fail safe (every call 401s) but silently — warn loudly in
+// production so an operator who expects cron emails or internal analytics to
+// work notices the misconfiguration instead of debugging a silent 401.
+if (env.NODE_ENV === "production") {
+  if (!env.CRON_SECRET) {
+    logger.warn({ context: "startup-config" }, "CRON_SECRET not set — /api/v1/cron/emails will reject every request");
+  }
+  if (!env.INTERNAL_ANALYTICS_SECRET) {
+    logger.warn({ context: "startup-config" }, "INTERNAL_ANALYTICS_SECRET not set — internal analytics endpoints will reject every request");
+  }
+}
+
 const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;
 const clientEmomFlag = clientEmomFlagRaw === "true";
 const serverEmomFlag = env.EMOM_BUILDER_ENABLED === "true";

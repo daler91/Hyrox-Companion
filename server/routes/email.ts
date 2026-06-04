@@ -21,7 +21,11 @@ protectedPost(router, "/api/v1/emails/check", { limiter: rateLimiter("emailCheck
     res.json({ sent });
   });
 
-router.get("/api/v1/cron/emails", asyncHandler(async (req: ExpressRequest, res: Response) => {
+// W3: rate-limit the secret-gated cron endpoint so a leaked CRON_SECRET can't
+// be brute-forced or used to hammer the (expensive) all-users email job.
+// Generous for a real scheduler (10/min, IP-keyed); GET fails open so a
+// rate-limit-store blip can't block legitimate cron runs.
+router.get("/api/v1/cron/emails", rateLimiter("cronEmails", 10, 60_000), asyncHandler(async (req: ExpressRequest, res: Response) => {
   const secret = req.headers["x-cron-secret"] as string;
   const cronSecret = env.CRON_SECRET;
 
