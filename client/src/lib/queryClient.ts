@@ -1,5 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+import { timeoutSignal } from "./timeoutSignal";
+
 export class RateLimitError extends Error {
   readonly retryAfter: number | null;
 
@@ -82,7 +84,7 @@ async function fetchCsrfToken(): Promise<string> {
   // after load indefinitely (the caller surfaces the failure to the user).
   const res = await fetch("/api/v1/csrf-token", {
     credentials: "include",
-    signal: AbortSignal.timeout(10_000),
+    signal: timeoutSignal(10_000),
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch CSRF token: ${res.status}`);
