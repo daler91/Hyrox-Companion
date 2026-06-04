@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 
 function TimelineMockup() {
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-lg overflow-hidden">
+    <div className="w-full max-w-md mx-auto" role="img" aria-label="Preview of the training timeline showing today's completed workout, an AI-modified session for tomorrow, and a planned recovery day">
+      <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-lg overflow-hidden" aria-hidden="true">
         <div className="px-4 py-3 border-b border-border/40 flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-red-400/60" />
           <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
@@ -76,9 +76,9 @@ export function LandingHeader() {
       <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <Logo size={32} />
         <div className="flex items-center gap-3">
-          <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">Features</a>
-          <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">How It Works</a>
-          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block">FAQ</a>
+          <a href="#features" className="rounded text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Features</a>
+          <a href="#how-it-works" className="rounded text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">How It Works</a>
+          <a href="#faq" className="rounded text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">FAQ</a>
           <SignInButton mode="modal">
             <Button data-testid="button-login-header" size="sm">Log In</Button>
           </SignInButton>
@@ -105,21 +105,21 @@ export function LandingHeader() {
           <div className="container mx-auto px-4 py-3 flex flex-col gap-3">
             <a
               href="#features"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="rounded text-sm text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setMobileNavOpen(false)}
             >
               Features
             </a>
             <a
               href="#how-it-works"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="rounded text-sm text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setMobileNavOpen(false)}
             >
               How It Works
             </a>
             <a
               href="#faq"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="rounded text-sm text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setMobileNavOpen(false)}
             >
               FAQ
@@ -160,11 +160,9 @@ export function Hero() {
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </SignInButton>
-              <a href="#features">
-                <Button variant="outline" size="lg" className="text-base px-6 w-full sm:w-auto">
-                  See Features
-                </Button>
-              </a>
+              <Button variant="outline" size="lg" className="text-base px-6 w-full sm:w-auto" asChild>
+                <a href="#features">See Features</a>
+              </Button>
             </div>
           </div>
           {/* Decorative illustration — its badges/text duplicate the hero copy,
