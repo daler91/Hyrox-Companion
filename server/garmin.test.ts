@@ -1,4 +1,4 @@
-import { afterEach,describe, expect, it } from "vitest";
+import { afterEach,describe, expect, it, vi } from "vitest";
 
 import { __testing } from "./garmin";
 
@@ -72,6 +72,55 @@ describe("garmin safety layers", () => {
 
     it("leaves a wide buffer before token expiry", () => {
       expect(__testing.TOKEN_EXPIRY_BUFFER_MS).toBeGreaterThanOrEqual(60 * 1000);
+    });
+  });
+
+  describe("withTimeout (C4)", () => {
+    it("passes through a value that settles before the budget", async () => {
+      await expect(__testing.withTimeout(Promise.resolve("ok"), 1_000, "test")).resolves.toBe("ok");
+    });
+
+    it("rejects a hung promise once the budget elapses", async () => {
+      vi.useFakeTimers();
+      try {
+        const pending = __testing.withTimeout(new Promise<never>(() => {}), 1_000, "test");
+        const assertion = expect(pending).rejects.toThrow(/timed out/);
+        await vi.advanceTimersByTimeAsync(1_001);
+        await assertion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("withCircuitBreaker (C4 + breaker)", () => {
+    it("trips the breaker on a 429-looking error", async () => {
+      await expect(
+        __testing.withCircuitBreaker("login", () =>
+          Promise.reject(new Error("Request failed: 429 Too Many Requests")),
+        ),
+      ).rejects.toThrow();
+      expect(__testing.garminCircuitBreaker.isOpen()).toBe(true);
+    });
+
+    it("does not trip the breaker on a non-429 error", async () => {
+      await expect(
+        __testing.withCircuitBreaker("login", () => Promise.reject(new Error("invalid credentials"))),
+      ).rejects.toThrow(/invalid credentials/);
+      expect(__testing.garminCircuitBreaker.isOpen()).toBe(false);
+    });
+
+    it("times out a hung call without tripping the breaker", async () => {
+      vi.useFakeTimers();
+      try {
+        const pending = __testing.withCircuitBreaker("getActivities", () => new Promise<never>(() => {}));
+        const assertion = expect(pending).rejects.toThrow(/timed out/);
+        await vi.advanceTimersByTimeAsync(__testing.GARMIN_CALL_TIMEOUT_MS + 10);
+        await assertion;
+        expect(__testing.garminCircuitBreaker.isOpen()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
