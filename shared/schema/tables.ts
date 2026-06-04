@@ -108,6 +108,11 @@ export const trainingPlans = pgTable("training_plans", {
   raceDate: date("race_date"),
   generationStatus: text("generation_status").notNull().default("ready"),
   generationError: text("generation_error"),
+  // When AI generation began, used by the startup sweep to fail plans left
+  // `pending`/`generating` by a worker that crashed mid-job (S2). DEFAULT now()
+  // backfills existing rows harmlessly — only stuck pending/generating rows are
+  // ever swept, and those are all newly created.
+  generationStartedAt: timestamp("generation_started_at").defaultNow(),
 }, (table) => [
   index("idx_training_plans_user_id").on(table.userId),
   check("training_plans_generation_status_check", sql`generation_status IN ('pending', 'generating', 'ready', 'failed')`),

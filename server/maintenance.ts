@@ -218,6 +218,15 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   } catch (error) {
     logger.warn({ context: "db", err: error }, "Reset stale isAutoCoaching skipped");
   }
+  // Fail plans stranded in pending/generating by a worker that crashed mid-job
+  // (S2). 1h ≫ real generation time, so a job legitimately in flight on another
+  // instance during a rolling deploy is never failed by mistake.
+  try {
+    const failed = await storage.plans.failStalePlanGenerations(60 * 60 * 1000);
+    if (failed > 0) logger.info({ context: "db", failed }, "Failed stale plan generation(s) on startup");
+  } catch (error) {
+    logger.warn({ context: "db", err: error }, "Fail stale plan generations skipped");
+  }
   // Restore any persisted AI circuit-breaker state so a deploy mid-outage
   // doesn't reset the breaker to "closed" and amplify load on a struggling
   // upstream (W20). loadPersistedBreakerState swallows its own errors so

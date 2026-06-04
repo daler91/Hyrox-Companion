@@ -8,7 +8,7 @@ import {
   type TrainingPlanWithDays,
   type UpdatePlanDay,
 } from "@shared/schema";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
@@ -384,6 +384,34 @@ export class PlanStorage {
       .set({ status: "missed" })
       .where(and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} < ${today}`))
       .returning({ id: planDays.id });
+    return result.length;
+  }
+
+  /**
+   * Fail plans left in `pending`/`generating` past `olderThanMs` (S2). The
+   * pg-boss plan-generation job is NO_RETRY and isn't resumed after a crash, so
+   * a worker that dies mid-job strands the plan in a perpetual loading state the
+   * user can't escape. `executePlanGeneration`'s catch always flips to `failed`,
+   * so the only way a row stays in flight is a crash — this sweep cleans those
+   * up on startup. The threshold must comfortably exceed real generation time so
+   * a genuinely in-flight job on another instance is never failed.
+   */
+  async failStalePlanGenerations(olderThanMs: number): Promise<number> {
+    const cutoff = new Date(Date.now() - olderThanMs);
+    const result = await db
+      .update(trainingPlans)
+      .set({
+        generationStatus: "failed",
+        generationError:
+          "Plan generation was interrupted (likely a server restart). Please try again.",
+      })
+      .where(
+        and(
+          inArray(trainingPlans.generationStatus, ["pending", "generating"]),
+          lt(trainingPlans.generationStartedAt, cutoff),
+        ),
+      )
+      .returning({ id: trainingPlans.id });
     return result.length;
   }
 }
