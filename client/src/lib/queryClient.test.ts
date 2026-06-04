@@ -49,8 +49,11 @@ describe("queryClient", () => {
 
       const res = await apiRequest("POST", "/api/test", { foo: "bar" });
 
-      // csrf-token fetch
-      expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf-token", { credentials: "include" });
+      // csrf-token fetch (W15: now carries an AbortSignal timeout)
+      expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf-token", {
+        credentials: "include",
+        signal: expect.any(AbortSignal),
+      });
       // actual mutation with token header
       expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/test", {
         method: "POST",

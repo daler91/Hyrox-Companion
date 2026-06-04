@@ -37,6 +37,12 @@ export async function compressImage(
   }
   const maxDim = opts.maxDim ?? DEFAULT_MAX_DIM;
   const quality = opts.quality ?? DEFAULT_QUALITY;
+  // Browser-compat: createImageBitmap is absent on some older Safari versions.
+  // Detect it up front so the caller can show "not supported" rather than an
+  // opaque ReferenceError.
+  if (typeof createImageBitmap !== "function") {
+    throw new Error("Image capture isn't supported in this browser. Try a different device or browser.");
+  }
   const bitmap = await createImageBitmap(file);
   try {
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
