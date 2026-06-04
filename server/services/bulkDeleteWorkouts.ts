@@ -70,6 +70,11 @@ export async function bulkDeleteWorkouts({
           .map((workout) => workout.planDayId)
           .filter((planDayId): planDayId is string => Boolean(planDayId)),
       );
+      // Sequential on purpose: these share the single transaction connection
+      // (`tx`), so Promise.all here would throw "another query is already in
+      // progress". The set is bounded by the workouts being deleted; the path
+      // to fewer round-trips is a bulk-update variant of
+      // syncPlanDayStatusFromWorkouts (accepting an id array), not concurrency.
       for (const planDayId of linkedPlanDayIds) {
         await syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
       }

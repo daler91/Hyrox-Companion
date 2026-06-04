@@ -323,12 +323,15 @@ export class TimelineStorage {
       where: eq(trainingPlans.userId, userId),
       columns: { id: true, name: true, raceDate: true },
     });
-    if (userPlans.length === 0) return [];
+    // W7: build the plan-name map once and return it so getTimeline can reuse it
+    // for standalone-workout plan names instead of issuing a second identical
+    // trainingPlans query (the old fetchUserPlanNameMap).
+    const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
+    if (userPlans.length === 0) return { scheduledDays: [], planNameById };
 
     const planIds = userPlans.map((p) => p.id);
     const relevantPlanIds = planId && planIds.includes(planId) ? [planId] : planIds;
-    if (relevantPlanIds.length === 0) return [];
-    const planNameById = new Map(userPlans.map((p) => [p.id, p.name]));
+    if (relevantPlanIds.length === 0) return { scheduledDays: [], planNameById };
     const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
 
     const days = await db.query.planDays.findMany({
@@ -337,12 +340,13 @@ export class TimelineStorage {
       ...(sqlLimit === undefined ? {} : { limit: sqlLimit }),
     });
 
-    return days.map((day) => ({
+    const scheduledDays = days.map((day) => ({
       planDay: day,
       planName: planNameById.get(day.planId)!,
       planId: day.planId,
       raceDate: raceDateById.get(day.planId) ?? null,
     }));
+    return { scheduledDays, planNameById };
   }
 
   private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
@@ -391,16 +395,8 @@ export class TimelineStorage {
     return query;
   }
 
-  private async fetchUserPlanNameMap(userId: string): Promise<Map<string, string>> {
-    const userPlans = await db.query.trainingPlans.findMany({
-      where: eq(trainingPlans.userId, userId),
-      columns: { id: true, name: true },
-    });
-    return new Map(userPlans.map((p) => [p.id, p.name]));
-  }
-
   private buildTimelineEntries(
-    scheduledDays: Awaited<ReturnType<TimelineStorage["fetchScheduledDays"]>>,
+    scheduledDays: Awaited<ReturnType<TimelineStorage["fetchScheduledDays"]>>["scheduledDays"],
     linkedWorkouts: WorkoutLog[],
     standaloneWorkouts: WorkoutLog[],
     today: string,
@@ -456,10 +452,12 @@ export class TimelineStorage {
     const today = toDateStr();
     const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
 
-    const scheduledDays = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
+    const { scheduledDays, planNameById } = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
-    const [linkedWorkouts, standaloneWorkouts, planNameById] = await Promise.all([
+    // W7: planNameById already came from fetchScheduledDays above, so no second
+    // trainingPlans query is needed here for the standalone-workout plan names.
+    const [linkedWorkouts, standaloneWorkouts] = await Promise.all([
       planDayIds.length > 0
         ? db
             .select()
@@ -467,7 +465,6 @@ export class TimelineStorage {
             .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds)))
         : Promise.resolve([]),
       this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch),
-      this.fetchUserPlanNameMap(userId),
     ]);
 
     const { entries, suppressedPlanDayIds } = this.buildTimelineEntries(
