@@ -123,7 +123,7 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
   } else if (firstSet.reps && sets.length === 1) {
     parts.push(`${firstSet.reps}r`);
   } else if (sets.length > 1) {
-    parts.push(`${sets.length}s`);
+    parts.push(`${sets.length} sets`);
   }
 
   if (allSameWeight && firstSet.weight) {
