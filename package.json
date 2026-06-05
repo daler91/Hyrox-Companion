@@ -91,7 +91,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.0",
     "rehype-sanitize": "^6.0.0",
-    "resend": "^4.8.0",
+    "resend": "^6.12.4",
     "tailwind-merge": "^2.6.1",
     "tailwindcss-animate": "^1.0.7",
     "web-push": "^3.6.7",
