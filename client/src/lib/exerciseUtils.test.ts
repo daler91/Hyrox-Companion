@@ -115,7 +115,7 @@ describe("formatExerciseSummary", () => {
       ]),
       weightUnit: "kg",
       distanceUnit: "km",
-      expected: "Test 3s",
+      expected: "Test 3 sets",
     },
     {
       desc: "formats sets with same weight",
