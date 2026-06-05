@@ -4,15 +4,6 @@
 
 @config "../../tailwind.config.ts";
 
-/* Hide scrollbars while preserving scroll. Used for horizontal tab bars. */
-.scrollbar-none {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-
 /* Respect the user's motion preference. The fade-up / float / pulse
  * animations across Landing, Coach thinking indicator, and the reviewing
  * banner are purely decorative, so reduce them to near-instant transitions
