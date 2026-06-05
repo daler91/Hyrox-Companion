@@ -18,8 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { ScrollableTabsList } from "@/components/ui/scrollable-tabs-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -153,34 +154,34 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className={`mb-6 flex h-auto w-full gap-1 overflow-x-auto scrollbar-none justify-start sm:grid sm:gap-0 sm:overflow-visible ${isMaf ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
-          <TabsTrigger value="overview" className="shrink-0 sm:shrink" data-testid="tab-overview">
+        <ScrollableTabsList className={`flex h-auto w-full gap-1 snap-x overflow-x-auto scrollbar-none justify-start sm:grid sm:gap-0 sm:overflow-visible ${isMaf ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
+          <TabsTrigger value="overview" className="shrink-0 snap-start scroll-mx-1 sm:shrink" data-testid="tab-overview">
             <BarChart3 className="h-4 w-4 mr-2 hidden sm:block" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="breakdown" className="shrink-0 sm:shrink" data-testid="tab-breakdown">
+          <TabsTrigger value="breakdown" className="shrink-0 snap-start scroll-mx-1 sm:shrink" data-testid="tab-breakdown">
             <PieChart className="h-4 w-4 mr-2 hidden sm:block" />
             Breakdown
           </TabsTrigger>
-          <TabsTrigger value="progress" className="shrink-0 sm:shrink" data-testid="tab-progress">
+          <TabsTrigger value="progress" className="shrink-0 snap-start scroll-mx-1 sm:shrink" data-testid="tab-progress">
             <Trophy className="h-4 w-4 mr-2 hidden sm:block" />
             PRs &amp; Trends
           </TabsTrigger>
-          <TabsTrigger value="insights" className="shrink-0 sm:shrink" data-testid="tab-coach-insights">
+          <TabsTrigger value="insights" className="shrink-0 snap-start scroll-mx-1 sm:shrink" data-testid="tab-coach-insights">
             <Sparkles className="h-4 w-4 mr-2 hidden sm:block" />
             Coach Insights
           </TabsTrigger>
-          <TabsTrigger value="predictor" className="shrink-0 sm:shrink" data-testid="tab-race-predictor">
+          <TabsTrigger value="predictor" className="shrink-0 snap-start scroll-mx-1 sm:shrink" data-testid="tab-race-predictor">
             <Timer className="h-4 w-4 mr-2 hidden sm:block" />
             Race Predictor
           </TabsTrigger>
           {isMaf ? (
-            <TabsTrigger value="maf" className="shrink-0 sm:shrink" data-testid="tab-maf-trend">
+            <TabsTrigger value="maf" className="shrink-0 snap-start scroll-mx-1 sm:shrink" data-testid="tab-maf-trend">
               <HeartPulse className="h-4 w-4 mr-2 hidden sm:block" />
               MAF Trend
             </TabsTrigger>
           ) : null}
-        </TabsList>
+        </ScrollableTabsList>
 
         <TabsContent value="overview" className="space-y-6">
           <TrainingOverviewTab dateParams={dateParams} weeklyGoal={preferences?.weeklyGoal} />
