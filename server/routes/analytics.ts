@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { dateStringSchema, type WorkoutLog } from "@shared/schema";
+import { dateStringSchema, type RacePredictionResponse, type WorkoutLog } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { type NextFunction, type Request as ExpressRequest, type Response,Router } from "express";
 
@@ -10,8 +10,8 @@ import { db } from "../db";
 import { env } from "../env";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
+import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
-import { generateRacePrediction } from "../services/racePrediction/racePredictionService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 
@@ -166,10 +166,28 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics
 // history. No aiConsentCheck: the endpoint degrades gracefully to a
 // deterministic estimate when AI is disabled/unconsented/over budget, and only
 // calls the model when consent + budget allow (handled inside the service).
+//
+// Stored-first: returns the LAST persisted prediction instantly (no AI spend)
+// so the tab paints on open without a spinner, flagging `stale` when a workout
+// was logged after it was generated. `?refresh=1` (manual refresh button) — or
+// the absence of any stored row — regenerates and persists a fresh prediction.
 router.get("/api/v1/race-prediction", isAuthenticated, rateLimiter("race-prediction", 12), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const prediction = await generateRacePrediction(userId, reqLogger(req));
-    res.json(prediction);
+    const refresh = req.query.refresh === "1";
+    if (!refresh) {
+      const row = await storage.analyticsResults.get(userId, "race_prediction");
+      if (row) {
+        const latestWorkoutDate = await getLatestWorkoutDate(userId);
+        res.json({
+          ...(row.payload as RacePredictionResponse),
+          generatedAt: row.generatedAt.toISOString(),
+          stale: computeStale(row, latestWorkoutDate),
+        });
+        return;
+      }
+    }
+    const prediction = await regenerateAndStoreRacePrediction(userId, reqLogger(req));
+    res.json({ ...prediction, stale: false });
   }));
 
 // Workout-logs cache — same coalescing pattern as above, namespaced with a

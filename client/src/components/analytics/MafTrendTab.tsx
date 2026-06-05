@@ -2,14 +2,18 @@ import { metersPerSecond } from "@shared/maf";
 import { formatPace } from "@shared/unitConversion";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, HeartPulse } from "lucide-react";
+import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useAuth } from "@/hooks/useAuth";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
+import { readAnalyticsSnapshot, useWriteAnalyticsSnapshot } from "@/lib/analyticsSnapshot";
 import { api, type MafTestsListResponse, QUERY_KEYS } from "@/lib/api";
 import { formatSecondsToMmSs } from "@/lib/statsUtils";
 
+import { LastUpdatedNote } from "./LastUpdatedNote";
 import { buildComplianceTrendData, buildPaceTrendData, buildTestRows, classificationMeta } from "./mafTrend.helpers";
 import { MiniLineChart } from "./MiniLineChart";
 
@@ -43,12 +47,23 @@ function EmptyState() {
 
 export function MafTrendTab() {
   const { distanceUnit } = useUnitPreferences();
-  const { data, isLoading } = useQuery<MafTestsListResponse>({
+  const { user } = useAuth();
+
+  // Per-user localStorage snapshot so the trend paints instantly on open
+  // instead of a full-screen spinner, then revalidates against the DB.
+  const snapshotKey = user?.id ? `fitai-maf-tests-cache:${user.id}` : null;
+  const placeholder = useMemo(
+    () => (snapshotKey ? readAnalyticsSnapshot<MafTestsListResponse>(snapshotKey) : undefined),
+    [snapshotKey],
+  );
+  const { data, isLoading, isPlaceholderData } = useQuery<MafTestsListResponse>({
     queryKey: QUERY_KEYS.mafTests,
     queryFn: () => api.mafTests.list(),
+    placeholderData: placeholder,
   });
+  useWriteAnalyticsSnapshot(snapshotKey, data, isPlaceholderData);
 
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading && !data) return <LoadingSpinner />;
 
   const rows = buildTestRows(data);
   if (rows.length === 0) return <EmptyState />;
@@ -72,6 +87,8 @@ export function MafTrendTab() {
           </Badge>
         )}
       </div>
+
+      <LastUpdatedNote value={latest.date} mode="date" />
 
       {trend.length >= 2 ? (
         <MiniLineChart

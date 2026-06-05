@@ -73,6 +73,36 @@ export function getLocalDateStr(instant: Date, tz: string): string {
   return getYmdFormatter(tz).format(instant);
 }
 
+const HOUR_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function getHourFormatter(tz: string): Intl.DateTimeFormat {
+  let formatter = HOUR_FORMATTERS.get(tz);
+  if (!formatter) {
+    // hourCycle "h23" guarantees a 00-23 range (midnight = "00"), avoiding the
+    // "24" that hour12:false emits in some locales.
+    formatter = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", hourCycle: "h23" });
+    HOUR_FORMATTERS.set(tz, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * Return the local hour (0-23) for `instant` as seen in `tz`. Used by the
+ * analytics recompute cron to fire each user's job once per day at their local
+ * midnight (hour 0) — the same "fixed UTC tick, gate per local time" approach
+ * the email scheduler uses for weekly summaries. A sub-hour UTC offset (e.g.
+ * India +5:30, Nepal +5:45) still resolves to hour 0 on exactly one of the
+ * hourly UTC ticks, so every user is covered once per day.
+ */
+export function getLocalHour(instant: Date, tz: string): number {
+  const label = getHourFormatter(tz).format(instant);
+  const hour = Number(label);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    throw new Error(`Unexpected hour label "${label}" from Intl formatter for tz "${tz}"`);
+  }
+  return hour;
+}
+
 /**
  * Add `days` (may be negative) to a YYYY-MM-DD string in date-only space —
  * no timezone interpretation needed because the inputs are already calendar

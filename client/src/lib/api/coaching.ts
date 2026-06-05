@@ -35,9 +35,13 @@ interface ChatResponse {
 }
 
 export interface CoachInsightsResponse {
-  insights: string;
+  // null when the athlete has never generated insights — the GET surfaces the
+  // stored result (or this empty sentinel) without spending AI.
+  insights: string | null;
   ragInfo?: RagInfo;
-  generatedAt: string;
+  generatedAt?: string;
+  /** True when a workout was logged after these insights were generated. */
+  stale?: boolean;
 }
 
 export const chat = {
@@ -69,11 +73,16 @@ export const chat = {
 
   clearHistory: () => typedRequest<{ success: boolean }>("DELETE", "/api/v1/chat/history"),
 
-  getCoachInsights: () =>
+  // Fetch the LAST stored insights (no AI spend) so the tab paints instantly on
+  // open. Returns `{ insights: null }` when never generated.
+  getStoredCoachInsights: () =>
+    typedRequest<CoachInsightsResponse>("GET", "/api/v1/coach-insights"),
+
+  // Regenerate (and persist) fresh insights. Builds full training + RAG context
+  // and uses a reasoning AI model; matches the timeline-suggestions budget so it
+  // doesn't time out before the first token.
+  regenerateCoachInsights: () =>
     typedRequest<CoachInsightsResponse>("POST", "/api/v1/coach-insights", {}, {
-      // Coach Insights builds full training + RAG context and uses a
-      // reasoning AI model; matches the timeline-suggestions
-      // budget so it doesn't time out before the first token.
       timeoutMs: 90_000,
     }),
 } as const;

@@ -11,6 +11,8 @@ import { aiConsentCheck } from "../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
+import { computeStale, getLatestWorkoutDate, regenerateAndStoreCoachInsights } from "../services/analyticsPersistence";
+import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
@@ -330,44 +332,35 @@ protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHist
   });
 
 // Coach Insights — single-shot AI analysis of the user's progress against
-// their stated goal. Reuses the chat surface (chatWithCoach) with a fixed
-// analysis prompt rather than introducing a new generation path. Rate-limited
-// like suggestions because it builds the full training + RAG context.
-const COACH_INSIGHTS_PROMPT = [
-  "Generate a Coach Insights analysis for the athlete using ONLY the training context provided in the system prompt.",
-  "",
-  "Focus the analysis on how the athlete is progressing toward their stated goal (see activePlan.goal). If no goal is set, evaluate progress against their weekly workout goal and overall consistency.",
-  "",
-  "Structure the response in clear Markdown with these sections:",
-  "1. **Goal Progress** — How close is the athlete to their goal? Quantify where possible (race date, plan phase, weeks remaining, completion rate).",
-  "2. **What's Working** — Strengths from recent workouts, RPE trends, progression flags, streaks.",
-  "3. **Watch Outs** — Fatigue flags, station gaps, plateaus, undertraining signals, missed/skipped workouts.",
-  "4. **Recommended Focus (Next 1–2 Weeks)** — 2–4 concrete, actionable priorities tied to the data.",
-  "",
-  "Be specific: cite numbers (RPE, completion %, days since station X, weekly volume vs goal) from the context. Keep tone warm but direct. Do not invent data that isn't in the context.",
-].join("\n");
+// their stated goal. The fixed analysis prompt and generation live in
+// services/coachInsightsService so the route and the midnight recompute cron
+// share one path.
+//
+// GET returns the LAST stored result instantly (no AI spend) so the tab paints
+// the previous analysis on open instead of a blank state; `stale` flags that a
+// workout was logged after it was generated. POST regenerates (gated by the AI
+// consent/budget middleware) and persists the fresh result.
+router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    const row = await storage.analyticsResults.get(userId, "coach_insights");
+    if (!row) {
+      res.json({ insights: null });
+      return;
+    }
+    const latestWorkoutDate = await getLatestWorkoutDate(userId);
+    const payload = row.payload as CoachInsightsResult;
+    res.json({
+      ...payload,
+      generatedAt: row.generatedAt.toISOString(),
+      stale: computeStale(row, latestWorkoutDate),
+    });
+  }));
 
 protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const log = reqLogger(req);
-    const startedAt = Date.now();
-    const aiContext = await buildAIContext(userId, COACH_INSIGHTS_PROMPT, log);
-    const response = await chatWithCoach(
-      COACH_INSIGHTS_PROMPT,
-      [],
-      aiContext.trainingContext,
-      aiContext.coachingMaterials,
-      aiContext.retrievedChunks,
-      userId,
-    );
-    // userId is already bound on the child logger via reqLogger; logging
-    // it again here trips Bearer's "leakage of information in logger
-    // message" rule. Stick to per-call metadata only.
-    log.info(
-      { durationMs: Date.now() - startedAt, ragSource: aiContext.ragInfo?.source ?? "none" },
-      "[ai] Coach insights generated",
-    );
-    res.json({ insights: response, ragInfo: sanitizeRagInfo(aiContext.ragInfo), generatedAt: new Date().toISOString() });
+    const result = await regenerateAndStoreCoachInsights(userId, reqLogger(req));
+    // Freshly generated against the current latest workout, so never stale.
+    res.json({ ...result, stale: false });
   });
 
 protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
