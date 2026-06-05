@@ -93,6 +93,43 @@ export const serverRuntimeCache = pgTable("server_runtime_cache", {
   index("idx_server_runtime_cache_key_pattern").on(table.key.op("text_pattern_ops")),
 ]);
 
+// Canonical analytics surfaces whose last computed result is persisted so it
+// can be shown instantly on open and refreshed by the midnight cron. Kept in
+// sync with the analytics_results check constraint below.
+export const ANALYTICS_FEATURES = ["coach_insights", "race_prediction"] as const;
+export type AnalyticsFeature = (typeof ANALYTICS_FEATURES)[number];
+
+// Durable "last computed result" for the expensive analytics surfaces (Coach
+// Insights, Race Predictor). Unlike serverRuntimeCache this is NOT expiry-based:
+// the row persists until the next recompute so the client can paint the
+// previous result instantly on open (no spinner/blank), and the midnight cron
+// can tell whether a newer workout has landed since it was generated. One row
+// per (user, feature), upserted on the unique index.
+export const analyticsResults = pgTable("analytics_results", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  feature: text("feature").notNull(),
+  payload: jsonb("payload").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Calendar date (YYYY-MM-DD) of the athlete's latest logged workout AT the
+  // moment this result was generated. The cron compares the CURRENT latest
+  // workout date against this to decide staleness — a robust ISO-string
+  // compare that sidesteps the date-vs-timestamp mismatch (workout.date is a
+  // calendar day with no time component, generatedAt is a timestamp).
+  lastWorkoutDateAtGeneration: date("last_workout_date_at_generation"),
+  // Local calendar date of the last cron recompute — the once-per-day claim
+  // guard so at-least-once job delivery (or a DST-doubled local hour) can't
+  // recompute the same feature twice in one day.
+  recomputedOn: date("recomputed_on"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_analytics_results_user_feature").on(table.userId, table.feature),
+  index("idx_analytics_results_feature").on(table.feature),
+  check("analytics_results_feature_check", sql`feature IN ('coach_insights', 'race_prediction')`),
+]);
+
+export type AnalyticsResult = typeof analyticsResults.$inferSelect;
+
 export const trainingPlans = pgTable("training_plans", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -679,6 +716,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   mafProfiles: many(mafProfile),
   mafTestResults: many(mafTestResults),
   mafWorkoutAnalyses: many(mafWorkoutAnalysis),
+  analyticsResults: many(analyticsResults),
 }));
 
 export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
@@ -816,5 +854,12 @@ export const mafWorkoutAnalysisRelations = relations(mafWorkoutAnalysis, ({ one 
   workoutLog: one(workoutLogs, {
     fields: [mafWorkoutAnalysis.workoutLogId],
     references: [workoutLogs.id],
+  }),
+}));
+
+export const analyticsResultsRelations = relations(analyticsResults, ({ one }) => ({
+  user: one(users, {
+    fields: [analyticsResults.userId],
+    references: [users.id],
   }),
 }));

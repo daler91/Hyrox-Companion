@@ -1,5 +1,6 @@
 import type { AiUsageStorage } from "./aiUsage";
 import type { AnalyticsStorage } from "./analytics";
+import type { AnalyticsResultsStorage } from "./analyticsResults";
 import type { CoachingStorage } from "./coaching";
 import type { IdempotencyStorage } from "./idempotency";
 import type { MafTestStorage } from "./mafTests";
@@ -29,6 +30,7 @@ export interface IStorage {
   timeline: TimelineStorage;
   timelineAnnotations: TimelineAnnotationsStorage;
   analytics: AnalyticsStorage;
+  analyticsResults: AnalyticsResultsStorage;
   coaching: CoachingStorage;
   idempotency: IdempotencyStorage;
   aiUsage: AiUsageStorage;

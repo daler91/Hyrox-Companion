@@ -29,6 +29,13 @@ export type ApplySuggestionResult =
 
 export type AnalyticsExportFormat = "csv" | "json";
 
+/**
+ * Race prediction as returned to the client. Extends the shared response with a
+ * `stale` flag the server sets when a workout was logged after the stored
+ * prediction was generated.
+ */
+export type RacePredictionView = RacePredictionResponse & { stale?: boolean };
+
 export const analytics = {
   getPersonalRecords: (dateParams?: string) =>
     typedRequest<Record<string, PersonalRecord>>("GET", `/api/v1/personal-records${dateParams || ""}`),
@@ -39,12 +46,19 @@ export const analytics = {
   getTrainingOverview: (dateParams?: string) =>
     typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams ?? ""}`),
 
-  getRacePrediction: () =>
-    typedRequest<RacePredictionResponse>("GET", "/api/v1/race-prediction", undefined, {
-      // May invoke a reasoning AI model server-side; allow well past the
-      // default 15s timeout (matches the suggestions pattern).
-      timeoutMs: 90_000,
-    }),
+  // Without `refresh`, returns the stored prediction instantly (no AI spend).
+  // With `refresh: true` (manual refresh button), forces a fresh regeneration.
+  getRacePrediction: (options?: { refresh?: boolean }) =>
+    typedRequest<RacePredictionView>(
+      "GET",
+      `/api/v1/race-prediction${options?.refresh ? "?refresh=1" : ""}`,
+      undefined,
+      {
+        // May invoke a reasoning AI model server-side; allow well past the
+        // default 15s timeout (matches the suggestions pattern).
+        timeoutMs: 90_000,
+      },
+    ),
 
   exportData: (format: AnalyticsExportFormat) =>
     rawRequest("GET", `/api/v1/export?format=${format}`),

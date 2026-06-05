@@ -414,6 +414,13 @@
       "when": 1780587261741,
       "tag": "0058_eminent_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1780699073175,
+      "tag": "0059_natural_nomad",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { pool } from "./db";
 import { runEmailCronJob } from "./emailScheduler";
 import { logger } from "./logger";
 import { queue } from "./queue";
+import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
@@ -16,6 +17,7 @@ let staleAutoCoachTask: ReturnType<typeof cron.schedule> | null = null;
 let queueDepthTask: ReturnType<typeof cron.schedule> | null = null;
 let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null;
 let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
+let analyticsRecomputeTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -32,6 +34,7 @@ export const CRON_LOCK_KEYS = {
   structuredExerciseRollup: 42_010_006n,
   startupEmailCatchUp: 42_010_007n,
   sharedRuntimeCleanup: 42_010_008n,
+  analyticsRecompute: 42_010_009n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -213,6 +216,33 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Structured exercise health rollup scheduled: daily at 02:10 UTC");
 
+  // Midnight analytics recompute. Ticks hourly in UTC and fires per-user at
+  // their LOCAL midnight (the scan gates on local hour 0), mirroring the email
+  // scheduler's per-timezone approach. Enqueues recompute jobs for users whose
+  // stored Coach Insights / Race Prediction is stale because a workout was
+  // logged after it was generated. Scoped to users who already have a stored
+  // result, so AI is never spent for users who never opened the feature.
+  analyticsRecomputeTask = cron.schedule(
+    "5 * * * *",
+    async () => {
+      await runCronJobWithLock("analyticsRecompute", async () => {
+        try {
+          const result = await runAnalyticsRecomputeScan(storage, new Date());
+          if (result.enqueued > 0) {
+            logger.info(
+              { context: "cron", ...result },
+              `Analytics recompute: enqueued ${result.enqueued} job(s) for ${result.usersChecked} user(s) at local midnight`,
+            );
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Analytics recompute scan failed");
+        }
+      });
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "Analytics recompute scheduled: hourly, fires at each user's local midnight");
+
 
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
@@ -271,5 +301,9 @@ export async function stopCron(): Promise<void> {
   if (sharedRuntimeCleanupTask) {
     await sharedRuntimeCleanupTask.stop();
     sharedRuntimeCleanupTask = null;
+  }
+  if (analyticsRecomputeTask) {
+    await analyticsRecomputeTask.stop();
+    analyticsRecomputeTask = null;
   }
 }

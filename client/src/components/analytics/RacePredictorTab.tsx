@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatSecondsToClock, formatSecondsToMmSs } from "@/lib/statsUtils";
 import { cn } from "@/lib/utils";
 
+import { LastUpdatedNote } from "./LastUpdatedNote";
 import { useRacePrediction } from "./useRacePrediction";
 
 const CONFIDENCE_STYLES: Record<RacePredictionConfidence, { label: string; className: string }> = {
@@ -114,10 +115,12 @@ function SegmentRow({ segment }: Readonly<{ segment: RaceSegmentPrediction }>) {
 }
 
 export function RacePredictorTab() {
-  const query = useRacePrediction();
+  const { query, refresh, isRefreshing } = useRacePrediction();
   const data = query.data;
 
-  if (query.isLoading) {
+  // Spinner only on a true cold start — when a snapshot/stored result exists it
+  // paints immediately as placeholderData and we skip straight to the result.
+  if (query.isLoading && !data) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -125,7 +128,7 @@ export function RacePredictorTab() {
     );
   }
 
-  if (query.error || !data) {
+  if (!data) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/20 py-12 text-center text-muted-foreground">
         <AlertTriangle className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
@@ -175,12 +178,12 @@ export function RacePredictorTab() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => query.refetch()}
-              disabled={query.isFetching}
+              onClick={refresh}
+              disabled={isRefreshing}
               aria-label="Refresh prediction"
               data-testid="race-prediction-refresh"
             >
-              <RefreshCw className={cn("h-4 w-4", query.isFetching && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             </Button>
           </div>
         </CardHeader>
@@ -227,6 +230,7 @@ export function RacePredictorTab() {
               for division-correct loads.
             </p>
           )}
+          <LastUpdatedNote value={data.generatedAt} stale={data.stale} className="border-t pt-3" />
         </CardContent>
       </Card>
 

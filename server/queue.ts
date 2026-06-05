@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { GeneratePlanInput } from "@shared/schema";
+import type { AnalyticsFeature, GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
 
@@ -11,6 +11,8 @@ import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 import { getRequestContext, runWithRequestContext } from "./requestContext";
+import { persistCoachInsights, regenerateAndStoreRacePrediction } from "./services/analyticsPersistence";
+import { generateCoachInsightsIfAllowed } from "./services/coachInsightsService";
 import { triggerAutoCoach } from "./services/coachService";
 import { executePlanGeneration } from "./services/planGenerationService";
 import { embedCoachingMaterial } from "./services/ragService";
@@ -66,6 +68,18 @@ export const NO_RETRY_JOB_OPTIONS = {
   retryLimit: 0,
   expireInMinutes: 60,
 } as const;
+
+// Midnight analytics recompute contract — the queue name and payload shape
+// shared between the producer (analyticsRecomputeScheduler) and the worker
+// below. Defined here (the queue registry) so the scheduler depends on the
+// queue module and not vice-versa.
+export const RECOMPUTE_ANALYTICS_QUEUE = "recompute-analytics";
+
+export interface RecomputeAnalyticsJobData {
+  userId: string;
+  feature: AnalyticsFeature;
+  localDate: string;
+}
 
 // Reserved job-payload key carrying the originating request's correlation id
 // across the pg-boss boundary (S19) so async-job logs trace back to the request
@@ -345,6 +359,58 @@ export async function startQueue() {
         logger.info({ jobId: job.id, planId }, "[pg-boss] Completed plan-generation job");
       } catch (error) {
         logger.error({ err: error, jobId: job.id, planId }, "[pg-boss] Failed plan-generation job");
+        throw error;
+      }
+    });
+  });
+
+  // Midnight analytics recompute — refreshes a user's stored Coach Insights /
+  // Race Prediction when a workout was logged after it was generated. Enqueued
+  // by the analyticsRecompute cron at each user's local midnight.
+  await queue.createQueue(RECOMPUTE_ANALYTICS_QUEUE);
+  await queue.work(RECOMPUTE_ANALYTICS_QUEUE, async (jobs: Job[]) => {
+    await runBatch(RECOMPUTE_ANALYTICS_QUEUE, jobs, async (job) => {
+      const { userId, feature, localDate } = job.data as RecomputeAnalyticsJobData;
+      if (!userId || !feature || !localDate) {
+        // bearer:disable javascript_lang_logger_leak — jobId is a UUID and
+        // dataKeys are field names (not values); no PII or secrets.
+        logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing recompute-analytics fields, skipping");
+        return;
+      }
+      const user = await storage.users.getUser(userId);
+      if (!user) {
+        logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping recompute-analytics job");
+        return;
+      }
+      // Atomic once-per-day claim (W4): if another delivery already recomputed
+      // this feature today, skip without spending AI. Also returns false if the
+      // stored row was deleted between scan enqueue and now.
+      const claimed = await storage.analyticsResults.markRecomputedOn(userId, feature, localDate);
+      if (!claimed) {
+        logger.info({ jobId: job.id }, "[pg-boss] recompute-analytics already claimed/absent, skipping");
+        return;
+      }
+      logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
+      try {
+        await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, async () => {
+          if (feature === "race_prediction") {
+            // Always refreshes (deterministic fallback when AI is unavailable).
+            await regenerateAndStoreRacePrediction(userId, logger, localDate);
+            return;
+          }
+          // coach_insights — self-gate so we don't spend AI when consent is off
+          // or the user is over budget; the previously stored insight is left
+          // intact in that case (the claim above stops a same-day retry).
+          const outcome = await generateCoachInsightsIfAllowed(userId, logger);
+          if (outcome.ok) {
+            await persistCoachInsights(userId, outcome.result, localDate);
+          } else {
+            logger.info({ jobId: job.id, reason: outcome.reason }, "[pg-boss] Coach insights recompute skipped (gated)");
+          }
+        });
+        logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
+      } catch (error) {
+        logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed recompute-analytics job");
         throw error;
       }
     });
