@@ -42,7 +42,15 @@ export function buildComplianceTrendData(analysis: readonly MafWorkoutAnalysis[]
   return analysis
     .map((a) => ({ date: isoDateOnly(a.createdAt), compliancePct: a.compliancePct }))
     .filter((p): p is CompliancePoint => p.date != null && p.compliancePct != null)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // ⚡ Bolt Performance Optimization:
+    // Replaced expensive `new Date()` parsing inside the sort comparator.
+    // Since dates are formatted as YYYY-MM-DD strings, standard string comparison
+    // securely orders chronologically without the O(N log N) instantiation overhead.
+    .sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return 0;
+    });
 }
 
 /** The `workoutLogId` a test row carries inside its `conditions` JSONB, if any. */
@@ -124,5 +132,13 @@ export function buildPaceTrendData(rows: readonly MafTestRow[], distanceUnit: st
       return { date: row.date, secondsPerUnit };
     })
     .filter((p): p is PacePoint => p !== null)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // ⚡ Bolt Performance Optimization:
+    // Replaced expensive `new Date()` parsing inside the sort comparator.
+    // Since dates are formatted as YYYY-MM-DD strings, standard string comparison
+    // securely orders chronologically without the O(N log N) instantiation overhead.
+    .sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return 0;
+    });
 }
