@@ -287,7 +287,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "@types/web-push": "^3.6.4",
     "@typescript-eslint/eslint-plugin": "^8.59.4",
-    "@typescript-eslint/parser": "^8.59.4",
+    "@typescript-eslint/parser": "^8.60.1",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.7",
     "cross-env": "^10.1.0",
