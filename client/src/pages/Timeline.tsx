@@ -1,8 +1,10 @@
 import {
+  type Announcements,
   DndContext,
   type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
+  type ScreenReaderInstructions,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -37,6 +39,34 @@ import { useEmbeddedCoachRouting } from "@/pages/timeline/useEmbeddedCoachRoutin
 import { useTimelineDialogState } from "@/pages/timeline/useTimelineDialogState";
 import { useTimelinePageController } from "@/pages/timeline/useTimelinePageController";
 import { useTimelineSurfaceSelection } from "@/pages/timeline/useTimelineSurfaceSelection";
+
+// Screen-reader feedback for keyboard-driven workout rescheduling (S9). The
+// default dnd-kit announcements read opaque draggable/droppable ids; these
+// reference the calendar dates the drag actually moves between.
+const dndScreenReaderInstructions: ScreenReaderInstructions = {
+  draggable:
+    "To reschedule a workout, press space or enter to pick it up, use the arrow keys to choose a different day, then press space or enter to drop it. Press escape to cancel.",
+};
+
+function draggedFromDate(active: { data: { current?: unknown } }): string {
+  return (active.data.current as { entry?: TimelineEntry } | undefined)?.entry?.date ?? "its day";
+}
+
+const dndAnnouncements: Announcements = {
+  onDragStart: ({ active }) =>
+    `Picked up the workout from ${draggedFromDate(active)}. Use the arrow keys to move it to a different day, then press space to drop.`,
+  onDragOver: ({ over }) => {
+    const date = (over?.data.current as { date?: string } | undefined)?.date;
+    return date ? `Over ${date}.` : "Not over a day.";
+  },
+  onDragEnd: ({ active, over }) => {
+    const date = (over?.data.current as { date?: string } | undefined)?.date;
+    return date
+      ? `Moved the workout to ${date}.`
+      : `Drop cancelled; the workout stayed on ${draggedFromDate(active)}.`;
+  },
+  onDragCancel: ({ active }) => `Cancelled; the workout stayed on ${draggedFromDate(active)}.`,
+};
 
 export default function Timeline() {
   useDocumentTitle("Timeline");
@@ -342,7 +372,14 @@ export default function Timeline() {
               todayPresent={todayPresent}
             />
 
-            <DndContext sensors={dragSensors} onDragEnd={handleDragEnd}>
+            <DndContext
+              sensors={dragSensors}
+              onDragEnd={handleDragEnd}
+              accessibility={{
+                announcements: dndAnnouncements,
+                screenReaderInstructions: dndScreenReaderInstructions,
+              }}
+            >
               <TimelineContent
                 timelineLoading={timelineLoading}
                 filterStatus={filterStatus}

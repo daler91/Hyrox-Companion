@@ -14,6 +14,9 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background" ref={sectionRef}>
+      <a href="#main-content" className="skip-to-content">
+        Skip to main content
+      </a>
       <style>{`
         .fade-up {
           opacity: 0;
@@ -39,7 +42,7 @@ export default function Landing() {
 
       <LandingHeader />
 
-      <main>
+      <main id="main-content" tabIndex={-1} className="focus:outline-none">
         <Hero />
         <SocialProof />
         <Features />
