@@ -41,7 +41,7 @@ export async function setupVite(server: Server, app: Express) {
     max: 100,
   });
 
-  app.use("*", viteFallbackLimiter, (req, res, next) => {
+  app.use("/{*splat}", viteFallbackLimiter, (req, res, next) => {
     (async () => {
     const url = req.originalUrl;
 
