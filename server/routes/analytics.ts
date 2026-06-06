@@ -278,6 +278,7 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
         exerciseSets: loadExerciseSets,
         currentDate: loadCurrentDate,
       },
+      user?.userTimezone,
     ));
   }));
 

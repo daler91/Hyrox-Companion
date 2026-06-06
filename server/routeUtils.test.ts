@@ -344,6 +344,22 @@ describe("calculateStreak", () => {
     vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
     expect(calculateStreak(new Set(["2026-01-10", "2026-01-09"]))).toBe(0);
   });
+
+  it("anchors today/yesterday to the user's timezone (W19)", () => {
+    // 23:30 UTC on the 15th is already the 16th in Kiritimati (UTC+14) but still
+    // the 15th in UTC. A log dated the 16th must count for the UTC+14 athlete.
+    vi.setSystemTime(new Date("2026-01-15T23:30:00Z"));
+    const dates = new Set(["2026-01-15", "2026-01-16"]);
+    // UTC: the 16th is "tomorrow", so only the 15th counts → streak 1.
+    expect(calculateStreak(dates, "UTC")).toBe(1);
+    // UTC+14: it is already the 16th locally, so both days count → streak 2.
+    expect(calculateStreak(dates, "Pacific/Kiritimati")).toBe(2);
+  });
+
+  it("defaults to UTC when no timezone is supplied (W19 back-compat)", () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    expect(calculateStreak(new Set(["2026-01-15", "2026-01-14"]))).toBe(2);
+  });
 });
 
 describe("expandExercisesToSetRows", () => {

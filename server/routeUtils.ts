@@ -1,12 +1,12 @@
 import type { NextFunction,Request, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 
-import { DEFAULT_RATE_LIMIT_WINDOW_MS, MS_PER_DAY } from "./constants";
+import { DEFAULT_RATE_LIMIT_WINDOW_MS } from "./constants";
 import { env } from "./env";
 import { ErrorCode } from "./errors";
 import { logger } from "./logger";
 import { PostgresRateLimitStore } from "./rateLimitStore";
-import { toDateStr } from "./types";
+import { addDaysLocal, getLocalDateStr } from "./timezone";
 
 export const DEFAULT_WINDOW_MS = DEFAULT_RATE_LIMIT_WINDOW_MS;
 
@@ -93,29 +93,24 @@ export function clearRateLimitBuckets() {
   limiterCache.clear();
 }
 
-export function calculateStreak(completedDates: Set<string>): number {
+export function calculateStreak(completedDates: Set<string>, userTimezone = "UTC"): number {
   if (completedDates.size === 0) return 0;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = toDateStr(today);
-
-  const yesterday = new Date(today.getTime() - MS_PER_DAY);
-  const yesterdayStr = toDateStr(yesterday);
+  // Anchor "today"/"yesterday" to the athlete's local calendar (W19): the
+  // email scheduler already runs its "this week"/"yesterday" math in the
+  // user's timezone, but the streak used server UTC, so a far-offset user
+  // could see their streak break or extend a day early. The walk-back then
+  // steps calendar-date strings, which is timezone-independent.
+  const todayStr = getLocalDateStr(new Date(), userTimezone);
+  const yesterdayStr = addDaysLocal(todayStr, -1);
 
   if (!completedDates.has(todayStr) && !completedDates.has(yesterdayStr)) return 0;
 
   let streak = 0;
-  const checkDate = completedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
-
-  while (true) {
-    const dateStr = toDateStr(checkDate);
-    if (completedDates.has(dateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
+  let cursor = completedDates.has(todayStr) ? todayStr : yesterdayStr;
+  while (completedDates.has(cursor)) {
+    streak++;
+    cursor = addDaysLocal(cursor, -1);
   }
 
   return streak;

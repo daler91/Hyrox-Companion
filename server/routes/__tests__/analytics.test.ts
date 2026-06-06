@@ -374,6 +374,7 @@ describe("Analytics Routes", () => {
           exerciseSets: expect.any(Array),
           currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         }),
+        undefined,
       );
     });
     it("should pass date params to storage", async () => {
@@ -440,6 +441,7 @@ describe("Analytics Routes", () => {
           exerciseSets: [],
           currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         }),
+        undefined,
       );
     });
 

@@ -318,9 +318,10 @@ export async function generateRacePrediction(
     gender: storedGender,
     weightUnit: user?.weightUnit ?? "kg",
     distanceUnit: user?.distanceUnit ?? "km",
-    // Age group drives the cohort benchmarks/ranking; derived from MAF age when
-    // set, else null (falls back to the all-ages division×gender cohort).
-    ageGroup: deriveAgeGroupFromAge(user?.mafAge ?? null),
+    // Age group drives the cohort benchmarks/ranking; prefer the general age
+    // field (set for all athletes), fall back to MAF age, else null → the
+    // all-ages division×gender cohort (review W17).
+    ageGroup: deriveAgeGroupFromAge(user?.age ?? user?.mafAge ?? null),
   });
 
   const blocker = await resolveAiBlocker(user, userId, log);

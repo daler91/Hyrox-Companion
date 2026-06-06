@@ -10,6 +10,7 @@ interface PreferencesSectionProps {
   readonly distanceUnit: string;
   readonly division: string;
   readonly gender: string;
+  readonly ageInput: string;
   readonly weeklyGoal: string;
   readonly emailNotifications: boolean;
   readonly emailWeeklySummary: boolean;
@@ -20,6 +21,7 @@ interface PreferencesSectionProps {
   readonly onDistanceUnitChange: (value: string) => void;
   readonly onDivisionChange: (value: string) => void;
   readonly onGenderChange: (value: string) => void;
+  readonly onAgeInputChange: (value: string) => void;
   readonly onWeeklyGoalChange: (value: string) => void;
   readonly onEmailNotificationsChange: (checked: boolean) => void;
   readonly onEmailWeeklySummaryChange: (checked: boolean) => void;
@@ -33,6 +35,7 @@ export function PreferencesSection({
   distanceUnit,
   division,
   gender,
+  ageInput,
   weeklyGoal,
   emailNotifications,
   emailWeeklySummary,
@@ -43,6 +46,7 @@ export function PreferencesSection({
   onDistanceUnitChange,
   onDivisionChange,
   onGenderChange,
+  onAgeInputChange,
   onWeeklyGoalChange,
   onEmailNotificationsChange,
   onEmailWeeklySummaryChange,
@@ -61,8 +65,10 @@ export function PreferencesSection({
       <AthleteProfileCard
         division={division}
         gender={gender}
+        age={ageInput}
         onDivisionChange={onDivisionChange}
         onGenderChange={onGenderChange}
+        onAgeChange={onAgeInputChange}
       />
       <TrainingGoalsCard weeklyGoal={weeklyGoal} onWeeklyGoalChange={onWeeklyGoalChange} />
       <EmailNotificationsCard

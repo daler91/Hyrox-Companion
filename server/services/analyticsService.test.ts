@@ -1,6 +1,6 @@
 import { afterEach, describe, expect,it, vi } from "vitest";
 
-import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeOverviewStats } from "./analyticsService";
+import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeOverviewStats, countPersonalRecordsInRange } from "./analyticsService";
 
 function makeSet(overrides: Record<string, unknown> = {}) {
   return {
@@ -31,6 +31,26 @@ describe("computeOverviewStats (fresh-user / zero-workout state)", () => {
       avgRpe: null,
       avgCompliancePct: null,
     });
+  });
+});
+
+describe("countPersonalRecordsInRange (W18 weekly-email PR count)", () => {
+  it("counts only records whose all-time best falls inside the window", () => {
+    const sets = [
+      // back_squat all-time best (120) was set on the 12th — inside the window.
+      makeSet({ exerciseName: "back_squat", weight: 100, date: "2026-01-05", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "back_squat", weight: 120, date: "2026-01-12", workoutLogId: "w2" }),
+      // deadlift all-time best (200) was set before the window.
+      makeSet({ exerciseName: "deadlift", weight: 200, date: "2026-01-01", workoutLogId: "w3" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(countPersonalRecordsInRange(prs, "2026-01-12", "2026-01-18")).toBe(1);
+    expect(countPersonalRecordsInRange(prs, "2025-12-29", "2026-01-04")).toBe(1);
+    expect(countPersonalRecordsInRange(prs, "2026-02-01", "2026-02-07")).toBe(0);
+  });
+
+  it("returns 0 when there are no records", () => {
+    expect(countPersonalRecordsInRange(calculatePersonalRecords([]), "2026-01-01", "2026-01-07")).toBe(0);
   });
 });
 

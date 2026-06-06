@@ -60,11 +60,12 @@ type SavePayload = Omit<UserPreferences, "weeklyGoal" | "userTimezone"> & { week
 interface PreferencesSnapshot
   extends Omit<
     UserPreferences,
-    "weeklyGoal" | "userTimezone" | "trainingStyleId" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
+    "weeklyGoal" | "userTimezone" | "trainingStyleId" | "age" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
   > {
   weeklyGoal: string;
   division: string;
   gender: string;
+  age: number | null;
   trainingStyleId: string;
   mafAge: number | null;
   mafConsistency: Exclude<MafConsistencyInput, ""> | null;
@@ -72,7 +73,7 @@ interface PreferencesSnapshot
   mafHrDataAvailable: boolean | null;
 }
 
-function mafAgeInputToSnapshot(value: string): number | null {
+function ageInputToSnapshot(value: string): number | null {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) ? parsed : null;
 }
@@ -97,6 +98,7 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
     distanceUnit: preferences.distanceUnit || "km",
     division: preferences.division || "open",
     gender: preferences.gender ?? "prefer_not_to_say",
+    age: preferences.age ?? null,
     weeklyGoal: String(preferences.weeklyGoal || 5),
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
@@ -117,6 +119,7 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     distanceUnit: payload.distanceUnit,
     division: payload.division ?? "open",
     gender: payload.gender ?? "prefer_not_to_say",
+    age: payload.age ?? null,
     weeklyGoal: String(payload.weeklyGoal),
     emailNotifications: payload.emailNotifications,
     emailWeeklySummary: payload.emailWeeklySummary,
@@ -137,6 +140,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,
     gender: snapshot.gender,
+    age: snapshot.age,
     weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
@@ -161,6 +165,7 @@ export default function Settings() {
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [division, setDivision] = useState("open");
   const [gender, setGender] = useState("prefer_not_to_say");
+  const [ageInput, setAgeInput] = useState("");
   const [weeklyGoal, setWeeklyGoal] = useState("5");
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [emailWeeklySummary, setEmailWeeklySummary] = useState(false);
@@ -192,6 +197,7 @@ export default function Settings() {
     distanceUnit: "km",
     division: "open",
     gender: "prefer_not_to_say",
+    age: null,
     weeklyGoal: "5",
     emailNotifications: false,
     emailWeeklySummary: false,
@@ -225,6 +231,7 @@ export default function Settings() {
       distanceUnit,
       division,
       gender,
+      age: ageInputToSnapshot(ageInput),
       weeklyGoal,
       emailNotifications,
       emailWeeklySummary,
@@ -232,7 +239,7 @@ export default function Settings() {
       showAdherenceInsights,
       aiCoachEnabled,
       trainingStyleId,
-      mafAge: mafAgeInputToSnapshot(mafAgeInput),
+      mafAge: ageInputToSnapshot(mafAgeInput),
       mafConsistency: mafConsistencyInput || null,
       mafTrend: mafTrendInput || null,
       mafHrDataAvailable: mafHrDataAvailableInputToSnapshot(mafHrDataAvailableInput),
@@ -249,6 +256,7 @@ export default function Settings() {
       showAdherenceInsights,
       aiCoachEnabled,
       trainingStyleId,
+      ageInput,
       mafAgeInput,
       mafConsistencyInput,
       mafTrendInput,
@@ -303,6 +311,7 @@ export default function Settings() {
       setDistanceUnit(preferences.distanceUnit || "km");
       setDivision(preferences.division || "open");
       setGender(preferences.gender ?? "prefer_not_to_say");
+      setAgeInput(preferences.age == null ? "" : String(preferences.age));
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
       setEmailNotifications(preferences.emailNotifications ?? false);
       setEmailWeeklySummary(preferences.emailWeeklySummary ?? false);
@@ -399,7 +408,7 @@ export default function Settings() {
   }, [hasChanges]);
 
   const handleSave = useCallback(() => {
-    const mafAge = mafAgeInputToSnapshot(mafAgeInput);
+    const mafAge = ageInputToSnapshot(mafAgeInput);
     const mafConsistency = mafConsistencyInput || null;
     const mafTrend = mafTrendInput || null;
     const mafHrDataAvailable = mafHrDataAvailableInputToSnapshot(mafHrDataAvailableInput);
@@ -480,7 +489,7 @@ export default function Settings() {
 
   const userName = getUserDisplayName(user);
   const hasRequiredMafInputs = useCallback(() => {
-    const age = mafAgeInputToSnapshot(mafAgeInput);
+    const age = ageInputToSnapshot(mafAgeInput);
     return (
       age != null &&
       age >= 16 &&
@@ -558,6 +567,7 @@ export default function Settings() {
         distanceUnit={distanceUnit}
         division={division}
         gender={gender}
+        ageInput={ageInput}
         weeklyGoal={weeklyGoal}
         emailNotifications={emailNotifications}
         emailWeeklySummary={emailWeeklySummary}
@@ -570,12 +580,9 @@ export default function Settings() {
         onDistanceUnitChange={(v) => {
           setDistanceUnit(v);
         }}
-        onDivisionChange={(v) => {
-          setDivision(v);
-        }}
-        onGenderChange={(v) => {
-          setGender(v);
-        }}
+        onDivisionChange={setDivision}
+        onGenderChange={setGender}
+        onAgeInputChange={setAgeInput}
         onWeeklyGoalChange={(v) => {
           setWeeklyGoal(v);
         }}
