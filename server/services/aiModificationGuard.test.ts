@@ -264,304 +264,249 @@ describe("buildWorkoutPrescriptionFingerprint", () => {
   });
 });
 
+// Shared fixtures for the classification + suppression suites below.
+const FATIGUE_SIGNALS: CoachModificationSignals = {
+  coachingInsights: { fatigueFlag: true },
+};
+const RISING_RPE_SIGNALS: CoachModificationSignals = {
+  coachingInsights: { rpeTrend: "rising" },
+};
+
+// A suggestion whose wording trips the fatigue-reduction classifier (a fatigue
+// term plus a reduction term), reused across the suppression cases.
+const FATIGUE_SUGGESTION = suggestion({
+  recommendation: "Reduce volume",
+  rationale: "Recover from fatigue",
+});
+
+// A canonical workout and its prescription fingerprint, used to line a prior
+// fatigue reduction up against (or deliberately mismatch) the current
+// prescription.
+const SUPPRESS_WORKOUT = workout({ mainWorkout: "Heavy deadlift triples" });
+const MATCHING_FINGERPRINT = buildWorkoutPrescriptionFingerprint(SUPPRESS_WORKOUT)!;
+
+function priorReductionInputs(fingerprint: string, completedWorkoutCount = 4): CoachNoteInputs {
+  return {
+    lastFatigueReduction: {
+      kind: "fatigue_volume_reduction",
+      at: "2026-05-20T00:00:00Z",
+      completedWorkoutCount,
+      prescriptionFingerprint: fingerprint,
+    },
+  };
+}
+
 describe("classifyCoachModification", () => {
-  const fatigueSignals: CoachModificationSignals = {
-    coachingInsights: { fatigueFlag: true },
-  };
-  const risingRpeSignals: CoachModificationSignals = {
-    coachingInsights: { rpeTrend: "rising" },
-  };
-
-  it("returns null when targetField is 'notes'", () => {
-    expect(
-      classifyCoachModification(suggestion({ targetField: "notes" }), fatigueSignals),
-    ).toBeNull();
-  });
-
-  it("returns null when recommendation is missing", () => {
-    expect(
-      classifyCoachModification(suggestion({ recommendation: undefined }), fatigueSignals),
-    ).toBeNull();
-  });
-
-  it("returns null when recommendation is whitespace-only", () => {
-    expect(
-      classifyCoachModification(suggestion({ recommendation: "    \n\t  " }), fatigueSignals),
-    ).toBeNull();
-  });
-
-  it("returns 'fatigue_volume_reduction' when fatigueFlag + fatigue term + reduction term align", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "RPE has been climbing — let's recover.",
-        }),
-        fatigueSignals,
-      ),
-    ).toBe("fatigue_volume_reduction");
-  });
-
-  it("treats a rising rpeTrend (with no explicit fatigueFlag) as an active fatigue signal", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "Lower the intensity and recover.",
-          rationale: undefined,
-        }),
-        risingRpeSignals,
-      ),
-    ).toBe("fatigue_volume_reduction");
-  });
-
-  it("is case-insensitive over both fatigue and reduction vocabulary", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "REDUCE the LOAD",
-          rationale: "RPE TRENDING UP, athlete looks TIRED",
-        }),
-        fatigueSignals,
-      ),
-    ).toBe("fatigue_volume_reduction");
-  });
-
-  it("falls back to 'workload_adjustment' when fatigue signal is absent", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recovery needed",
-        }),
-        { coachingInsights: { fatigueFlag: false, rpeTrend: "stable" } },
-      ),
-    ).toBe("workload_adjustment");
-  });
-
-  it("falls back to 'workload_adjustment' when no reduction vocabulary is present", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "Add a tempo block at the end",
-          rationale: "RPE is rising and athlete is tired",
-        }),
-        fatigueSignals,
-      ),
-    ).toBe("workload_adjustment");
-  });
-
-  it("falls back to 'workload_adjustment' when no fatigue vocabulary is present", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Schedule conflict",
-        }),
-        fatigueSignals,
-      ),
-    ).toBe("workload_adjustment");
-  });
-
-  it("treats missing coachingInsights as no active fatigue signal", () => {
-    expect(
-      classifyCoachModification(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "fatigue noted",
-        }),
-        {},
-      ),
-    ).toBe("workload_adjustment");
+  it.each<{
+    name: string;
+    sugg: Partial<CoachModificationInput>;
+    signals: CoachModificationSignals;
+    expected: "fatigue_volume_reduction" | "workload_adjustment" | null;
+  }>([
+    {
+      name: "targetField is 'notes'",
+      sugg: { targetField: "notes" },
+      signals: FATIGUE_SIGNALS,
+      expected: null,
+    },
+    {
+      name: "recommendation is missing",
+      sugg: { recommendation: undefined },
+      signals: FATIGUE_SIGNALS,
+      expected: null,
+    },
+    {
+      name: "recommendation is whitespace-only",
+      sugg: { recommendation: "    \n\t  " },
+      signals: FATIGUE_SIGNALS,
+      expected: null,
+    },
+    {
+      name: "fatigueFlag + fatigue term + reduction term align",
+      sugg: {
+        recommendation: "Reduce volume",
+        rationale: "RPE has been climbing — let's recover.",
+      },
+      signals: FATIGUE_SIGNALS,
+      expected: "fatigue_volume_reduction",
+    },
+    {
+      name: "a rising rpeTrend (no explicit fatigueFlag) counts as a fatigue signal",
+      sugg: {
+        recommendation: "Lower the intensity and recover.",
+        rationale: undefined,
+      },
+      signals: RISING_RPE_SIGNALS,
+      expected: "fatigue_volume_reduction",
+    },
+    {
+      name: "vocabulary matching is case-insensitive",
+      sugg: {
+        recommendation: "REDUCE the LOAD",
+        rationale: "RPE TRENDING UP, athlete looks TIRED",
+      },
+      signals: FATIGUE_SIGNALS,
+      expected: "fatigue_volume_reduction",
+    },
+    {
+      name: "the fatigue signal is absent",
+      sugg: { recommendation: "Reduce volume", rationale: "Recovery needed" },
+      signals: { coachingInsights: { fatigueFlag: false, rpeTrend: "stable" } },
+      expected: "workload_adjustment",
+    },
+    {
+      name: "no reduction vocabulary is present",
+      sugg: {
+        recommendation: "Add a tempo block at the end",
+        rationale: "RPE is rising and athlete is tired",
+      },
+      signals: FATIGUE_SIGNALS,
+      expected: "workload_adjustment",
+    },
+    {
+      name: "no fatigue vocabulary is present",
+      sugg: { recommendation: "Reduce volume", rationale: "Schedule conflict" },
+      signals: FATIGUE_SIGNALS,
+      expected: "workload_adjustment",
+    },
+    {
+      name: "coachingInsights is missing entirely",
+      sugg: { recommendation: "Reduce volume", rationale: "fatigue noted" },
+      signals: {},
+      expected: "workload_adjustment",
+    },
+  ])("returns $expected when $name", ({ sugg, signals, expected }) => {
+    expect(classifyCoachModification(suggestion(sugg), signals)).toBe(expected);
   });
 });
 
 describe("shouldSuppressRepeatedFatigueReduction", () => {
-  const fatigueSignals: CoachModificationSignals = {
+  const withCompleted = (completedWorkouts: number): CoachModificationSignals => ({
     coachingInsights: { fatigueFlag: true },
-  };
+    completedWorkouts,
+  });
 
-  function priorReductionInputs(fingerprint: string, completedWorkoutCount = 4): CoachNoteInputs {
-    return {
-      lastFatigueReduction: {
-        kind: "fatigue_volume_reduction",
-        at: "2026-05-20T00:00:00Z",
-        completedWorkoutCount,
-        prescriptionFingerprint: fingerprint,
+  it.each<{
+    name: string;
+    sugg: CoachModificationInput;
+    target: UpcomingWorkout | undefined;
+    signals: CoachModificationSignals;
+    expected: boolean;
+  }>([
+    {
+      name: "the modification would not classify as a fatigue reduction",
+      sugg: suggestion({ targetField: "notes" }),
+      target: SUPPRESS_WORKOUT,
+      signals: FATIGUE_SIGNALS,
+      expected: false,
+    },
+    {
+      name: "the workout argument is undefined",
+      sugg: FATIGUE_SUGGESTION,
+      target: undefined,
+      signals: FATIGUE_SIGNALS,
+      expected: false,
+    },
+    {
+      name: "no prior fatigue reduction has been recorded",
+      sugg: FATIGUE_SUGGESTION,
+      target: workout({ aiInputsUsed: null }),
+      signals: FATIGUE_SIGNALS,
+      expected: false,
+    },
+    {
+      name: "the prior reduction has no fingerprint to compare against",
+      sugg: FATIGUE_SUGGESTION,
+      target: workout({
+        aiInputsUsed: {
+          lastFatigueReduction: {
+            kind: "fatigue_volume_reduction",
+            completedWorkoutCount: 2,
+          },
+        },
+      }),
+      signals: FATIGUE_SIGNALS,
+      expected: false,
+    },
+    {
+      name: "the prior fingerprint matches the current prescription",
+      sugg: FATIGUE_SUGGESTION,
+      target: {
+        ...SUPPRESS_WORKOUT,
+        aiInputsUsed: priorReductionInputs(MATCHING_FINGERPRINT, 4),
       },
-    };
-  }
-
-  it("returns false when the modification would not classify as fatigue reduction", () => {
-    const target = workout();
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({ targetField: "notes" }),
-        target,
-        fatigueSignals,
-      ),
-    ).toBe(false);
-  });
-
-  it("returns false when the workout argument is undefined", () => {
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        undefined,
-        fatigueSignals,
-      ),
-    ).toBe(false);
-  });
-
-  it("returns false when no prior fatigue reduction has been recorded", () => {
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        workout({ aiInputsUsed: null }),
-        fatigueSignals,
-      ),
-    ).toBe(false);
-  });
-
-  it("returns false when prior fingerprint is missing (cannot prove the prescription is unchanged)", () => {
-    const target = workout({
-      aiInputsUsed: {
-        lastFatigueReduction: {
-          kind: "fatigue_volume_reduction",
-          completedWorkoutCount: 2,
+      signals: withCompleted(4),
+      expected: true,
+    },
+    {
+      name: "the athlete has completed MORE workouts since the prior reduction",
+      sugg: FATIGUE_SUGGESTION,
+      target: {
+        ...SUPPRESS_WORKOUT,
+        aiInputsUsed: priorReductionInputs(MATCHING_FINGERPRINT, 4),
+      },
+      signals: withCompleted(5),
+      expected: false,
+    },
+    {
+      name: "the prescription changed (fingerprint mismatch)",
+      sugg: FATIGUE_SUGGESTION,
+      target: {
+        ...SUPPRESS_WORKOUT,
+        aiInputsUsed: priorReductionInputs("some-other-hash", 4),
+      },
+      signals: withCompleted(4),
+      expected: false,
+    },
+    {
+      name: "the prior reduction is derived from a lastModification of kind=fatigue_volume_reduction",
+      sugg: FATIGUE_SUGGESTION,
+      target: {
+        ...SUPPRESS_WORKOUT,
+        aiInputsUsed: {
+          lastModification: {
+            kind: "fatigue_volume_reduction",
+            completedWorkoutCount: 4,
+            prescriptionFingerprint: MATCHING_FINGERPRINT,
+          },
         },
       },
-    });
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        target,
-        fatigueSignals,
-      ),
-    ).toBe(false);
-  });
-
-  it("returns true when prior fingerprint matches the current prescription", () => {
-    const target = workout({ mainWorkout: "Heavy deadlift triples" });
-    const fingerprint = buildWorkoutPrescriptionFingerprint(target)!;
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        { ...target, aiInputsUsed: priorReductionInputs(fingerprint, 4) },
-        { coachingInsights: { fatigueFlag: true }, completedWorkouts: 4 },
-      ),
-    ).toBe(true);
-  });
-
-  it("returns false when athlete has completed MORE workouts since the prior reduction", () => {
-    const target = workout({ mainWorkout: "Heavy deadlift triples" });
-    const fingerprint = buildWorkoutPrescriptionFingerprint(target)!;
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        { ...target, aiInputsUsed: priorReductionInputs(fingerprint, 4) },
-        { coachingInsights: { fatigueFlag: true }, completedWorkouts: 5 },
-      ),
-    ).toBe(false);
-  });
-
-  it("returns false when prescriptions differ even if fatigue + prior + count gates pass", () => {
-    const target = workout({ mainWorkout: "Heavy deadlift triples" });
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        { ...target, aiInputsUsed: priorReductionInputs("some-other-hash", 4) },
-        { coachingInsights: { fatigueFlag: true }, completedWorkouts: 4 },
-      ),
-    ).toBe(false);
-  });
-
-  it("derives a prior fatigue reduction from lastModification when lastFatigueReduction is missing", () => {
-    const target = workout({ mainWorkout: "Heavy deadlift triples" });
-    const fingerprint = buildWorkoutPrescriptionFingerprint(target)!;
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        {
-          ...target,
-          aiInputsUsed: {
-            lastModification: {
-              kind: "fatigue_volume_reduction",
-              completedWorkoutCount: 4,
-              prescriptionFingerprint: fingerprint,
-            },
+      signals: withCompleted(4),
+      expected: true,
+    },
+    {
+      name: "a lastModification of kind=workload_adjustment is NOT treated as a prior reduction",
+      sugg: FATIGUE_SUGGESTION,
+      target: {
+        ...SUPPRESS_WORKOUT,
+        aiInputsUsed: {
+          lastModification: {
+            kind: "workload_adjustment",
+            completedWorkoutCount: 4,
+            prescriptionFingerprint: MATCHING_FINGERPRINT,
           },
         },
-        { coachingInsights: { fatigueFlag: true }, completedWorkouts: 4 },
-      ),
-    ).toBe(true);
-  });
-
-  it("does NOT derive a prior fatigue reduction from a lastModification of kind=workload_adjustment", () => {
-    const target = workout({ mainWorkout: "Heavy deadlift triples" });
-    const fingerprint = buildWorkoutPrescriptionFingerprint(target)!;
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        {
-          ...target,
-          aiInputsUsed: {
-            lastModification: {
-              kind: "workload_adjustment",
-              completedWorkoutCount: 4,
-              prescriptionFingerprint: fingerprint,
-            },
+      },
+      signals: withCompleted(4),
+      expected: false,
+    },
+    {
+      name: "the prior reduction has no completedWorkoutCount (count gate skipped)",
+      sugg: FATIGUE_SUGGESTION,
+      target: {
+        ...SUPPRESS_WORKOUT,
+        aiInputsUsed: {
+          lastFatigueReduction: {
+            kind: "fatigue_volume_reduction",
+            prescriptionFingerprint: MATCHING_FINGERPRINT,
           },
         },
-        { coachingInsights: { fatigueFlag: true }, completedWorkouts: 4 },
-      ),
-    ).toBe(false);
-  });
-
-  it("returns true when prior has no completedWorkoutCount (count gate skipped)", () => {
-    const target = workout({ mainWorkout: "Heavy deadlift triples" });
-    const fingerprint = buildWorkoutPrescriptionFingerprint(target)!;
-    expect(
-      shouldSuppressRepeatedFatigueReduction(
-        suggestion({
-          recommendation: "Reduce volume",
-          rationale: "Recover from fatigue",
-        }),
-        {
-          ...target,
-          aiInputsUsed: {
-            lastFatigueReduction: {
-              kind: "fatigue_volume_reduction",
-              prescriptionFingerprint: fingerprint,
-            },
-          },
-        },
-        { coachingInsights: { fatigueFlag: true }, completedWorkouts: 99 },
-      ),
-    ).toBe(true);
+      },
+      signals: withCompleted(99),
+      expected: true,
+    },
+  ])("returns $expected when $name", ({ sugg, target, signals, expected }) => {
+    expect(shouldSuppressRepeatedFatigueReduction(sugg, target, signals)).toBe(expected);
   });
 });
 
