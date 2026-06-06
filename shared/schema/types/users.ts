@@ -1,4 +1,4 @@
-﻿import { users } from "../tables";
+﻿import { userConsents, users } from "../tables";
 import { z } from "../zod";
 // User types and schemas
 export type UpsertUser = typeof users.$inferInsert;
@@ -47,4 +47,18 @@ export const updateUserPreferencesSchema = z.object({
 });
 
 export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
+
+// Auditable consent records (W4). `privacy_notice` = the first-load privacy
+// banner acknowledgement; `error_reporting` = the Sentry telemetry opt-in,
+// split from the notice so accept/reject are recorded independently.
+export const consentTypeSchema = z.enum(["privacy_notice", "error_reporting"]);
+export type ConsentType = z.infer<typeof consentTypeSchema>;
+
+export const recordConsentSchema = z.object({
+  consentType: consentTypeSchema,
+  granted: z.boolean(),
+});
+export type RecordConsentInput = z.infer<typeof recordConsentSchema>;
+
+export type UserConsent = typeof userConsents.$inferSelect;
 

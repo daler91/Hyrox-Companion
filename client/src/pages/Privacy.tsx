@@ -20,7 +20,7 @@ export default function Privacy() {
 
         <article className="prose prose-neutral dark:prose-invert max-w-none">
           <h1>Privacy Policy</h1>
-          <p className="text-muted-foreground">Last updated: May 31, 2026</p>
+          <p className="text-muted-foreground">Last updated: June 6, 2026</p>
 
           <h2>1. Data We Collect</h2>
           <p>
@@ -202,7 +202,30 @@ export default function Privacy() {
             </li>
           </ul>
 
-          <h2>9. Cookies</h2>
+          <h2>9. California Privacy Rights (CCPA/CPRA)</h2>
+          <p>
+            If you are a California resident, the California Consumer Privacy Act (as amended by the
+            CPRA) gives you the rights to know, access, delete, and correct the personal information
+            we hold, and to not be discriminated against for exercising them. The access and deletion
+            controls in <strong>Section 8</strong> apply to these rights.
+          </p>
+          <h3>Do Not Sell or Share My Personal Information</h3>
+          <p>
+            We do <strong>not</strong> sell your personal information, and we do not share it for
+            cross-context behavioral advertising. The only sharing is with the processors listed in{" "}
+            <strong>Section 3</strong>, solely to operate the features you request.
+          </p>
+          <h3>Limit the Use of My Sensitive Personal Information</h3>
+          <p>
+            Health and fitness metrics (such as heart rate and workout performance) are sensitive
+            personal information. We use them only to provide the features you enable, never to infer
+            characteristics about you or for advertising. This data is sent to an AI provider{" "}
+            <em>only</em> when you opt in to AI coaching. To exercise your &sect;1798.120 right to
+            opt out, leave <strong>AI Coach</strong> disabled (the default) or turn it off in
+            Settings &mdash; no health data is sent to any AI processor while it is off.
+          </p>
+
+          <h2>10. Cookies</h2>
           <p>
             fitai.coach uses the following cookies, all of which are strictly necessary for the
             application to function:
@@ -217,7 +240,7 @@ export default function Privacy() {
           </ul>
           <p>We do not use tracking cookies or third-party analytics cookies.</p>
 
-          <h2>10. Contact</h2>
+          <h2>11. Contact</h2>
           <p>
             For questions about this privacy policy or to exercise your data rights, please contact
             us through the application&apos;s Settings page.

@@ -126,7 +126,17 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       return sendNotFound(res, "User not found");
     }
 
-    // Step 6: Best-effort purge of any pending pg-boss jobs for this user, so
+    // Step 6: Best-effort purge of the user's rate-limit buckets (S6). Their
+    // keys are `${category}:user:${userId}` and are NOT FK-linked to `users`,
+    // so the cascade in step 5 leaves them behind until their TTL lapses.
+    // Non-fatal — stale buckets only affect that user's now-deleted identity.
+    try {
+      await storage.users.purgeRateLimitBucketsForUser(userId);
+    } catch (err) {
+      logger.warn({ err, userId }, "Failed to purge rate-limit buckets during account deletion");
+    }
+
+    // Step 7: Best-effort purge of any pending pg-boss jobs for this user, so
     // transient job payloads (userId, plan-generation input) don't linger at
     // rest after erasure. Non-fatal — every handler already no-ops for a
     // deleted user, so a failure here is harmless (W17).
@@ -139,7 +149,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       logger.warn({ err, userId }, "Failed to purge queued jobs during account deletion");
     }
 
-    // Step 7: Evict from the auth seen-cache so stale sessions can't
+    // Step 8: Evict from the auth seen-cache so stale sessions can't
     // trigger ensureUserExists within the 5-minute TTL window.
     await evictUserFromSeenCache(userId);
 

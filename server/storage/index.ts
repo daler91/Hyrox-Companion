@@ -2,6 +2,7 @@ import { AiUsageStorage } from "./aiUsage";
 import { AnalyticsStorage } from "./analytics";
 import { AnalyticsResultsStorage } from "./analyticsResults";
 import { CoachingStorage } from "./coaching";
+import { ConsentStorage } from "./consent";
 import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
 import { MafTestStorage } from "./mafTests";
@@ -29,4 +30,5 @@ export const storage: IStorage = {
   aiUsage: new AiUsageStorage(),
   push: new PushStorage(),
   mafTests: new MafTestStorage(),
+  consent: new ConsentStorage(),
 };
