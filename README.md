@@ -64,7 +64,8 @@ fitai.coach helps athletes plan structured training, log complex workouts, under
 
 - **Training overview** - Track volume, duration, average workouts per week, completion rate, streaks, and week-over-week changes.
 - **Exercise progression** - See personal records, set history, category breakdowns, and progression trends.
-- **Coach insights** - Surface RPE trends, plan phase, weekly volume, station gaps, fatigue flags, and progression flags.
+- **Coach insights** - Surface RPE trends, plan phase, weekly volume, station gaps, fatigue flags, and progression flags. Results are persisted server-side and paint instantly on open, with an automatic refresh at local midnight when newer workouts are logged.
+- **Race predictor** - Estimate your HYROX finish time from logged history, with the same stored-first instant paint and a manual refresh.
 - **MAF Trend** - For MAF Method athletes, chart per-test compliance and pace-at-ceiling progression with classification badges across tagged MAF tests.
 - **Data export** - Download workout timeline and exercise sets as CSV or JSON.
 - **Email and push notifications** - Send opt-in weekly summaries and missed-day reminders through pg-boss, Resend, and Web Push when configured.
@@ -383,7 +384,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The current suite includes 237 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
+The current suite includes 254 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 
@@ -401,6 +402,7 @@ GitHub Actions workflows live in [`.github/workflows/`](.github/workflows/):
 | **Dependency Review**           | Pull request                                  | Audit dependency changes                                                |
 | **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                |
 | **Bearer**                      | Push to `main`, pull request, weekly schedule | Security and privacy scanning                                           |
+| **Secret Scan**                 | Push to `main`, pull request                  | Gitleaks secret scanning                                                |
 
 SonarQube Cloud automatic analysis is configured outside the manual workflow steps.
 
@@ -416,15 +418,16 @@ When reporting an accessibility issue, include the page, browser, assistive tech
 
 ## Contributing
 
-1. Fork the project.
-2. Create a feature branch.
-3. Make the smallest focused change that solves the problem.
-4. Run the relevant checks, usually `pnpm check`, `pnpm test`, and `pnpm lint`.
-5. Update docs and `docs/openapi.json` when the public API or setup changes.
-6. Open a pull request with the behavior change, verification, and any remaining risks.
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for local setup, the checks to run before opening a pull request, and code-style conventions. In short:
+
+1. Fork the project and create a feature branch.
+2. Make the smallest focused change that solves the problem.
+3. Run `pnpm check`, `pnpm test`, and `pnpm lint`.
+4. Update docs and `docs/openapi.json` when the public API or setup changes.
+5. Open a pull request with the behavior change, verification, and any remaining risks.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See the [`LICENSE`](LICENSE) file for the full text.

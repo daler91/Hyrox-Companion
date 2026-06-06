@@ -57,6 +57,15 @@ const queryClient = new QueryClient({
   - `"throw"` (default) -- Throws an error, triggering React Query's error state.
   - `"returnNull"` -- Returns `null`, useful for optional auth checks.
 
+### Instant-paint Snapshots (placeholderData + localStorage)
+
+The expensive analytics surfaces (Coach Insights, Race Predictor) avoid a blank/spinner state on open by persisting their last result to `localStorage` and feeding it back as React Query `placeholderData`. The helpers live in `client/src/lib/analyticsSnapshot.ts`:
+
+- `readAnalyticsSnapshot<T>(key)` / `writeAnalyticsSnapshot(key, value)` -- JSON get/set that swallow corrupt payloads and quota errors so a bad snapshot can never break the tab.
+- `useWriteAnalyticsSnapshot(key, data, isPlaceholderData)` -- persists `data` whenever it changes and is *real* (skips the placeholder it just read back, and no-ops when `key` is `null`, e.g. signed out).
+
+Snapshot keys are **scoped by `userId`** by the caller (e.g. `fitai-race-prediction-cache:<userId>`) so a previous account's data is never shown. The per-tab flow: read the per-user snapshot → pass as `placeholderData` → render instantly → the live query revalidates in the background → `useWriteAnalyticsSnapshot` writes the fresh result back. This pairs with the server's stored-first endpoints (see [API Reference — Analytics Routes](api-reference.md#analytics-routes)): the server returns the last persisted result with a `stale` flag, and the client paints it with no spinner.
+
 ### Custom Error Types
 
 `queryClient.ts` exports two custom error classes thrown from `throwIfResNotOk`:
@@ -155,6 +164,12 @@ Timeline annotation queries and mutations are composed directly from the `client
 | Hook | File | Purpose |
 |------|------|---------|
 | `useChatSession` | `useChatSession.ts` | Full chat session management. Handles message history, SSE streaming with `requestAnimationFrame` batching for smooth UI updates, RAG info tracking, and auto-scroll. |
+
+### Analytics
+
+| Hook | File | Purpose |
+|------|------|---------|
+| `useRacePrediction` | `components/analytics/useRacePrediction.ts` | Fetches the stored HYROX race prediction with instant paint (`placeholderData` from a per-user localStorage snapshot, see [Instant-paint Snapshots](#instant-paint-snapshots-placeholderdata--localstorage)). Exposes a manual `refresh()` that forces server regeneration via `?refresh=1` and writes the fresh result back into the query cache. |
 
 ### Plans
 

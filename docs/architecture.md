@@ -457,11 +457,12 @@ flowchart LR
 ```
 
 **Key details:**
-- **Fixed UTC schedule**: `"0 9 * * *"` in `server/cron.ts` — daily at 09:00 UTC. Seven other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, and a one-shot startup email catch-up). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
+- **Fixed UTC schedule**: `"0 9 * * *"` in `server/cron.ts` — daily at 09:00 UTC. Eight other crons live in the same process (idempotency cleanup 03:30, AI-usage log cleanup 04:00, shared runtime state cleanup 04:15, structured exercise health rollup 02:10, analytics recompute hourly at :05 firing at each user's local midnight, stale `isAutoCoaching` recovery every 10 minutes, queue-depth telemetry every 5 minutes, and a one-shot startup email catch-up). Each cron body runs under a Postgres advisory lock so only one replica performs the work even when `APP_INSTANCE_COUNT > 1`.
 - **Startup catch-up**: if the server boots after 09:00 UTC (e.g. a Railway restart), `cron.ts` schedules a one-shot catch-up run after 30 s. The per-user "sent" markers below keep this idempotent.
 - **Scoped retries**: the enqueue uses `sendJobNoRetry()` for the send legs because the final "mark as sent" happens *after* Resend returns, so a retry after a post-send DB failure would deliver a duplicate email. Upstream jobs (parse / ingest) use `sendJob()` with the default `retryLimit: 3` because their handlers are idempotent by id.
 - **External trigger**: the same `runEmailCronJob` can be invoked via `GET /api/v1/cron/emails` guarded by the `CRON_SECRET` header — useful when scheduling from Railway Cron or GitHub Actions instead of the in-process timer.
 - **Per-job timeout**: every worker is wrapped in `runWithTimeout` (55 min) so a hung Resend or Gemini call cannot leak a worker slot indefinitely.
+- **Same pattern, different payload — stored-first analytics**: the `analyticsRecompute` cron reuses this exact fixed-UTC-tick → local-time-gate → pg-boss → worker shape. It ticks hourly, fires per user at local midnight, and enqueues `recompute-analytics` jobs that refresh the durable `analytics_results` row (Coach Insights / Race Prediction) so the next open paints a fresh result with no AI spend on the read path. See [integrations.md § Analytics Recompute](integrations.md#analytics-recompute-scan).
 - See [integrations.md § Email](integrations.md#email-system-resend) for the prose walkthrough and [integrations.md § Job Queue](integrations.md#job-queue-pg-boss) for the queue-level details.
 
 ---

@@ -30,7 +30,7 @@ The project follows a testing pyramid with three layers:
 
 | Layer | Count | Location |
 |-------|-------|----------|
-| Unit/component/route tests (Vitest) | 184 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
+| Unit/component/route tests (Vitest) | 251 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
 | Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
 | Smoke tests | 1 file | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
 | Cypress E2E specs | 12 files | `cypress/e2e/*.cy.ts` |

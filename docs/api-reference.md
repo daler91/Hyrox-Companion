@@ -539,13 +539,23 @@ Create the built-in sample Hyrox training plan.
 
 ### POST /api/v1/plans/generate
 
-Generate a custom training plan using the configured text AI provider.
+Kick off an **asynchronous** AI training-plan generation. The request creates a *pending* plan immediately, enqueues a background `plan-generation` job (see [Integrations — Job Queue](integrations.md#job-types)), and returns the stub so the client can poll for completion.
 
 - **Auth:** Required
 - **Rate limit:** `planGenerate` category, 3/min
+- **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** `GeneratePlanInput` — `{ goal, totalWeeks (1-24), daysPerWeek (2-7), experienceLevel, raceDate?, startDate?, restDays?, focusAreas?, injuries? }`
 - **Validation:** `generatePlanInputSchema`
-- **Response:** `TrainingPlanWithDays`
+- **Response:** `202 Accepted` with the pending `TrainingPlan` stub. Poll [`GET /api/v1/plans/:id/generation-status`](#get-apiv1plansidgeneration-status) for progress.
+- **`409 PLAN_GENERATION_IN_PROGRESS`:** Returned when the user already has a generation in flight (`hasInFlightPlanGeneration`), so rapid re-submits (triple-clicks, retries) can't enqueue parallel jobs that each burn AI budget and race to write the same user's plans.
+
+### GET /api/v1/plans/:id/generation-status
+
+Poll the status of an asynchronous plan generation.
+
+- **Auth:** Required
+- **Rate limit:** `planStatus` category, 60/min
+- **Response:** `{ planId: string, generationStatus: "pending" | "generating" | "ready" | "failed", error?: string }` (404 when the plan is not found)
 
 ### PATCH /api/v1/plans/:id
 
@@ -808,6 +818,16 @@ Calculate weekly training summaries, category totals, station coverage, and week
 - **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
 - The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the four stat cards.
 
+### GET /api/v1/race-prediction
+
+Predict the athlete's HYROX finish time from their logged history. **Stored-first**: returns the last persisted prediction instantly (no AI spend) so the tab paints on open without a spinner; `?refresh=1` (the manual refresh button) — or the absence of any stored row — regenerates and persists a fresh prediction. The stored row is also kept warm by the midnight [analytics recompute job](integrations.md#job-types).
+
+- **Auth:** Required
+- **Rate limit:** `race-prediction` category, 12/min
+- **AI gates:** None — the service degrades to a deterministic estimate when AI is disabled, unconsented, or over budget, and only calls the model when consent + budget allow.
+- **Query:** `refresh?` — `refresh=1` forces regeneration and persistence
+- **Response:** `RacePredictionResponse & { generatedAt: string, stale: boolean }` — on a stored read, `stale` is `true` when a workout was logged after `generatedAt`; a freshly generated prediction returns `stale: false`.
+
 ---
 
 ## AI and Chat Routes
@@ -982,14 +1002,23 @@ Clear all chat messages for the current user.
 - **Rate limit:** `chatHistoryDelete` category, 5/min
 - **Response:** `{ success: true }`
 
+### GET /api/v1/coach-insights
+
+Return the **last stored** Coach Insights analysis instantly, with no AI spend, so the Analytics tab paints the previous result on open instead of a blank state.
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 60/min
+- **AI gates:** None (read-only; never calls the model)
+- **Response:** `{ ...CoachInsightsResult, generatedAt: string, stale: boolean }` — `stale` is `true` when a workout was logged after `generatedAt`. Returns `{ insights: null }` when the user has never generated insights.
+
 ### POST /api/v1/coach-insights
 
-Single-shot AI analysis of the athlete's progress against their stated goal. Reuses the chat surface with a fixed analysis prompt.
+Regenerate the single-shot AI analysis of the athlete's progress against their stated goal and **persist** it to the durable `analytics_results` store. Generation lives in `services/coachInsightsService` so the route and the midnight [recompute job](integrations.md#job-types) share one path.
 
 - **Auth:** Required
 - **Rate limit:** `suggestions` category, 3/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
-- **Response:** `{ insights: string, ragInfo: RagInfo, generatedAt: string }`
+- **Response:** `{ ...CoachInsightsResult, stale: false }` — freshly generated against the current latest workout, so never stale (`CoachInsightsResult` includes `insights` and `ragInfo`).
 
 ### POST /api/v1/timeline/ai-suggestions
 

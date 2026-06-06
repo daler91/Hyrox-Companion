@@ -488,6 +488,8 @@ Aggregates the user's training state:
 
 The coaching insights module computes seven analytical dimensions from the athlete's timeline data. These are included in every `TrainingContext` and injected into the AI system prompt so the model can make data-driven coaching decisions.
 
+> **Not to be confused with the user-facing "Coach Insights" tab.** This module (`coachingInsights.ts`) produces the *deterministic signals* fed **into** the AI context. The single-shot AI narrative shown on the Analytics → Coach Insights tab is generated separately by `server/services/coachInsightsService.ts` (the `COACH_INSIGHTS_PROMPT` path) and **persisted** to the `analytics_results` table for instant paint and midnight recompute — see [API Reference — Coach Insights](api-reference.md#get-apiv1coach-insights) and [Integrations — recompute-analytics](integrations.md#job-types).
+
 ### RPE Trend
 
 Compares the average RPE (Rate of Perceived Exertion) of the last 3 completed workouts against the prior 3. Requires at least 3 workouts with RPE data; returns `insufficient_data` otherwise.

@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~755 lines, 26 tables plus their Drizzle relations). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~865 lines, 28 tables plus their Drizzle relations). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -676,6 +676,32 @@ Current use cases:
 
 ---
 
+### analytics_results
+
+Durable "last computed result" for the expensive analytics surfaces (Coach Insights and the Race Predictor). Unlike `server_runtime_cache` this is **not** expiry-based -- the row persists until the next recompute so the client can paint the previous result instantly on open (no spinner/blank), and the midnight recompute cron can tell whether a newer workout has landed since it was generated. One row per `(user_id, feature)`, upserted on the unique index. The canonical feature list lives in `ANALYTICS_FEATURES` in `shared/schema/tables.ts`, kept in sync with the check constraint below.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `feature` | text | Not null, CHECK `feature IN ('coach_insights', 'race_prediction')` |
+| `payload` | jsonb | Not null -- the serialized feature result |
+| `generated_at` | timestamp with time zone | Not null, default `now()` |
+| `last_workout_date_at_generation` | date | Nullable -- the athlete's latest logged workout date (YYYY-MM-DD) when this result was generated; the staleness anchor the cron compares against |
+| `recomputed_on` | date | Nullable -- local calendar date of the last cron recompute; the once-per-day claim guard against duplicate recomputes |
+| `updated_at` | timestamp with time zone | Not null, default `now()` |
+
+**Engaged-user scope:** the mere existence of a row marks the user as "engaged" with that feature -- the only users the midnight recompute scan considers, so AI is never spent for users who never opened it.
+
+**Indexes:**
+- Primary key on `id`
+- `uq_analytics_results_user_feature` -- unique on (`user_id`, `feature`) -- one row per user+feature (the upsert target)
+- `idx_analytics_results_feature` on (`feature`)
+
+Written and read through `AnalyticsResultsStorage` (`server/storage/analyticsResults.ts`); refreshed by the `recompute-analytics` queue job. This durable store is distinct from the in-memory coalesced analytics cache described under [Performance Considerations](#performance-considerations).
+
+---
+
 ## Drizzle Relations
 
 All tables have explicit Drizzle relation definitions in `shared/schema/tables.ts`, enabling the `db.query.<table>.findMany({ with: { ... } })` relational query pattern. This replaces several manual JOIN queries with cleaner, type-safe relation-based queries.
@@ -684,7 +710,7 @@ All tables have explicit Drizzle relation definitions in `shared/schema/tables.t
 
 | Relation | Type | Description |
 |---|---|---|
-| `usersRelations` | `many` trainingPlans, workoutLogs, customExercises, chatMessages, coachingMaterials, documentChunks, aiUsageLogs, pushSubscriptions, trainingStyles, mafProfiles, mafTestResults, mafWorkoutAnalyses; `one` stravaConnection, garminConnection |
+| `usersRelations` | `many` trainingPlans, workoutLogs, customExercises, chatMessages, coachingMaterials, documentChunks, aiUsageLogs, pushSubscriptions, trainingStyles, mafProfiles, mafTestResults, mafWorkoutAnalyses, analyticsResults; `one` stravaConnection, garminConnection |
 | `trainingPlansRelations` | `one` user; `many` planDays (`days`), workoutLogs |
 | `planDaysRelations` | `one` trainingPlan; `many` workoutLogs, exerciseSets |
 | `workoutLogsRelations` | `one` user, planDay (optional), trainingPlan (optional); `many` exerciseSets |
@@ -701,6 +727,7 @@ All tables have explicit Drizzle relation definitions in `shared/schema/tables.t
 | `mafProfileRelations` | `one` user |
 | `mafTestResultsRelations` | `one` user |
 | `mafWorkoutAnalysisRelations` | `one` user, workoutLog |
+| `analyticsResultsRelations` | `one` user |
 
 Note: `timeline_annotations`, `rate_limit_buckets`, `server_runtime_cache`, and the `structured_exercise_*` tables do not declare Drizzle relations and are queried directly.
 
@@ -731,6 +758,8 @@ users
   |-- 1:N --> timeline_annotations
   |
   |-- 1:N --> idempotency_keys
+  |
+  |-- 1:N --> analytics_results   (one row per persisted analytics feature)
 ```
 
 ```mermaid
@@ -939,10 +968,12 @@ Each domain class owns a cohesive slice of functionality:
 | `TimelineStorage` | `server/storage/timeline.ts` | Unified timeline and upcoming planned days |
 | `TimelineAnnotationsStorage` | `server/storage/timelineAnnotations.ts` | Timeline annotation bands (injury/illness/travel/rest) |
 | `AnalyticsStorage` | `server/storage/analytics.ts` | Weekly stats, date-range queries, missed-workout reporting |
+| `AnalyticsResultsStorage` | `server/storage/analyticsResults.ts` | Durable last-computed analytics results (Coach Insights, Race Predictor): get/upsert, engaged-user scan, atomic per-day recompute claim |
 | `CoachingStorage` | `server/storage/coaching.ts` | Coaching materials and RAG document chunks (on the vector pool) |
 | `IdempotencyStorage` | `server/storage/idempotency.ts` | Idempotency key caching (get, set, cleanup) |
 | `AiUsageStorage` | `server/storage/aiUsage.ts` | AI token usage logging and daily-spend totals |
 | `PushStorage` | `server/storage/push.ts` | Web Push subscription storage |
+| `MafTestStorage` | `server/storage/mafTests.ts` | MAF test results and per-workout MAF analyses (create/update, lookup and delete by workout) |
 
 Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, and `timelineWindow.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
 
@@ -960,10 +991,12 @@ export const storage: IStorage = {
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
   analytics: new AnalyticsStorage(),
+  analyticsResults: new AnalyticsResultsStorage(),
   coaching: new CoachingStorage(),
   idempotency: new IdempotencyStorage(),
   aiUsage: new AiUsageStorage(),
   push: new PushStorage(),
+  mafTests: new MafTestStorage(),
 };
 ```
 
@@ -1004,7 +1037,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **54 migrations**, `0000` through `0053`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **60 migrations**, `0000` through `0059`:
 
 ```
 migrations/
@@ -1030,11 +1063,17 @@ migrations/
   0051_slow_omega_flight.sql
   0052_unusual_red_wolf.sql          # text_pattern_ops index on server_runtime_cache.key
   0053_dizzy_omega_sentinel.sql      # garmin_connections credential columns -> nullable
+  0054_hot_roxanne_simpson.sql       # plan_days (plan_id, scheduled_date) index
+  0055_next_hammerhead.sql           # users.user_timezone (drives per-user local-time crons)
+  0056_magical_marvex.sql            # users.division + users.gender
+  0057_broken_mordo.sql              # exercise_sets.version
+  0058_eminent_shaman.sql            # training_plans.generation_started_at (in-flight guard)
+  0059_natural_nomad.sql             # analytics_results table
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0053_snapshot.json
+    0059_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.
@@ -1056,6 +1095,9 @@ Notable recent migrations:
 - `0046`: Adds the `score` JSONB column to `workout_structure_blocks`.
 - `0047`: Adds the `onboarding_completed` column to `users`.
 - `0048`: Adds `rate_limit_buckets` and `server_runtime_cache` so rate limits and short-lived auth/AI/RAG caches are shared across app replicas.
+- `0055`: Adds `user_timezone` to `users`, enabling the per-user local-time gating used by the email and analytics-recompute crons.
+- `0058`: Adds `generation_started_at` to `training_plans`, the marker that lets the API reject a second plan generation while one is already in flight.
+- `0059`: Creates the `analytics_results` table — the durable store for the last computed Coach Insights / Race Prediction (instant-paint + midnight recompute).
 
 ### Startup Migration
 
@@ -1166,12 +1208,16 @@ for (const ex of exercises) {
 **custom_exercises** also has:
 - Unique composite: `(user_id, name)` to prevent duplicate exercise names per user
 
+**analytics_results** (2 indexes):
+- Unique composite: `(user_id, feature)` — one stored result per user+feature (the upsert target)
+- Single-column: `feature` — for the engaged-user recompute scan
+
 ---
 
 ## Performance Considerations
 
 **Coalesced Analytics Cache:**
-The analytics routes (`server/routes/analytics.ts`) use two in-memory promise caches — one for exercise sets (`getExerciseSetsCoalesced`) and one for workout logs (`getWorkoutLogsCoalesced`) — to prevent redundant DB queries within a single process. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query.
+The analytics routes (`server/routes/analytics.ts`) use two in-memory promise caches — one for exercise sets (`getExerciseSetsCoalesced`) and one for workout logs (`getWorkoutLogsCoalesced`) — to prevent redundant DB queries within a single process. These caches only coalesce duplicate DB reads and are not part of abuse prevention or AI provider-spend controls; those shared concerns use the Postgres-backed runtime-state tables above. The cache entry stores the *pending* promise, so concurrent callers on the same replica share the same in-flight query. This in-memory coalescing is separate from the durable [`analytics_results`](#analytics_results) store, which persists the last *computed* Coach Insights / Race Prediction across restarts for instant paint and the midnight recompute.
 
 ```typescript
 // Multiple concurrent requests for the same user's analytics data

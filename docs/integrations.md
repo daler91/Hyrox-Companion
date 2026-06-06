@@ -354,7 +354,7 @@ back to the settings page.
 
 ### Email Sending Pipeline
 
-For an end-to-end diagram covering the cron tick → pg-boss enqueue → per-user worker → Resend send flow (including the scoped-retry invariant and startup catch-up), see [architecture.md § 7 — Cron → Email Pipeline](architecture.md#7-cron--email-pipeline).
+For an end-to-end diagram covering the cron tick → pg-boss enqueue → per-user worker → Resend send flow (including the scoped-retry invariant and startup catch-up), see [architecture.md § 7 — Cron → Notification Pipeline](architecture.md#7-cron--notification-pipeline).
 
 The `sendEmail()` function in `server/email.ts`:
 
@@ -413,7 +413,7 @@ const queue = new PgBoss(env.DATABASE_URL);
 The queue is started via `startQueue()`, which:
 
 1. Calls `queue.start()` to initialize pg-boss tables and begin polling (wrapped in a 30s timeout that calls `queue.stop()` on failure to avoid leaking the connection pool)
-2. Creates the four named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`
+2. Creates the seven named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `plan-generation`, `recompute-analytics`
 3. Registers a worker function for each queue
 
 Errors on the queue emit to a global error handler that logs via the application logger.
@@ -449,6 +449,27 @@ Errors on the queue emit to a global error handler that logs via the application
 - **Worker**: Resolves the user, then calls `processMissedWorkoutReminder()` from `server/emailScheduler.ts`
 - **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0` for the same reason. The `lastMissedReminderAt` "sent" marker prevents duplicates.
 
+#### `send-maf-test-reminder`
+
+- **Purpose**: Sends one user's MAF baseline-test reminder email (MAF training style only)
+- **Payload**: `{ userId: string }`
+- **Worker**: Resolves the user, then calls `processMafTestReminder()` from `server/emailScheduler.ts`
+- **Enqueued via**: `sendJobNoRetry()` — `retryLimit: 0` like the other email jobs; the "sent" marker prevents duplicates.
+
+#### `plan-generation`
+
+- **Purpose**: Runs an AI training-plan generation in the background so the request returns immediately
+- **Payload**: `{ planId: string, userId: string, input: GeneratePlanInput }`
+- **Worker**: Calls `executePlanGeneration(planId, input, userId, signal)`; the in-flight plan row is reconciled if the job fails, and a new generation is rejected while one is already running for the user (see [API Reference — `POST /api/v1/plans/generate`](api-reference.md))
+- **Enqueued via**: `sendJob()` (`DEFAULT_JOB_OPTIONS`) — the handler is keyed by `planId`, so a retry is safe.
+
+#### `recompute-analytics`
+
+- **Purpose**: Refreshes a user's **stored** Coach Insights / Race Prediction (the durable `analytics_results` row) when a workout was logged after it was generated, so the next open paints a fresh result. Enqueued by the `analyticsRecompute` cron at each user's local midnight (see [Cron Scheduling](#cron-scheduling-node-cron)).
+- **Payload**: `{ userId: string, feature: "coach_insights" | "race_prediction", localDate: string }`
+- **Worker**: Performs an atomic once-per-day claim via `storage.analyticsResults.markRecomputedOn(userId, feature, localDate)` (skips silently if already claimed today or the row was deleted), then regenerates: `regenerateAndStoreRacePrediction()` for `race_prediction` (always refreshes — deterministic fallback when AI is unavailable) or `generateCoachInsightsIfAllowed()` for `coach_insights` (self-gates on AI consent/budget, leaving the previous insight intact when skipped).
+- **Enqueued via**: `queue.send()` with `DEFAULT_JOB_OPTIONS` plus `singletonKey: recompute:<feature>:<userId>` and `singletonSeconds: 3600`, which coalesces duplicate enqueues for the same user+feature within the hour. Combined with the per-day claim, this makes the job safely idempotent. See [API Reference — Coach Insights / Race Prediction](api-reference.md) for the stored-first read endpoints this keeps warm.
+
 ### Job Processing Pattern
 
 Every worker receives an array of `Job[]` objects and processes them concurrently via the shared `runBatch()` helper, which uses a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll. Each job is additionally wrapped in a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`) that aborts the job — deliberately 10 minutes below the 60-minute `expireInMinutes` so an orphaned upstream call can tear down before pg-boss treats the job as re-dispatchable.
@@ -474,7 +495,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **seven recurring** scheduled jobs (the daily email check plus six maintenance/telemetry jobs) and one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eight recurring** scheduled jobs (the daily email check plus seven maintenance/telemetry jobs) and one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -496,6 +517,15 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | Stale auto-coach recovery | `*/10 * * * *` UTC | `staleAutoCoaching` |
 | pg-boss queue-depth telemetry | `*/5 * * * *` UTC | `queueDepthTelemetry` |
 | Structured exercise health rollup | `10 2 * * *` UTC | `structuredExerciseRollup` |
+| Analytics recompute | `5 * * * *` UTC (hourly; fires per-user at local midnight) | `analyticsRecompute` |
+
+#### Analytics Recompute Scan
+
+- **Schedule**: `5 * * * *` (hourly at :05) in `Etc/UTC`
+- **Action**: Calls `runAnalyticsRecomputeScan(storage, now)` (`server/services/analyticsRecomputeScheduler.ts`). The scan ticks every hour but gates per user on their **local** hour being `0` (using `getLocalHour()` in `server/timezone.ts`), mirroring the email scheduler's per-timezone approach, so each user is processed once around their local midnight.
+- **Scope**: Only users who already have a stored `analytics_results` row (i.e. who have opened Coach Insights or the Race Predictor) **and** whose stored result is stale — a workout was logged after `last_workout_date_at_generation`. AI is therefore never spent for users who never used the feature.
+- **Effect**: Enqueues a [`recompute-analytics`](#job-types) job per stale (user, feature). The job's atomic per-day claim plus the queue `singletonKey` prevent duplicate recomputes (e.g. from a DST-doubled local hour or at-least-once delivery).
+- **Advisory lock**: `analyticsRecompute`
 
 ### Startup Catch-Up
 
