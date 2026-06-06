@@ -252,7 +252,7 @@ export function WorkoutStructureEditor({
             <div>
               <Label className="text-xs">Format</Label>
               <Select value={value.blockType} onValueChange={(v) => update("blockType", v as BlockType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Block format"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {blockTypeOptions.map((s) => <SelectItem key={s} value={s}>{BLOCK_TYPE_LABELS[s]}</SelectItem>)}
                 </SelectContent>
@@ -262,7 +262,7 @@ export function WorkoutStructureEditor({
           <div>
             <Label className="text-xs">Workout section</Label>
             <Select value={value.section} onValueChange={(v) => update("section", v as WorkoutSection)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Workout section"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {sections.map((s) => <SelectItem key={s} value={s}>{sectionLabel(s)}</SelectItem>)}
               </SelectContent>
