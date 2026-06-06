@@ -1,4 +1,3 @@
-import type { ExerciseSet } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TrainingContext } from "../../gemini/index";
@@ -10,6 +9,7 @@ import {
   computeRpeTrend,
   computeWeeklyVolume,
 } from "./coachingInsights";
+import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
 import type { TimelineEntry } from "./types";
 
 // Fixed "today" (a Monday) so toDateStr()/getMondayWeekBoundaries() are
@@ -30,53 +30,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
-
-function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
-  return {
-    status: COMPLETED,
-    date: "2026-06-10",
-    focus: "Strength",
-    mainWorkout: "Squats",
-    notes: null,
-    ...overrides,
-  };
-}
-
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1",
-    workoutLogId: "wl-1",
-    planDayId: null,
-    exerciseName: BACK_SQUAT,
-    customLabel: null,
-    category: "strength",
-    setNumber: 1,
-    reps: null,
-    weight: null,
-    distance: null,
-    time: null,
-    plannedReps: null,
-    plannedWeight: null,
-    plannedDistance: null,
-    plannedTime: null,
-    blockId: null,
-    stepNumber: null,
-    intervalMinute: null,
-    cycleNumber: null,
-    stepRole: null,
-    groupId: null,
-    intensity: null,
-    load: null,
-    repMode: null,
-    tempo: null,
-    standards: null,
-    notes: null,
-    confidence: null,
-    sortOrder: 0,
-    version: 1,
-    ...overrides,
-  };
-}
 
 function makeRecent(overrides: Partial<RecentWorkout> = {}): RecentWorkout {
   return {

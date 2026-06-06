@@ -1,6 +1,6 @@
-import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
+import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
 import {
   calculateTrainingStats,
   collectRecentWorkouts,
@@ -18,53 +18,6 @@ const BACK_SQUAT = "back_squat";
 const RUNNING = "running";
 const ROWING = "rowing";
 const DATE_A = "2026-01-01";
-
-function makeEntry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
-  return {
-    status: COMPLETED,
-    date: DATE_A,
-    focus: "Strength",
-    mainWorkout: "Squats",
-    notes: null,
-    ...overrides,
-  };
-}
-
-function makeSet(overrides: Partial<ExerciseSet> = {}): ExerciseSet {
-  return {
-    id: "set-1",
-    workoutLogId: "wl-1",
-    planDayId: null,
-    exerciseName: BACK_SQUAT,
-    customLabel: null,
-    category: "strength",
-    setNumber: 1,
-    reps: null,
-    weight: null,
-    distance: null,
-    time: null,
-    plannedReps: null,
-    plannedWeight: null,
-    plannedDistance: null,
-    plannedTime: null,
-    blockId: null,
-    stepNumber: null,
-    intervalMinute: null,
-    cycleNumber: null,
-    stepRole: null,
-    groupId: null,
-    intensity: null,
-    load: null,
-    repMode: null,
-    tempo: null,
-    standards: null,
-    notes: null,
-    confidence: null,
-    sortOrder: 0,
-    version: 1,
-    ...overrides,
-  };
-}
 
 describe("calculateTrainingStats", () => {
   it("returns all-zero stats for an empty timeline", () => {
