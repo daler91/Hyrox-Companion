@@ -1,6 +1,7 @@
 import type { StructureBlockInput, StructureBlockScore } from "@shared/schema";
 import { ArrowDown, ArrowUp, Link2, Plus, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,6 +173,16 @@ export function WorkoutStructureEditor({
   onScoreChange,
   linking,
 }: Props) {
+  // Keep the latest value/handlers in a ref so the per-row callbacks below stay
+  // referentially stable (useCallback []) — otherwise every keystroke re-creates
+  // them and React.memo can't stop every MovementRow from re-rendering (W8).
+  const latest = useRef({ value, onChange, onScoreChange });
+  // Sync in an effect (not during render) so the stable callbacks below read
+  // the latest props at event time without an illegal render-phase ref write.
+  useEffect(() => {
+    latest.current = { value, onChange, onScoreChange };
+  });
+
   const update = <K extends keyof WorkoutStructureConfig>(key: K, next: WorkoutStructureConfig[K]) =>
     onChange({ ...value, [key]: next });
 
@@ -186,32 +197,37 @@ export function WorkoutStructureEditor({
     const parsed = parsePositiveInt(raw);
     return parsed === undefined ? undefined : Math.min(parsed, MAX_EMOM_DURATION_MINUTES);
   };
-  const reorderStep = (index: number, direction: -1 | 1) => {
+  const reorderStep = useCallback((index: number, direction: -1 | 1) => {
+    const { value, onChange } = latest.current;
     const destination = index + direction;
     if (destination < 0 || destination >= value.steps.length) return;
     const steps = [...value.steps];
     const [item] = steps.splice(index, 1);
     steps.splice(destination, 0, item);
-    update("steps", steps);
-  };
+    onChange({ ...value, steps });
+  }, []);
   const addWorkStep = () =>
     update("steps", [
       ...value.steps,
       { id: crypto.randomUUID(), type: "work", exercise: UNASSIGNED_WORK_STEP_LABEL },
     ]);
-  const changeStepType = (index: number, nextType: StepType) => {
+  const changeStepType = useCallback((index: number, nextType: StepType) => {
+    const { value, onChange } = latest.current;
     const steps = [...value.steps];
     const base = { ...steps[index], type: nextType };
     steps[index] = nextType === "work" ? base : { ...base, exercise: undefined };
-    update("steps", steps);
-  };
-  const changeStepDuration = (index: number, raw: string) => {
+    onChange({ ...value, steps });
+  }, []);
+  const changeStepDuration = useCallback((index: number, raw: string) => {
+    const { value, onChange } = latest.current;
     const steps = [...value.steps];
     steps[index] = { ...steps[index], durationSeconds: raw ? Number(raw) : undefined };
-    update("steps", steps);
-  };
-  const removeStep = (index: number) =>
-    update("steps", value.steps.filter((_, i) => i !== index));
+    onChange({ ...value, steps });
+  }, []);
+  const removeStep = useCallback((index: number) => {
+    const { value, onChange } = latest.current;
+    onChange({ ...value, steps: value.steps.filter((_, i) => i !== index) });
+  }, []);
 
   const updateScore = (score: StructureBlockScore | null) => {
     if (value.id && onScoreChange) {
@@ -302,11 +318,10 @@ export function WorkoutStructureEditor({
             isFirst={idx === 0}
             isLast={idx === value.steps.length - 1}
             linking={linking}
-            onChangeType={(next) => changeStepType(idx, next)}
-            onChangeDuration={(raw) => changeStepDuration(idx, raw)}
-            onMoveUp={() => reorderStep(idx, -1)}
-            onMoveDown={() => reorderStep(idx, 1)}
-            onRemove={() => removeStep(idx)}
+            onChangeType={changeStepType}
+            onChangeDuration={changeStepDuration}
+            onMove={reorderStep}
+            onRemove={removeStep}
           />
         ))}
         <Button type="button" variant="outline" size="sm" onClick={addWorkStep}>
@@ -364,14 +379,13 @@ interface MovementRowProps {
   readonly isFirst: boolean;
   readonly isLast: boolean;
   readonly linking?: StepLinking;
-  readonly onChangeType: (next: StepType) => void;
-  readonly onChangeDuration: (raw: string) => void;
-  readonly onMoveUp: () => void;
-  readonly onMoveDown: () => void;
-  readonly onRemove: () => void;
+  readonly onChangeType: (index: number, next: StepType) => void;
+  readonly onChangeDuration: (index: number, raw: string) => void;
+  readonly onMove: (index: number, direction: -1 | 1) => void;
+  readonly onRemove: (index: number) => void;
 }
 
-function MovementRow({
+const MovementRow = memo(function MovementRow({
   step,
   index,
   blockType,
@@ -380,8 +394,7 @@ function MovementRow({
   linking,
   onChangeType,
   onChangeDuration,
-  onMoveUp,
-  onMoveDown,
+  onMove,
   onRemove,
 }: MovementRowProps) {
   const positionLabel = stepPositionLabel(blockType, index);
@@ -393,7 +406,7 @@ function MovementRow({
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
           {positionLabel}
         </span>
-        <Select value={step.type} onValueChange={(v) => onChangeType(v as StepType)}>
+        <Select value={step.type} onValueChange={(v) => onChangeType(index, v as StepType)}>
           <SelectTrigger className="h-8 w-[8.5rem]" aria-label={`${positionLabel} type`}>
             <SelectValue />
           </SelectTrigger>
@@ -410,7 +423,7 @@ function MovementRow({
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  onClick={onMoveUp}
+                  onClick={() => onMove(index, -1)}
                   disabled={isFirst}
                   aria-label={`Move ${positionLabel} earlier`}
                 >
@@ -428,7 +441,7 @@ function MovementRow({
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  onClick={onMoveDown}
+                  onClick={() => onMove(index, 1)}
                   disabled={isLast}
                   aria-label={`Move ${positionLabel} later`}
                 >
@@ -446,7 +459,7 @@ function MovementRow({
                   variant="ghost"
                   size="icon"
                   className="size-7"
-                  onClick={onRemove}
+                  onClick={() => onRemove(index)}
                   aria-label={`Remove ${positionLabel}`}
                 >
                   <X className="size-3.5" aria-hidden />
@@ -477,14 +490,14 @@ function MovementRow({
           min={0}
           placeholder="Sec"
           value={step.durationSeconds ?? ""}
-          onChange={(e) => onChangeDuration(e.target.value)}
+          onChange={(e) => onChangeDuration(index, e.target.value)}
           aria-label={`${positionLabel} duration in seconds`}
         />
         <span className="text-[11px] text-muted-foreground">optional</span>
       </div>
     </div>
   );
-}
+});
 
 function WorkStepBody({
   step,

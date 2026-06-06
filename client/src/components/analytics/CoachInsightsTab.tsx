@@ -6,6 +6,7 @@ import rehypeSanitize from "rehype-sanitize";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/hooks/useAuth";
 import { readAnalyticsSnapshot, useWriteAnalyticsSnapshot } from "@/lib/analyticsSnapshot";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -145,7 +146,7 @@ export function CoachInsightsTab() {
           if (showInitialSpinner) {
             return (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-center text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin" />
+                <LoadingSpinner iconClassName="h-6 w-6" />
                 <p className="text-sm">Reviewing your workouts, plan progress, and goal&hellip;</p>
               </div>
             );

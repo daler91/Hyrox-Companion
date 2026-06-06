@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Dumbbell, Loader2, Sparkles,Trophy } from "lucide-react";
+import { Dumbbell, Sparkles,Trophy } from "lucide-react";
 import { useMemo,useState } from "react";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api } from "@/lib/api";
@@ -122,7 +123,7 @@ export function PersonalRecordsTab({ dateParams }: PersonalRecordsTabProps) {
           if (isLoading) {
             return (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <LoadingSpinner iconClassName="h-6 w-6" />
               </div>
             );
           }

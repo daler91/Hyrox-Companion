@@ -524,22 +524,19 @@ export class WorkoutStorage {
     set: NormalizedSetCreateInput,
     adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
   ): Promise<ExerciseSet | undefined> {
-    // W10: the ownership check and the next-sort-order lookup are independent
-    // reads on the pool (`db`, not a transaction), so run them concurrently —
-    // one round-trip instead of two — before the INSERT. Each acquires its own
-    // pooled connection, so this is safe (unlike parallelizing within a `tx`).
-    const [owns, maxRows] = await Promise.all([
-      adapter.ownsContainer(context.id, context.userId),
-      db
-        .select({ maxOrder: sql<number | null>`max(${exerciseSets.sortOrder})` })
-        .from(exerciseSets)
-        .where(adapter.scopeWhere(context.id)),
-    ]);
+    // W10: after the ownership check, fold the next-sort-order lookup into the
+    // INSERT as a correlated subquery. That drops the separate MAX round-trip
+    // (one ownership read + one INSERT instead of three queries) and computes
+    // sortOrder atomically at insert time rather than read-then-write.
+    const owns = await adapter.ownsContainer(context.id, context.userId);
     if (!owns) return undefined;
-    const nextOrder = (maxRows[0]?.maxOrder ?? -1) + 1;
+    const baseValues = adapter.buildInsertValues(context.id, set, 0);
     const [created] = await db
       .insert(exerciseSets)
-      .values(adapter.buildInsertValues(context.id, set, nextOrder))
+      .values({
+        ...baseValues,
+        sortOrder: sql<number>`(select coalesce(max(${exerciseSets.sortOrder}), -1) + 1 from ${exerciseSets} where ${adapter.scopeWhere(context.id)})`,
+      })
       .returning();
     if (created) await this.syncStructureStepMirror(created);
     return created;

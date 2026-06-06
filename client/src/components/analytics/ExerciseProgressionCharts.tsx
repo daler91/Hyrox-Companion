@@ -1,7 +1,6 @@
 import {
   BarChart3,
   LineChart as LineChartIcon,
-  Loader2,
   Minus,
   TrendingDown,
   TrendingUp,
@@ -11,6 +10,7 @@ import { useMemo, useState } from "react";
 import { type ExerciseAnalyticDay,MiniBarChart } from "@/components/analytics/MiniBarChart";
 import { MiniLineChart } from "@/components/analytics/MiniLineChart";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 type TrendDirection = "up" | "down" | "flat";
 const FLAT: TrendDirection = "flat";
@@ -127,7 +127,7 @@ export function ExerciseProgressionCharts({
   if (analyticsLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
     );
   }

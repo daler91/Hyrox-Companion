@@ -34,11 +34,12 @@ interface RpeSelectorProps {
 }
 
 export function RpeSelector({ value, onChange, showLabel = true, compact = false }: Readonly<RpeSelectorProps>) {
-  // 28x28 (compact) or 32x32 (default). These remain below the 44x44 touch
-  // recommendation in compact mode by design — the parent layout decides
-  // density. Arrow-key navigation (via Radix RadioGroup) makes mis-tap less
-  // critical for keyboard users.
-  const buttonSize = compact ? "h-7 w-7 text-xs" : "h-8 w-8 text-sm";
+  // Default mode meets the 44x44 touch-target recommendation (h-11 w-11); the
+  // row uses flex-wrap so the ten buttons wrap on narrow screens rather than
+  // overflow. Compact mode (28x28) stays below it by design for dense layouts
+  // where the parent decides density; arrow-key navigation (via Radix
+  // RadioGroup) keeps it keyboard-friendly there (S9).
+  const buttonSize = compact ? "h-7 w-7 text-xs" : "h-11 w-11 text-sm";
 
   return (
     <fieldset className="space-y-2 border-0 m-0 p-0">

@@ -1,12 +1,13 @@
 import type { TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Dumbbell, Loader2, PieChart as PieChartIcon } from "lucide-react";
+import { Dumbbell, PieChart as PieChartIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
@@ -221,7 +222,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
     );
   }

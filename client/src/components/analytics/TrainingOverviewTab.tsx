@@ -1,4 +1,6 @@
-import { BarChart3, Loader2 } from "lucide-react";
+import { BarChart3 } from "lucide-react";
+
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
 import { OverviewStatsGrid } from "./training-overview/OverviewStatsGrid";
@@ -19,7 +21,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
     );
   }

@@ -21,6 +21,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { formatSecondsToClock, formatSecondsToMmSs } from "@/lib/statsUtils";
 import { cn } from "@/lib/utils";
 
@@ -123,7 +124,7 @@ export function RacePredictorTab() {
   if (query.isLoading && !data) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <LoadingSpinner iconClassName="h-6 w-6" />
       </div>
     );
   }

@@ -127,6 +127,8 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
               className="grid flex-1 gap-x-2"
               style={{ gridTemplateColumns: WEEK_GRID_TEMPLATE }}
               data-testid="workout-heatmap-grid"
+              role="img"
+              aria-label="Workout activity heatmap: each square is a day, shaded when a workout was logged, arranged by week."
             >
               {grid.map((week) => (
                 <div
