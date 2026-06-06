@@ -2,9 +2,9 @@
 
 ## Overview
 
-The fitai.coach backend is an Express 4 REST API running on Node.js with TypeScript. It serves both the JSON API (under `/api/v1/`) and the Vite-built SPA client. Key technologies:
+The fitai.coach backend is an Express 5 REST API running on Node.js with TypeScript. It serves both the JSON API (under `/api/v1/`) and the Vite-built SPA client. Key technologies:
 
-- **Express 4** -- HTTP framework
+- **Express 5** -- HTTP framework
 - **Drizzle ORM** with **node-postgres** (`pg`) -- primary database access
 - **pgvector** on a separate (or shared) Neon PostgreSQL instance -- vector/RAG storage
 - **pg-boss** -- PostgreSQL-backed job queue
@@ -407,10 +407,12 @@ Cron jobs run in-process on each app replica, but each job body is wrapped in a 
 `server/routeUtils.ts` provides shared utilities used across route modules:
 
 - `rateLimiter(category, max, windowMs)` -- per-route rate limiting factory
-- `validateBody(schema)` -- Zod-based request body validation middleware
+- `validateBody(schema)` / `validateQuery(schema)` / `validateParams(schema)` -- Zod-based validation middleware for the request body, query string, and route params. On success the parsed (coerced) value is written back with `Object.defineProperty`, because Express 5 exposes `req.query` as a read-only getter that a plain `req.query = ...` assignment throws on.
 - `asyncHandler(fn)` -- wraps async route handlers with error forwarding to `next(err)`
 - `formatValidationErrors(error)` -- formats Zod errors into safe client-facing messages
 - `calculateStreak(completedDates)` -- calculates consecutive workout day streaks
+
+> **Express 5 note:** under `@types/express` v5 the default `req.params` value type widened to `string | string[]`, so handlers that read a path parameter type their request generic -- e.g. `Request<{ id: string }>` -- to keep `req.params.id` a `string` (see `server/routes/coaching.ts` and `server/routes/plans.ts`).
 
 ### Static File Serving
 
@@ -418,7 +420,7 @@ In production (`server/static.ts`):
 
 - `/assets/*` is served with `Cache-Control: max-age=1y, immutable` (fingerprinted build artifacts)
 - Other static files are served with `max-age=0` and no index
-- The SPA fallback (`*`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags
+- The SPA fallback (`/{*splat}`) reads `index.html` once at startup and injects the per-request CSP nonce into all `<script>` tags. The named-wildcard form is required by Express 5's path-to-regexp v8 -- a bare `*` throws at route registration
 - The fallback route is rate-limited to 100 requests per 15-minute window
 
 ---

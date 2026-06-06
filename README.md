@@ -102,7 +102,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Backend
 
-- **Runtime**: Node.js >=20, Express 4, TypeScript 6
+- **Runtime**: Node.js >=20, Express 5, TypeScript 6
 - **Database**: PostgreSQL with Drizzle ORM
 - **Vector search**: pgvector, optionally on a separate `VECTOR_DATABASE_URL`
 - **Authentication**: Clerk JWT middleware with local dev bypass support
