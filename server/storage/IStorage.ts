@@ -2,6 +2,7 @@ import type { AiUsageStorage } from "./aiUsage";
 import type { AnalyticsStorage } from "./analytics";
 import type { AnalyticsResultsStorage } from "./analyticsResults";
 import type { CoachingStorage } from "./coaching";
+import type { ConsentStorage } from "./consent";
 import type { IdempotencyStorage } from "./idempotency";
 import type { MafTestStorage } from "./mafTests";
 import type { PlanStorage } from "./plans";
@@ -36,4 +37,5 @@ export interface IStorage {
   aiUsage: AiUsageStorage;
   push: PushStorage;
   mafTests: MafTestStorage;
+  consent: ConsentStorage;
 }

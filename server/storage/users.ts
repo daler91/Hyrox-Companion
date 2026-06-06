@@ -11,6 +11,7 @@ import {
   type InsertGarminConnection,
   type InsertStravaConnection,
   mafProfile,
+  rateLimitBuckets,
   type StravaConnection,
   stravaConnections,
   type UpdateUserPreferences,
@@ -18,7 +19,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, isNotNull, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -39,6 +40,20 @@ export class UserStorage {
   async deleteUser(id: string): Promise<boolean> {
     const result = await db.delete(users).where(eq(users.id, id));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Purge the user's rate-limit buckets on account deletion (S6). Their keys
+   * are `${category}:user:${id}` (server/routeUtils.ts) and are NOT FK-linked
+   * to `users`, so the deletion cascade can't reach them. `split_part` matches
+   * the id after `:user:` exactly — avoiding LIKE-wildcard pitfalls when a
+   * Clerk userId contains `_`.
+   */
+  async purgeRateLimitBucketsForUser(id: string): Promise<number> {
+    const result = await db
+      .delete(rateLimitBuckets)
+      .where(sql`split_part(${rateLimitBuckets.key}, ':user:', 2) = ${id}`);
+    return result.rowCount ?? 0;
   }
 
   private async upsertUserRow(userData: UpsertUser): Promise<User> {
