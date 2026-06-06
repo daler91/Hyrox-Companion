@@ -73,14 +73,15 @@ export function exercise(
 /**
  * Compact wrapper around the system under test: builds an overview from the
  * given restrictions (+ optional overview overrides such as `acwr`) and runs
- * the governor. Pass `currentDate: undefined` to exercise the
- * "default to today" branch.
+ * the governor pinned to `CURRENT_DATE`. Tests that need to exercise the
+ * SUT's own "default to today" path should call buildLoadGovernorSuggestions
+ * directly instead of going through this helper.
  */
 export function runGovernor(
   restrictions: TrainingLoadRestriction[],
   workouts: UpcomingWorkoutForLoad[],
   overrides: Partial<TrainingLoadOverview> = {},
-  currentDate: string | undefined = CURRENT_DATE,
+  currentDate: string = CURRENT_DATE,
 ): LoadGovernorSuggestion[] {
   return buildLoadGovernorSuggestions(summary(restrictions, overrides), workouts, currentDate);
 }

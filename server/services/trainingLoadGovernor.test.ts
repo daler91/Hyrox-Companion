@@ -1,12 +1,13 @@
 import type { WorkoutSuggestion } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
+import { buildLoadGovernorSuggestions } from "./trainingLoadGovernor";
 import {
-  CURRENT_DATE,
   dayAhead,
   exercise,
   restriction,
   runGovernor,
+  summary,
   workout,
 } from "./trainingLoadGovernor.testHelpers";
 import type { UpcomingWorkoutForLoad } from "./trainingLoadService";
@@ -277,11 +278,12 @@ describe("buildLoadGovernorSuggestions — date windows", () => {
   it("defaults the current date to today when omitted (past workouts ⇒ empty)", () => {
     // Only past workouts are passed, so the test is timezone-stable: the
     // function should derive today from the system clock and filter them out.
-    const result = runGovernor(
-      [restriction("posterior_chain_velocity_lock")],
+    // We call the SUT directly here (skipping the runGovernor helper, which
+    // has its own CURRENT_DATE default) so the omitted argument really does
+    // exercise buildLoadGovernorSuggestions's internal default-to-today path.
+    const result = buildLoadGovernorSuggestions(
+      summary([restriction("posterior_chain_velocity_lock")]),
       [workout({ id: "ancient", date: "1999-01-01", mainWorkout: "Hill repeats" })],
-      {},
-      undefined,
     );
     expect(result).toEqual([]);
   });
