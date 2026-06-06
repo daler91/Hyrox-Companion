@@ -190,7 +190,7 @@ const CANONICAL_AGE_SET = new Set<string>(CANONICAL_AGE_BANDS);
  */
 export function normalizeAgeGroup(raw: string | null | undefined): AgeBand | null {
   if (!raw) return null;
-  const m = raw.trim().match(/(\d{2})\s*-\s*(\d{2})/);
+  const m = /(\d{2})\s*-\s*(\d{2})/.exec(raw.trim());
   if (!m) return null;
   const band = `${m[1]}-${m[2]}`;
   return CANONICAL_AGE_SET.has(band) ? (band as AgeBand) : null;

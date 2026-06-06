@@ -11,8 +11,7 @@
  * Nothing here runs at build or request time — re-run manually after the CSV
  * changes: `pnpm data:race-benchmarks`.
  */
-import { createReadStream } from "node:fs";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createReadStream, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 

@@ -69,7 +69,7 @@ describe("GET /api/v1/race-prediction (stored-first)", () => {
   });
 
   it("returns the stored prediction (flagged stale) without regenerating", async () => {
-    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue({ // NOSONAR partial mock of the full AnalyticsResult row; only these fields are read here
       payload: STORED_PAYLOAD,
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       lastWorkoutDateAtGeneration: "2026-06-01",
@@ -86,7 +86,7 @@ describe("GET /api/v1/race-prediction (stored-first)", () => {
   });
 
   it("regenerates and persists when ?refresh=1 (never reads the stored row)", async () => {
-    vi.mocked(regenerateAndStoreRacePrediction).mockResolvedValue({
+    vi.mocked(regenerateAndStoreRacePrediction).mockResolvedValue({ // NOSONAR partial mock of the regeneration result
       ...STORED_PAYLOAD,
       totalFinishSeconds: 3900,
       generatedAt: "2026-06-05T00:00:00.000Z",
@@ -103,7 +103,7 @@ describe("GET /api/v1/race-prediction (stored-first)", () => {
 
   it("regenerates when no stored prediction exists yet", async () => {
     vi.mocked(storage.analyticsResults.get).mockResolvedValue(undefined);
-    vi.mocked(regenerateAndStoreRacePrediction).mockResolvedValue({
+    vi.mocked(regenerateAndStoreRacePrediction).mockResolvedValue({ // NOSONAR partial mock of the regeneration result
       ...STORED_PAYLOAD,
       totalFinishSeconds: 4100,
       generatedAt: "2026-06-05T00:00:00.000Z",

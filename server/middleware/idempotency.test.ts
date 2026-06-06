@@ -48,7 +48,8 @@ function makeRes() {
     return this;
   });
   const onFn = vi.fn(function (this: Response, event: string, handler: () => void) {
-    (listeners[event] ??= []).push(handler);
+    listeners[event] ??= [];
+    listeners[event].push(handler);
     return this;
   });
   const res = {

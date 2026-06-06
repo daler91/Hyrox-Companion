@@ -71,11 +71,11 @@ describe("checkSafeOutboundUrl (W2)", () => {
 });
 
 describe("isPrivateAddress", () => {
-  it.each(["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.0.1", "169.254.169.254", "::1", "fc00::1", "fe80::1"])(
+  it.each(["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.0.1", "169.254.169.254", "::1", "fc00::1", "fe80::1"])( // NOSONAR SSRF guard test needs literal private/link-local IPs
     "%s → private",
     (addr) => expect(isPrivateAddress(addr)).toBe(true),
   );
-  it.each(["8.8.8.8", "203.0.113.42", "2001:db8::1"])("%s → public", (addr) =>
+  it.each(["8.8.8.8", "203.0.113.42", "2001:db8::1"])("%s → public", (addr) => // NOSONAR SSRF guard test needs literal public IPs
     expect(isPrivateAddress(addr)).toBe(false),
   );
 });
@@ -83,19 +83,19 @@ describe("isPrivateAddress", () => {
 describe("assertResolvedHostIsPublic (S2 / W2 follow-up)", () => {
   it("rejects a hostname that resolves to a private IPv4", async () => {
     await expect(
-      assertResolvedHostIsPublic("https://ai.internal.corp", { resolver: stubResolver(["10.0.0.5"]) }),
+      assertResolvedHostIsPublic("https://ai.internal.corp", { resolver: stubResolver(["10.0.0.5"]) }), // NOSONAR SSRF guard test fixture
     ).rejects.toThrow(/private\/loopback/);
   });
 
   it("rejects a hostname that resolves to a private IPv6", async () => {
     await expect(
-      assertResolvedHostIsPublic("https://ai.internal.corp", { resolver: stubResolver([], ["fd00::1"]) }),
+      assertResolvedHostIsPublic("https://ai.internal.corp", { resolver: stubResolver([], ["fd00::1"]) }), // NOSONAR SSRF guard test fixture
     ).rejects.toThrow(/private\/loopback/);
   });
 
   it("allows a hostname that resolves only to public addresses", async () => {
     await expect(
-      assertResolvedHostIsPublic("https://api.example.com", { resolver: stubResolver(["93.184.216.34"]) }),
+      assertResolvedHostIsPublic("https://api.example.com", { resolver: stubResolver(["93.184.216.34"]) }), // NOSONAR SSRF guard test fixture
     ).resolves.toBeUndefined();
   });
 

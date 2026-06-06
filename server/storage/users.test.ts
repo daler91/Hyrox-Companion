@@ -218,16 +218,16 @@ describe('UserStorage', () => {
         }),
       });
       vi.mocked(db.select)
-        .mockReturnValueOnce({ from: getUserFrom } as never)
-        .mockReturnValueOnce({ from: snapshotFrom } as never);
+        .mockReturnValueOnce({ from: getUserFrom } as never) // NOSONAR partial Drizzle query-builder mock
+        .mockReturnValueOnce({ from: snapshotFrom } as never); // NOSONAR partial Drizzle query-builder mock
 
       const returningMock = vi.fn().mockResolvedValue([mafUser]);
-      vi.mocked(db.update).mockReturnValue({
+      vi.mocked(db.update).mockReturnValue({ // NOSONAR partial Drizzle query-builder mock
         set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ returning: returningMock }) }),
       } as never);
 
       const insertValues = vi.fn().mockResolvedValue(undefined);
-      vi.mocked(db.insert).mockReturnValue({ values: insertValues } as never);
+      vi.mocked(db.insert).mockReturnValue({ values: insertValues } as never); // NOSONAR partial Drizzle query-builder mock
       return insertValues;
     }
 
