@@ -206,6 +206,25 @@ describe("generateRacePrediction — transition & ranking", () => {
     expect(result.percentile?.basis).toBe("age_group");
     expect(result.percentile?.cohortLabel).toContain("30-34");
   });
+
+  it("derives the cohort from the general age field for non-MAF athletes (W17)", async () => {
+    mockUser({ age: 40, mafAge: null });
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.ageGroup).toBe("40-44");
+    expect(result.ageGroupAssumed).toBe(false);
+  });
+
+  it("prefers the general age field over MAF age (W17)", async () => {
+    mockUser({ age: 40, mafAge: 32 });
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.ageGroup).toBe("40-44");
+  });
 });
 
 describe("generateRacePrediction — AI clamp guardrail", () => {

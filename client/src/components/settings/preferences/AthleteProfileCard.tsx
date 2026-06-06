@@ -1,19 +1,26 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 import { PreferenceSelectRow } from "./PreferenceRows";
 
 interface AthleteProfileCardProps {
   readonly division: string;
   readonly gender: string;
+  /** Stringified age input ("" when unset); omit with onAgeChange to hide the row. */
+  readonly age?: string;
   readonly onDivisionChange: (value: string) => void;
   readonly onGenderChange: (value: string) => void;
+  readonly onAgeChange?: (value: string) => void;
 }
 
 export function AthleteProfileCard({
   division,
   gender,
+  age,
   onDivisionChange,
   onGenderChange,
+  onAgeChange,
 }: Readonly<AthleteProfileCardProps>) {
   return (
     <Card>
@@ -51,6 +58,28 @@ export function AthleteProfileCard({
           ariaLabel="Select gender"
           triggerClassName="w-44"
         />
+        {onAgeChange ? (
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="athlete-age">Age</Label>
+              <p className="text-sm text-muted-foreground">
+                Sets your Race Predictor age cohort for more accurate benchmark times.
+              </p>
+            </div>
+            <Input
+              id="athlete-age"
+              type="number"
+              inputMode="numeric"
+              min={13}
+              max={100}
+              value={age ?? ""}
+              onChange={(event) => onAgeChange(event.target.value)}
+              className="w-24"
+              data-testid="input-athlete-age"
+              aria-label="Your age"
+            />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

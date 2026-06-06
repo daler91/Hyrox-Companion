@@ -42,6 +42,8 @@ export interface UserPreferences {
   division?: string;
   /** HYROX gender category ("male" | "female" | "prefer_not_to_say") or null when unset. */
   gender?: string | null;
+  /** General athlete age (13–100) — picks the Race Predictor age cohort for all athletes (W17). */
+  age?: number | null;
   mafAge?: number | null;
   mafInjuryIllnessMedication?: boolean | null;
   mafConsistency?: "low" | "moderate" | "high" | null;

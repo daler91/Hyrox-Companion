@@ -276,4 +276,33 @@ describe("plan-day exercise routes", () => {
       "test_user_id",
     );
   });
+
+  it("rejects structure writes with 403 when the EMOM builder is disabled (W20)", async () => {
+    const { replacePlanDayStructure } = await import("../../services/workoutService");
+    const validBlock = {
+      sectionType: "warmup",
+      formatType: "steady",
+      steps: [{ stepNumber: 1, stepType: "work", exerciseName: "Burpees" }],
+    };
+
+    const response = await request(app)
+      .patch("/api/v1/plans/days/day-1/structure")
+      .send({ structureBlocks: [validBlock] });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({ code: "EMOM_BUILDER_DISABLED" });
+    expect(replacePlanDayStructure).not.toHaveBeenCalled();
+  });
+
+  it("allows empty structure writes regardless of the EMOM flag (W20)", async () => {
+    const { replacePlanDayStructure } = await import("../../services/workoutService");
+    vi.mocked(replacePlanDayStructure).mockResolvedValue(emptyPlanDayRowsResponse);
+
+    const response = await request(app)
+      .patch("/api/v1/plans/days/day-1/structure")
+      .send({ structureBlocks: [] });
+
+    expect(response.status).toBe(200);
+    expect(replacePlanDayStructure).toHaveBeenCalledWith("day-1", "test_user_id", []);
+  });
 });

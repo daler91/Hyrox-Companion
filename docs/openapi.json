@@ -624,6 +624,12 @@
               null
             ]
           },
+          "age": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 13,
+            "maximum": 100
+          },
           "mafAge": {
             "type": "integer",
             "nullable": true,

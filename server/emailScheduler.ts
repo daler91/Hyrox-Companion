@@ -5,6 +5,7 @@ import { logger } from "./logger";
 import { sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
+import { calculatePersonalRecords, countPersonalRecordsInRange } from "./services/analyticsService";
 import type { IStorage } from "./storage";
 import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek } from "./timezone";
 
@@ -33,16 +34,24 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const weekEndStr = addDaysLocal(todayStr, -1);
   const weekStartStr = addDaysLocal(weekEndStr, -6);
 
-  const [stats, timeline] = await Promise.all([
+  const [stats, timeline, allSets] = await Promise.all([
     storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr),
     storage.timeline.getTimeline(user.id),
+    storage.analytics.getAllExerciseSetsWithDates(user.id),
   ]);
   const completedDates = new Set(
     timeline
       .filter(e => e.status === "completed" && e.date)
       .map(e => e.date)
   );
-  const streak = calculateStreak(completedDates);
+  const streak = calculateStreak(completedDates, tz);
+  // "PRs This Week" = all-time bests first achieved within last week's window
+  // (W18). Computed over the user's full history so only true records count.
+  const prsThisWeek = countPersonalRecordsInRange(
+    calculatePersonalRecords(allSets),
+    weekStartStr,
+    weekEndStr,
+  );
 
   const total = stats.completedCount + stats.missedCount + stats.skippedCount;
   const summaryData: WeeklySummaryData = {
@@ -52,7 +61,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     skippedCount: stats.skippedCount,
     completionRate: total > 0 ? Math.round((stats.completedCount / total) * 100) : 0,
     currentStreak: streak,
-    prsThisWeek: 0,
+    prsThisWeek,
     totalDuration: stats.totalDuration,
     weekStartDate: weekStartStr,
     weekEndDate: weekEndStr,

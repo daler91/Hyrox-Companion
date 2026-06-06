@@ -53,6 +53,7 @@ function serializePreferences(user: {
   onboardingCompleted: boolean | null;
   division: string | null;
   gender: string | null;
+  age: number | null;
   mafAge: number | null;
   mafInjuryIllnessMedication: boolean | null;
   mafConsistency: string | null;
@@ -81,6 +82,7 @@ function serializePreferences(user: {
     onboardingCompleted: user.onboardingCompleted ?? false,
     division: user.division ?? "open",
     gender: user.gender ?? null,
+    age: user.age ?? null,
     mafAge: user.mafAge ?? null,
     mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
     mafConsistency: user.mafConsistency ?? null,

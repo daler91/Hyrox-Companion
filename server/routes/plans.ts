@@ -3,6 +3,7 @@ import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
+import { env } from "../env";
 import { AppError, classifyAiError, ErrorCode } from "../errors";
 import { reqLogger } from "../logger";
 import { sendJobNoRetry } from "../queue";
@@ -317,6 +318,16 @@ protectedPatch(
   "/api/v1/plans/days/:dayId/structure",
   { limiter: rateLimiter("planDaySet", 60), middleware: [validateBody(planDayStructureBodySchema)] },
   async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof planDayStructureBodySchema>>, res: Response) => {
+    // W20: the structured-block / EMOM builder is feature-flagged. The flag was
+    // UI-only — the server persisted structureBlocks regardless, so a client
+    // with the flag forced on (or a direct API call) could write structured
+    // blocks while the feature is disabled. Enforce it server-side.
+    if (env.EMOM_BUILDER_ENABLED !== "true" && (req.body.structureBlocks?.length ?? 0) > 0) {
+      return res.status(403).json({
+        error: "The structured workout builder is not enabled.",
+        code: "EMOM_BUILDER_DISABLED",
+      });
+    }
     const result = await replacePlanDayStructure(
       req.params.dayId,
       getUserId(req),

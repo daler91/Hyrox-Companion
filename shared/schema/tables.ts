@@ -57,6 +57,11 @@ export const users = pgTable("users", {
   // answered, treated as "prefer_not_to_say" by the predictor).
   division: varchar("division", { length: 16 }).default("open"),
   gender: varchar("gender", { length: 16 }),
+  // General athlete age, collected for every user (profile/onboarding) and used
+  // by the Race Predictor to pick an age cohort. Distinct from `mafAge`, which
+  // is only set during MAF onboarding — so balanced-style athletes previously
+  // had no age signal and fell back to the all-ages cohort (review W17).
+  age: integer("age"),
   mafAge: integer("maf_age"),
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
   mafConsistency: text("maf_consistency"),

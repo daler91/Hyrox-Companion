@@ -35,6 +35,8 @@ export const updateUserPreferencesSchema = z.object({
   // Athlete competition profile for the Race Predictor.
   division: z.enum(["open", "pro"]).optional(),
   gender: z.enum(["male", "female", "prefer_not_to_say"]).nullable().optional(),
+  // General age cohort signal for the Race Predictor (W17), independent of MAF.
+  age: z.number().int().min(13).max(100).nullable().optional(),
   mafAge: z.number().int().min(16).max(99).nullable().optional(),
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),

@@ -122,6 +122,26 @@ export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record
   return prs;
 }
 
+/**
+ * Count personal records whose all-time best was achieved within
+ * [fromStr, toStr] (inclusive, YYYY-MM-DD). Powers the weekly-summary email's
+ * "PRs This Week" stat (W18). Counts per metric (maxWeight / maxDistance /
+ * bestTime / estimated1RM), matching findPersonalRecordAchievements' grain.
+ */
+export function countPersonalRecordsInRange(
+  prs: Record<string, PersonalRecord>,
+  fromStr: string,
+  toStr: string,
+): number {
+  let count = 0;
+  for (const pr of Object.values(prs)) {
+    for (const value of [pr.maxWeight, pr.maxDistance, pr.bestTime, pr.estimated1RM]) {
+      if (value && value.date >= fromStr && value.date <= toStr) count++;
+    }
+  }
+  return count;
+}
+
 interface DayAnalytics {
   date: string;
   totalVolume: number;
@@ -456,6 +476,7 @@ export function calculateTrainingOverview(
     exerciseSets?: ExerciseSetWithDate[];
     currentDate?: string;
   },
+  userTimezone = "UTC",
 ): TrainingOverview {
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
@@ -522,7 +543,9 @@ export function calculateTrainingOverview(
     previousStats,
     // Matches the AI context definition: consecutive completed calendar dates
     // ending today or yesterday count; rest days and earlier gaps break it.
-    currentStreak: calculateStreak(completedDates),
+    // Anchored to the athlete's local calendar so far-offset users aren't
+    // mis-counted (W19).
+    currentStreak: calculateStreak(completedDates, userTimezone),
     weeklyCompletedWorkouts,
     weeklyGoal,
     trainingLoad,

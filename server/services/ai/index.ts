@@ -78,7 +78,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     completedDates,
   } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
-  const currentStreak = calculateStreak(completedDates);
+  const currentStreak = calculateStreak(completedDates, user?.userTimezone);
   const recentWorkouts = collectRecentWorkouts(timeline);
   const structuredExerciseStats = getStructuredExerciseStats(timeline);
 

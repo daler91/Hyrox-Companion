@@ -114,12 +114,14 @@ describe("Settings MAF style switch", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
 
     expect(await screen.findByRole("heading", { name: "Complete MAF setup" })).toBeInTheDocument();
-    expect(screen.getByText("Age")).toBeInTheDocument();
+    // Target the MAF age input directly: the Race-profile card also renders an
+    // "Age" label (W17), so a bare getByText("Age") is ambiguous here.
+    expect(screen.getByTestId("maf-age-input")).toBeInTheDocument();
     expect(screen.getByText("Consistency")).toBeInTheDocument();
     expect(screen.getByText("Trend")).toBeInTheDocument();
     expect(screen.getByText("HR data available")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Age"), { target: { value: "39" } });
+    fireEvent.change(screen.getByTestId("maf-age-input"), { target: { value: "39" } });
     await chooseSelectOption("Consistency", "Moderate");
     await chooseSelectOption("Trend", "Flat");
     await chooseSelectOption("HR data available", "Yes");

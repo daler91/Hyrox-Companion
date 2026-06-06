@@ -30,6 +30,7 @@ export function mockEnabledUser(storage: StorageMock) {
     onboardingCompleted: false,
     division: "open",
     gender: null,
+    age: null,
     mafAge: null,
     mafInjuryIllnessMedication: null,
     mafConsistency: null,
