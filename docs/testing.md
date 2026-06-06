@@ -28,12 +28,12 @@ The project follows a testing pyramid with three layers:
 
 ### Test counts (approximate)
 
-| Layer | Count | Location |
-|-------|-------|----------|
-| Unit/component/route tests (Vitest) | 251 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
-| Integration tests | 2 files | `server/routes/tests/*.integration.test.ts` |
-| Smoke tests | 1 file | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback |
-| Cypress E2E specs | 12 files | `cypress/e2e/*.cy.ts` |
+| Layer                               | Count     | Location                                                                                                              |
+| ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| Unit/component/route tests (Vitest) | 262 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
+| Integration tests                   | 2 files   | `server/routes/tests/*.integration.test.ts`                                                                           |
+| Smoke tests                         | 1 file    | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback       |
+| Cypress E2E specs                   | 12 files  | `cypress/e2e/*.cy.ts`                                                                                                 |
 
 The exact Vitest assertion count changes frequently as review-fix branches land.
 Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current total test-file count, and add `-g "!*.integration.test.ts" -g "!*.smoke.test.ts"` when you need the unit/component/route count.
@@ -66,10 +66,10 @@ exclude: ['**/*.integration.test.ts', ...] // Integration tests run separately
 
 **Path aliases** mirror the Vite dev config:
 
-| Alias | Resolves to |
-|-------|-------------|
-| `@` | `client/src` |
-| `@shared` | `shared` |
+| Alias     | Resolves to  |
+| --------- | ------------ |
+| `@`       | `client/src` |
+| `@shared` | `shared`     |
 
 **Setup file** (`vitest.setup.ts`):
 
@@ -87,10 +87,10 @@ Integration tests use a **separate Vitest config** to run against a real databas
 
 ```ts
 // Key differences from unit config:
-include: ['**/*.integration.test.ts']  // Only integration test files
-environment: 'node'                     // No jsdom -- server-side only
-setupFiles: ['./vitest.integration.setup.ts']
-fileParallelism: false                  // Sequential execution to avoid DB conflicts
+include: ["**/*.integration.test.ts"]; // Only integration test files
+environment: "node"; // No jsdom -- server-side only
+setupFiles: ["./vitest.integration.setup.ts"];
+fileParallelism: false; // Sequential execution to avoid DB conflicts
 ```
 
 The integration setup file (`vitest.integration.setup.ts`) deletes Clerk env vars so the app falls back to dev auth bypass, and falls back to a dummy `DATABASE_URL` when none is provided by CI.
@@ -117,6 +117,22 @@ describe("calculatePersonalRecords", () => {
   it("tracks maxWeight PR", () => { ... });
 });
 ```
+
+#### Shared fixtures across sibling suites
+
+When several suites need the same large shape (the ~30-field `ExerciseSet` row or
+the `TimelineEntry` shape), define the factory **once** in a shared
+`testFixtures.ts` module and import it, rather than copy-pasting the builder into
+each `*.test.ts`. For example, `server/services/ai/testFixtures.ts` exports
+`makeExerciseSet` and `makeTimelineEntry`, consumed by both `trainingStats.test.ts`
+and `coachingInsights.test.ts`:
+
+```ts
+import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
+```
+
+Besides keeping the builders in one place, this avoids tripping SonarCloud's
+duplication gate (see [SonarCloud Quality Gate](#sonarcloud-quality-gate)).
 
 ### Schema validation tests
 
@@ -247,9 +263,9 @@ Integration tests run against a **real PostgreSQL database** (pgvector/pgvector:
 
 **Integration test files:**
 
-| File | Purpose |
-|------|---------|
-| `server/routes/tests/api.integration.test.ts` | Tests plans, preferences, timeline, and workout CRUD against a real database |
+| File                                                     | Purpose                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `server/routes/tests/api.integration.test.ts`            | Tests plans, preferences, timeline, and workout CRUD against a real database                |
 | `server/routes/tests/post-migration.integration.test.ts` | Verifies database schema correctness after migrations (used in the post-migration workflow) |
 
 ---
@@ -259,33 +275,33 @@ Integration tests run against a **real PostgreSQL database** (pgvector/pgvector:
 ### Configuration (`cypress.config.ts`)
 
 ```ts
-projectId: "dy8p9y"              // Cypress Cloud project for recording/parallelism
-baseUrl: "http://localhost:5000"  // Local dev server
-specPattern: "cypress/e2e/**/*.cy.ts"
-supportFile: "cypress/support/e2e.ts"
-video: true
-screenshotOnRunFailure: true
-viewportWidth: 1280
-viewportHeight: 720
-defaultCommandTimeout: 10000      // 10 seconds
+projectId: "dy8p9y"; // Cypress Cloud project for recording/parallelism
+baseUrl: "http://localhost:5000"; // Local dev server
+specPattern: "cypress/e2e/**/*.cy.ts";
+supportFile: "cypress/support/e2e.ts";
+video: true;
+screenshotOnRunFailure: true;
+viewportWidth: 1280;
+viewportHeight: 720;
+defaultCommandTimeout: 10000; // 10 seconds
 ```
 
 ### E2E spec files
 
-| Spec file | Coverage area |
-|-----------|---------------|
-| `cypress/e2e/analytics.cy.ts` | Analytics dashboard |
-| `cypress/e2e/api-validation.cy.ts` | API input validation |
-| `cypress/e2e/coach-chat.cy.ts` | Coach chat flow |
-| `cypress/e2e/emom-rollout-config.cy.ts` | EMOM rollout configuration |
-| `cypress/e2e/landing.cy.ts` | Landing/marketing page |
-| `cypress/e2e/log-workout.cy.ts` | Workout logging form |
-| `cypress/e2e/log-workout-submission.cy.ts` | Workout form submission |
-| `cypress/e2e/navigation.cy.ts` | Sidebar navigation, routing, 404 |
-| `cypress/e2e/onboarding.cy.ts` | Onboarding flow |
-| `cypress/e2e/plan-generation.cy.ts` | AI plan generation flow |
-| `cypress/e2e/settings.cy.ts` | Settings page |
-| `cypress/e2e/timeline.cy.ts` | Timeline view |
+| Spec file                                  | Coverage area                    |
+| ------------------------------------------ | -------------------------------- |
+| `cypress/e2e/analytics.cy.ts`              | Analytics dashboard              |
+| `cypress/e2e/api-validation.cy.ts`         | API input validation             |
+| `cypress/e2e/coach-chat.cy.ts`             | Coach chat flow                  |
+| `cypress/e2e/emom-rollout-config.cy.ts`    | EMOM rollout configuration       |
+| `cypress/e2e/landing.cy.ts`                | Landing/marketing page           |
+| `cypress/e2e/log-workout.cy.ts`            | Workout logging form             |
+| `cypress/e2e/log-workout-submission.cy.ts` | Workout form submission          |
+| `cypress/e2e/navigation.cy.ts`             | Sidebar navigation, routing, 404 |
+| `cypress/e2e/onboarding.cy.ts`             | Onboarding flow                  |
+| `cypress/e2e/plan-generation.cy.ts`        | AI plan generation flow          |
+| `cypress/e2e/settings.cy.ts`               | Settings page                    |
+| `cypress/e2e/timeline.cy.ts`               | Timeline view                    |
 
 ### Support files
 
@@ -428,20 +444,47 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 ---
 
+## SonarCloud Quality Gate
+
+Pull requests are analysed by **SonarQube Cloud** (project key
+`daler91_Hyrox-Companion`), configured via `sonar-project.properties`. The gate
+runs on the PR diff ("new code") and reports back as the **SonarCloud Code
+Analysis** check. These conditions most often affect test-only PRs:
+
+- **Duplication on New Code ≤ 3%.** Copy-pasting a large fixture factory (for
+  example the ~30-field `ExerciseSet` or `TimelineEntry` builder) into multiple
+  sibling `*.test.ts` files trips this gate. Extract the builder into a single
+  shared module instead — see [Shared fixtures](#shared-fixtures-across-sibling-suites)
+  and `server/services/ai/testFixtures.ts`.
+- **No commented-out code (`S125`).** Keep explanatory comments in prose.
+  Comments that read as code — method chains like `select().from().where()`, or
+  `last3 = [8, 8, 8]` — can be flagged as commented-out code; describe the intent
+  instead of pasting a snippet.
+- **Coverage on New Code** and **Security Hotspots reviewed.** New production code
+  should ship with tests, and any flagged hotspots must be triaged.
+
+Test files are declared via `sonar.test.inclusions=**/*.test.ts,**/*.test.tsx`, so
+test code is analysed under the test profile and not counted toward production
+coverage. Drizzle SQL migrations and generated artifacts are excluded. A failing
+gate posts a "Quality Gate failed" comment listing the failed conditions; a
+passing gate may still list non-blocking new issues worth cleaning up.
+
+---
+
 ## Code Review Skill Profiles
 
 The `.claude/commands/review/` directory contains structured code-review prompts ("skill profiles") that frame a walkthrough of the codebase from a specific role's perspective. They complement automated tests by surfacing issues that linters and unit tests miss — architectural drift, UX regressions, privacy gaps, and so on.
 
-| Profile | File | Role |
-|---|---|---|
-| `security` | `.claude/commands/review/security.md` | Senior security auditor — vulnerabilities, exposed secrets, auth gaps |
-| `privacy` | `.claude/commands/review/privacy.md` | Data privacy officer — collection, storage, transmission, retention, compliance |
-| `ux` | `.claude/commands/review/ux.md` | UX / accessibility expert — usability, flow, responsiveness, WCAG compliance |
-| `performance` | `.claude/commands/review/performance.md` | Performance engineer — bottlenecks, memory leaks, optimization opportunities |
-| `business` | `.claude/commands/review/business.md` | Business analyst — requirements, logic, business-value alignment |
-| `qa` | `.claude/commands/review/qa.md` | QA engineer — edge cases, race conditions, failure modes |
-| `devops` | `.claude/commands/review/devops.md` | DevOps engineer — deployment readiness, error handling, logging, infra |
-| `all` | `.claude/commands/review/all.md` | Runs every profile and produces a unified report |
+| Profile       | File                                     | Role                                                                            |
+| ------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `security`    | `.claude/commands/review/security.md`    | Senior security auditor — vulnerabilities, exposed secrets, auth gaps           |
+| `privacy`     | `.claude/commands/review/privacy.md`     | Data privacy officer — collection, storage, transmission, retention, compliance |
+| `ux`          | `.claude/commands/review/ux.md`          | UX / accessibility expert — usability, flow, responsiveness, WCAG compliance    |
+| `performance` | `.claude/commands/review/performance.md` | Performance engineer — bottlenecks, memory leaks, optimization opportunities    |
+| `business`    | `.claude/commands/review/business.md`    | Business analyst — requirements, logic, business-value alignment                |
+| `qa`          | `.claude/commands/review/qa.md`          | QA engineer — edge cases, race conditions, failure modes                        |
+| `devops`      | `.claude/commands/review/devops.md`      | DevOps engineer — deployment readiness, error handling, logging, infra          |
+| `all`         | `.claude/commands/review/all.md`         | Runs every profile and produces a unified report                                |
 
 Invoke a profile inside Claude Code with `/review:<profile>` (for example, `/review:security` or `/review:all`). Each profile defines the review scope, the output format, and the severity bands — so repeated runs produce comparable reports.
 
@@ -451,13 +494,13 @@ Invoke a profile inside Claude Code with `/review:<profile>` (for example, `/rev
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm test` | Run all unit tests once (`vitest run`) |
-| `pnpm test:watch` | Run unit tests in watch mode (`vitest`) |
-| `pnpm exec vitest run --config vitest.integration.config.ts` | Run integration tests (requires a running PostgreSQL database) |
-| `pnpm exec cypress open` | Open Cypress interactive runner (requires the app running on port 5000) |
-| `pnpm exec cypress run` | Run Cypress tests headlessly |
+| Command                                                      | Description                                                             |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `pnpm test`                                                  | Run all unit tests once (`vitest run`)                                  |
+| `pnpm test:watch`                                            | Run unit tests in watch mode (`vitest`)                                 |
+| `pnpm exec vitest run --config vitest.integration.config.ts` | Run integration tests (requires a running PostgreSQL database)          |
+| `pnpm exec cypress open`                                     | Open Cypress interactive runner (requires the app running on port 5000) |
+| `pnpm exec cypress run`                                      | Run Cypress tests headlessly                                            |
 
 ### Coverage reporting
 
@@ -606,6 +649,18 @@ project-root/
       ragService.test.ts             # RAG service tests
       stravaMapper.test.ts           # Strava data mapping tests
       workoutService.test.ts         # Workout CRUD tests
+      ai/
+        coachingInsights.test.ts     # RPE trend, plan phase, station gaps, progression
+        trainingStats.test.ts        # Training-context stats aggregation
+        mafTrend.test.ts             # MAF trend summary
+        testFixtures.ts              # Shared makeExerciseSet / makeTimelineEntry factories
+      racePrediction/
+        featureBuilder.test.ts       # Race-prediction feature extraction
+        racePredictionService.test.ts # End-to-end prediction service
+        ranking.test.ts              # Cohort percentile ranking
+      workoutService/
+        structure.test.ts            # Workout structure helpers (pure + guard branches)
+        assignWorkoutPlanDay.test.ts # Plan-day linking + adherence
     storage/
       __tests__/
         plans.test.ts                # Plan storage tests

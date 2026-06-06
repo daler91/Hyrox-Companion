@@ -33,12 +33,12 @@ See [`docs/env-reference.md`](docs/env-reference.md) for the full environment-va
 
 Run these locally before pushing; they also run in CI:
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm check` | TypeScript type checking |
-| `pnpm test` | Vitest unit/component/route suite (includes `jest-axe` accessibility checks) |
-| `pnpm lint` | ESLint |
-| `pnpm format:check` | Prettier formatting check (use `pnpm format` to fix) |
+| Command             | Purpose                                                                      |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `pnpm check`        | TypeScript type checking                                                     |
+| `pnpm test`         | Vitest unit/component/route suite (includes `jest-axe` accessibility checks) |
+| `pnpm lint`         | ESLint                                                                       |
+| `pnpm format:check` | Prettier formatting check (use `pnpm format` to fix)                         |
 
 Useful additional suites when relevant to your change:
 
@@ -46,8 +46,13 @@ Useful additional suites when relevant to your change:
 - `pnpm exec vitest run --config vitest.integration.config.ts` — integration tests (require PostgreSQL).
 - `pnpm exec cypress run` — end-to-end tests.
 
+Pull requests are also gated by **SonarQube Cloud**: keep new-code duplication under
+3% (extract shared test fixtures into a `testFixtures.ts` module rather than
+copy-pasting large factory objects across suites) and avoid commented-out code.
+
 See [`docs/testing.md`](docs/testing.md) for the full testing guide, including the local
-database requirements and Cypress conventions.
+database requirements, the [SonarCloud quality gate](docs/testing.md#sonarcloud-quality-gate),
+and Cypress conventions.
 
 ## Code style
 
