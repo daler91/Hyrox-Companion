@@ -162,7 +162,7 @@ export function RacePredictorTab() {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Timer className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -175,16 +175,28 @@ export function RacePredictorTab() {
                 stations logged
               </CardDescription>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={refresh}
-              disabled={isRefreshing}
-              aria-label="Refresh prediction"
-              data-testid="race-prediction-refresh"
-            >
-              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-            </Button>
+            <div className="ml-auto flex flex-col items-end gap-1">
+              <Button
+                variant="outline"
+                onClick={refresh}
+                disabled={isRefreshing}
+                aria-label="Refresh prediction"
+                data-testid="race-prediction-refresh"
+              >
+                {isRefreshing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Regenerating…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Regenerate
+                  </>
+                )}
+              </Button>
+              <LastUpdatedNote value={data.generatedAt} stale={data.stale} className="text-right" />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -230,7 +242,6 @@ export function RacePredictorTab() {
               for division-correct loads.
             </p>
           )}
-          <LastUpdatedNote value={data.generatedAt} stale={data.stale} className="border-t pt-3" />
         </CardContent>
       </Card>
 

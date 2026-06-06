@@ -96,42 +96,45 @@ export function CoachInsightsTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <CardTitle as="h2">Coach Insights</CardTitle>
           </div>
-          <Button
-            variant={hasInsights ? "outline" : "default"}
-            onClick={handleGenerateInsights}
-            disabled={isGenerating || !userId}
-            data-testid="button-generate-coach-insights"
-          >
-            {(() => {
-              if (isGenerating) {
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <Button
+              variant={hasInsights ? "outline" : "default"}
+              onClick={handleGenerateInsights}
+              disabled={isGenerating || !userId}
+              data-testid="button-generate-coach-insights"
+            >
+              {(() => {
+                if (isGenerating) {
+                  return (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing…
+                    </>
+                  );
+                }
+                if (hasInsights) {
+                  return (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Regenerate
+                    </>
+                  );
+                }
                 return (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing…
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate insights
                   </>
                 );
-              }
-              if (hasInsights) {
-                return (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Regenerate
-                  </>
-                );
-              }
-              return (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Generate insights
-                </>
-              );
-            })()}
-          </Button>
+              })()}
+            </Button>
+            <LastUpdatedNote value={data?.generatedAt} stale={data?.stale} className="text-right" />
+          </div>
         </div>
         <CardDescription>
           AI-generated analysis of your training so far and how you&rsquo;re tracking against your goal.
@@ -190,7 +193,6 @@ export function CoachInsightsTab() {
                     arbitrary JS in the user's session (C2). */}
                 <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{data?.insights ?? ""}</ReactMarkdown>
               </div>
-              <LastUpdatedNote value={data?.generatedAt} stale={data?.stale} className="border-t pt-3" />
             </div>
           );
         })()}
