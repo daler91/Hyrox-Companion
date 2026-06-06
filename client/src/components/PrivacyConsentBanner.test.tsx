@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { PrivacyConsentBanner } from "./PrivacyConsentBanner";
 
 const CONSENT_STORAGE_KEY = "fitai-privacy-consent-v1";
+const ERROR_REPORTING_CONSENT_KEY = "fitai-error-reporting-consent-v1";
 
 type BlockingLayer = "dialog" | "sheet" | "alert";
 
@@ -92,6 +93,26 @@ describe("PrivacyConsentBanner", () => {
 
     expect(localStorage.getItem(CONSENT_STORAGE_KEY)).not.toBeNull();
     expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
+  });
+
+  it("opts out of error reporting when analytics are declined (W4)", () => {
+    render(<PrivacyConsentBanner />);
+
+    fireEvent.click(screen.getByTestId("btn-consent-decline"));
+
+    expect(localStorage.getItem(ERROR_REPORTING_CONSENT_KEY)).toBe("off");
+    expect(localStorage.getItem(CONSENT_STORAGE_KEY)).not.toBeNull();
+    expect(screen.queryByLabelText("Privacy notice")).not.toBeInTheDocument();
+  });
+
+  it("keeps error reporting on when accepted, clearing a prior opt-out (W4)", () => {
+    localStorage.setItem(ERROR_REPORTING_CONSENT_KEY, "off");
+    render(<PrivacyConsentBanner />);
+
+    fireEvent.click(screen.getByTestId("btn-consent-ack"));
+
+    expect(localStorage.getItem(ERROR_REPORTING_CONSENT_KEY)).toBeNull();
+    expect(localStorage.getItem(CONSENT_STORAGE_KEY)).not.toBeNull();
   });
 
   it.each<BlockingLayer>(["dialog", "sheet", "alert"])(

@@ -10,6 +10,7 @@ import aiRoutes from "./routes/ai";
 import analyticsRoutes from "./routes/analytics";
 import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
+import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
@@ -45,6 +46,7 @@ export async function registerRoutes(
   app.use(workoutRoutes);
   app.use(planRoutes);
   app.use(coachingRoutes);
+  app.use(consentRoutes);
   app.use(pushRoutes);
   app.use(timelineAnnotationsRoutes);
 

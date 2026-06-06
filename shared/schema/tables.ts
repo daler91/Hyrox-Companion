@@ -636,6 +636,22 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   uniqueIndex("idx_push_subscriptions_user_endpoint").on(table.userId, table.endpoint),
 ]);
 
+// Auditable consent records (GDPR Art. 7(1)/5(2), CCPA). Until now privacy-
+// notice acknowledgement and Sentry opt-in lived only in the browser's
+// localStorage with no server-side trail (review W4). One row per
+// (userId, consentType) holds the latest decision and when it was made;
+// `granted` distinguishes accept vs. reject so an opt-out is auditable too.
+export const userConsents = pgTable("user_consents", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  consentType: varchar("consent_type", { length: 64 }).notNull(),
+  granted: boolean("granted").notNull(),
+  consentedAt: timestamp("consented_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_user_consents_user_type").on(table.userId, table.consentType),
+]);
+
 // User training-style history. Stores where a style came from (onboarding or
 // settings) and when it became effective so downstream analysis can use the
 // style active at a given workout/test date.
