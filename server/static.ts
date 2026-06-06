@@ -37,7 +37,7 @@ export function serveStatic(app: Express) {
   // so a transient DB blip can't stop the SPA shell from serving.
   const fallbackLimiter = rateLimiter("staticFallback", 100, RATE_LIMIT_WINDOW_15M_MS);
 
-  app.use("*", fallbackLimiter, (_req, res) => {
+  app.use("/{*splat}", fallbackLimiter, (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     const nonce = res.locals.cspNonce;
     const html = indexHtml.replaceAll("<script ", `<script nonce="${nonce}" `);

@@ -169,16 +169,26 @@ function makeValidator<T>(schema: z.ZodType<T>, picker: (req: Request) => unknow
   };
 }
 
+// Express 5 exposes `req.query` as a getter-only property on the request
+// prototype, so a plain assignment (`req.query = parsed`) throws
+// "Cannot set property query of #<IncomingMessage> which has only a getter".
+// Define an own data property to shadow the accessor instead — this keeps the
+// Zod-coerced value visible to downstream handlers and stays correct for the
+// `body`/`params` properties (and under Express 4) too.
+function writeValidated(req: Request, key: "body" | "query" | "params", value: unknown): void {
+  Object.defineProperty(req, key, { value, writable: true, enumerable: true, configurable: true });
+}
+
 export function validateBody<T>(schema: z.ZodType<T>) {
-  return makeValidator(schema, (req) => req.body, (req, value) => { req.body = value; });
+  return makeValidator(schema, (req) => req.body, (req, value) => { writeValidated(req, "body", value); });
 }
 
 export function validateQuery<T>(schema: z.ZodType<T>) {
-  return makeValidator(schema, (req) => req.query, (req, value) => { req.query = value as Request["query"]; });
+  return makeValidator(schema, (req) => req.query, (req, value) => { writeValidated(req, "query", value); });
 }
 
 export function validateParams<T>(schema: z.ZodType<T>) {
-  return makeValidator(schema, (req) => req.params, (req, value) => { req.params = value as Request["params"]; });
+  return makeValidator(schema, (req) => req.params, (req, value) => { writeValidated(req, "params", value); });
 }
 
 export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction): void => {

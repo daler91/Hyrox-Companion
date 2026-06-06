@@ -40,7 +40,7 @@ protectedPost(router, "/api/v1/coaching-materials", { limiter: rateLimiter("coac
     res.status(201).json(material);
   });
 
-protectedPatch(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(updateCoachingMaterialSchema)] }, async (req: ExpressRequest, res: Response) => {
+protectedPatch(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10), aiConsent: true, aiBudget: true, validation: [validateBody(updateCoachingMaterialSchema)] }, async (req: ExpressRequest<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     const body = req.body as UpdateMaterialBody;
     const material = await storage.coaching.updateCoachingMaterial(req.params.id, body, userId);
@@ -68,7 +68,7 @@ protectedPost(router, "/api/v1/coaching-materials/re-embed", { limiter: rateLimi
     res.json(result);
   });
 
-protectedDelete(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10) }, async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10) }, async (req: ExpressRequest<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
     // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.coaching.deleteCoachingMaterial(req.params.id, userId);
