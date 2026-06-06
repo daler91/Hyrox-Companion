@@ -103,7 +103,7 @@ export default function Analytics() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
-            <SelectTrigger className="w-36" data-testid="select-date-range">
+            <SelectTrigger className="w-36" data-testid="select-date-range" aria-label="Analytics date range">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
