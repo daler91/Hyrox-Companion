@@ -37,8 +37,8 @@ vi.mock("../../logger", () => ({
 
 type StepTargets = StructureBlockInput["steps"][number]["targets"];
 
-// Cast helper so we can exercise the runtime type guards with values the static
-// type wouldn't otherwise allow (strings, NaN, non-objects).
+// Cast helper so the runtime type guards can be exercised with values the
+// static type would reject: strings, NaN, and non-object inputs.
 function targets(value: unknown): StepTargets {
   return value as StepTargets;
 }
@@ -243,7 +243,7 @@ describe("resolveStructureBlocksForPersist", () => {
 
 const AMRAP_SCORE: StructureBlockScore = { type: "amrap", rounds: 5 };
 
-// select().from().innerJoin().where().limit() — the owned-block lookup.
+// Stubs the owned-block lookup query chain used by updateWorkoutStructureBlockScore.
 function mockBlockLookup(rows: unknown[]): void {
   const chain = {
     from: () => ({
