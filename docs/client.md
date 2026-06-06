@@ -103,13 +103,14 @@ A `StepIndicator` allows jumping between steps. Drafts are persisted client-side
 
 ### Analytics (`client/src/pages/Analytics.tsx`)
 
-Displays training data analysis across five tabs:
+Displays training data analysis across five tabs (a sixth, **MAF Trend**, appears for athletes on the MAF training style):
 
 - **Overview** (`TrainingOverviewTab`) -- Training volume summary, completion rates, streaks, weekly goal tracking, and workout heatmap. Four summary cards (total workouts, avg/week, total duration, avg duration) render a `DeltaIndicator` showing the percentage change versus the equal-length prior period (derived server-side — see [`previousStats` in `/training-overview`](api-reference.md#get-apiv1training-overview)). The weekly workout chart overlays shaded bands for any timeline annotations that intersect the visible window.
-- **Trends** (`ExerciseProgressionTab`) -- Exercise-level progression charts over time.
-- **Records** (`PersonalRecordsTab`) -- Personal records across all exercises.
 - **Breakdown** (`CategoryBreakdownTab`) -- Category-level training distribution (functional, running, strength, conditioning).
-- **Coach Insights** (`CoachInsightsTab`) -- AI-surfaced coaching signals: RPE trends, plan phase, weekly volume, station gaps, and fatigue/progression flags.
+- **PRs & Trends** (`ProgressTab`) -- A nested tab pair: personal records across all exercises (`PersonalRecordsTab`) and exercise-level progression charts over time (`ExerciseProgressionTab`).
+- **Coach Insights** (`CoachInsightsTab`) -- AI-surfaced coaching signals: RPE trends, plan phase, weekly volume, station gaps, and fatigue/progression flags. Paints the last stored result instantly and shows a `LastUpdatedNote` (see [stored-first Coach Insights](api-reference.md#get-apiv1coach-insights)).
+- **Race Predictor** (`RacePredictorTab`) -- Predicted HYROX finish time from logged history; also stored-first with instant paint and a manual refresh button.
+- **MAF Trend** (`MafTrendTab`, MAF training style only) -- Pace-at-MAF-ceiling trend across MAF tests over time.
 
 A date range selector filters data across all tabs (30 days, 90 days, 6 months, 1 year, all time).
 
@@ -163,12 +164,17 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 
 - `TrainingOverviewTab` -- Summary cards, completion rates, workout heatmap.
 - `DeltaIndicator` -- Arrow + percentage chip rendered on each of the four overview stat cards. Consumes `currentStats` / `previousStats` from `GET /api/v1/training-overview` and handles the "no prior data" case by rendering nothing.
+- `ProgressTab` -- "PRs & Trends" tab; a nested `Tabs` wrapping `PersonalRecordsTab` and `ExerciseProgressionTab`.
 - `ExerciseProgressionTab` -- Per-exercise charts.
 - `PersonalRecordsTab` / `PersonalRecordItem` -- PR listings.
 - `CategoryBreakdownTab` -- Training distribution by category.
+- `RacePredictorTab` -- Predicted HYROX finish time; stored-first with instant paint and a manual refresh (uses `useRacePrediction`).
+- `MafTrendTab` -- Pace-at-MAF-ceiling trend across MAF tests (MAF training style only).
+- `LastUpdatedNote` -- Shared "Last updated … / New activity since — refresh to update" note rendered by the stored-first Coach Insights and Race Predictor tabs.
 - `MiniLineChart`, `MiniBarChart` -- Reusable small chart components.
 - `WorkoutHeatmap` -- GitHub-style activity heatmap.
-- `CoachInsightsTab` -- AI coaching-signal tab (RPE trends, plan phase, fatigue/progression flags).
+- `MuscleHeatMapCard` -- Muscle-group coverage heatmap card.
+- `CoachInsightsTab` -- AI coaching-signal tab (RPE trends, plan phase, fatigue/progression flags); stored-first with instant paint.
 - `ExerciseProgressionCharts` -- Per-exercise progression chart group used by the Trends tab.
 - `chartConstants.ts` -- Shared chart configuration.
 - `training-overview/` -- Overview-tab building blocks: `OverviewStatsGrid`, `OverviewTrendCharts`, `WeeklyWorkoutsChart`, and the `useTrainingOverviewData` hook.
@@ -417,6 +423,10 @@ Configured via `components.json` at the project root:
   and sidebar transitions.
 - Onboarding wizard progress bar: exposes step count via both the visible "Step N of M" counter
   and the `sr-only` `<progress>` element with `aria-label`.
+- `aria-busy` on async action buttons (e.g. the Garmin sync/disconnect buttons in
+  `GarminStatusRow`) so assistive tech announces the in-progress state while a request is running.
+- Live region for empty results: the `ExerciseSelector` "no exercises match" state uses
+  `role="status"` with `aria-live="polite"` so screen readers announce when a search yields nothing.
 
 **Automated accessibility coverage (runs in CI via `pnpm test`):**
 
