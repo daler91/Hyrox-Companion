@@ -39,7 +39,10 @@ function start(): void {
 function stop(): void {
   if (!started) return;
   // close() flushes and disables the client; a later start() re-inits.
-  void Sentry.close();
+  // Fire-and-forget: a failed flush on opt-out is non-actionable.
+  Sentry.close().catch(() => {
+    /* ignore flush failures */
+  });
   started = false;
 }
 
@@ -66,7 +69,7 @@ export function setupErrorReporting(): void {
  * next reload: enabling inits Sentry once the privacy notice is acknowledged;
  * disabling closes the client. Persisting the preference is the caller's job.
  */
-export function applyErrorReportingPreference(enabled: boolean): void {
+export function applyErrorReportingPreference(enabled: boolean): void { // NOSONAR a single boolean toggle is clearer here; the only caller already branches
   if (enabled) {
     if (hasAcknowledgedPrivacyNotice()) start();
   } else {

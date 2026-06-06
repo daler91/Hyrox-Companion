@@ -133,11 +133,10 @@ export class UserStorage {
         .limit(1);
 
       const mafProfileUnchanged =
-        latestSnapshot != null &&
-        latestSnapshot.baseHr === maf.base &&
-        latestSnapshot.adjustment === maf.adjustment &&
-        latestSnapshot.finalHr === maf.ceiling &&
-        latestSnapshot.reason === reason;
+        latestSnapshot?.baseHr === maf.base &&
+        latestSnapshot?.adjustment === maf.adjustment &&
+        latestSnapshot?.finalHr === maf.ceiling &&
+        latestSnapshot?.reason === reason;
 
       if (!mafProfileUnchanged) {
         await db.insert(mafProfile).values({

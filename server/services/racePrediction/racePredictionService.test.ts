@@ -53,6 +53,21 @@ function validAiPayload(totalFinishSeconds = 3500): string {
   });
 }
 
+// Wall balls is the final station (segment index 16).
+function aiPayloadWithWallBalls(wallBallsSeconds: number): string {
+  return JSON.stringify({
+    segments: RACE_SEGMENTS.map((s) => ({
+      index: s.index,
+      estimatedSeconds: s.index === 16 ? wallBallsSeconds : 200,
+      confidence: "medium",
+      basis: "benchmark",
+    })),
+    totalFinishSeconds: 4000,
+    overallConfidence: "medium",
+    narrative: "ok",
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   envState.AI_FEATURES_ENABLED = "true";
@@ -228,21 +243,6 @@ describe("generateRacePrediction — transition & ranking", () => {
 });
 
 describe("generateRacePrediction — AI clamp guardrail", () => {
-  // Wall balls is the final station (segment index 16).
-  function aiPayloadWithWallBalls(wallBallsSeconds: number): string {
-    return JSON.stringify({
-      segments: RACE_SEGMENTS.map((s) => ({
-        index: s.index,
-        estimatedSeconds: s.index === 16 ? wallBallsSeconds : 200,
-        confidence: "medium",
-        basis: "benchmark",
-      })),
-      totalFinishSeconds: 4000,
-      overallConfidence: "medium",
-      narrative: "ok",
-    });
-  }
-
   it("clamps an implausibly fast AI split up to the cohort-relative floor, not 2:30", async () => {
     mockUser(); // open male, no logged data → wall balls uses the cohort benchmark
     const benchmark = getRaceReference("open", "male").stations.wall_balls.benchmarkSeconds;

@@ -58,7 +58,7 @@ export class AnalyticsResultsStorage {
           // Only advance recomputedOn when the caller supplies one. A manual
           // (route) regeneration passes undefined and must NOT clear a claim
           // the cron already made today.
-          ...(input.recomputedOn !== undefined ? { recomputedOn: input.recomputedOn } : {}),
+          ...(input.recomputedOn === undefined ? {} : { recomputedOn: input.recomputedOn }),
           updatedAt: now,
         },
       });

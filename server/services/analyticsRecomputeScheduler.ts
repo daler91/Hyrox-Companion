@@ -17,6 +17,38 @@ import type { IStorage } from "../storage";
 import { getLocalDateStr, getLocalHour } from "../timezone";
 import { computeStale } from "./analyticsStaleness";
 
+/**
+ * For one user at their local midnight, enqueue a recompute job for each feature
+ * with a stored result that is stale relative to their latest workout. Returns
+ * the number of jobs enqueued.
+ */
+async function enqueueStaleRecomputes(
+  storage: IStorage,
+  userId: string,
+  latestWorkoutDate: string,
+  localDate: string,
+): Promise<number> {
+  let enqueued = 0;
+  for (const feature of ANALYTICS_FEATURES) {
+    const row = await storage.analyticsResults.get(userId, feature);
+    if (!row) continue; // only refresh features the user has actually used
+    if (row.recomputedOn === localDate) continue; // already recomputed today (pre-check)
+    if (!computeStale(row, latestWorkoutDate)) continue; // up to date → skip
+
+    const data: RecomputeAnalyticsJobData = { userId, feature, localDate };
+    await queue.send(RECOMPUTE_ANALYTICS_QUEUE, data, {
+      ...DEFAULT_JOB_OPTIONS,
+      // Coalesce duplicate enqueues for the same (feature, user) across the
+      // adjacent hourly tick or a multi-instance scan; the worker's atomic
+      // recomputedOn claim remains the authoritative once-per-day guard.
+      singletonKey: `recompute:${feature}:${userId}`,
+      singletonSeconds: 3600,
+    });
+    enqueued += 1;
+  }
+  return enqueued;
+}
+
 export async function runAnalyticsRecomputeScan(
   storage: IStorage,
   now: Date,
@@ -39,24 +71,7 @@ export async function runAnalyticsRecomputeScan(
     if (latestWorkoutDate == null) continue;
 
     const localDate = getLocalDateStr(now, user.userTimezone);
-
-    for (const feature of ANALYTICS_FEATURES) {
-      const row = await storage.analyticsResults.get(userId, feature);
-      if (!row) continue; // only refresh features the user has actually used
-      if (row.recomputedOn === localDate) continue; // already recomputed today (pre-check)
-      if (!computeStale(row, latestWorkoutDate)) continue; // up to date → skip
-
-      const data: RecomputeAnalyticsJobData = { userId, feature, localDate };
-      await queue.send(RECOMPUTE_ANALYTICS_QUEUE, data, {
-        ...DEFAULT_JOB_OPTIONS,
-        // Coalesce duplicate enqueues for the same (feature, user) across the
-        // adjacent hourly tick or a multi-instance scan; the worker's atomic
-        // recomputedOn claim remains the authoritative once-per-day guard.
-        singletonKey: `recompute:${feature}:${userId}`,
-        singletonSeconds: 3600,
-      });
-      enqueued += 1;
-    }
+    enqueued += await enqueueStaleRecomputes(storage, userId, latestWorkoutDate, localDate);
   }
 
   return { usersChecked, enqueued };

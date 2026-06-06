@@ -41,7 +41,7 @@ export async function compressImage(
   // Detect it up front so the caller can show "not supported" rather than an
   // opaque ReferenceError.
   if (typeof createImageBitmap !== "function") {
-    throw new Error("Image capture isn't supported in this browser. Try a different device or browser.");
+    throw new TypeError("Image capture isn't supported in this browser. Try a different device or browser.");
   }
   const bitmap = await createImageBitmap(file);
   try {

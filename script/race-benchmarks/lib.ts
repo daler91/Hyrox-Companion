@@ -34,7 +34,7 @@ export function parseClockToSeconds(raw: string | null | undefined): number | nu
   if (!raw) return null;
   const parts = raw.trim().split(":");
   if (parts.length < 2 || parts.length > 3) return null;
-  const nums = parts.map((p) => Number(p));
+  const nums = parts.map(Number);
   if (nums.some((n) => !Number.isFinite(n) || n < 0)) return null;
   return parts.length === 3 ? nums[0] * 3600 + nums[1] * 60 + nums[2] : nums[0] * 60 + nums[1];
 }
@@ -54,13 +54,49 @@ export interface ParsedRace {
 
 const sum = (xs: number[]): number => xs.reduce((t, x) => t + x, 0);
 
+/** Parse the 8 work-station splits; null if any is missing, non-positive, or
+ *  below the world-class per-station floor (impossible/mis-recorded). */
+function parseStationSeconds(r: Record<string, string>): number[] | null {
+  const stationSeconds: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    const v = parseClockToSeconds(r[`work_${i + 1}`]);
+    if (v == null || v <= 0) return null;
+    if (v < STATION_FLOOR_SECONDS[HYROX_STATION_ORDER[i]]) return null;
+    stationSeconds.push(v);
+  }
+  return stationSeconds;
+}
+
+/** Parse the 8 run-leg splits; null if any is missing, non-positive, or below
+ *  the 1 km floor. */
+function parseRunSeconds(r: Record<string, string>): number[] | null {
+  const runSeconds: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    const v = parseClockToSeconds(r[`run_${i + 1}`]);
+    if (v == null || v <= 0 || v < RUN_KM_FLOOR_SECONDS) return null;
+    runSeconds.push(v);
+  }
+  return runSeconds;
+}
+
+/** Sum the 8 transition (roxzone) splits; null if any is missing or negative.
+ *  roxzone_8 is legitimately 0 (no transition after the final station). */
+function parseTransitionTotal(r: Record<string, string>): number | null {
+  let transitionTotal = 0;
+  for (let i = 0; i < 8; i++) {
+    const v = parseClockToSeconds(r[`roxzone_${i + 1}`]);
+    if (v == null || v < 0) return null;
+    transitionTotal += v;
+  }
+  return transitionTotal;
+}
+
 /**
  * Parse and validate one CSV record (keyed by header). Returns null for any row
  * that is not a clean singles result: non open/pro division, non male/female
  * gender, unparseable/implausible total, a missing/non-positive split, a split
  * below the world-class floor (mis-recorded), or segment splits that don't add
- * up to the stated total. roxzone_8 is legitimately 0 (no transition after the
- * final station), so transitions may be 0 but never negative.
+ * up to the stated total.
  */
 export function parseRaceRow(r: Record<string, string>): ParsedRace | null {
   const division: Division | null =
@@ -78,27 +114,12 @@ export function parseRaceRow(r: Record<string, string>): ParsedRace | null {
     return null;
   }
 
-  const stationSeconds: number[] = [];
-  for (let i = 0; i < 8; i++) {
-    const v = parseClockToSeconds(r[`work_${i + 1}`]);
-    if (v == null || v <= 0) return null;
-    if (v < STATION_FLOOR_SECONDS[HYROX_STATION_ORDER[i]]) return null; // impossible/mis-recorded
-    stationSeconds.push(v);
-  }
-
-  const runSeconds: number[] = [];
-  for (let i = 0; i < 8; i++) {
-    const v = parseClockToSeconds(r[`run_${i + 1}`]);
-    if (v == null || v <= 0 || v < RUN_KM_FLOOR_SECONDS) return null;
-    runSeconds.push(v);
-  }
-
-  let transitionTotal = 0;
-  for (let i = 0; i < 8; i++) {
-    const v = parseClockToSeconds(r[`roxzone_${i + 1}`]);
-    if (v == null || v < 0) return null;
-    transitionTotal += v;
-  }
+  const stationSeconds = parseStationSeconds(r);
+  if (stationSeconds == null) return null;
+  const runSeconds = parseRunSeconds(r);
+  if (runSeconds == null) return null;
+  const transitionTotal = parseTransitionTotal(r);
+  if (transitionTotal == null) return null;
 
   const partsSum = sum(stationSeconds) + sum(runSeconds) + transitionTotal;
   if (Math.abs(partsSum - totalSeconds) > totalSeconds * TOTAL_CONSISTENCY_TOLERANCE) return null;
