@@ -346,3 +346,20 @@ export interface NutritionTargetsResponse {
   // All target versions, newest effectiveFrom first.
   history: NutritionTarget[];
 }
+
+/** FR-5.1 — one micronutrient's daily total against its reference daily intake. */
+export interface MicroSummaryRow {
+  key: string;
+  label: string;
+  unit: "mg" | "mcg";
+  amount: number;
+  rdi: number;
+  pctRdi: number;
+}
+
+export interface MicroSummaryResponse {
+  date: string;
+  // Only micros the day's foods carry data for; absent ≠ zero (most cached foods
+  // have no micros until re-fetched from the importer).
+  micros: MicroSummaryRow[];
+}

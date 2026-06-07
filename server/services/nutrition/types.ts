@@ -14,4 +14,6 @@ export interface MappedFood {
   carbPer100g: number | null;
   fatPer100g: number | null;
   fiberPer100g: number | null;
+  // Per-100g micronutrient map (FR-5.1); null when the source carries none.
+  micros: Record<string, number> | null;
 }

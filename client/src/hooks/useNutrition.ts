@@ -10,6 +10,7 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodWithServingsResponse,
+  MicroSummaryResponse,
   NutritionTarget,
   NutritionTargetsResponse,
   ParseMealResponse,
@@ -266,5 +267,13 @@ export function useSetTarget() {
     invalidateQueries: [QUERY_KEYS.nutritionTargets],
     successToast: "Targets saved",
     errorToast: "Couldn't save targets",
+  });
+}
+
+/** The day's micronutrient totals vs reference daily intakes (FR-5.1). */
+export function useMicros(date: string) {
+  return useQuery<MicroSummaryResponse>({
+    queryKey: QUERY_KEYS.nutritionMicros(date),
+    queryFn: () => api.nutrition.getMicros(date),
   });
 }

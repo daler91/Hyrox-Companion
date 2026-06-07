@@ -21,6 +21,7 @@ import {
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type MealType,
+  type MicroSummaryResponse,
   type NutritionTargetsResponse,
   type ParseMealResponse,
   type ParseMealTextInput,
@@ -47,6 +48,7 @@ import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
 import { parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
+import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
 import {
   computeSessionFuelling,
@@ -486,6 +488,22 @@ export function registerNutritionRoutes(router: Router): void {
       const target = await storage.nutrition.createTarget(userId, { ...body, effectiveFrom });
       res.status(201).json(target);
     },
+  );
+
+  // FR-5.1 — the day's micronutrient totals vs reference daily intakes.
+  router.get(
+    "/api/v1/nutrition/micros",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    validateQuery(dailySummaryQuerySchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { date } = req.query as unknown as DailySummaryQuery;
+      const logDate = date ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
+      const response: MicroSummaryResponse = { date: logDate, micros: buildMicroSummary(rows) };
+      res.json(response);
+    }),
   );
 
   // ---- recipes (FR-2.3) ----------------------------------------------------

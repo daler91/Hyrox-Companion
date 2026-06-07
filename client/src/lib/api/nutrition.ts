@@ -12,6 +12,7 @@ import type {
   FoodSearchResponse,
   FoodServing,
   FoodWithServingsResponse,
+  MicroSummaryResponse,
   NutritionTarget,
   NutritionTargetsResponse,
   ParseMealResponse,
@@ -130,4 +131,10 @@ export const nutrition = {
 
   setTarget: (data: UpsertNutritionTargetInput) =>
     typedRequest<NutritionTarget>("POST", `${base}/targets`, data),
+
+  getMicros: (date?: string) =>
+    typedRequest<MicroSummaryResponse>(
+      "GET",
+      date ? `${base}/micros?date=${date}` : `${base}/micros`,
+    ),
 } as const;

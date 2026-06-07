@@ -564,6 +564,35 @@ describe("nutrition routes", () => {
     });
   });
 
+  describe("Phase 5: micros (FR-5.1)", () => {
+    it("returns the day's micronutrient summary vs RDI", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([
+        {
+          id: "e1", userId: "test_user", foodId: "f1",
+          loggedAt: new Date("2026-06-07T08:00:00Z"), logDate: "2026-06-07",
+          quantityG: 200, mealType: "breakfast", entryMethod: "manual",
+          rawInput: null, parseConfidence: null, pendingReview: false,
+          createdAt: new Date(), updatedAt: new Date(),
+          food: {
+            id: "f1", source: "usda", sourceId: "1", name: "Salty", brand: null,
+            servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 1, carbPer100g: 1,
+            fatPer100g: 1, fiberPer100g: 0, micros: { sodium: 1000 }, createdByUserId: null,
+            createdAt: new Date(), updatedAt: new Date(),
+          },
+        },
+      ] as never);
+
+      const res = await request(app).get("/api/v1/nutrition/micros?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.date).toBe("2026-06-07");
+      // 200g × 1000mg/100g = 2000mg sodium → 87% of the 2300mg RDI.
+      expect(res.body.micros.find((m: { key: string }) => m.key === "sodium")).toMatchObject({
+        amount: 2000,
+        pctRdi: 87,
+      });
+    });
+  });
+
   describe("feature flag gate", () => {
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
@@ -576,6 +605,7 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/targets")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/targets").send({ calories: 2000 })).status).toBe(404);
+      expect((await request(gatedApp).get("/api/v1/nutrition/micros")).status).toBe(404);
     });
   });
 });

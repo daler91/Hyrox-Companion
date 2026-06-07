@@ -117,6 +117,7 @@ export class NutritionStorage {
       carbPer100g: m.carbPer100g,
       fatPer100g: m.fatPer100g,
       fiberPer100g: m.fiberPer100g,
+      micros: m.micros,
     }));
 
     return executor
@@ -134,6 +135,7 @@ export class NutritionStorage {
           carbPer100g: sql`excluded.carb_per_100g`,
           fatPer100g: sql`excluded.fat_per_100g`,
           fiberPer100g: sql`excluded.fiber_per_100g`,
+          micros: sql`excluded.micros`,
           updatedAt: new Date(),
         },
       })

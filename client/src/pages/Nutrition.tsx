@@ -16,6 +16,7 @@ import { DescribeMealButton } from "./nutrition/DescribeMealButton";
 import { FoodSearch } from "./nutrition/FoodSearch";
 import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
+import { MicronutrientPanel } from "./nutrition/MicronutrientPanel";
 import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
@@ -158,6 +159,8 @@ export default function Nutrition() {
         </div>
 
         {dayBody}
+
+        {summary && !isEmpty && <MicronutrientPanel date={date} />}
 
         <MyFoodsSection
           onEditFood={(food) => setCustomFood({ mode: "edit", food })}
