@@ -12,6 +12,7 @@ import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../util
  */
 
 const FDC_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search";
+const FDC_DETAIL_URL = "https://api.nal.usda.gov/fdc/v1/food";
 const USDA_TIMEOUT_MS = 8_000;
 const USDA_PAGE_SIZE = 25;
 
@@ -194,4 +195,71 @@ export async function searchUsdaFoods(
   return foods
     .map(mapUsdaSearchFood)
     .filter((f): f is UsdaFoodMapped => f !== null);
+}
+
+// USDA food-detail portions (FR-2.4): "1 cup" → grams. Only the /food/{id}
+// detail endpoint (format=full) carries foodPortions; the search endpoint doesn't.
+
+interface UsdaFoodPortion {
+  amount?: number;
+  gramWeight?: number;
+  modifier?: string;
+  portionDescription?: string;
+  measureUnit?: { name?: string };
+}
+
+interface UsdaFoodDetail {
+  foodPortions?: UsdaFoodPortion[];
+}
+
+function portionLabel(p: UsdaFoodPortion): string | null {
+  const description = p.portionDescription?.trim();
+  if (description) return description;
+  const unit = p.measureUnit?.name?.trim();
+  if (typeof p.amount === "number" && unit && unit.toLowerCase() !== "undetermined") {
+    return `${p.amount} ${unit}`;
+  }
+  return p.modifier?.trim() || null;
+}
+
+/**
+ * Fetch a USDA food's named portions, e.g. "1 cup" → grams. Best-effort: returns
+ * [] when the food has no portions (common for Branded foods) or on any error —
+ * named servings are a nicety and must never block logging.
+ */
+export async function fetchUsdaFoodPortions(
+  fdcId: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<{ label: string; grams: number }[]> {
+  const apiKey = env.USDA_API_KEY;
+  if (!apiKey) return [];
+  const url = `${FDC_DETAIL_URL}/${encodeURIComponent(fdcId)}?api_key=${encodeURIComponent(apiKey)}&format=full`;
+
+  try {
+    const raw = await retryWithJitter(
+      async () => {
+        const timeout = AbortSignal.timeout(USDA_TIMEOUT_MS);
+        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+        const res = await fetch(url, { signal });
+        if (res.status === 429 || res.status >= 500) {
+          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
+        }
+        if (!res.ok) throw new Error(`USDA detail failed with HTTP ${res.status}`);
+        return (await res.json()) as UsdaFoodDetail;
+      },
+      { retries: 1, label: "usda-detail" },
+    );
+
+    const portions = Array.isArray(raw.foodPortions) ? raw.foodPortions : [];
+    const out: { label: string; grams: number }[] = [];
+    for (const portion of portions) {
+      const grams = portion.gramWeight;
+      if (typeof grams !== "number" || !Number.isFinite(grams) || grams <= 0) continue;
+      const label = portionLabel(portion);
+      if (label) out.push({ label, grams });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }

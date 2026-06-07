@@ -27,7 +27,7 @@ vi.mock("../../utils/httpRetry", async () => {
 });
 
 import { env } from "../../env";
-import { mapUsdaSearchFood, searchUsdaFoods } from "./usdaClient";
+import { fetchUsdaFoodPortions, mapUsdaSearchFood, searchUsdaFoods } from "./usdaClient";
 
 const okResponse = (body: unknown) => ({
   ok: true,
@@ -171,5 +171,50 @@ describe("searchUsdaFoods", () => {
     fetchMock.mockRejectedValue(Object.assign(new Error("timed out"), { name: "TimeoutError" }));
     await expect(searchUsdaFoods("x")).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+});
+
+describe("fetchUsdaFoodPortions", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const detail = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
+
+  it("maps foodPortions to label + grams (label precedence; skips no-gram)", async () => {
+    fetchMock.mockResolvedValue(
+      detail({
+        foodPortions: [
+          { gramWeight: 240, portionDescription: "1 cup" },
+          { gramWeight: 30, amount: 1, measureUnit: { name: "tablespoon" } },
+          { gramWeight: 0, portionDescription: "skip me" },
+        ],
+      }),
+    );
+    expect(await fetchUsdaFoodPortions("123")).toEqual([
+      { label: "1 cup", grams: 240 },
+      { label: "1 tablespoon", grams: 30 },
+    ]);
+  });
+
+  it("returns [] when the food has no portions", async () => {
+    fetchMock.mockResolvedValue(detail({}));
+    expect(await fetchUsdaFoodPortions("123")).toEqual([]);
+  });
+
+  it("returns [] on API error (best-effort)", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}), headers: { get: () => null } });
+    expect(await fetchUsdaFoodPortions("123")).toEqual([]);
+  });
+
+  it("returns [] when no API key is configured", async () => {
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
+    expect(await fetchUsdaFoodPortions("123")).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -27,8 +27,8 @@ function mergeFoods(usda: Food[], local: Food[]): Food[] {
   return out.slice(0, MAX_RESULTS);
 }
 
-export async function searchFoods(query: string): Promise<FoodSearchResponse> {
-  const local = await storage.nutrition.searchLocalFoods(query, LOCAL_LIMIT);
+export async function searchFoods(query: string, userId: string): Promise<FoodSearchResponse> {
+  const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
 
   let apiDegraded = false;
   let usda: Food[] = [];

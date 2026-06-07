@@ -1,5 +1,5 @@
 import { MEAL_TYPES } from "@shared/schema";
-import { ChevronLeft, ChevronRight, CopyPlus } from "lucide-react";
+import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useDeleteLog, useNutritionDay, useRepeatDay } from "@/hooks/useNutrition";
 
+import { BarcodeScanner } from "./nutrition/BarcodeScanner";
+import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
 import { FoodSearch } from "./nutrition/FoodSearch";
 import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
+import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
+import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
 const EMPTY_TOTALS = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
@@ -28,6 +32,9 @@ export default function Nutrition() {
   const { isLoading: authLoading } = useAuth();
   const [date, setDate] = useState(todayStr());
   const [dialog, setDialog] = useState<LogDialogState | null>(null);
+  const [barcodeOpen, setBarcodeOpen] = useState(false);
+  const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
+  const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const day = useNutritionDay(date);
   const deleteLog = useDeleteLog(date);
@@ -127,10 +134,34 @@ export default function Nutrition() {
         <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
 
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setBarcodeOpen(true)} data-testid="button-scan-barcode">
+            <ScanLine className="mr-2 h-4 w-4" /> Scan barcode
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCustomFood({ mode: "create" })} data-testid="button-new-custom-food">
+            <Plus className="mr-2 h-4 w-4" /> Custom food
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setRecipe({ open: true, id: null })} data-testid="button-new-recipe">
+            <ChefHat className="mr-2 h-4 w-4" /> Recipe
+          </Button>
+        </div>
+
         {dayBody}
+
+        <MyFoodsSection
+          onEditFood={(food) => setCustomFood({ mode: "edit", food })}
+          onEditRecipe={(id) => setRecipe({ open: true, id })}
+        />
       </div>
 
       <LogFoodDialog state={dialog} date={date} onClose={() => setDialog(null)} />
+      <BarcodeScanner
+        open={barcodeOpen}
+        onClose={() => setBarcodeOpen(false)}
+        onResolved={(food) => setDialog({ mode: "create", food, entryMethod: "barcode" })}
+      />
+      <CustomFoodDialog state={customFood} onClose={() => setCustomFood(null)} />
+      <RecipeBuilderDialog open={recipe.open} recipeId={recipe.id} onClose={() => setRecipe({ open: false, id: null })} />
     </PageContainer>
   );
 }
