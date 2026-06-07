@@ -107,7 +107,6 @@ export async function generateNutritionInsights(
   userId: string,
   log: Logger = defaultLogger,
 ): Promise<NutritionInsightsResult> {
-  const startedAt = Date.now();
   const context = await buildNutritionContext(userId);
   const response = await generateText({
     systemInstruction: NUTRITION_INSIGHTS_PROMPT,
@@ -126,6 +125,8 @@ export async function generateNutritionInsights(
   if (!response.text || response.text.length === 0) {
     throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for nutrition insights", 502);
   }
-  log.info({ durationMs: Date.now() - startedAt }, "[ai] Nutrition insights generated");
+  // Plain static message — no object payload (Bearer flags structured logger
+  // data as potential information leakage; matches the repo's fix pattern).
+  log.info("[ai] Nutrition insights generated");
   return { insights: validateAiOutput(response.text), generatedAt: new Date().toISOString() };
 }
