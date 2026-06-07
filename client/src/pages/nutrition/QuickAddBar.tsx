@@ -24,7 +24,8 @@ function FoodChipRow({
             key={food.id}
             type="button"
             onClick={() => onSelect(food)}
-            className="shrink-0 rounded-full border px-3 py-1 text-sm hover:bg-accent"
+            className="shrink-0 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label={food.name.length > MAX_LABEL ? `Quick add ${food.name}` : undefined}
             data-testid={`quickadd-${testid}-${food.id}`}
           >
             {food.name.length > MAX_LABEL ? `${food.name.slice(0, MAX_LABEL)}…` : food.name}

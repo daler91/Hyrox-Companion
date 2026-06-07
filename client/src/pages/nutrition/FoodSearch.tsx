@@ -57,7 +57,7 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
               key={food.id}
               type="button"
               onClick={() => onSelect(food)}
-              className="flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-accent"
+              className="flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
               data-testid={`result-food-${food.id}`}
             >
               <span className="min-w-0">
