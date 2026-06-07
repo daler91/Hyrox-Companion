@@ -134,12 +134,10 @@ export function countPersonalRecordsInRange(
   toStr: string,
 ): number {
   let count = 0;
-  for (const key in prs) {
-    const pr = prs[key];
-    if (pr.maxWeight && pr.maxWeight.date >= fromStr && pr.maxWeight.date <= toStr) count++;
-    if (pr.maxDistance && pr.maxDistance.date >= fromStr && pr.maxDistance.date <= toStr) count++;
-    if (pr.bestTime && pr.bestTime.date >= fromStr && pr.bestTime.date <= toStr) count++;
-    if (pr.estimated1RM && pr.estimated1RM.date >= fromStr && pr.estimated1RM.date <= toStr) count++;
+  for (const pr of Object.values(prs)) {
+    for (const value of [pr.maxWeight, pr.maxDistance, pr.bestTime, pr.estimated1RM]) {
+      if (value && value.date >= fromStr && value.date <= toStr) count++;
+    }
   }
   return count;
 }

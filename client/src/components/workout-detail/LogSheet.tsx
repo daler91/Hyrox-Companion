@@ -9,13 +9,11 @@ import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
-import { featureFlags } from "@/lib/featureFlags";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
-import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
@@ -611,10 +609,6 @@ export function LogSheet({
           distanceUnit={distanceUnit}
           isEditMode={isEditMode}
         />
-
-        {featureFlags.nutritionEnabled && entry.workoutLogId ? (
-          <FuellingAroundSessionPanel workoutLogId={entry.workoutLogId} />
-        ) : null}
 
         <LogSheetFooter
           entry={entry}

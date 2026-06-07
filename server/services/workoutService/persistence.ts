@@ -26,23 +26,20 @@ export async function saveParsedWorkoutsBatch(
   let saved = 0;
   let failed = 0;
 
-  // Drop existing sets in one query, then insert per-workout so one invalid
-  // row can't roll back every other parsed workout in the chunk.
+  // Drop existing sets in one query, then bulk insert all new sets
   await db.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
 
-  for (const workout of workouts) {
-    try {
-      if (workout.setRows.length > 0) {
-        await db.insert(exerciseSets).values(workout.setRows);
-      }
-      saved++;
-    } catch (err) {
-      failed++;
-      logger.error(
-        { err, workoutId: workout.workoutId },
-        "Failed to persist parsed exercise sets for workout during batch reparse",
-      );
+  try {
+    const allSetRows = workouts.flatMap(w => w.setRows);
+    if (allSetRows.length > 0) {
+      await db.insert(exerciseSets).values(allSetRows);
     }
+    saved = workouts.length;
+  } catch (err) {
+    failed = workouts.length;
+    logger.error(
+      "Failed to persist parsed exercise sets for workouts during batch reparse: " + (err instanceof Error ? err.message : "Unknown error")
+    );
   }
 
   return { saved, failed };

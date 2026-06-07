@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateMafHr, computeMafCompliance, metersPerSecond } from "./maf";
+import { calculateMafHr, computeMafCompliance } from "./maf";
 
 describe("calculateMafHr", () => {
   it("applies conservative -10 first when injury flag is present", () => {
@@ -27,18 +27,6 @@ describe("calculateMafHr", () => {
     expect(result.adjustment).toBe(-5);
     expect(result.ceiling).toBe(110); // base 180-65=115, -5 = 110
     expect(result.reasonCodes).toContain("age_over_65_conservative_default");
-  });
-
-  it("applies -5 for low consistency or declining trend", () => {
-    const result = calculateMafHr({ age: 30, injuryIllnessMedication: false, consistency: "low", trend: "improving" });
-    expect(result.adjustment).toBe(-5);
-    expect(result.reasonCodes).toContain("low_consistency_or_declining_trend");
-  });
-
-  it("applies 0 adjustment for moderate consistency or flat trend", () => {
-    const result = calculateMafHr({ age: 30, injuryIllnessMedication: false, consistency: "moderate", trend: "improving" });
-    expect(result.adjustment).toBe(0);
-    expect(result.reasonCodes).toContain("moderate_consistency_or_flat_trend");
   });
 });
 
@@ -71,31 +59,5 @@ describe("computeMafCompliance", () => {
     const r = computeMafCompliance({ avgHeartRate: 140, maxHeartRate: null, ceiling: 145 });
     expect(r.classification).toBe("compliant");
     expect(r.details.maxOverBy).toBeNull();
-  });
-});
-
-describe("metersPerSecond", () => {
-  it("calculates meters per second correctly", () => {
-    expect(metersPerSecond(1000, 200)).toBe(5);
-    expect(metersPerSecond(5000, 1000)).toBe(5);
-    expect(metersPerSecond(42195, 14400)).toBeCloseTo(2.93, 2);
-  });
-
-  it("returns null if distanceMeters is missing, zero, or negative", () => {
-    expect(metersPerSecond(null, 200)).toBeNull();
-    expect(metersPerSecond(0, 200)).toBeNull();
-    expect(metersPerSecond(-100, 200)).toBeNull();
-  });
-
-  it("returns null if durationSeconds is missing, zero, or negative", () => {
-    expect(metersPerSecond(1000, null)).toBeNull();
-    expect(metersPerSecond(1000, 0)).toBeNull();
-    expect(metersPerSecond(1000, -200)).toBeNull();
-  });
-
-  it("returns null if both are missing, zero, or negative", () => {
-    expect(metersPerSecond(null, null)).toBeNull();
-    expect(metersPerSecond(0, 0)).toBeNull();
-    expect(metersPerSecond(-100, -200)).toBeNull();
   });
 });

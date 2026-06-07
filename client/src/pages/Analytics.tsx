@@ -1,11 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { BarChart3, Download, FileJson, FileSpreadsheet, HeartPulse, Loader2, PieChart, Sparkles, Target, Timer, Trophy, UtensilsCrossed } from "lucide-react";
+import { BarChart3, Download, FileJson, FileSpreadsheet, HeartPulse, Loader2, PieChart, Sparkles, Target, Timer, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
-import { FuellingTab } from "@/components/analytics/FuellingTab";
 import { MafTrendTab } from "@/components/analytics/MafTrendTab";
 import { ProgressTab } from "@/components/analytics/ProgressTab";
 import { RacePredictorTab } from "@/components/analytics/RacePredictorTab";
@@ -26,19 +25,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { type AnalyticsExportFormat, api, QUERY_KEYS } from "@/lib/api";
-import { featureFlags } from "@/lib/featureFlags";
 
 type DateRange = "30" | "90" | "180" | "365" | "all";
 
 const DATE_RANGES: readonly DateRange[] = ["30", "90", "180", "365", "all"];
-
-// Literal classes (not interpolated) so Tailwind's JIT keeps them; the tab grid
-// widens by one column per optional tab (MAF trend, Fuelling).
-const SM_GRID_COLS: Record<number, string> = {
-  5: "sm:grid-cols-5",
-  6: "sm:grid-cols-6",
-  7: "sm:grid-cols-7",
-};
 
 function getExportFilename(response: Response, exportFormat: AnalyticsExportFormat) {
   const contentDisposition = response.headers.get("Content-Disposition");
@@ -51,10 +41,6 @@ export default function Analytics() {
   const { toast } = useToast();
   const { user } = useAuth();
   const isMaf = user?.trainingStyleId === "maf_method";
-  const showFuelling = featureFlags.nutritionEnabled;
-  // 5 base tabs + each optional tab. On mobile the tabs flow in a 2-col grid, so
-  // the last tab is alone (and looks unbalanced) when the total is odd.
-  const tabCount = 5 + (isMaf ? 1 : 0) + (showFuelling ? 1 : 0);
   const [dateRange, setDateRange] = useUrlQueryState<DateRange>(
     "range",
     "90",
@@ -167,7 +153,7 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className={`mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:gap-0 ${SM_GRID_COLS[tabCount]}`}>
+        <TabsList className={`mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:gap-0 ${isMaf ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
           <TabsTrigger value="overview" data-testid="tab-overview">
             <BarChart3 className="h-4 w-4 mr-2" />
             Overview
@@ -186,7 +172,7 @@ export default function Analytics() {
           </TabsTrigger>
           <TabsTrigger
             value="predictor"
-            className={`${!isMaf && !showFuelling ? "col-span-2" : ""} sm:col-span-1`}
+            className={`${isMaf ? "" : "col-span-2"} sm:col-span-1`}
             data-testid="tab-race-predictor"
           >
             <Timer className="h-4 w-4 mr-2" />
@@ -196,16 +182,6 @@ export default function Analytics() {
             <TabsTrigger value="maf" data-testid="tab-maf-trend">
               <HeartPulse className="h-4 w-4 mr-2" />
               MAF Trend
-            </TabsTrigger>
-          ) : null}
-          {showFuelling ? (
-            <TabsTrigger
-              value="fuelling"
-              className={`${tabCount % 2 === 1 ? "col-span-2" : ""} sm:col-span-1`}
-              data-testid="tab-fuelling"
-            >
-              <UtensilsCrossed className="h-4 w-4 mr-2" />
-              Fuelling
             </TabsTrigger>
           ) : null}
         </TabsList>
@@ -233,12 +209,6 @@ export default function Analytics() {
         {isMaf ? (
           <TabsContent value="maf" className="space-y-6">
             <MafTrendTab />
-          </TabsContent>
-        ) : null}
-
-        {showFuelling ? (
-          <TabsContent value="fuelling" className="space-y-6">
-            <FuellingTab dateParams={dateParams} />
           </TabsContent>
         ) : null}
       </Tabs>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef,useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { useCreateCoachingMaterial } from "@/hooks/useCoachingMaterials";
@@ -14,7 +14,7 @@ async function ensurePdfjs() {
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
   ]);
   if (!pdfjsWorkerConfigured) {
-    GlobalWorkerOptions.workerSrc = workerModule.default;
+    GlobalWorkerOptions.workerSrc = (workerModule).default;
     pdfjsWorkerConfigured = true;
   }
   return { getDocument };
@@ -33,10 +33,7 @@ function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
       PARSE_TIMEOUT_MS,
     );
     fn().then(
-      (val) => {
-        clearTimeout(timer);
-        resolve(val);
-      },
+      (val) => { clearTimeout(timer); resolve(val); },
       (err: unknown) => {
         clearTimeout(timer);
         // ESLint wants the rejection reason to be a real Error so caller-side
@@ -49,9 +46,8 @@ function withParseTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
 
 /** Strip null bytes and non-printable control characters that PostgreSQL text columns reject. */
 function sanitizeText(text: string): string {
-  return text.replaceAll(/\p{Cc}/gu, (char) =>
-    char === "\t" || char === "\n" || char === "\r" ? char : "",
-  );
+  // eslint-disable-next-line no-control-regex
+  return text.replaceAll(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
 
 /**
@@ -130,11 +126,7 @@ export function useCoachingUpload() {
 
   const processSingleFile = async (file: File) => {
     if (file.size > MAX_FILE_SIZE) {
-      toast({
-        title: "File too large",
-        description: "Maximum file size is 10MB.",
-        variant: "destructive",
-      });
+      toast({ title: "File too large", description: "Maximum file size is 10MB.", variant: "destructive" });
       return;
     }
     try {
