@@ -1,0 +1,12 @@
+--- server/services/workoutService/persistence.ts
++++ server/services/workoutService/persistence.ts
+@@ -29,8 +29,7 @@
+   let saved = 0;
+   let failed = 0;
+
+-  // Drop existing sets in one query, then insert per-workout so one invalid
+-  // row can't roll back every other parsed workout in the chunk.
++  // Drop existing sets in one query, then bulk insert all new sets
+   await db.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
+
+   try {
