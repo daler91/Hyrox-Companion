@@ -485,6 +485,53 @@ describe("expandExercisesToSetRows", () => {
 
 
 
+
+describe("parsePagination", () => {
+  const mockRes = {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn()
+  } as unknown as import("express").Response;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return default limit when limit is not provided", () => {
+    const result = parsePagination({}, mockRes, { defaultLimit: 20 });
+    expect(result).toEqual({ limit: 20, offset: undefined });
+  });
+
+  it("should parse limit and offset correctly", () => {
+    const result = parsePagination({ limit: "15", offset: "30" }, mockRes, { defaultLimit: 20 });
+    expect(result).toEqual({ limit: 15, offset: 30 });
+  });
+
+  const errorCases = [
+    { name: "invalid limit", query: { limit: "-5" }, error: "Invalid limit" },
+    { name: "NaN limit", query: { limit: "invalid" }, error: "Invalid limit" },
+    { name: "invalid offset", query: { offset: "-10" }, error: "Invalid offset" },
+    { name: "NaN offset", query: { offset: "invalid" }, error: "Invalid offset" },
+  ];
+
+  it.each(errorCases)("should return 400 for $name", ({ query, error }) => {
+    const result = parsePagination(query, mockRes, { defaultLimit: 20 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({ error, code: "BAD_REQUEST" });
+  });
+
+  it("should return 412 for limit exceeding maxLimit", () => {
+    const result = parsePagination({ limit: "100" }, mockRes, { defaultLimit: 20, maxLimit: 50 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(412);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: "limit exceeds maximum of 50",
+      code: "PRECONDITION_FAILED",
+      maxLimit: 50
+    });
+  });
+});
+
 describe("Validator Middleware (validateBody, validateQuery, validateParams)", () => {
   const schema = z.object({
     key: z.string(),
@@ -562,62 +609,79 @@ describe("sendNotFound", () => {
   });
 });
 
-describe("parsePagination", () => {
-  const mockRes = {
-    status: vi.fn().mockReturnThis(),
-    json: vi.fn()
-  } as unknown as import("express").Response;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe("Validator Middleware (validateBody, validateQuery, validateParams)", () => {
+  const schema = z.object({
+    key: z.string(),
+    optional: z.number().optional(),
   });
 
-  it("should return default limit when limit is not provided", () => {
-    const result = parsePagination({}, mockRes, { defaultLimit: 20 });
-    expect(result).toEqual({ limit: 20, offset: undefined });
+  const cases = [
+    { name: "validateBody", fn: validateBody, prop: "body" },
+    { name: "validateQuery", fn: validateQuery, prop: "query" },
+    { name: "validateParams", fn: validateParams, prop: "params" },
+  ] as const;
+
+  it.each(cases)("$name calls next() and updates req.$prop on valid input", ({ fn, prop }) => {
+    const req = { [prop]: { key: "Test", optional: 30 } } as unknown as import("express").Request;
+    const res = {} as unknown as import("express").Response;
+    const next = vi.fn();
+
+    const middleware = fn(schema);
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req[prop]).toEqual({ key: "Test", optional: 30 });
   });
 
-  it("should parse limit and offset correctly", () => {
-    const result = parsePagination({ limit: "15", offset: "30" }, mockRes, { defaultLimit: 20 });
-    expect(result).toEqual({ limit: 15, offset: 30 });
+  it.each(cases)("$name strips unknown properties from req.$prop on valid input", ({ fn, prop }) => {
+    const req = { [prop]: { key: "Test", unknownProp: true } } as unknown as import("express").Request;
+    const res = {} as unknown as import("express").Response;
+    const next = vi.fn();
+
+    const middleware = fn(schema);
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req[prop]).toEqual({ key: "Test" });
   });
 
-  it("should return 400 for invalid limit", () => {
-    const result = parsePagination({ limit: "-5" }, mockRes, { defaultLimit: 20 });
-    expect(result).toBeNull();
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid limit", code: "BAD_REQUEST" });
-  });
+  it.each(cases)("$name returns 400 on invalid input without calling next()", ({ fn, prop }) => {
+    const req = { [prop]: { optional: "not a number" } } as unknown as import("express").Request;
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as unknown as import("express").Response;
+    const next = vi.fn();
 
-  it("should return 400 for NaN limit", () => {
-    const result = parsePagination({ limit: "invalid" }, mockRes, { defaultLimit: 20 });
-    expect(result).toBeNull();
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid limit", code: "BAD_REQUEST" });
-  });
+    const middleware = fn(schema);
+    middleware(req, res, next);
 
-  it("should return 400 for invalid offset", () => {
-    const result = parsePagination({ offset: "-10" }, mockRes, { defaultLimit: 20 });
-    expect(result).toBeNull();
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid offset", code: "BAD_REQUEST" });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        message: expect.stringMatching(/expected string, received undefined/),
+        details: expect.objectContaining({ issues: expect.any(Array) }),
+      })
+    );
   });
+});
 
-  it("should return 400 for NaN offset", () => {
-    const result = parsePagination({ offset: "invalid" }, mockRes, { defaultLimit: 20 });
-    expect(result).toBeNull();
-    expect(mockRes.status).toHaveBeenCalledWith(400);
-    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid offset", code: "BAD_REQUEST" });
-  });
+describe("sendNotFound", () => {
+  it("should return a 404 status and standard NOT_FOUND error JSON", () => {
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as unknown as import("express").Response;
 
-  it("should return 412 for limit exceeding maxLimit", () => {
-    const result = parsePagination({ limit: "100" }, mockRes, { defaultLimit: 20, maxLimit: 50 });
-    expect(result).toBeNull();
-    expect(mockRes.status).toHaveBeenCalledWith(412);
-    expect(mockRes.json).toHaveBeenCalledWith({
-      error: "limit exceeds maximum of 50",
-      code: "PRECONDITION_FAILED",
-      maxLimit: 50
+    const message = "Custom not found message";
+    sendNotFound(res, message);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({
+      error: message,
+      code: ErrorCode.NOT_FOUND,
     });
   });
 });
