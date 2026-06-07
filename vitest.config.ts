@@ -13,6 +13,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
+    // Nutrition is ON by default at runtime now the module is complete, but tests
+    // are pinned to the prior OFF value so the flag-gate test and flag-conditional
+    // UI (Analytics Fuelling tab, workout fuelling panel) behave exactly as written.
+    // (vitest exposes test.env on both process.env and import.meta.env.)
+    env: { NUTRITION_ENABLED: 'false', VITE_NUTRITION_ENABLED: 'false' },
     exclude: ['**/*.integration.test.ts', '**/smoke.test.ts', '**/node_modules/**', '**/dist/**', '**/cypress/**'],
     globals: true,
     coverage: {
