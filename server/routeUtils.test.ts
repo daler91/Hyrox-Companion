@@ -2,6 +2,8 @@ import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { ErrorCode } from "./errors";
+
 // ---------------------------------------------------------------------------
 // Mock express-rate-limit with a lightweight, synchronous in-process store.
 // This lets us test that our rateLimiter() wrapper correctly:
@@ -69,7 +71,7 @@ vi.mock("express-rate-limit", () => {
 
 import rateLimit from "express-rate-limit";
 
-import { calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,rateLimiter, validateBody } from "./routeUtils";
+import {     calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,parsePagination , rateLimiter, sendNotFound,validateBody  , validateParams,validateQuery  } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -532,5 +534,119 @@ describe("validateBody", () => {
         details: expect.objectContaining({ issues: expect.any(Array) }),
       })
     );
+  });
+});
+
+describe("sendNotFound", () => {
+  it("should return a 404 status and standard NOT_FOUND error JSON", () => {
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as unknown as import("express").Response;
+
+    const message = "Custom not found message";
+    sendNotFound(res, message);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({
+      error: message,
+      code: ErrorCode.NOT_FOUND,
+    });
+  });
+});
+
+describe("parsePagination", () => {
+  const mockRes = {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn()
+  } as unknown as import("express").Response;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return default limit when limit is not provided", () => {
+    const result = parsePagination({}, mockRes, { defaultLimit: 20 });
+    expect(result).toEqual({ limit: 20, offset: undefined });
+  });
+
+  it("should parse limit and offset correctly", () => {
+    const result = parsePagination({ limit: "15", offset: "30" }, mockRes, { defaultLimit: 20 });
+    expect(result).toEqual({ limit: 15, offset: 30 });
+  });
+
+  it("should return 400 for invalid limit", () => {
+    const result = parsePagination({ limit: "-5" }, mockRes, { defaultLimit: 20 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid limit", code: "BAD_REQUEST" });
+  });
+
+  it("should return 400 for NaN limit", () => {
+    const result = parsePagination({ limit: "invalid" }, mockRes, { defaultLimit: 20 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid limit", code: "BAD_REQUEST" });
+  });
+
+  it("should return 400 for invalid offset", () => {
+    const result = parsePagination({ offset: "-10" }, mockRes, { defaultLimit: 20 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid offset", code: "BAD_REQUEST" });
+  });
+
+  it("should return 400 for NaN offset", () => {
+    const result = parsePagination({ offset: "invalid" }, mockRes, { defaultLimit: 20 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({ error: "Invalid offset", code: "BAD_REQUEST" });
+  });
+
+  it("should return 412 for limit exceeding maxLimit", () => {
+    const result = parsePagination({ limit: "100" }, mockRes, { defaultLimit: 20, maxLimit: 50 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(412);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: "limit exceeds maximum of 50",
+      code: "PRECONDITION_FAILED",
+      maxLimit: 50
+    });
+  });
+});
+
+describe("validateQuery", () => {
+  const schema = z.object({
+    search: z.string()
+  });
+
+  it("should validate and update req.query", () => {
+    const req = { query: { search: "test" } } as unknown as import("express").Request;
+    const res = {} as unknown as import("express").Response;
+    const next = vi.fn();
+
+    const middleware = validateQuery(schema);
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.query).toEqual({ search: "test" });
+  });
+});
+
+describe("validateParams", () => {
+  const schema = z.object({
+    id: z.string()
+  });
+
+  it("should validate and update req.params", () => {
+    const req = { params: { id: "123" } } as unknown as import("express").Request;
+    const res = {} as unknown as import("express").Response;
+    const next = vi.fn();
+
+    const middleware = validateParams(schema);
+    middleware(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.params).toEqual({ id: "123" });
   });
 });
