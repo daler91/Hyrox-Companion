@@ -2,6 +2,8 @@ import type { NextFunction,Request, Response } from "express";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { ErrorCode } from "./errors";
+
 // ---------------------------------------------------------------------------
 // Mock express-rate-limit with a lightweight, synchronous in-process store.
 // This lets us test that our rateLimiter() wrapper correctly:
@@ -69,7 +71,7 @@ vi.mock("express-rate-limit", () => {
 
 import rateLimit from "express-rate-limit";
 
-import { calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,rateLimiter, validateBody } from "./routeUtils";
+import {     calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,parsePagination , rateLimiter, sendNotFound,validateBody  , validateParams,validateQuery  } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
@@ -482,45 +484,99 @@ describe("expandExercisesToSetRows", () => {
 
 
 
-describe("validateBody", () => {
+
+
+describe("parsePagination", () => {
+  const mockRes = {
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn()
+  } as unknown as import("express").Response;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return default limit when limit is not provided", () => {
+    const result = parsePagination({}, mockRes, { defaultLimit: 20 });
+    expect(result).toEqual({ limit: 20, offset: undefined });
+  });
+
+  it("should parse limit and offset correctly", () => {
+    const result = parsePagination({ limit: "15", offset: "30" }, mockRes, { defaultLimit: 20 });
+    expect(result).toEqual({ limit: 15, offset: 30 });
+  });
+
+  const errorCases = [
+    { name: "invalid limit", query: { limit: "-5" }, error: "Invalid limit" },
+    { name: "NaN limit", query: { limit: "invalid" }, error: "Invalid limit" },
+    { name: "invalid offset", query: { offset: "-10" }, error: "Invalid offset" },
+    { name: "NaN offset", query: { offset: "invalid" }, error: "Invalid offset" },
+  ];
+
+  it.each(errorCases)("should return 400 for $name", ({ query, error }) => {
+    const result = parsePagination(query, mockRes, { defaultLimit: 20 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({ error, code: "BAD_REQUEST" });
+  });
+
+  it("should return 412 for limit exceeding maxLimit", () => {
+    const result = parsePagination({ limit: "100" }, mockRes, { defaultLimit: 20, maxLimit: 50 });
+    expect(result).toBeNull();
+    expect(mockRes.status).toHaveBeenCalledWith(412);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      error: "limit exceeds maximum of 50",
+      code: "PRECONDITION_FAILED",
+      maxLimit: 50
+    });
+  });
+});
+
+describe("Validator Middleware (validateBody, validateQuery, validateParams)", () => {
   const schema = z.object({
-    name: z.string(),
-    age: z.number().optional(),
+    key: z.string(),
+    optional: z.number().optional(),
   });
 
-  it("should call next() and update req.body on valid input", () => {
-    const req = { body: { name: "Test", age: 30 } } as unknown as import("express").Request;
+  const cases = [
+    { name: "validateBody", fn: validateBody, prop: "body" },
+    { name: "validateQuery", fn: validateQuery, prop: "query" },
+    { name: "validateParams", fn: validateParams, prop: "params" },
+  ] as const;
+
+  it.each(cases)("$name calls next() and updates req.$prop on valid input", ({ fn, prop }) => {
+    const req = { [prop]: { key: "Test", optional: 30 } } as unknown as import("express").Request;
     const res = {} as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
+    const middleware = fn(schema);
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(req.body).toEqual({ name: "Test", age: 30 });
+    expect(req[prop]).toEqual({ key: "Test", optional: 30 });
   });
 
-  it("should strip unknown properties from req.body on valid input", () => {
-    const req = { body: { name: "Test", unknownProp: true } } as unknown as import("express").Request;
+  it.each(cases)("$name strips unknown properties from req.$prop on valid input", ({ fn, prop }) => {
+    const req = { [prop]: { key: "Test", unknownProp: true } } as unknown as import("express").Request;
     const res = {} as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
+    const middleware = fn(schema);
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(req.body).toEqual({ name: "Test" });
+    expect(req[prop]).toEqual({ key: "Test" });
   });
 
-  it("should return 400 on invalid input without calling next()", () => {
-    const req = { body: { age: "not a number" } } as unknown as import("express").Request;
+  it.each(cases)("$name returns 400 on invalid input without calling next()", ({ fn, prop }) => {
+    const req = { [prop]: { optional: "not a number" } } as unknown as import("express").Request;
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     } as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
+    const middleware = fn(schema);
     middleware(req, res, next);
 
     expect(next).not.toHaveBeenCalled();
@@ -532,5 +588,23 @@ describe("validateBody", () => {
         details: expect.objectContaining({ issues: expect.any(Array) }),
       })
     );
+  });
+});
+
+describe("sendNotFound", () => {
+  it("should return a 404 status and standard NOT_FOUND error JSON", () => {
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+    } as unknown as import("express").Response;
+
+    const message = "Custom not found message";
+    sendNotFound(res, message);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({
+      error: message,
+      code: ErrorCode.NOT_FOUND,
+    });
   });
 });
