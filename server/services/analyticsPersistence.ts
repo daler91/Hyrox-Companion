@@ -14,6 +14,7 @@ import type { Logger } from "pino";
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import { type CoachInsightsResult, generateCoachInsights } from "./coachInsightsService";
+import { generateNutritionInsights, type NutritionInsightsResult } from "./nutrition/nutritionInsightsService";
 import { generateRacePrediction } from "./racePrediction/racePredictionService";
 
 // Re-exported so route handlers can import the staleness check alongside the
@@ -88,5 +89,37 @@ export async function regenerateAndStoreCoachInsights(
 ): Promise<CoachInsightsResult> {
   const result = await generateCoachInsights(userId, log);
   await persistCoachInsights(userId, result, recomputedOn);
+  return result;
+}
+
+/**
+ * Persist an already-generated nutrition insights result. Unlike the training
+ * surfaces, staleness is anchored on the latest FOOD-LOG date — a newly logged
+ * meal (not a workout) is what makes nutrition insights stale — stored in the
+ * generic lastWorkoutDateAtGeneration column (computeStale is feature-agnostic).
+ */
+export async function persistNutritionInsights(
+  userId: string,
+  result: NutritionInsightsResult,
+  recomputedOn?: string,
+): Promise<void> {
+  await storage.analyticsResults.upsert({
+    userId,
+    feature: "nutrition_insights",
+    payload: result,
+    generatedAt: new Date(result.generatedAt),
+    lastWorkoutDateAtGeneration: await storage.nutrition.getLatestLogDate(userId),
+    recomputedOn,
+  });
+}
+
+/** Generate nutrition insights and persist them. Gating is the caller's (route middleware). */
+export async function regenerateAndStoreNutritionInsights(
+  userId: string,
+  log: Logger = defaultLogger,
+  recomputedOn?: string,
+): Promise<NutritionInsightsResult> {
+  const result = await generateNutritionInsights(userId, log);
+  await persistNutritionInsights(userId, result, recomputedOn);
   return result;
 }

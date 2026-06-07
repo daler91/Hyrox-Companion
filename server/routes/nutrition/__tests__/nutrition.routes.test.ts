@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError, ErrorCode } from "../../../errors";
 import { clearRateLimitBuckets } from "../../../routeUtils";
+import { regenerateAndStoreNutritionInsights } from "../../../services/analyticsPersistence";
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
@@ -47,6 +48,7 @@ vi.mock("../../../storage", () => ({
       getAllExerciseSetsWithDates: vi.fn(),
       getExerciseLoadTags: vi.fn(),
     },
+    analyticsResults: { get: vi.fn() },
     nutrition: {
       getVisibleFoodById: vi.fn(),
       getRecentFoods: vi.fn(),
@@ -76,8 +78,14 @@ vi.mock("../../../storage", () => ({
       getCurrentTarget: vi.fn(),
       listTargets: vi.fn(),
       createTarget: vi.fn(),
+      getLatestLogDate: vi.fn(),
     },
   },
+}));
+
+vi.mock("../../../services/analyticsPersistence", () => ({
+  computeStale: vi.fn(() => false),
+  regenerateAndStoreNutritionInsights: vi.fn(),
 }));
 
 function buildApp(): express.Express {
@@ -593,6 +601,39 @@ describe("nutrition routes", () => {
     });
   });
 
+  describe("Phase 5: AI insights (FR-5.3)", () => {
+    it("returns insights:null when none have been generated", async () => {
+      vi.mocked(storage.analyticsResults.get).mockResolvedValue(undefined);
+      const res = await request(app).get("/api/v1/nutrition/insights");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ insights: null });
+    });
+
+    it("returns the stored analysis with generatedAt + stale flag", async () => {
+      vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+        payload: { insights: "# Eat up", generatedAt: "2026-06-01T00:00:00.000Z" },
+        generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+      } as never);
+      vi.mocked(storage.nutrition.getLatestLogDate).mockResolvedValue("2026-06-07");
+
+      const res = await request(app).get("/api/v1/nutrition/insights");
+      expect(res.status).toBe(200);
+      expect(res.body.insights).toBe("# Eat up");
+      expect(res.body).toHaveProperty("stale");
+    });
+
+    it("regenerates on POST", async () => {
+      vi.mocked(regenerateAndStoreNutritionInsights).mockResolvedValue({
+        insights: "# Fresh",
+        generatedAt: "2026-06-07T00:00:00.000Z",
+      });
+      const res = await request(app).post("/api/v1/nutrition/insights").send({});
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ insights: "# Fresh", stale: false });
+      expect(regenerateAndStoreNutritionInsights).toHaveBeenCalledWith("test_user");
+    });
+  });
+
   describe("feature flag gate", () => {
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
@@ -606,6 +647,8 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).get("/api/v1/nutrition/targets")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/targets").send({ calories: 2000 })).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/micros")).status).toBe(404);
+      expect((await request(gatedApp).get("/api/v1/nutrition/insights")).status).toBe(404);
+      expect((await request(gatedApp).post("/api/v1/nutrition/insights").send({})).status).toBe(404);
     });
   });
 });

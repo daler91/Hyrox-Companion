@@ -730,6 +730,18 @@ export class NutritionStorage {
     };
   }
 
+  /** The user's most recent food-log calendar date (YYYY-MM-DD), or null. The
+   *  staleness anchor for nutrition insights (FR-5.3). */
+  async getLatestLogDate(userId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ logDate: foodLogEntries.logDate })
+      .from(foodLogEntries)
+      .where(eq(foodLogEntries.userId, userId))
+      .orderBy(desc(foodLogEntries.logDate))
+      .limit(1);
+    return row?.logDate ?? null;
+  }
+
   // --- targets (FR-5.2) -----------------------------------------------------
 
   /** The target effective on `onDate` — the latest version with effectiveFrom <= onDate. */

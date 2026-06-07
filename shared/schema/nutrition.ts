@@ -363,3 +363,11 @@ export interface MicroSummaryResponse {
   // have no micros until re-fetched from the importer).
   micros: MicroSummaryRow[];
 }
+
+/** FR-5.3 — stored AI nutrition insights (Markdown), or null if never generated. */
+export interface NutritionInsightsResponse {
+  insights: string | null;
+  generatedAt?: string;
+  // true when a meal has been logged since the analysis was generated.
+  stale?: boolean;
+}

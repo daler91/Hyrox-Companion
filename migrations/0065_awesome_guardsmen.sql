@@ -1,0 +1,2 @@
+ALTER TABLE "analytics_results" DROP CONSTRAINT "analytics_results_feature_check";--> statement-breakpoint
+ALTER TABLE "analytics_results" ADD CONSTRAINT "analytics_results_feature_check" CHECK (feature IN ('coach_insights', 'race_prediction', 'nutrition_insights'));

@@ -22,6 +22,7 @@ import {
   foodSearchQuerySchema,
   type MealType,
   type MicroSummaryResponse,
+  type NutritionInsightsResponse,
   type NutritionTargetsResponse,
   type ParseMealResponse,
   type ParseMealTextInput,
@@ -43,6 +44,7 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
+import { computeStale, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
@@ -504,6 +506,45 @@ export function registerNutritionRoutes(router: Router): void {
       const response: MicroSummaryResponse = { date: logDate, micros: buildMicroSummary(rows) };
       res.json(response);
     }),
+  );
+
+  // FR-5.3 — AI nutrition insights. GET returns the last stored analysis instantly
+  // (no AI spend) with a `stale` flag set when a meal was logged after it was
+  // generated; POST regenerates (AI consent + budget gated) and persists.
+  router.get(
+    "/api/v1/nutrition/insights",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const row = await storage.analyticsResults.get(userId, "nutrition_insights");
+      if (!row) {
+        const empty: NutritionInsightsResponse = { insights: null };
+        res.json(empty);
+        return;
+      }
+      const latestLogDate = await storage.nutrition.getLatestLogDate(userId);
+      const payload = row.payload as NutritionInsightsResponse;
+      const response: NutritionInsightsResponse = {
+        ...payload,
+        generatedAt: row.generatedAt.toISOString(),
+        stale: computeStale(row, latestLogDate),
+      };
+      res.json(response);
+    }),
+  );
+
+  protectedPost(
+    router,
+    "/api/v1/nutrition/insights",
+    { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const result = await regenerateAndStoreNutritionInsights(userId);
+      // Freshly generated against the current latest food log, so never stale.
+      const response: NutritionInsightsResponse = { ...result, stale: false };
+      res.json(response);
+    },
   );
 
   // ---- recipes (FR-2.3) ----------------------------------------------------

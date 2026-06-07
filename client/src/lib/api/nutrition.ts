@@ -13,6 +13,7 @@ import type {
   FoodServing,
   FoodWithServingsResponse,
   MicroSummaryResponse,
+  NutritionInsightsResponse,
   NutritionTarget,
   NutritionTargetsResponse,
   ParseMealResponse,
@@ -137,4 +138,9 @@ export const nutrition = {
       "GET",
       date ? `${base}/micros?date=${date}` : `${base}/micros`,
     ),
+
+  // --- Phase 5: AI insights ---
+  getInsights: () => typedRequest<NutritionInsightsResponse>("GET", `${base}/insights`),
+
+  regenerateInsights: () => typedRequest<NutritionInsightsResponse>("POST", `${base}/insights`),
 } as const;

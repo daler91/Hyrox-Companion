@@ -18,6 +18,7 @@ import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
 import { MicronutrientPanel } from "./nutrition/MicronutrientPanel";
 import { MyFoodsSection } from "./nutrition/MyFoodsSection";
+import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
@@ -166,6 +167,8 @@ export default function Nutrition() {
           onEditFood={(food) => setCustomFood({ mode: "edit", food })}
           onEditRecipe={(id) => setRecipe({ open: true, id })}
         />
+
+        <NutritionInsightsPanel />
       </div>
 
       <LogFoodDialog state={dialog} date={date} onClose={() => setDialog(null)} />

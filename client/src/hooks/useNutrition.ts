@@ -11,6 +11,7 @@ import type {
   FoodSearchResponse,
   FoodWithServingsResponse,
   MicroSummaryResponse,
+  NutritionInsightsResponse,
   NutritionTarget,
   NutritionTargetsResponse,
   ParseMealResponse,
@@ -275,5 +276,26 @@ export function useMicros(date: string) {
   return useQuery<MicroSummaryResponse>({
     queryKey: QUERY_KEYS.nutritionMicros(date),
     queryFn: () => api.nutrition.getMicros(date),
+  });
+}
+
+/** The last stored AI nutrition insights — no AI spend; authoritative until
+ *  regenerated, so treated as fresh across remounts (FR-5.3). */
+export function useNutritionInsights(enabled = true) {
+  return useQuery<NutritionInsightsResponse>({
+    queryKey: QUERY_KEYS.nutritionInsights,
+    queryFn: () => api.nutrition.getInsights(),
+    enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+/** Regenerate the AI nutrition insights (spends AI); refreshes the cached query. */
+export function useRegenerateNutritionInsights() {
+  return useApiMutation<NutritionInsightsResponse, Error, void>({
+    mutationFn: () => api.nutrition.regenerateInsights(),
+    invalidateQueries: [QUERY_KEYS.nutritionInsights],
+    errorToast: "Couldn't generate insights",
   });
 }
