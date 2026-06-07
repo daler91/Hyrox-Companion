@@ -2,6 +2,7 @@ import {
   type CreateCustomFoodInput,
   type CreateRecipeInput,
   type Food,
+  type FoodEntryMethod,
   type FoodFavorite,
   foodFavorites,
   foodLogEntries,
@@ -50,7 +51,11 @@ interface CreateLogEntryData {
   mealType: MealType;
   loggedAt: Date;
   logDate: string;
-  entryMethod?: "manual" | "barcode";
+  entryMethod?: FoodEntryMethod;
+  // Provenance for AI-assisted entries (Phase 4); null/false for manual/barcode.
+  rawInput?: string | null;
+  parseConfidence?: number | null;
+  pendingReview?: boolean;
 }
 
 interface UpdateLogEntryPatch {
@@ -340,9 +345,44 @@ export class NutritionStorage {
         quantityG: data.quantityG,
         mealType: data.mealType,
         entryMethod: data.entryMethod ?? "manual",
+        rawInput: data.rawInput ?? null,
+        parseConfidence: data.parseConfidence ?? null,
+        pendingReview: data.pendingReview ?? false,
       })
       .returning();
     return row;
+  }
+
+  /**
+   * Persist a batch of reviewed entries in one atomic multi-row insert (FR-4.1).
+   * All share the capture metadata (entryMethod, rawInput, loggedAt, logDate);
+   * each item carries its own food/quantity/meal and optional parse confidence.
+   * `pendingReview` is false — the user reviewed every item before confirming.
+   */
+  async createLogEntriesBatch(
+    userId: string,
+    data: {
+      entryMethod: FoodEntryMethod;
+      rawInput?: string | null;
+      loggedAt: Date;
+      logDate: string;
+      items: { foodId: string; quantityG: number; mealType: MealType; parseConfidence?: number | null }[];
+    },
+  ): Promise<FoodLogEntry[]> {
+    if (data.items.length === 0) return [];
+    const rows = data.items.map((item) => ({
+      userId,
+      foodId: item.foodId,
+      loggedAt: data.loggedAt,
+      logDate: data.logDate,
+      quantityG: item.quantityG,
+      mealType: item.mealType,
+      entryMethod: data.entryMethod,
+      rawInput: data.rawInput ?? null,
+      parseConfidence: item.parseConfidence ?? null,
+      pendingReview: false,
+    }));
+    return db.insert(foodLogEntries).values(rows).returning();
   }
 
   /** A day's entries joined to their foods, ordered by time, for the daily view. */

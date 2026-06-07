@@ -1,7 +1,9 @@
 import type {
   AddFavoriteInput,
+  BatchLogResponse,
   BlockViewResponse,
   CreateCustomFoodInput,
+  CreateFoodLogBatchInput,
   CreateFoodLogInput,
   CreateRecipeInput,
   DailySummaryResponse,
@@ -10,6 +12,7 @@ import type {
   FoodSearchResponse,
   FoodServing,
   FoodWithServingsResponse,
+  ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
   RepeatDayInput,
@@ -111,4 +114,11 @@ export const nutrition = {
       "GET",
       to ? `${base}/block?from=${enc(from)}&to=${enc(to)}` : `${base}/block?from=${enc(from)}`,
     ),
+
+  // --- Phase 4: natural-language meal logging ---
+  parseMealText: (text: string) =>
+    typedRequest<ParseMealResponse>("POST", `${base}/parse/text`, { text }),
+
+  createLogBatch: (data: CreateFoodLogBatchInput) =>
+    typedRequest<BatchLogResponse>("POST", `${base}/logs/batch`, data),
 } as const;

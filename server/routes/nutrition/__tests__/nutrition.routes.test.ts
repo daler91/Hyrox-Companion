@@ -7,6 +7,7 @@ import { clearRateLimitBuckets } from "../../../routeUtils";
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
+import { parseMealFromText, resolveAndPreview } from "../../../services/nutrition/mealParser";
 import { storage } from "../../../storage";
 import { createTestApp } from "../../__tests__/testUtils";
 import nutritionIndexRouter from "../index";
@@ -24,6 +25,18 @@ vi.mock("../../../types", () => ({ getUserId: () => "test_user" }));
 vi.mock("../../../services/nutrition/foodSearch", () => ({ searchFoods: vi.fn() }));
 vi.mock("../../../services/nutrition/foodDetail", () => ({ getFoodWithServings: vi.fn() }));
 vi.mock("../../../services/nutrition/barcode", () => ({ lookupBarcode: vi.fn() }));
+vi.mock("../../../services/nutrition/mealParser", () => ({
+  parseMealFromText: vi.fn(),
+  resolveAndPreview: vi.fn(),
+}));
+// AI consent/budget gates are exercised in ai.test.ts; here they pass through so
+// the Phase 4 parse route's own logic is what's under test.
+vi.mock("../../../middleware/aiConsent", () => ({
+  aiConsentCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+vi.mock("../../../middleware/aibudget", () => ({
+  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
 
 vi.mock("../../../storage", () => ({
   storage: {
@@ -47,6 +60,8 @@ vi.mock("../../../storage", () => ({
       addFavorite: vi.fn(),
       removeFavorite: vi.fn(),
       createLogEntry: vi.fn(),
+      createLogEntriesBatch: vi.fn(),
+      getVisibleFoodsByIds: vi.fn(),
       listEntriesWithFoodForDate: vi.fn(),
       listEntriesWithFoodInWindow: vi.fn(),
       listEntriesWithFoodForDateRange: vi.fn(),
@@ -432,6 +447,89 @@ describe("nutrition routes", () => {
     });
   });
 
+  describe("Phase 4: natural-language logging (FR-4.1)", () => {
+    it("parses a meal description into reviewed suggestions", async () => {
+      vi.mocked(parseMealFromText).mockResolvedValue({ items: [], warnings: ["assumed large eggs"] });
+      vi.mocked(resolveAndPreview).mockResolvedValue({
+        items: [
+          {
+            name: "egg, scrambled",
+            quantityG: 100,
+            displayAmount: "2 eggs",
+            mealType: "breakfast",
+            confidence: 92,
+            foodId: "f1",
+            food: { id: "f1" } as never,
+            nutrition: { calories: 150, protein: 10, carb: 1, fat: 11, fiber: 0 },
+          },
+        ],
+        warnings: ["assumed large eggs"],
+      });
+
+      const res = await request(app).post("/api/v1/nutrition/parse/text").send({ text: "2 eggs" });
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].foodId).toBe("f1");
+      expect(res.body.rawInput).toBe("2 eggs");
+      expect(parseMealFromText).toHaveBeenCalledWith("2 eggs", "test_user");
+    });
+
+    it("400s when the text is missing", async () => {
+      expect((await request(app).post("/api/v1/nutrition/parse/text").send({})).status).toBe(400);
+      expect(parseMealFromText).not.toHaveBeenCalled();
+    });
+
+    it("logs a reviewed batch, deriving logDate from the user's timezone", async () => {
+      vi.mocked(storage.nutrition.getVisibleFoodsByIds).mockResolvedValue(
+        new Map([
+          ["f1", { id: "f1" }],
+          ["f2", { id: "f2" }],
+        ]) as never,
+      );
+      vi.mocked(storage.nutrition.createLogEntriesBatch).mockResolvedValue([
+        { id: "e1" },
+        { id: "e2" },
+      ] as never);
+
+      const res = await request(app).post("/api/v1/nutrition/logs/batch").send({
+        entryMethod: "nl",
+        rawInput: "2 eggs and toast",
+        loggedAt: "2026-06-07T02:30:00Z", // Chicago (UTC-5 in June) → previous local day
+        items: [
+          { foodId: "f1", quantityG: 100, mealType: "breakfast", parseConfidence: 92 },
+          { foodId: "f2", quantityG: 30, mealType: "breakfast" },
+        ],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ created: 2, logDate: "2026-06-06" });
+      expect(storage.nutrition.createLogEntriesBatch).toHaveBeenCalledWith(
+        "test_user",
+        expect.objectContaining({ entryMethod: "nl", rawInput: "2 eggs and toast", logDate: "2026-06-06" }),
+      );
+    });
+
+    it("404s a batch referencing a food not visible to the user", async () => {
+      vi.mocked(storage.nutrition.getVisibleFoodsByIds).mockResolvedValue(new Map() as never);
+      const res = await request(app).post("/api/v1/nutrition/logs/batch").send({
+        entryMethod: "nl",
+        loggedAt: "2026-06-07T12:00:00Z",
+        items: [{ foodId: "ghost", quantityG: 100, mealType: "lunch" }],
+      });
+      expect(res.status).toBe(404);
+      expect(storage.nutrition.createLogEntriesBatch).not.toHaveBeenCalled();
+    });
+
+    it("400s a batch with no items", async () => {
+      const res = await request(app).post("/api/v1/nutrition/logs/batch").send({
+        entryMethod: "nl",
+        loggedAt: "2026-06-07T12:00:00Z",
+        items: [],
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe("feature flag gate", () => {
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
@@ -440,6 +538,8 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).post("/api/v1/nutrition/foods/barcode").send({ code: "3017620422003" })).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/session-fuelling/w1")).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/block?from=2026-06-01")).status).toBe(404);
+      expect((await request(gatedApp).post("/api/v1/nutrition/parse/text").send({ text: "eggs" })).status).toBe(404);
+      expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
     });
   });
 });

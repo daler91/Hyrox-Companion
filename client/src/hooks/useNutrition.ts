@@ -1,6 +1,8 @@
 import type {
+  BatchLogResponse,
   BlockViewResponse,
   CreateCustomFoodInput,
+  CreateFoodLogBatchInput,
   CreateFoodLogInput,
   CreateRecipeInput,
   DailySummaryResponse,
@@ -8,6 +10,7 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodWithServingsResponse,
+  ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
   RepeatDayInput,
@@ -217,5 +220,28 @@ export function useBlockView(from: string, to: string, enabled = true) {
     queryFn: () => api.nutrition.getBlock(from, to),
     enabled: enabled && from.length > 0,
     staleTime: 60_000,
+  });
+}
+
+// --- Phase 4: natural-language meal logging ---------------------------------
+
+/** Parse a free-text meal into suggested items (FR-4.1). Opens the review sheet
+ *  on success, so no success toast; errors map AI codes (consent/budget). */
+export function useParseMealText() {
+  return useApiMutation<ParseMealResponse, Error, string>({
+    mutationFn: (text) => api.nutrition.parseMealText(text),
+    errorToast: "Couldn't read that meal",
+  });
+}
+
+/** Confirm the reviewed items: persist them in one batch (FR-4.1). */
+export function useLogMealBatch(date: string) {
+  return useApiMutation<BatchLogResponse, Error, CreateFoodLogBatchInput>({
+    mutationFn: (data) => api.nutrition.createLogBatch(data),
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRecent],
+    successToast: (data) => ({
+      title: `Logged ${data.created} item${data.created === 1 ? "" : "s"}`,
+    }),
+    errorToast: "Couldn't log those items",
   });
 }

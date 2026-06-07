@@ -1,5 +1,5 @@
 import type { FoodLogEntryWithNutrition } from "@shared/schema";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -26,7 +26,16 @@ export function MealSection({ label, entries, onEdit, onDelete, deletingId }: Me
         {entries.map((e) => (
           <li key={e.id} className="flex items-center justify-between gap-2 px-3 py-2">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{e.name}</p>
+              <p className="truncate text-sm font-medium">
+                {e.name}
+                {(e.entryMethod === "nl" || e.entryMethod === "photo") && (
+                  <Sparkles
+                    className="ml-1 inline h-3 w-3 align-baseline text-primary"
+                    aria-label="Logged with AI"
+                    data-testid={`ai-badge-${e.id}`}
+                  />
+                )}
+              </p>
               <p className="text-xs text-muted-foreground">
                 {Math.round(e.quantityG)} g · {e.nutrition.calories} kcal · P{e.nutrition.protein} C
                 {e.nutrition.carb} F{e.nutrition.fat}

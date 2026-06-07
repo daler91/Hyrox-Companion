@@ -3,11 +3,14 @@ import {
   addFavoriteSchema,
   type BarcodeLookupInput,
   barcodeLookupSchema,
+  type BatchLogResponse,
   type BlockViewQuery,
   blockViewQuerySchema,
   type BlockViewResponse,
   type CreateCustomFoodInput,
   createCustomFoodSchema,
+  type CreateFoodLogBatchInput,
+  createFoodLogBatchSchema,
   type CreateFoodLogInput,
   createFoodLogSchema,
   type CreateRecipeInput,
@@ -18,6 +21,9 @@ import {
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type MealType,
+  type ParseMealResponse,
+  type ParseMealTextInput,
+  parseMealTextSchema,
   type RepeatDayInput,
   repeatDaySchema,
   type ServingInput,
@@ -37,6 +43,7 @@ import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
+import { parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { buildDailySummary } from "../../services/nutrition/rollup";
 import {
   computeSessionFuelling,
@@ -386,6 +393,63 @@ export function registerNutritionRoutes(router: Router): void {
       });
       if (created === 0) return sendNotFound(res, "No entries found to repeat for that day");
       res.status(201).json({ created, logDate: targetDate });
+    },
+  );
+
+  // ---- Phase 4 (Natural-language logging) ----------------------------------
+  // FR-4.1 — parse a free-text meal description into suggested food items.
+  // AI-gated (consent + daily budget) and on the shared "parse" rate bucket.
+  // Returns suggestions only; nothing is logged until the client confirms via
+  // /logs/batch (never auto-log an AI guess).
+  protectedPost(
+    router,
+    "/api/v1/nutrition/parse/text",
+    {
+      limiter: rateLimiter("parse", 5),
+      aiConsent: true,
+      aiBudget: true,
+      validation: [validateBody(parseMealTextSchema)],
+    },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { text } = req.body as ParseMealTextInput;
+      const raw = await parseMealFromText(text, userId);
+      const { items, warnings } = await resolveAndPreview(raw, userId);
+      const response: ParseMealResponse = { items, warnings, rawInput: text };
+      res.json(response);
+    },
+  );
+
+  // FR-4.1 — confirm reviewed items: persist them in one batch. Pure DB write
+  // (no AI gate). logDate is derived server-side from the user's timezone.
+  protectedPost(
+    router,
+    "/api/v1/nutrition/logs/batch",
+    { limiter: rateLimiter("nutritionLog", 60), validation: [validateBody(createFoodLogBatchSchema)] },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const body = req.body as CreateFoodLogBatchInput;
+      // Every food must be visible to the user (no cross-user / unknown foods).
+      const ids = body.items.map((i) => i.foodId);
+      const visible = await storage.nutrition.getVisibleFoodsByIds(userId, ids);
+      if (ids.some((id) => !visible.has(id))) return sendNotFound(res, FOOD_NOT_FOUND);
+
+      const loggedAt = new Date(body.loggedAt);
+      const logDate = getLocalDateStr(loggedAt, await getUserTimezone(userId));
+      const created = await storage.nutrition.createLogEntriesBatch(userId, {
+        entryMethod: body.entryMethod,
+        rawInput: body.rawInput ?? null,
+        loggedAt,
+        logDate,
+        items: body.items.map((i) => ({
+          foodId: i.foodId,
+          quantityG: i.quantityG,
+          mealType: i.mealType,
+          parseConfidence: i.parseConfidence ?? null,
+        })),
+      });
+      const response: BatchLogResponse = { created: created.length, logDate };
+      res.status(201).json(response);
     },
   );
 
