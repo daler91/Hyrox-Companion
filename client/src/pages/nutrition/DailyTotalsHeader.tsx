@@ -1,4 +1,4 @@
-import type { NutritionMacroTotals, NutritionTarget } from "@shared/schema";
+import type { EffectiveTargetSummary, NutritionMacroTotals } from "@shared/schema";
 
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -12,18 +12,28 @@ const MACROS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> 
   { key: "fiber", label: "Fiber (g)" },
 ];
 
+/** The carb adjustment note when the day's target is load-scaled (FR-5.x). */
+function carbLoadNote(effectiveTarget: EffectiveTargetSummary | null): string | null {
+  if (!effectiveTarget?.scaled || effectiveTarget.carbDeltaG === 0) return null;
+  return effectiveTarget.carbDeltaG > 0
+    ? `+${effectiveTarget.carbDeltaG}g for today's load`
+    : `${effectiveTarget.carbDeltaG}g (lighter day)`;
+}
+
 /** Running daily totals for calories + macros (FR-1.3), with progress toward the
- *  current target where one is set (FR-5.2). */
+ *  day's effective target where one is set — including carb periodisation by
+ *  training load (FR-5.2 / FR-5.x). */
 export function DailyTotalsHeader({
   totals,
-  target = null,
+  effectiveTarget = null,
 }: {
   readonly totals: NutritionMacroTotals;
-  readonly target?: NutritionTarget | null;
+  readonly effectiveTarget?: EffectiveTargetSummary | null;
 }) {
   const progressByKey = new Map<string, TargetProgressRow>(
-    computeTargetProgress(totals, target).map((r) => [r.key, r]),
+    computeTargetProgress(totals, effectiveTarget).map((r) => [r.key, r]),
   );
+  const carbNote = carbLoadNote(effectiveTarget);
 
   return (
     <Card data-testid="nutrition-daily-totals">
@@ -51,6 +61,14 @@ export function DailyTotalsHeader({
                     {progress.value} / {progress.target}
                   </span>
                 </div>
+              )}
+              {m.key === "carb" && carbNote && (
+                <span
+                  className="mt-0.5 block text-center text-[10px] font-medium text-primary"
+                  data-testid="carb-load-note"
+                >
+                  {carbNote}
+                </span>
               )}
             </div>
           );

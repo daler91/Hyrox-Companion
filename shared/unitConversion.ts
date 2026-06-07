@@ -245,6 +245,30 @@ export function userWeightToKg(value: number, weightUnit: string): number {
   return value;
 }
 
+const CM_PER_INCH = 2.54;
+const INCHES_PER_FOOT = 12;
+
+/**
+ * Split a canonical height in centimetres into whole feet + inches for display
+ * to imperial users. Read-only (display edge) so the S5 read-convert-write
+ * caveat does not apply. Rolls 12" up to the next foot.
+ */
+export function cmToFtIn(cm: number): { feet: number; inches: number } {
+  const totalInches = Math.round(cm / CM_PER_INCH);
+  let feet = Math.floor(totalInches / INCHES_PER_FOOT);
+  let inches = totalInches % INCHES_PER_FOOT;
+  if (inches === INCHES_PER_FOOT) {
+    feet += 1;
+    inches = 0;
+  }
+  return { feet, inches };
+}
+
+/** Convert a feet + inches height back to canonical centimetres. */
+export function ftInToCm(feet: number, inches: number): number {
+  return (feet * INCHES_PER_FOOT + inches) * CM_PER_INCH;
+}
+
 function roundToNearestHalf(value: number): number {
   return Math.round(value * 2) / 2;
 }

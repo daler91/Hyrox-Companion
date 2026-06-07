@@ -169,10 +169,27 @@ export interface FoodLogEntryWithNutrition {
   nutrition: NutritionMacroTotals;
 }
 
+/** The target in force for a given day, after any training-load periodisation. */
+export interface EffectiveTargetSummary {
+  calories: number | null;
+  proteinG: number | null;
+  carbG: number | null;
+  fatG: number | null;
+  // Signed carb grams applied vs the baseline for this day's load (0 = flat).
+  carbDeltaG: number;
+  // The day's actual training load (UTSS) used for the scaling.
+  utss: number;
+  // True when carbs/calories were load-scaled (false ⇒ a flat baseline target).
+  scaled: boolean;
+}
+
 export interface DailySummaryResponse {
   logDate: string;
   totals: NutritionMacroTotals;
   meals: Record<MealType, FoodLogEntryWithNutrition[]>;
+  // The day's effective target (baseline ± load periodisation), or null when the
+  // user has set no target. Lets the client render per-date progress correctly.
+  effectiveTarget: EffectiveTargetSummary | null;
 }
 
 export interface RepeatDayResponse {
@@ -332,6 +349,12 @@ export const upsertNutritionTargetSchema = z
     proteinG: targetValue,
     carbG: targetValue,
     fatG: targetValue,
+    // Training-day-aware periodisation (FR-5.x): when enabled, the effective
+    // carb/calorie target for a date is scaled from this baseline by that date's
+    // training load (UTSS). Optional so a flat target omits them.
+    periodizationEnabled: z.boolean().optional(),
+    referenceUtss: z.number().nonnegative().max(1000).nullable().optional(),
+    carbGramsPerUtss: z.number().nonnegative().max(100).nullable().optional(),
     // Day the target takes effect; server defaults to the user's local today.
     effectiveFrom: isoDate.optional(),
   })

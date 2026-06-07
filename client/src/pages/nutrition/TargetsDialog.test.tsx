@@ -21,6 +21,9 @@ const CURRENT: NutritionTarget = {
   proteinG: 150,
   carbG: null,
   fatG: null,
+  periodizationEnabled: false,
+  referenceUtss: null,
+  carbGramsPerUtss: null,
   effectiveFrom: "2026-06-01",
 };
 

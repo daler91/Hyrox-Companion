@@ -37,6 +37,14 @@ export const updateUserPreferencesSchema = z.object({
   gender: z.enum(["male", "female", "prefer_not_to_say"]).nullable().optional(),
   // General age cohort signal for the Race Predictor (W17), independent of MAF.
   age: z.number().int().min(13).max(100).nullable().optional(),
+  // Body-composition inputs for calculated nutrition targets. Canonical units
+  // on the wire (kg/cm); the client converts from the user's display unit at the
+  // input edge before PATCHing.
+  bodyweightKg: z.number().positive().max(500).nullable().optional(),
+  heightCm: z.number().positive().max(300).nullable().optional(),
+  activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]).nullable().optional(),
+  weightGoalDirection: z.enum(["lose", "maintain", "gain"]).nullable().optional(),
+  weightGoalRateKgPerWeek: z.number().nonnegative().max(2).nullable().optional(),
   mafAge: z.number().int().min(16).max(99).nullable().optional(),
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),

@@ -139,7 +139,7 @@ export default function Nutrition() {
           </div>
         </div>
 
-        <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} target={currentTarget} />
+        <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} effectiveTarget={summary?.effectiveTarget ?? null} />
 
         <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />

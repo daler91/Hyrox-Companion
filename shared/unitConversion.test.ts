@@ -1,6 +1,7 @@
 import { describe, expect,it } from "vitest";
 
 import {
+  cmToFtIn,
   convertDistance,
   convertWeight,
   displayDistanceToStored,
@@ -9,6 +10,7 @@ import {
   formatPace,
   formatSpeed,
   formatWeight,
+  ftInToCm,
   getStoredDistanceUnit,
   getWorkoutDistanceDisplay,
   kgToUserWeight,
@@ -529,5 +531,22 @@ describe("formatDistance", () => {
   it("handles integers accurately", () => {
     expect(formatDistance(42, "km")).toBe("42 km");
     expect(formatDistance(42, "miles", 3)).toBe("42 miles");
+  });
+});
+
+describe("cmToFtIn / ftInToCm", () => {
+  it("splits centimetres into feet and inches", () => {
+    expect(cmToFtIn(180)).toEqual({ feet: 5, inches: 11 }); // 70.9" → 71"
+    expect(cmToFtIn(152.4)).toEqual({ feet: 5, inches: 0 });
+  });
+
+  it("rolls 12 inches up to the next foot", () => {
+    // 178.5cm ≈ 70.3" but a value that rounds to 72" must not read 5'12".
+    expect(cmToFtIn(182.88)).toEqual({ feet: 6, inches: 0 }); // exactly 72"
+  });
+
+  it("round-trips feet+inches back to centimetres", () => {
+    expect(ftInToCm(5, 11)).toBeCloseTo(180.34, 2);
+    expect(ftInToCm(6, 0)).toBeCloseTo(182.88, 2);
   });
 });
