@@ -6,6 +6,7 @@ import { ConsentStorage } from "./consent";
 import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
 import { MafTestStorage } from "./mafTests";
+import { NutritionStorage } from "./nutrition";
 import { PlanStorage } from "./plans";
 import { PushStorage } from "./push";
 import { TimelineStorage } from "./timeline";
@@ -31,4 +32,5 @@ export const storage: IStorage = {
   push: new PushStorage(),
   mafTests: new MafTestStorage(),
   consent: new ConsentStorage(),
+  nutrition: new NutritionStorage(),
 };

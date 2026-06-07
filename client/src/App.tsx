@@ -20,6 +20,7 @@ import { useEmailCheck } from "@/hooks/useEmailCheck";
 import { useFocusMainOnRouteChange } from "@/hooks/useFocusMainOnRouteChange";
 import { useNavigationBreadcrumb } from "@/hooks/useNavigationBreadcrumb";
 import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
+import { featureFlags } from "@/lib/featureFlags";
 import NotFound from "@/pages/not-found";
 
 import { queryClient } from "./lib/queryClient";
@@ -33,6 +34,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Privacy = lazy(() => import("@/pages/Privacy"));
+const Nutrition = lazy(() => import("@/pages/Nutrition"));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 
@@ -77,6 +79,9 @@ function AuthenticatedRouter() {
         <Route path="/"><FeatureErrorBoundaryWrapper featureName="Timeline"><Timeline /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/log"><FeatureErrorBoundaryWrapper featureName="Log Workout"><LogWorkout /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/analytics"><FeatureErrorBoundaryWrapper featureName="Analytics"><Analytics /></FeatureErrorBoundaryWrapper></Route>
+        {featureFlags.nutritionEnabled && (
+          <Route path="/nutrition"><FeatureErrorBoundaryWrapper featureName="Nutrition"><Nutrition /></FeatureErrorBoundaryWrapper></Route>
+        )}
         <Route path="/settings"><FeatureErrorBoundaryWrapper featureName="Settings"><Settings /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/privacy"><Privacy /></Route>
         <Route component={NotFound} />

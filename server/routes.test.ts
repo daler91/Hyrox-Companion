@@ -14,6 +14,7 @@ import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
+import nutritionRoutes from "./routes/nutrition/index";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
 import pushRoutes from "./routes/push";
@@ -38,6 +39,7 @@ vi.mock("./routes/auth", () => ({ default: { name: "authRoutes" } }));
 vi.mock("./routes/coaching", () => ({ default: { name: "coachingRoutes" } }));
 vi.mock("./routes/consent", () => ({ default: { name: "consentRoutes" } }));
 vi.mock("./routes/email", () => ({ default: { name: "emailRoutes" } }));
+vi.mock("./routes/nutrition/index", () => ({ default: { name: "nutritionRoutes" } }));
 vi.mock("./routes/plans", () => ({ default: { name: "planRoutes" } }));
 vi.mock("./routes/preferences", () => ({ default: { name: "preferencesRoutes" } }));
 vi.mock("./routes/push", () => ({ default: { name: "pushRoutes" } }));
@@ -94,6 +96,7 @@ describe("registerRoutes", () => {
     expect(app.use).toHaveBeenCalledWith(consentRoutes);
     expect(app.use).toHaveBeenCalledWith(pushRoutes);
     expect(app.use).toHaveBeenCalledWith(timelineAnnotationsRoutes);
+    expect(app.use).toHaveBeenCalledWith(nutritionRoutes);
   });
 
   it("should return the provided HTTP server instance", async () => {

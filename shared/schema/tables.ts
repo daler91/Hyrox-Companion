@@ -712,6 +712,137 @@ export const mafWorkoutAnalysis = pgTable("maf_workout_analysis", {
 ]);
 
 // ---------------------------------------------------------------------------
+// Nutrition tracking (Phase 1 — core logging). Food reference data is cached
+// from USDA FoodData Central; every stored nutrition number originates from
+// USDA / Open Food Facts / a user custom food — never from AI (BRD §7).
+// ---------------------------------------------------------------------------
+
+// Where a food's reference data came from. USDA is the Phase 1 source; `off`
+// (Open Food Facts) and `custom` are reserved for Phase 2.
+export const FOOD_SOURCES = ["usda", "off", "custom"] as const;
+export type FoodSource = (typeof FOOD_SOURCES)[number];
+
+// Meal slot a log entry is filed under. pre_workout / post_workout exist so the
+// Phase 3 training-integration views can bucket fuelling around sessions.
+export const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "pre_workout", "post_workout"] as const;
+export type MealType = (typeof MEAL_TYPES)[number];
+
+// How an entry was created. Phase 1 only ever writes "manual"; the others are
+// dormant columns reserved for Phase 2 (barcode) and Phase 4 (AI nl/photo).
+export const FOOD_ENTRY_METHODS = ["manual", "barcode", "nl", "photo"] as const;
+export type FoodEntryMethod = (typeof FOOD_ENTRY_METHODS)[number];
+
+// Shared, NON-per-user reference cache. A USDA food is cached once (keyed by
+// fdcId) and reused across every user's log. All nutrition values are stored on
+// a PER-100-GRAM basis and scaled by the logged grams at read time — the column
+// names say so explicitly to make a wrong-basis bug impossible to write.
+export const foods = pgTable("foods", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  source: varchar("source", { length: 16 }).notNull(),
+  // USDA fdcId (or OFF barcode). NULL only for user custom foods (Phase 2).
+  sourceId: varchar("source_id", { length: 255 }),
+  name: text("name").notNull(),
+  brand: text("brand"),
+  // Typical/default serving in grams, surfaced as a one-tap "1 serving" option.
+  servingSizeG: real("serving_size_g"),
+  caloriesPer100g: real("calories_per_100g"),
+  proteinPer100g: real("protein_per_100g"),
+  carbPer100g: real("carb_per_100g"),
+  fatPer100g: real("fat_per_100g"),
+  fiberPer100g: real("fiber_per_100g"),
+  // Long tail of micronutrients (per 100g), reserved for the Phase 5 panel.
+  micros: jsonb("micros").$type<Record<string, number>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  // Upsert-on-cache key. Partial (source_id IS NOT NULL) so custom foods, which
+  // have no source_id, are exempt — mirrors the Strava partial-unique above.
+  uniqueIndex("uq_foods_source_source_id")
+    .on(table.source, table.sourceId)
+    .where(sql`${table.sourceId} IS NOT NULL`),
+  // Functional index for case-insensitive prefix search (ILIKE 'q%'). pg_trgm
+  // is intentionally NOT enabled; fuzzy ranking would go in its own migration.
+  index("idx_foods_name_lower").on(sql`lower(${table.name})`),
+  check("foods_source_check", sql`source IN ('usda', 'off', 'custom')`),
+]);
+export type Food = typeof foods.$inferSelect;
+export type InsertFood = typeof foods.$inferInsert;
+
+// Named portions for a food ("1 cup", "1 medium"). Created now; the Phase 1 UI
+// only uses foods.serving_size_g — multi-portion logging arrives in Phase 2.
+export const foodServings = pgTable("food_servings", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  foodId: varchar("food_id", { length: 255 }).notNull().references(() => foods.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  grams: real("grams").notNull(),
+}, (table) => [
+  index("idx_food_servings_food_id").on(table.foodId),
+  check("food_servings_grams_positive_check", sql`grams > 0`),
+]);
+export type FoodServing = typeof foodServings.$inferSelect;
+
+// A single logged food. `loggedAt` is the mandatory instant and the future
+// Phase 3 join key to workout_logs; `logDate` is the user's LOCAL calendar day
+// (computed server-side from users.user_timezone) so daily rollups stay correct
+// across midnight for offset users. Nutrition is computed by joining to `foods`
+// and scaling per-100g values by quantity_g — never snapshotted, because USDA
+// values are immutable per fdcId.
+export const foodLogEntries = pgTable("food_log_entries", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  // restrict: a cached food can't be evicted while a log still references it,
+  // so historical entries never lose their nutrition source.
+  foodId: varchar("food_id", { length: 255 }).notNull().references(() => foods.id, { onDelete: "restrict" }),
+  loggedAt: timestamp("logged_at", { withTimezone: true }).notNull(),
+  logDate: date("log_date").notNull(),
+  quantityG: real("quantity_g").notNull(),
+  mealType: varchar("meal_type", { length: 16 }).notNull(),
+  entryMethod: varchar("entry_method", { length: 16 }).notNull().default("manual"),
+  // Reserved for Phase 2/4: original text/photo ref + AI parse confidence + a
+  // low-confidence review-queue flag. Dormant in Phase 1.
+  rawInput: text("raw_input"),
+  parseConfidence: real("parse_confidence"),
+  pendingReview: boolean("pending_review").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_food_log_entries_user_log_date").on(table.userId, table.logDate),
+  index("idx_food_log_entries_user_logged_at").on(table.userId, table.loggedAt),
+  index("idx_food_log_entries_food_id").on(table.foodId),
+  check("food_log_entries_quantity_positive_check", sql`quantity_g > 0`),
+  check("food_log_entries_meal_type_check", sql`meal_type IN ('breakfast','lunch','dinner','snack','pre_workout','post_workout')`),
+  check("food_log_entries_entry_method_check", sql`entry_method IN ('manual','barcode','nl','photo')`),
+]);
+export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
+
+// User-defined macro/calorie targets, versioned by effective_from. Created now;
+// targets CRUD/UI is Phase 5, so Phase 1 never writes to or reads this table.
+export const nutritionTargets = pgTable("nutrition_targets", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  calories: real("calories"),
+  proteinG: real("protein_g"),
+  carbG: real("carb_g"),
+  fatG: real("fat_g"),
+  effectiveFrom: date("effective_from").notNull(),
+}, (table) => [
+  index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),
+]);
+export type NutritionTarget = typeof nutritionTargets.$inferSelect;
+
+// Per-user favourites over the shared `foods` cache (FR-1.5).
+export const foodFavorites = pgTable("food_favorites", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  foodId: varchar("food_id", { length: 255 }).notNull().references(() => foods.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_food_favorites_user_food").on(table.userId, table.foodId),
+  index("idx_food_favorites_user_id").on(table.userId),
+]);
+export type FoodFavorite = typeof foodFavorites.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // Drizzle relations — enables `db.query.<table>.findMany({ with: { ... } })`
 // for type-safe nested queries in the storage layer.
 // ---------------------------------------------------------------------------
@@ -738,6 +869,9 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   mafTestResults: many(mafTestResults),
   mafWorkoutAnalyses: many(mafWorkoutAnalysis),
   analyticsResults: many(analyticsResults),
+  foodLogEntries: many(foodLogEntries),
+  foodFavorites: many(foodFavorites),
+  nutritionTargets: many(nutritionTargets),
 }));
 
 export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
@@ -881,6 +1015,48 @@ export const mafWorkoutAnalysisRelations = relations(mafWorkoutAnalysis, ({ one 
 export const analyticsResultsRelations = relations(analyticsResults, ({ one }) => ({
   user: one(users, {
     fields: [analyticsResults.userId],
+    references: [users.id],
+  }),
+}));
+
+export const foodsRelations = relations(foods, ({ many }) => ({
+  servings: many(foodServings),
+  logEntries: many(foodLogEntries),
+  favorites: many(foodFavorites),
+}));
+
+export const foodServingsRelations = relations(foodServings, ({ one }) => ({
+  food: one(foods, {
+    fields: [foodServings.foodId],
+    references: [foods.id],
+  }),
+}));
+
+export const foodLogEntriesRelations = relations(foodLogEntries, ({ one }) => ({
+  user: one(users, {
+    fields: [foodLogEntries.userId],
+    references: [users.id],
+  }),
+  food: one(foods, {
+    fields: [foodLogEntries.foodId],
+    references: [foods.id],
+  }),
+}));
+
+export const foodFavoritesRelations = relations(foodFavorites, ({ one }) => ({
+  user: one(users, {
+    fields: [foodFavorites.userId],
+    references: [users.id],
+  }),
+  food: one(foods, {
+    fields: [foodFavorites.foodId],
+    references: [foods.id],
+  }),
+}));
+
+export const nutritionTargetsRelations = relations(nutritionTargets, ({ one }) => ({
+  user: one(users, {
+    fields: [nutritionTargets.userId],
     references: [users.id],
   }),
 }));

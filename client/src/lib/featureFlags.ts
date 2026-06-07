@@ -6,4 +6,5 @@ const parseBool = (value: unknown, fallback = false): boolean => {
 
 export const featureFlags = {
   emomBuilderEnabled: parseBool(import.meta.env.VITE_EMOM_BUILDER_ENABLED, false),
+  nutritionEnabled: parseBool(import.meta.env.VITE_NUTRITION_ENABLED, false),
 };
