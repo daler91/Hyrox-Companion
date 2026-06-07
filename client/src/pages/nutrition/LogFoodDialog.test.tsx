@@ -11,10 +11,11 @@ import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 import { LogFoodDialog } from "./LogFoodDialog";
 
 vi.mock("@/lib/api", () => ({
-  api: { nutrition: { createLog: vi.fn(), updateLog: vi.fn() } },
+  api: { nutrition: { createLog: vi.fn(), updateLog: vi.fn(), getFood: vi.fn() } },
   QUERY_KEYS: {
     nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
+    nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id],
   },
 }));
 
@@ -33,6 +34,7 @@ const FOOD: Food = {
   fatPer100g: 0.3,
   fiberPer100g: 2.6,
   micros: null,
+  createdByUserId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -54,7 +56,7 @@ const SAVED_ENTRY: FoodLogEntry = {
 };
 
 function renderWithClient(ui: ReactNode) {
-  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
@@ -63,6 +65,7 @@ describe("LogFoodDialog", () => {
     vi.clearAllMocks();
     vi.mocked(api.nutrition.createLog).mockResolvedValue(SAVED_ENTRY);
     vi.mocked(api.nutrition.updateLog).mockResolvedValue(SAVED_ENTRY);
+    vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [] });
   });
 
   it("previews scaled nutrition and logs the food on submit", async () => {

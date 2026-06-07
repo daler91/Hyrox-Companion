@@ -5,7 +5,7 @@ import {
   type MealType,
   type NutritionMacroTotals,
 } from "@shared/schema";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,14 +24,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLogFood, useUpdateLog } from "@/hooks/useNutrition";
+import { useFoodWithServings, useLogFood, useUpdateLog } from "@/hooks/useNutrition";
 
 import { loggedAtForDate, MEAL_LABELS, previewNutrition } from "./utils";
 
-/** Either creating a log from a searched/quick-add food, or editing an entry. */
+/** Either creating a log from a searched/quick-add/barcode food, or editing an entry. */
 export type LogDialogState =
-  | { mode: "create"; food: Food }
+  | { mode: "create"; food: Food; entryMethod?: "manual" | "barcode" }
   | { mode: "edit"; entry: FoodLogEntryWithNutrition };
+
+interface UnitOption {
+  value: string;
+  label: string;
+  grams: number;
+}
 
 const PREVIEW_FIELDS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
   { key: "calories", label: "kcal" },
@@ -50,10 +56,7 @@ function defaultMealForNow(): MealType {
 }
 
 /** Scale an existing entry's nutrition proportionally for the edit preview. */
-function scaleEntryPreview(
-  entry: FoodLogEntryWithNutrition,
-  quantityG: number,
-): NutritionMacroTotals {
+function scaleEntryPreview(entry: FoodLogEntryWithNutrition, quantityG: number): NutritionMacroTotals {
   const factor = entry.quantityG > 0 ? quantityG / entry.quantityG : 0;
   const r1 = (v: number) => Math.round(v * 10) / 10;
   return {
@@ -82,19 +85,42 @@ function LogFoodForm({
   const updateLog = useUpdateLog(date);
   const isCreate = state.mode === "create";
 
-  const [quantityG, setQuantityG] = useState(() =>
-    isCreate ? Math.round(state.food.servingSizeG ?? 100) : Math.round(state.entry.quantityG),
+  // Named servings for the unit selector (create mode) — also enriches USDA portions.
+  const servingsQuery = useFoodWithServings(state.mode === "create" ? state.food.id : null);
+
+  // create mode: a count + a unit (grams / named serving). edit mode: grams.
+  const [count, setCount] = useState(() =>
+    state.mode === "create" ? Math.round(state.food.servingSizeG ?? 100) : 0,
+  );
+  const [unitValue, setUnitValue] = useState("g");
+  const [editQuantityG, setEditQuantityG] = useState(() =>
+    state.mode === "edit" ? Math.round(state.entry.quantityG) : 0,
   );
   const [mealType, setMealType] = useState<MealType>(() =>
-    isCreate ? defaultMealForNow() : state.entry.mealType,
+    state.mode === "create" ? defaultMealForNow() : state.entry.mealType,
   );
 
-  const name = isCreate ? state.food.name : state.entry.name;
-  const brand = isCreate ? state.food.brand : state.entry.brand;
-  const servingSizeG = isCreate ? state.food.servingSizeG : null;
-  const preview = isCreate
-    ? previewNutrition(state.food, quantityG)
-    : scaleEntryPreview(state.entry, quantityG);
+  const unitOptions = useMemo<UnitOption[]>(() => {
+    const opts: UnitOption[] = [{ value: "g", label: "grams", grams: 1 }];
+    if (state.mode !== "create") return opts;
+    const fetchedServings = servingsQuery.data?.servings ?? [];
+    for (const s of fetchedServings) opts.push({ value: s.id, label: s.label, grams: s.grams });
+    const ssg = state.food.servingSizeG;
+    if (ssg && ssg > 0 && !fetchedServings.some((s) => Math.abs(s.grams - ssg) < 0.5)) {
+      opts.push({ value: "__serving", label: `1 serving (${Math.round(ssg)} g)`, grams: ssg });
+    }
+    return opts;
+  }, [state, servingsQuery.data]);
+
+  const selectedUnit = unitOptions.find((o) => o.value === unitValue) ?? unitOptions[0];
+  const quantityG = isCreate ? count * (selectedUnit?.grams ?? 1) : editQuantityG;
+
+  const name = state.mode === "create" ? state.food.name : state.entry.name;
+  const brand = state.mode === "create" ? state.food.brand : state.entry.brand;
+  const preview =
+    state.mode === "create"
+      ? previewNutrition(state.food, quantityG)
+      : scaleEntryPreview(state.entry, quantityG);
   const isPending = logFood.isPending || updateLog.isPending;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
 
@@ -102,7 +128,13 @@ function LogFoodForm({
     if (!validQuantity) return;
     if (state.mode === "create") {
       logFood.mutate(
-        { foodId: state.food.id, quantityG, mealType, loggedAt: loggedAtForDate(date) },
+        {
+          foodId: state.food.id,
+          quantityG,
+          mealType,
+          loggedAt: loggedAtForDate(date),
+          entryMethod: state.entryMethod,
+        },
         { onSuccess: onClose },
       );
     } else {
@@ -122,32 +154,52 @@ function LogFoodForm({
           {brand && <p className="truncate text-sm text-muted-foreground">{brand}</p>}
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="log-quantity">Quantity (grams)</Label>
-          <div className="flex items-center gap-2">
+        {isCreate ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="log-quantity">Amount</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="log-quantity"
+                type="number"
+                min={0}
+                step="any"
+                inputMode="decimal"
+                className="w-24"
+                value={Number.isFinite(count) ? count : ""}
+                onChange={(e) => setCount(Number(e.target.value))}
+                data-testid="input-quantity"
+              />
+              <Select value={unitValue} onValueChange={setUnitValue}>
+                <SelectTrigger className="flex-1" data-testid="select-unit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {unitOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedUnit && selectedUnit.value !== "g" && (
+              <p className="text-xs text-muted-foreground">= {Math.round(quantityG)} g</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="log-quantity">Quantity (grams)</Label>
             <Input
               id="log-quantity"
               type="number"
               min={1}
               inputMode="numeric"
-              value={Number.isFinite(quantityG) ? quantityG : ""}
-              onChange={(e) => setQuantityG(Number(e.target.value))}
+              value={Number.isFinite(editQuantityG) ? editQuantityG : ""}
+              onChange={(e) => setEditQuantityG(Number(e.target.value))}
               data-testid="input-quantity"
             />
-            {servingSizeG ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setQuantityG(Math.round(servingSizeG))}
-                data-testid="button-one-serving"
-              >
-                1 serving ({Math.round(servingSizeG)} g)
-              </Button>
-            ) : null}
           </div>
-        </div>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="log-meal">Meal</Label>

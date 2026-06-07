@@ -1,8 +1,14 @@
 import {
   type AddFavoriteInput,
   addFavoriteSchema,
+  type BarcodeLookupInput,
+  barcodeLookupSchema,
+  type CreateCustomFoodInput,
+  createCustomFoodSchema,
   type CreateFoodLogInput,
   createFoodLogSchema,
+  type CreateRecipeInput,
+  createRecipeSchema,
   type DailySummaryQuery,
   dailySummaryQuerySchema,
   type DailySummaryResponse,
@@ -11,13 +17,20 @@ import {
   type MealType,
   type RepeatDayInput,
   repeatDaySchema,
+  type ServingInput,
+  servingInputSchema,
+  type UpdateCustomFoodInput,
+  updateCustomFoodSchema,
   type UpdateFoodLogInput,
   updateFoodLogSchema,
+  updateRecipeSchema,
 } from "@shared/schema";
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
+import { lookupBarcode } from "../../services/nutrition/barcode";
+import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
 import { buildDailySummary } from "../../services/nutrition/rollup";
 import { storage } from "../../storage";
@@ -27,6 +40,7 @@ import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/prot
 
 const FOOD_NOT_FOUND = "Food not found";
 const LOG_ENTRY_NOT_FOUND = "Log entry not found";
+const RECIPE_NOT_FOUND = "Recipe not found";
 
 /** Resolve the user's IANA timezone, defaulting to UTC pre-detection. */
 async function getUserTimezone(userId: string): Promise<string> {
@@ -35,7 +49,11 @@ async function getUserTimezone(userId: string): Promise<string> {
 }
 
 export function registerNutritionRoutes(router: Router): void {
-  // FR-1.1 — search foods (local cache + USDA, caching misses).
+  // ---- foods: search / recent / custom -------------------------------------
+  // NOTE: the static /foods/* GET routes must be registered BEFORE /foods/:id,
+  // or the param route swallows "custom"/"search"/"recent".
+
+  // FR-1.1 — search foods (local cache + own custom foods + USDA, caching misses).
   router.get(
     "/api/v1/nutrition/foods/search",
     isAuthenticated,
@@ -43,7 +61,7 @@ export function registerNutritionRoutes(router: Router): void {
     validateQuery(foodSearchQuerySchema),
     asyncHandler(async (req: Request, res: Response) => {
       const { q } = req.query as unknown as FoodSearchQuery;
-      res.json(await searchFoods(q));
+      res.json(await searchFoods(q, getUserId(req)));
     }),
   );
 
@@ -57,7 +75,108 @@ export function registerNutritionRoutes(router: Router): void {
     }),
   );
 
-  // FR-1.5 — favorites.
+  // FR-2.2 — the user's custom foods (excludes recipe-backing foods).
+  router.get(
+    "/api/v1/nutrition/foods/custom",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(await storage.nutrition.listCustomFoods(getUserId(req)));
+    }),
+  );
+
+  // FR-2.1 — resolve a barcode via Open Food Facts (cache-first), then log it.
+  protectedPost(
+    router,
+    "/api/v1/nutrition/foods/barcode",
+    { limiter: rateLimiter("nutritionBarcode", 30), middleware: [validateBody(barcodeLookupSchema)] },
+    async (req: Request, res: Response) => {
+      const { code } = req.body as BarcodeLookupInput;
+      const food = await lookupBarcode(code);
+      if (!food) return sendNotFound(res, "Barcode not recognized");
+      res.json(food);
+    },
+  );
+
+  // FR-2.2 — create a custom food (with optional named servings).
+  protectedPost(
+    router,
+    "/api/v1/nutrition/foods",
+    { limiter: rateLimiter("nutritionWrite", 30), middleware: [validateBody(createCustomFoodSchema)] },
+    async (req: Request, res: Response) => {
+      const food = await storage.nutrition.createCustomFood(getUserId(req), req.body as CreateCustomFoodInput);
+      res.status(201).json(food);
+    },
+  );
+
+  // FR-2.4 — a food + its named servings (USDA portions enriched on first access).
+  router.get(
+    "/api/v1/nutrition/foods/:id",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+      const result = await getFoodWithServings(getUserId(req), req.params.id);
+      if (!result) return sendNotFound(res, FOOD_NOT_FOUND);
+      res.json(result);
+    }),
+  );
+
+  // FR-2.2 — edit / delete a custom food (owner-scoped; 409 if referenced).
+  protectedPatch(
+    router,
+    "/api/v1/nutrition/foods/:id",
+    { limiter: rateLimiter("nutritionWrite", 30), middleware: [validateBody(updateCustomFoodSchema)] },
+    async (req: Request<{ id: string }>, res: Response) => {
+      const food = await storage.nutrition.updateCustomFood(
+        getUserId(req),
+        req.params.id,
+        req.body as UpdateCustomFoodInput,
+      );
+      if (!food) return sendNotFound(res, FOOD_NOT_FOUND);
+      res.json(food);
+    },
+  );
+
+  protectedDelete(
+    router,
+    "/api/v1/nutrition/foods/:id",
+    { limiter: rateLimiter("nutritionWrite", 30) },
+    async (req: Request<{ id: string }>, res: Response) => {
+      // Throws a 409 AppError when the food is referenced by a log entry/recipe.
+      const deleted = await storage.nutrition.deleteCustomFood(getUserId(req), req.params.id);
+      if (!deleted) return sendNotFound(res, FOOD_NOT_FOUND);
+      res.json({ success: true });
+    },
+  );
+
+  // FR-2.4 — named-serving CRUD for a user's custom food.
+  protectedPost(
+    router,
+    "/api/v1/nutrition/foods/:id/servings",
+    { limiter: rateLimiter("nutritionWrite", 30), middleware: [validateBody(servingInputSchema)] },
+    async (req: Request<{ id: string }>, res: Response) => {
+      const serving = await storage.nutrition.createServing(
+        getUserId(req),
+        req.params.id,
+        req.body as ServingInput,
+      );
+      if (!serving) return sendNotFound(res, FOOD_NOT_FOUND);
+      res.status(201).json(serving);
+    },
+  );
+
+  protectedDelete(
+    router,
+    "/api/v1/nutrition/foods/:id/servings/:servingId",
+    { limiter: rateLimiter("nutritionWrite", 30) },
+    async (req: Request<{ id: string; servingId: string }>, res: Response) => {
+      const removed = await storage.nutrition.deleteServing(getUserId(req), req.params.servingId);
+      if (!removed) return sendNotFound(res, "Serving not found");
+      res.json({ success: true });
+    },
+  );
+
+  // ---- favorites (FR-1.5) --------------------------------------------------
   router.get(
     "/api/v1/nutrition/favorites",
     isAuthenticated,
@@ -74,7 +193,7 @@ export function registerNutritionRoutes(router: Router): void {
     async (req: Request, res: Response) => {
       const userId = getUserId(req);
       const { foodId } = req.body as AddFavoriteInput;
-      const food = await storage.nutrition.getFoodById(foodId);
+      const food = await storage.nutrition.getVisibleFoodById(userId, foodId);
       if (!food) return sendNotFound(res, FOOD_NOT_FOUND);
       await storage.nutrition.addFavorite(userId, foodId);
       res.status(201).json({ success: true });
@@ -92,6 +211,7 @@ export function registerNutritionRoutes(router: Router): void {
     },
   );
 
+  // ---- logging (FR-1.2 / FR-1.3 / FR-1.6) ----------------------------------
   // FR-1.2 — log a food. The server derives `logDate` from `loggedAt` + the
   // user's timezone; never trust a client-sent date (cross-midnight bug class).
   protectedPost(
@@ -101,7 +221,7 @@ export function registerNutritionRoutes(router: Router): void {
     async (req: Request, res: Response) => {
       const userId = getUserId(req);
       const body = req.body as CreateFoodLogInput;
-      const food = await storage.nutrition.getFoodById(body.foodId);
+      const food = await storage.nutrition.getVisibleFoodById(userId, body.foodId);
       if (!food) return sendNotFound(res, FOOD_NOT_FOUND);
 
       const loggedAt = new Date(body.loggedAt);
@@ -112,6 +232,7 @@ export function registerNutritionRoutes(router: Router): void {
         mealType: body.mealType,
         loggedAt,
         logDate,
+        entryMethod: body.entryMethod,
       });
       res.status(201).json(entry);
     },
@@ -190,6 +311,62 @@ export function registerNutritionRoutes(router: Router): void {
       });
       if (created === 0) return sendNotFound(res, "No entries found to repeat for that day");
       res.status(201).json({ created, logDate: targetDate });
+    },
+  );
+
+  // ---- recipes (FR-2.3) ----------------------------------------------------
+  protectedPost(
+    router,
+    "/api/v1/nutrition/recipes",
+    { limiter: rateLimiter("nutritionWrite", 30), middleware: [validateBody(createRecipeSchema)] },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      // Throws a 400 AppError if an ingredient food isn't visible to the user.
+      const recipe = await storage.nutrition.createRecipe(userId, req.body as CreateRecipeInput);
+      res.status(201).json(await storage.nutrition.getRecipeWithIngredients(userId, recipe.id));
+    },
+  );
+
+  router.get(
+    "/api/v1/nutrition/recipes",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request, res: Response) => {
+      res.json(await storage.nutrition.listRecipes(getUserId(req)));
+    }),
+  );
+
+  router.get(
+    "/api/v1/nutrition/recipes/:id",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+      const recipe = await storage.nutrition.getRecipeWithIngredients(getUserId(req), req.params.id);
+      if (!recipe) return sendNotFound(res, RECIPE_NOT_FOUND);
+      res.json(recipe);
+    }),
+  );
+
+  protectedPatch(
+    router,
+    "/api/v1/nutrition/recipes/:id",
+    { limiter: rateLimiter("nutritionWrite", 30), middleware: [validateBody(updateRecipeSchema)] },
+    async (req: Request<{ id: string }>, res: Response) => {
+      const userId = getUserId(req);
+      const updated = await storage.nutrition.updateRecipe(userId, req.params.id, req.body as CreateRecipeInput);
+      if (!updated) return sendNotFound(res, RECIPE_NOT_FOUND);
+      res.json(await storage.nutrition.getRecipeWithIngredients(userId, updated.id));
+    },
+  );
+
+  protectedDelete(
+    router,
+    "/api/v1/nutrition/recipes/:id",
+    { limiter: rateLimiter("nutritionWrite", 30) },
+    async (req: Request<{ id: string }>, res: Response) => {
+      const deleted = await storage.nutrition.deleteRecipe(getUserId(req), req.params.id);
+      if (!deleted) return sendNotFound(res, RECIPE_NOT_FOUND);
+      res.json({ success: true });
     },
   );
 }

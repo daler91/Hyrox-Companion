@@ -752,6 +752,11 @@ export const foods = pgTable("foods", {
   fiberPer100g: real("fiber_per_100g"),
   // Long tail of micronutrients (per 100g), reserved for the Phase 5 panel.
   micros: jsonb("micros").$type<Record<string, number>>(),
+  // Owner of a user custom food / recipe-backing food (Phase 2). NULL = the
+  // shared USDA/OFF reference cache. `set null` on user delete (NOT cascade) so
+  // logged history survives — a food referenced by food_log_entries can't be
+  // deleted (that FK is restrict), which would otherwise block the user delete.
+  createdByUserId: varchar("created_by_user_id", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -763,6 +768,7 @@ export const foods = pgTable("foods", {
   // Functional index for case-insensitive prefix search (ILIKE 'q%'). pg_trgm
   // is intentionally NOT enabled; fuzzy ranking would go in its own migration.
   index("idx_foods_name_lower").on(sql`lower(${table.name})`),
+  index("idx_foods_created_by_user_id").on(table.createdByUserId),
   check("foods_source_check", sql`source IN ('usda', 'off', 'custom')`),
 ]);
 export type Food = typeof foods.$inferSelect;
@@ -842,6 +848,44 @@ export const foodFavorites = pgTable("food_favorites", {
 ]);
 export type FoodFavorite = typeof foodFavorites.$inferSelect;
 
+// A recipe is a user custom food (the backing `foods` row, source='custom')
+// PLUS an ingredient breakdown. Its per-100g macros are COMPUTED from the
+// ingredients, so it logs and rolls up through the unchanged Phase 1 path; the
+// recipe + ingredient rows let the user re-open and edit it (FR-2.3).
+export const recipes = pgTable("recipes", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  // The backing custom food (source='custom', created_by_user_id=userId).
+  // restrict: deleting the recipe decides the food's fate explicitly (the food
+  // may be referenced by food_log_entries, which is itself restrict).
+  foodId: varchar("food_id", { length: 255 }).notNull().references(() => foods.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  servings: real("servings").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_recipes_user_id").on(table.userId),
+  index("idx_recipes_food_id").on(table.foodId),
+  check("recipes_servings_positive_check", sql`servings > 0`),
+]);
+export type Recipe = typeof recipes.$inferSelect;
+
+// One ingredient line of a recipe. foodId is restrict so an ingredient food
+// (USDA / OFF / another custom) can't be deleted out from under the recipe.
+export const recipeIngredients = pgTable("recipe_ingredients", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  recipeId: varchar("recipe_id", { length: 255 }).notNull().references(() => recipes.id, { onDelete: "cascade" }),
+  foodId: varchar("food_id", { length: 255 }).notNull().references(() => foods.id, { onDelete: "restrict" }),
+  quantityG: real("quantity_g").notNull(),
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_recipe_ingredients_recipe_id").on(table.recipeId),
+  index("idx_recipe_ingredients_food_id").on(table.foodId),
+  check("recipe_ingredients_quantity_positive_check", sql`quantity_g > 0`),
+]);
+export type RecipeIngredient = typeof recipeIngredients.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // Drizzle relations — enables `db.query.<table>.findMany({ with: { ... } })`
 // for type-safe nested queries in the storage layer.
@@ -872,6 +916,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   foodLogEntries: many(foodLogEntries),
   foodFavorites: many(foodFavorites),
   nutritionTargets: many(nutritionTargets),
+  recipes: many(recipes),
 }));
 
 export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
@@ -1023,6 +1068,8 @@ export const foodsRelations = relations(foods, ({ many }) => ({
   servings: many(foodServings),
   logEntries: many(foodLogEntries),
   favorites: many(foodFavorites),
+  recipes: many(recipes),
+  recipeIngredients: many(recipeIngredients),
 }));
 
 export const foodServingsRelations = relations(foodServings, ({ one }) => ({
@@ -1059,4 +1106,15 @@ export const nutritionTargetsRelations = relations(nutritionTargets, ({ one }) =
     fields: [nutritionTargets.userId],
     references: [users.id],
   }),
+}));
+
+export const recipesRelations = relations(recipes, ({ one, many }) => ({
+  user: one(users, { fields: [recipes.userId], references: [users.id] }),
+  food: one(foods, { fields: [recipes.foodId], references: [foods.id] }),
+  ingredients: many(recipeIngredients),
+}));
+
+export const recipeIngredientsRelations = relations(recipeIngredients, ({ one }) => ({
+  recipe: one(recipes, { fields: [recipeIngredients.recipeId], references: [recipes.id] }),
+  food: one(foods, { fields: [recipeIngredients.foodId], references: [foods.id] }),
 }));

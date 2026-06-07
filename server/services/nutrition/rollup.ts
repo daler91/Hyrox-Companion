@@ -36,7 +36,7 @@ function round(value: number, dp: number): number {
 }
 
 /** Present totals at sensible precision: whole calories, 1-dp macros. */
-function present(totals: NutritionMacroTotals): NutritionMacroTotals {
+export function roundMacros(totals: NutritionMacroTotals): NutritionMacroTotals {
   return {
     calories: Math.round(totals.calories),
     protein: round(totals.protein, 1),
@@ -105,10 +105,10 @@ export function buildDailySummary(
       quantityG: row.quantityG,
       mealType,
       entryMethod: row.entryMethod,
-      nutrition: present(nutrition),
+      nutrition: roundMacros(nutrition),
     };
     meals[mealType].push(entry);
   }
 
-  return { logDate, totals: present(rawTotals), meals };
+  return { logDate, totals: roundMacros(rawTotals), meals };
 }

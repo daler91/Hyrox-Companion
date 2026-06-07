@@ -27,6 +27,7 @@ const BANANA: Food = {
   fatPer100g: 0.3,
   fiberPer100g: 2.6,
   micros: null,
+  createdByUserId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
