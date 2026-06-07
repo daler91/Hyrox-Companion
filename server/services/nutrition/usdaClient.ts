@@ -17,14 +17,16 @@ const FDC_DETAIL_URL = "https://api.nal.usda.gov/fdc/v1/food";
 const USDA_TIMEOUT_MS = 8_000;
 const USDA_PAGE_SIZE = 25;
 
-// USDA nutrient numbers (strings in the API). Energy has several encodings:
+// USDA nutrient IDs — the `nutrientId` field in the API (e.g. 1008 for Energy),
+// NOT the legacy nutrient *number* (Energy's number is "208"). The search
+// response carries both, and we key off the id. Energy has several encodings:
 // 1008 is the classic kcal; 2047/2048 are Atwater kcal on Foundation foods.
 // 1062 (kJ) is deliberately absent so kilojoules are never read as calories.
-const ENERGY_KCAL_NUMBERS = ["1008", "2047", "2048"];
-const PROTEIN_NUMBER = "1003";
-const CARB_NUMBER = "1005";
-const FAT_NUMBER = "1004";
-const FIBER_NUMBER = "1079";
+const ENERGY_KCAL_IDS = ["1008", "2047", "2048"];
+const PROTEIN_ID = "1003";
+const CARB_ID = "1005";
+const FAT_ID = "1004";
+const FIBER_ID = "1079";
 
 export interface UsdaFoodMapped {
   source: "usda";
@@ -41,9 +43,14 @@ export interface UsdaFoodMapped {
 }
 
 interface UsdaNutrient {
+  // Search endpoint (flattened): nutrientId / value / unitName.
+  nutrientId?: number | string;
   nutrientNumber?: string | number;
   unitName?: string;
   value?: number;
+  // Detail endpoint (nested): nutrient.{id,unitName} + amount.
+  nutrient?: { id?: number | string; unitName?: string };
+  amount?: number;
 }
 
 interface UsdaLabelNutrient {
@@ -71,20 +78,32 @@ interface UsdaSearchResponse {
   foods?: UsdaSearchFood[];
 }
 
-/** Find the first nutrient matching one of `numbers`, optionally unit-filtered. */
+// USDA returns nutrients in two shapes: the search endpoint flattens
+// id/value/unit onto the entry, while the detail endpoint nests them under
+// `nutrient` with the value in `amount`. Read through both so one matcher works.
+function readId(n: UsdaNutrient): string {
+  return String(n.nutrientId ?? n.nutrient?.id ?? "");
+}
+function readUnit(n: UsdaNutrient): string {
+  return (n.unitName ?? n.nutrient?.unitName ?? "").toLowerCase();
+}
+function readValue(n: UsdaNutrient): number | null {
+  if (typeof n.value === "number") return n.value;
+  if (typeof n.amount === "number") return n.amount;
+  return null;
+}
+
+/** Find the first nutrient matching one of `ids`, optionally unit-filtered. */
 function findNutrient(
   nutrients: UsdaNutrient[],
-  numbers: string[],
+  ids: string[],
   opts: { unit?: string } = {},
 ): number | null {
-  for (const num of numbers) {
+  for (const id of ids) {
     const match = nutrients.find(
-      (n) =>
-        String(n.nutrientNumber) === num &&
-        typeof n.value === "number" &&
-        (!opts.unit || (n.unitName ?? "").toLowerCase() === opts.unit),
+      (n) => readId(n) === id && readValue(n) !== null && (!opts.unit || readUnit(n) === opts.unit),
     );
-    if (match && typeof match.value === "number") return match.value;
+    if (match) return readValue(match);
   }
   return null;
 }
@@ -98,7 +117,7 @@ function findNutrient(
 function extractMicros(nutrients: UsdaNutrient[]): Record<string, number> | null {
   const micros: Record<string, number> = {};
   for (const def of MICRO_DEFS) {
-    const value = findNutrient(nutrients, [def.usdaNumber], { unit: def.usdaUnit });
+    const value = findNutrient(nutrients, [def.usdaId], { unit: def.usdaUnit });
     if (value !== null && value >= 0) micros[def.key] = value;
   }
   return Object.keys(micros).length > 0 ? micros : null;
@@ -157,11 +176,11 @@ export function mapUsdaSearchFood(raw: UsdaSearchFood): UsdaFoodMapped | null {
     name: raw.description,
     brand: raw.brandOwner ?? raw.brandName ?? null,
     servingSizeG: servingToGrams(raw.servingSize, raw.servingSizeUnit),
-    caloriesPer100g: findNutrient(nutrients, ENERGY_KCAL_NUMBERS, { unit: "kcal" }),
-    proteinPer100g: findNutrient(nutrients, [PROTEIN_NUMBER]),
-    carbPer100g: findNutrient(nutrients, [CARB_NUMBER]),
-    fatPer100g: findNutrient(nutrients, [FAT_NUMBER]),
-    fiberPer100g: findNutrient(nutrients, [FIBER_NUMBER]),
+    caloriesPer100g: findNutrient(nutrients, ENERGY_KCAL_IDS, { unit: "kcal" }),
+    proteinPer100g: findNutrient(nutrients, [PROTEIN_ID]),
+    carbPer100g: findNutrient(nutrients, [CARB_ID]),
+    fatPer100g: findNutrient(nutrients, [FAT_ID]),
+    fiberPer100g: findNutrient(nutrients, [FIBER_ID]),
     micros: extractMicros(nutrients),
   };
   return withLabelFallback(mapped, raw);
