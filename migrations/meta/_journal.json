@@ -435,6 +435,13 @@
       "when": 1780753754098,
       "tag": "0061_sharp_pandemic",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1780798814267,
+      "tag": "0062_chief_logan",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,7 @@ import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
+import nutritionRoutes from "./routes/nutrition/index";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
 import pushRoutes from "./routes/push";
@@ -49,6 +50,7 @@ export async function registerRoutes(
   app.use(consentRoutes);
   app.use(pushRoutes);
   app.use(timelineAnnotationsRoutes);
+  app.use(nutritionRoutes);
 
   return httpServer;
 }

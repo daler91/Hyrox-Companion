@@ -96,6 +96,13 @@ const envSchema = z.object({
   STRUCTURED_BLOCKS_ENABLED: z.enum(["true", "false"]).default("true"),
   STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY: z.enum(["true", "false"]).default("false"),
   EMOM_BUILDER_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Nutrition tracking module (Phase 1). Gated off by default so the feature
+  // can merge "dark" and be flipped on per environment. The matching client
+  // flag is VITE_NUTRITION_ENABLED (read in client/src/lib/featureFlags.ts).
+  NUTRITION_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Free USDA FoodData Central API key for live food search. Optional: when
+  // unset the module still works, degrading to locally-cached foods only (NFR-5).
+  USDA_API_KEY: z.string().optional(),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],

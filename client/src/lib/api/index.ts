@@ -8,6 +8,7 @@ export type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "./exe
 export { exercises } from "./exercises";
 export type { MafTagResponse, MafTestMetricsInput, MafTestMutationPayload, MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "./mafTests";
 export { mafTests } from "./mafTests";
+export { nutrition } from "./nutrition";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
@@ -23,6 +24,7 @@ import { analytics, timeline } from "./analytics";
 import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { mafTests } from "./mafTests";
+import { nutrition } from "./nutrition";
 import { plans } from "./plans";
 import { timelineAnnotations } from "./timelineAnnotations";
 import { auth, email, garmin, preferences, strava } from "./user";
@@ -43,6 +45,7 @@ export const api = {
   garmin,
   email,
   mafTests,
+  nutrition,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -71,6 +74,10 @@ export const QUERY_KEYS = {
   stravaStatus: ["/api/v1/strava/status"] as const,
   garminStatus: ["/api/v1/garmin/status"] as const,
   mafTests: ["/api/v1/maf-tests"] as const,
+  nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date] as const,
+  nutritionRecent: ["/api/v1/nutrition/foods/recent"] as const,
+  nutritionFavorites: ["/api/v1/nutrition/favorites"] as const,
+  nutritionSearch: (q: string) => ["/api/v1/nutrition/foods/search", q] as const,
 } as const;
 
 export type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./exerciseSetMutations";

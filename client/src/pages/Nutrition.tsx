@@ -1,0 +1,136 @@
+import { MEAL_TYPES } from "@shared/schema";
+import { ChevronLeft, ChevronRight, CopyPlus } from "lucide-react";
+import { type ReactNode, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageContainer } from "@/components/ui/PageContainer";
+import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useDeleteLog, useNutritionDay, useRepeatDay } from "@/hooks/useNutrition";
+
+import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
+import { FoodSearch } from "./nutrition/FoodSearch";
+import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
+import { MealSection } from "./nutrition/MealSection";
+import { QuickAddBar } from "./nutrition/QuickAddBar";
+import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
+
+const EMPTY_TOTALS = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
+
+/**
+ * Nutrition tracking — Phase 1 daily log. Pick a day, see running macro totals,
+ * search/quick-add foods, and edit/delete entries. Reached only when the
+ * VITE_NUTRITION_ENABLED flag is on (route + nav are gated in App/AppSidebar).
+ */
+export default function Nutrition() {
+  useDocumentTitle("Nutrition");
+  const { isLoading: authLoading } = useAuth();
+  const [date, setDate] = useState(todayStr());
+  const [dialog, setDialog] = useState<LogDialogState | null>(null);
+
+  const day = useNutritionDay(date);
+  const deleteLog = useDeleteLog(date);
+  const repeatDay = useRepeatDay(date);
+
+  if (authLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  const summary = day.data;
+  const isEmpty = !!summary && MEAL_TYPES.every((m) => summary.meals[m].length === 0);
+
+  let dayBody: ReactNode;
+  if (day.isLoading) {
+    dayBody = (
+      <div className="flex justify-center p-6">
+        <LoadingSpinner />
+      </div>
+    );
+  } else if (isEmpty) {
+    dayBody = (
+      <div
+        className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
+        data-testid="text-empty-day"
+      >
+        <p>Nothing logged for {formatDateLabel(date).toLowerCase()}.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-3"
+          onClick={() => repeatDay.mutate({ sourceDate: addDays(date, -1), targetDate: date })}
+          disabled={repeatDay.isPending}
+          data-testid="button-repeat-prev"
+        >
+          <CopyPlus className="mr-2 h-4 w-4" /> Repeat previous day
+        </Button>
+      </div>
+    );
+  } else {
+    dayBody = (
+      <div className="space-y-4">
+        {MEAL_TYPES.map((m) => (
+          <MealSection
+            key={m}
+            label={MEAL_LABELS[m]}
+            entries={summary?.meals[m] ?? []}
+            onEdit={(entry) => setDialog({ mode: "edit", entry })}
+            onDelete={(id) => deleteLog.mutate(id)}
+            deletingId={deleteLog.isPending ? deleteLog.variables : undefined}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <PageContainer>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Nutrition</h1>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Previous day"
+              onClick={() => setDate((d) => addDays(d, -1))}
+              data-testid="button-prev-day"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <button
+              type="button"
+              className="min-w-24 text-center text-sm font-medium hover:underline"
+              onClick={() => setDate(todayStr())}
+              data-testid="button-date-label"
+            >
+              {formatDateLabel(date)}
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Next day"
+              onClick={() => setDate((d) => addDays(d, 1))}
+              data-testid="button-next-day"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} />
+
+        <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
+        <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
+
+        {dayBody}
+      </div>
+
+      <LogFoodDialog state={dialog} date={date} onClose={() => setDialog(null)} />
+    </PageContainer>
+  );
+}

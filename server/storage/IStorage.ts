@@ -5,6 +5,7 @@ import type { CoachingStorage } from "./coaching";
 import type { ConsentStorage } from "./consent";
 import type { IdempotencyStorage } from "./idempotency";
 import type { MafTestStorage } from "./mafTests";
+import type { NutritionStorage } from "./nutrition";
 import type { PlanStorage } from "./plans";
 import type { PushStorage } from "./push";
 import type { TimelineStorage } from "./timeline";
@@ -38,4 +39,5 @@ export interface IStorage {
   push: PushStorage;
   mafTests: MafTestStorage;
   consent: ConsentStorage;
+  nutrition: NutritionStorage;
 }

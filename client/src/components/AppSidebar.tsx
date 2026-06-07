@@ -1,4 +1,4 @@
-import { BarChart3, CalendarRange, LogOut, PlusCircle, Settings } from "lucide-react";
+import { Apple, BarChart3, CalendarRange, LogOut, PlusCircle, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
 import { getUserDisplayName } from "@/lib/authUtils";
+import { featureFlags } from "@/lib/featureFlags";
 
 import { Logo } from "./brand/Logo";
 import { ThemeToggle } from "./ThemeToggle";
@@ -25,6 +26,9 @@ import { ThemeToggle } from "./ThemeToggle";
 const menuItems = [
   { title: "Training", url: "/", icon: CalendarRange },
   { title: "Log Workout", url: "/log", icon: PlusCircle },
+  ...(featureFlags.nutritionEnabled
+    ? [{ title: "Nutrition", url: "/nutrition", icon: Apple }]
+    : []),
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

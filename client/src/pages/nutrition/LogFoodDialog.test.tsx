@@ -1,0 +1,119 @@
+import type { Food, FoodLogEntry, FoodLogEntryWithNutrition } from "@shared/schema";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { api } from "@/lib/api";
+import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
+
+import { LogFoodDialog } from "./LogFoodDialog";
+
+vi.mock("@/lib/api", () => ({
+  api: { nutrition: { createLog: vi.fn(), updateLog: vi.fn() } },
+  QUERY_KEYS: {
+    nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
+    nutritionRecent: ["/api/v1/nutrition/foods/recent"],
+  },
+}));
+
+installRadixPointerMocks();
+
+const FOOD: Food = {
+  id: "f1",
+  source: "usda",
+  sourceId: "1",
+  name: "Banana",
+  brand: "Dole",
+  servingSizeG: 118,
+  caloriesPer100g: 89,
+  proteinPer100g: 1.1,
+  carbPer100g: 23,
+  fatPer100g: 0.3,
+  fiberPer100g: 2.6,
+  micros: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const SAVED_ENTRY: FoodLogEntry = {
+  id: "e1",
+  userId: "u1",
+  foodId: "f1",
+  loggedAt: new Date(),
+  logDate: "2026-06-07",
+  quantityG: 200,
+  mealType: "snack",
+  entryMethod: "manual",
+  rawInput: null,
+  parseConfidence: null,
+  pendingReview: false,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+function renderWithClient(ui: ReactNode) {
+  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+describe("LogFoodDialog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.nutrition.createLog).mockResolvedValue(SAVED_ENTRY);
+    vi.mocked(api.nutrition.updateLog).mockResolvedValue(SAVED_ENTRY);
+  });
+
+  it("previews scaled nutrition and logs the food on submit", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />);
+
+    expect(screen.getByText("Banana")).toBeInTheDocument();
+    // Default quantity = serving size (118 g) → 89 * 118 / 100 ≈ 105 kcal.
+    expect(screen.getByTestId("preview-calories")).toHaveTextContent("105");
+
+    const quantity = screen.getByTestId("input-quantity");
+    await user.clear(quantity);
+    await user.type(quantity, "200");
+    // 89 * 200 / 100 = 178 kcal.
+    expect(screen.getByTestId("preview-calories")).toHaveTextContent("178");
+
+    await user.click(screen.getByTestId("button-submit-log"));
+    await waitFor(() =>
+      expect(api.nutrition.createLog).toHaveBeenCalledWith(
+        expect.objectContaining({ foodId: "f1", quantityG: 200 }),
+      ),
+    );
+  });
+
+  it("saves an edited entry", async () => {
+    const entry: FoodLogEntryWithNutrition = {
+      id: "e1",
+      foodId: "f1",
+      name: "Banana",
+      brand: null,
+      loggedAt: "2026-06-07T08:00:00.000Z",
+      logDate: "2026-06-07",
+      quantityG: 100,
+      mealType: "breakfast",
+      entryMethod: "manual",
+      nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
+    };
+    const user = userEvent.setup();
+    renderWithClient(<LogFoodDialog state={{ mode: "edit", entry }} date="2026-06-07" onClose={vi.fn()} />);
+
+    expect(screen.getByText("Edit entry")).toBeInTheDocument();
+    const quantity = screen.getByTestId("input-quantity");
+    await user.clear(quantity);
+    await user.type(quantity, "200");
+
+    await user.click(screen.getByTestId("button-submit-log"));
+    await waitFor(() =>
+      expect(api.nutrition.updateLog).toHaveBeenCalledWith(
+        "e1",
+        expect.objectContaining({ quantityG: 200 }),
+      ),
+    );
+  });
+});
