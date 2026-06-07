@@ -463,6 +463,73 @@ The biggest unrealised value is connecting fuelling to the race itself:
 - **[P3] Track search/parse misses.** Log which queries return nothing and which
   parsed names fail to resolve, to prioritise cache backfill and prompt tuning.
 
+### Depth & energy balance — inspired by Cronometer
+
+[Cronometer](https://cronometer.com/features/index.html) is the benchmark for
+nutrition *depth* and *energy balance*. We already match or beat it on a few axes —
+**nutrient timing** (our `loggedAt` + pre/post-session windows are richer than a
+plain diary), **AI photo logging**, **AI coaching insights**, and **training
+integration** — so the ideas below are the genuinely net-new ones, framed for a
+Hyrox athlete.
+
+| Cronometer capability | Our status today | Opportunity |
+|-----------------------|------------------|-------------|
+| Energy balance: TDEE = BMR + activity/exercise − intake, with a daily calorie budget | Intake only; training shown as UTSS, no expenditure side | Compute a real **energy balance** |
+| 84 nutrients incl. amino acids, fatty acids, omega-3:6 | **13 micros**; no amino acids / fat breakdown | **Expand the nutrient panel** |
+| Nutrition *completeness scores* (grouped) | Per-micro `%RDI` only | Add an aggregate **day score** |
+| **Oracle** — suggest foods to fill unmet targets | None | AI-driven **gap-filling suggestions** |
+| Net carbs (carbs − fibre) | Fibre tracked, net carbs not surfaced | Trivial display add |
+| Macro targets by % of calories, presets, per-weekday templates | Absolute targets only | Extends the training-day-target idea |
+| Biometric logging (weight, body-fat, resting HR, HRV, sleep, glucose) + correlations | Not logged in-app | Mostly available from Garmin/Strava |
+| Long-term per-nutrient trends & chart overlays | Daily view + intake-vs-load block view | Extends the trend-view idea |
+| Recipe importer (from a URL) | Manual ingredient entry | Convenience |
+| Fasting timer | None | Niche for this audience |
+
+Concrete additions worth putting on the roadmap:
+
+- **[P2] Energy balance / calorie budget.** This is Cronometer's headline number and
+  our biggest miss: we track intake and training *load* (UTSS) but never *energy
+  expenditure*. Estimate TDEE as **BMR (Mifflin–St Jeor from the profile) + baseline
+  activity + session calories already coming from Strava/Garmin**, then show
+  intake − expenditure as a daily balance (and an optional weight-goal adjustment).
+  This turns the Analytics block view from "intake vs. load" into a true
+  energy-balance chart — directly actionable for race-weight and recovery.
+- **[P2] AI "fill my gaps" food suggestions (our take on Oracle).** Given the day's
+  remaining macro/micro targets, suggest a few foods that close the gaps without
+  blowing macros, with diet/allergen filters (veg/vegan, exclude dairy/nuts/seafood).
+  We're well-placed to do this better than a static ranker because we already have an
+  AI layer and a resolvable food database — the suggestions would name real `foods`
+  rows so the numbers stay non-AI.
+- **[P2] Percentage-based & templated targets.** Let targets be set as **% of
+  calories** (e.g. 50/30/20) and saved as **presets**, including **per-weekday /
+  training-day vs. rest-day templates** (folds together with the periodised-targets
+  item above). Athletes reason in g/kg and ratios, not just absolute grams.
+- **[P3] Expand the nutrient panel.** Add **amino-acid** (protein-quality:
+  leucine/EAAs — relevant to recovery) and **fatty-acid / omega-3:6** breakdowns,
+  plus the remaining vitamins/minerals. USDA Foundation & SR Legacy foods already
+  carry these profiles and our `foods.micros` column is a generic JSONB map, so this
+  is largely an **importer + display** change, not a schema one (`micros.ts` is the
+  single place to extend the curated set).
+- **[P3] Daily nutrition completeness score.** Roll the per-micro `%RDI` into one or
+  two grouped scores (e.g. "vitamins" / "minerals" completeness) so the athlete gets
+  an at-a-glance "how complete was today" signal instead of scanning rows.
+- **[P3] Net carbs.** Surface `carbs − fibre` in the daily header and food preview;
+  zero new data, just a derived field some athletes track.
+- **[P3] Lightweight biometric logging + correlation.** A place to log/﻿import
+  bodyweight, body-fat, resting HR, HRV, and sleep (most already available via
+  Garmin/Strava) and overlay them on the nutrition trend — the substrate for the
+  energy-balance and trend features above, and for "did under-fuelling track with
+  poor HRV?".
+- **[P3] Recipe import from a URL.** Parse a recipe page into ingredients (reusing
+  the AI parse path) to remove the friction of building recipes by hand.
+- **[P3] Per-nutrient long-term trends.** Beyond the daily view, chart a nutrient (or
+  macro) over weeks with a target band — extends the weekly/trend-view item to the
+  nutrient level.
+
+Deliberately **lower priority for this audience:** a fasting timer and continuous
+glucose-monitor (CGM) integration are signature Cronometer features but a weaker fit
+for Hyrox training; note them as exploratory rather than roadmap.
+
 ---
 
 ## Appendix: file map
