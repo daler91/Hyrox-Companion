@@ -5,6 +5,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
 import { isPushEnabled, sendPushToUser } from "../pushNotifications";
 import { rateLimiter, validateBody } from "../routeUtils";
+import { checkSafeOutboundUrl } from "../ssrfGuard";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
@@ -13,8 +14,8 @@ const router = Router();
 
 const subscribeSchema = z.object({
   // 🛡️ Sentinel: Enforce HTTPS to prevent SSRF against internal/local services
-  endpoint: z.string().url().refine((url) => url.startsWith("https://"), {
-    message: "Push endpoint must be an HTTPS URL",
+  endpoint: z.string().url().refine((url) => url.startsWith("https://") && checkSafeOutboundUrl(url).ok, {
+    message: "Push endpoint must be an HTTPS URL and must not point to a local/private address",
   }),
   keys: z.object({
     p256dh: z.string().min(1),
@@ -41,7 +42,7 @@ protectedPost(router, "/api/v1/push/subscribe", { limiter: rateLimiter("push", 1
   res.json({ success: true });
 });
 
-protectedDelete(router, "/api/v1/push/unsubscribe", { limiter: rateLimiter("push", 10), middleware: [validateBody(z.object({ endpoint: z.string().url().refine((url) => url.startsWith("https://"), { message: "Push endpoint must be an HTTPS URL" }) }))] }, async (req: ExpressRequest, res: Response) => {
+protectedDelete(router, "/api/v1/push/unsubscribe", { limiter: rateLimiter("push", 10), middleware: [validateBody(z.object({ endpoint: z.string().url().refine((url) => url.startsWith("https://") && checkSafeOutboundUrl(url).ok, { message: "Push endpoint must be an HTTPS URL and must not point to a local/private address" }) }))] }, async (req: ExpressRequest, res: Response) => {
   const userId = getUserId(req);
   const { endpoint } = req.body as { endpoint: string };
   await storage.push.removeSubscription(userId, endpoint);
