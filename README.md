@@ -261,6 +261,7 @@ Detailed documentation lives in [`docs/`](docs/):
 | [Server](docs/server.md)                       | Express bootstrap, middleware stack, routes, logging, graceful shutdown                    |
 | [Database](docs/database.md)                   | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer                        |
 | [AI and RAG](docs/ai-and-rag.md)               | Text provider layer, Gemini embeddings/vision, coaching context, RAG pipeline              |
+| [Nutrition & Fuelling](docs/nutrition.md)      | Food logging, USDA/Open Food Facts, barcode, recipes, AI meal parsing, fuelling vs. training |
 | [State Management](docs/state-management.md)   | TanStack Query, custom hooks, offline queue, utility functions                             |
 | [API Reference](docs/api-reference.md)         | Endpoint catalog, request/response shapes, rate limits                                     |
 | [Authentication](docs/authentication.md)       | Clerk setup, user sync, dev auth bypass, protected routes                                  |
