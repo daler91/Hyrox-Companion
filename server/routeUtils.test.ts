@@ -484,45 +484,52 @@ describe("expandExercisesToSetRows", () => {
 
 
 
-describe("validateBody", () => {
+
+describe("Validator Middleware (validateBody, validateQuery, validateParams)", () => {
   const schema = z.object({
-    name: z.string(),
-    age: z.number().optional(),
+    key: z.string(),
+    optional: z.number().optional(),
   });
 
-  it("should call next() and update req.body on valid input", () => {
-    const req = { body: { name: "Test", age: 30 } } as unknown as import("express").Request;
+  const cases = [
+    { name: "validateBody", fn: validateBody, prop: "body" },
+    { name: "validateQuery", fn: validateQuery, prop: "query" },
+    { name: "validateParams", fn: validateParams, prop: "params" },
+  ] as const;
+
+  it.each(cases)("$name calls next() and updates req.$prop on valid input", ({ fn, prop }) => {
+    const req = { [prop]: { key: "Test", optional: 30 } } as unknown as import("express").Request;
     const res = {} as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
+    const middleware = fn(schema);
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(req.body).toEqual({ name: "Test", age: 30 });
+    expect(req[prop]).toEqual({ key: "Test", optional: 30 });
   });
 
-  it("should strip unknown properties from req.body on valid input", () => {
-    const req = { body: { name: "Test", unknownProp: true } } as unknown as import("express").Request;
+  it.each(cases)("$name strips unknown properties from req.$prop on valid input", ({ fn, prop }) => {
+    const req = { [prop]: { key: "Test", unknownProp: true } } as unknown as import("express").Request;
     const res = {} as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
+    const middleware = fn(schema);
     middleware(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(req.body).toEqual({ name: "Test" });
+    expect(req[prop]).toEqual({ key: "Test" });
   });
 
-  it("should return 400 on invalid input without calling next()", () => {
-    const req = { body: { age: "not a number" } } as unknown as import("express").Request;
+  it.each(cases)("$name returns 400 on invalid input without calling next()", ({ fn, prop }) => {
+    const req = { [prop]: { optional: "not a number" } } as unknown as import("express").Request;
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     } as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
+    const middleware = fn(schema);
     middleware(req, res, next);
 
     expect(next).not.toHaveBeenCalled();
@@ -612,41 +619,5 @@ describe("parsePagination", () => {
       code: "PRECONDITION_FAILED",
       maxLimit: 50
     });
-  });
-});
-
-describe("validateQuery", () => {
-  const schema = z.object({
-    search: z.string()
-  });
-
-  it("should validate and update req.query", () => {
-    const req = { query: { search: "test" } } as unknown as import("express").Request;
-    const res = {} as unknown as import("express").Response;
-    const next = vi.fn();
-
-    const middleware = validateQuery(schema);
-    middleware(req, res, next);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(req.query).toEqual({ search: "test" });
-  });
-});
-
-describe("validateParams", () => {
-  const schema = z.object({
-    id: z.string()
-  });
-
-  it("should validate and update req.params", () => {
-    const req = { params: { id: "123" } } as unknown as import("express").Request;
-    const res = {} as unknown as import("express").Response;
-    const next = vi.fn();
-
-    const middleware = validateParams(schema);
-    middleware(req, res, next);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(req.params).toEqual({ id: "123" });
   });
 });
