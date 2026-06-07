@@ -7,6 +7,7 @@ import { clearRateLimitBuckets } from "../../../routeUtils";
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
+import { parseMealFromText, resolveAndPreview } from "../../../services/nutrition/mealParser";
 import { storage } from "../../../storage";
 import { createTestApp } from "../../__tests__/testUtils";
 import nutritionIndexRouter from "../index";
@@ -24,10 +25,28 @@ vi.mock("../../../types", () => ({ getUserId: () => "test_user" }));
 vi.mock("../../../services/nutrition/foodSearch", () => ({ searchFoods: vi.fn() }));
 vi.mock("../../../services/nutrition/foodDetail", () => ({ getFoodWithServings: vi.fn() }));
 vi.mock("../../../services/nutrition/barcode", () => ({ lookupBarcode: vi.fn() }));
+vi.mock("../../../services/nutrition/mealParser", () => ({
+  parseMealFromText: vi.fn(),
+  resolveAndPreview: vi.fn(),
+}));
+// AI consent/budget gates are exercised in ai.test.ts; here they pass through so
+// the Phase 4 parse route's own logic is what's under test.
+vi.mock("../../../middleware/aiConsent", () => ({
+  aiConsentCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+vi.mock("../../../middleware/aibudget", () => ({
+  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
 
 vi.mock("../../../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
+    workouts: { getWorkoutLog: vi.fn() },
+    analytics: {
+      getWorkoutLogsByDateRange: vi.fn(),
+      getAllExerciseSetsWithDates: vi.fn(),
+      getExerciseLoadTags: vi.fn(),
+    },
     nutrition: {
       getVisibleFoodById: vi.fn(),
       getRecentFoods: vi.fn(),
@@ -41,7 +60,11 @@ vi.mock("../../../storage", () => ({
       addFavorite: vi.fn(),
       removeFavorite: vi.fn(),
       createLogEntry: vi.fn(),
+      createLogEntriesBatch: vi.fn(),
+      getVisibleFoodsByIds: vi.fn(),
       listEntriesWithFoodForDate: vi.fn(),
+      listEntriesWithFoodInWindow: vi.fn(),
+      listEntriesWithFoodForDateRange: vi.fn(),
       updateLogEntry: vi.fn(),
       deleteLogEntry: vi.fn(),
       repeatDay: vi.fn(),
@@ -316,12 +339,207 @@ describe("nutrition routes", () => {
     });
   });
 
+  describe("Phase 3: session-fuelling (FR-3.1/3.2/3.4)", () => {
+    const food = {
+      id: "f1", source: "usda", sourceId: "1", name: "Banana", brand: null,
+      servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 10, carbPer100g: 20,
+      fatPer100g: 5, fiberPer100g: 2, micros: null, createdByUserId: null,
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+    const makeRow = (over: Record<string, unknown>) => ({
+      id: "e1", userId: "test_user", foodId: "f1",
+      loggedAt: new Date("2026-06-07T11:00:00Z"), logDate: "2026-06-07",
+      quantityG: 100, mealType: "snack", entryMethod: "manual",
+      rawInput: null, parseConfidence: null, pendingReview: false,
+      createdAt: new Date(), updatedAt: new Date(), food, ...over,
+    });
+
+    it("404s for an unknown workout", async () => {
+      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(undefined);
+      expect((await request(app).get("/api/v1/nutrition/session-fuelling/missing")).status).toBe(404);
+    });
+
+    it("windows entries around a known start instant (usedStartTime true)", async () => {
+      const startedAt = new Date("2026-06-07T12:00:00Z");
+      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "w1", date: "2026-06-07", startedAt });
+      vi.mocked(storage.nutrition.listEntriesWithFoodInWindow).mockResolvedValue([
+        makeRow({ id: "pre", loggedAt: new Date("2026-06-07T11:00:00Z") }),
+        makeRow({ id: "post", loggedAt: new Date("2026-06-07T13:00:00Z") }),
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/session-fuelling/w1");
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ workoutId: "w1", date: "2026-06-07", usedStartTime: true });
+      expect(res.body.pre).toHaveLength(1);
+      expect(res.body.post).toHaveLength(1);
+      // 4h pre / 6h post windows around the captured start instant.
+      expect(storage.nutrition.listEntriesWithFoodInWindow).toHaveBeenCalledWith(
+        "test_user",
+        new Date(startedAt.getTime() - 4 * 60 * 60 * 1000),
+        new Date(startedAt.getTime() + 6 * 60 * 60 * 1000),
+      );
+      expect(storage.nutrition.listEntriesWithFoodForDate).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the day's meal tags when startedAt is null (usedStartTime false)", async () => {
+      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "w2", date: "2026-06-07", startedAt: null });
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([
+        makeRow({ id: "pre", mealType: "pre_workout" }),
+        makeRow({ id: "post", mealType: "post_workout" }),
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/session-fuelling/w2");
+      expect(res.status).toBe(200);
+      expect(res.body.usedStartTime).toBe(false);
+      expect(res.body.pre).toHaveLength(1);
+      expect(res.body.post).toHaveLength(1);
+      expect(storage.nutrition.listEntriesWithFoodForDate).toHaveBeenCalledWith("test_user", "2026-06-07");
+      expect(storage.nutrition.listEntriesWithFoodInWindow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Phase 3: block view (FR-3.3)", () => {
+    beforeEach(() => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([]);
+    });
+
+    it("merges intake and training load into zero-filled daily points", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([
+        {
+          id: "e1", userId: "test_user", foodId: "f1",
+          loggedAt: new Date("2026-06-02T12:00:00Z"), logDate: "2026-06-02",
+          quantityG: 100, mealType: "lunch", entryMethod: "manual",
+          rawInput: null, parseConfidence: null, pendingReview: false,
+          createdAt: new Date(), updatedAt: new Date(),
+          food: {
+            id: "f1", source: "usda", sourceId: "1", name: "Banana", brand: null,
+            servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 10, carbPer100g: 20,
+            fatPer100g: 5, fiberPer100g: 2, micros: null, createdByUserId: null,
+            createdAt: new Date(), updatedAt: new Date(),
+          },
+        },
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01&to=2026-06-03");
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ from: "2026-06-01", to: "2026-06-03" });
+      expect(res.body.points).toHaveLength(3);
+      const jun2 = res.body.points.find((p: { date: string }) => p.date === "2026-06-02");
+      expect(jun2).toMatchObject({ calories: 100, protein: 10, utss: 0 });
+      expect(storage.nutrition.listEntriesWithFoodForDateRange).toHaveBeenCalledWith(
+        "test_user", "2026-06-01", "2026-06-03",
+      );
+    });
+
+    it("defaults `to` to the user's local today when omitted", async () => {
+      const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01");
+      expect(res.status).toBe(200);
+      expect(res.body.from).toBe("2026-06-01");
+      expect(res.body.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it("400s on a missing or invalid from", async () => {
+      expect((await request(app).get("/api/v1/nutrition/block")).status).toBe(400);
+      expect((await request(app).get("/api/v1/nutrition/block?from=not-a-date")).status).toBe(400);
+    });
+  });
+
+  describe("Phase 4: natural-language logging (FR-4.1)", () => {
+    it("parses a meal description into reviewed suggestions", async () => {
+      vi.mocked(parseMealFromText).mockResolvedValue({ items: [], warnings: ["assumed large eggs"] });
+      vi.mocked(resolveAndPreview).mockResolvedValue({
+        items: [
+          {
+            name: "egg, scrambled",
+            quantityG: 100,
+            displayAmount: "2 eggs",
+            mealType: "breakfast",
+            confidence: 92,
+            foodId: "f1",
+            food: { id: "f1" } as never,
+            nutrition: { calories: 150, protein: 10, carb: 1, fat: 11, fiber: 0 },
+          },
+        ],
+        warnings: ["assumed large eggs"],
+      });
+
+      const res = await request(app).post("/api/v1/nutrition/parse/text").send({ text: "2 eggs" });
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].foodId).toBe("f1");
+      expect(res.body.rawInput).toBe("2 eggs");
+      expect(parseMealFromText).toHaveBeenCalledWith("2 eggs", "test_user");
+    });
+
+    it("400s when the text is missing", async () => {
+      expect((await request(app).post("/api/v1/nutrition/parse/text").send({})).status).toBe(400);
+      expect(parseMealFromText).not.toHaveBeenCalled();
+    });
+
+    it("logs a reviewed batch, deriving logDate from the user's timezone", async () => {
+      vi.mocked(storage.nutrition.getVisibleFoodsByIds).mockResolvedValue(
+        new Map([
+          ["f1", { id: "f1" }],
+          ["f2", { id: "f2" }],
+        ]) as never,
+      );
+      vi.mocked(storage.nutrition.createLogEntriesBatch).mockResolvedValue([
+        { id: "e1" },
+        { id: "e2" },
+      ] as never);
+
+      const res = await request(app).post("/api/v1/nutrition/logs/batch").send({
+        entryMethod: "nl",
+        rawInput: "2 eggs and toast",
+        loggedAt: "2026-06-07T02:30:00Z", // Chicago (UTC-5 in June) → previous local day
+        items: [
+          { foodId: "f1", quantityG: 100, mealType: "breakfast", parseConfidence: 92 },
+          { foodId: "f2", quantityG: 30, mealType: "breakfast" },
+        ],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ created: 2, logDate: "2026-06-06" });
+      expect(storage.nutrition.createLogEntriesBatch).toHaveBeenCalledWith(
+        "test_user",
+        expect.objectContaining({ entryMethod: "nl", rawInput: "2 eggs and toast", logDate: "2026-06-06" }),
+      );
+    });
+
+    it("404s a batch referencing a food not visible to the user", async () => {
+      vi.mocked(storage.nutrition.getVisibleFoodsByIds).mockResolvedValue(new Map() as never);
+      const res = await request(app).post("/api/v1/nutrition/logs/batch").send({
+        entryMethod: "nl",
+        loggedAt: "2026-06-07T12:00:00Z",
+        items: [{ foodId: "ghost", quantityG: 100, mealType: "lunch" }],
+      });
+      expect(res.status).toBe(404);
+      expect(storage.nutrition.createLogEntriesBatch).not.toHaveBeenCalled();
+    });
+
+    it("400s a batch with no items", async () => {
+      const res = await request(app).post("/api/v1/nutrition/logs/batch").send({
+        entryMethod: "nl",
+        loggedAt: "2026-06-07T12:00:00Z",
+        items: [],
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe("feature flag gate", () => {
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
       expect((await request(gatedApp).get("/api/v1/nutrition/foods/recent")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/logs").send({})).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/foods/barcode").send({ code: "3017620422003" })).status).toBe(404);
+      expect((await request(gatedApp).get("/api/v1/nutrition/session-fuelling/w1")).status).toBe(404);
+      expect((await request(gatedApp).get("/api/v1/nutrition/block?from=2026-06-01")).status).toBe(404);
+      expect((await request(gatedApp).post("/api/v1/nutrition/parse/text").send({ text: "eggs" })).status).toBe(404);
+      expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
     });
   });
 });

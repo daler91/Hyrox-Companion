@@ -1,5 +1,8 @@
 import type {
+  BatchLogResponse,
+  BlockViewResponse,
   CreateCustomFoodInput,
+  CreateFoodLogBatchInput,
   CreateFoodLogInput,
   CreateRecipeInput,
   DailySummaryResponse,
@@ -7,10 +10,12 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodWithServingsResponse,
+  ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
   RepeatDayInput,
   RepeatDayResponse,
+  SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
 } from "@shared/schema";
@@ -193,5 +198,50 @@ export function useDeleteRecipe() {
     invalidateQueries: [QUERY_KEYS.nutritionRecipes, QUERY_KEYS.nutritionCustomFoods],
     successToast: "Recipe deleted",
     errorToast: "Couldn't delete that recipe",
+  });
+}
+
+// --- Phase 3: fuelling around a session / block intake-vs-load --------------
+
+/** A session's pre/post fuelling (FR-3.1/3.2/3.4); only fires for a real workout. */
+export function useSessionFuelling(workoutId: string | null, enabled = true) {
+  return useQuery<SessionFuellingResponse>({
+    queryKey: QUERY_KEYS.nutritionSessionFuelling(workoutId ?? "none"),
+    queryFn: () => api.nutrition.getSessionFuelling(workoutId as string),
+    enabled: enabled && !!workoutId,
+    staleTime: 60_000,
+  });
+}
+
+/** Daily intake macros vs training UTSS over a block range (FR-3.3). */
+export function useBlockView(from: string, to: string, enabled = true) {
+  return useQuery<BlockViewResponse>({
+    queryKey: QUERY_KEYS.nutritionBlock(from, to),
+    queryFn: () => api.nutrition.getBlock(from, to),
+    enabled: enabled && from.length > 0,
+    staleTime: 60_000,
+  });
+}
+
+// --- Phase 4: natural-language meal logging ---------------------------------
+
+/** Parse a free-text meal into suggested items (FR-4.1). Opens the review sheet
+ *  on success, so no success toast; errors map AI codes (consent/budget). */
+export function useParseMealText() {
+  return useApiMutation<ParseMealResponse, Error, string>({
+    mutationFn: (text) => api.nutrition.parseMealText(text),
+    errorToast: "Couldn't read that meal",
+  });
+}
+
+/** Confirm the reviewed items: persist them in one batch (FR-4.1). */
+export function useLogMealBatch(date: string) {
+  return useApiMutation<BatchLogResponse, Error, CreateFoodLogBatchInput>({
+    mutationFn: (data) => api.nutrition.createLogBatch(data),
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRecent],
+    successToast: (data) => ({
+      title: `Logged ${data.created} item${data.created === 1 ? "" : "s"}`,
+    }),
+    errorToast: "Couldn't log those items",
   });
 }

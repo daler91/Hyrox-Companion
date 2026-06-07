@@ -1,4 +1,4 @@
-import { type Food, type FoodServing, MEAL_TYPES, type MealType } from "./tables";
+import { type Food, FOOD_ENTRY_METHODS, type FoodServing, MEAL_TYPES, type MealType } from "./tables";
 import { z } from "./zod";
 
 /**
@@ -41,9 +41,9 @@ export const createFoodLogSchema = z.object({
   // Instant the food was eaten; defaults to "now" on the client. The server
   // derives the local `logDate` from this + the user's timezone.
   loggedAt: isoDateTime,
-  // How the entry was created. Phase 2 distinguishes barcode logging; 'nl'/'photo'
-  // arrive in Phase 4. Defaults to 'manual' server-side when omitted.
-  entryMethod: z.enum(["manual", "barcode"]).optional(),
+  // How the entry was created. 'manual'/'barcode' (Phase 1–2); 'nl'/'photo' (Phase 4,
+  // via the batch endpoint). Defaults to 'manual' server-side when omitted.
+  entryMethod: z.enum(FOOD_ENTRY_METHODS).optional(),
 });
 export type CreateFoodLogInput = z.infer<typeof createFoodLogSchema>;
 
@@ -212,4 +212,106 @@ export interface RecipeListItem {
   name: string;
   servings: number;
   foodId: string;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 (Integration) — relate fuelling to training.
+// ---------------------------------------------------------------------------
+
+// Block view range. `to` defaults to the user's local "today" server-side.
+export const blockViewQuerySchema = z.object({
+  from: isoDate,
+  to: isoDate.optional(),
+});
+export type BlockViewQuery = z.infer<typeof blockViewQuerySchema>;
+
+/** FR-3.1/3.2/3.4 — a session's surrounding entries, split pre/post with totals. */
+export interface SessionFuellingResponse {
+  workoutId: string;
+  date: string;
+  // true → split by the workout's real start-time windows; false → by pre/post_workout tags.
+  usedStartTime: boolean;
+  pre: FoodLogEntryWithNutrition[];
+  post: FoodLogEntryWithNutrition[];
+  preTotals: NutritionMacroTotals;
+  postTotals: NutritionMacroTotals;
+}
+
+/** FR-3.3 — one day on the block view: daily intake macros + training UTSS. */
+export interface BlockViewPoint {
+  date: string;
+  calories: number;
+  protein: number;
+  carb: number;
+  fat: number;
+  fiber: number;
+  utss: number;
+}
+
+export interface BlockViewResponse {
+  from: string;
+  to: string;
+  points: BlockViewPoint[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 (Natural-language logging) — describe a meal → AI items → review → log.
+// ---------------------------------------------------------------------------
+
+// A free-text meal description ("2 eggs and a slice of toast"). Capped like the
+// workout text parser so a pasted essay can't blow the AI budget.
+export const parseMealTextSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+});
+export type ParseMealTextInput = z.infer<typeof parseMealTextSchema>;
+
+/**
+ * One AI-parsed food from a meal description. The model estimates `quantityG`
+ * directly (its strength) plus a human-readable `displayAmount`. The server
+ * resolves `name` to a visible `Food` (local cache only at parse time); when
+ * resolved, `food` + `nutrition` (scaled preview) are populated, otherwise
+ * `foodId` is null and the client must pick a match before logging.
+ */
+export interface ParsedFoodItem {
+  name: string;
+  quantityG: number;
+  displayAmount: string;
+  mealType: MealType | null;
+  confidence: number;
+  foodId: string | null;
+  food: Food | null;
+  nutrition: NutritionMacroTotals | null;
+}
+
+export interface ParseMealResponse {
+  items: ParsedFoodItem[];
+  warnings: string[];
+  // Echoed back so the client can persist it as provenance on the logged entries.
+  rawInput: string;
+}
+
+// Confirm step: persist the reviewed items in one transaction. `entryMethod`
+// records how they were captured; `rawInput` is the original description.
+export const createFoodLogBatchSchema = z.object({
+  entryMethod: z.enum(["nl", "photo"]),
+  rawInput: z.string().max(4000).optional(),
+  loggedAt: isoDateTime,
+  items: z
+    .array(
+      z.object({
+        foodId: z.string().min(1),
+        quantityG,
+        mealType,
+        // 0–100, as emitted by the parser; stored for provenance/analytics.
+        parseConfidence: z.number().min(0).max(100).optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type CreateFoodLogBatchInput = z.infer<typeof createFoodLogBatchSchema>;
+
+export interface BatchLogResponse {
+  created: number;
+  logDate: string;
 }

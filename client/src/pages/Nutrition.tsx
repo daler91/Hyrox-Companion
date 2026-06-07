@@ -1,4 +1,4 @@
-import { MEAL_TYPES } from "@shared/schema";
+import { MEAL_TYPES, type ParseMealResponse } from "@shared/schema";
 import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -12,10 +12,12 @@ import { useDeleteLog, useNutritionDay, useRepeatDay } from "@/hooks/useNutritio
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
+import { DescribeMealButton } from "./nutrition/DescribeMealButton";
 import { FoodSearch } from "./nutrition/FoodSearch";
 import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
 import { MyFoodsSection } from "./nutrition/MyFoodsSection";
+import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
@@ -35,6 +37,7 @@ export default function Nutrition() {
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
   const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [mealReview, setMealReview] = useState<ParseMealResponse | null>(null);
 
   const day = useNutritionDay(date);
   const deleteLog = useDeleteLog(date);
@@ -135,6 +138,7 @@ export default function Nutrition() {
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
 
         <div className="flex flex-wrap gap-2">
+          <DescribeMealButton onParsed={setMealReview} />
           <Button variant="outline" size="sm" onClick={() => setBarcodeOpen(true)} data-testid="button-scan-barcode">
             <ScanLine className="mr-2 h-4 w-4" /> Scan barcode
           </Button>
@@ -162,6 +166,7 @@ export default function Nutrition() {
       />
       <CustomFoodDialog state={customFood} onClose={() => setCustomFood(null)} />
       <RecipeBuilderDialog open={recipe.open} recipeId={recipe.id} onClose={() => setRecipe({ open: false, id: null })} />
+      <ParsedMealReviewSheet result={mealReview} date={date} onClose={() => setMealReview(null)} />
     </PageContainer>
   );
 }

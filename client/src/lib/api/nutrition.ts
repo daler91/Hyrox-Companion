@@ -1,6 +1,9 @@
 import type {
   AddFavoriteInput,
+  BatchLogResponse,
+  BlockViewResponse,
   CreateCustomFoodInput,
+  CreateFoodLogBatchInput,
   CreateFoodLogInput,
   CreateRecipeInput,
   DailySummaryResponse,
@@ -9,11 +12,13 @@ import type {
   FoodSearchResponse,
   FoodServing,
   FoodWithServingsResponse,
+  ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
   RepeatDayInput,
   RepeatDayResponse,
   ServingInput,
+  SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
 } from "@shared/schema";
@@ -99,4 +104,21 @@ export const nutrition = {
 
   deleteRecipe: (id: string) =>
     typedRequest<{ success: boolean }>("DELETE", `${base}/recipes/${enc(id)}`),
+
+  // --- Phase 3: fuelling around a session / block intake-vs-load ---
+  getSessionFuelling: (workoutId: string) =>
+    typedRequest<SessionFuellingResponse>("GET", `${base}/session-fuelling/${enc(workoutId)}`),
+
+  getBlock: (from: string, to?: string) =>
+    typedRequest<BlockViewResponse>(
+      "GET",
+      to ? `${base}/block?from=${enc(from)}&to=${enc(to)}` : `${base}/block?from=${enc(from)}`,
+    ),
+
+  // --- Phase 4: natural-language meal logging ---
+  parseMealText: (text: string) =>
+    typedRequest<ParseMealResponse>("POST", `${base}/parse/text`, { text }),
+
+  createLogBatch: (data: CreateFoodLogBatchInput) =>
+    typedRequest<BatchLogResponse>("POST", `${base}/logs/batch`, data),
 } as const;

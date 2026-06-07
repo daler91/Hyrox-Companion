@@ -39,4 +39,21 @@ describe("MealSection", () => {
     await user.click(screen.getByTestId("button-delete-e1"));
     expect(onDelete).toHaveBeenCalledWith("e1");
   });
+
+  it("shows an AI badge only for nl/photo entries", () => {
+    const { rerender } = render(
+      <MealSection label="Breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={vi.fn()} />,
+    );
+    expect(screen.queryByTestId("ai-badge-e1")).not.toBeInTheDocument();
+
+    rerender(
+      <MealSection
+        label="Breakfast"
+        entries={[{ ...ENTRY, entryMethod: "nl" }]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("ai-badge-e1")).toBeInTheDocument();
+  });
 });

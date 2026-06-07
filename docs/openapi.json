@@ -140,6 +140,11 @@
             "nullable": true,
             "minimum": -2147483648,
             "maximum": 2147483647
+          },
+          "startedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           }
         },
         "required": [
@@ -896,6 +901,11 @@
                 "nullable": true,
                 "minimum": -2147483648,
                 "maximum": 2147483647
+              },
+              "startedAt": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
               }
             },
             "required": [
@@ -1336,6 +1346,11 @@
                 "nullable": true,
                 "minimum": -2147483648,
                 "maximum": 2147483647
+              },
+              "startedAt": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
               },
               "prescribedMainWorkout": {
                 "type": "string",
