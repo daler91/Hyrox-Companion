@@ -124,6 +124,9 @@ export const nutrition = {
   parseMealText: (text: string) =>
     typedRequest<ParseMealResponse>("POST", `${base}/parse/text`, { text }),
 
+  parseMealPhoto: (imageBase64: string, mimeType: string) =>
+    typedRequest<ParseMealResponse>("POST", `${base}/parse/photo`, { imageBase64, mimeType }),
+
   createLogBatch: (data: CreateFoodLogBatchInput) =>
     typedRequest<BatchLogResponse>("POST", `${base}/logs/batch`, data),
 

@@ -13,8 +13,14 @@ describe("isImageParsePath", () => {
     expect(isImageParsePath("/api/v1/plans/days/day-1/reparse-from-image")).toBe(true);
   });
 
+  it("allows the nutrition meal-photo parse route", () => {
+    expect(isImageParsePath("/api/v1/nutrition/parse/photo")).toBe(true);
+  });
+
   it("leaves non-image routes on the default parser", () => {
     expect(isImageParsePath("/api/v1/parse-workout-structure")).toBe(false);
     expect(isImageParsePath("/api/v1/workouts/workout-1")).toBe(false);
+    // The text meal-parse route uses the default (small) JSON body parser.
+    expect(isImageParsePath("/api/v1/nutrition/parse/text")).toBe(false);
   });
 });

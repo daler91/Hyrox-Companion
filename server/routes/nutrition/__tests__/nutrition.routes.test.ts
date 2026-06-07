@@ -8,7 +8,7 @@ import { regenerateAndStoreNutritionInsights } from "../../../services/analytics
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
-import { parseMealFromText, resolveAndPreview } from "../../../services/nutrition/mealParser";
+import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../../services/nutrition/mealParser";
 import { storage } from "../../../storage";
 import { createTestApp } from "../../__tests__/testUtils";
 import nutritionIndexRouter from "../index";
@@ -28,6 +28,7 @@ vi.mock("../../../services/nutrition/foodDetail", () => ({ getFoodWithServings: 
 vi.mock("../../../services/nutrition/barcode", () => ({ lookupBarcode: vi.fn() }));
 vi.mock("../../../services/nutrition/mealParser", () => ({
   parseMealFromText: vi.fn(),
+  parseMealFromPhoto: vi.fn(),
   resolveAndPreview: vi.fn(),
 }));
 // AI consent/budget gates are exercised in ai.test.ts; here they pass through so
@@ -643,6 +644,9 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).get("/api/v1/nutrition/session-fuelling/w1")).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/block?from=2026-06-01")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/parse/text").send({ text: "eggs" })).status).toBe(404);
+      expect(
+        (await request(gatedApp).post("/api/v1/nutrition/parse/photo").send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" })).status,
+      ).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/targets")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/targets").send({ calories: 2000 })).status).toBe(404);
@@ -650,5 +654,61 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).get("/api/v1/nutrition/insights")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/insights").send({})).status).toBe(404);
     });
+  });
+});
+
+// Kept as a separate top-level suite (not nested in "nutrition routes") so the
+// outer describe callback stays under the max-lines-per-function limit.
+describe("nutrition photo meal parsing (FR-4.1)", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = buildApp();
+  });
+
+  it("parses a meal photo into reviewed suggestions", async () => {
+    vi.mocked(parseMealFromPhoto).mockResolvedValue({ items: [], warnings: [] });
+    vi.mocked(resolveAndPreview).mockResolvedValue({
+      items: [
+        {
+          name: "egg, scrambled",
+          quantityG: 100,
+          displayAmount: "2 eggs",
+          mealType: "breakfast",
+          confidence: 88,
+          foodId: "f1",
+          food: { id: "f1" } as never,
+          nutrition: { calories: 150, protein: 10, carb: 1, fat: 11, fiber: 0 },
+        },
+      ],
+      warnings: [],
+    });
+
+    const res = await request(app)
+      .post("/api/v1/nutrition/parse/photo")
+      .send({ imageBase64: "ZmFrZS1pbWFnZQ==", mimeType: "image/jpeg" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].foodId).toBe("f1");
+    // No source text for a photo — rawInput is a short marker.
+    expect(res.body.rawInput).toBe("[photo]");
+    expect(parseMealFromPhoto).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg", "test_user");
+  });
+
+  it("400s a photo parse with an unsupported mimeType", async () => {
+    const res = await request(app)
+      .post("/api/v1/nutrition/parse/photo")
+      .send({ imageBase64: "ZmFrZQ==", mimeType: "image/gif" });
+    expect(res.status).toBe(400);
+    expect(parseMealFromPhoto).not.toHaveBeenCalled();
+  });
+
+  it("400s a photo parse with a missing image", async () => {
+    const res = await request(app).post("/api/v1/nutrition/parse/photo").send({ mimeType: "image/jpeg" });
+    expect(res.status).toBe(400);
+    expect(parseMealFromPhoto).not.toHaveBeenCalled();
   });
 });

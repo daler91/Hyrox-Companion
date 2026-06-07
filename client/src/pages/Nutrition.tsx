@@ -22,6 +22,7 @@ import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
+import { SnapMealButton } from "./nutrition/SnapMealButton";
 import { TargetsDialog } from "./nutrition/TargetsDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
@@ -40,7 +41,7 @@ export default function Nutrition() {
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
   const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
-  const [mealReview, setMealReview] = useState<ParseMealResponse | null>(null);
+  const [mealReview, setMealReview] = useState<{ result: ParseMealResponse; entryMethod: "nl" | "photo" } | null>(null);
   const [targetsOpen, setTargetsOpen] = useState(false);
 
   const day = useNutritionDay(date);
@@ -144,7 +145,8 @@ export default function Nutrition() {
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
 
         <div className="flex flex-wrap gap-2">
-          <DescribeMealButton onParsed={setMealReview} />
+          <DescribeMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })} />
+          <SnapMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })} />
           <Button variant="outline" size="sm" onClick={() => setBarcodeOpen(true)} data-testid="button-scan-barcode">
             <ScanLine className="mr-2 h-4 w-4" /> Scan barcode
           </Button>
@@ -179,7 +181,12 @@ export default function Nutrition() {
       />
       <CustomFoodDialog state={customFood} onClose={() => setCustomFood(null)} />
       <RecipeBuilderDialog open={recipe.open} recipeId={recipe.id} onClose={() => setRecipe({ open: false, id: null })} />
-      <ParsedMealReviewSheet result={mealReview} date={date} onClose={() => setMealReview(null)} />
+      <ParsedMealReviewSheet
+        result={mealReview?.result ?? null}
+        date={date}
+        entryMethod={mealReview?.entryMethod ?? "nl"}
+        onClose={() => setMealReview(null)}
+      />
       <TargetsDialog open={targetsOpen} current={currentTarget} onClose={() => setTargetsOpen(false)} />
     </PageContainer>
   );

@@ -239,6 +239,15 @@ export function useParseMealText() {
   });
 }
 
+/** Parse a meal *photo* into suggested items (FR-4.1, photo path). Opens the
+ *  review sheet on success, so no success toast; errors map AI codes. */
+export function useParseMealPhoto() {
+  return useApiMutation<ParseMealResponse, Error, { imageBase64: string; mimeType: string }>({
+    mutationFn: ({ imageBase64, mimeType }) => api.nutrition.parseMealPhoto(imageBase64, mimeType),
+    errorToast: "Couldn't read that photo",
+  });
+}
+
 /** Confirm the reviewed items: persist them in one batch (FR-4.1). */
 export function useLogMealBatch(date: string) {
   return useApiMutation<BatchLogResponse, Error, CreateFoodLogBatchInput>({

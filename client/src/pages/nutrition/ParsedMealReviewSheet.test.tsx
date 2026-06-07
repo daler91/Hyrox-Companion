@@ -63,11 +63,11 @@ const RESULT: ParseMealResponse = {
   ],
 };
 
-function renderSheet(onClose = vi.fn()) {
+function renderSheet(onClose = vi.fn(), entryMethod: "nl" | "photo" = "nl") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      <ParsedMealReviewSheet result={RESULT} date="2026-06-07" onClose={onClose} />
+      <ParsedMealReviewSheet result={RESULT} date="2026-06-07" entryMethod={entryMethod} onClose={onClose} />
     </QueryClientProvider>,
   );
   return { onClose };
@@ -101,6 +101,19 @@ describe("ParsedMealReviewSheet", () => {
       }),
     );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("logs photo-sourced items with entryMethod 'photo'", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.nutrition.createLogBatch).mockResolvedValue({ created: 1, logDate: "2026-06-07" });
+    renderSheet(vi.fn(), "photo");
+
+    await user.click(screen.getByTestId("button-log-meal-batch"));
+
+    await waitFor(() => expect(api.nutrition.createLogBatch).toHaveBeenCalledTimes(1));
+    expect(api.nutrition.createLogBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ entryMethod: "photo" }),
+    );
   });
 
   it("removing the matched row disables logging", async () => {
