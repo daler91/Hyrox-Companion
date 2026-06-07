@@ -1,5 +1,5 @@
 import { MEAL_TYPES, type ParseMealResponse } from "@shared/schema";
-import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine } from "lucide-react";
+import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine, Target } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useDeleteLog, useNutritionDay, useRepeatDay } from "@/hooks/useNutrition";
+import { useDeleteLog, useNutritionDay, useNutritionTargets, useRepeatDay } from "@/hooks/useNutrition";
 
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
@@ -20,6 +20,7 @@ import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
+import { TargetsDialog } from "./nutrition/TargetsDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
 const EMPTY_TOTALS = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
@@ -38,8 +39,11 @@ export default function Nutrition() {
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
   const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const [mealReview, setMealReview] = useState<ParseMealResponse | null>(null);
+  const [targetsOpen, setTargetsOpen] = useState(false);
 
   const day = useNutritionDay(date);
+  const targets = useNutritionTargets();
+  const currentTarget = targets.data?.current ?? null;
   const deleteLog = useDeleteLog(date);
   const repeatDay = useRepeatDay(date);
 
@@ -132,7 +136,7 @@ export default function Nutrition() {
           </div>
         </div>
 
-        <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} />
+        <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} target={currentTarget} />
 
         <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
@@ -147,6 +151,9 @@ export default function Nutrition() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setRecipe({ open: true, id: null })} data-testid="button-new-recipe">
             <ChefHat className="mr-2 h-4 w-4" /> Recipe
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setTargetsOpen(true)} data-testid="button-edit-targets">
+            <Target className="mr-2 h-4 w-4" /> Targets
           </Button>
         </div>
 
@@ -167,6 +174,7 @@ export default function Nutrition() {
       <CustomFoodDialog state={customFood} onClose={() => setCustomFood(null)} />
       <RecipeBuilderDialog open={recipe.open} recipeId={recipe.id} onClose={() => setRecipe({ open: false, id: null })} />
       <ParsedMealReviewSheet result={mealReview} date={date} onClose={() => setMealReview(null)} />
+      <TargetsDialog open={targetsOpen} current={currentTarget} onClose={() => setTargetsOpen(false)} />
     </PageContainer>
   );
 }

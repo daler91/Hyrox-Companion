@@ -10,6 +10,8 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodWithServingsResponse,
+  NutritionTarget,
+  NutritionTargetsResponse,
   ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
@@ -18,6 +20,7 @@ import type {
   SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
+  UpsertNutritionTargetInput,
 } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 
@@ -243,5 +246,25 @@ export function useLogMealBatch(date: string) {
       title: `Logged ${data.created} item${data.created === 1 ? "" : "s"}`,
     }),
     errorToast: "Couldn't log those items",
+  });
+}
+
+// --- Phase 5: targets -------------------------------------------------------
+
+/** The user's current macro/calorie target (for today) + version history (FR-5.2). */
+export function useNutritionTargets(enabled = true) {
+  return useQuery<NutritionTargetsResponse>({
+    queryKey: QUERY_KEYS.nutritionTargets,
+    queryFn: () => api.nutrition.getTargets(),
+    enabled,
+  });
+}
+
+export function useSetTarget() {
+  return useApiMutation<NutritionTarget, Error, UpsertNutritionTargetInput>({
+    mutationFn: (data) => api.nutrition.setTarget(data),
+    invalidateQueries: [QUERY_KEYS.nutritionTargets],
+    successToast: "Targets saved",
+    errorToast: "Couldn't save targets",
   });
 }

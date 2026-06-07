@@ -86,6 +86,7 @@ export const QUERY_KEYS = {
     ["/api/v1/nutrition/session-fuelling", workoutId] as const,
   nutritionBlock: (from: string, to: string) =>
     ["/api/v1/nutrition/block", from, to] as const,
+  nutritionTargets: ["/api/v1/nutrition/targets"] as const,
 } as const;
 
 export type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./exerciseSetMutations";

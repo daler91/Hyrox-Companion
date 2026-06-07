@@ -12,6 +12,8 @@ import type {
   FoodSearchResponse,
   FoodServing,
   FoodWithServingsResponse,
+  NutritionTarget,
+  NutritionTargetsResponse,
   ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
@@ -21,6 +23,7 @@ import type {
   SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
+  UpsertNutritionTargetInput,
 } from "@shared/schema";
 
 import { typedRequest } from "./client";
@@ -121,4 +124,10 @@ export const nutrition = {
 
   createLogBatch: (data: CreateFoodLogBatchInput) =>
     typedRequest<BatchLogResponse>("POST", `${base}/logs/batch`, data),
+
+  // --- Phase 5: targets ---
+  getTargets: () => typedRequest<NutritionTargetsResponse>("GET", `${base}/targets`),
+
+  setTarget: (data: UpsertNutritionTargetInput) =>
+    typedRequest<NutritionTarget>("POST", `${base}/targets`, data),
 } as const;

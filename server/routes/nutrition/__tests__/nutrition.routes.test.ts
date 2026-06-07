@@ -73,6 +73,9 @@ vi.mock("../../../storage", () => ({
       deleteRecipe: vi.fn(),
       listRecipes: vi.fn(),
       getRecipeWithIngredients: vi.fn(),
+      getCurrentTarget: vi.fn(),
+      listTargets: vi.fn(),
+      createTarget: vi.fn(),
     },
   },
 }));
@@ -530,6 +533,37 @@ describe("nutrition routes", () => {
     });
   });
 
+  describe("Phase 5: targets (FR-5.2)", () => {
+    it("returns the current target (for today) plus history", async () => {
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue({ id: "t1", calories: 2000 } as never);
+      vi.mocked(storage.nutrition.listTargets).mockResolvedValue([{ id: "t1" }, { id: "t0" }] as never);
+
+      const res = await request(app).get("/api/v1/nutrition/targets");
+      expect(res.status).toBe(200);
+      expect(res.body.current).toMatchObject({ id: "t1", calories: 2000 });
+      expect(res.body.history).toHaveLength(2);
+    });
+
+    it("creates a target, defaulting effectiveFrom to the user's local today", async () => {
+      vi.mocked(storage.nutrition.createTarget).mockResolvedValue({ id: "t1" } as never);
+      const res = await request(app)
+        .post("/api/v1/nutrition/targets")
+        .send({ calories: 2200, proteinG: 160 });
+
+      expect(res.status).toBe(201);
+      expect(storage.nutrition.createTarget).toHaveBeenCalledWith(
+        "test_user",
+        expect.objectContaining({ calories: 2200, proteinG: 160, effectiveFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }),
+      );
+    });
+
+    it("400s when no target field is set", async () => {
+      const res = await request(app).post("/api/v1/nutrition/targets").send({});
+      expect(res.status).toBe(400);
+      expect(storage.nutrition.createTarget).not.toHaveBeenCalled();
+    });
+  });
+
   describe("feature flag gate", () => {
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
@@ -540,6 +574,8 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).get("/api/v1/nutrition/block?from=2026-06-01")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/parse/text").send({ text: "eggs" })).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
+      expect((await request(gatedApp).get("/api/v1/nutrition/targets")).status).toBe(404);
+      expect((await request(gatedApp).post("/api/v1/nutrition/targets").send({ calories: 2000 })).status).toBe(404);
     });
   });
 });

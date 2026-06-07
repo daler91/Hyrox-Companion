@@ -21,6 +21,7 @@ import {
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type MealType,
+  type NutritionTargetsResponse,
   type ParseMealResponse,
   type ParseMealTextInput,
   parseMealTextSchema,
@@ -34,6 +35,8 @@ import {
   type UpdateFoodLogInput,
   updateFoodLogSchema,
   updateRecipeSchema,
+  type UpsertNutritionTargetInput,
+  upsertNutritionTargetSchema,
 } from "@shared/schema";
 import { type Request, type Response, Router } from "express";
 
@@ -450,6 +453,38 @@ export function registerNutritionRoutes(router: Router): void {
       });
       const response: BatchLogResponse = { created: created.length, logDate };
       res.status(201).json(response);
+    },
+  );
+
+  // ---- Phase 5 (Insights & Coaching): targets ------------------------------
+  // FR-5.2 — the current macro/calorie target (for today) plus version history.
+  router.get(
+    "/api/v1/nutrition/targets",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const today = getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const [current, history] = await Promise.all([
+        storage.nutrition.getCurrentTarget(userId, today),
+        storage.nutrition.listTargets(userId),
+      ]);
+      const response: NutritionTargetsResponse = { current: current ?? null, history };
+      res.json(response);
+    }),
+  );
+
+  // FR-5.2 — set/replace a target version (defaults effectiveFrom to local today).
+  protectedPost(
+    router,
+    "/api/v1/nutrition/targets",
+    { limiter: rateLimiter("nutritionWrite", 30), validation: [validateBody(upsertNutritionTargetSchema)] },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const body = req.body as UpsertNutritionTargetInput;
+      const effectiveFrom = body.effectiveFrom ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const target = await storage.nutrition.createTarget(userId, { ...body, effectiveFrom });
+      res.status(201).json(target);
     },
   );
 
