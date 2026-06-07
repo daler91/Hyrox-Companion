@@ -80,52 +80,6 @@ function toIso(value: Date | string): string {
 }
 
 /**
- * Project a joined entry row into the wire `FoodLogEntryWithNutrition`, scaling
- * its food's per-100g macros to the logged grams. The single source of truth for
- * that projection, shared by the daily summary (Phase 1) and the session-fuelling
- * views (Phase 3) so an entry looks identical wherever it surfaces.
- */
-export function toEntryWithNutrition(row: LogEntryWithFood): FoodLogEntryWithNutrition {
-  return {
-    id: row.id,
-    foodId: row.foodId,
-    name: row.food.name,
-    brand: row.food.brand,
-    loggedAt: toIso(row.loggedAt),
-    logDate: row.logDate,
-    quantityG: row.quantityG,
-    mealType: row.mealType as MealType,
-    entryMethod: row.entryMethod,
-    nutrition: roundMacros(scaleNutrition(row.food, row.quantityG)),
-  };
-}
-
-/** Raw (unrounded) macro sum over a set of entries — accumulate, then round once. */
-export function sumNutrition(rows: LogEntryWithFood[]): NutritionMacroTotals {
-  const totals = emptyTotals();
-  for (const row of rows) addInto(totals, scaleNutrition(row.food, row.quantityG));
-  return totals;
-}
-
-/**
- * Project a set of entries and their rounded macro total in one pass. Totals are
- * summed raw then rounded once (no accumulated rounding error), matching the daily
- * summary. Backs the pre/post groups of the session-fuelling view (Phase 3).
- */
-export function summariseEntries(rows: LogEntryWithFood[]): {
-  entries: FoodLogEntryWithNutrition[];
-  totals: NutritionMacroTotals;
-} {
-  const entries: FoodLogEntryWithNutrition[] = [];
-  const rawTotals = emptyTotals();
-  for (const row of rows) {
-    addInto(rawTotals, scaleNutrition(row.food, row.quantityG));
-    entries.push(toEntryWithNutrition(row));
-  }
-  return { entries, totals: roundMacros(rawTotals) };
-}
-
-/**
  * Build the daily summary from a day's joined entries: running totals plus the
  * entries bucketed by meal, each carrying its own scaled nutrition. Rows are
  * assumed pre-sorted by `loggedAt`; meal order follows MEAL_TYPES.
@@ -138,9 +92,22 @@ export function buildDailySummary(
   const rawTotals = emptyTotals();
 
   for (const row of rows) {
-    addInto(rawTotals, scaleNutrition(row.food, row.quantityG));
-    const entry = toEntryWithNutrition(row);
-    meals[entry.mealType].push(entry);
+    const nutrition = scaleNutrition(row.food, row.quantityG);
+    addInto(rawTotals, nutrition);
+    const mealType = row.mealType as MealType;
+    const entry: FoodLogEntryWithNutrition = {
+      id: row.id,
+      foodId: row.foodId,
+      name: row.food.name,
+      brand: row.food.brand,
+      loggedAt: toIso(row.loggedAt),
+      logDate: row.logDate,
+      quantityG: row.quantityG,
+      mealType,
+      entryMethod: row.entryMethod,
+      nutrition: roundMacros(nutrition),
+    };
+    meals[mealType].push(entry);
   }
 
   return { logDate, totals: roundMacros(rawTotals), meals };

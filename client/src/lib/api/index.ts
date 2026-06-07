@@ -82,10 +82,6 @@ export const QUERY_KEYS = {
   nutritionRecipes: ["/api/v1/nutrition/recipes"] as const,
   nutritionRecipe: (id: string) => ["/api/v1/nutrition/recipes", id] as const,
   nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id] as const,
-  nutritionSessionFuelling: (workoutId: string) =>
-    ["/api/v1/nutrition/session-fuelling", workoutId] as const,
-  nutritionBlock: (from: string, to: string) =>
-    ["/api/v1/nutrition/block", from, to] as const,
 } as const;
 
 export type { AddExerciseSetPayload, PatchExerciseSetPayload } from "./exerciseSetMutations";

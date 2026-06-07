@@ -1,5 +1,4 @@
 import type {
-  BlockViewResponse,
   CreateCustomFoodInput,
   CreateFoodLogInput,
   CreateRecipeInput,
@@ -12,7 +11,6 @@ import type {
   RecipeWithIngredients,
   RepeatDayInput,
   RepeatDayResponse,
-  SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
 } from "@shared/schema";
@@ -195,27 +193,5 @@ export function useDeleteRecipe() {
     invalidateQueries: [QUERY_KEYS.nutritionRecipes, QUERY_KEYS.nutritionCustomFoods],
     successToast: "Recipe deleted",
     errorToast: "Couldn't delete that recipe",
-  });
-}
-
-// --- Phase 3: fuelling around a session / block intake-vs-load --------------
-
-/** A session's pre/post fuelling (FR-3.1/3.2/3.4); only fires for a real workout. */
-export function useSessionFuelling(workoutId: string | null, enabled = true) {
-  return useQuery<SessionFuellingResponse>({
-    queryKey: QUERY_KEYS.nutritionSessionFuelling(workoutId ?? "none"),
-    queryFn: () => api.nutrition.getSessionFuelling(workoutId as string),
-    enabled: enabled && !!workoutId,
-    staleTime: 60_000,
-  });
-}
-
-/** Daily intake macros vs training UTSS over a block range (FR-3.3). */
-export function useBlockView(from: string, to: string, enabled = true) {
-  return useQuery<BlockViewResponse>({
-    queryKey: QUERY_KEYS.nutritionBlock(from, to),
-    queryFn: () => api.nutrition.getBlock(from, to),
-    enabled: enabled && from.length > 0,
-    staleTime: 60_000,
   });
 }

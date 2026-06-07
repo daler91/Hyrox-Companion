@@ -82,8 +82,6 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
   return {
     userId,
     date: activity.start_date_local.split("T")[0],
-    // Preserve the true start instant (Phase 3 fuelling windows); start_date is UTC ISO.
-    startedAt: activity.start_date ? new Date(activity.start_date) : null,
     focus: activity.sport_type || activity.type || "Workout",
     mainWorkout,
     accessory,

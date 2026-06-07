@@ -38,8 +38,7 @@ export async function saveParsedWorkoutsBatch(
   } catch (err) {
     failed = workouts.length;
     logger.error(
-      { err: err instanceof Error ? err.message : "Unknown error" },
-      "Failed to persist parsed exercise sets for workouts during batch reparse"
+      "Failed to persist parsed exercise sets for workouts during batch reparse: " + (err instanceof Error ? err.message : "Unknown error")
     );
   }
 

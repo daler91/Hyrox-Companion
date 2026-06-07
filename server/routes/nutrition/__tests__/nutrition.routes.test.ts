@@ -28,12 +28,6 @@ vi.mock("../../../services/nutrition/barcode", () => ({ lookupBarcode: vi.fn() }
 vi.mock("../../../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
-    workouts: { getWorkoutLog: vi.fn() },
-    analytics: {
-      getWorkoutLogsByDateRange: vi.fn(),
-      getAllExerciseSetsWithDates: vi.fn(),
-      getExerciseLoadTags: vi.fn(),
-    },
     nutrition: {
       getVisibleFoodById: vi.fn(),
       getRecentFoods: vi.fn(),
@@ -48,8 +42,6 @@ vi.mock("../../../storage", () => ({
       removeFavorite: vi.fn(),
       createLogEntry: vi.fn(),
       listEntriesWithFoodForDate: vi.fn(),
-      listEntriesWithFoodInWindow: vi.fn(),
-      listEntriesWithFoodForDateRange: vi.fn(),
       updateLogEntry: vi.fn(),
       deleteLogEntry: vi.fn(),
       repeatDay: vi.fn(),
@@ -324,122 +316,12 @@ describe("nutrition routes", () => {
     });
   });
 
-  describe("Phase 3: session-fuelling (FR-3.1/3.2/3.4)", () => {
-    const food = {
-      id: "f1", source: "usda", sourceId: "1", name: "Banana", brand: null,
-      servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 10, carbPer100g: 20,
-      fatPer100g: 5, fiberPer100g: 2, micros: null, createdByUserId: null,
-      createdAt: new Date(), updatedAt: new Date(),
-    };
-    const makeRow = (over: Record<string, unknown>) => ({
-      id: "e1", userId: "test_user", foodId: "f1",
-      loggedAt: new Date("2026-06-07T11:00:00Z"), logDate: "2026-06-07",
-      quantityG: 100, mealType: "snack", entryMethod: "manual",
-      rawInput: null, parseConfidence: null, pendingReview: false,
-      createdAt: new Date(), updatedAt: new Date(), food, ...over,
-    });
-
-    it("404s for an unknown workout", async () => {
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue(undefined);
-      expect((await request(app).get("/api/v1/nutrition/session-fuelling/missing")).status).toBe(404);
-    });
-
-    it("windows entries around a known start instant (usedStartTime true)", async () => {
-      const startedAt = new Date("2026-06-07T12:00:00Z");
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "w1", date: "2026-06-07", startedAt });
-      vi.mocked(storage.nutrition.listEntriesWithFoodInWindow).mockResolvedValue([
-        makeRow({ id: "pre", loggedAt: new Date("2026-06-07T11:00:00Z") }),
-        makeRow({ id: "post", loggedAt: new Date("2026-06-07T13:00:00Z") }),
-      ]);
-
-      const res = await request(app).get("/api/v1/nutrition/session-fuelling/w1");
-      expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ workoutId: "w1", date: "2026-06-07", usedStartTime: true });
-      expect(res.body.pre).toHaveLength(1);
-      expect(res.body.post).toHaveLength(1);
-      // 4h pre / 6h post windows around the captured start instant.
-      expect(storage.nutrition.listEntriesWithFoodInWindow).toHaveBeenCalledWith(
-        "test_user",
-        new Date(startedAt.getTime() - 4 * 60 * 60 * 1000),
-        new Date(startedAt.getTime() + 6 * 60 * 60 * 1000),
-      );
-      expect(storage.nutrition.listEntriesWithFoodForDate).not.toHaveBeenCalled();
-    });
-
-    it("falls back to the day's meal tags when startedAt is null (usedStartTime false)", async () => {
-      vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "w2", date: "2026-06-07", startedAt: null });
-      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([
-        makeRow({ id: "pre", mealType: "pre_workout" }),
-        makeRow({ id: "post", mealType: "post_workout" }),
-      ]);
-
-      const res = await request(app).get("/api/v1/nutrition/session-fuelling/w2");
-      expect(res.status).toBe(200);
-      expect(res.body.usedStartTime).toBe(false);
-      expect(res.body.pre).toHaveLength(1);
-      expect(res.body.post).toHaveLength(1);
-      expect(storage.nutrition.listEntriesWithFoodForDate).toHaveBeenCalledWith("test_user", "2026-06-07");
-      expect(storage.nutrition.listEntriesWithFoodInWindow).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("Phase 3: block view (FR-3.3)", () => {
-    beforeEach(() => {
-      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
-      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
-      vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
-      vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([]);
-    });
-
-    it("merges intake and training load into zero-filled daily points", async () => {
-      vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([
-        {
-          id: "e1", userId: "test_user", foodId: "f1",
-          loggedAt: new Date("2026-06-02T12:00:00Z"), logDate: "2026-06-02",
-          quantityG: 100, mealType: "lunch", entryMethod: "manual",
-          rawInput: null, parseConfidence: null, pendingReview: false,
-          createdAt: new Date(), updatedAt: new Date(),
-          food: {
-            id: "f1", source: "usda", sourceId: "1", name: "Banana", brand: null,
-            servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 10, carbPer100g: 20,
-            fatPer100g: 5, fiberPer100g: 2, micros: null, createdByUserId: null,
-            createdAt: new Date(), updatedAt: new Date(),
-          },
-        },
-      ]);
-
-      const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01&to=2026-06-03");
-      expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ from: "2026-06-01", to: "2026-06-03" });
-      expect(res.body.points).toHaveLength(3);
-      const jun2 = res.body.points.find((p: { date: string }) => p.date === "2026-06-02");
-      expect(jun2).toMatchObject({ calories: 100, protein: 10, utss: 0 });
-      expect(storage.nutrition.listEntriesWithFoodForDateRange).toHaveBeenCalledWith(
-        "test_user", "2026-06-01", "2026-06-03",
-      );
-    });
-
-    it("defaults `to` to the user's local today when omitted", async () => {
-      const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01");
-      expect(res.status).toBe(200);
-      expect(res.body.from).toBe("2026-06-01");
-      expect(res.body.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    });
-
-    it("400s on a missing or invalid from", async () => {
-      expect((await request(app).get("/api/v1/nutrition/block")).status).toBe(400);
-      expect((await request(app).get("/api/v1/nutrition/block?from=not-a-date")).status).toBe(400);
-    });
-  });
-
   describe("feature flag gate", () => {
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
       expect((await request(gatedApp).get("/api/v1/nutrition/foods/recent")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/logs").send({})).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/foods/barcode").send({ code: "3017620422003" })).status).toBe(404);
-      expect((await request(gatedApp).get("/api/v1/nutrition/session-fuelling/w1")).status).toBe(404);
-      expect((await request(gatedApp).get("/api/v1/nutrition/block?from=2026-06-01")).status).toBe(404);
     });
   });
 });

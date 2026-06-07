@@ -19,7 +19,7 @@ import {
   type ServingInput,
   type UpdateCustomFoodInput,
 } from "@shared/schema";
-import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -353,56 +353,6 @@ export class NutritionStorage {
       .innerJoin(foods, eq(foodLogEntries.foodId, foods.id))
       .where(and(eq(foodLogEntries.userId, userId), eq(foodLogEntries.logDate, logDate)))
       .orderBy(asc(foodLogEntries.loggedAt));
-    return rows.map((r) => ({ ...r.entry, food: r.food }));
-  }
-
-  /**
-   * Entries joined to foods whose `loggedAt` instant falls within [from, to],
-   * time-ordered. Backs the session-fuelling windows when a workout has a known
-   * start instant (FR-3.1/3.2; served by idx_food_log_entries_user_logged_at).
-   */
-  async listEntriesWithFoodInWindow(
-    userId: string,
-    fromInstant: Date,
-    toInstant: Date,
-  ): Promise<LogEntryWithFood[]> {
-    const rows = await db
-      .select({ entry: foodLogEntries, food: foods })
-      .from(foodLogEntries)
-      .innerJoin(foods, eq(foodLogEntries.foodId, foods.id))
-      .where(
-        and(
-          eq(foodLogEntries.userId, userId),
-          gte(foodLogEntries.loggedAt, fromInstant),
-          lte(foodLogEntries.loggedAt, toInstant),
-        ),
-      )
-      .orderBy(asc(foodLogEntries.loggedAt));
-    return rows.map((r) => ({ ...r.entry, food: r.food }));
-  }
-
-  /**
-   * Entries joined to foods whose local `logDate` falls within [fromDate, toDate],
-   * ordered by day then time. Backs the block view's daily macro totals (FR-3.3;
-   * served by idx_food_log_entries_user_log_date).
-   */
-  async listEntriesWithFoodForDateRange(
-    userId: string,
-    fromDate: string,
-    toDate: string,
-  ): Promise<LogEntryWithFood[]> {
-    const rows = await db
-      .select({ entry: foodLogEntries, food: foods })
-      .from(foodLogEntries)
-      .innerJoin(foods, eq(foodLogEntries.foodId, foods.id))
-      .where(
-        and(
-          eq(foodLogEntries.userId, userId),
-          gte(foodLogEntries.logDate, fromDate),
-          lte(foodLogEntries.logDate, toDate),
-        ),
-      )
-      .orderBy(asc(foodLogEntries.logDate), asc(foodLogEntries.loggedAt));
     return rows.map((r) => ({ ...r.entry, food: r.food }));
   }
 
