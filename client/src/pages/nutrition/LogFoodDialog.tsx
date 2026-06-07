@@ -193,6 +193,11 @@ function LogFoodForm({
   );
 }
 
+function getFormKey(state: LogDialogState | null): string {
+  if (!state) return "closed";
+  return state.mode === "create" ? `create:${state.food.id}` : `edit:${state.entry.id}`;
+}
+
 export function LogFoodDialog({
   state,
   date,
@@ -202,11 +207,7 @@ export function LogFoodDialog({
   readonly date: string;
   readonly onClose: () => void;
 }) {
-  const formKey = state
-    ? state.mode === "create"
-      ? `create:${state.food.id}`
-      : `edit:${state.entry.id}`
-    : "closed";
+  const formKey = getFormKey(state);
 
   return (
     <Dialog

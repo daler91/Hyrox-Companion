@@ -43,7 +43,7 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
       )}
 
       {showResults && (
-        <div className="overflow-hidden rounded-md border" role="listbox" aria-label="Search results">
+        <div className="overflow-hidden rounded-md border">
           {isFetching && results.length === 0 && (
             <p className="p-3 text-sm text-muted-foreground">Searching…</p>
           )}

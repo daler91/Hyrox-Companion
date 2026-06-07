@@ -80,8 +80,8 @@ describe("buildDailySummary", () => {
   it("returns all-zero totals and every meal bucket for an empty day", () => {
     const summary = buildDailySummary("2026-06-07", []);
     expect(summary.totals).toEqual(emptyTotals());
-    expect(Object.keys(summary.meals).sort()).toEqual(
-      ["breakfast", "dinner", "lunch", "post_workout", "pre_workout", "snack"].sort(),
+    expect(new Set(Object.keys(summary.meals))).toEqual(
+      new Set(["breakfast", "lunch", "dinner", "snack", "pre_workout", "post_workout"]),
     );
     for (const meal of Object.values(summary.meals)) {
       expect(meal).toEqual([]);

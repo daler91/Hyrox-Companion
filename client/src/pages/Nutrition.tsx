@@ -1,6 +1,6 @@
 import { MEAL_TYPES } from "@shared/schema";
 import { ChevronLeft, ChevronRight, CopyPlus } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -44,6 +44,49 @@ export default function Nutrition() {
   const summary = day.data;
   const isEmpty = !!summary && MEAL_TYPES.every((m) => summary.meals[m].length === 0);
 
+  let dayBody: ReactNode;
+  if (day.isLoading) {
+    dayBody = (
+      <div className="flex justify-center p-6">
+        <LoadingSpinner />
+      </div>
+    );
+  } else if (isEmpty) {
+    dayBody = (
+      <div
+        className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
+        data-testid="text-empty-day"
+      >
+        <p>Nothing logged for {formatDateLabel(date).toLowerCase()}.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-3"
+          onClick={() => repeatDay.mutate({ sourceDate: addDays(date, -1), targetDate: date })}
+          disabled={repeatDay.isPending}
+          data-testid="button-repeat-prev"
+        >
+          <CopyPlus className="mr-2 h-4 w-4" /> Repeat previous day
+        </Button>
+      </div>
+    );
+  } else {
+    dayBody = (
+      <div className="space-y-4">
+        {MEAL_TYPES.map((m) => (
+          <MealSection
+            key={m}
+            label={MEAL_LABELS[m]}
+            entries={summary?.meals[m] ?? []}
+            onEdit={(entry) => setDialog({ mode: "edit", entry })}
+            onDelete={(id) => deleteLog.mutate(id)}
+            deletingId={deleteLog.isPending ? deleteLog.variables : undefined}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <PageContainer>
       <div className="space-y-4">
@@ -84,41 +127,7 @@ export default function Nutrition() {
         <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
 
-        {day.isLoading ? (
-          <div className="flex justify-center p-6">
-            <LoadingSpinner />
-          </div>
-        ) : isEmpty ? (
-          <div
-            className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
-            data-testid="text-empty-day"
-          >
-            <p>Nothing logged for {formatDateLabel(date).toLowerCase()}.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onClick={() => repeatDay.mutate({ sourceDate: addDays(date, -1), targetDate: date })}
-              disabled={repeatDay.isPending}
-              data-testid="button-repeat-prev"
-            >
-              <CopyPlus className="mr-2 h-4 w-4" /> Repeat previous day
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {MEAL_TYPES.map((m) => (
-              <MealSection
-                key={m}
-                label={MEAL_LABELS[m]}
-                entries={summary?.meals[m] ?? []}
-                onEdit={(entry) => setDialog({ mode: "edit", entry })}
-                onDelete={(id) => deleteLog.mutate(id)}
-                deletingId={deleteLog.isPending ? deleteLog.variables : undefined}
-              />
-            ))}
-          </div>
-        )}
+        {dayBody}
       </div>
 
       <LogFoodDialog state={dialog} date={date} onClose={() => setDialog(null)} />

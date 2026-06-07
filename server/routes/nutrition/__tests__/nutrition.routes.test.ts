@@ -1,5 +1,4 @@
-import express from "express";
-import { Router } from "express";
+import express, { Router } from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -53,13 +52,13 @@ describe("nutrition routes", () => {
     clearRateLimitBuckets();
     app = buildApp();
     // Chicago is UTC-5 in June, so an 02:30Z instant is the previous local day.
-    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago" } as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago" });
   });
 
   describe("POST /api/v1/nutrition/logs", () => {
     it("computes logDate server-side from the user's timezone", async () => {
-      vi.mocked(storage.nutrition.getFoodById).mockResolvedValue({ id: "food1" } as never);
-      vi.mocked(storage.nutrition.createLogEntry).mockResolvedValue({ id: "entry1" } as never);
+      vi.mocked(storage.nutrition.getFoodById).mockResolvedValue({ id: "food1" });
+      vi.mocked(storage.nutrition.createLogEntry).mockResolvedValue({ id: "entry1" });
 
       const res = await request(app).post("/api/v1/nutrition/logs").send({
         foodId: "food1",
@@ -130,7 +129,7 @@ describe("nutrition routes", () => {
     };
 
     it("returns totals + per-meal entries for a date", async () => {
-      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row] as never);
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
       const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
       expect(res.status).toBe(200);
       expect(res.body.logDate).toBe("2026-06-07");
@@ -154,7 +153,7 @@ describe("nutrition routes", () => {
 
   describe("PATCH/DELETE /api/v1/nutrition/logs/:id", () => {
     it("updates an entry", async () => {
-      vi.mocked(storage.nutrition.updateLogEntry).mockResolvedValue({ id: "e1" } as never);
+      vi.mocked(storage.nutrition.updateLogEntry).mockResolvedValue({ id: "e1" });
       const res = await request(app).patch("/api/v1/nutrition/logs/e1").send({ quantityG: 200 });
       expect(res.status).toBe(200);
       expect(storage.nutrition.updateLogEntry).toHaveBeenCalledWith(
@@ -180,7 +179,7 @@ describe("nutrition routes", () => {
 
   describe("search, recent, favorites, repeat", () => {
     it("returns search results and surfaces apiDegraded", async () => {
-      vi.mocked(searchFoods).mockResolvedValue({ results: [{ id: "f1" }] as never, apiDegraded: true });
+      vi.mocked(searchFoods).mockResolvedValue({ results: [{ id: "f1" }], apiDegraded: true });
       const res = await request(app).get("/api/v1/nutrition/foods/search?q=banana");
       expect(res.status).toBe(200);
       expect(res.body.apiDegraded).toBe(true);
@@ -194,15 +193,15 @@ describe("nutrition routes", () => {
     });
 
     it("lists recent foods", async () => {
-      vi.mocked(storage.nutrition.getRecentFoods).mockResolvedValue([{ id: "f1" }] as never);
+      vi.mocked(storage.nutrition.getRecentFoods).mockResolvedValue([{ id: "f1" }]);
       const res = await request(app).get("/api/v1/nutrition/foods/recent");
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);
     });
 
     it("adds a favorite when the food exists, 404 otherwise", async () => {
-      vi.mocked(storage.nutrition.getFoodById).mockResolvedValue({ id: "f1" } as never);
-      vi.mocked(storage.nutrition.addFavorite).mockResolvedValue({ id: "fav1" } as never);
+      vi.mocked(storage.nutrition.getFoodById).mockResolvedValue({ id: "f1" });
+      vi.mocked(storage.nutrition.addFavorite).mockResolvedValue({ id: "fav1" });
       expect((await request(app).post("/api/v1/nutrition/favorites").send({ foodId: "f1" })).status).toBe(201);
 
       vi.mocked(storage.nutrition.getFoodById).mockResolvedValue(undefined);

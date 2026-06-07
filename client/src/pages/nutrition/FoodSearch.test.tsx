@@ -1,14 +1,40 @@
+import type { Food } from "@shared/schema";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSearchFoods } from "@/hooks/useNutrition";
+import { api } from "@/lib/api";
 
 import { FoodSearch } from "./FoodSearch";
 
-vi.mock("@/hooks/useNutrition", () => ({ useSearchFoods: vi.fn() }));
+vi.mock("@/lib/api", () => ({
+  api: { nutrition: { search: vi.fn() } },
+  QUERY_KEYS: { nutritionSearch: (q: string) => ["/api/v1/nutrition/foods/search", q] },
+}));
 
-const BANANA = { id: "f1", name: "Banana", brand: null, caloriesPer100g: 89 };
+const BANANA: Food = {
+  id: "f1",
+  source: "usda",
+  sourceId: "1",
+  name: "Banana",
+  brand: null,
+  servingSizeG: 118,
+  caloriesPer100g: 89,
+  proteinPer100g: 1.1,
+  carbPer100g: 23,
+  fatPer100g: 0.3,
+  fiberPer100g: 2.6,
+  micros: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+function renderWithClient(ui: ReactNode) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 describe("FoodSearch", () => {
   beforeEach(() => {
@@ -16,13 +42,10 @@ describe("FoodSearch", () => {
   });
 
   it("shows results after typing and selects one on click", async () => {
-    vi.mocked(useSearchFoods).mockReturnValue({
-      data: { results: [BANANA], apiDegraded: false },
-      isFetching: false,
-    } as never);
+    vi.mocked(api.nutrition.search).mockResolvedValue({ results: [BANANA], apiDegraded: false });
     const onSelect = vi.fn();
     const user = userEvent.setup();
-    render(<FoodSearch onSelect={onSelect} />);
+    renderWithClient(<FoodSearch onSelect={onSelect} />);
 
     await user.type(screen.getByTestId("input-food-search"), "ban");
 
@@ -31,12 +54,12 @@ describe("FoodSearch", () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "f1" }));
   });
 
-  it("surfaces the cached-results notice when the API is degraded", () => {
-    vi.mocked(useSearchFoods).mockReturnValue({
-      data: { results: [], apiDegraded: true },
-      isFetching: false,
-    } as never);
-    render(<FoodSearch onSelect={vi.fn()} />);
-    expect(screen.getByTestId("text-search-degraded")).toBeInTheDocument();
+  it("surfaces the cached-results notice when the API is degraded", async () => {
+    vi.mocked(api.nutrition.search).mockResolvedValue({ results: [], apiDegraded: true });
+    const user = userEvent.setup();
+    renderWithClient(<FoodSearch onSelect={vi.fn()} />);
+
+    await user.type(screen.getByTestId("input-food-search"), "ban");
+    expect(await screen.findByTestId("text-search-degraded")).toBeInTheDocument();
   });
 });

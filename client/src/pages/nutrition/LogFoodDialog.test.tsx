@@ -1,21 +1,26 @@
-import type { Food, FoodLogEntryWithNutrition } from "@shared/schema";
-import { render, screen } from "@testing-library/react";
+import type { Food, FoodLogEntry, FoodLogEntryWithNutrition } from "@shared/schema";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useLogFood, useUpdateLog } from "@/hooks/useNutrition";
+import { api } from "@/lib/api";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { LogFoodDialog } from "./LogFoodDialog";
 
-vi.mock("@/hooks/useNutrition", () => ({ useLogFood: vi.fn(), useUpdateLog: vi.fn() }));
+vi.mock("@/lib/api", () => ({
+  api: { nutrition: { createLog: vi.fn(), updateLog: vi.fn() } },
+  QUERY_KEYS: {
+    nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
+    nutritionRecent: ["/api/v1/nutrition/foods/recent"],
+  },
+}));
 
 installRadixPointerMocks();
 
-const logMutate = vi.fn();
-const updateMutate = vi.fn();
-
-const FOOD = {
+const FOOD: Food = {
   id: "f1",
   source: "usda",
   sourceId: "1",
@@ -30,18 +35,39 @@ const FOOD = {
   micros: null,
   createdAt: new Date(),
   updatedAt: new Date(),
-} as Food;
+};
+
+const SAVED_ENTRY: FoodLogEntry = {
+  id: "e1",
+  userId: "u1",
+  foodId: "f1",
+  loggedAt: new Date(),
+  logDate: "2026-06-07",
+  quantityG: 200,
+  mealType: "snack",
+  entryMethod: "manual",
+  rawInput: null,
+  parseConfidence: null,
+  pendingReview: false,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+function renderWithClient(ui: ReactNode) {
+  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 describe("LogFoodDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useLogFood).mockReturnValue({ mutate: logMutate, isPending: false } as never);
-    vi.mocked(useUpdateLog).mockReturnValue({ mutate: updateMutate, isPending: false } as never);
+    vi.mocked(api.nutrition.createLog).mockResolvedValue(SAVED_ENTRY);
+    vi.mocked(api.nutrition.updateLog).mockResolvedValue(SAVED_ENTRY);
   });
 
   it("previews scaled nutrition and logs the food on submit", async () => {
     const user = userEvent.setup();
-    render(<LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />);
+    renderWithClient(<LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />);
 
     expect(screen.getByText("Banana")).toBeInTheDocument();
     // Default quantity = serving size (118 g) → 89 * 118 / 100 ≈ 105 kcal.
@@ -54,9 +80,10 @@ describe("LogFoodDialog", () => {
     expect(screen.getByTestId("preview-calories")).toHaveTextContent("178");
 
     await user.click(screen.getByTestId("button-submit-log"));
-    expect(logMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ foodId: "f1", quantityG: 200 }),
-      expect.any(Object),
+    await waitFor(() =>
+      expect(api.nutrition.createLog).toHaveBeenCalledWith(
+        expect.objectContaining({ foodId: "f1", quantityG: 200 }),
+      ),
     );
   });
 
@@ -74,7 +101,7 @@ describe("LogFoodDialog", () => {
       nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
     };
     const user = userEvent.setup();
-    render(<LogFoodDialog state={{ mode: "edit", entry }} date="2026-06-07" onClose={vi.fn()} />);
+    renderWithClient(<LogFoodDialog state={{ mode: "edit", entry }} date="2026-06-07" onClose={vi.fn()} />);
 
     expect(screen.getByText("Edit entry")).toBeInTheDocument();
     const quantity = screen.getByTestId("input-quantity");
@@ -82,9 +109,11 @@ describe("LogFoodDialog", () => {
     await user.type(quantity, "200");
 
     await user.click(screen.getByTestId("button-submit-log"));
-    expect(updateMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "e1", data: expect.objectContaining({ quantityG: 200 }) }),
-      expect.any(Object),
+    await waitFor(() =>
+      expect(api.nutrition.updateLog).toHaveBeenCalledWith(
+        "e1",
+        expect.objectContaining({ quantityG: 200 }),
+      ),
     );
   });
 });
