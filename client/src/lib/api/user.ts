@@ -44,6 +44,13 @@ export interface UserPreferences {
   gender?: string | null;
   /** General athlete age (13–100) — picks the Race Predictor age cohort for all athletes (W17). */
   age?: number | null;
+  /** Body-composition inputs for calculated nutrition targets. Canonical units (kg/cm). */
+  bodyweightKg?: number | null;
+  heightCm?: number | null;
+  activityLevel?: "sedentary" | "light" | "moderate" | "active" | "very_active" | null;
+  weightGoalDirection?: "lose" | "maintain" | "gain" | null;
+  /** Magnitude of target weight change in kg/week; sign comes from weightGoalDirection. */
+  weightGoalRateKgPerWeek?: number | null;
   mafAge?: number | null;
   mafInjuryIllnessMedication?: boolean | null;
   mafConsistency?: "low" | "moderate" | "high" | null;

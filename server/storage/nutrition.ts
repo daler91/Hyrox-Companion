@@ -791,6 +791,9 @@ export class NutritionStorage {
           proteinG: data.proteinG ?? null,
           carbG: data.carbG ?? null,
           fatG: data.fatG ?? null,
+          periodizationEnabled: data.periodizationEnabled ?? false,
+          referenceUtss: data.referenceUtss ?? null,
+          carbGramsPerUtss: data.carbGramsPerUtss ?? null,
           effectiveFrom: data.effectiveFrom,
         })
         .returning();

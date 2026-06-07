@@ -56,16 +56,37 @@ type Preferences = UserPreferences;
 // independently by useDetectTimezone (C10). Keeping it out of the snapshot
 // + save payload means a Settings save never overwrites the auto-detected
 // value with stale state.
+type ActivityLevelValue = "sedentary" | "light" | "moderate" | "active" | "very_active";
+type WeightGoalDirectionValue = "lose" | "maintain" | "gain";
+
 type SavePayload = Omit<UserPreferences, "weeklyGoal" | "userTimezone"> & { weeklyGoal: number };
 interface PreferencesSnapshot
   extends Omit<
     UserPreferences,
-    "weeklyGoal" | "userTimezone" | "trainingStyleId" | "age" | "mafAge" | "mafConsistency" | "mafTrend" | "mafHrDataAvailable"
+    | "weeklyGoal"
+    | "userTimezone"
+    | "trainingStyleId"
+    | "age"
+    | "mafAge"
+    | "mafConsistency"
+    | "mafTrend"
+    | "mafHrDataAvailable"
+    | "bodyweightKg"
+    | "heightCm"
+    | "activityLevel"
+    | "weightGoalDirection"
+    | "weightGoalRateKgPerWeek"
   > {
   weeklyGoal: string;
   division: string;
   gender: string;
   age: number | null;
+  // Body-composition inputs, stored canonical (kg/cm) for stable dirty-tracking.
+  bodyweightKg: number | null;
+  heightCm: number | null;
+  activityLevel: ActivityLevelValue | null;
+  weightGoalDirection: WeightGoalDirectionValue | null;
+  weightGoalRateKgPerWeek: number | null;
   trainingStyleId: string;
   mafAge: number | null;
   mafConsistency: Exclude<MafConsistencyInput, ""> | null;
@@ -99,6 +120,11 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
     division: preferences.division || "open",
     gender: preferences.gender ?? "prefer_not_to_say",
     age: preferences.age ?? null,
+    bodyweightKg: preferences.bodyweightKg ?? null,
+    heightCm: preferences.heightCm ?? null,
+    activityLevel: preferences.activityLevel ?? null,
+    weightGoalDirection: preferences.weightGoalDirection ?? null,
+    weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
     weeklyGoal: String(preferences.weeklyGoal || 5),
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
@@ -120,6 +146,11 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     division: payload.division ?? "open",
     gender: payload.gender ?? "prefer_not_to_say",
     age: payload.age ?? null,
+    bodyweightKg: payload.bodyweightKg ?? null,
+    heightCm: payload.heightCm ?? null,
+    activityLevel: payload.activityLevel ?? null,
+    weightGoalDirection: payload.weightGoalDirection ?? null,
+    weightGoalRateKgPerWeek: payload.weightGoalRateKgPerWeek ?? null,
     weeklyGoal: String(payload.weeklyGoal),
     emailNotifications: payload.emailNotifications,
     emailWeeklySummary: payload.emailWeeklySummary,
@@ -141,6 +172,11 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     division: snapshot.division,
     gender: snapshot.gender,
     age: snapshot.age,
+    bodyweightKg: snapshot.bodyweightKg,
+    heightCm: snapshot.heightCm,
+    activityLevel: snapshot.activityLevel,
+    weightGoalDirection: snapshot.weightGoalDirection,
+    weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
     weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
@@ -166,6 +202,11 @@ export default function Settings() {
   const [division, setDivision] = useState("open");
   const [gender, setGender] = useState("prefer_not_to_say");
   const [ageInput, setAgeInput] = useState("");
+  const [bodyweightKg, setBodyweightKg] = useState<number | null>(null);
+  const [heightCm, setHeightCm] = useState<number | null>(null);
+  const [activityLevel, setActivityLevel] = useState("");
+  const [weightGoalDirection, setWeightGoalDirection] = useState("");
+  const [weightGoalRateKgPerWeek, setWeightGoalRateKgPerWeek] = useState<number | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState("5");
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [emailWeeklySummary, setEmailWeeklySummary] = useState(false);
@@ -198,6 +239,11 @@ export default function Settings() {
     division: "open",
     gender: "prefer_not_to_say",
     age: null,
+    bodyweightKg: null,
+    heightCm: null,
+    activityLevel: null,
+    weightGoalDirection: null,
+    weightGoalRateKgPerWeek: null,
     weeklyGoal: "5",
     emailNotifications: false,
     emailWeeklySummary: false,
@@ -232,6 +278,11 @@ export default function Settings() {
       division,
       gender,
       age: ageInputToSnapshot(ageInput),
+      bodyweightKg,
+      heightCm,
+      activityLevel: (activityLevel || null) as ActivityLevelValue | null,
+      weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
+      weightGoalRateKgPerWeek,
       weeklyGoal,
       emailNotifications,
       emailWeeklySummary,
@@ -249,6 +300,11 @@ export default function Settings() {
       distanceUnit,
       division,
       gender,
+      bodyweightKg,
+      heightCm,
+      activityLevel,
+      weightGoalDirection,
+      weightGoalRateKgPerWeek,
       weeklyGoal,
       emailNotifications,
       emailWeeklySummary,
@@ -312,6 +368,11 @@ export default function Settings() {
       setDivision(preferences.division || "open");
       setGender(preferences.gender ?? "prefer_not_to_say");
       setAgeInput(preferences.age == null ? "" : String(preferences.age));
+      setBodyweightKg(preferences.bodyweightKg ?? null);
+      setHeightCm(preferences.heightCm ?? null);
+      setActivityLevel(preferences.activityLevel ?? "");
+      setWeightGoalDirection(preferences.weightGoalDirection ?? "");
+      setWeightGoalRateKgPerWeek(preferences.weightGoalRateKgPerWeek ?? null);
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
       setEmailNotifications(preferences.emailNotifications ?? false);
       setEmailWeeklySummary(preferences.emailWeeklySummary ?? false);
@@ -368,6 +429,11 @@ export default function Settings() {
               setDistanceUnit(previous.distanceUnit);
               setDivision(previous.division);
               setGender(previous.gender);
+              setBodyweightKg(previous.bodyweightKg);
+              setHeightCm(previous.heightCm);
+              setActivityLevel(previous.activityLevel ?? "");
+              setWeightGoalDirection(previous.weightGoalDirection ?? "");
+              setWeightGoalRateKgPerWeek(previous.weightGoalRateKgPerWeek);
               setWeeklyGoal(previous.weeklyGoal);
               setEmailNotifications(previous.emailNotifications);
               setEmailWeeklySummary(previous.emailWeeklySummary);
@@ -449,6 +515,11 @@ export default function Settings() {
       distanceUnit,
       division,
       gender,
+      bodyweightKg,
+      heightCm,
+      activityLevel: (activityLevel || null) as ActivityLevelValue | null,
+      weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
+      weightGoalRateKgPerWeek,
       weeklyGoal: Number.parseInt(weeklyGoal, 10),
       emailNotifications,
       emailWeeklySummary,
@@ -472,6 +543,11 @@ export default function Settings() {
     distanceUnit,
     division,
     gender,
+    bodyweightKg,
+    heightCm,
+    activityLevel,
+    weightGoalDirection,
+    weightGoalRateKgPerWeek,
     weeklyGoal,
     emailNotifications,
     emailWeeklySummary,
@@ -568,6 +644,11 @@ export default function Settings() {
         division={division}
         gender={gender}
         ageInput={ageInput}
+        bodyweightKg={bodyweightKg}
+        heightCm={heightCm}
+        activityLevel={activityLevel}
+        weightGoalDirection={weightGoalDirection}
+        weightGoalRateKgPerWeek={weightGoalRateKgPerWeek}
         weeklyGoal={weeklyGoal}
         emailNotifications={emailNotifications}
         emailWeeklySummary={emailWeeklySummary}
@@ -583,6 +664,11 @@ export default function Settings() {
         onDivisionChange={setDivision}
         onGenderChange={setGender}
         onAgeInputChange={setAgeInput}
+        onBodyweightKgChange={setBodyweightKg}
+        onHeightCmChange={setHeightCm}
+        onActivityLevelChange={setActivityLevel}
+        onWeightGoalDirectionChange={setWeightGoalDirection}
+        onWeightGoalRateKgPerWeekChange={setWeightGoalRateKgPerWeek}
         onWeeklyGoalChange={(v) => {
           setWeeklyGoal(v);
         }}

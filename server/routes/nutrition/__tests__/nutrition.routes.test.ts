@@ -208,6 +208,46 @@ describe("nutrition routes", () => {
       const res = await request(app).get("/api/v1/nutrition/summary?date=not-a-date");
       expect(res.status).toBe(400);
     });
+
+    it("returns a null effectiveTarget when the user has no target", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.effectiveTarget).toBeNull();
+      expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    });
+
+    it("returns a flat effective target without querying training load", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue({
+        id: "t1", userId: "test_user", calories: 2000, proteinG: 150, carbG: 200, fatG: 60,
+        periodizationEnabled: false, referenceUtss: null, carbGramsPerUtss: null, effectiveFrom: "2026-06-01",
+      });
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.effectiveTarget).toMatchObject({ carbG: 200, carbDeltaG: 0, scaled: false });
+      expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    });
+
+    it("scales a periodised target using the day's training load (1-day window)", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue({
+        id: "t1", userId: "test_user", calories: 2000, proteinG: 150, carbG: 200, fatG: 60,
+        periodizationEnabled: true, referenceUtss: 0, carbGramsPerUtss: 1, effectiveFrom: "2026-06-01",
+      });
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      // No logged workouts ⇒ UTSS 0; the scaling path still runs (scaled: true).
+      expect(res.body.effectiveTarget).toMatchObject({ scaled: true, utss: 0, carbDeltaG: 0, carbG: 200 });
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
+        "test_user",
+        "2026-06-07",
+        "2026-06-07",
+      );
+    });
   });
 
   describe("search / recent / favorites", () => {

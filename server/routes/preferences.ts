@@ -54,6 +54,11 @@ function serializePreferences(user: {
   division: string | null;
   gender: string | null;
   age: number | null;
+  bodyweightKg: number | null;
+  heightCm: number | null;
+  activityLevel: string | null;
+  weightGoalDirection: string | null;
+  weightGoalRateKgPerWeek: number | null;
   mafAge: number | null;
   mafInjuryIllnessMedication: boolean | null;
   mafConsistency: string | null;
@@ -83,6 +88,11 @@ function serializePreferences(user: {
     division: user.division ?? "open",
     gender: user.gender ?? null,
     age: user.age ?? null,
+    bodyweightKg: user.bodyweightKg ?? null,
+    heightCm: user.heightCm ?? null,
+    activityLevel: user.activityLevel ?? null,
+    weightGoalDirection: user.weightGoalDirection ?? null,
+    weightGoalRateKgPerWeek: user.weightGoalRateKgPerWeek ?? null,
     mafAge: user.mafAge ?? null,
     mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
     mafConsistency: user.mafConsistency ?? null,

@@ -79,13 +79,17 @@ const TARGET_FIELDS = [
   { key: "fat", targetKey: "fatG", label: "Fat" },
 ] as const;
 
+/** The macro fields any target shape must carry to drive progress (a baseline
+ *  `NutritionTarget` or a day's periodised `EffectiveTargetSummary`). */
+export type TargetLike = Pick<NutritionTarget, "calories" | "proteinG" | "carbG" | "fatG">;
+
 /**
  * Today's totals against the current target, one row per macro the user has set
  * a goal for (unset/zero goals are skipped). Display-only; pure.
  */
 export function computeTargetProgress(
   totals: NutritionMacroTotals,
-  target: NutritionTarget | null,
+  target: TargetLike | null,
 ): TargetProgressRow[] {
   if (!target) return [];
   const rows: TargetProgressRow[] = [];

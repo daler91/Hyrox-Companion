@@ -1,3 +1,4 @@
+import { effectiveTarget } from "@shared/nutritionTargets";
 import {
   type AddFavoriteInput,
   addFavoriteSchema,
@@ -18,6 +19,7 @@ import {
   type DailySummaryQuery,
   dailySummaryQuerySchema,
   type DailySummaryResponse,
+  type EffectiveTargetSummary,
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type MealType,
@@ -68,6 +70,58 @@ import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/prot
 const FOOD_NOT_FOUND = "Food not found";
 const LOG_ENTRY_NOT_FOUND = "Log entry not found";
 const RECIPE_NOT_FOUND = "Recipe not found";
+
+/**
+ * Resolve the effective target for one day: the user's baseline target (the
+ * version effective on that date) with carbs/calories scaled by that day's
+ * actual training load (UTSS) when periodisation is enabled. Returns null when
+ * no target is set. The (cheap, single-day) UTSS query runs ONLY for periodised
+ * targets, so flat-target and no-target users pay nothing extra here.
+ */
+async function resolveEffectiveTarget(
+  userId: string,
+  logDate: string,
+): Promise<EffectiveTargetSummary | null> {
+  const baseline = await storage.nutrition.getCurrentTarget(userId, logDate);
+  if (!baseline) return null;
+
+  let utss = 0;
+  if (baseline.periodizationEnabled) {
+    const [workoutLogs, exerciseSets, loadTags] = await Promise.all([
+      storage.analytics.getWorkoutLogsByDateRange(userId, logDate, logDate),
+      storage.analytics.getAllExerciseSetsWithDates(userId, logDate, logDate),
+      storage.analytics.getExerciseLoadTags(),
+    ]);
+    const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
+      currentDate: logDate,
+    });
+    utss = dailyLoads.find((d) => d.date === logDate)?.utss ?? 0;
+  }
+
+  const result = effectiveTarget(
+    {
+      calories: baseline.calories,
+      proteinG: baseline.proteinG,
+      carbG: baseline.carbG,
+      fatG: baseline.fatG,
+    },
+    utss,
+    {
+      enabled: baseline.periodizationEnabled,
+      referenceUtss: baseline.referenceUtss ?? 0,
+      carbGramsPerUtss: baseline.carbGramsPerUtss ?? 0,
+    },
+  );
+  return {
+    calories: result.calories,
+    proteinG: result.proteinG,
+    carbG: result.carbG,
+    fatG: result.fatG,
+    carbDeltaG: result.carbDeltaG,
+    utss: Math.round(utss * 10) / 10,
+    scaled: result.scaled,
+  };
+}
 
 /** Resolve the user's IANA timezone, defaulting to UTC pre-detection. */
 async function getUserTimezone(userId: string): Promise<string> {
@@ -276,7 +330,10 @@ export function registerNutritionRoutes(router: Router): void {
       const { date } = req.query as unknown as DailySummaryQuery;
       const logDate = date ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
       const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
-      const summary: DailySummaryResponse = buildDailySummary(logDate, rows);
+      const summary: DailySummaryResponse = {
+        ...buildDailySummary(logDate, rows),
+        effectiveTarget: await resolveEffectiveTarget(userId, logDate),
+      };
       res.json(summary);
     }),
   );

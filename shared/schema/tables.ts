@@ -62,6 +62,22 @@ export const users = pgTable("users", {
   // is only set during MAF onboarding — so balanced-style athletes previously
   // had no age signal and fell back to the all-ages cohort (review W17).
   age: integer("age"),
+  // Body-composition inputs for the calculated-nutrition-targets feature
+  // (BMR/TDEE via Mifflin–St Jeor). Stored CANONICAL (kg/cm), not the user's
+  // display unit: these are formula inputs like maf_test_results, not parsed
+  // workout weights, so the S5 stored-unit invariant does not apply — the UI
+  // converts at the input/display edge only. All nullable (profiles are partial;
+  // the calc degrades gracefully and is gated client-side until complete).
+  bodyweightKg: real("bodyweight_kg"),
+  heightCm: real("height_cm"),
+  // Mifflin–St Jeor activity multiplier bucket. null ⇒ calc unavailable.
+  activityLevel: varchar("activity_level", { length: 24 }), // sedentary|light|moderate|active|very_active
+  // Weight-goal DIRECTION for the calorie adjustment. Distinct from weeklyGoal
+  // (training sessions/week). null/maintain ⇒ no adjustment.
+  weightGoalDirection: varchar("weight_goal_direction", { length: 16 }), // lose|maintain|gain
+  // Target rate of weight change in kg/week (canonical). Magnitude only; the
+  // sign comes from weightGoalDirection. null ⇒ treated as 0 (maintain).
+  weightGoalRateKgPerWeek: real("weight_goal_rate_kg_per_week"),
   mafAge: integer("maf_age"),
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
   mafConsistency: text("maf_consistency"),
@@ -836,6 +852,14 @@ export const nutritionTargets = pgTable("nutrition_targets", {
   proteinG: real("protein_g"),
   carbG: real("carb_g"),
   fatG: real("fat_g"),
+  // Training-day-aware targets: when enabled, the effective carb (and therefore
+  // calorie) target for a given date is scaled from this baseline by that date's
+  // actual training load (UTSS). Protein/fat stay anchored to bodyweight. Config
+  // lives on the versioned row so past dates use the then-current plan, not
+  // today's. NULL/false ⇒ a flat target (back-compatible with pre-existing rows).
+  periodizationEnabled: boolean("periodization_enabled").notNull().default(false),
+  referenceUtss: real("reference_utss"), // UTSS at which carbG == the baseline carbG
+  carbGramsPerUtss: real("carb_grams_per_utss"), // ΔcarbG per +1 UTSS vs the reference
   effectiveFrom: date("effective_from").notNull(),
 }, (table) => [
   index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),

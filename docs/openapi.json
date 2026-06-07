@@ -635,6 +635,48 @@
             "minimum": 13,
             "maximum": 100
           },
+          "bodyweightKg": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 500
+          },
+          "heightCm": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 300
+          },
+          "activityLevel": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "sedentary",
+              "light",
+              "moderate",
+              "active",
+              "very_active",
+              null
+            ]
+          },
+          "weightGoalDirection": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "lose",
+              "maintain",
+              "gain",
+              null
+            ]
+          },
+          "weightGoalRateKgPerWeek": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 2
+          },
           "mafAge": {
             "type": "integer",
             "nullable": true,
