@@ -4,11 +4,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generateJsonText } from "../../ai/providers";
 import { AppError } from "../../errors";
 import { storage } from "../../storage";
-import { type MealParseRaw, parseMealFromText, resolveAndPreview } from "./mealParser";
+import { type MealParseRaw, parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "./mealParser";
 
 vi.mock("../../ai/providers", () => ({ generateJsonText: vi.fn() }));
 vi.mock("../../storage", () => ({
   storage: { nutrition: { searchLocalFoods: vi.fn() } },
+}));
+
+// Vision path: capture the generateContent request the parser builds (mirrors
+// server/gemini/exerciseParser.image.test.ts). The mocked retryWithBackoff runs
+// the fn so the spy is invoked with the constructed request; vi.hoisted keeps
+// the spies reachable inside the hoisted vi.mock factory.
+const { generateContentSpy, trackUsageSpy } = vi.hoisted(() => ({
+  generateContentSpy: vi.fn(),
+  trackUsageSpy: vi.fn(),
+}));
+vi.mock("../../gemini/client", () => ({
+  GEMINI_VISION_MODEL: "gemini-2.5-flash",
+  getAiClient: () => ({ models: { generateContent: generateContentSpy } }),
+  retryWithBackoff: (fn: (signal?: AbortSignal) => Promise<unknown>) => fn(),
+  trackUsageFromResponse: trackUsageSpy,
 }));
 
 function aiText(payload: unknown) {
@@ -89,6 +104,68 @@ describe("parseMealFromText", () => {
   it("throws an AppError on an empty response", async () => {
     vi.mocked(generateJsonText).mockResolvedValue({ text: "" } as Awaited<ReturnType<typeof generateJsonText>>);
     await expect(parseMealFromText("x", "u1")).rejects.toBeInstanceOf(AppError);
+  });
+});
+
+describe("parseMealFromPhoto", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("sends the image as inlineData on the vision model and maps items like the text path", async () => {
+    generateContentSpy.mockResolvedValueOnce({
+      text: JSON.stringify({
+        items: [
+          { name: "egg, scrambled", quantityG: 100, displayAmount: "2 eggs", mealType: "breakfast", confidence: 88 },
+        ],
+        warnings: ["portion estimated from the plate"],
+      }),
+    });
+
+    const raw = await parseMealFromPhoto("ZmFrZS1pbWFnZQ==", "image/jpeg", "u1");
+
+    expect(raw.items).toHaveLength(1);
+    expect(raw.items[0]).toMatchObject({ name: "egg, scrambled", quantityG: 100, mealType: "breakfast" });
+    expect(raw.warnings).toEqual(["portion estimated from the plate"]);
+
+    // The request carries the base64 under inlineData on the vision model with a JSON contract.
+    expect(generateContentSpy).toHaveBeenCalledTimes(1);
+    const callArgs = generateContentSpy.mock.calls[0][0] as {
+      model: string;
+      config: { responseMimeType: string };
+      contents: { parts: ({ inlineData?: { mimeType: string; data: string }; text?: string })[] }[];
+    };
+    expect(callArgs.model).toBe("gemini-2.5-flash");
+    expect(callArgs.config.responseMimeType).toBe("application/json");
+    expect(callArgs.contents[0].parts[0]).toEqual({
+      inlineData: { mimeType: "image/jpeg", data: "ZmFrZS1pbWFnZQ==" },
+    });
+    expect(typeof callArgs.contents[0].parts[1].text).toBe("string");
+    // Usage is tracked for the vision call (before any empty-response check).
+    expect(trackUsageSpy).toHaveBeenCalledWith("u1", "gemini-2.5-flash", "parse", expect.anything());
+  });
+
+  it("drops malformed items but keeps the valid ones", async () => {
+    generateContentSpy.mockResolvedValueOnce({
+      text: JSON.stringify({
+        items: [
+          { name: "banana", quantityG: 120, displayAmount: "1 banana", confidence: 80 },
+          { name: "", quantityG: -1 },
+        ],
+        warnings: [],
+      }),
+    });
+    const raw = await parseMealFromPhoto("ZmFrZQ==", "image/png", "u1");
+    expect(raw.items).toHaveLength(1);
+    expect(raw.items[0].name).toBe("banana");
+  });
+
+  it("throws an AppError on invalid JSON", async () => {
+    generateContentSpy.mockResolvedValueOnce({ text: "not json" });
+    await expect(parseMealFromPhoto("ZmFrZQ==", "image/jpeg", "u1")).rejects.toBeInstanceOf(AppError);
+  });
+
+  it("throws an AppError on an empty response", async () => {
+    generateContentSpy.mockResolvedValueOnce({ text: "" });
+    await expect(parseMealFromPhoto("ZmFrZQ==", "image/jpeg", "u1")).rejects.toBeInstanceOf(AppError);
   });
 });
 

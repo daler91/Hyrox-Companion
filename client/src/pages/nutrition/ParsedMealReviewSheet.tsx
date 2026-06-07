@@ -151,10 +151,12 @@ function ReviewRowCard({
 function ReviewForm({
   result,
   date,
+  entryMethod,
   onClose,
 }: {
   readonly result: ParseMealResponse;
   readonly date: string;
+  readonly entryMethod: "nl" | "photo";
   readonly onClose: () => void;
 }) {
   const [rows, setRows] = useState<ReviewRow[]>(() => toRows(result.items));
@@ -173,7 +175,7 @@ function ReviewForm({
     if (loggable.length === 0) return;
     logBatch.mutate(
       {
-        entryMethod: "nl",
+        entryMethod,
         rawInput: result.rawInput,
         loggedAt: loggedAtForDate(date),
         items: loggable.map((r) => ({
@@ -256,16 +258,20 @@ function ReviewForm({
 export function ParsedMealReviewSheet({
   result,
   date,
+  entryMethod,
   onClose,
 }: {
   readonly result: ParseMealResponse | null;
   readonly date: string;
+  readonly entryMethod: "nl" | "photo";
   readonly onClose: () => void;
 }) {
   return (
     <Dialog open={result !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent data-testid="dialog-meal-review">
-        {result && <ReviewForm key={result.rawInput} result={result} date={date} onClose={onClose} />}
+        {result && (
+          <ReviewForm key={result.rawInput} result={result} date={date} entryMethod={entryMethod} onClose={onClose} />
+        )}
       </DialogContent>
     </Dialog>
   );

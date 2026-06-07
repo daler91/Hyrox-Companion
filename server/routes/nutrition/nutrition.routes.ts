@@ -24,6 +24,8 @@ import {
   type MicroSummaryResponse,
   type NutritionInsightsResponse,
   type NutritionTargetsResponse,
+  type ParseExercisesFromImageRequest,
+  parseExercisesFromImageRequestSchema,
   type ParseMealResponse,
   type ParseMealTextInput,
   parseMealTextSchema,
@@ -49,7 +51,7 @@ import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
-import { parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
+import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
 import {
@@ -423,6 +425,29 @@ export function registerNutritionRoutes(router: Router): void {
       const raw = await parseMealFromText(text, userId);
       const { items, warnings } = await resolveAndPreview(raw, userId);
       const response: ParseMealResponse = { items, warnings, rawInput: text };
+      res.json(response);
+    },
+  );
+
+  // FR-4.1 (photo) — parse a meal *photo* into suggested food items. Same
+  // contract + review flow as /parse/text, but the image goes to Gemini Vision
+  // (direct — the provider abstraction has no vision method). The 10MB body
+  // parser is mounted for this exact path via server/imageParsePaths.ts.
+  protectedPost(
+    router,
+    "/api/v1/nutrition/parse/photo",
+    {
+      limiter: rateLimiter("parse", 5),
+      aiConsent: true,
+      aiBudget: true,
+      validation: [validateBody(parseExercisesFromImageRequestSchema)],
+    },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { imageBase64, mimeType } = req.body as ParseExercisesFromImageRequest;
+      const raw = await parseMealFromPhoto(imageBase64, mimeType, userId);
+      const { items, warnings } = await resolveAndPreview(raw, userId);
+      const response: ParseMealResponse = { items, warnings, rawInput: "[photo]" };
       res.json(response);
     },
   );

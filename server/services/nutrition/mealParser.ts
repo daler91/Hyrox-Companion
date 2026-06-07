@@ -7,8 +7,9 @@ import { z } from "zod";
 
 import { generateJsonText } from "../../ai/providers";
 import { AppError, ErrorCode } from "../../errors";
+import { GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../../gemini/client";
 import { logger } from "../../logger";
-import { PARSE_MEAL_PROMPT } from "../../prompts";
+import { MEAL_IMAGE_PREAMBLE, PARSE_MEAL_PROMPT } from "../../prompts";
 import { storage } from "../../storage";
 import { sanitizeUserInput, validateAiOutput } from "../../utils/sanitize";
 import { roundMacros, scaleNutrition } from "./rollup";
@@ -98,6 +99,67 @@ export async function parseMealFromText(text: string, userId: string): Promise<M
     if (error instanceof AppError) throw error;
     logger.error("[ai] meal-parse error");
     throw new AppError(ErrorCode.AI_ERROR, "Failed to parse meal from text", 502);
+  }
+}
+
+/**
+ * Gemini-direct vision call for a meal photo (FR-4.1, photo path). The provider
+ * abstraction has no vision method, so — exactly like exercise image-parsing
+ * (server/gemini/exerciseParser/provider.ts) — this talks to the Gemini client
+ * directly with the image as `inlineData`, reusing the same JSON contract.
+ */
+async function callGeminiParseMealImage(
+  imageBase64: string,
+  mimeType: string,
+  userId: string,
+): Promise<string> {
+  const response = await retryWithBackoff(
+    (signal) =>
+      getAiClient().models.generateContent({
+        model: GEMINI_VISION_MODEL,
+        config: {
+          systemInstruction: PARSE_MEAL_PROMPT + MEAL_IMAGE_PREAMBLE,
+          responseMimeType: "application/json",
+          abortSignal: signal,
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: imageBase64 } },
+              { text: "Identify the foods in the attached photo and estimate each portion in grams." },
+            ],
+          },
+        ],
+      }),
+    "nutrition-meal-parse-image",
+  );
+
+  // Track usage before the empty check — the call consumed tokens regardless.
+  trackUsageFromResponse(userId, GEMINI_VISION_MODEL, "parse", response);
+
+  if (!response.text || response.text.length === 0) {
+    throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for meal parsing", 502);
+  }
+  return validateAiOutput(response.text);
+}
+
+/**
+ * Parse a meal *photo* into validated raw items (FR-4.1, photo path). Mirrors
+ * parseMealFromText but sends an image to the vision model; returns the same
+ * MealParseRaw so `resolveAndPreview` is reused unchanged downstream.
+ */
+export async function parseMealFromPhoto(
+  imageBase64: string,
+  mimeType: string,
+  userId: string,
+): Promise<MealParseRaw> {
+  try {
+    return validateMealItems(parseJson(await callGeminiParseMealImage(imageBase64, mimeType, userId)));
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    logger.error("[ai] meal-parse-image error");
+    throw new AppError(ErrorCode.AI_ERROR, "Failed to parse meal from photo", 502);
   }
 }
 
