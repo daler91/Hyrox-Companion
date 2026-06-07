@@ -63,9 +63,9 @@ function validateMealItems(raw: unknown): MealParseRaw {
   for (const candidate of rawItems) {
     const parsed = parsedMealItemSchema.safeParse(candidate);
     if (parsed.success) items.push(parsed.data);
-    // Log only the issue count — never the zod issues/raw item, which can echo
-    // user-derived input (Bearer: no information leakage in logger messages).
-    else logger.warn(`[ai] meal-parse dropped a malformed item (${parsed.error.issues.length} issue(s))`);
+    // Plain static message — never interpolate the zod issues/raw item, or any
+    // value derived from them (Bearer flags such taint as logger info leakage).
+    else logger.warn("[ai] meal-parse dropped a malformed item");
   }
   const warnings = Array.isArray(shape.warnings)
     ? shape.warnings.filter((w): w is string => typeof w === "string" && w.trim().length > 0)
