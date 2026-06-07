@@ -86,10 +86,10 @@ describe("USDA micro extraction (unit-filtered)", () => {
       fdcId: 1,
       description: "Test",
       foodNutrients: [
-        { nutrientNumber: "1093", unitName: "MG", value: 50 }, // sodium → 50 mg
-        { nutrientNumber: "1106", unitName: "UG", value: 300 }, // vitamin A → 300 mcg
-        { nutrientNumber: "1114", unitName: "IU", value: 600 }, // vitamin D in IU → skipped
-        { nutrientNumber: "1114", unitName: "UG", value: 15 }, // vitamin D in µg → 15 mcg
+        { nutrientId: 1093, nutrientNumber: "307", unitName: "MG", value: 50 }, // sodium → 50 mg
+        { nutrientId: 1106, nutrientNumber: "320", unitName: "UG", value: 300 }, // vitamin A → 300 mcg
+        { nutrientId: 1114, nutrientNumber: "328", unitName: "IU", value: 600 }, // vitamin D in IU → skipped
+        { nutrientId: 1114, nutrientNumber: "328", unitName: "UG", value: 15 }, // vitamin D in µg → 15 mcg
       ],
     });
     expect(mapped?.micros).toEqual({ sodium: 50, vitaminA: 300, vitaminD: 15 });

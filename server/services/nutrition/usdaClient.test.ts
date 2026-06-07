@@ -47,12 +47,14 @@ describe("mapUsdaSearchFood", () => {
     const mapped = mapUsdaSearchFood({
       fdcId: 100,
       description: "Banana, raw",
+      // Real USDA search shape: the macro identifier lives in `nutrientId`
+      // (1008, 1003, …); `nutrientNumber` is a different legacy code ("208", …).
       foodNutrients: [
-        { nutrientNumber: "1008", unitName: "KCAL", value: 89 },
-        { nutrientNumber: "1003", value: 1.1 },
-        { nutrientNumber: "1005", value: 22.8 },
-        { nutrientNumber: "1004", value: 0.3 },
-        { nutrientNumber: "1079", value: 2.6 },
+        { nutrientId: 1008, nutrientNumber: "208", unitName: "KCAL", value: 89 },
+        { nutrientId: 1003, nutrientNumber: "203", value: 1.1 },
+        { nutrientId: 1005, nutrientNumber: "205", value: 22.8 },
+        { nutrientId: 1004, nutrientNumber: "204", value: 0.3 },
+        { nutrientId: 1079, nutrientNumber: "291", value: 2.6 },
       ],
       servingSize: 118,
       servingSizeUnit: "g",
@@ -91,14 +93,14 @@ describe("mapUsdaSearchFood", () => {
       mapUsdaSearchFood({
         fdcId: 1,
         description: "x",
-        foodNutrients: [{ nutrientNumber: "1062", unitName: "kJ", value: 372 }],
+        foodNutrients: [{ nutrientId: 1062, nutrientNumber: "268", unitName: "kJ", value: 372 }],
       })?.caloriesPer100g,
     ).toBeNull();
     expect(
       mapUsdaSearchFood({
         fdcId: 1,
         description: "x",
-        foodNutrients: [{ nutrientNumber: "1008", unitName: "kcal", value: 89 }],
+        foodNutrients: [{ nutrientId: 1008, nutrientNumber: "208", unitName: "kcal", value: 89 }],
       })?.caloriesPer100g,
     ).toBe(89);
   });
@@ -144,7 +146,7 @@ describe("searchUsdaFoods", () => {
     fetchMock.mockResolvedValue(
       okResponse({
         foods: [
-          { fdcId: 1, description: "Banana", foodNutrients: [{ nutrientNumber: "1008", unitName: "kcal", value: 89 }] },
+          { fdcId: 1, description: "Banana", foodNutrients: [{ nutrientId: 1008, nutrientNumber: "208", unitName: "kcal", value: 89 }] },
         ],
       }),
     );
