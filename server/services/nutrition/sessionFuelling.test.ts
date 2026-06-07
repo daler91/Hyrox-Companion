@@ -77,7 +77,8 @@ describe("computeSessionFuelling — start instant known", () => {
     const result = computeSessionFuelling(workout, rows);
 
     expect(result.pre.map((e) => e.id)).toEqual(["pre-edge"]);
-    expect(result.post.map((e) => e.id).sort()).toEqual(["at-start", "post-edge"]);
+    // Insertion order: "at-start" (== start) precedes "post-edge" (start+POST).
+    expect(result.post.map((e) => e.id)).toEqual(["at-start", "post-edge"]);
   });
 
   it("treats an entry exactly at the start instant as post, not pre", () => {
