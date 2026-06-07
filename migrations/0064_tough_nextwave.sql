@@ -1,0 +1,2 @@
+ALTER TABLE "workout_logs" ADD COLUMN "started_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "idx_workout_logs_user_started_at" ON "workout_logs" USING btree ("user_id","started_at");

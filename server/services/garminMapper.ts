@@ -67,6 +67,26 @@ function extractDate(startTimeLocal: string): string {
   return startTimeLocal.split(/[ T]/)[0];
 }
 
+/**
+ * Resolve the true session start instant (Phase 3 fuelling windows). Prefer
+ * startTimeGMT ("YYYY-MM-DD HH:mm:ss" in UTC) — appending "Z" makes it an
+ * unambiguous instant. Fall back to startTimeLocal parsed in the runtime's
+ * local zone, then null. Nullable rows fall back to pre/post_workout meal tags.
+ */
+function parseStartInstant(activity: GarminActivity): Date | null {
+  const gmt = activity.startTimeGMT;
+  if (gmt) {
+    const d = new Date(`${gmt.replace(" ", "T")}Z`);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  const local = activity.startTimeLocal;
+  if (local) {
+    const d = new Date(local.replace(" ", "T"));
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 function buildMainWorkout(
   movingSec: number,
   distance: number,
@@ -142,6 +162,9 @@ export function mapGarminActivityToWorkout(
   return {
     userId,
     date: extractDate(activity.startTimeLocal),
+    // Preserve the true start instant (Phase 3 fuelling windows); null falls
+    // back to the day's pre/post_workout meal tags.
+    startedAt: parseStartInstant(activity),
     focus,
     mainWorkout: buildMainWorkout(movingSec, distance, isDistanceActivity, distanceUnit),
     accessory: buildAccessory(activity, isDistanceActivity, distanceUnit),
