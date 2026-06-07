@@ -213,3 +213,43 @@ export interface RecipeListItem {
   servings: number;
   foodId: string;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 (Integration) — relate fuelling to training.
+// ---------------------------------------------------------------------------
+
+// Block view range. `to` defaults to the user's local "today" server-side.
+export const blockViewQuerySchema = z.object({
+  from: isoDate,
+  to: isoDate.optional(),
+});
+export type BlockViewQuery = z.infer<typeof blockViewQuerySchema>;
+
+/** FR-3.1/3.2/3.4 — a session's surrounding entries, split pre/post with totals. */
+export interface SessionFuellingResponse {
+  workoutId: string;
+  date: string;
+  // true → split by the workout's real start-time windows; false → by pre/post_workout tags.
+  usedStartTime: boolean;
+  pre: FoodLogEntryWithNutrition[];
+  post: FoodLogEntryWithNutrition[];
+  preTotals: NutritionMacroTotals;
+  postTotals: NutritionMacroTotals;
+}
+
+/** FR-3.3 — one day on the block view: daily intake macros + training UTSS. */
+export interface BlockViewPoint {
+  date: string;
+  calories: number;
+  protein: number;
+  carb: number;
+  fat: number;
+  fiber: number;
+  utss: number;
+}
+
+export interface BlockViewResponse {
+  from: string;
+  to: string;
+  points: BlockViewPoint[];
+}

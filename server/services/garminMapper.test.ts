@@ -184,4 +184,34 @@ describe("mapGarminActivityToWorkout", () => {
     // Should NOT shadow the Strava field
     expect(result).not.toHaveProperty("stravaActivityId");
   });
+
+  it("captures the start instant from startTimeGMT as UTC", () => {
+    const result = mapGarminActivityToWorkout(makeActivity(), "user-1");
+    expect(result.startedAt).toEqual(new Date("2026-01-15T06:00:00Z"));
+  });
+
+  it("parses a space-separated startTimeGMT as UTC", () => {
+    const result = mapGarminActivityToWorkout(
+      makeActivity({ startTimeGMT: "2026-01-15 06:00:00" }),
+      "user-1",
+    );
+    expect(result.startedAt).toEqual(new Date("2026-01-15T06:00:00Z"));
+  });
+
+  it("falls back to startTimeLocal when startTimeGMT is absent", () => {
+    const result = mapGarminActivityToWorkout(
+      makeActivity({ startTimeGMT: undefined }),
+      "user-1",
+    );
+    // Parsed in the runtime's local zone (no trailing Z), matching the same parse.
+    expect(result.startedAt).toEqual(new Date("2026-01-15T08:00:00"));
+  });
+
+  it("sets startedAt null when neither start time is present", () => {
+    const result = mapGarminActivityToWorkout(
+      makeActivity({ startTimeGMT: undefined, startTimeLocal: "" }),
+      "user-1",
+    );
+    expect(result.startedAt).toBeNull();
+  });
 });

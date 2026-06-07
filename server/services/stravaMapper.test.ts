@@ -138,6 +138,16 @@ describe("mapStravaActivityToWorkout", () => {
     expect(result.sufferScore).toBe(75);
     expect(result.elevationGain).toBe(120);
   });
+
+  it("captures the true start instant from start_date (UTC)", () => {
+    const result = mapStravaActivityToWorkout(makeActivity(), "user-1");
+    expect(result.startedAt).toEqual(new Date("2026-01-15T08:00:00Z"));
+  });
+
+  it("sets startedAt null when start_date is absent", () => {
+    const result = mapStravaActivityToWorkout(makeActivity({ start_date: "" }), "user-1");
+    expect(result.startedAt).toBeNull();
+  });
 });
 
 describe("formatStravaDistance", () => {

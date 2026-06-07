@@ -3,6 +3,9 @@ import {
   addFavoriteSchema,
   type BarcodeLookupInput,
   barcodeLookupSchema,
+  type BlockViewQuery,
+  blockViewQuerySchema,
+  type BlockViewResponse,
   type CreateCustomFoodInput,
   createCustomFoodSchema,
   type CreateFoodLogInput,
@@ -19,6 +22,7 @@ import {
   repeatDaySchema,
   type ServingInput,
   servingInputSchema,
+  type SessionFuellingResponse,
   type UpdateCustomFoodInput,
   updateCustomFoodSchema,
   type UpdateFoodLogInput,
@@ -30,9 +34,16 @@ import { type Request, type Response, Router } from "express";
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
 import { lookupBarcode } from "../../services/nutrition/barcode";
+import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
 import { buildDailySummary } from "../../services/nutrition/rollup";
+import {
+  computeSessionFuelling,
+  POST_WINDOW_MS,
+  PRE_WINDOW_MS,
+} from "../../services/nutrition/sessionFuelling";
+import { calculateTrainingLoad } from "../../services/trainingLoadService";
 import { storage } from "../../storage";
 import { getLocalDateStr } from "../../timezone";
 import { getUserId } from "../../types";
@@ -251,6 +262,70 @@ export function registerNutritionRoutes(router: Router): void {
       const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
       const summary: DailySummaryResponse = buildDailySummary(logDate, rows);
       res.json(summary);
+    }),
+  );
+
+  // ---- Phase 3 (Integration): relate fuelling to training ------------------
+
+  // FR-3.1/3.2/3.4 — a session's surrounding entries, split pre/post. When the
+  // workout has a true start instant (from Strava/Garmin) we window by time;
+  // otherwise we fall back to that day's pre_workout/post_workout meal tags.
+  router.get(
+    "/api/v1/nutrition/session-fuelling/:workoutId",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request<{ workoutId: string }>, res: Response) => {
+      const userId = getUserId(req);
+      // userId-scoped: a foreign workout resolves to undefined → 404 (no leak).
+      const workout = await storage.workouts.getWorkoutLog(req.params.workoutId, userId);
+      if (!workout) return sendNotFound(res, "Workout not found");
+
+      const entries = workout.startedAt
+        ? await storage.nutrition.listEntriesWithFoodInWindow(
+            userId,
+            new Date(workout.startedAt.getTime() - PRE_WINDOW_MS),
+            new Date(workout.startedAt.getTime() + POST_WINDOW_MS),
+          )
+        : await storage.nutrition.listEntriesWithFoodForDate(userId, workout.date);
+
+      const response: SessionFuellingResponse = {
+        workoutId: workout.id,
+        date: workout.date,
+        ...computeSessionFuelling(workout, entries),
+      };
+      res.json(response);
+    }),
+  );
+
+  // FR-3.3 — block view: daily intake macros vs training UTSS over a range.
+  // Calls calculateTrainingLoad directly for the FULL range (training-overview's
+  // trend is hard-capped at 42 days), reusing the same analytics storage.
+  router.get(
+    "/api/v1/nutrition/block",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    validateQuery(blockViewQuerySchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { from, to: toParam } = req.query as unknown as BlockViewQuery;
+      const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+
+      const [rows, workoutLogs, exerciseSets, loadTags] = await Promise.all([
+        storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
+        storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
+        storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
+        storage.analytics.getExerciseLoadTags(),
+      ]);
+
+      const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
+        currentDate: to,
+      });
+      const response: BlockViewResponse = {
+        from,
+        to,
+        points: buildBlockView(rows, dailyLoads, { from, to }),
+      };
+      res.json(response);
     }),
   );
 
