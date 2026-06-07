@@ -1,4 +1,4 @@
-import { structuredExerciseHealthCounters,structuredExerciseHealthDailyRollups } from "@shared/schema";
+import { structuredExerciseHealthDailyRollups } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
 import { db } from "../db";
@@ -118,31 +118,13 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
       and counter_name = 'text_only_rows_detected'
   `);
 
-  const valuesToInsert = legacyBreakdown.rows
-    .filter(item => (item.legacy_count ?? 0) > 0)
-    .map(item => ({
-      day,
-      ownerType: item.owner_type,
-      source: item.source,
-      counterName: "text_only_rows_detected" as const,
-      value: item.legacy_count,
-      updatedAt: new Date(),
-    }));
-
-  if (valuesToInsert.length > 0) {
-    await db.insert(structuredExerciseHealthCounters)
-      .values(valuesToInsert)
-      .onConflictDoUpdate({
-        target: [
-          structuredExerciseHealthCounters.day,
-          structuredExerciseHealthCounters.ownerType,
-          structuredExerciseHealthCounters.source,
-          structuredExerciseHealthCounters.counterName,
-        ],
-        set: {
-          value: sql`excluded.value`,
-          updatedAt: new Date(),
-        },
-      });
+  for (const item of legacyBreakdown.rows) {
+    if ((item.legacy_count ?? 0) <= 0) continue;
+    await db.execute(sql`
+      insert into structured_exercise_health_counters (day, owner_type, source, counter_name, value, updated_at)
+      values (${day}::date, ${item.owner_type}, ${item.source}, 'text_only_rows_detected', ${item.legacy_count}, now())
+      on conflict (day, owner_type, source, counter_name)
+      do update set value = excluded.value, updated_at = now()
+    `);
   }
 }
