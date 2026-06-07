@@ -107,6 +107,30 @@ export function sumNutrition(rows: LogEntryWithFood[]): NutritionMacroTotals {
   return totals;
 }
 
+/** Scale a food's per-100g micronutrient map to a logged quantity in grams (FR-5.1). */
+export function scaleMicros(
+  micros: Record<string, number> | null,
+  quantityG: number,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!micros) return out;
+  for (const [key, per100g] of Object.entries(micros)) {
+    out[key] = (per100g * quantityG) / PER_100G;
+  }
+  return out;
+}
+
+/** Sum scaled micros across a day's entries (raw, unrounded; keys absent everywhere are omitted). */
+export function sumMicros(rows: LogEntryWithFood[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const row of rows) {
+    for (const [key, value] of Object.entries(scaleMicros(row.food.micros, row.quantityG))) {
+      totals[key] = (totals[key] ?? 0) + value;
+    }
+  }
+  return totals;
+}
+
 /**
  * Project a set of entries and their rounded macro total in one pass. Totals are
  * summed raw then rounded once (no accumulated rounding error), matching the daily

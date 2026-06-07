@@ -12,6 +12,8 @@ import {
   foodServings,
   type MealType,
   type NutritionMacroTotals,
+  type NutritionTarget,
+  nutritionTargets,
   type Recipe,
   recipeIngredients,
   type RecipeListItem,
@@ -19,6 +21,7 @@ import {
   type RecipeWithIngredients,
   type ServingInput,
   type UpdateCustomFoodInput,
+  type UpsertNutritionTargetInput,
 } from "@shared/schema";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 
@@ -114,6 +117,7 @@ export class NutritionStorage {
       carbPer100g: m.carbPer100g,
       fatPer100g: m.fatPer100g,
       fiberPer100g: m.fiberPer100g,
+      micros: m.micros,
     }));
 
     return executor
@@ -131,6 +135,7 @@ export class NutritionStorage {
           carbPer100g: sql`excluded.carb_per_100g`,
           fatPer100g: sql`excluded.fat_per_100g`,
           fiberPer100g: sql`excluded.fiber_per_100g`,
+          micros: sql`excluded.micros`,
           updatedAt: new Date(),
         },
       })
@@ -723,5 +728,73 @@ export class NutritionStorage {
       perServing,
       ingredients,
     };
+  }
+
+  /** The user's most recent food-log calendar date (YYYY-MM-DD), or null. The
+   *  staleness anchor for nutrition insights (FR-5.3). */
+  async getLatestLogDate(userId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ logDate: foodLogEntries.logDate })
+      .from(foodLogEntries)
+      .where(eq(foodLogEntries.userId, userId))
+      .orderBy(desc(foodLogEntries.logDate))
+      .limit(1);
+    return row?.logDate ?? null;
+  }
+
+  // --- targets (FR-5.2) -----------------------------------------------------
+
+  /** The target effective on `onDate` — the latest version with effectiveFrom <= onDate. */
+  async getCurrentTarget(userId: string, onDate: string): Promise<NutritionTarget | undefined> {
+    const [row] = await db
+      .select()
+      .from(nutritionTargets)
+      .where(and(eq(nutritionTargets.userId, userId), lte(nutritionTargets.effectiveFrom, onDate)))
+      .orderBy(desc(nutritionTargets.effectiveFrom))
+      .limit(1);
+    return row;
+  }
+
+  /** All target versions for the user, newest effective date first. */
+  async listTargets(userId: string): Promise<NutritionTarget[]> {
+    return db
+      .select()
+      .from(nutritionTargets)
+      .where(eq(nutritionTargets.userId, userId))
+      .orderBy(desc(nutritionTargets.effectiveFrom));
+  }
+
+  /**
+   * Create a target version (history is preserved across distinct effectiveFrom
+   * dates). Re-saving the same day replaces that day's version in place — a
+   * delete-then-insert keeps exactly one row per (user, effectiveFrom) without
+   * needing a unique constraint, so getCurrentTarget's "latest" is unambiguous.
+   */
+  async createTarget(
+    userId: string,
+    data: UpsertNutritionTargetInput & { effectiveFrom: string },
+  ): Promise<NutritionTarget> {
+    return db.transaction(async (tx) => {
+      await tx
+        .delete(nutritionTargets)
+        .where(
+          and(
+            eq(nutritionTargets.userId, userId),
+            eq(nutritionTargets.effectiveFrom, data.effectiveFrom),
+          ),
+        );
+      const [row] = await tx
+        .insert(nutritionTargets)
+        .values({
+          userId,
+          calories: data.calories ?? null,
+          proteinG: data.proteinG ?? null,
+          carbG: data.carbG ?? null,
+          fatG: data.fatG ?? null,
+          effectiveFrom: data.effectiveFrom,
+        })
+        .returning();
+      return row;
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { type Food, FOOD_ENTRY_METHODS, type FoodServing, MEAL_TYPES, type MealType } from "./tables";
+import { type Food, FOOD_ENTRY_METHODS, type FoodServing, MEAL_TYPES, type MealType, type NutritionTarget } from "./tables";
 import { z } from "./zod";
 
 /**
@@ -314,4 +314,60 @@ export type CreateFoodLogBatchInput = z.infer<typeof createFoodLogBatchSchema>;
 export interface BatchLogResponse {
   created: number;
   logDate: string;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 (Insights & Coaching) — targets, micronutrients, AI insights.
+// ---------------------------------------------------------------------------
+
+// A non-negative goal (kcal or grams); each is optional so a user can set only
+// the goals they care about. Cap matches the per-entry quantity guard.
+const targetValue = z.number().nonnegative().max(100_000).nullable().optional();
+
+// Set/replace the user's macro & calorie targets. Targets are versioned by
+// effectiveFrom (insert-only, never updated in place) so history is preserved.
+export const upsertNutritionTargetSchema = z
+  .object({
+    calories: targetValue,
+    proteinG: targetValue,
+    carbG: targetValue,
+    fatG: targetValue,
+    // Day the target takes effect; server defaults to the user's local today.
+    effectiveFrom: isoDate.optional(),
+  })
+  .refine((v) => [v.calories, v.proteinG, v.carbG, v.fatG].some((x) => x != null), {
+    message: "Set at least one target",
+  });
+export type UpsertNutritionTargetInput = z.infer<typeof upsertNutritionTargetSchema>;
+
+export interface NutritionTargetsResponse {
+  // The target effective for the requested day (latest effectiveFrom <= day), or null.
+  current: NutritionTarget | null;
+  // All target versions, newest effectiveFrom first.
+  history: NutritionTarget[];
+}
+
+/** FR-5.1 — one micronutrient's daily total against its reference daily intake. */
+export interface MicroSummaryRow {
+  key: string;
+  label: string;
+  unit: "mg" | "mcg";
+  amount: number;
+  rdi: number;
+  pctRdi: number;
+}
+
+export interface MicroSummaryResponse {
+  date: string;
+  // Only micros the day's foods carry data for; absent ≠ zero (most cached foods
+  // have no micros until re-fetched from the importer).
+  micros: MicroSummaryRow[];
+}
+
+/** FR-5.3 — stored AI nutrition insights (Markdown), or null if never generated. */
+export interface NutritionInsightsResponse {
+  insights: string | null;
+  generatedAt?: string;
+  // true when a meal has been logged since the analysis was generated.
+  stale?: boolean;
 }

@@ -21,6 +21,9 @@ import {
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type MealType,
+  type MicroSummaryResponse,
+  type NutritionInsightsResponse,
+  type NutritionTargetsResponse,
   type ParseMealResponse,
   type ParseMealTextInput,
   parseMealTextSchema,
@@ -34,16 +37,20 @@ import {
   type UpdateFoodLogInput,
   updateFoodLogSchema,
   updateRecipeSchema,
+  type UpsertNutritionTargetInput,
+  upsertNutritionTargetSchema,
 } from "@shared/schema";
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
+import { computeStale, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
 import { parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
+import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
 import {
   computeSessionFuelling,
@@ -450,6 +457,93 @@ export function registerNutritionRoutes(router: Router): void {
       });
       const response: BatchLogResponse = { created: created.length, logDate };
       res.status(201).json(response);
+    },
+  );
+
+  // ---- Phase 5 (Insights & Coaching): targets ------------------------------
+  // FR-5.2 — the current macro/calorie target (for today) plus version history.
+  router.get(
+    "/api/v1/nutrition/targets",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const today = getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const [current, history] = await Promise.all([
+        storage.nutrition.getCurrentTarget(userId, today),
+        storage.nutrition.listTargets(userId),
+      ]);
+      const response: NutritionTargetsResponse = { current: current ?? null, history };
+      res.json(response);
+    }),
+  );
+
+  // FR-5.2 — set/replace a target version (defaults effectiveFrom to local today).
+  protectedPost(
+    router,
+    "/api/v1/nutrition/targets",
+    { limiter: rateLimiter("nutritionWrite", 30), validation: [validateBody(upsertNutritionTargetSchema)] },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const body = req.body as UpsertNutritionTargetInput;
+      const effectiveFrom = body.effectiveFrom ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const target = await storage.nutrition.createTarget(userId, { ...body, effectiveFrom });
+      res.status(201).json(target);
+    },
+  );
+
+  // FR-5.1 — the day's micronutrient totals vs reference daily intakes.
+  router.get(
+    "/api/v1/nutrition/micros",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    validateQuery(dailySummaryQuerySchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { date } = req.query as unknown as DailySummaryQuery;
+      const logDate = date ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
+      const response: MicroSummaryResponse = { date: logDate, micros: buildMicroSummary(rows) };
+      res.json(response);
+    }),
+  );
+
+  // FR-5.3 — AI nutrition insights. GET returns the last stored analysis instantly
+  // (no AI spend) with a `stale` flag set when a meal was logged after it was
+  // generated; POST regenerates (AI consent + budget gated) and persists.
+  router.get(
+    "/api/v1/nutrition/insights",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const row = await storage.analyticsResults.get(userId, "nutrition_insights");
+      if (!row) {
+        const empty: NutritionInsightsResponse = { insights: null };
+        res.json(empty);
+        return;
+      }
+      const latestLogDate = await storage.nutrition.getLatestLogDate(userId);
+      const payload = row.payload as NutritionInsightsResponse;
+      const response: NutritionInsightsResponse = {
+        ...payload,
+        generatedAt: row.generatedAt.toISOString(),
+        stale: computeStale(row, latestLogDate),
+      };
+      res.json(response);
+    }),
+  );
+
+  protectedPost(
+    router,
+    "/api/v1/nutrition/insights",
+    { limiter: rateLimiter("suggestions", 3), aiConsent: true, aiBudget: true },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const result = await regenerateAndStoreNutritionInsights(userId);
+      // Freshly generated against the current latest food log, so never stale.
+      const response: NutritionInsightsResponse = { ...result, stale: false };
+      res.json(response);
     },
   );
 

@@ -1,5 +1,6 @@
 import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
+import { MICRO_DEFS, OFF_GRAMS_TO_UNIT } from "./micros";
 import type { MappedFood } from "./types";
 
 /**
@@ -58,6 +59,21 @@ function parseServingGrams(product: OffProduct): number | null {
   return null;
 }
 
+/**
+ * Per-100g micros (FR-5.1). OFF reports `*_100g` nutriments in GRAMS, so each is
+ * converted to the micro's unit (×1000 → mg, ×1e6 → mcg). Micros absent from the
+ * product are omitted (not zeroed).
+ */
+function extractMicros(nutriments: OffNutriments): Record<string, number> | null {
+  const source = nutriments as Record<string, unknown>;
+  const micros: Record<string, number> = {};
+  for (const def of MICRO_DEFS) {
+    const grams = num(source[`${def.offKey}_100g`]);
+    if (grams !== null && grams >= 0) micros[def.key] = grams * OFF_GRAMS_TO_UNIT[def.unit];
+  }
+  return Object.keys(micros).length > 0 ? micros : null;
+}
+
 export function mapOffProduct(code: string, product: OffProduct): MappedFood | null {
   const name = product.product_name?.trim();
   if (!name) return null;
@@ -73,6 +89,7 @@ export function mapOffProduct(code: string, product: OffProduct): MappedFood | n
     carbPer100g: num(n.carbohydrates_100g),
     fatPer100g: num(n.fat_100g),
     fiberPer100g: num(n.fiber_100g ?? n.fibre_100g),
+    micros: extractMicros(n),
   };
 }
 

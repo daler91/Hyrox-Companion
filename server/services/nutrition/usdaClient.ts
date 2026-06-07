@@ -1,5 +1,6 @@
 import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
+import { MICRO_DEFS } from "./micros";
 
 /**
  * USDA FoodData Central client. Turns a search term into a list of foods whose
@@ -36,6 +37,7 @@ export interface UsdaFoodMapped {
   carbPer100g: number | null;
   fatPer100g: number | null;
   fiberPer100g: number | null;
+  micros: Record<string, number> | null;
 }
 
 interface UsdaNutrient {
@@ -85,6 +87,21 @@ function findNutrient(
     if (match && typeof match.value === "number") return match.value;
   }
   return null;
+}
+
+/**
+ * Per-100g micronutrient map (FR-5.1). Each value is read unit-filtered to the
+ * micro's expected USDA unit (mg or µg), so the stored value is already in the
+ * micro's display unit (µg === mcg) with no conversion. Micros absent from this
+ * food are omitted (not zeroed).
+ */
+function extractMicros(nutrients: UsdaNutrient[]): Record<string, number> | null {
+  const micros: Record<string, number> = {};
+  for (const def of MICRO_DEFS) {
+    const value = findNutrient(nutrients, [def.usdaNumber], { unit: def.usdaUnit });
+    if (value !== null && value >= 0) micros[def.key] = value;
+  }
+  return Object.keys(micros).length > 0 ? micros : null;
 }
 
 /** Convert a USDA serving size to grams. Volume units (ml/l) are skipped in Phase 1. */
@@ -145,6 +162,7 @@ export function mapUsdaSearchFood(raw: UsdaSearchFood): UsdaFoodMapped | null {
     carbPer100g: findNutrient(nutrients, [CARB_NUMBER]),
     fatPer100g: findNutrient(nutrients, [FAT_NUMBER]),
     fiberPer100g: findNutrient(nutrients, [FIBER_NUMBER]),
+    micros: extractMicros(nutrients),
   };
   return withLabelFallback(mapped, raw);
 }

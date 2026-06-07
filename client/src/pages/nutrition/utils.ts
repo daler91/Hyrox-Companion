@@ -1,4 +1,4 @@
-import type { Food, NutritionMacroTotals } from "@shared/schema";
+import type { Food, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 
 const YMD = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
@@ -61,6 +61,49 @@ export const MEAL_LABELS: Record<string, string> = {
   pre_workout: "Pre-workout",
   post_workout: "Post-workout",
 };
+
+/** One macro's progress toward its target (FR-5.2). `pct` is uncapped (can exceed 100). */
+export interface TargetProgressRow {
+  key: "calories" | "protein" | "carb" | "fat";
+  label: string;
+  value: number;
+  target: number;
+  pct: number;
+  remaining: number;
+}
+
+const TARGET_FIELDS = [
+  { key: "calories", targetKey: "calories", label: "Calories" },
+  { key: "protein", targetKey: "proteinG", label: "Protein" },
+  { key: "carb", targetKey: "carbG", label: "Carbs" },
+  { key: "fat", targetKey: "fatG", label: "Fat" },
+] as const;
+
+/**
+ * Today's totals against the current target, one row per macro the user has set
+ * a goal for (unset/zero goals are skipped). Display-only; pure.
+ */
+export function computeTargetProgress(
+  totals: NutritionMacroTotals,
+  target: NutritionTarget | null,
+): TargetProgressRow[] {
+  if (!target) return [];
+  const rows: TargetProgressRow[] = [];
+  for (const f of TARGET_FIELDS) {
+    const goal = target[f.targetKey];
+    if (goal == null || goal <= 0) continue;
+    const value = totals[f.key];
+    rows.push({
+      key: f.key,
+      label: f.label,
+      value,
+      target: goal,
+      pct: Math.round((value / goal) * 100),
+      remaining: round1(goal - value),
+    });
+  }
+  return rows;
+}
 
 export function formatDateLabel(dateStr: string): string {
   const today = todayStr();

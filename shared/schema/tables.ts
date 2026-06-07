@@ -101,7 +101,7 @@ export const serverRuntimeCache = pgTable("server_runtime_cache", {
 // Canonical analytics surfaces whose last computed result is persisted so it
 // can be shown instantly on open and refreshed by the midnight cron. Kept in
 // sync with the analytics_results check constraint below.
-export const ANALYTICS_FEATURES = ["coach_insights", "race_prediction"] as const;
+export const ANALYTICS_FEATURES = ["coach_insights", "race_prediction", "nutrition_insights"] as const;
 export type AnalyticsFeature = (typeof ANALYTICS_FEATURES)[number];
 
 // Durable "last computed result" for the expensive analytics surfaces (Coach
@@ -130,7 +130,7 @@ export const analyticsResults = pgTable("analytics_results", {
 }, (table) => [
   uniqueIndex("uq_analytics_results_user_feature").on(table.userId, table.feature),
   index("idx_analytics_results_feature").on(table.feature),
-  check("analytics_results_feature_check", sql`feature IN ('coach_insights', 'race_prediction')`),
+  check("analytics_results_feature_check", sql`feature IN ('coach_insights', 'race_prediction', 'nutrition_insights')`),
 ]);
 
 export type AnalyticsResult = typeof analyticsResults.$inferSelect;

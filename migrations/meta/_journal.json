@@ -456,6 +456,13 @@
       "when": 1780836858323,
       "tag": "0064_tough_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1780849156067,
+      "tag": "0065_awesome_guardsmen",
+      "breakpoints": true
     }
   ]
 }
