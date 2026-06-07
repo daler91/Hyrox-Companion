@@ -222,6 +222,11 @@ export const workoutLogs = pgTable("workout_logs", {
   avgCadence: real("avg_cadence"),
   avgWatts: integer("avg_watts"),
   sufferScore: integer("suffer_score"),
+  // True session start instant captured from Strava/Garmin at import (Phase 3).
+  // Nullable: legacy rows and manual logs leave it null and fall back to the
+  // pre_workout/post_workout meal-type tags on the calendar day for the
+  // fuelling-around-session views (FR-3.1/3.2). No manual entry UI this phase.
+  startedAt: timestamp("started_at", { withTimezone: true }),
 }, (table) => [
   index("idx_workout_logs_user_id").on(table.userId),
   index("idx_workout_logs_date").on(table.date),
@@ -231,6 +236,7 @@ export const workoutLogs = pgTable("workout_logs", {
   index("idx_workout_logs_strava_activity_id").on(table.stravaActivityId),
   index("idx_workout_logs_garmin_activity_id").on(table.garminActivityId),
   index("idx_workout_logs_source").on(table.source),
+  index("idx_workout_logs_user_started_at").on(table.userId, table.startedAt),
   // Enforce Strava activity uniqueness per user at the DB layer so concurrent
   // sync requests cannot create duplicate workouts for the same activity
   // (CODEBASE_AUDIT.md §5). Partial index so non-Strava rows are unaffected.
