@@ -1,5 +1,6 @@
 import type { NutritionMacroTotals } from "@shared/schema";
 import { UtensilsCrossed } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { useSessionFuelling } from "@/hooks/useNutrition";
 import { cn } from "@/lib/utils";
@@ -37,18 +38,25 @@ function MacroChips({
   );
 }
 
+/** "12g to go" when short of the target, "on target" once met (remaining ≤ 0). */
+function gapText(remaining: number | null | undefined): string {
+  return remaining != null && remaining > 0 ? `${remaining}g to go` : "on target";
+}
+
 function FuellingGroup({
   title,
   count,
   totals,
   emphasizeProtein,
   testId,
+  targetLine,
 }: {
   readonly title: string;
   readonly count: number;
   readonly totals: NutritionMacroTotals;
   readonly emphasizeProtein?: boolean;
   readonly testId: string;
+  readonly targetLine?: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
@@ -61,15 +69,16 @@ function FuellingGroup({
       ) : (
         <p className="text-xs text-muted-foreground/70">Nothing logged</p>
       )}
+      {targetLine}
     </div>
   );
 }
 
 /**
- * FR-3.4 — fuelling context on a workout record. Shows what the athlete ate in
- * the pre-session (carb-forward) and post-session (protein/recovery) windows
- * around the workout's true start time, or — when no start time was captured —
- * by their pre/post-workout meal tags. The caller gates on
+ * FR-3.4 + Phase 3 — fuelling context on a workout record. Shows what the athlete
+ * ate in the pre-session (carb-forward) and post-session (protein/recovery)
+ * windows around the workout, and — new in Phase 3 — the recommended fuelling for
+ * the session and how far the logged intake is from it. The caller gates on
  * `featureFlags.nutritionEnabled && entry.workoutLogId`.
  */
 export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutLogId: string }) {
@@ -78,7 +87,30 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
   // Don't clutter the sheet if the fuelling lookup failed — it's supplementary.
   if (isError) return null;
 
-  const isEmpty = !!data && data.pre.length === 0 && data.post.length === 0;
+  const target = data?.target ?? null;
+  const gap = data?.gap ?? null;
+
+  const preTarget = target ? (
+    target.preCarbG > 0 ? (
+      <p className="text-[11px] leading-relaxed text-muted-foreground" data-testid="fuelling-pre-target">
+        Aim ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs (
+        {gapText(gap?.preCarbG)})
+      </p>
+    ) : (
+      <p className="text-[11px] text-muted-foreground" data-testid="fuelling-pre-target">
+        No pre-fuelling needed
+      </p>
+    )
+  ) : undefined;
+
+  const postTarget = target ? (
+    <p className="text-[11px] leading-relaxed text-muted-foreground" data-testid="fuelling-post-target">
+      Aim ~<span className="font-medium text-foreground">{target.postCarbG}g</span> carbs (
+      {gapText(gap?.postCarbG)}) · ~
+      <span className="font-medium text-foreground">{target.postProteinG}g</span> protein (
+      {gapText(gap?.postProteinG)})
+    </p>
+  ) : undefined;
 
   return (
     <section className="space-y-3 rounded-md border bg-card p-3" data-testid="fuelling-panel">
@@ -91,26 +123,32 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
 
       {data ? (
         <>
-          {isEmpty ? (
-            <p className="text-xs text-muted-foreground" data-testid="fuelling-empty">
-              No food logged around this session yet.
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FuellingGroup
+              title="Pre-session fuelling"
+              count={data.pre.length}
+              totals={data.preTotals}
+              testId="fuelling-pre-totals"
+              targetLine={preTarget}
+            />
+            <FuellingGroup
+              title="Post-session recovery"
+              count={data.post.length}
+              totals={data.postTotals}
+              emphasizeProtein
+              testId="fuelling-post-totals"
+              targetLine={postTarget}
+            />
+          </div>
+
+          {target && (
+            <p
+              className="text-[11px] text-muted-foreground/70"
+              title={target.explanation}
+              data-testid="fuelling-guidance"
+            >
+              Targets are guidance based on this session.
             </p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FuellingGroup
-                title="Pre-session fuelling"
-                count={data.pre.length}
-                totals={data.preTotals}
-                testId="fuelling-pre-totals"
-              />
-              <FuellingGroup
-                title="Post-session recovery"
-                count={data.post.length}
-                totals={data.postTotals}
-                emphasizeProtein
-                testId="fuelling-post-totals"
-              />
-            </div>
           )}
 
           {!data.usedStartTime && (

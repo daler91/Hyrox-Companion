@@ -1,5 +1,8 @@
+import type { SessionFuellingTarget } from "../sessionFuellingTargets";
 import { type Food, FOOD_ENTRY_METHODS, type FoodServing, MEAL_TYPES, type MealType, type NutritionTarget } from "./tables";
 import { z } from "./zod";
+
+export type { SessionFuellingTarget } from "../sessionFuellingTargets";
 
 /**
  * Request/response contracts for the nutrition module (Phase 1 — core logging).
@@ -242,6 +245,14 @@ export const blockViewQuerySchema = z.object({
 });
 export type BlockViewQuery = z.infer<typeof blockViewQuerySchema>;
 
+/** Phase 3 — how far the logged fuelling is from the session target (target −
+ *  logged). Positive = still to go; negative = already over. */
+export interface SessionFuellingGap {
+  preCarbG: number;
+  postCarbG: number;
+  postProteinG: number;
+}
+
 /** FR-3.1/3.2/3.4 — a session's surrounding entries, split pre/post with totals. */
 export interface SessionFuellingResponse {
   workoutId: string;
@@ -252,6 +263,10 @@ export interface SessionFuellingResponse {
   post: FoodLogEntryWithNutrition[];
   preTotals: NutritionMacroTotals;
   postTotals: NutritionMacroTotals;
+  /** Phase 3 — recommended fuelling for this session (guidance), or null when unavailable. */
+  target?: SessionFuellingTarget | null;
+  /** Phase 3 — remaining vs the target, or null when there's no target. */
+  gap?: SessionFuellingGap | null;
 }
 
 /** FR-3.3 — one day on the block view: daily intake macros + training UTSS. */
