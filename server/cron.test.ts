@@ -25,6 +25,14 @@ vi.mock("./services/structuredExerciseHealth", () => ({
   runStructuredExerciseDailyRollup: vi.fn(),
 }));
 
+vi.mock("./logger", () => ({
+  logger: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 import { CRON_LOCK_KEYS, runCronJobWithLock } from "./cron";
 
 describe("cron advisory lock wiring", () => {
@@ -56,6 +64,22 @@ describe("cron advisory lock wiring", () => {
 
     expect(result).toEqual({ acquired: false, value: undefined });
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("logs an error when advisory lock execution fails", async () => {
+    const run = vi.fn().mockResolvedValue("done");
+    const error = new Error("connect failed");
+    mocks.withPgAdvisoryLock.mockRejectedValueOnce(error);
+
+    const { logger } = await import("./logger");
+
+    const result = await runCronJobWithLock("dailyEmail", run);
+
+    expect(result).toEqual({ acquired: false, value: undefined });
+    expect(logger.error).toHaveBeenCalledWith(
+      { context: "cron", err: error, job: "dailyEmail" },
+      "Cron advisory lock execution failed"
+    );
   });
 
 });
