@@ -18,7 +18,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * DST transition can never shift a day bucket. Yields nothing for an inverted or
  * unparseable range.
  */
-function* eachDate(from: string, to: string): Generator<string> {
+export function* eachDate(from: string, to: string): Generator<string> {
   const start = Date.parse(`${from}T00:00:00Z`);
   const end = Date.parse(`${to}T00:00:00Z`);
   if (Number.isNaN(start) || Number.isNaN(end) || start > end) return;

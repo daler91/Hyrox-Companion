@@ -28,6 +28,21 @@ import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/uti
 
 const EMPTY_TOTALS = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
 
+/** Well-formed YYYY-MM-DD check (no regex — keeps off SonarCloud's regex hotspot rule). */
+function isValidYmd(s: string): boolean {
+  if (s.length !== 10 || s[4] !== "-" || s[7] !== "-") return false;
+  const [y, m, d] = s.split("-").map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
+  return m >= 1 && m <= 12 && d >= 1 && d <= 31;
+}
+
+/** Initial day from an optional ?date=YYYY-MM-DD deep-link (the Timeline fuelling
+ *  chip links here), falling back to today when absent or malformed. */
+function initialDate(): string {
+  const param = new URLSearchParams(window.location.search).get("date");
+  return param && isValidYmd(param) ? param : todayStr();
+}
+
 /**
  * Nutrition tracking — Phase 1 daily log. Pick a day, see running macro totals,
  * search/quick-add foods, and edit/delete entries. Reached only when the
@@ -36,7 +51,7 @@ const EMPTY_TOTALS = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
 export default function Nutrition() {
   useDocumentTitle("Nutrition");
   const { isLoading: authLoading } = useAuth();
-  const [date, setDate] = useState(todayStr());
+  const [date, setDate] = useState(initialDate);
   const [dialog, setDialog] = useState<LogDialogState | null>(null);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);

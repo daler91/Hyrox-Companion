@@ -1,4 +1,4 @@
-import type { TimelineAnnotation, TimelineEntry } from "@shared/schema";
+import type { FuellingDayPoint, TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { format, isToday, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -54,6 +54,8 @@ interface TimelineContentProps {
   isBulkSelectMode: boolean;
   selectedBulkEntryKeys: ReadonlySet<string>;
   onBulkSelectToggle: (entry: TimelineEntry) => void;
+  /** Per-day fuelling progress keyed by YYYY-MM-DD (Phase 2); empty/undefined when nutrition is off. */
+  fuellingByDate?: Map<string, FuellingDayPoint>;
 }
 
 export function TimelineContent({
@@ -93,6 +95,7 @@ export function TimelineContent({
   isBulkSelectMode,
   selectedBulkEntryKeys,
   onBulkSelectToggle,
+  fuellingByDate,
 }: Readonly<TimelineContentProps>) {
   if (timelineLoading) {
     return <TimelineSkeleton />;
@@ -169,6 +172,7 @@ export function TimelineContent({
                 date={date}
                 entries={entries}
                 annotations={annotationsByDate[date]}
+                fuelling={fuellingByDate?.get(date)}
                 onMarkComplete={handleMarkComplete}
                 onClick={onCardClick}
                 onCombineSelect={handleCombine}

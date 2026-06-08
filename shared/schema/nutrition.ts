@@ -272,6 +272,29 @@ export interface BlockViewResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 2 (Timeline integration) — per-day fuelling progress for the home screen.
+// ---------------------------------------------------------------------------
+
+/**
+ * One day's fuelling for the Timeline chip: intake totals, the load-adjusted
+ * effective target (null when no target is set), and whether a post-workout meal
+ * was logged. Computed for every day in the requested range (zero totals / null
+ * target on days with no data).
+ */
+export interface FuellingDayPoint {
+  date: string;
+  totals: NutritionMacroTotals;
+  effectiveTarget: EffectiveTargetSummary | null;
+  hasPostWorkoutFuel: boolean;
+}
+
+export interface FuellingRangeResponse {
+  from: string;
+  to: string;
+  days: FuellingDayPoint[];
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4 (Natural-language logging) — describe a meal → AI items → review → log.
 // ---------------------------------------------------------------------------
 

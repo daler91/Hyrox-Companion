@@ -22,6 +22,7 @@ import {
   type EffectiveTargetSummary,
   type FoodSearchQuery,
   foodSearchQuerySchema,
+  type FuellingRangeResponse,
   type MealType,
   type MicroSummaryResponse,
   type NutritionInsightsResponse,
@@ -53,6 +54,7 @@ import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView } from "../../services/nutrition/blockView";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
+import { buildFuellingRange } from "../../services/nutrition/fuellingRange";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
@@ -397,6 +399,47 @@ export function registerNutritionRoutes(router: Router): void {
         from,
         to,
         points: buildBlockView(rows, dailyLoads, { from, to }),
+      };
+      res.json(response);
+    }),
+  );
+
+  // Phase 2 (Timeline integration) — per-day fuelling progress (intake totals,
+  // load-adjusted effective target, post-workout-meal flag) for the home-screen
+  // chips. One batched read for the whole visible window (no per-day fan-out):
+  // the day's training load is only computed when a periodised target exists, so
+  // flat-target and no-target users pay nothing extra.
+  router.get(
+    "/api/v1/nutrition/summary-range",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    validateQuery(blockViewQuerySchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { from, to: toParam } = req.query as unknown as BlockViewQuery;
+      const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+
+      const targets = await storage.nutrition.listTargets(userId);
+      const needLoad = targets.some((t) => t.periodizationEnabled);
+      const [rows, dailyLoads] = await Promise.all([
+        storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
+        needLoad
+          ? (async () => {
+              const [workoutLogs, exerciseSets, loadTags] = await Promise.all([
+                storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
+                storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
+                storage.analytics.getExerciseLoadTags(),
+              ]);
+              return calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, { currentDate: to })
+                .dailyLoads;
+            })()
+          : Promise.resolve([] as { date: string; utss: number }[]),
+      ]);
+
+      const response: FuellingRangeResponse = {
+        from,
+        to,
+        days: buildFuellingRange(rows, dailyLoads, targets, { from, to }),
       };
       res.json(response);
     }),

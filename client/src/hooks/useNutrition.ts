@@ -10,6 +10,7 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodWithServingsResponse,
+  FuellingRangeResponse,
   MicroSummaryResponse,
   NutritionInsightsResponse,
   NutritionTarget,
@@ -66,7 +67,11 @@ export function useFavorites(enabled = true) {
 export function useLogFood(date: string) {
   return useApiMutation<FoodLogEntry, Error, CreateFoodLogInput>({
     mutationFn: (input) => api.nutrition.createLog(input),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRecent],
+    invalidateQueries: [
+      QUERY_KEYS.nutritionDay(date),
+      QUERY_KEYS.nutritionRecent,
+      QUERY_KEYS.nutritionRangePrefix,
+    ],
     successToast: "Food logged",
     errorToast: "Couldn't log that food",
   });
@@ -75,7 +80,7 @@ export function useLogFood(date: string) {
 export function useUpdateLog(date: string) {
   return useApiMutation<FoodLogEntry, Error, { id: string; data: UpdateFoodLogInput }>({
     mutationFn: ({ id, data }) => api.nutrition.updateLog(id, data),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date)],
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRangePrefix],
     successToast: "Entry updated",
     errorToast: "Couldn't update that entry",
   });
@@ -84,7 +89,7 @@ export function useUpdateLog(date: string) {
 export function useDeleteLog(date: string) {
   return useApiMutation<{ success: boolean }, Error, string>({
     mutationFn: (id) => api.nutrition.deleteLog(id),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date)],
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRangePrefix],
     successToast: "Entry removed",
     errorToast: "Couldn't remove that entry",
   });
@@ -101,7 +106,11 @@ export function useToggleFavorite() {
 export function useRepeatDay(date: string) {
   return useApiMutation<RepeatDayResponse, Error, RepeatDayInput>({
     mutationFn: (input) => api.nutrition.repeatDay(input),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRecent],
+    invalidateQueries: [
+      QUERY_KEYS.nutritionDay(date),
+      QUERY_KEYS.nutritionRecent,
+      QUERY_KEYS.nutritionRangePrefix,
+    ],
     successToast: (data) => ({
       title: `Repeated ${data.created} item${data.created === 1 ? "" : "s"}`,
     }),
@@ -228,6 +237,21 @@ export function useBlockView(from: string, to: string, enabled = true) {
   });
 }
 
+/**
+ * Per-day fuelling progress over a date range, for the Timeline home-screen chips
+ * (Phase 2). One request for the whole visible window. `refetchOnMount` keeps the
+ * chips fresh when returning to the Timeline after logging elsewhere.
+ */
+export function useFuellingRange(from: string, to: string, enabled = true) {
+  return useQuery<FuellingRangeResponse>({
+    queryKey: QUERY_KEYS.nutritionRange(from, to),
+    queryFn: () => api.nutrition.getFuellingRange(from, to),
+    enabled: enabled && from.length > 0 && to.length > 0,
+    staleTime: 60_000,
+    refetchOnMount: true,
+  });
+}
+
 // --- Phase 4: natural-language meal logging ---------------------------------
 
 /** Parse a free-text meal into suggested items (FR-4.1). Opens the review sheet
@@ -252,7 +276,11 @@ export function useParseMealPhoto() {
 export function useLogMealBatch(date: string) {
   return useApiMutation<BatchLogResponse, Error, CreateFoodLogBatchInput>({
     mutationFn: (data) => api.nutrition.createLogBatch(data),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRecent],
+    invalidateQueries: [
+      QUERY_KEYS.nutritionDay(date),
+      QUERY_KEYS.nutritionRecent,
+      QUERY_KEYS.nutritionRangePrefix,
+    ],
     successToast: (data) => ({
       title: `Logged ${data.created} item${data.created === 1 ? "" : "s"}`,
     }),
