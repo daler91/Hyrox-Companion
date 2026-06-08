@@ -50,14 +50,17 @@ function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
-export function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: DistanceUnit = "km") {
-  const durationMinutes = Math.round(activity.moving_time / 60);
-  const isDistanceActivity = activity.distance > 100;
+function getCalories(activity: StravaActivity): number | null {
+  if (activity.calories) {
+    return Math.round(activity.calories);
+  }
+  if (activity.kilojoules) {
+    return Math.round(activity.kilojoules * 0.239);
+  }
+  return null;
+}
 
-  const mainWorkout = isDistanceActivity
-    ? `${formatStravaDistance(activity.distance, distanceUnit)}, ${formatDuration(activity.moving_time)}`
-    : `${formatDuration(activity.moving_time)} session`;
-
+function getAccessory(activity: StravaActivity, distanceUnit: DistanceUnit, isDistanceActivity: boolean): string | null {
   const accessoryParts: string[] = [];
   if (activity.total_elevation_gain > 0) {
     accessoryParts.push(`Elevation: ${formatElevation(activity.total_elevation_gain, distanceUnit)}`);
@@ -65,8 +68,10 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
   if (isDistanceActivity && activity.average_speed > 0) {
     accessoryParts.push(`Pace: ${formatStravaPace(activity.average_speed, distanceUnit)}`);
   }
-  const accessory = accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
+  return accessoryParts.length > 0 ? accessoryParts.join(" | ") : null;
+}
 
+function getNotes(activity: StravaActivity): string | null {
   const notesParts: string[] = [];
   if (activity.name) {
     notesParts.push(activity.name);
@@ -77,7 +82,19 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
       : `Avg HR: ${Math.round(activity.average_heartrate)} bpm`;
     notesParts.push(hrText);
   }
-  const notes = notesParts.length > 0 ? notesParts.join(" | ") : null;
+  return notesParts.length > 0 ? notesParts.join(" | ") : null;
+}
+
+export function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: DistanceUnit = "km") {
+  const durationMinutes = Math.round(activity.moving_time / 60);
+  const isDistanceActivity = activity.distance > 100;
+
+  const mainWorkout = isDistanceActivity
+    ? `${formatStravaDistance(activity.distance, distanceUnit)}, ${formatDuration(activity.moving_time)}`
+    : `${formatDuration(activity.moving_time)} session`;
+
+  const accessory = getAccessory(activity, distanceUnit, isDistanceActivity);
+  const notes = getNotes(activity);
 
   return {
     userId,
@@ -93,7 +110,7 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
     planDayId: null,
     source: "strava" as const,
     stravaActivityId: String(activity.id),
-    calories: activity.calories ? Math.round(activity.calories) : activity.kilojoules ? Math.round(activity.kilojoules * 0.239) : null,
+    calories: getCalories(activity),
     distanceMeters: activity.distance || null,
     elevationGain: activity.total_elevation_gain || null,
     avgHeartrate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
