@@ -13,6 +13,7 @@ import {
   buildRetrievedChunksSection,
   type CoachingMaterialInput,
 } from "./prompts/materialsBuilder";
+import { buildNutritionSection } from "./prompts/nutritionContext";
 
 export type { CoachingMaterialInput } from "./prompts/materialsBuilder";
 export {
@@ -38,6 +39,8 @@ When users ask about their training:
 - Identify training gaps (e.g., exercises not practiced recently)
 - When asked about upcoming workouts, reference the scheduled plan data to discuss what's coming up and whether modifications might help
 - Acknowledge their progress and consistency
+
+When a "Fuelling and Recovery" section is provided in the training data, you may use it to inform recovery and load advice — for example, flagging consistent under-fuelling on high training-load days, or low protein relative to training. Offer nutrition guidance only when it is relevant to the athlete's question or the data clearly warrants it; keep it brief and supportive rather than preachy, and treat the numbers as estimates, not medical advice.
 
 Keep responses concise but informative. Use bullet points for lists.
 
@@ -73,6 +76,7 @@ RESPOND TO THE COACHING ANALYSIS:
 - REGRESSION + high RPE: This is fatigue — reduce the load for this exercise. REGRESSION + low RPE: Form may be off — add technique cues in notes and keep the load.
 - VOLUME BELOW GOAL: Add meaningful work to upcoming sessions targeting weak areas or running. Don't add junk volume.
 - VOLUME ABOVE GOAL: Consider consolidating — merge accessory work into main workout rather than adding separate sessions.
+- FUELLING (only when a "Fuelling and Recovery" section is present): if the athlete is consistently under-fuelling on high training-load days (low calories or protein relative to UTSS), treat it as a recovery risk. The ONLY change you may make for this reason is appending a brief recovery/fuelling cue to notes — never add or increase training volume, and never override the TAPER/RACE_WEEK constraints.
 
 FUNCTIONAL FITNESS / HYROX COACHING (apply when the athlete's goal involves functional fitness, Hyrox, or their plan includes functional station exercises):
 - Running is ~50% of total race time in Hyrox. Running frequency should be 3-4x/week minimum for functional fitness athletes.
@@ -410,6 +414,9 @@ export function buildSystemPrompt(
   contextSection += buildStructuredPerformance(trainingContext);
   contextSection += buildRecentWorkouts(trainingContext);
   contextSection += buildUpcomingWorkouts(trainingContext);
+
+  const nutritionSection = buildNutritionSection(trainingContext);
+  if (nutritionSection) contextSection += `\n\n${nutritionSection}`;
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 

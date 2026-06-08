@@ -15,6 +15,7 @@ import {
 } from "./coachingInsights";
 import { buildTrainingContext } from "./index";
 import { summarizeMafTrend } from "./mafTrend";
+import { buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
@@ -35,6 +36,7 @@ vi.mock("./coachingInsights", () => ({
   computeWeeklyVolume: vi.fn(),
 }));
 vi.mock("./mafTrend", () => ({ summarizeMafTrend: vi.fn() }));
+vi.mock("./nutritionContext", () => ({ buildNutritionTrainingContext: vi.fn() }));
 vi.mock("./trainingDecisionEngine", () => ({ decideTrainingState: vi.fn() }));
 vi.mock("./trainingStats", () => ({
   calculateTrainingStats: vi.fn(),
@@ -74,6 +76,7 @@ const volumeMock = vi.mocked(computeWeeklyVolume);
 const loadMock = vi.mocked(calculateTrainingLoad);
 const decideMock = vi.mocked(decideTrainingState);
 const mafMock = vi.mocked(summarizeMafTrend);
+const nutritionMock = vi.mocked(buildNutritionTrainingContext);
 
 function makeStats(overrides: Record<string, unknown> = {}) {
   return {
@@ -135,6 +138,7 @@ beforeEach(() => {
   loadMock.mockReturnValue({ overview: { zone: "sweet_spot" } } as never);
   decideMock.mockReturnValue(makeDecision());
   mafMock.mockReturnValue({ testCount: 2 } as never);
+  nutritionMock.mockResolvedValue(undefined);
 
   vi.mocked(storage.timeline.getTimeline).mockResolvedValue([]);
   vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
@@ -325,6 +329,33 @@ describe("buildTrainingContext", () => {
 
     expect(storage.mafTests.listTestResults).not.toHaveBeenCalled();
     expect(ctx.mafTrend).toBeUndefined();
+  });
+
+  it("omits nutrition when the nutrition builder returns undefined", async () => {
+    nutritionMock.mockResolvedValue(undefined);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(buildNutritionTrainingContext).toHaveBeenCalledWith(USER_ID);
+    expect(ctx).not.toHaveProperty("nutrition");
+  });
+
+  it("includes the nutrition slice when the builder returns one", async () => {
+    const nutrition = {
+      windowDays: 14,
+      loggedDaysCount: 6,
+      avgCalories: 2400,
+      avgProteinG: 160,
+      avgCarbG: 270,
+      avgFatG: 78,
+      highLoadDays: [],
+      lowMicros: [],
+    };
+    nutritionMock.mockResolvedValue(nutrition);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.nutrition).toEqual(nutrition);
   });
 
   it("includes unit preferences only when the user has them", async () => {

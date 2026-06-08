@@ -404,4 +404,52 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(idx("FINGERPRINT_RAG_CHUNK")).toBeGreaterThan(idx("UPCOMING WORKOUTS"));
     expect(idx("Analyze the coaching analysis")).toBeGreaterThan(idx("FINGERPRINT_RAG_CHUNK"));
   });
+
+  const NUTRITION_CTX = {
+    windowDays: 14,
+    loggedDaysCount: 8,
+    avgCalories: 2450,
+    avgProteinG: 165,
+    avgCarbG: 280,
+    avgFatG: 80,
+    target: { calories: 2600, proteinG: 180, carbG: 300, fatG: 75 },
+    highLoadDays: [{ date: "2026-04-15", utss: 95, calories: 2100, proteinG: 130 }],
+    lowMicros: ["Iron 32%"],
+  };
+
+  it("includes the fuelling section in the suggestions prompt when nutrition context is present", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext({ nutrition: NUTRITION_CTX }),
+      [createMockUpcomingWorkout()],
+      "goal",
+    );
+
+    expect(prompt).toContain("Fuelling and Recovery (last 14 days, 8 days logged):");
+    expect(prompt).toContain("2450 kcal, 165g protein");
+    expect(prompt).toContain("Daily target: 2600 kcal, 180g protein, 300g carbs, 75g fat.");
+    expect(prompt).toContain("2026-04-15 (UTSS 95: 2100 kcal, 130g protein)");
+    expect(prompt).toContain("Iron 32%");
+    // Placed between the coaching analysis and the upcoming workouts.
+    expect(prompt.indexOf("Fuelling and Recovery")).toBeGreaterThan(prompt.indexOf("COACHING ANALYSIS"));
+    expect(prompt.indexOf("Fuelling and Recovery")).toBeLessThan(prompt.indexOf("UPCOMING WORKOUTS"));
+  });
+
+  it("omits the fuelling section when there is no nutrition context", () => {
+    const prompt = buildSuggestionsPrompt(
+      createMockTrainingContext(),
+      [createMockUpcomingWorkout()],
+      "goal",
+    );
+
+    expect(prompt).not.toContain("Fuelling and Recovery");
+  });
+
+  it("includes the fuelling section in the chat system prompt when present", () => {
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({ totalWorkouts: 5, nutrition: NUTRITION_CTX }),
+    );
+
+    expect(prompt).toContain("Fuelling and Recovery (last 14 days, 8 days logged):");
+    expect(prompt).toContain("Daily target: 2600 kcal");
+  });
 });
