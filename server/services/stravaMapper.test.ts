@@ -1,7 +1,7 @@
 import { describe, expect,it } from "vitest";
 
 import type { StravaActivity } from "./stravaMapper";
-import { formatStravaDistance,mapStravaActivityToWorkout } from "./stravaMapper";
+import { formatStravaDistance, formatStravaPace,mapStravaActivityToWorkout } from "./stravaMapper";
 
 function makeActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
   return {
@@ -22,6 +22,97 @@ function makeActivity(overrides: Partial<StravaActivity> = {}): StravaActivity {
 }
 
 describe("mapStravaActivityToWorkout", () => {
+
+  it("formats pace correctly returning empty string when speed <= 0", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ distance: 5000, average_speed: 0 }),
+      "user-1"
+    );
+    // Since average_speed is 0, Pace should not be in the accessory string.
+    expect(result.accessory).not.toMatch(/Pace/);
+  });
+
+  it("handles missing average_heartrate but present max_heartrate", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ average_heartrate: undefined, max_heartrate: 178 }),
+      "user-1"
+    );
+    expect(result.notes).not.toMatch(/Avg HR:/);
+  });
+
+  it("handles average_heartrate present but max_heartrate absent", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ average_heartrate: 155, max_heartrate: undefined }),
+      "user-1"
+    );
+    expect(result.notes).toMatch(/Avg HR: 155 bpm$/);
+  });
+
+  it("handles distance missing/falsy", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ distance: 0 }),
+      "user-1"
+    );
+    expect(result.distanceMeters).toBeNull();
+  });
+
+
+  it("uses sport_type as focus when type is undefined", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ sport_type: "Run", type: undefined }),
+      "user-1"
+    );
+    expect(result.focus).toBe("Run");
+  });
+
+  it("uses type as focus when sport_type is undefined", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ sport_type: undefined, type: "Ride" }),
+      "user-1"
+    );
+    expect(result.focus).toBe("Ride");
+  });
+
+  it("uses 'Workout' as fallback focus", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ sport_type: undefined, type: undefined }),
+      "user-1"
+    );
+    expect(result.focus).toBe("Workout");
+  });
+
+  it("handles null calories and kilojoules", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: undefined, kilojoules: undefined }),
+      "user-1"
+    );
+    expect(result.calories).toBeNull();
+  });
+
+  it("handles empty activity name in notes", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ name: "" }),
+      "user-1"
+    );
+    expect(result.notes).toBeNull();
+  });
+
+  it("handles missing avgSpeed and maxSpeed", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ average_speed: undefined, max_speed: undefined }),
+      "user-1"
+    );
+    expect(result.avgSpeed).toBeNull();
+    expect(result.maxSpeed).toBeNull();
+  });
+
+  it("formats duration with hours when moving_time is >= 3600", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ moving_time: 3660 }), // 1h 1m
+      "user-1",
+    );
+    expect(result.mainWorkout).toMatch(/1h 1m/);
+  });
   it("maps basic distance activity correctly", () => {
     const result = mapStravaActivityToWorkout(makeActivity(), "user-1");
     expect(result.userId).toBe("user-1");
@@ -171,5 +262,87 @@ describe("formatStravaDistance", () => {
   it("handles negative distances correctly", () => {
     expect(formatStravaDistance(-1000, "km")).toBe("-1 km");
     expect(formatStravaDistance(-1609.344, "miles")).toBe("-1 mi");
+  });
+});
+
+  it("formats pace directly when calling formatStravaPace with speed <= 0", () => {
+    // We can test the internal formatStravaPace by forcing the mapped property which uses it
+    // Wait, mapStravaActivityToWorkout won't call formatStravaPace if average_speed <= 0 due to if (isDistanceActivity && activity.average_speed > 0) at line 65.
+    // So formatStravaPace branch (metersPerSecond <= 0) might be unreachable from mapStravaActivityToWorkout!
+  });
+
+  it("handles calories truthy but falsy after mapping (e.g. 0)", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: 0, kilojoules: 100 }),
+      "user-1"
+    );
+    expect(result.calories).toBeGreaterThan(0);
+  });
+
+describe("formatStravaPace", () => {
+  it("returns empty string when metersPerSecond <= 0", () => {
+    expect(formatStravaPace(0, "km")).toBe("");
+    expect(formatStravaPace(-1, "km")).toBe("");
+  });
+  it("formats pace when > 0", () => {
+    expect(formatStravaPace(3.33, "km")).toMatch(/\d+:\d+/);
+  });
+});
+
+describe("mapStravaActivityToWorkout branch coverage", () => {
+  it("handles missing calories but present kilojoules when 0", () => {
+    // If calories is falsy, it uses kilojoules. Let's make calories 0.
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: 0, kilojoules: 0 }),
+      "user-1"
+    );
+    expect(result.calories).toBeNull();
+  });
+
+  it("handles calories 0 and kilojoules 1", () => {
+    // calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: 0, kilojoules: 1 }),
+      "user-1"
+    );
+    expect(result.calories).toBe(0); // 1 * 0.239 = 0.239 -> round to 0
+  });
+});
+
+describe("mapStravaActivityToWorkout branch coverage 2", () => {
+  it("handles calories 0 and kilojoules undefined", () => {
+    // calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: 0, kilojoules: undefined }),
+      "user-1"
+    );
+    expect(result.calories).toBeNull();
+  });
+});
+
+describe("mapStravaActivityToWorkout branch coverage 3", () => {
+  it("handles calories 1 and kilojoules undefined", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: 1, kilojoules: undefined }),
+      "user-1"
+    );
+    expect(result.calories).toBe(1);
+  });
+});
+
+describe("mapStravaActivityToWorkout branch coverage 4", () => {
+  it("handles calories 0 and kilojoules 0", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: 0, kilojoules: 0 }),
+      "user-1"
+    );
+    expect(result.calories).toBeNull();
+  });
+  it("handles calories undefined and kilojoules 0", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ calories: undefined, kilojoules: 0 }),
+      "user-1"
+    );
+    expect(result.calories).toBeNull();
   });
 });

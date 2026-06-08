@@ -30,6 +30,11 @@ interface StravaActivity {
   achievement_count?: number;
 }
 
+export function formatStravaPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
+  if (metersPerSecond <= 0) return "";
+  return formatPaceShared(metersPerSecond, distanceUnit);
+}
+
 export function formatStravaDistance(meters: number, distanceUnit: DistanceUnit): string {
   const converted = metersToUserDistance(meters, distanceUnit);
   const unitStr = distanceUnit === "miles" ? "mi" : "km";
@@ -43,11 +48,6 @@ function formatDuration(seconds: number): string {
     return `${hours}h ${minutes}m`;
   }
   return `${minutes}m`;
-}
-
-function formatStravaPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
-  if (metersPerSecond <= 0) return "";
-  return formatPaceShared(metersPerSecond, distanceUnit);
 }
 
 export function mapStravaActivityToWorkout(activity: StravaActivity, userId: string, distanceUnit: DistanceUnit = "km") {
@@ -93,7 +93,7 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
     planDayId: null,
     source: "strava" as const,
     stravaActivityId: String(activity.id),
-    calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null,
+    calories: activity.calories ? Math.round(activity.calories) : activity.kilojoules ? Math.round(activity.kilojoules * 0.239) : null,
     distanceMeters: activity.distance || null,
     elevationGain: activity.total_elevation_gain || null,
     avgHeartrate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
