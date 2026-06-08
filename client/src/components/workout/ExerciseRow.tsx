@@ -1,9 +1,14 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
-import { ChevronDown, Copy,Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import React, { useId } from "react";
 
-import { type FieldKey,getFieldLabel, getFields, getFieldSpec } from "@/components/exercise-row/fieldMeta";
-import type { SetData,StructuredExercise } from "@/components/ExerciseInput";
+import {
+  type FieldKey,
+  getFieldLabel,
+  getFields,
+  getFieldSpec,
+} from "@/components/exercise-row/fieldMeta";
+import type { SetData, StructuredExercise } from "@/components/ExerciseInput";
 import { createDefaultSet } from "@/components/ExerciseInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,7 +85,7 @@ export function ExerciseRow({
         <button
           type="button"
           onClick={handleClick}
-          className="flex w-full items-center gap-3 px-4 py-3 text-left hover-elevate active-elevate-2"
+          className="flex w-full items-center gap-3 px-4 py-3 text-left hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           aria-expanded={isExpanded}
           data-testid={`button-exercise-${exerciseName}`}
         >
@@ -114,9 +119,7 @@ export function ExerciseRow({
                 )}
               />
             )}
-            {!isAdded && (
-              <Plus className="h-5 w-5 text-muted-foreground" />
-            )}
+            {!isAdded && <Plus className="h-5 w-5 text-muted-foreground" />}
           </div>
         </button>
 
@@ -225,9 +228,7 @@ function ExerciseBlockEditor({
 
   const removeSet = (idx: number) => {
     if (sets.length <= 1) return;
-    const next = sets
-      .filter((_, i) => i !== idx)
-      .map((s, i) => ({ ...s, setNumber: i + 1 }));
+    const next = sets.filter((_, i) => i !== idx).map((s, i) => ({ ...s, setNumber: i + 1 }));
     onUpdate({ ...exercise, sets: next });
   };
 
@@ -262,9 +263,7 @@ function ExerciseBlockEditor({
             type="text"
             placeholder="Enter exercise name"
             value={exercise.customLabel ?? ""}
-            onChange={(e) =>
-              onUpdate({ ...exercise, customLabel: e.target.value || undefined })
-            }
+            onChange={(e) => onUpdate({ ...exercise, customLabel: e.target.value || undefined })}
             data-testid={`input-custom-name-${block.blockId}`}
           />
         </div>
@@ -278,9 +277,7 @@ function ExerciseBlockEditor({
             data-testid={`set-row-${block.blockId}-${idx}`}
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-foreground">
-                Set {set.setNumber}
-              </span>
+              <span className="text-sm font-semibold text-foreground">Set {set.setNumber}</span>
               {sets.length > 1 &&
                 renderGhostIconButton({
                   onClick: () => removeSet(idx),
@@ -290,12 +287,7 @@ function ExerciseBlockEditor({
                   icon: <X className="h-3.5 w-3.5" />,
                 })}
             </div>
-            <div
-              className={cn(
-                "grid gap-3",
-                fields.length === 1 ? "grid-cols-1" : "grid-cols-2",
-              )}
-            >
+            <div className={cn("grid gap-3", fields.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
               {fields.map((field) => {
                 return (
                   <div key={field} className="space-y-1">

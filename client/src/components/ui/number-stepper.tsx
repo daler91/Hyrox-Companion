@@ -106,7 +106,7 @@ export function NumberStepper({
         <button
           type="button"
           onClick={cycleStep}
-          className="text-[10px] text-muted-foreground hover:text-foreground tabular-nums px-2 py-0.5 rounded-full bg-muted/50"
+          className="text-[10px] text-muted-foreground hover:text-foreground tabular-nums px-2 py-0.5 rounded-full bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Step: ${step}. Tap to change.`}
           data-testid={testId ? `${testId}-step` : undefined}
         >
