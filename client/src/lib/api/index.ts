@@ -86,6 +86,11 @@ export const QUERY_KEYS = {
     ["/api/v1/nutrition/session-fuelling", workoutId] as const,
   nutritionBlock: (from: string, to: string) =>
     ["/api/v1/nutrition/block", from, to] as const,
+  nutritionRange: (from: string, to: string) =>
+    ["/api/v1/nutrition/summary-range", from, to] as const,
+  // Prefix for invalidating every per-day range query regardless of from/to
+  // (TanStack matches query keys by prefix).
+  nutritionRangePrefix: ["/api/v1/nutrition/summary-range"] as const,
   nutritionTargets: ["/api/v1/nutrition/targets"] as const,
   nutritionMicros: (date: string) => ["/api/v1/nutrition/micros", date] as const,
   nutritionInsights: ["/api/v1/nutrition/insights"] as const,

@@ -12,6 +12,7 @@ import type {
   FoodSearchResponse,
   FoodServing,
   FoodWithServingsResponse,
+  FuellingRangeResponse,
   MicroSummaryResponse,
   NutritionInsightsResponse,
   NutritionTarget,
@@ -118,6 +119,15 @@ export const nutrition = {
     typedRequest<BlockViewResponse>(
       "GET",
       to ? `${base}/block?from=${enc(from)}&to=${enc(to)}` : `${base}/block?from=${enc(from)}`,
+    ),
+
+  // Per-day fuelling progress for the Timeline home-screen chips (Phase 2).
+  getFuellingRange: (from: string, to?: string) =>
+    typedRequest<FuellingRangeResponse>(
+      "GET",
+      to
+        ? `${base}/summary-range?from=${enc(from)}&to=${enc(to)}`
+        : `${base}/summary-range?from=${enc(from)}`,
     ),
 
   // --- Phase 4: natural-language meal logging ---

@@ -1,4 +1,3 @@
-import { effectiveTarget } from "@shared/nutritionTargets";
 import {
   type AddFavoriteInput,
   addFavoriteSchema,
@@ -22,6 +21,7 @@ import {
   type EffectiveTargetSummary,
   type FoodSearchQuery,
   foodSearchQuerySchema,
+  type FuellingRangeResponse,
   type MealType,
   type MicroSummaryResponse,
   type NutritionInsightsResponse,
@@ -50,9 +50,11 @@ import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
 import { computeStale, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { lookupBarcode } from "../../services/nutrition/barcode";
-import { buildBlockView } from "../../services/nutrition/blockView";
+import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
+import { fetchDailyUtss } from "../../services/nutrition/dailyLoad";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
+import { buildEffectiveTargetSummary, buildFuellingRange } from "../../services/nutrition/fuellingRange";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
@@ -61,7 +63,6 @@ import {
   POST_WINDOW_MS,
   PRE_WINDOW_MS,
 } from "../../services/nutrition/sessionFuelling";
-import { calculateTrainingLoad } from "../../services/trainingLoadService";
 import { storage } from "../../storage";
 import { getLocalDateStr } from "../../timezone";
 import { getUserId } from "../../types";
@@ -87,40 +88,10 @@ async function resolveEffectiveTarget(
 
   let utss = 0;
   if (baseline.periodizationEnabled) {
-    const [workoutLogs, exerciseSets, loadTags] = await Promise.all([
-      storage.analytics.getWorkoutLogsByDateRange(userId, logDate, logDate),
-      storage.analytics.getAllExerciseSetsWithDates(userId, logDate, logDate),
-      storage.analytics.getExerciseLoadTags(),
-    ]);
-    const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
-      currentDate: logDate,
-    });
+    const dailyLoads = await fetchDailyUtss(userId, logDate, logDate);
     utss = dailyLoads.find((d) => d.date === logDate)?.utss ?? 0;
   }
-
-  const result = effectiveTarget(
-    {
-      calories: baseline.calories,
-      proteinG: baseline.proteinG,
-      carbG: baseline.carbG,
-      fatG: baseline.fatG,
-    },
-    utss,
-    {
-      enabled: baseline.periodizationEnabled,
-      referenceUtss: baseline.referenceUtss ?? 0,
-      carbGramsPerUtss: baseline.carbGramsPerUtss ?? 0,
-    },
-  );
-  return {
-    calories: result.calories,
-    proteinG: result.proteinG,
-    carbG: result.carbG,
-    fatG: result.fatG,
-    carbDeltaG: result.carbDeltaG,
-    utss: Math.round(utss * 10) / 10,
-    scaled: result.scaled,
-  };
+  return buildEffectiveTargetSummary(baseline, utss);
 }
 
 /** Resolve the user's IANA timezone, defaulting to UTC pre-detection. */
@@ -383,20 +354,46 @@ export function registerNutritionRoutes(router: Router): void {
       const { from, to: toParam } = req.query as unknown as BlockViewQuery;
       const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
 
-      const [rows, workoutLogs, exerciseSets, loadTags] = await Promise.all([
+      const [rows, dailyLoads] = await Promise.all([
         storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
-        storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
-        storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
-        storage.analytics.getExerciseLoadTags(),
+        fetchDailyUtss(userId, from, to),
       ]);
 
-      const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
-        currentDate: to,
-      });
       const response: BlockViewResponse = {
         from,
         to,
         points: buildBlockView(rows, dailyLoads, { from, to }),
+      };
+      res.json(response);
+    }),
+  );
+
+  // Phase 2 (Timeline integration) — per-day fuelling progress (intake totals,
+  // load-adjusted effective target, post-workout-meal flag) for the home-screen
+  // chips. One batched read for the whole visible window (no per-day fan-out):
+  // the day's training load is only computed when a periodised target exists, so
+  // flat-target and no-target users pay nothing extra.
+  router.get(
+    "/api/v1/nutrition/summary-range",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    validateQuery(blockViewQuerySchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const { from, to: toParam } = req.query as unknown as BlockViewQuery;
+      const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+
+      const targets = await storage.nutrition.listTargets(userId);
+      const needLoad = targets.some((t) => t.periodizationEnabled);
+      const [rows, dailyLoads] = await Promise.all([
+        storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
+        needLoad ? fetchDailyUtss(userId, from, to) : Promise.resolve<DailyUtss[]>([]),
+      ]);
+
+      const response: FuellingRangeResponse = {
+        from,
+        to,
+        days: buildFuellingRange(rows, dailyLoads, targets, { from, to }),
       };
       res.json(response);
     }),

@@ -107,6 +107,18 @@ export function sumNutrition(rows: LogEntryWithFood[]): NutritionMacroTotals {
   return totals;
 }
 
+/** Group joined entries by their user-local `logDate` — the shared per-day bucket
+ *  used by the block view and the fuelling range. */
+export function groupByLogDate(rows: LogEntryWithFood[]): Map<string, LogEntryWithFood[]> {
+  const byDate = new Map<string, LogEntryWithFood[]>();
+  for (const row of rows) {
+    const bucket = byDate.get(row.logDate);
+    if (bucket) bucket.push(row);
+    else byDate.set(row.logDate, [row]);
+  }
+  return byDate;
+}
+
 /** Scale a food's per-100g micronutrient map to a logged quantity in grams (FR-5.1). */
 export function scaleMicros(
   micros: Record<string, number> | null,

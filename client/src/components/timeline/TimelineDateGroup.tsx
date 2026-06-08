@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import type { PersonalRecord,TimelineAnnotation, TimelineEntry } from "@shared/schema";
+import type { FuellingDayPoint, PersonalRecord,TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import { format, isBefore,isToday, isTomorrow, isYesterday, parseISO } from "date-fns";
 import { StickyNote } from "lucide-react";
 import React, { forwardRef } from "react";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { getBulkDeleteSelectionKey, isTimelineEntryBulkDeletable } from "@/hooks/workout-actions/bulkDelete";
 import { cn } from "@/lib/utils";
 
+import { FuellingDayChip } from "./FuellingDayChip";
 import TimelineWorkoutCard from "./timeline-workout-card";
 import { TimelineAnnotationCard } from "./TimelineAnnotationCard";
 
@@ -16,6 +17,8 @@ interface TimelineDateGroupProps {
   date: string;
   entries: TimelineEntry[];
   annotations?: TimelineAnnotation[];
+  /** Per-day fuelling progress for the home-screen chip (Phase 2); absent when the nutrition feature is off or out of the fetched range. */
+  fuelling?: FuellingDayPoint;
   onMarkComplete: (entry: TimelineEntry) => void;
   onClick: (entry: TimelineEntry) => void;
   onCombineSelect?: (entry: TimelineEntry) => void;
@@ -55,6 +58,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
       date,
       entries,
       annotations,
+      fuelling,
       onMarkComplete,
       onClick,
       onCombineSelect,
@@ -143,26 +147,25 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
           <span className={isTodayDate ? "" : "text-muted-foreground"}>
             {getDateLabel(dateObj)}
           </span>
-          {entries[0]?.weekNumber && (
-            <Badge variant="outline" className="ml-auto">
-              Week {entries[0].weekNumber}
-            </Badge>
-          )}
-          {onAddAnnotation ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`h-7 px-2 text-xs text-muted-foreground hover:text-foreground ${
-                entries[0]?.weekNumber ? "ml-1" : "ml-auto"
-              } ${addNoteClassName}`}
-              onClick={() => onAddAnnotation(date)}
-              aria-label={`Log a note for ${getDateLabel(dateObj)}`}
-              data-testid={`button-add-annotation-${date}`}
-            >
-              <StickyNote className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-              Note
-            </Button>
-          ) : null}
+          <div className="ml-auto flex items-center gap-1">
+            {fuelling ? <FuellingDayChip date={date} fuelling={fuelling} /> : null}
+            {entries[0]?.weekNumber && (
+              <Badge variant="outline">Week {entries[0].weekNumber}</Badge>
+            )}
+            {onAddAnnotation ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 px-2 text-xs text-muted-foreground hover:text-foreground ${addNoteClassName}`}
+                onClick={() => onAddAnnotation(date)}
+                aria-label={`Log a note for ${getDateLabel(dateObj)}`}
+                data-testid={`button-add-annotation-${date}`}
+              >
+                <StickyNote className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                Note
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <div className="space-y-2 ml-6">

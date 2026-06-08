@@ -8,7 +8,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { TimelineEntry } from "@shared/schema";
+import type { FuellingDayPoint, TimelineEntry } from "@shared/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,7 +30,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching, useIsOnboardingCompleted } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useFuellingRange } from "@/hooks/useNutrition";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { featureFlags } from "@/lib/featureFlags";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
 import { TimelineWorkoutSurfaces } from "@/pages/timeline/TimelineWorkoutSurfaces";
@@ -209,6 +211,20 @@ export default function Timeline() {
   const allVisibleGroups = useMemo(() => {
     return [...visiblePastGroups.slice().reverse(), ...visibleFutureGroups];
   }, [visiblePastGroups, visibleFutureGroups]);
+
+  // Phase 2: per-day fuelling chips on the home screen. Fetch the whole visible
+  // window once (groups are ascending by date) and look up per-date below — no
+  // per-day fan-out. Gated by the nutrition feature flag; no-ops without data.
+  const { data: fuellingRange } = useFuellingRange(
+    allVisibleGroups[0]?.[0] ?? "",
+    allVisibleGroups[allVisibleGroups.length - 1]?.[0] ?? "",
+    featureFlags.nutritionEnabled,
+  );
+  const fuellingByDate = useMemo(() => {
+    const map = new Map<string, FuellingDayPoint>();
+    for (const day of fuellingRange?.days ?? []) map.set(day.date, day);
+    return map;
+  }, [fuellingRange]);
 
   const {
     bulkDeleteMode,
@@ -417,6 +433,7 @@ export default function Timeline() {
                 isBulkSelectMode={bulkDeleteMode}
                 selectedBulkEntryKeys={selectedBulkEntryKeys}
                 onBulkSelectToggle={handleBulkSelectToggle}
+                fuellingByDate={fuellingByDate}
               />
             </DndContext>
 
