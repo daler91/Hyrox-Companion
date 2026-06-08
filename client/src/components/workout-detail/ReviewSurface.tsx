@@ -444,18 +444,20 @@ function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionPr
   return (
     <>
       <Separator />
-      <section className="space-y-2" data-testid={`review-plan-link-${workoutLogId}`}>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <details className="space-y-2" data-testid={`review-plan-link-${workoutLogId}`}>
+        <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground">
           Training plan
-        </p>
-        <WorkoutPlanDayPicker
-          planId={workout?.planId ?? null}
-          planDayId={workout?.planDayId ?? null}
-          onChange={(next) => detail.updatePlanDay.mutate(next)}
-          disabled={detail.updatePlanDay.isPending}
-          idPrefix={`review-plan-${workoutLogId}`}
-        />
-      </section>
+        </summary>
+        <div className="pt-1">
+          <WorkoutPlanDayPicker
+            planId={workout?.planId ?? null}
+            planDayId={workout?.planDayId ?? null}
+            onChange={(next) => detail.updatePlanDay.mutate(next)}
+            disabled={detail.updatePlanDay.isPending}
+            idPrefix={`review-plan-${workoutLogId}`}
+          />
+        </div>
+      </details>
     </>
   );
 }

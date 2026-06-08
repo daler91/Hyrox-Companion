@@ -167,6 +167,16 @@ describe("ReviewSurface", () => {
     expect(updatePlanDay.mutate).toHaveBeenCalledWith({ planId: "plan-9", planDayId: "day-9" });
   });
 
+  it("collapses the Training plan section by default", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    const section = screen.getByTestId("review-plan-link-workout-1");
+    expect(section.tagName).toBe("DETAILS");
+    expect(section).not.toHaveAttribute("open");
+  });
+
   it("surfaces planned differences when adherence guidance is enabled", () => {
     mockUseWorkoutDetail.mockReturnValue(
       makeDetail({
