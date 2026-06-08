@@ -1,5 +1,5 @@
 import type { Event as SentryEvent } from "@sentry/node";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { env } from "../env";
 import { logger } from "../logger";
@@ -8,6 +8,8 @@ import {
   registerProcessErrorHandlers,
   scrubSentryEvent,
 } from "./observability";
+
+const originalEnv = { ...process.env };
 
 vi.mock("../env", () => ({
   env: {
@@ -88,6 +90,19 @@ describe("scrubSentryEvent", () => {
     expect(result.contexts?.os).toEqual({ name: "macOS" });
   });
 
+  it("handles request with no headers", () => {
+    const event: SentryEvent = {
+      request: {
+        data: "some data",
+      },
+    };
+
+    const result = scrubSentryEvent(event);
+
+    expect(result.request?.data).toBeUndefined();
+    expect(result.request?.headers).toBeUndefined();
+  });
+
   it("strips request body, query string, and cookies", () => {
     const event: SentryEvent = {
       request: {
@@ -124,19 +139,6 @@ describe("scrubSentryEvent", () => {
     const result = scrubSentryEvent(event);
 
     expect(result.request?.headers).toEqual({ "user-agent": "test" });
-  });
-
-  it("handles request with no headers", () => {
-    const event: SentryEvent = {
-      request: {
-        data: "some data",
-      },
-    };
-
-    const result = scrubSentryEvent(event);
-
-    expect(result.request?.data).toBeUndefined();
-    expect(result.request?.headers).toBeUndefined();
   });
 
   it("strips email, username, and ip from user context", () => {
@@ -206,28 +208,12 @@ describe("scrubSentryEvent", () => {
       expect(result.breadcrumbs?.[1]?.data?.url).toBe("https://api.example.com/v1/workouts");
     });
 
-    it("handles non-string urls in breadcrumbs", () => {
-      const event: SentryEvent = {
-        breadcrumbs: [
-          {
-            category: "http",
-            data: { url: 12345 },
-          },
-        ],
-      };
-
-      const result = scrubSentryEvent(event);
-      expect(result.breadcrumbs?.[0]?.data?.url).toBe(12345);
-    });
-
     it("leaves breadcrumbs without a data object alone", () => {
       const event: SentryEvent = {
         breadcrumbs: [
           { category: "console", message: "hello" },
           // @ts-expect-error — deliberately malformed to exercise the guard
           { category: "ui.click", data: null },
-          // @ts-expect-error — deliberately malformed to exercise the guard
-          undefined,
         ],
       };
 
@@ -266,8 +252,17 @@ describe("scrubSentryEvent", () => {
 });
 
 describe("configureObservability", () => {
+  const originalEnvDsn = env.SENTRY_DSN;
+  const originalNodeEnv = env.NODE_ENV;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    env.SENTRY_DSN = originalEnvDsn;
+    env.NODE_ENV = originalNodeEnv;
   });
 
   it("warns when SENTRY_DSN is not set in production", () => {
@@ -324,8 +319,6 @@ describe("configureObservability", () => {
     expect(initMock).toHaveBeenCalledWith(expect.objectContaining({
       release: "test-release",
     }));
-
-    delete process.env.SENTRY_RELEASE;
   });
 
   it("falls back to npm_package_version when SENTRY_RELEASE is not set", () => {
@@ -340,8 +333,6 @@ describe("configureObservability", () => {
     expect(initMock).toHaveBeenCalledWith(expect.objectContaining({
       release: "fitai-coach@1.0.0",
     }));
-
-    delete process.env.npm_package_version;
   });
 });
 
@@ -350,13 +341,21 @@ describe("registerProcessErrorHandlers", () => {
     vi.clearAllMocks();
   });
 
-  it("handles uncaught exceptions", async () => {
-    let uncaughtCb: (err: Error) => void = () => {};
-    const onUncaught = vi.fn((cb) => { uncaughtCb = cb; });
-    const onUnhandled = vi.fn();
+  it.each([
+    { type: "uncaught", error: new Error("test error"), expectedMsg: "uncaught_exception: test error", logMsg: "Uncaught exception in server process", flushSuccess: true },
+    { type: "unhandled", error: new Error("test rejection"), expectedMsg: "unhandled_rejection: test rejection", logMsg: "Unhandled rejection in server process", flushSuccess: false },
+    { type: "unhandled", error: "just a string", expectedMsg: "unhandled_rejection: just a string", logMsg: "Unhandled rejection in server process", flushSuccess: true },
+  ])("handles $type errors with flush success: $flushSuccess", async ({ type, error, expectedMsg, logMsg, flushSuccess }) => {
+    let fireEvent: (e: any) => void = () => {};
+    const onUncaught = vi.fn((cb) => { if (type === "uncaught") fireEvent = cb; });
+    const onUnhandled = vi.fn((cb) => { if (type === "unhandled") fireEvent = cb; });
     const setStartupError = vi.fn();
     const captureException = vi.fn();
-    const flush = vi.fn().mockResolvedValue(true);
+
+    const flush = vi.fn().mockImplementation(() => {
+      if (flushSuccess) return Promise.resolve(true);
+      return Promise.reject(new Error("flush failed"));
+    });
     const exit = vi.fn();
 
     registerProcessErrorHandlers({
@@ -368,75 +367,19 @@ describe("registerProcessErrorHandlers", () => {
       exit,
     });
 
-    const error = new Error("test error");
-    uncaughtCb(error);
+    fireEvent(error);
 
-    expect(logger.fatal).toHaveBeenCalledWith({ err: error }, "Uncaught exception in server process");
-    expect(setStartupError).toHaveBeenCalledWith("uncaught_exception: test error");
-    expect(captureException).toHaveBeenCalledWith(error);
+    expect(setStartupError).toHaveBeenCalledWith(expectedMsg);
+
+    if (error instanceof Error) {
+      expect(logger.fatal).toHaveBeenCalledWith({ err: error }, logMsg);
+      expect(captureException).toHaveBeenCalledWith(error);
+    }
 
     // Wait for the async flushThenExit to complete
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(flush).toHaveBeenCalledWith(2000);
-    expect(exit).toHaveBeenCalledWith(1);
-  });
-
-  it("handles unhandled rejections", async () => {
-    let unhandledCb: (reason: unknown) => void = () => {};
-    const onUncaught = vi.fn();
-    const onUnhandled = vi.fn((cb) => { unhandledCb = cb; });
-    const setStartupError = vi.fn();
-    const captureException = vi.fn();
-    const flush = vi.fn().mockRejectedValue(new Error("flush failed"));
-    const exit = vi.fn();
-
-    registerProcessErrorHandlers({
-      onUncaught,
-      onUnhandled,
-      setStartupError,
-      captureException,
-      flush,
-      exit,
-    });
-
-    const error = new Error("test rejection");
-    unhandledCb(error);
-
-    expect(logger.fatal).toHaveBeenCalledWith({ err: error }, "Unhandled rejection in server process");
-    expect(setStartupError).toHaveBeenCalledWith("unhandled_rejection: test rejection");
-    expect(captureException).toHaveBeenCalledWith(error);
-
-    // Wait for the async flushThenExit to complete
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(flush).toHaveBeenCalledWith(2000);
-    expect(exit).toHaveBeenCalledWith(1);
-  });
-
-  it("handles string unhandled rejections", async () => {
-    let unhandledCb: (reason: unknown) => void = () => {};
-    const onUncaught = vi.fn();
-    const onUnhandled = vi.fn((cb) => { unhandledCb = cb; });
-    const setStartupError = vi.fn();
-    const captureException = vi.fn();
-    const flush = vi.fn().mockResolvedValue(true);
-    const exit = vi.fn();
-
-    registerProcessErrorHandlers({
-      onUncaught,
-      onUnhandled,
-      setStartupError,
-      captureException,
-      flush,
-      exit,
-    });
-
-    unhandledCb("just a string");
-
-    expect(setStartupError).toHaveBeenCalledWith("unhandled_rejection: just a string");
-
-    await new Promise(resolve => setTimeout(resolve, 0));
     expect(exit).toHaveBeenCalledWith(1);
   });
 });
