@@ -1,11 +1,8 @@
 import { effectiveTarget } from "@shared/nutritionTargets";
 import type { EffectiveTargetSummary, FuellingDayPoint, NutritionTarget } from "@shared/schema";
 
-import { eachDate } from "./blockView";
-import { type LogEntryWithFood, roundMacros, sumNutrition } from "./rollup";
-
-/** Per-day UTSS read off `calculateTrainingLoad(...).dailyLoads`. */
-type DailyUtss = { date: string; utss: number };
+import { type DailyUtss, eachDate, toUtssByDate } from "./blockView";
+import { groupByLogDate, type LogEntryWithFood, roundMacros, sumNutrition } from "./rollup";
 
 /**
  * Resolve the target version effective on `date` — the latest one whose
@@ -23,9 +20,16 @@ function baselineForDate(
   return null;
 }
 
-/** Build a day's EffectiveTargetSummary from its baseline + load, reusing the
- *  shared `effectiveTarget` calculator (the same one the daily summary uses). */
-function toEffectiveSummary(baseline: NutritionTarget, dayUtss: number): EffectiveTargetSummary {
+/**
+ * Build a day's EffectiveTargetSummary from its baseline target + that day's
+ * training load, reusing the shared `effectiveTarget` calculator. Shared with the
+ * daily-summary route's resolver so a day's target is derived identically
+ * everywhere. Pure; carbs/calories scale with load only when periodisation is on.
+ */
+export function buildEffectiveTargetSummary(
+  baseline: NutritionTarget,
+  dayUtss: number,
+): EffectiveTargetSummary {
   const utss = baseline.periodizationEnabled ? dayUtss : 0;
   const result = effectiveTarget(
     {
@@ -66,15 +70,8 @@ export function buildFuellingRange(
   targets: NutritionTarget[],
   range: { from: string; to: string },
 ): FuellingDayPoint[] {
-  const rowsByDate = new Map<string, LogEntryWithFood[]>();
-  for (const row of rows) {
-    const bucket = rowsByDate.get(row.logDate);
-    if (bucket) bucket.push(row);
-    else rowsByDate.set(row.logDate, [row]);
-  }
-
-  const utssByDate = new Map<string, number>();
-  for (const d of dailyLoads) utssByDate.set(d.date, d.utss);
+  const rowsByDate = groupByLogDate(rows);
+  const utssByDate = toUtssByDate(dailyLoads);
 
   // Newest effectiveFrom first, so the first match for a date is the version in
   // force on that date.
@@ -87,7 +84,9 @@ export function buildFuellingRange(
     points.push({
       date,
       totals: roundMacros(sumNutrition(dayRows)),
-      effectiveTarget: baseline ? toEffectiveSummary(baseline, utssByDate.get(date) ?? 0) : null,
+      effectiveTarget: baseline
+        ? buildEffectiveTargetSummary(baseline, utssByDate.get(date) ?? 0)
+        : null,
       hasPostWorkoutFuel: dayRows.some((r) => r.mealType === "post_workout"),
     });
   }
