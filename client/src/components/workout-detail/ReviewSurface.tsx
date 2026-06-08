@@ -11,12 +11,14 @@ import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
+import { featureFlags } from "@/lib/featureFlags";
 import { apiRequest } from "@/lib/queryClient";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
+import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -346,6 +348,9 @@ function ReviewDetailsColumn({
         onRpeChange={onRpeChange}
         onSaveNote={onSaveNote}
       />
+      {featureFlags.nutritionEnabled && workoutLogId ? (
+        <FuellingAroundSessionPanel workoutLogId={workoutLogId} />
+      ) : null}
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
       <CoachRationale rationale={entry.aiRationale} />
 
@@ -439,18 +444,20 @@ function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionPr
   return (
     <>
       <Separator />
-      <section className="space-y-2" data-testid={`review-plan-link-${workoutLogId}`}>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <details className="space-y-2" data-testid={`review-plan-link-${workoutLogId}`}>
+        <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground">
           Training plan
-        </p>
-        <WorkoutPlanDayPicker
-          planId={workout?.planId ?? null}
-          planDayId={workout?.planDayId ?? null}
-          onChange={(next) => detail.updatePlanDay.mutate(next)}
-          disabled={detail.updatePlanDay.isPending}
-          idPrefix={`review-plan-${workoutLogId}`}
-        />
-      </section>
+        </summary>
+        <div className="pt-1">
+          <WorkoutPlanDayPicker
+            planId={workout?.planId ?? null}
+            planDayId={workout?.planDayId ?? null}
+            onChange={(next) => detail.updatePlanDay.mutate(next)}
+            disabled={detail.updatePlanDay.isPending}
+            idPrefix={`review-plan-${workoutLogId}`}
+          />
+        </div>
+      </details>
     </>
   );
 }
