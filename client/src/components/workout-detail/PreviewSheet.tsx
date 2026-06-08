@@ -1,7 +1,10 @@
 import type { TimelineEntry } from "@shared/schema";
 import { CalendarClock, MessageSquare, Pencil, SkipForward } from "lucide-react";
 
+import { featureFlags } from "@/lib/featureFlags";
+
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
+import { FuellingPlanPanel } from "./FuellingPlanPanel";
 import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
@@ -69,6 +72,11 @@ export function PreviewSheet({
           onSkip={onSkip}
         />
       )}
+      renderPanels={
+        featureFlags.nutritionEnabled && entry.planDayId
+          ? () => <FuellingPlanPanel entry={entry} />
+          : undefined
+      }
     />
   );
 }

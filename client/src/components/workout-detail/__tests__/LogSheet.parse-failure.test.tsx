@@ -25,6 +25,10 @@ vi.mock("@/components/ui/responsive-sheet", () => ({
   ),
 }));
 
+vi.mock("../FuellingPlanPanel", () => ({
+  FuellingPlanPanel: () => null,
+}));
+
 const baseEntry = {
   id: "entry-1",
   userId: "user-1",

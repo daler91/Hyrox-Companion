@@ -61,6 +61,10 @@ vi.mock("../EmbeddedWorkoutCoachChat", () => ({
   ),
 }));
 
+vi.mock("../FuellingPlanPanel", () => ({
+  FuellingPlanPanel: () => null,
+}));
+
 const baseEntry = {
   id: "entry-1",
   date: "2026-05-09",

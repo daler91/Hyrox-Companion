@@ -191,8 +191,16 @@ export const planDays = pgTable("plan_days", {
   aiRationale: text("ai_rationale"),
   aiNoteUpdatedAt: timestamp("ai_note_updated_at", { withTimezone: true }),
   aiInputsUsed: jsonb("ai_inputs_used").$type<CoachNoteInputs>(),
+  // Athlete's expected duration (minutes) + intensity (RPE 1–10) for a planned
+  // session. Drives per-session fuelling targets before the workout is logged;
+  // nullable, so an unset session estimates from the planned exercise table or
+  // falls back to a moderate-session baseline.
+  expectedDurationMin: integer("expected_duration_min"),
+  expectedRpe: integer("expected_rpe"),
 }, (table) => [
   check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
+  check("plan_days_expected_duration_check", sql`expected_duration_min IS NULL OR (expected_duration_min BETWEEN 1 AND 600)`),
+  check("plan_days_expected_rpe_check", sql`expected_rpe IS NULL OR (expected_rpe BETWEEN 1 AND 10)`),
   index("idx_plan_days_plan_id").on(table.planId),
   index("idx_plan_days_scheduled_date").on(table.scheduledDate),
   index("idx_plan_days_status").on(table.status),

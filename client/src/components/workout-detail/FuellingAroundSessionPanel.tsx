@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { useSessionFuelling } from "@/hooks/useNutrition";
 import { cn } from "@/lib/utils";
 
+import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
+
 const MACRO_CHIPS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
   { key: "calories", label: "kcal" },
   { key: "protein", label: "P" },
@@ -36,11 +38,6 @@ function MacroChips({
       ))}
     </div>
   );
-}
-
-/** "12g to go" when short of the target, "on target" once met (remaining ≤ 0). */
-function gapText(remaining: number | null | undefined): string {
-  return remaining != null && remaining > 0 ? `${remaining}g to go` : "on target";
 }
 
 function FuellingGroup({
@@ -91,25 +88,23 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
   const gap = data?.gap ?? null;
 
   const preTarget = target ? (
-    target.preCarbG > 0 ? (
-      <p className="text-[11px] leading-relaxed text-muted-foreground" data-testid="fuelling-pre-target">
-        Aim ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs (
-        {gapText(gap?.preCarbG)})
-      </p>
-    ) : (
-      <p className="text-[11px] text-muted-foreground" data-testid="fuelling-pre-target">
-        No pre-fuelling needed
-      </p>
-    )
+    <PreCarbTargetLine
+      preCarbG={target.preCarbG}
+      remaining={gap?.preCarbG}
+      showRemaining
+      testId="fuelling-pre-target"
+    />
   ) : undefined;
 
   const postTarget = target ? (
-    <p className="text-[11px] leading-relaxed text-muted-foreground" data-testid="fuelling-post-target">
-      Aim ~<span className="font-medium text-foreground">{target.postCarbG}g</span> carbs (
-      {gapText(gap?.postCarbG)}) · ~
-      <span className="font-medium text-foreground">{target.postProteinG}g</span> protein (
-      {gapText(gap?.postProteinG)})
-    </p>
+    <PostTargetLine
+      postCarbG={target.postCarbG}
+      postProteinG={target.postProteinG}
+      carbRemaining={gap?.postCarbG}
+      proteinRemaining={gap?.postProteinG}
+      showRemaining
+      testId="fuelling-post-target"
+    />
   ) : undefined;
 
   return (

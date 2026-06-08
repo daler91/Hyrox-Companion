@@ -24,6 +24,8 @@ export const insertPlanDaySchema = createInsertSchema(planDays)
   })
   .extend({
     status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
+    expectedDurationMin: z.number().int().min(1).max(600).nullable().optional(),
+    expectedRpe: z.number().int().min(1).max(10).nullable().optional(),
   });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
