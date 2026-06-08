@@ -13,6 +13,7 @@ import {
   computeWeeklyVolume,
 } from "./coachingInsights";
 import { summarizeMafTrend } from "./mafTrend";
+import { buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
@@ -54,6 +55,9 @@ function mapTestTrendDirection(
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   const today = todayUtcDate();
   const loadHistoryStart = addDays(today, -70);
+  // Build the (optional) fuelling slice concurrently with the training reads; it
+  // short-circuits to undefined when nutrition is off or the athlete has no data.
+  const nutritionPromise = buildNutritionTrainingContext(userId);
   const [timeline, activePlanRecord, user, upcomingDays, loadWorkoutLogs, loadExerciseSets, loadTags] = await Promise.all([
     // Bound to recent history: this internal caller has no caller-supplied
     // limit, so an unbounded getTimeline() would hydrate the user's entire
@@ -187,6 +191,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     mafTrend = summarizeMafTrend(mafTestRows, mafAnalysisRows);
   }
 
+  const nutrition = await nutritionPromise;
+
   return {
     totalWorkouts,
     completedWorkouts,
@@ -200,6 +206,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     weeklyGoal: user?.weeklyGoal ?? undefined,
     ...(user?.weightUnit ? { weightUnit: user.weightUnit } : {}),
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
+    ...(nutrition ? { nutrition } : {}),
     recentWorkouts: recentWorkouts.slice(0, 10),
     upcomingWorkouts: upcomingDays.map((d) => ({
       planDayId: d.planDayId,

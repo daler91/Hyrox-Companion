@@ -3,6 +3,13 @@ import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 import { storage } from "../storage";
 import { buildTrainingContext } from "./ai";
 
+// Nutrition context is exercised in its own unit test; here it must no-op so the
+// (nutrition-free) storage mock below is sufficient and the exact context shape
+// asserted in these tests is unchanged.
+vi.mock("./ai/nutritionContext", () => ({
+  buildNutritionTrainingContext: vi.fn(() => Promise.resolve(undefined)),
+}));
+
 vi.mock("../storage", () => ({
   storage: {
     users: {

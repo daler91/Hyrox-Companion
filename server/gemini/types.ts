@@ -22,6 +22,34 @@ export interface MafTrendSummary {
   complianceTrend: "improving" | "flat" | "declining" | "insufficient_data";
 }
 
+/**
+ * Compact summary of an athlete's recent fuelling vs training load + targets,
+ * injected into the coach chat and auto-suggestions context. Present only when
+ * the nutrition feature is enabled AND the athlete has logged food or set a
+ * target; absent otherwise so the prompt is unchanged for non-nutrition users.
+ */
+export interface NutritionCoachContext {
+  /** Length of the look-back window in days. */
+  windowDays: number;
+  /** Days in the window with any food logged. */
+  loggedDaysCount: number;
+  avgCalories: number;
+  avgProteinG: number;
+  avgCarbG: number;
+  avgFatG: number;
+  /** The athlete's current daily target, when one is set. */
+  target?: {
+    calories: number | null;
+    proteinG: number | null;
+    carbG: number | null;
+    fatG: number | null;
+  };
+  /** Up to 3 highest training-load days with that day's intake (to spot under-fuelling). */
+  highLoadDays: Array<{ date: string; utss: number; calories: number; proteinG: number }>;
+  /** Today's tracked micronutrients below 50% of reference intake, formatted e.g. "Iron 32%". */
+  lowMicros: string[];
+}
+
 export interface TrainingContext {
   totalWorkouts: number;
   completedWorkouts: number;
@@ -37,6 +65,8 @@ export interface TrainingContext {
   weeklyGoal?: number;
   weightUnit?: string;
   distanceUnit?: string;
+  /** Recent fuelling vs training load + targets; present only when the nutrition feature is on and the athlete has logged food or set a target. */
+  nutrition?: NutritionCoachContext;
   recentWorkouts: Array<{
     date: string;
     focus: string;

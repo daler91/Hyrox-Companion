@@ -8,6 +8,7 @@ import {
   formatExerciseSetsForPrompt,
   type PromptExerciseSet,
 } from "../prompts/exerciseSetFormatter";
+import { buildNutritionSection } from "../prompts/nutritionContext";
 import { sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -345,6 +346,9 @@ function buildPromptDataSections(
   if (trainingContext.coachingInsights) {
     sections.push(formatCoachingAnalysis(trainingContext.coachingInsights, planGoal));
   }
+
+  const nutritionSection = buildNutritionSection(trainingContext);
+  if (nutritionSection) sections.push(nutritionSection);
 
   sections.push(
     `--- UPCOMING WORKOUTS ---`,
