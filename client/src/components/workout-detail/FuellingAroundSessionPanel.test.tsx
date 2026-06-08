@@ -79,7 +79,7 @@ describe("FuellingAroundSessionPanel", () => {
     expect(await screen.findByTestId("fuelling-fallback-note")).toBeInTheDocument();
   });
 
-  it("shows an empty state when nothing was logged around the session", async () => {
+  it("shows the per-group empty hint and the session targets when nothing is logged", async () => {
     const data: SessionFuellingResponse = {
       workoutId: "w1",
       date: "2026-06-07",
@@ -88,12 +88,39 @@ describe("FuellingAroundSessionPanel", () => {
       post: [],
       preTotals: ZERO,
       postTotals: ZERO,
+      target: { preCarbG: 30, postCarbG: 60, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
+      gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
     };
     vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
 
     renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
 
-    expect(await screen.findByTestId("fuelling-empty")).toBeInTheDocument();
+    // Targets are shown even when nothing is logged yet (what to aim for).
+    expect(await screen.findByTestId("fuelling-post-target")).toHaveTextContent("60g");
+    expect(screen.getAllByText("Nothing logged").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("fuelling-pre-totals")).not.toBeInTheDocument();
+  });
+
+  it("shows the session fuelling targets and the remaining gap", async () => {
+    const data: SessionFuellingResponse = {
+      workoutId: "w1",
+      date: "2026-06-07",
+      usedStartTime: true,
+      pre: [makeEntry("e1")],
+      post: [makeEntry("e2")],
+      preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
+      postTotals: { calories: 200, protein: 15, carb: 30, fat: 5, fiber: 2 },
+      target: { preCarbG: 30, postCarbG: 80, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
+      gap: { preCarbG: 12, postCarbG: 50, postProteinG: 10 },
+    };
+    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
+
+    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+
+    expect(await screen.findByTestId("fuelling-pre-target")).toHaveTextContent("12g to go");
+    const post = screen.getByTestId("fuelling-post-target");
+    expect(post).toHaveTextContent("80g");
+    expect(post).toHaveTextContent("10g to go");
+    expect(screen.getByTestId("fuelling-guidance")).toBeInTheDocument();
   });
 });

@@ -35,6 +35,7 @@ import {
   repeatDaySchema,
   type ServingInput,
   servingInputSchema,
+  type SessionFuellingGap,
   type SessionFuellingResponse,
   type UpdateCustomFoodInput,
   updateCustomFoodSchema,
@@ -44,6 +45,7 @@ import {
   type UpsertNutritionTargetInput,
   upsertNutritionTargetSchema,
 } from "@shared/schema";
+import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
@@ -98,6 +100,11 @@ async function resolveEffectiveTarget(
 async function getUserTimezone(userId: string): Promise<string> {
   const user = await storage.users.getUser(userId);
   return user?.userTimezone ?? "UTC";
+}
+
+/** Round to 1 dp — the macro display precision used across the nutrition surface. */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 export function registerNutritionRoutes(router: Router): void {
@@ -324,18 +331,38 @@ export function registerNutritionRoutes(router: Router): void {
       const workout = await storage.workouts.getWorkoutLog(req.params.workoutId, userId);
       if (!workout) return sendNotFound(res, "Workout not found");
 
-      const entries = workout.startedAt
-        ? await storage.nutrition.listEntriesWithFoodInWindow(
-            userId,
-            new Date(workout.startedAt.getTime() - PRE_WINDOW_MS),
-            new Date(workout.startedAt.getTime() + POST_WINDOW_MS),
-          )
-        : await storage.nutrition.listEntriesWithFoodForDate(userId, workout.date);
+      const [user, entries] = await Promise.all([
+        storage.users.getUser(userId),
+        workout.startedAt
+          ? storage.nutrition.listEntriesWithFoodInWindow(
+              userId,
+              new Date(workout.startedAt.getTime() - PRE_WINDOW_MS),
+              new Date(workout.startedAt.getTime() + POST_WINDOW_MS),
+            )
+          : storage.nutrition.listEntriesWithFoodForDate(userId, workout.date),
+      ]);
+
+      const fuelling = computeSessionFuelling(workout, entries);
+      // Recommended fuelling for this session (guidance), and how far the logged
+      // pre/post intake is from it. Always present — the calculator falls back to
+      // sensible defaults when duration/RPE/bodyweight are missing.
+      const target = computeSessionFuellingTarget({
+        durationMin: workout.duration ?? null,
+        rpe: workout.rpe ?? null,
+        bodyweightKg: user?.bodyweightKg ?? null,
+      });
+      const gap: SessionFuellingGap = {
+        preCarbG: round1(target.preCarbG - fuelling.preTotals.carb),
+        postCarbG: round1(target.postCarbG - fuelling.postTotals.carb),
+        postProteinG: round1(target.postProteinG - fuelling.postTotals.protein),
+      };
 
       const response: SessionFuellingResponse = {
         workoutId: workout.id,
         date: workout.date,
-        ...computeSessionFuelling(workout, entries),
+        ...fuelling,
+        target,
+        gap,
       };
       res.json(response);
     }),
