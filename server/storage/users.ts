@@ -19,7 +19,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, isNotNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -31,6 +31,11 @@ function isUsersEmailUniqueViolation(error: unknown): boolean {
 }
 
 export class UserStorage {
+  async getUsers(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    return await db.select().from(users).where(inArray(users.id, ids));
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
