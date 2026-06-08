@@ -6,14 +6,23 @@ export interface MondayWeekBoundaries {
 }
 
 export function getMondayWeekBoundaries(todayInput: Date = new Date()): MondayWeekBoundaries {
-  const today = new Date(toDateStr(todayInput));
-  const dayOfWeek = today.getDay(); // 0=Sun
+  // toDateStr(todayInput) returns "YYYY-MM-DD" in UTC
+  const dateStr = toDateStr(todayInput);
+
+  // Parse it explicitly as a UTC date to prevent local timezone skew
+  // new Date(dateStr) automatically parses "YYYY-MM-DD" as UTC midnight,
+  // but subsequent Date methods like getDay(), getDate() will use the local timezone.
+  // Using getUTCDay(), getUTCDate() ensures we stay in UTC.
+  const today = new Date(dateStr);
+
+  const dayOfWeek = today.getUTCDay(); // 0=Sun
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 
   const thisMonday = new Date(today);
-  thisMonday.setDate(today.getDate() + mondayOffset);
+  thisMonday.setUTCDate(today.getUTCDate() + mondayOffset);
+
   const lastMonday = new Date(thisMonday);
-  lastMonday.setDate(thisMonday.getDate() - 7);
+  lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
 
   return {
     thisMondayStr: toDateStr(thisMonday),
