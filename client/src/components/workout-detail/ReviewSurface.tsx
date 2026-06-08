@@ -11,12 +11,14 @@ import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
+import { featureFlags } from "@/lib/featureFlags";
 import { apiRequest } from "@/lib/queryClient";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
+import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
@@ -346,6 +348,9 @@ function ReviewDetailsColumn({
         onRpeChange={onRpeChange}
         onSaveNote={onSaveNote}
       />
+      {featureFlags.nutritionEnabled && workoutLogId ? (
+        <FuellingAroundSessionPanel workoutLogId={workoutLogId} />
+      ) : null}
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
       <CoachRationale rationale={entry.aiRationale} />
 

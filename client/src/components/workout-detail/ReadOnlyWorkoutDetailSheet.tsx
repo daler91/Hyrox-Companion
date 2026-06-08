@@ -4,13 +4,10 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
-import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { featureFlags } from "@/lib/featureFlags";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
-import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import { getWorkoutCoachPanelState, WorkoutCoachChatPanel, WorkoutCoachLayout } from "./WorkoutCoachPanel";
 
@@ -107,10 +104,6 @@ export function ReadOnlyWorkoutDetailSheet({
         }
       >
         <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
-        <Separator />
-        {featureFlags.nutritionEnabled && entry.workoutLogId ? (
-          <FuellingAroundSessionPanel workoutLogId={entry.workoutLogId} />
-        ) : null}
         {renderActions(currentCoachSeedText)}
       </WorkoutCoachLayout>
     </ResponsiveSheet>
