@@ -24,8 +24,12 @@ export async function buildNutritionTrainingContext(
   let summary;
   try {
     summary = await buildNutritionSummary(userId);
-  } catch (err) {
-    logger.warn({ err }, "[ai] nutrition context build failed; omitting from coach context");
+  } catch {
+    // Plain static message — no err/object payload. Bearer flags structured
+    // logger data here as potential information leakage (a caught error can
+    // carry user nutrition data); matches the fix pattern in
+    // nutritionInsightsService.
+    logger.warn("[ai] nutrition context build failed; omitting from coach context");
     return undefined;
   }
   if (summary.loggedDaysCount === 0 && summary.target == null) return undefined;
