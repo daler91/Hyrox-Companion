@@ -31,6 +31,10 @@ function makeStorage(data: FakeData): IStorage {
     },
     users: {
       getUser: vi.fn(async (userId: string) => data.users[userId]),
+      getUsers: vi.fn(async (userIds: string[]) => userIds.map(id => {
+        const u = data.users[id];
+        return u ? { id, ...u } : undefined;
+      }).filter((u): u is {id: string, userTimezone: string} => u !== undefined)),
     },
     workouts: {
       listWorkoutLogs: vi.fn(async (userId: string) => {

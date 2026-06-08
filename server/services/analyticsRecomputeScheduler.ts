@@ -57,8 +57,21 @@ export async function runAnalyticsRecomputeScan(
   let usersChecked = 0;
   let enqueued = 0;
 
+  if (userIds.length === 0) return { usersChecked, enqueued };
+
+  // Fetch all users in batches to avoid N+1 query issue
+  const usersMap = new Map<string, NonNullable<Awaited<ReturnType<typeof storage.users.getUser>>>>();
+  const batchSize = 100;
+  for (let i = 0; i < userIds.length; i += batchSize) {
+    const batch = userIds.slice(i, i + batchSize);
+    const usersBatch = await storage.users.getUsers(batch);
+    for (const u of usersBatch) {
+      usersMap.set(u.id, u);
+    }
+  }
+
   for (const userId of userIds) {
-    const user = await storage.users.getUser(userId);
+    const user = usersMap.get(userId);
     if (!user) continue;
     // Only act in the user's local midnight hour (00:00–00:59 local). The
     // hourly UTC cron lands exactly one tick in this window per day per tz.
