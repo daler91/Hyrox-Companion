@@ -1,6 +1,6 @@
 import { SignInButton } from "@clerk/react";
-import { ArrowRight, CheckCircle2, Menu, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, CheckCircle2, Menu, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Logo } from "@/components/brand/Logo";
 import { StravaIcon } from "@/components/icons/StravaIcon";
@@ -70,6 +70,23 @@ function TimelineMockup() {
 
 export function LandingHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const firstLink = navRef.current?.querySelector<HTMLElement>("a");
+    firstLink?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMobileNavOpen(false);
+        toggleRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileNavOpen]);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
@@ -83,21 +100,23 @@ export function LandingHeader() {
             <Button data-testid="button-login-header" size="sm">Log In</Button>
           </SignInButton>
           <Button
+            ref={toggleRef}
             variant="ghost"
             size="icon"
             className="sm:hidden"
             onClick={() => setMobileNavOpen((prev) => !prev)}
             aria-expanded={mobileNavOpen}
             aria-controls="landing-mobile-nav"
-            aria-label="Toggle navigation menu"
+            aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
             data-testid="button-mobile-nav-toggle"
           >
-            <Menu className="h-5 w-5" />
+            {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
       </div>
       {mobileNavOpen ? (
         <nav
+          ref={navRef}
           id="landing-mobile-nav"
           className="sm:hidden border-t bg-background/95 backdrop-blur-md"
           aria-label="Landing mobile navigation"
