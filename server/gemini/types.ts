@@ -48,6 +48,23 @@ export interface NutritionCoachContext {
   highLoadDays: Array<{ date: string; utss: number; calories: number; proteinG: number }>;
   /** Today's tracked micronutrients below 50% of reference intake, formatted e.g. "Iron 32%". */
   lowMicros: string[];
+  /**
+   * Pre/post fuelling target for the next upcoming planned session (Phase 3b),
+   * from the athlete's saved expected duration/RPE or an estimate derived from
+   * the planned exercise table. Absent when there is no upcoming planned day.
+   */
+  nextSessionFuelling?: {
+    date: string;
+    focus: string;
+    /** Effective inputs fed to the calculator (null = calculator assumed a default). */
+    durationMin: number | null;
+    rpe: number | null;
+    /** True when duration/RPE came from the exercise-table estimate, not athlete-set values. */
+    estimated: boolean;
+    preCarbG: number;
+    postCarbG: number;
+    postProteinG: number;
+  };
 }
 
 export interface TrainingContext {

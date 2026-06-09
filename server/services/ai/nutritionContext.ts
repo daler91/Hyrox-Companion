@@ -1,6 +1,10 @@
+import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
+import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
+
 import { env } from "../../env";
 import type { NutritionCoachContext } from "../../gemini/types";
 import { logger } from "../../logger";
+import type { UpcomingPlannedDay } from "../../storage/timeline";
 import { buildNutritionSummary } from "../nutrition/nutritionSummary";
 
 /**
@@ -49,5 +53,36 @@ export async function buildNutritionTrainingContext(
       proteinG: d.protein,
     })),
     lowMicros: summary.lowMicros.map((m) => `${m.label} ${m.pctRdi}%`),
+  };
+}
+
+/**
+ * Pre/post fuelling target for the next upcoming planned session (Phase 3b).
+ * The athlete's saved expected duration/RPE win; otherwise both are estimated
+ * from the planned exercise table (structure blocks + prescribed sets), the
+ * same seeding the FuellingPlanPanel uses client-side, so the coach quotes the
+ * numbers the athlete sees on the workout sheet.
+ */
+export function buildNextSessionFuelling(
+  day: UpcomingPlannedDay,
+  bodyweightKg: number | null,
+): NonNullable<NutritionCoachContext["nextSessionFuelling"]> {
+  const estimate = estimatePlannedSession({
+    structureBlocks: day.structureBlocks ?? [],
+    exerciseSets: day.exerciseSets,
+  });
+  const durationMin = day.expectedDurationMin ?? estimate.durationMin;
+  const rpe = day.expectedRpe ?? estimate.rpe;
+  const target = computeSessionFuellingTarget({ durationMin, rpe, bodyweightKg });
+
+  return {
+    date: day.date,
+    focus: day.focus,
+    durationMin,
+    rpe,
+    estimated: day.expectedDurationMin == null && day.expectedRpe == null,
+    preCarbG: target.preCarbG,
+    postCarbG: target.postCarbG,
+    postProteinG: target.postProteinG,
   };
 }

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { logger } from "../../logger";
+import type { UpcomingPlannedDay } from "../../storage/timeline";
 import { buildNutritionSummary, type NutritionSummary } from "../nutrition/nutritionSummary";
-import { buildNutritionTrainingContext } from "./nutritionContext";
+import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
 
 const { mockEnv } = vi.hoisted(() => ({
   mockEnv: { NUTRITION_ENABLED: "true" },
@@ -82,5 +83,67 @@ describe("buildNutritionTrainingContext", () => {
     vi.mocked(buildNutritionSummary).mockRejectedValue(new Error("db down"));
     expect(await buildNutritionTrainingContext("u1")).toBeUndefined();
     expect(logger.warn).toHaveBeenCalled();
+  });
+});
+
+function makeDay(overrides: Partial<UpcomingPlannedDay> = {}): UpcomingPlannedDay {
+  return {
+    planDayId: "pd-1",
+    date: "2026-06-10",
+    focus: "Strength",
+    mainWorkout: "5x5 squat",
+    accessory: null,
+    notes: null,
+    aiSource: null,
+    aiRationale: null,
+    aiNoteUpdatedAt: null,
+    aiInputsUsed: null,
+    expectedDurationMin: null,
+    expectedRpe: null,
+    exerciseSets: [],
+    structureBlocks: [],
+    ...overrides,
+  };
+}
+
+describe("buildNextSessionFuelling", () => {
+  it("prefers the athlete's saved expected duration and RPE", () => {
+    const out = buildNextSessionFuelling(makeDay({ expectedDurationMin: 90, expectedRpe: 9 }), 75);
+
+    expect(out).toMatchObject({
+      date: "2026-06-10",
+      focus: "Strength",
+      durationMin: 90,
+      rpe: 9,
+      estimated: false,
+    });
+    expect(out.preCarbG).toBe(61); // 75kg × 0.4 g/kg × 1.35 (hard) × 1.5h
+  });
+
+  it("estimates duration and RPE from the planned exercise table", () => {
+    const out = buildNextSessionFuelling(
+      makeDay({
+        structureBlocks: [
+          { sectionType: "main", formatType: "for_time", timeCapMinutes: 45, steps: [] },
+        ],
+      }),
+      75,
+    );
+
+    expect(out).toMatchObject({ durationMin: 45, rpe: 8, estimated: true });
+    expect(out.preCarbG).toBe(30); // 75kg × 0.4 g/kg × 1.35 (hard) × 0.75h
+  });
+
+  it("falls back to calculator defaults when nothing is known", () => {
+    const out = buildNextSessionFuelling(makeDay(), null);
+
+    expect(out).toMatchObject({
+      durationMin: null,
+      rpe: null,
+      estimated: true,
+      preCarbG: 30,
+      postCarbG: 60,
+      postProteinG: 25,
+    });
   });
 });
