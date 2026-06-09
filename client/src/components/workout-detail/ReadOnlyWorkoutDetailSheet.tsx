@@ -33,6 +33,8 @@ interface ReadOnlyWorkoutDetailSheetProps extends WorkoutCoachSheetProps {
   readonly entry: TimelineEntry;
   readonly onOpenChange: (open: boolean) => void;
   readonly renderActions: (seedText: string) => ReactNode;
+  /** Optional extra panels rendered between the prescription summary and actions. */
+  readonly renderPanels?: () => ReactNode;
   readonly returnTestId: string;
   readonly sheetTestId: string;
   readonly title: ReactNode;
@@ -66,6 +68,7 @@ export function ReadOnlyWorkoutDetailSheet({
   onShowCoachPanel,
   onShowWorkoutDetails,
   renderActions,
+  renderPanels,
   returnTestId,
   sheetTestId,
   title,
@@ -104,6 +107,7 @@ export function ReadOnlyWorkoutDetailSheet({
         }
       >
         <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
+        {renderPanels?.()}
         {renderActions(currentCoachSeedText)}
       </WorkoutCoachLayout>
     </ResponsiveSheet>

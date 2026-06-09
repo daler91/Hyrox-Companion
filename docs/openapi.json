@@ -809,6 +809,18 @@
                 }
               }
             ]
+          },
+          "expectedDurationMin": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 600
+          },
+          "expectedRpe": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10
           }
         },
         "required": [

@@ -99,6 +99,8 @@ function createPlannedDayEntry(
     accessory: override ? override.accessory : day.accessory,
     notes: override ? override.notes : day.notes,
     planDayId: day.id,
+    expectedDurationMin: day.expectedDurationMin,
+    expectedRpe: day.expectedRpe,
     weekNumber: day.weekNumber,
     dayName: day.dayName,
     planName: row.planName,

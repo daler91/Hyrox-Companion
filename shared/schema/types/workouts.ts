@@ -106,6 +106,10 @@ export type TimelineEntry = {
   notes: string | null;
   duration?: number | null;
   rpe?: number | null;
+  // Athlete's expected duration/intensity for a PLANNED session, copied from its
+  // plan day. Drives the pre-session fuelling target before the workout is logged.
+  expectedDurationMin?: number | null;
+  expectedRpe?: number | null;
   planDayId?: string | null;
   workoutLogId?: string | null;
   weekNumber?: number;
