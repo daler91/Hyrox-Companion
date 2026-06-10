@@ -1,5 +1,5 @@
 import type { Food, NutritionMacroTotals, RecipeWithIngredients } from "@shared/schema";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,12 @@ function RecipeBuilderForm({
   const addFood = (food: Food) => {
     setIngredients((prev) => [
       ...prev,
-      { foodId: food.id, name: food.name, quantityG: Math.round(food.servingSizeG ?? 100), per100: per100From(food) },
+      {
+        foodId: food.id,
+        name: food.name,
+        quantityG: Math.round(food.servingSizeG ?? 100),
+        per100: per100From(food),
+      },
     ]);
   };
 
@@ -120,7 +125,12 @@ function RecipeBuilderForm({
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2 space-y-1.5">
             <Label htmlFor="recipe-name">Name</Label>
-            <Input id="recipe-name" value={name} onChange={(e) => setName(e.target.value)} data-testid="input-recipe-name" />
+            <Input
+              id="recipe-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              data-testid="input-recipe-name"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="recipe-servings">Servings</Label>
@@ -150,7 +160,11 @@ function RecipeBuilderForm({
                 className="w-24"
                 value={ing.quantityG}
                 onChange={(e) =>
-                  setIngredients((prev) => prev.map((row, j) => (j === i ? { ...row, quantityG: Number(e.target.value) } : row)))
+                  setIngredients((prev) =>
+                    prev.map((row, j) =>
+                      j === i ? { ...row, quantityG: Number(e.target.value) } : row,
+                    ),
+                  )
                 }
                 data-testid={`input-ingredient-qty-${i}`}
               />
@@ -170,29 +184,66 @@ function RecipeBuilderForm({
         </div>
 
         <div className="grid grid-cols-5 gap-2 rounded-md bg-muted/40 p-3 text-center">
-          <PreviewCell label="kcal" value={Math.round(totals.calories / divisor)} testid="recipe-preview-calories" />
-          <PreviewCell label="P" value={round1(totals.protein / divisor)} testid="recipe-preview-protein" />
-          <PreviewCell label="C" value={round1(totals.carb / divisor)} testid="recipe-preview-carb" />
+          <PreviewCell
+            label="kcal"
+            value={Math.round(totals.calories / divisor)}
+            testid="recipe-preview-calories"
+          />
+          <PreviewCell
+            label="P"
+            value={round1(totals.protein / divisor)}
+            testid="recipe-preview-protein"
+          />
+          <PreviewCell
+            label="C"
+            value={round1(totals.carb / divisor)}
+            testid="recipe-preview-carb"
+          />
           <PreviewCell label="F" value={round1(totals.fat / divisor)} testid="recipe-preview-fat" />
-          <PreviewCell label="Fib" value={round1(totals.fiber / divisor)} testid="recipe-preview-fiber" />
+          <PreviewCell
+            label="Fib"
+            value={round1(totals.fiber / divisor)}
+            testid="recipe-preview-fiber"
+          />
         </div>
         <p className="text-center text-[10px] text-muted-foreground">per serving</p>
       </div>
 
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
         <Button onClick={submit} disabled={!valid || isPending} data-testid="button-save-recipe">
-          {initial ? "Save" : "Create recipe"}
+          {isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              Saving…
+            </>
+          ) : initial ? (
+            "Save"
+          ) : (
+            "Create recipe"
+          )}
         </Button>
       </DialogFooter>
     </>
   );
 }
 
-function PreviewCell({ label, value, testid }: { readonly label: string; readonly value: number; readonly testid: string }) {
+function PreviewCell({
+  label,
+  value,
+  testid,
+}: {
+  readonly label: string;
+  readonly value: number;
+  readonly testid: string;
+}) {
   return (
     <div>
-      <div className="text-sm font-semibold tabular-nums" data-testid={testid}>{value}</div>
+      <div className="text-sm font-semibold tabular-nums" data-testid={testid}>
+        {value}
+      </div>
       <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
     </div>
   );
@@ -211,12 +262,23 @@ export function RecipeBuilderDialog({
   const ready = !recipeId || recipeQuery.data !== undefined;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-h-[90vh] overflow-y-auto" data-testid="dialog-recipe">
         {!ready ? (
-          <div className="flex justify-center p-6"><LoadingSpinner /></div>
+          <div className="flex justify-center p-6">
+            <LoadingSpinner />
+          </div>
         ) : (
-          <RecipeBuilderForm key={recipeId ?? "create"} initial={recipeQuery.data ?? null} onClose={onClose} />
+          <RecipeBuilderForm
+            key={recipeId ?? "create"}
+            initial={recipeQuery.data ?? null}
+            onClose={onClose}
+          />
         )}
       </DialogContent>
     </Dialog>
