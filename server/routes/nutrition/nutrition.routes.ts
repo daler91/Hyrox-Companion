@@ -54,6 +54,7 @@ import { computeStale, regenerateAndStoreNutritionInsights } from "../../service
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
 import { fetchDailyUtss } from "../../services/nutrition/dailyLoad";
+import { resolveDayEnergy } from "../../services/nutrition/energy";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
 import { buildEffectiveTargetSummary, buildFuellingRange } from "../../services/nutrition/fuellingRange";
@@ -308,10 +309,12 @@ export function registerNutritionRoutes(router: Router): void {
       const { date } = req.query as unknown as DailySummaryQuery;
       const logDate = date ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
       const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
-      const summary: DailySummaryResponse = {
-        ...buildDailySummary(logDate, rows),
-        effectiveTarget: await resolveEffectiveTarget(userId, logDate),
-      };
+      const base = buildDailySummary(logDate, rows);
+      const [effectiveTarget, energy] = await Promise.all([
+        resolveEffectiveTarget(userId, logDate),
+        resolveDayEnergy(userId, logDate, base.totals.calories),
+      ]);
+      const summary: DailySummaryResponse = { ...base, effectiveTarget, energy };
       res.json(summary);
     }),
   );

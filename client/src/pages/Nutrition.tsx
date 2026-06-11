@@ -12,6 +12,7 @@ import { useDeleteLog, useNutritionDay, useNutritionTargets, useRepeatDay } from
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
+import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { DescribeMealButton } from "./nutrition/DescribeMealButton";
 import { FoodSearch } from "./nutrition/FoodSearch";
 import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
@@ -155,6 +156,7 @@ export default function Nutrition() {
         </div>
 
         <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} effectiveTarget={summary?.effectiveTarget ?? null} />
+        <EnergyBalanceCard energy={summary?.energy ?? null} />
 
         <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
         <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />

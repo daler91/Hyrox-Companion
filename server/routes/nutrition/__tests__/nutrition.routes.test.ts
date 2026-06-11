@@ -214,7 +214,30 @@ describe("nutrition routes", () => {
       const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
       expect(res.status).toBe(200);
       expect(res.body.effectiveTarget).toBeNull();
+      // No BMR profile either → no energy block, and no training-data reads.
+      expect(res.body.energy).toBeNull();
       expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    });
+
+    it("includes the day's energy balance when the profile supports a BMR", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({
+        userTimezone: "America/Chicago",
+        bodyweightKg: 75,
+        heightCm: 180,
+        age: 30,
+        gender: "male",
+        activityLevel: "moderate",
+      });
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+        { calories: 600 },
+      ] as never);
+
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+
+      expect(res.status).toBe(200);
+      // BMR 1730 × 1.2 + 600 measured = 2676 out vs 89 kcal logged.
+      expect(res.body.energy).toMatchObject({ basis: "measured", outKcal: 2676, inKcal: 89 });
     });
 
     it("returns a flat effective target without querying training load", async () => {
