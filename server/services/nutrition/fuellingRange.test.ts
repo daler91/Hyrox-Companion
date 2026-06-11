@@ -1,7 +1,7 @@
-import type { MealType, NutritionTarget } from "@shared/schema";
+import type { BlockViewPoint, MealType, NutritionTarget } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { buildFuellingRange } from "./fuellingRange";
+import { buildFuellingRange, decorateBlockPointsWithOutcomes } from "./fuellingRange";
 import type { LogEntryWithFood } from "./rollup";
 
 /** A minimal joined entry — only the fields the range builder/rollup read. */
@@ -125,5 +125,46 @@ describe("buildFuellingRange", () => {
     });
     expect(days[0].effectiveTarget).toBeNull(); // before the first target
     expect(days[1].effectiveTarget).not.toBeNull();
+  });
+});
+
+describe("decorateBlockPointsWithOutcomes", () => {
+  function point(date: string, over: Partial<BlockViewPoint> = {}): BlockViewPoint {
+    return { date, calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0, utss: 0, ...over };
+  }
+
+  it("attaches the day's carb target and averages multi-workout outcomes", () => {
+    const points = decorateBlockPointsWithOutcomes(
+      [point("2026-06-01"), point("2026-06-02")],
+      [
+        { date: "2026-06-02", rpe: 6, compliancePct: 80 },
+        { date: "2026-06-02", rpe: 7, compliancePct: 90 },
+      ],
+      [target("2026-06-01")],
+    );
+
+    // Rest day: target resolves, outcomes null.
+    expect(points[0]).toMatchObject({ carbTargetG: 250, avgRpe: null, compliancePct: null });
+    // Training day: outcomes averaged across the day's workouts.
+    expect(points[1]).toMatchObject({ carbTargetG: 250, avgRpe: 6.5, compliancePct: 85 });
+  });
+
+  it("scales a periodised carb target by the point's UTSS and skips unrecorded metrics", () => {
+    const points = decorateBlockPointsWithOutcomes(
+      [point("2026-06-02", { utss: 100 })],
+      [
+        { date: "2026-06-02", rpe: null, compliancePct: null },
+        { date: "2026-06-02", rpe: 8, compliancePct: null },
+      ],
+      [target("2026-06-01", { periodizationEnabled: true, referenceUtss: 50, carbGramsPerUtss: 1 })],
+    );
+
+    // 250g + (100 − 50) × 1 = 300g; null RPEs don't drag the average down.
+    expect(points[0]).toMatchObject({ carbTargetG: 300, avgRpe: 8, compliancePct: null });
+  });
+
+  it("leaves the carb target null before any target version applies", () => {
+    const points = decorateBlockPointsWithOutcomes([point("2026-06-01")], [], [target("2026-06-05")]);
+    expect(points[0].carbTargetG).toBeNull();
   });
 });

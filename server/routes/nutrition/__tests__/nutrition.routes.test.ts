@@ -479,6 +479,27 @@ describe("nutrition routes", () => {
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
       vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
       vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([]);
+      vi.mocked(storage.nutrition.listTargets).mockResolvedValue([]);
+    });
+
+    it("decorates points with the day's carb target, RPE and compliance (Roadmap G)", async () => {
+      vi.mocked(storage.nutrition.listTargets).mockResolvedValue([
+        {
+          effectiveFrom: "2026-06-01", calories: 2000, proteinG: 150, carbG: 250, fatG: 60,
+          periodizationEnabled: false, referenceUtss: null, carbGramsPerUtss: null,
+        },
+      ] as never);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+        { date: "2026-06-02", rpe: 7, compliancePct: 84, duration: 60, focus: "Strength", mainWorkout: "5x5" },
+      ] as never);
+
+      const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01&to=2026-06-02");
+
+      expect(res.status).toBe(200);
+      const jun2 = res.body.points.find((p: { date: string }) => p.date === "2026-06-02");
+      expect(jun2).toMatchObject({ carbTargetG: 250, avgRpe: 7, compliancePct: 84 });
+      const jun1 = res.body.points.find((p: { date: string }) => p.date === "2026-06-01");
+      expect(jun1).toMatchObject({ carbTargetG: 250, avgRpe: null, compliancePct: null });
     });
 
     it("merges intake and training load into zero-filled daily points", async () => {
