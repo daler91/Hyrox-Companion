@@ -34,7 +34,11 @@ export function summarizeMafTrend(
     .filter((a): a is MafWorkoutAnalysis & { compliancePct: number; createdAt: Date } =>
       a.compliancePct != null && a.createdAt != null,
     )
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    // ⚡ Bolt Performance Optimization:
+    // Replaced expensive `new Date()` parsing inside the sort comparator.
+    // The `createdAt` field on the filtered items is strictly typed as a Date object.
+    // Calling `getTime()` directly avoids O(N log N) instantiation overhead during sorting.
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   const latest = scored.at(-1) ?? null;
   const latestCompliancePct = latest?.compliancePct ?? null;
