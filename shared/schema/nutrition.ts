@@ -1,7 +1,9 @@
+import type { EnergyBalanceSummary } from "../energyBalance";
 import type { SessionFuellingTarget } from "../sessionFuellingTargets";
 import { type Food, FOOD_ENTRY_METHODS, type FoodServing, MEAL_TYPES, type MealType, type NutritionTarget } from "./tables";
 import { z } from "./zod";
 
+export type { EnergyBalanceSummary } from "../energyBalance";
 export type { SessionFuellingTarget } from "../sessionFuellingTargets";
 
 /**
@@ -193,6 +195,10 @@ export interface DailySummaryResponse {
   // The day's effective target (baseline ± load periodisation), or null when the
   // user has set no target. Lets the client render per-date progress correctly.
   effectiveTarget: EffectiveTargetSummary | null;
+  // Phase 4 — the day's energy in vs out (measured training calories when a
+  // device provided them, else the static TDEE estimate). Optional + nullable:
+  // null when the profile lacks BMR inputs (bodyweight/height/age).
+  energy?: EnergyBalanceSummary | null;
 }
 
 export interface RepeatDayResponse {
