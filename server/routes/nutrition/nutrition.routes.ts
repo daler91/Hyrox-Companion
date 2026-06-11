@@ -53,11 +53,11 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } 
 import { computeStale, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
-import { fetchDailyUtss } from "../../services/nutrition/dailyLoad";
+import { fetchDailyTraining, fetchDailyUtss } from "../../services/nutrition/dailyLoad";
 import { resolveDayEnergy } from "../../services/nutrition/energy";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
-import { buildEffectiveTargetSummary, buildFuellingRange } from "../../services/nutrition/fuellingRange";
+import { buildEffectiveTargetSummary, buildFuellingRange, decorateBlockPointsWithOutcomes } from "../../services/nutrition/fuellingRange";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
@@ -106,6 +106,28 @@ async function getUserTimezone(userId: string): Promise<string> {
 /** Round to 1 dp — the macro display precision used across the nutrition surface. */
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * FR-3.3 + Roadmap G — the block view's per-day points: intake macros + UTSS,
+ * decorated with the day's carb target / RPE / compliance so the Fuelling tab
+ * can correlate fuelling with performance without another endpoint.
+ */
+async function buildDecoratedBlockPoints(
+  userId: string,
+  from: string,
+  to: string,
+): Promise<BlockViewResponse["points"]> {
+  const [rows, training, targets] = await Promise.all([
+    storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
+    fetchDailyTraining(userId, from, to),
+    storage.nutrition.listTargets(userId),
+  ]);
+  return decorateBlockPointsWithOutcomes(
+    buildBlockView(rows, training.dailyLoads, { from, to }),
+    training.workoutLogs,
+    targets,
+  );
 }
 
 export function registerNutritionRoutes(router: Router): void {
@@ -384,15 +406,10 @@ export function registerNutritionRoutes(router: Router): void {
       const { from, to: toParam } = req.query as unknown as BlockViewQuery;
       const to = toParam ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
 
-      const [rows, dailyLoads] = await Promise.all([
-        storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
-        fetchDailyUtss(userId, from, to),
-      ]);
-
       const response: BlockViewResponse = {
         from,
         to,
-        points: buildBlockView(rows, dailyLoads, { from, to }),
+        points: await buildDecoratedBlockPoints(userId, from, to),
       };
       res.json(response);
     }),

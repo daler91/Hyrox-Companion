@@ -284,6 +284,12 @@ export interface BlockViewPoint {
   fat: number;
   fiber: number;
   utss: number;
+  // Roadmap G — per-day outcome fields for the fuelling↔performance correlation
+  // card. Optional so the pure block builder (and its fixtures) stay unchanged;
+  // the /block route always decorates them (null where the day has no data).
+  carbTargetG?: number | null;
+  avgRpe?: number | null;
+  compliancePct?: number | null;
 }
 
 export interface BlockViewResponse {

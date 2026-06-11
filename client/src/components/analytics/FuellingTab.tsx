@@ -3,6 +3,7 @@ import { UtensilsCrossed } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
+import { FuellingCorrelationCard } from "./FuellingCorrelationCard";
 import { IntakeVsTrainingChart } from "./IntakeVsTrainingChart";
 import { useFuellingAnalytics } from "./useFuellingAnalytics";
 
@@ -40,6 +41,7 @@ export function FuellingTab({ dateParams }: { readonly dateParams: string }) {
   return (
     <div className="space-y-6" data-testid="fuelling-tab">
       <IntakeVsTrainingChart points={data.points} />
+      <FuellingCorrelationCard points={data.points} />
     </div>
   );
 }
