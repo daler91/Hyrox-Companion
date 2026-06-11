@@ -26,7 +26,7 @@ export function EnergyBalanceCard({ energy }: { readonly energy?: EnergyBalanceS
             <p className="text-sm font-semibold">Energy balance</p>
             <p className="text-xs text-muted-foreground" data-testid="energy-basis">
               {energy.basis === "measured"
-                ? "Training burn measured by your device"
+                ? "Training burn from your logged workouts"
                 : "Estimated from your activity level"}
             </p>
           </div>

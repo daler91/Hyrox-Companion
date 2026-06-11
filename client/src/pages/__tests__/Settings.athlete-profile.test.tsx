@@ -56,6 +56,28 @@ describe("Settings race profile persistence", () => {
     });
   }, 10_000);
 
+  // Regression: the Save payload built the object field-by-field and omitted
+  // `age` (the general Race Predictor cohort, distinct from mafAge), so editing
+  // the age field looked saved but never reached the PATCH body and reverted on
+  // the next refetch — the same class of bug as the gender drop above.
+  it("sends the changed age in the save payload", async () => {
+    const qc = new QueryClient();
+    seedSettings(qc, defaultSettings());
+    renderSettings(qc);
+
+    fireEvent.change(await screen.findByTestId("input-athlete-age"), {
+      target: { value: "34" },
+    });
+
+    fireEvent.click(await screen.findByTestId("button-save-settings"));
+
+    await waitFor(() => {
+      expect(settingsHarness.updatePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ age: 34 }),
+      );
+    });
+  }, 10_000);
+
   // The payload always carries the full preference set: an unrelated edit must
   // still forward the seeded gender/division rather than dropping them.
   it("preserves gender and division when an unrelated field changes", async () => {

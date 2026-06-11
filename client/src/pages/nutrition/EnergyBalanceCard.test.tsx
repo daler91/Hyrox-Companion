@@ -26,7 +26,7 @@ describe("EnergyBalanceCard", () => {
     expect(screen.getByTestId("energy-out")).toHaveTextContent("2676");
     expect(screen.getByTestId("energy-balance")).toHaveTextContent("-176");
     expect(screen.getByTestId("energy-basis")).toHaveTextContent(
-      "Training burn measured by your device",
+      "Training burn from your logged workouts",
     );
   });
 

@@ -141,6 +141,7 @@ describe("decorateBlockPointsWithOutcomes", () => {
         { date: "2026-06-02", rpe: 7, compliancePct: 90 },
       ],
       [target("2026-06-01")],
+      [],
     );
 
     // Rest day: target resolves, outcomes null.
@@ -149,7 +150,7 @@ describe("decorateBlockPointsWithOutcomes", () => {
     expect(points[1]).toMatchObject({ carbTargetG: 250, avgRpe: 6.5, compliancePct: 85 });
   });
 
-  it("scales a periodised carb target by the point's UTSS and skips unrecorded metrics", () => {
+  it("scales a periodised carb target by the day's UTSS and skips unrecorded metrics", () => {
     const points = decorateBlockPointsWithOutcomes(
       [point("2026-06-02", { utss: 100 })],
       [
@@ -157,14 +158,33 @@ describe("decorateBlockPointsWithOutcomes", () => {
         { date: "2026-06-02", rpe: 8, compliancePct: null },
       ],
       [target("2026-06-01", { periodizationEnabled: true, referenceUtss: 50, carbGramsPerUtss: 1 })],
+      [{ date: "2026-06-02", utss: 100 }],
     );
 
     // 250g + (100 − 50) × 1 = 300g; null RPEs don't drag the average down.
     expect(points[0]).toMatchObject({ carbTargetG: 300, avgRpe: 8, compliancePct: null });
   });
 
+  it("derives the carb target from the RAW UTSS, matching the other endpoints", () => {
+    const points = decorateBlockPointsWithOutcomes(
+      // The point carries the display-rounded value (42.3)…
+      [point("2026-06-02", { utss: 42.3 })],
+      [],
+      [target("2026-06-01", { periodizationEnabled: true, referenceUtss: 50, carbGramsPerUtss: 2 })],
+      // …but the target must use the raw load: 250 + (42.34 − 50) × 2 = 234.68 → 234.7.
+      [{ date: "2026-06-02", utss: 42.34 }],
+    );
+
+    expect(points[0].carbTargetG).toBe(234.7); // rounded-utss math would give 234.6
+  });
+
   it("leaves the carb target null before any target version applies", () => {
-    const points = decorateBlockPointsWithOutcomes([point("2026-06-01")], [], [target("2026-06-05")]);
+    const points = decorateBlockPointsWithOutcomes(
+      [point("2026-06-01")],
+      [],
+      [target("2026-06-05")],
+      [],
+    );
     expect(points[0].carbTargetG).toBeNull();
   });
 });

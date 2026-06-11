@@ -71,16 +71,20 @@ function meanOrNull(values: number[], round: (n: number) => number): number | nu
 /**
  * Roadmap G — decorate block-view points with the day's outcome fields for the
  * fuelling↔performance correlation: the effective carb target (same resolution
- * rules as the range/summary endpoints, fed by the point's own UTSS) and the
- * day's mean session RPE / prescription compliance from its workout logs. Pure;
- * fields are null on days with no target or no recorded outcome.
+ * rules as the range/summary endpoints, fed by the RAW per-day UTSS so all
+ * three surfaces derive the identical target — the point's own utss is
+ * display-rounded) and the day's mean session RPE / prescription compliance
+ * from its workout logs. Pure; fields are null on days with no target or no
+ * recorded outcome.
  */
 export function decorateBlockPointsWithOutcomes(
   points: BlockViewPoint[],
   workoutLogs: readonly DayOutcomeWorkout[],
   targets: NutritionTarget[],
+  dailyLoads: ReadonlyArray<DailyUtss>,
 ): BlockViewPoint[] {
   const sortedTargets = [...targets].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
+  const utssByDate = toUtssByDate(dailyLoads);
   const logsByDate = new Map<string, DayOutcomeWorkout[]>();
   for (const log of workoutLogs) {
     const list = logsByDate.get(log.date) ?? [];
@@ -93,7 +97,9 @@ export function decorateBlockPointsWithOutcomes(
     const dayLogs = logsByDate.get(point.date) ?? [];
     return {
       ...point,
-      carbTargetG: baseline ? buildEffectiveTargetSummary(baseline, point.utss).carbG : null,
+      carbTargetG: baseline
+        ? buildEffectiveTargetSummary(baseline, utssByDate.get(point.date) ?? 0).carbG
+        : null,
       avgRpe: meanOrNull(
         dayLogs.map((l) => l.rpe).filter((r): r is number => r != null),
         (n) => Math.round(n * 10) / 10,

@@ -26,6 +26,21 @@ describe("analyzeFuellingCorrelation", () => {
     expect(out.compliance).toEqual({ hitDays: 3, missDays: 3, hitAvg: 88, missAvg: 78, delta: 10 });
   });
 
+  it("derives the delta from raw means, not the rounded ones", () => {
+    const out = analyzeFuellingCorrelation([
+      day({ carbG: 300, avgRpe: 6.25 }),
+      day({ carbG: 300, avgRpe: 6.25 }),
+      day({ carbG: 300, avgRpe: 6.25 }),
+      day({ carbG: 100, avgRpe: 7.0 }),
+      day({ carbG: 100, avgRpe: 7.0 }),
+      day({ carbG: 100, avgRpe: 7.01 }),
+    ]);
+
+    // Raw means 6.25 vs 7.0033… → delta −0.75… → −0.8. Differencing the
+    // rounded averages (6.3 − 7.0) would misreport −0.7.
+    expect(out.rpe).toMatchObject({ hitAvg: 6.3, missAvg: 7.0, delta: -0.8 });
+  });
+
   it("treats exactly 90% of the target as a hit", () => {
     const out = analyzeFuellingCorrelation([
       ...BALANCED.slice(3), // 3 miss days

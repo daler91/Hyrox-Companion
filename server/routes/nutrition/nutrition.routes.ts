@@ -127,6 +127,7 @@ async function buildDecoratedBlockPoints(
     buildBlockView(rows, training.dailyLoads, { from, to }),
     training.workoutLogs,
     targets,
+    training.dailyLoads,
   );
 }
 

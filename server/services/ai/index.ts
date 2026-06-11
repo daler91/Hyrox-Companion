@@ -229,15 +229,18 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       aiInputsUsed: d.aiInputsUsed,
       ...((d.exerciseSets?.length ?? 0) > 0
         ? {
+            // Upcoming plan-day sets carry their prescription in planned*
+            // (actuals stay null until logged) — fall back so the coach sees
+            // the prescribed numbers, not blanks.
             exerciseDetails: d.exerciseSets.map((es) => ({
               exerciseName: es.exerciseName,
               customLabel: es.customLabel,
               category: es.category,
               setNumber: es.setNumber,
-              reps: es.reps,
-              weight: es.weight,
-              distance: es.distance,
-              time: es.time,
+              reps: es.reps ?? es.plannedReps,
+              weight: es.weight ?? es.plannedWeight,
+              distance: es.distance ?? es.plannedDistance,
+              time: es.time ?? es.plannedTime,
               notes: es.notes,
               sortOrder: es.sortOrder,
             })),

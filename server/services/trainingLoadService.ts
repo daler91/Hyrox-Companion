@@ -295,6 +295,10 @@ function inferWorkoutText(log: Pick<WorkoutLog, "focus" | "mainWorkout" | "acces
   return [log.focus, log.mainWorkout, log.accessory ?? "", log.notes ?? ""].join(" ").toLowerCase();
 }
 
+// Logged RPE always wins; the keyword fallback below is a coarse heuristic
+// with known blind spots (no negation handling — "not easy" still matches
+// "easy"). Accepted: it only applies to unstructured logs without an RPE,
+// and changing the keywords would silently re-score historical load.
 function inferCardioIntensityFactor(
   log: Pick<WorkoutLog, "rpe" | "focus" | "mainWorkout" | "accessory" | "notes">,
   sets: TrainingLoadSet[],
@@ -385,9 +389,27 @@ export function resolveAcwrZone(acwr: number | null, chronicAvg: number): LoadGo
   return "danger";
 }
 
-function applyAcwr(days: Map<string, DailyTrainingLoad>, start: string, end: string): void {
+// ACWR needs a real chronic baseline before the ratio means anything: the
+// rolling 28-day average treats missing days as genuine zero-load rest, which
+// is wrong for athletes whose history simply doesn't reach back that far —
+// 7 days of logs would read as ACWR ≈ 4 and flag a brand-new athlete as
+// "danger". Gate the ratio behind ~2 weeks of logged history instead.
+const ACWR_MIN_HISTORY_DAYS = 14;
+
+function applyAcwr(
+  days: Map<string, DailyTrainingLoad>,
+  start: string,
+  end: string,
+  firstLogDate: string | null,
+): void {
+  const ratioFrom = firstLogDate ? addDays(firstLogDate, ACWR_MIN_HISTORY_DAYS - 1) : null;
   for (const date of dateRange(start, end)) {
     const day = getOrCreateDay(days, date);
+    if (ratioFrom == null || date < ratioFrom) {
+      day.acwr = null;
+      day.zone = "insufficient_data";
+      continue;
+    }
     const acuteAvg = sumUtss(days, date, 7) / 7;
     const chronicAvg = sumUtss(days, date, 28) / 28;
     const acwr = chronicAvg > 0 ? round(acuteAvg / chronicAvg, 2) : null;
@@ -531,8 +553,11 @@ function buildOverview(
   const currentDay = getOrCreateDay(allDays, currentDate);
   const acuteAvg = round(sumUtss(allDays, currentDate, 7) / 7, 1);
   const chronicAvg = round(sumUtss(allDays, currentDate, 28) / 28, 1);
-  const acwr = chronicAvg > 0 ? round(acuteAvg / chronicAvg, 2) : null;
-  const zone = resolveAcwrZone(acwr, chronicAvg);
+  // Single source of truth: applyAcwr already computed today's ratio/zone
+  // (including the new-athlete history guard). Recomputing here from the
+  // display-rounded averages used to drift by ±0.01 and bypassed the guard.
+  const acwr = currentDay.acwr;
+  const zone = currentDay.zone;
   const activeRestrictions = buildRestrictions(allDays, currentDate, zone);
   const flaggedVectors = [...new Set(activeRestrictions.flatMap((r) => r.vector ? [r.vector] : []))];
   const trendStart = rangeStart > addDays(currentDate, -(TREND_DAYS - 1))
@@ -561,11 +586,15 @@ function buildOverview(
   };
 }
 
-function computeRangeStart(workoutLogs: readonly Pick<WorkoutLog, "date">[], currentDate: string): string {
-  const earliestLog = workoutLogs.reduce<string | null>((earliest, log) => {
+function earliestLogDate(workoutLogs: readonly Pick<WorkoutLog, "date">[]): string | null {
+  return workoutLogs.reduce<string | null>((earliest, log) => {
     if (!earliest || log.date < earliest) return log.date;
     return earliest;
   }, null);
+}
+
+function computeRangeStart(workoutLogs: readonly Pick<WorkoutLog, "date">[], currentDate: string): string {
+  const earliestLog = earliestLogDate(workoutLogs);
   const minNeeded = addDays(currentDate, -(TREND_DAYS + 28));
   if (!earliestLog || earliestLog > minNeeded) return minNeeded;
   return earliestLog;
@@ -611,6 +640,11 @@ function applyCardioLoad(
   const cardioSets = sets.filter(isCardioSet);
   if (cardioSets.length === 0) return;
 
+  // Deliberate stacking: a mixed/circuit set contributes its tonnage to the
+  // vectors via the strength path AND a 0.25-damped share of the workout's
+  // duration-based cardio stress here — mirroring how UTSS itself sums
+  // strength + cardio for the same session. The damping is the calibration;
+  // don't "deduplicate" without recalibrating thresholds downstream.
   const stressPerSet = stress / cardioSets.length;
   for (const set of cardioSets) {
     updateVectorLoads(day.vectorLoads, stressPerSet, getTag(tags, set.exerciseName, set.category), 0.25);
@@ -657,7 +691,7 @@ export function calculateTrainingLoad(
     applyWorkoutLoad(day, log, sets, tags);
   }
 
-  applyAcwr(allDays, rangeStart, currentDate);
+  applyAcwr(allDays, rangeStart, currentDate, earliestLogDate(workoutLogs));
 
   return {
     // ⚡ Bolt Performance Optimization:
