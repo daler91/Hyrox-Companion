@@ -67,14 +67,14 @@ function compareMetric(
     if (days.length > 0) reasonCodes.push(insufficientCode);
     return null;
   }
-  const hitAvg = round(mean(hit));
-  const missAvg = round(mean(miss));
   return {
     hitDays: hit.length,
     missDays: miss.length,
-    hitAvg,
-    missAvg,
-    delta: round(hitAvg - missAvg),
+    hitAvg: round(mean(hit)),
+    missAvg: round(mean(miss)),
+    // From the raw means, not the rounded ones — rounding first can drift the
+    // reported difference by up to one display unit.
+    delta: round(mean(hit) - mean(miss)),
   };
 }
 

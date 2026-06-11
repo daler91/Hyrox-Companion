@@ -161,6 +161,9 @@ export function mapGarminActivityToWorkout(
 
   return {
     userId,
+    // startTimeLocal is the athlete's local wall-clock time per the Garmin
+    // contract, so this calendar date lines up with the nutrition module's
+    // user-timezone logDate (block view / fuelling range / energy day-joins).
     date: extractDate(activity.startTimeLocal),
     // Preserve the true start instant (Phase 3 fuelling windows); null falls
     // back to the day's pre/post_workout meal tags.

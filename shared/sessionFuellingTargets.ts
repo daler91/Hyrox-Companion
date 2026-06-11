@@ -105,6 +105,11 @@ export function computeSessionFuellingTarget(
     preCarbG = 0;
     reasonCodes.push("short_easy_no_pre");
   } else {
+    // Pre-fuelling deliberately scales on a narrower band than recovery: a
+    // short-but-hard session still warrants a floor of ~45 min worth of carbs
+    // (you fuel the intensity, not just the clock), and beyond ~90 min extra
+    // pre-loading helps less than during/after fuelling — so duration is
+    // re-clamped to [0.75h, 1.5h] here while post-carbs track true duration.
     preCarbG = Math.round(bw * PRE_CARB_BASE_G_PER_KG * intensity.factor * clamp(durH, 0.75, 1.5));
   }
 

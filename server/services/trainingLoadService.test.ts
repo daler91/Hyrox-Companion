@@ -100,6 +100,40 @@ describe("trainingLoadService", () => {
     expect(resolveAcwrZone(1.6, 50)).toBe("danger");
   });
 
+  it("withholds ACWR for a brand-new athlete instead of flagging danger", () => {
+    const currentDate = "2026-05-22";
+    // 7 straight training days and nothing before them — the rolling 28-day
+    // average would read ACWR ≈ 4 and cry "danger" at a brand-new athlete.
+    const workoutLogs = Array.from({ length: 7 }, (_, i) =>
+      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
+    );
+
+    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+
+    const today = dailyLoads.find((d) => d.date === currentDate);
+    expect(today?.acwr).toBeNull();
+    expect(today?.zone).toBe("insufficient_data");
+    expect(overview.zone).toBe("insufficient_data");
+    expect(overview.acwr).toBeNull();
+  });
+
+  it("computes ACWR once two weeks of logged history exist", () => {
+    const currentDate = "2026-05-22";
+    const workoutLogs = Array.from({ length: 21 }, (_, i) =>
+      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
+    );
+
+    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+
+    const today = dailyLoads.find((d) => d.date === currentDate);
+    expect(today?.acwr).not.toBeNull();
+    expect(today?.zone).not.toBe("insufficient_data");
+    expect(overview.zone).toBe(today?.zone);
+    // Days before the guard window (first log + 13) still report insufficient.
+    const early = dailyLoads.find((d) => d.date === daysBefore(currentDate, 8));
+    expect(early?.zone).toBe("insufficient_data");
+  });
+
   it("flags posterior-chain overlap and downshifts next-day hill repeats", () => {
     const workoutLogs = [log({ id: "deadlift-day", focus: "Strength", mainWorkout: "Heavy deadlifts", rpe: 9 })];
     const sets = Array.from({ length: 4 }, (_, index) =>

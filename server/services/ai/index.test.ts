@@ -450,6 +450,29 @@ describe("buildTrainingContext", () => {
     ]);
   });
 
+  it("falls back to the planned prescription in upcoming exercise details", async () => {
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+      {
+        planDayId: "pd-1",
+        date: "2026-06-16",
+        focus: "Legs",
+        mainWorkout: "Squats",
+        exerciseSets: [
+          // Plan-day sets carry the prescription in planned*; actuals are null
+          // until the workout is logged.
+          { exerciseName: "back_squat", setNumber: 1, reps: null, plannedReps: 5, weight: null, plannedWeight: 100, sortOrder: 0 },
+        ],
+      },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.upcomingWorkouts?.[0].exerciseDetails?.[0]).toMatchObject({
+      reps: 5,
+      weight: 100,
+    });
+  });
+
   it("omits exercise details for upcoming days without exercise sets", async () => {
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
       {

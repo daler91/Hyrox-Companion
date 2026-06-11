@@ -98,6 +98,9 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
 
   return {
     userId,
+    // start_date_local is the athlete's local wall-clock time per the Strava
+    // API contract, so this calendar date lines up with the nutrition module's
+    // user-timezone logDate (block view / fuelling range / energy day-joins).
     date: activity.start_date_local.split("T")[0],
     // Preserve the true start instant (Phase 3 fuelling windows); start_date is UTC ISO.
     startedAt: activity.start_date ? new Date(activity.start_date) : null,

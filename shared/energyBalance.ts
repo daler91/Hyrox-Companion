@@ -98,8 +98,10 @@ export function computeEnergyBalance(input: EnergyBalanceInput): EnergyBalanceSu
     reasonCodes.push("measured_active_kcal");
     activeKcal = Math.round(measured);
     outKcal = Math.round(bmr * NEAT_MULTIPLIER + measured);
+    // Print the daily-living component as out − active so the stated equation
+    // always sums exactly (raw-BMR math vs rounded display can differ by 1).
     explanation =
-      `Energy out = BMR ${Math.round(bmr)} kcal × ${NEAT_MULTIPLIER} (daily living) + ` +
+      `Energy out = ${outKcal - activeKcal} kcal daily living (BMR × ${NEAT_MULTIPLIER}) + ` +
       `${activeKcal} kcal measured training = ${outKcal} kcal. Guidance only.`;
   } else {
     basis = "estimated";

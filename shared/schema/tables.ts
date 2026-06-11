@@ -229,6 +229,8 @@ export const workoutLogs = pgTable("workout_logs", {
   addedSetCount: integer("added_set_count"),
   removedSetCount: integer("removed_set_count"),
   compliancePct: integer("compliance_pct"),
+  // Session length in MINUTES (Strava/Garmin sync writes moving_time / 60;
+  // session-fuelling targets and cardio load both read it as minutes).
   duration: integer("duration"),
   rpe: integer("rpe"),
   planDayId: varchar("plan_day_id", { length: 255 }).references(() => planDays.id, { onDelete: "set null" }),
