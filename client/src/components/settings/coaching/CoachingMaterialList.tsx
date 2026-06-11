@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCoachingMaterials, useDeleteCoachingMaterial } from "@/hooks/useCoachingMaterials";
 
 interface CoachingMaterialListProps {
@@ -34,33 +35,42 @@ export function CoachingMaterialList({
   return (
     <>
       {materials && materials.length > 0 ? (
-        <div className="space-y-2">
-          {materials.map((material) => (
-            <div
-              key={material.id}
-              className="flex items-center justify-between p-3 rounded-lg border bg-card"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{material.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {material.type === "principles" ? "Principles" : "Document"} &middot; {Math.round(material.content.length / 1000)}k chars
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setPendingDeleteId(material.id)}
-                disabled={deleteMutation.isPending}
-                aria-label={`Delete ${material.title}`}
+        <TooltipProvider>
+          <div className="space-y-2">
+            {materials.map((material) => (
+              <div
+                key={material.id}
+                className="flex items-center justify-between p-3 rounded-lg border bg-card"
               >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-        </div>
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{material.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {material.type === "principles" ? "Principles" : "Document"} &middot; {Math.round(material.content.length / 1000)}k chars
+                    </p>
+                  </div>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setPendingDeleteId(material.id)}
+                      disabled={deleteMutation.isPending}
+                      aria-label={`Delete ${material.title}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Delete material</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+        </TooltipProvider>
       ) : (
         <p className="text-sm text-muted-foreground">
           No coaching materials added yet. Add training principles or upload reference documents to help the AI coach make better decisions.
