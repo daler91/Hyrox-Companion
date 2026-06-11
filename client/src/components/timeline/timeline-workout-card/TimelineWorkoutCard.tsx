@@ -30,10 +30,12 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
+import { featureFlags } from "@/lib/featureFlags";
 import { cn } from "@/lib/utils";
 
 import { CoachNote } from "./CoachNote";
 import { ExerciseChips } from "./ExerciseChips";
+import { FuellingTargetChip } from "./FuellingTargetChip";
 import type { TimelineWorkoutCardProps } from "./types";
 import { getCardClasses, getStatusBadge } from "./utils";
 import { WorkoutStravaStats } from "./WorkoutStravaStats";
@@ -547,6 +549,9 @@ function TimelineCardWorkoutBody({
         <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>
       )}
       {metricsText && <p className="text-xs text-muted-foreground mt-1">{metricsText}</p>}
+      {featureFlags.nutritionEnabled && isPlannedTimelineEntry(entry) && (
+        <FuellingTargetChip entry={entry} />
+      )}
       <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
       {entry.aiRationale && (
         <CoachNote

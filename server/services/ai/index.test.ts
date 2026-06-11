@@ -15,7 +15,7 @@ import {
 } from "./coachingInsights";
 import { buildTrainingContext } from "./index";
 import { summarizeMafTrend } from "./mafTrend";
-import { buildNutritionTrainingContext } from "./nutritionContext";
+import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
@@ -36,7 +36,10 @@ vi.mock("./coachingInsights", () => ({
   computeWeeklyVolume: vi.fn(),
 }));
 vi.mock("./mafTrend", () => ({ summarizeMafTrend: vi.fn() }));
-vi.mock("./nutritionContext", () => ({ buildNutritionTrainingContext: vi.fn() }));
+vi.mock("./nutritionContext", () => ({
+  buildNutritionTrainingContext: vi.fn(),
+  buildNextSessionFuelling: vi.fn(),
+}));
 vi.mock("./trainingDecisionEngine", () => ({ decideTrainingState: vi.fn() }));
 vi.mock("./trainingStats", () => ({
   calculateTrainingStats: vi.fn(),
@@ -77,6 +80,7 @@ const loadMock = vi.mocked(calculateTrainingLoad);
 const decideMock = vi.mocked(decideTrainingState);
 const mafMock = vi.mocked(summarizeMafTrend);
 const nutritionMock = vi.mocked(buildNutritionTrainingContext);
+const nextSessionFuellingMock = vi.mocked(buildNextSessionFuelling);
 
 function makeStats(overrides: Record<string, unknown> = {}) {
   return {
@@ -356,6 +360,31 @@ describe("buildTrainingContext", () => {
     const ctx = await buildTrainingContext(USER_ID);
 
     expect(ctx.nutrition).toEqual(nutrition);
+  });
+
+  it("attaches the next-session fuelling target when nutrition and an upcoming day exist", async () => {
+    const upcomingDay = { planDayId: "pd-1", date: "2026-06-16", focus: "Legs", mainWorkout: "Squats" };
+    const fuelling = { date: "2026-06-16", focus: "Legs", preCarbG: 35 };
+    nutritionMock.mockResolvedValue({ windowDays: 14, loggedDaysCount: 2 } as never);
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([upcomingDay] as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue(makeUser({ bodyweightKg: 75 }));
+    nextSessionFuellingMock.mockReturnValue(fuelling as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(buildNextSessionFuelling).toHaveBeenCalledWith(upcomingDay, 75);
+    expect(ctx.nutrition?.nextSessionFuelling).toEqual(fuelling);
+  });
+
+  it("skips next-session fuelling when the nutrition slice is absent", async () => {
+    nutritionMock.mockResolvedValue(undefined);
+    vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([
+      { planDayId: "pd-1", date: "2026-06-16", focus: "Legs", mainWorkout: "Squats" },
+    ] as never);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(buildNextSessionFuelling).not.toHaveBeenCalled();
   });
 
   it("includes unit preferences only when the user has them", async () => {

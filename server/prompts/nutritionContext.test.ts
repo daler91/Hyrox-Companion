@@ -22,6 +22,17 @@ const FULL: NutritionCoachContext = {
   lowMicros: ["Iron 32%", "Vitamin D 18%"],
 };
 
+const NEXT_SESSION: NonNullable<NutritionCoachContext["nextSessionFuelling"]> = {
+  date: "2026-06-10",
+  focus: "Strength",
+  durationMin: 60,
+  rpe: 7,
+  estimated: true,
+  preCarbG: 35,
+  postCarbG: 50,
+  postProteinG: 25,
+};
+
 describe("buildNutritionSection", () => {
   it("returns an empty string when no nutrition context is present", () => {
     expect(buildNutritionSection(ctx(undefined))).toBe("");
@@ -73,5 +84,35 @@ describe("buildNutritionSection", () => {
     // line still mentions carbs, so assert on the target's specific values).
     expect(out).not.toContain("300g carbs");
     expect(out).not.toContain("75g fat");
+  });
+
+  it("renders the next planned session's fuelling target", () => {
+    const out = buildNutritionSection(ctx({ ...FULL, nextSessionFuelling: NEXT_SESSION }));
+    expect(out).toContain(
+      "- Next planned session (2026-06-10, Strength, ~60 min at RPE 7): aim ~35g carbs beforehand, " +
+        "then ~50g carbs + 25g protein to recover; estimated from the planned exercises.",
+    );
+    expect(out).not.toContain("&");
+  });
+
+  it("says no pre-fuelling is needed and omits the estimate note for athlete-set sessions", () => {
+    const out = buildNutritionSection(
+      ctx({
+        ...FULL,
+        nextSessionFuelling: { ...NEXT_SESSION, preCarbG: 0, estimated: false },
+      }),
+    );
+    expect(out).toContain("no pre-fuelling needed");
+    expect(out).not.toContain("estimated from the planned exercises");
+  });
+
+  it("omits the effort detail when duration and RPE are unknown", () => {
+    const out = buildNutritionSection(
+      ctx({
+        ...FULL,
+        nextSessionFuelling: { ...NEXT_SESSION, durationMin: null, rpe: null },
+      }),
+    );
+    expect(out).toContain("- Next planned session (2026-06-10, Strength): aim ~35g carbs");
   });
 });

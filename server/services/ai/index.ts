@@ -13,7 +13,7 @@ import {
   computeWeeklyVolume,
 } from "./coachingInsights";
 import { summarizeMafTrend } from "./mafTrend";
-import { buildNutritionTrainingContext } from "./nutritionContext";
+import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutritionContext";
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
@@ -192,6 +192,14 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }
 
   const nutrition = await nutritionPromise;
+  // Phase 3b: when the athlete engages with nutrition (slice present) and has an
+  // upcoming planned session, tell the coach what to fuel for it.
+  if (nutrition && upcomingDays.length > 0) {
+    nutrition.nextSessionFuelling = buildNextSessionFuelling(
+      upcomingDays[0],
+      user?.bodyweightKg ?? null,
+    );
+  }
 
   return {
     totalWorkouts,

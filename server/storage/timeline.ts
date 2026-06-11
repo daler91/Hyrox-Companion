@@ -124,6 +124,9 @@ export interface UpcomingPlannedDay {
   aiRationale: string | null;
   aiNoteUpdatedAt: Date | null;
   aiInputsUsed: PlanDay["aiInputsUsed"];
+  /** Athlete-set expected duration/intensity for the session, when saved. */
+  expectedDurationMin: number | null;
+  expectedRpe: number | null;
   exerciseSets: ExerciseSet[];
   structureBlocks: TimelineEntry["structureBlocks"];
 }
@@ -141,6 +144,8 @@ function toUpcomingPlannedDay(
     aiRationale: string | null;
     aiNoteUpdatedAt: Date | null;
     aiInputsUsed: PlanDay["aiInputsUsed"];
+    expectedDurationMin: number | null;
+    expectedRpe: number | null;
   },
   scheduledDate: string,
   override: RaceDayOverride | null,
@@ -158,6 +163,10 @@ function toUpcomingPlannedDay(
     aiRationale: override ? null : row.aiRationale,
     aiNoteUpdatedAt: override ? null : row.aiNoteUpdatedAt,
     aiInputsUsed: override ? null : row.aiInputsUsed,
+    // Expected values describe the original prescription; a derived race/
+    // shakeout day replaces it, so drop them alongside the exercises.
+    expectedDurationMin: override ? null : row.expectedDurationMin,
+    expectedRpe: override ? null : row.expectedRpe,
     exerciseSets: override ? [] : (setsByPlanDayId.get(row.id) ?? []),
     structureBlocks: override ? [] : (blocksByPlanDayId.get(row.id) ?? []),
   };
@@ -518,6 +527,8 @@ export class TimelineStorage {
         aiRationale: true,
         aiNoteUpdatedAt: true,
         aiInputsUsed: true,
+        expectedDurationMin: true,
+        expectedRpe: true,
         status: true,
       },
       orderBy: asc(planDays.scheduledDate),

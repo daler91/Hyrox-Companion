@@ -48,5 +48,20 @@ export function buildNutritionSection(trainingContext: TrainingContext): string 
     lines.push(`- Micronutrients low today (under 50% reference): ${n.lowMicros.join(", ")}.`);
   }
 
+  if (n.nextSessionFuelling) {
+    const s = n.nextSessionFuelling;
+    const effort = [
+      s.durationMin != null ? `~${s.durationMin} min` : null,
+      s.rpe != null ? `RPE ${s.rpe}` : null,
+    ]
+      .filter(Boolean)
+      .join(" at ");
+    const pre = s.preCarbG > 0 ? `aim ~${s.preCarbG}g carbs beforehand` : "no pre-fuelling needed";
+    const basis = s.estimated ? "; estimated from the planned exercises" : "";
+    lines.push(
+      `- Next planned session (${s.date}, ${s.focus}${effort ? `, ${effort}` : ""}): ${pre}, then ~${s.postCarbG}g carbs + ${s.postProteinG}g protein to recover${basis}.`,
+    );
+  }
+
   return lines.join("\n");
 }
