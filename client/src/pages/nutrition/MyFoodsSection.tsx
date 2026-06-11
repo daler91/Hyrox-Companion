@@ -1,8 +1,15 @@
 import type { Food } from "@shared/schema";
 import { Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { useCustomFoods, useDeleteCustomFood, useDeleteRecipe, useRecipes } from "@/hooks/useNutrition";
+import {
+  useCustomFoods,
+  useDeleteCustomFood,
+  useDeleteRecipe,
+  useRecipes,
+} from "@/hooks/useNutrition";
 
 /** Manage the user's custom foods and recipes (edit/delete). Logging happens via search. */
 export function MyFoodsSection({
@@ -16,8 +23,15 @@ export function MyFoodsSection({
   const { data: recipes = [] } = useRecipes();
   const deleteFood = useDeleteCustomFood();
   const deleteRecipe = useDeleteRecipe();
+  const [pendingDelete, setPendingDelete] = useState<{
+    kind: "recipe" | "food";
+    id: string;
+    name: string;
+  } | null>(null);
 
   if (customFoods.length === 0 && recipes.length === 0) return null;
+
+  const isDeleting = deleteRecipe.isPending || deleteFood.isPending;
 
   return (
     <section className="space-y-3" data-testid="my-foods-section">
@@ -44,8 +58,8 @@ export function MyFoodsSection({
                     variant="ghost"
                     size="icon"
                     aria-label={`Delete ${r.name}`}
-                    disabled={deleteRecipe.isPending}
-                    onClick={() => deleteRecipe.mutate(r.id)}
+                    disabled={isDeleting}
+                    onClick={() => setPendingDelete({ kind: "recipe", id: r.id, name: r.name })}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -77,8 +91,8 @@ export function MyFoodsSection({
                     variant="ghost"
                     size="icon"
                     aria-label={`Delete ${f.name}`}
-                    disabled={deleteFood.isPending}
-                    onClick={() => deleteFood.mutate(f.id)}
+                    disabled={isDeleting}
+                    onClick={() => setPendingDelete({ kind: "food", id: f.id, name: f.name })}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -88,6 +102,28 @@ export function MyFoodsSection({
           </ul>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title={`Delete ${pendingDelete?.kind === "recipe" ? "recipe" : "custom food"}?`}
+        description={`"${pendingDelete?.name}" will be permanently deleted. This cannot be undone.`}
+        confirmText="Delete"
+        isDestructive
+        isPending={isDeleting}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          const opts = { onSettled: () => setPendingDelete(null) };
+          if (pendingDelete.kind === "recipe") {
+            deleteRecipe.mutate(pendingDelete.id, opts);
+          } else {
+            deleteFood.mutate(pendingDelete.id, opts);
+          }
+        }}
+        confirmTestId="confirm-delete-my-food"
+        cancelTestId="cancel-delete-my-food"
+      />
     </section>
   );
 }
