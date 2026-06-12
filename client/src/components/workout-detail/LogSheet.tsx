@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { Check, MessageSquare, SkipForward, Sparkles } from "lucide-react";
+import { Check, Dumbbell, Gauge, MessageSquare, SkipForward } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,12 @@ import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
+import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
+import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
 import {
   getWorkoutCoachPanelState,
   WorkoutCoachChatPanel,
@@ -158,76 +160,72 @@ function PlannedPrescription({
   showPrescriptionNotes,
 }: PlannedPrescriptionProps) {
   const hasUnparsedText = hasPrescriptionText(entry) && planSets.exerciseSets.length === 0;
+  // The "Workout" card hosts autosaving editors — keep it an always-open
+  // card: collapsing would unmount the editors and could drop debounced
+  // cell edits.
   return (
     <>
-      <PlanRationale rationale={entry.aiRationale} />
+      <CoachRationaleSection
+        rationale={entry.aiRationale}
+        title="Why this workout"
+        testId={`log-rationale-${entry.id}`}
+      />
 
-      <div className="space-y-3">
-        <StructureBlocksEditor
-          value={planSets.structureBlocks}
-          onChange={(next) => planSets.updateStructure.mutate(next)}
-          exerciseSets={planSets.exerciseSets}
-          onUpdateSet={planSets.patchSetDebounced}
-          onAddSet={planSets.addSet.mutate}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-        />
-        <ExerciseTable
-          workoutId={entry.planDayId!}
-          exerciseSets={planSets.exerciseSets}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          onUpdateSet={planSets.patchSetDebounced}
-          onAddSet={planSets.addSet.mutate}
-          onDeleteSet={planSets.deleteSet.mutate}
-          saveState={{
-            isSaving: planSets.isSaving,
-            lastSavedAt: planSets.lastSavedAt,
-          }}
-          onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
-          defaultExpanded
-          hasUnparsedText={hasUnparsedText}
-          structureBlocks={planSets.structureBlocks}
-        />
-        <ParseFailureAlert
-          entryId={entry.id}
-          visible={parseHelperVisible}
-          retryParse={planSets.retryParse}
-        />
-        <PrescriptionEditor
-          entryId={entry.id}
-          hasSets={planSets.exerciseSets.length > 0}
-          mainWorkout={entry.mainWorkout}
-          accessory={entry.accessory}
-          notes={entry.notes}
-          showNotes={showPrescriptionNotes}
-          onSaveField={(field, value) =>
-            planSets.updatePrescription.mutate({
-              [field]: value.trim().length === 0 ? null : value,
-            })
-          }
-          onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
-          onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
-          isParsingText={planSets.reparseFreeText.isPending}
-          isParsingImage={planSets.reparseFromImage.isPending}
-          title="Coach's text / photo"
-          compact
-        />
-      </div>
+      <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
+        <div className="space-y-3">
+          <StructureBlocksEditor
+            value={planSets.structureBlocks}
+            onChange={(next) => planSets.updateStructure.mutate(next)}
+            exerciseSets={planSets.exerciseSets}
+            onUpdateSet={planSets.patchSetDebounced}
+            onAddSet={planSets.addSet.mutate}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+          />
+          <ExerciseTable
+            workoutId={entry.planDayId!}
+            exerciseSets={planSets.exerciseSets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onUpdateSet={planSets.patchSetDebounced}
+            onAddSet={planSets.addSet.mutate}
+            onDeleteSet={planSets.deleteSet.mutate}
+            saveState={{
+              isSaving: planSets.isSaving,
+              lastSavedAt: planSets.lastSavedAt,
+            }}
+            onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
+            defaultExpanded
+            hasUnparsedText={hasUnparsedText}
+            structureBlocks={planSets.structureBlocks}
+          />
+          <ParseFailureAlert
+            entryId={entry.id}
+            visible={parseHelperVisible}
+            retryParse={planSets.retryParse}
+          />
+          <PrescriptionEditor
+            entryId={entry.id}
+            hasSets={planSets.exerciseSets.length > 0}
+            mainWorkout={entry.mainWorkout}
+            accessory={entry.accessory}
+            notes={entry.notes}
+            showNotes={showPrescriptionNotes}
+            onSaveField={(field, value) =>
+              planSets.updatePrescription.mutate({
+                [field]: value.trim().length === 0 ? null : value,
+              })
+            }
+            onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
+            onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
+            isParsingText={planSets.reparseFreeText.isPending}
+            isParsingImage={planSets.reparseFromImage.isPending}
+            title="Coach's text / photo"
+            compact
+          />
+        </div>
+      </DetailSection>
     </>
-  );
-}
-
-function PlanRationale({ rationale }: { readonly rationale?: string | null }) {
-  if (!rationale) return null;
-  return (
-    <details className="rounded-md border border-primary/30 bg-primary/5 p-3">
-      <summary className="cursor-pointer text-xs font-medium text-primary">
-        <Sparkles className="mr-1.5 inline h-3.5 w-3.5" />
-        Why this workout
-      </summary>
-      <p className="mt-2 text-sm text-foreground/80">{rationale}</p>
-    </details>
   );
 }
 
@@ -324,14 +322,16 @@ function LogCompletionControls({
 }: LogCompletionControlsProps) {
   return (
     <>
-      <Separator />
+      <DetailSection title="Effort & notes" icon={Gauge}>
+        <WorkoutEffortNotes
+          rpe={rpe}
+          onRpeChange={setRpe}
+          note={note}
+          onNoteChange={(next) => setNote(next ?? "")}
+        />
+      </DetailSection>
 
-      <WorkoutEffortNotes
-        rpe={rpe}
-        onRpeChange={setRpe}
-        note={note}
-        onNoteChange={(next) => setNote(next ?? "")}
-      />
+      <Separator />
 
       <div className="space-y-2">
         <Button
@@ -368,7 +368,18 @@ function LogSheetPrescriptionContent({
   isEditMode,
 }: LogSheetPrescriptionContentProps) {
   if (!entry.planDayId) {
-    return <WorkoutPrescriptionSummary entry={entry} rationaleVariant="collapsed" />;
+    return (
+      <>
+        <CoachRationaleSection
+          rationale={entry.aiRationale}
+          title="Why this workout"
+          testId={`log-rationale-${entry.id}`}
+        />
+        <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
+          <WorkoutPrescriptionSummary entry={entry} />
+        </DetailSection>
+      </>
+    );
   }
 
   return (
@@ -604,6 +615,15 @@ export function LogSheet({
           />
         }
       >
+        <WorkoutSummaryHeader
+          stats={buildWorkoutSummaryStats({
+            entry,
+            variant: "planned",
+            distanceUnit,
+            showAdherence: false,
+          })}
+          testId={`log-summary-${entry.id}`}
+        />
         <LogSheetPrescriptionContent
           entry={entry}
           planSets={planSets}

@@ -1,5 +1,14 @@
 import type { ExerciseSet, TimelineEntry } from "@shared/schema";
-import { CheckCircle2, MessageSquare, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import {
+  Activity,
+  CheckCircle2,
+  Dumbbell,
+  Gauge,
+  Link2,
+  MessageSquare,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
@@ -20,10 +29,12 @@ import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
 import { ExerciseTable } from "./ExerciseTable";
 import { FuellingAroundSessionPanel } from "./FuellingAroundSessionPanel";
 import { MafTestTagSection } from "./MafTestTagSection";
+import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPlanDayPicker } from "./shared/WorkoutPlanDayPicker";
+import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
 import {
   getWorkoutCoachPanelState,
   WorkoutCoachChatPanel,
@@ -327,6 +338,16 @@ function ReviewDetailsColumn({
 }: ReviewDetailsColumnProps) {
   return (
     <>
+      <WorkoutSummaryHeader
+        stats={buildWorkoutSummaryStats({
+          entry,
+          variant: "completed",
+          rpe,
+          distanceUnit,
+          showAdherence: showPlannedDiffs,
+        })}
+        testId={`review-summary-${entry.id}`}
+      />
       <ReviewStravaSection entry={entry} distanceUnit={distanceUnit} isStrava={isStrava} />
       <ReviewActualsSection
         entry={entry}
@@ -339,8 +360,6 @@ function ReviewDetailsColumn({
         distanceUnit={distanceUnit}
         showPlannedDiffs={showPlannedDiffs}
       />
-      <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
-      <MafTestTagSection workoutLogId={workoutLogId} workout={detail.workout ?? null} />
       <ReviewEffortNotes
         isStrava={isStrava}
         rpe={rpe}
@@ -348,11 +367,13 @@ function ReviewDetailsColumn({
         onRpeChange={onRpeChange}
         onSaveNote={onSaveNote}
       />
+      <CoachRationaleSection rationale={entry.aiRationale} testId={`review-rationale-${entry.id}`} />
       {featureFlags.nutritionEnabled && workoutLogId ? (
         <FuellingAroundSessionPanel workoutLogId={workoutLogId} />
       ) : null}
+      <ReviewPlanLinkSection detail={detail} workoutLogId={workoutLogId} />
+      <MafTestTagSection workoutLogId={workoutLogId} workout={detail.workout ?? null} />
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
-      <CoachRationale rationale={entry.aiRationale} />
 
       <Separator />
 
@@ -376,15 +397,16 @@ interface ReviewStravaSectionProps {
 }
 
 function ReviewStravaSection({ entry, distanceUnit, isStrava }: ReviewStravaSectionProps) {
-  if (!isStrava) return null;
+  // WorkoutStravaStats renders nothing without chip-level stats; gate
+  // here too so we never paint an empty titled card.
+  const hasChipStats =
+    !!entry.calories || !!entry.avgWatts || !!entry.sufferScore || !!entry.avgCadence || !!entry.avgSpeed;
+  if (!isStrava || !hasChipStats) return null;
 
   return (
-    <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Strava session
-      </p>
+    <DetailSection title="Strava session" icon={Activity} testId={`review-strava-${entry.id}`}>
       <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
-    </div>
+    </DetailSection>
   );
 }
 
@@ -412,8 +434,7 @@ function ReviewEffortNotes({
   if (isStrava) return null;
 
   return (
-    <>
-      <Separator />
+    <DetailSection title="Effort & notes" icon={Gauge}>
       <WorkoutEffortNotes
         rpe={rpe}
         onRpeChange={onRpeChange}
@@ -421,7 +442,7 @@ function ReviewEffortNotes({
         onNoteChange={onSaveNote}
         debounceNote
       />
-    </>
+    </DetailSection>
   );
 }
 
@@ -442,23 +463,20 @@ function ReviewPlanLinkSection({ detail, workoutLogId }: ReviewPlanLinkSectionPr
   const workout = detail.workout;
 
   return (
-    <>
-      <Separator />
-      <details className="space-y-2" data-testid={`review-plan-link-${workoutLogId}`}>
-        <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground">
-          Training plan
-        </summary>
-        <div className="pt-1">
-          <WorkoutPlanDayPicker
-            planId={workout?.planId ?? null}
-            planDayId={workout?.planDayId ?? null}
-            onChange={(next) => detail.updatePlanDay.mutate(next)}
-            disabled={detail.updatePlanDay.isPending}
-            idPrefix={`review-plan-${workoutLogId}`}
-          />
-        </div>
-      </details>
-    </>
+    <DetailSection
+      title="Training plan"
+      icon={Link2}
+      collapsible
+      testId={`review-plan-link-${workoutLogId}`}
+    >
+      <WorkoutPlanDayPicker
+        planId={workout?.planId ?? null}
+        planDayId={workout?.planDayId ?? null}
+        onChange={(next) => detail.updatePlanDay.mutate(next)}
+        disabled={detail.updatePlanDay.isPending}
+        idPrefix={`review-plan-${workoutLogId}`}
+      />
+    </DetailSection>
   );
 }
 
@@ -504,65 +522,69 @@ function ReviewActualsSection({
     });
   };
 
+  // Hosts autosaving editors — must stay an always-open card: collapsing
+  // would unmount the editors and could drop debounced cell edits.
   return (
-    <div className="space-y-3">
-      <StructureBlocksEditor
-        value={structureBlocks}
-        onChange={(next) => detail.updateStructure.mutate(next)}
-        exerciseSets={exerciseSets}
-        onUpdateSet={detail.patchSetDebounced}
-        onAddSet={detail.addSet.mutate}
-        weightUnit={weightUnit}
-        distanceUnit={distanceUnit}
-        showScoreControls
-        onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
-      />
-      <ExerciseTable
-        workoutId={workoutLogId}
-        exerciseSets={exerciseSets}
-        weightUnit={weightUnit}
-        distanceUnit={distanceUnit}
-        onUpdateSet={detail.patchSetDebounced}
-        onAddSet={detail.addSet.mutate}
-        onDeleteSet={detail.deleteSet.mutate}
-        saveState={{
-          isSaving: detail.isSaving,
-          lastSavedAt: detail.lastSavedAt,
-        }}
-        hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
-        onOpenConversionHelper={parseVisibleReference}
-        defaultExpanded
-        showPlannedDiffs={showPlannedDiffs}
-        structureBlocks={structureBlocks}
-      />
-      <PrescriptionEditor
-        entryId={entry.id}
-        hasSets={exerciseSets.length > 0}
-        mainWorkout={referenceMainWorkout}
-        accessory={referenceAccessory}
-        notes={null}
-        showNotes={false}
-        onSaveField={(field, value) => {
-          // Notes are owned by the effort/notes block below (writes
-          // through updateNote with optimistic patches); ignore any
-          // stray notes saves so we can't double-write to the same
-          // column.
-          if (field === "notes") return;
-          const normalized = value.trim().length === 0 ? null : value;
-          detail.updateReference.mutate(
-            field === "mainWorkout"
-              ? { prescribedMainWorkout: normalized }
-              : { prescribedAccessory: normalized },
-          );
-        }}
-        onParseText={handleExplicitTextParse}
-        onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
-        isParsingText={detail.reparseFreeText.isPending}
-        isParsingImage={detail.reparseFromImage.isPending}
-        title="Workout description"
-        compact
-      />
-    </div>
+    <DetailSection title="Results" icon={Dumbbell} testId={`review-results-${entry.id}`}>
+      <div className="space-y-3">
+        <StructureBlocksEditor
+          value={structureBlocks}
+          onChange={(next) => detail.updateStructure.mutate(next)}
+          exerciseSets={exerciseSets}
+          onUpdateSet={detail.patchSetDebounced}
+          onAddSet={detail.addSet.mutate}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          showScoreControls
+          onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
+        />
+        <ExerciseTable
+          workoutId={workoutLogId}
+          exerciseSets={exerciseSets}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onUpdateSet={detail.patchSetDebounced}
+          onAddSet={detail.addSet.mutate}
+          onDeleteSet={detail.deleteSet.mutate}
+          saveState={{
+            isSaving: detail.isSaving,
+            lastSavedAt: detail.lastSavedAt,
+          }}
+          hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
+          onOpenConversionHelper={parseVisibleReference}
+          defaultExpanded
+          showPlannedDiffs={showPlannedDiffs}
+          structureBlocks={structureBlocks}
+        />
+        <PrescriptionEditor
+          entryId={entry.id}
+          hasSets={exerciseSets.length > 0}
+          mainWorkout={referenceMainWorkout}
+          accessory={referenceAccessory}
+          notes={null}
+          showNotes={false}
+          onSaveField={(field, value) => {
+            // Notes are owned by the effort/notes block below (writes
+            // through updateNote with optimistic patches); ignore any
+            // stray notes saves so we can't double-write to the same
+            // column.
+            if (field === "notes") return;
+            const normalized = value.trim().length === 0 ? null : value;
+            detail.updateReference.mutate(
+              field === "mainWorkout"
+                ? { prescribedMainWorkout: normalized }
+                : { prescribedAccessory: normalized },
+            );
+          }}
+          onParseText={handleExplicitTextParse}
+          onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
+          isParsingText={detail.reparseFreeText.isPending}
+          isParsingImage={detail.reparseFromImage.isPending}
+          title="Workout description"
+          compact
+        />
+      </div>
+    </DetailSection>
   );
 }
 
@@ -606,24 +628,6 @@ function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReview
         </Button>
       </div>
     </div>
-  );
-}
-
-interface CoachRationaleProps {
-  readonly rationale: string | null | undefined;
-}
-
-function CoachRationale({ rationale }: CoachRationaleProps) {
-  if (!rationale) return null;
-
-  return (
-    <details className="rounded-md border border-primary/30 bg-primary/5 p-3">
-      <summary className="cursor-pointer text-xs font-medium text-primary">
-        <Sparkles className="mr-1.5 inline h-3.5 w-3.5" />
-        Coach rationale
-      </summary>
-      <p className="mt-2 text-sm text-foreground/80">{rationale}</p>
-    </details>
   );
 }
 

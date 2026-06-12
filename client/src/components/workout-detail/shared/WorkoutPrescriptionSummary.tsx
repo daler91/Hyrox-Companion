@@ -1,5 +1,4 @@
 import type { TimelineEntry } from "@shared/schema";
-import { Sparkles } from "lucide-react";
 
 import { ExerciseChips } from "@/components/timeline/timeline-workout-card/ExerciseChips";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -8,25 +7,21 @@ import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 interface WorkoutPrescriptionSummaryProps {
   readonly entry: TimelineEntry;
-  /** "open" renders the rationale always-visible (preview); "collapsed"
-   *  hides it behind a details/summary disclosure (log sheet). */
-  readonly rationaleVariant?: "open" | "collapsed";
 }
 
 /**
- * Shared "what was prescribed?" block used by every workout-detail surface
- * (PreviewSheet, LogSheet, and the upcoming ReviewSurface). Renders:
+ * Shared "what was prescribed?" block used by the read-only workout
+ * surfaces (PreviewSheet/SkippedSheet via ReadOnlyWorkoutDetailSheet,
+ * LogSheet's no-plan fallback). Renders:
  *  - Prescribed exercises (chips when structured, plain text fallback)
  *  - Accessory line if any
- *  - Coach rationale if any (open/collapsed per variant)
  *
- * Kept presentation-only — actions and primary CTAs stay on each surface
- * since they differ by intent.
+ * The coach rationale is NOT rendered here — surfaces show it in their
+ * own CoachRationaleSection card so it sits consistently next to this
+ * block. Kept presentation-only — actions and primary CTAs stay on each
+ * surface since they differ by intent.
  */
-export function WorkoutPrescriptionSummary({
-  entry,
-  rationaleVariant = "open",
-}: WorkoutPrescriptionSummaryProps) {
+export function WorkoutPrescriptionSummary({ entry }: WorkoutPrescriptionSummaryProps) {
   const { distanceUnit, weightLabel } = useUnitPreferences();
 
   const groupedExercises = entry.exerciseSets && entry.exerciseSets.length > 0
@@ -76,26 +71,6 @@ export function WorkoutPrescriptionSummary({
           </p>
           <p className="text-sm text-muted-foreground">{entry.accessory}</p>
         </div>
-      ) : null}
-
-      {entry.aiRationale && rationaleVariant === "open" ? (
-        <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
-          <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-primary">
-            <Sparkles className="h-3.5 w-3.5" />
-            Coach rationale
-          </p>
-          <p className="text-sm text-foreground/80">{entry.aiRationale}</p>
-        </div>
-      ) : null}
-
-      {entry.aiRationale && rationaleVariant === "collapsed" ? (
-        <details className="rounded-md border border-primary/30 bg-primary/5 p-3">
-          <summary className="cursor-pointer text-xs font-medium text-primary">
-            <Sparkles className="mr-1.5 inline h-3.5 w-3.5" />
-            Why this workout
-          </summary>
-          <p className="mt-2 text-sm text-foreground/80">{entry.aiRationale}</p>
-        </details>
       ) : null}
     </div>
   );

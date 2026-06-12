@@ -62,6 +62,7 @@ export function PreviewSheet({
       sheetTestId={`preview-sheet-${entry.id}`}
       detailsTestId={`preview-details-${entry.id}`}
       returnTestId={`preview-return-to-coach-${entry.id}`}
+      summaryVariant="preview"
       renderActions={(seedText) => (
         <PreviewActions
           entry={entry}

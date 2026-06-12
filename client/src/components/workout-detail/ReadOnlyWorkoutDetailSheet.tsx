@@ -1,14 +1,22 @@
 import type { TimelineEntry } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
+import { Dumbbell } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
+import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
+import {
+  buildWorkoutSummaryStats,
+  type SummaryVariant,
+  WorkoutSummaryHeader,
+} from "./shared/WorkoutSummaryHeader";
 import { getWorkoutCoachPanelState, WorkoutCoachChatPanel, WorkoutCoachLayout } from "./WorkoutCoachPanel";
 
 export interface WorkoutCoachSheetProps {
@@ -39,6 +47,8 @@ interface ReadOnlyWorkoutDetailSheetProps extends WorkoutCoachSheetProps {
   readonly sheetTestId: string;
   readonly title: ReactNode;
   readonly detailsTestId: string;
+  /** Renders the at-a-glance target tiles when set (e.g. "preview"). */
+  readonly summaryVariant?: SummaryVariant;
 }
 
 export function ReadOnlyWorkoutActionGrid({ actions }: { readonly actions: ReadOnlyWorkoutAction[] }) {
@@ -72,10 +82,14 @@ export function ReadOnlyWorkoutDetailSheet({
   returnTestId,
   sheetTestId,
   title,
+  summaryVariant,
 }: ReadOnlyWorkoutDetailSheetProps) {
   const isMobile = useIsMobile();
+  const { distanceUnit } = useUnitPreferences();
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, entry.exerciseSets ?? []);
   const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
+  const hasPrescription =
+    (entry.exerciseSets?.length ?? 0) > 0 || hasText(entry.mainWorkout) || hasText(entry.accessory);
 
   return (
     <ResponsiveSheet
@@ -106,10 +120,30 @@ export function ReadOnlyWorkoutDetailSheet({
           />
         }
       >
-        <WorkoutPrescriptionSummary entry={entry} rationaleVariant="open" />
+        {summaryVariant ? (
+          <WorkoutSummaryHeader
+            stats={buildWorkoutSummaryStats({
+              entry,
+              variant: summaryVariant,
+              distanceUnit,
+              showAdherence: false,
+            })}
+            testId={`${sheetTestId}-summary`}
+          />
+        ) : null}
+        {hasPrescription ? (
+          <DetailSection title="Workout" icon={Dumbbell}>
+            <WorkoutPrescriptionSummary entry={entry} />
+          </DetailSection>
+        ) : null}
+        <CoachRationaleSection rationale={entry.aiRationale} title="Why this workout" />
         {renderPanels?.()}
         {renderActions(currentCoachSeedText)}
       </WorkoutCoachLayout>
     </ResponsiveSheet>
   );
+}
+
+function hasText(value: string | null | undefined): boolean {
+  return !!value && value.trim().length > 0;
 }

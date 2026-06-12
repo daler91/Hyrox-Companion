@@ -1,7 +1,7 @@
 import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ExternalLink, ListChecks } from "lucide-react";
+import { Dumbbell, ExternalLink, Gauge, ListChecks, NotebookPen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
@@ -20,6 +19,7 @@ import { normalizeDurationMinutes } from "@/lib/workoutDuration";
 import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 
 import { ExerciseTable } from "./ExerciseTable";
+import { DetailSection } from "./shared/DetailSection";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 
@@ -396,96 +396,98 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       testId="adhoc-log-sheet"
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="adhoc-title">Title</Label>
-            <Input
-              id="adhoc-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Workout"
-              data-testid="adhoc-title-input"
-            />
+        <DetailSection title="Details" icon={NotebookPen}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="adhoc-title">Title</Label>
+              <Input
+                id="adhoc-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Workout"
+                data-testid="adhoc-title-input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="adhoc-date">Date</Label>
+              <Input
+                id="adhoc-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                max={todayStr()}
+                data-testid="adhoc-date-input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="adhoc-duration-minutes">Total time (minutes)</Label>
+              <Input
+                id="adhoc-duration-minutes"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                placeholder="45"
+                value={durationMinutes}
+                onChange={(event) => setDurationMinutes(event.target.value)}
+                data-testid="adhoc-duration-minutes-input"
+              />
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="adhoc-date">Date</Label>
-            <Input
-              id="adhoc-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              max={todayStr()}
-              data-testid="adhoc-date-input"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="adhoc-duration-minutes">Total time (minutes)</Label>
-            <Input
-              id="adhoc-duration-minutes"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              placeholder="45"
-              value={durationMinutes}
-              onChange={(event) => setDurationMinutes(event.target.value)}
-              data-testid="adhoc-duration-minutes-input"
-            />
-          </div>
-        </div>
+        </DetailSection>
 
-        <Separator />
+        <DetailSection title="Workout" icon={Dumbbell}>
+          <div className="space-y-3">
+            <ExerciseTable
+              workoutId={ADHOC_DRAFT_ID}
+              exerciseSets={exerciseSets}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onUpdateSet={handleUpdateSet}
+              onAddSet={handleAddSet}
+              onDeleteSet={handleDeleteSet}
+              defaultExpanded
+            />
+            <PrescriptionEditor
+              entryId={ADHOC_DRAFT_ID}
+              hasSets={exerciseSets.length > 0}
+              mainWorkout={mainWorkout}
+              accessory={accessory}
+              notes={notes}
+              showNotes={false}
+              onSaveField={(field, value) => {
+                const next = value;
+                if (field === "mainWorkout") setMainWorkout(next);
+                else if (field === "accessory") setAccessory(next);
+                else if (field === "notes") setNotes(next);
+              }}
+              onParseText={() => {
+                if (!mainWorkout.trim()) {
+                  toast({
+                    title: "Add coach text first",
+                    description: "Paste a workout into the text box, then tap Parse.",
+                  });
+                  return;
+                }
+                parseTextMutation.mutate(mainWorkout);
+              }}
+              onParseImage={(payload) => parseImageMutation.mutate(payload)}
+              isParsingText={parseTextMutation.isPending}
+              isParsingImage={parseImageMutation.isPending}
+              title="Coach's text / photo"
+              compact
+            />
+          </div>
+        </DetailSection>
 
-        <div className="space-y-3">
-          <ExerciseTable
-            workoutId={ADHOC_DRAFT_ID}
-            exerciseSets={exerciseSets}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            onUpdateSet={handleUpdateSet}
-            onAddSet={handleAddSet}
-            onDeleteSet={handleDeleteSet}
-            defaultExpanded
+        <DetailSection title="Effort & notes" icon={Gauge}>
+          <WorkoutEffortNotes
+            rpe={rpe}
+            onRpeChange={setRpe}
+            note={notes}
+            onNoteChange={(next) => setNotes(next ?? "")}
           />
-          <PrescriptionEditor
-            entryId={ADHOC_DRAFT_ID}
-            hasSets={exerciseSets.length > 0}
-            mainWorkout={mainWorkout}
-            accessory={accessory}
-            notes={notes}
-            showNotes={false}
-            onSaveField={(field, value) => {
-              const next = value;
-              if (field === "mainWorkout") setMainWorkout(next);
-              else if (field === "accessory") setAccessory(next);
-              else if (field === "notes") setNotes(next);
-            }}
-            onParseText={() => {
-              if (!mainWorkout.trim()) {
-                toast({
-                  title: "Add coach text first",
-                  description: "Paste a workout into the text box, then tap Parse.",
-                });
-                return;
-              }
-              parseTextMutation.mutate(mainWorkout);
-            }}
-            onParseImage={(payload) => parseImageMutation.mutate(payload)}
-            isParsingText={parseTextMutation.isPending}
-            isParsingImage={parseImageMutation.isPending}
-            title="Coach's text / photo"
-            compact
-          />
-        </div>
-
-        <Separator />
-
-        <WorkoutEffortNotes
-          rpe={rpe}
-          onRpeChange={setRpe}
-          note={notes}
-          onNoteChange={(next) => setNotes(next ?? "")}
-        />
+        </DetailSection>
 
         <div className="space-y-2">
           <Button

@@ -84,6 +84,7 @@ export function SkippedSheet({
       sheetTestId={`skipped-sheet-${entry.id}`}
       detailsTestId={`skipped-details-${entry.id}`}
       returnTestId={`skipped-return-to-coach-${entry.id}`}
+      summaryVariant="preview"
       renderActions={(seedText) => (
         <SkippedActions
           confirmingDelete={confirmingDelete}
