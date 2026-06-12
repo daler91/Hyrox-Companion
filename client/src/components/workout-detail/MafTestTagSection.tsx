@@ -7,7 +7,6 @@ import { useState } from "react";
 import { isWorkoutTagged, testWorkoutLogId } from "@/components/analytics/mafTrend.helpers";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -19,6 +18,7 @@ import {
 } from "@/lib/api";
 
 import { MafTestForm, type MafTestFormInitial } from "./MafTestForm";
+import { DetailSection } from "./shared/DetailSection";
 
 /**
  * "Tag as MAF test" control on the workout review surface. Only shown to
@@ -110,60 +110,60 @@ export function MafTestTagSection({
 
   return (
     <>
-      <Separator />
-      <section className="space-y-2" data-testid={`maf-test-tag-${workoutLogId}`}>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">MAF test</p>
-        {alreadyTagged ? (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`maf-test-tagged-${workoutLogId}`}>
-              <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-              Tracked in your MAF trend
+      <DetailSection title="MAF test" icon={Activity} testId={`maf-test-tag-${workoutLogId}`}>
+        <div className="space-y-2">
+          {alreadyTagged ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`maf-test-tagged-${workoutLogId}`}>
+                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+                Tracked in your MAF trend
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={openForm}
+                  data-testid={`maf-test-edit-button-${workoutLogId}`}
+                >
+                  <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={untagMutation.isPending}
+                  data-testid={`maf-test-untag-button-${workoutLogId}`}
+                >
+                  {untagMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                  )}
+                  Remove
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Tag this run as a MAF test to track your pace at the same heart rate over time.
+              </p>
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
+                variant="outline"
                 onClick={openForm}
-                data-testid={`maf-test-edit-button-${workoutLogId}`}
+                data-testid={`maf-test-tag-button-${workoutLogId}`}
               >
-                <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                Edit
+                <Activity className="mr-2 h-4 w-4" aria-hidden="true" />
+                Tag as MAF test
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmOpen(true)}
-                disabled={untagMutation.isPending}
-                data-testid={`maf-test-untag-button-${workoutLogId}`}
-              >
-                {untagMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                )}
-                Remove
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Tag this run as a MAF test to track your pace at the same heart rate over time.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={openForm}
-              data-testid={`maf-test-tag-button-${workoutLogId}`}
-            >
-              <Activity className="mr-2 h-4 w-4" aria-hidden="true" />
-              Tag as MAF test
-            </Button>
-          </>
-        )}
-      </section>
+            </>
+          )}
+        </div>
+      </DetailSection>
       <MafTestForm
         key={formNonce}
         open={formOpen}

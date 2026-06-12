@@ -111,7 +111,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   });
 
   return (
-    <section className="space-y-3 rounded-md border bg-card p-3" data-testid="fuelling-plan-panel">
+    <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm" data-testid="fuelling-plan-panel">
       <div className="flex items-center gap-2">
         <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold">Fuel for this session</h3>

@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
+import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { featureFlags } from "@/lib/featureFlags";
 import { cn } from "@/lib/utils";
@@ -579,24 +580,9 @@ function getAdherenceBadge(
   compliancePct: number | null,
 ): { label: string; className: string } | null {
   if (compliancePct == null) return null;
-  if (compliancePct >= 85) {
-    return {
-      label: `Adherence ${compliancePct}%`,
-      className:
-        "border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950",
-    };
-  }
-  if (compliancePct >= 60) {
-    return {
-      label: `Adherence ${compliancePct}%`,
-      className:
-        "border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950",
-    };
-  }
   return {
     label: `Adherence ${compliancePct}%`,
-    className:
-      "border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950",
+    className: getAdherenceToneClassName(compliancePct),
   };
 }
 

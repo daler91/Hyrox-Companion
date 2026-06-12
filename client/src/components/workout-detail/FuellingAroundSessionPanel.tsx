@@ -108,7 +108,7 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
   ) : undefined;
 
   return (
-    <section className="space-y-3 rounded-md border bg-card p-3" data-testid="fuelling-panel">
+    <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm" data-testid="fuelling-panel">
       <div className="flex items-center gap-2">
         <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold">Fuelling around this session</h3>
