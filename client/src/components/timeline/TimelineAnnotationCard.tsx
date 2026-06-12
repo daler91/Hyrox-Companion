@@ -1,6 +1,6 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
 import { differenceInDays, parseISO } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,7 +86,11 @@ export function TimelineAnnotationCard({
                 aria-label={`Delete ${label} annotation`}
                 data-testid={`button-delete-annotation-${annotation.id}`}
               >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>Delete annotation</TooltipContent>
