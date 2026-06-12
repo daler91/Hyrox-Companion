@@ -27,9 +27,7 @@ export function PushNotificationSection() {
             <BellOff className="h-5 w-5 text-muted-foreground" />
             Push Notifications
           </CardTitle>
-          <CardDescription>
-            Push notifications are not supported in this browser.
-          </CardDescription>
+          <CardDescription>Push notifications are not supported in this browser.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -82,8 +80,10 @@ export function PushNotificationSection() {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <Label htmlFor="push-notifications-switch" className="cursor-pointer">Enable Push Notifications</Label>
-            <p className="text-sm text-muted-foreground">
+            <Label htmlFor="push-notifications-switch" className="cursor-pointer">
+              Enable Push Notifications
+            </Label>
+            <p id="push-notifications-desc" className="text-sm text-muted-foreground">
               Receive instant alerts for missed workouts and AI coaching updates
             </p>
           </div>
@@ -93,6 +93,7 @@ export function PushNotificationSection() {
             onCheckedChange={handleToggle}
             disabled={isLoading}
             data-testid="switch-push-notifications"
+            aria-describedby="push-notifications-desc"
           />
         </div>
 
@@ -102,12 +103,7 @@ export function PushNotificationSection() {
               <Label className="text-sm">Test Notification</Label>
               <p className="text-xs text-muted-foreground">Send a test to verify it works</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTest}
-              data-testid="button-test-push"
-            >
+            <Button variant="outline" size="sm" onClick={handleTest} data-testid="button-test-push">
               <Send className="h-3.5 w-3.5 mr-1.5" />
               Test
             </Button>
@@ -116,7 +112,8 @@ export function PushNotificationSection() {
 
         {permission === "denied" && (
           <p className="text-sm text-destructive">
-            Notifications are blocked in your browser. Please update your browser settings to enable them.
+            Notifications are blocked in your browser. Please update your browser settings to enable
+            them.
           </p>
         )}
       </CardContent>

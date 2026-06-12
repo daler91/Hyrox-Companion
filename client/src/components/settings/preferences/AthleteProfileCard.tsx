@@ -62,7 +62,7 @@ export function AthleteProfileCard({
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
               <Label htmlFor="athlete-age">Age</Label>
-              <p className="text-sm text-muted-foreground">
+              <p id="athlete-age-desc" className="text-sm text-muted-foreground">
                 Sets your Race Predictor age cohort for more accurate benchmark times.
               </p>
             </div>
@@ -77,6 +77,7 @@ export function AthleteProfileCard({
               className="w-24"
               data-testid="input-athlete-age"
               aria-label="Your age"
+              aria-describedby="athlete-age-desc"
             />
           </div>
         ) : null}
