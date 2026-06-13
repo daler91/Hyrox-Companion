@@ -291,11 +291,18 @@ export class NutritionStorage {
 
   // --- named servings (FR-2.4) ----------------------------------------------
 
-  async getServings(foodId: string): Promise<FoodServing[]> {
+  /** A food's servings visible to the user: shared seed/USDA portions (NULL owner)
+   *  plus the user's own personal portions. Ordered by grams for a stable picker. */
+  async getServings(foodId: string, userId: string): Promise<FoodServing[]> {
     return db
       .select()
       .from(foodServings)
-      .where(eq(foodServings.foodId, foodId))
+      .where(
+        and(
+          eq(foodServings.foodId, foodId),
+          sql`(${foodServings.createdByUserId} IS NULL OR ${foodServings.createdByUserId} = ${userId})`,
+        ),
+      )
       .orderBy(asc(foodServings.grams));
   }
 
@@ -308,26 +315,47 @@ export class NutritionStorage {
       .returning();
   }
 
-  /** Add a named serving to the user's own custom food. undefined → 404 (not owner). */
+  /**
+   * Add a PERSONAL named portion to any food visible to the user (a USDA/OFF food
+   * or one of their own). undefined → 404 (food not visible). Idempotent: a repeat
+   * of the same (food, label) for this user returns the existing row rather than
+   * duplicating it. Always stamped with the owner, so it stays private to them.
+   */
   async createServing(userId: string, foodId: string, input: ServingInput): Promise<FoodServing | undefined> {
-    const [food] = await db
-      .select({ id: foods.id })
-      .from(foods)
-      .where(and(eq(foods.id, foodId), eq(foods.createdByUserId, userId), eq(foods.source, "custom")));
+    const food = await this.getVisibleFoodById(userId, foodId);
     if (!food) return undefined;
+    const [existing] = await db
+      .select()
+      .from(foodServings)
+      .where(
+        and(
+          eq(foodServings.foodId, foodId),
+          eq(foodServings.createdByUserId, userId),
+          sql`lower(${foodServings.label}) = lower(${input.label})`,
+        ),
+      );
+    if (existing) return existing;
     const [row] = await db
       .insert(foodServings)
-      .values({ foodId, label: input.label, grams: input.grams })
+      .values({ foodId, label: input.label, grams: input.grams, createdByUserId: userId })
       .returning();
     return row;
   }
 
+  /** Delete a serving the user owns — either a personal portion they created or a
+   *  serving on a food they own. A shared USDA portion (both owners NULL) never
+   *  matches, so it can never be deleted. false → 404. */
   async deleteServing(userId: string, servingId: string): Promise<boolean> {
     const rows = await db
       .select({ id: foodServings.id })
       .from(foodServings)
       .innerJoin(foods, eq(foodServings.foodId, foods.id))
-      .where(and(eq(foodServings.id, servingId), eq(foods.createdByUserId, userId)));
+      .where(
+        and(
+          eq(foodServings.id, servingId),
+          sql`(${foodServings.createdByUserId} = ${userId} OR ${foods.createdByUserId} = ${userId})`,
+        ),
+      );
     if (rows.length === 0) return false;
     await db.delete(foodServings).where(eq(foodServings.id, servingId));
     return true;

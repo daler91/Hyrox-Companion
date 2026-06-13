@@ -1,4 +1,4 @@
-import type { Food, FoodLogEntry, FoodLogEntryWithNutrition } from "@shared/schema";
+import type { Food, FoodLogEntry, FoodLogEntryWithNutrition, FoodServing } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -11,10 +11,19 @@ import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 import { LogFoodDialog } from "./LogFoodDialog";
 
 vi.mock("@/lib/api", () => ({
-  api: { nutrition: { createLog: vi.fn(), updateLog: vi.fn(), getFood: vi.fn() } },
+  api: {
+    nutrition: {
+      createLog: vi.fn(),
+      updateLog: vi.fn(),
+      getFood: vi.fn(),
+      addServing: vi.fn(),
+      removeServing: vi.fn(),
+    },
+  },
   QUERY_KEYS: {
     nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
+    nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
     nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id],
   },
 }));
@@ -68,24 +77,53 @@ describe("LogFoodDialog", () => {
     vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [] });
   });
 
-  it("previews scaled nutrition and logs the food on submit", async () => {
+  it("defaults to one serving and logs the scaled amount", async () => {
     const user = userEvent.setup();
     renderWithClient(<LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />);
 
     expect(screen.getByText("Banana")).toBeInTheDocument();
-    // Default quantity = serving size (118 g) → 89 * 118 / 100 ≈ 105 kcal.
+    // Default amount = 1 serving (118 g) → 89 * 118 / 100 ≈ 105 kcal (not a raw 100 g).
     expect(screen.getByTestId("preview-calories")).toHaveTextContent("105");
 
     const quantity = screen.getByTestId("input-quantity");
     await user.clear(quantity);
-    await user.type(quantity, "200");
-    // 89 * 200 / 100 = 178 kcal.
-    expect(screen.getByTestId("preview-calories")).toHaveTextContent("178");
+    await user.type(quantity, "2");
+    // 2 servings = 236 g → 89 * 236 / 100 ≈ 210 kcal.
+    expect(screen.getByTestId("preview-calories")).toHaveTextContent("210");
 
     await user.click(screen.getByTestId("button-submit-log"));
     await waitFor(() =>
       expect(api.nutrition.createLog).toHaveBeenCalledWith(
-        expect.objectContaining({ foodId: "f1", quantityG: 200 }),
+        expect.objectContaining({ foodId: "f1", quantityG: 236 }),
+      ),
+    );
+  });
+
+  it("adds a custom portion and logs in that portion", async () => {
+    const slice: FoodServing = { id: "s9", foodId: "f1", label: "1 slice", grams: 95, createdByUserId: "u1" };
+    vi.mocked(api.nutrition.addServing).mockResolvedValue(slice);
+    const user = userEvent.setup();
+    renderWithClient(<LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />);
+
+    // Open the unit selector and choose "+ Add portion…".
+    await user.click(screen.getByTestId("select-unit"));
+    await user.click(await screen.findByRole("option", { name: /add portion/i }));
+
+    await user.type(screen.getByTestId("input-portion-label"), "1 slice");
+    await user.type(screen.getByTestId("input-portion-grams"), "95");
+    await user.click(screen.getByTestId("button-save-portion"));
+
+    await waitFor(() =>
+      expect(api.nutrition.addServing).toHaveBeenCalledWith("f1", { label: "1 slice", grams: 95 }),
+    );
+
+    // The new portion is selected (1 × 95 g) → 89 * 95 / 100 ≈ 85 kcal.
+    await waitFor(() => expect(screen.getByTestId("preview-calories")).toHaveTextContent("85"));
+
+    await user.click(screen.getByTestId("button-submit-log"));
+    await waitFor(() =>
+      expect(api.nutrition.createLog).toHaveBeenCalledWith(
+        expect.objectContaining({ foodId: "f1", quantityG: 95 }),
       ),
     );
   });

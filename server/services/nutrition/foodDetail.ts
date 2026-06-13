@@ -15,7 +15,7 @@ export async function getFoodWithServings(
   const food = await storage.nutrition.getVisibleFoodById(userId, id);
   if (!food) return null;
 
-  let servings = await storage.nutrition.getServings(id);
+  let servings = await storage.nutrition.getServings(id, userId);
   if (servings.length === 0 && food.source === "usda" && food.sourceId) {
     const portions = await fetchUsdaFoodPortions(food.sourceId);
     if (portions.length > 0) {

@@ -1,10 +1,12 @@
 import {
   type Food,
   type FoodLogEntryWithNutrition,
+  type FoodServing,
   MEAL_TYPES,
   type MealType,
   type NutritionMacroTotals,
 } from "@shared/schema";
+import { Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -21,10 +23,17 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useFoodWithServings, useLogFood, useUpdateLog } from "@/hooks/useNutrition";
+import {
+  useAddServing,
+  useFoodWithServings,
+  useLogFood,
+  useRemoveServing,
+  useUpdateLog,
+} from "@/hooks/useNutrition";
 
 import { loggedAtForDate, MEAL_LABELS, previewNutrition } from "./utils";
 
@@ -53,6 +62,14 @@ function defaultMealForNow(): MealType {
   if (hour < 15) return "lunch";
   if (hour < 21) return "dinner";
   return "snack";
+}
+
+/** Parse the add-portion grams field: a positive finite number, else null. */
+function parsePortionGrams(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** Scale an existing entry's nutrition proportionally for the edit preview. */
@@ -84,15 +101,26 @@ function LogFoodForm({
   const logFood = useLogFood(date);
   const updateLog = useUpdateLog(date);
   const isCreate = state.mode === "create";
+  const foodId = state.mode === "create" ? state.food.id : "";
 
   // Named servings for the unit selector (create mode) — also enriches USDA portions.
   const servingsQuery = useFoodWithServings(state.mode === "create" ? state.food.id : null);
+  const addServing = useAddServing(foodId);
+  const removeServing = useRemoveServing(foodId);
 
-  // create mode: a count + a unit (grams / named serving). edit mode: grams.
+  const servingSizeG = state.mode === "create" ? state.food.servingSizeG : null;
+  const hasServingSize = servingSizeG != null && servingSizeG > 0;
+
+  // create mode: a count + a unit (grams / named portion). When the food has a
+  // known serving we seed "1 portion" instead of a raw 100 g — the synthetic
+  // "__serving" option is derivable from the food up front, so no effect is
+  // needed and there's no flash before the named servings load. edit mode: grams.
   const [count, setCount] = useState(() =>
-    state.mode === "create" ? Math.round(state.food.servingSizeG ?? 100) : 0,
+    state.mode === "create" ? (hasServingSize ? 1 : 100) : 0,
   );
-  const [unitValue, setUnitValue] = useState("g");
+  const [unitValue, setUnitValue] = useState(() =>
+    state.mode === "create" && hasServingSize ? "__serving" : "g",
+  );
   const [editQuantityG, setEditQuantityG] = useState(() =>
     state.mode === "edit" ? Math.round(state.entry.quantityG) : 0,
   );
@@ -100,19 +128,50 @@ function LogFoodForm({
     state.mode === "create" ? defaultMealForNow() : state.entry.mealType,
   );
 
+  // Add-portion sub-form + the just-added portion held optimistically until the
+  // food-detail refetch (triggered by the mutation) surfaces it from the server.
+  const [showAddPortion, setShowAddPortion] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newGrams, setNewGrams] = useState("");
+  const [extraServings, setExtraServings] = useState<FoodServing[]>([]);
+
+  // Servings visible to the user (fetched + optimistic), de-duped by id, by grams.
+  const mergedServings = useMemo<FoodServing[]>(() => {
+    if (state.mode !== "create") return [];
+    const byId = new Map<string, FoodServing>();
+    for (const s of servingsQuery.data?.servings ?? []) byId.set(s.id, s);
+    for (const s of extraServings) if (!byId.has(s.id)) byId.set(s.id, s);
+    return [...byId.values()].sort((a, b) => a.grams - b.grams);
+  }, [state.mode, servingsQuery.data, extraServings]);
+
   const unitOptions = useMemo<UnitOption[]>(() => {
     const opts: UnitOption[] = [{ value: "g", label: "grams", grams: 1 }];
     if (state.mode !== "create") return opts;
-    const fetchedServings = servingsQuery.data?.servings ?? [];
-    for (const s of fetchedServings) opts.push({ value: s.id, label: s.label, grams: s.grams });
-    const ssg = state.food.servingSizeG;
-    if (ssg && ssg > 0 && !fetchedServings.some((s) => Math.abs(s.grams - ssg) < 0.5)) {
-      opts.push({ value: "__serving", label: `1 serving (${Math.round(ssg)} g)`, grams: ssg });
+    for (const s of mergedServings) opts.push({ value: s.id, label: s.label, grams: s.grams });
+    // Fall back to the food's default serving size as a portion when no named
+    // serving already covers it (within 0.5 g).
+    if (hasServingSize && !mergedServings.some((s) => Math.abs(s.grams - servingSizeG) < 0.5)) {
+      opts.push({ value: "__serving", label: `1 serving (${Math.round(servingSizeG)} g)`, grams: servingSizeG });
     }
     return opts;
-  }, [state, servingsQuery.data]);
+  }, [state.mode, mergedServings, hasServingSize, servingSizeG]);
 
-  const selectedUnit = unitOptions.find((o) => o.value === unitValue) ?? unitOptions[0];
+  // The user's own portions (non-null owner) are removable; shared USDA ones aren't.
+  const personalServings = useMemo(
+    () => mergedServings.filter((s) => s.createdByUserId != null),
+    [mergedServings],
+  );
+
+  // Resolve the active unit, resilient to a stale selection: once a named serving
+  // matching the serving size loads, the synthetic "__serving" is de-duped out, so
+  // fall through to that matching portion, then any portion, then grams.
+  const selectedUnit =
+    unitOptions.find((o) => o.value === unitValue) ??
+    (hasServingSize
+      ? unitOptions.find((o) => o.value !== "g" && Math.abs(o.grams - servingSizeG) < 0.5)
+      : undefined) ??
+    unitOptions.find((o) => o.value !== "g") ??
+    unitOptions[0];
   const quantityG = isCreate ? count * (selectedUnit?.grams ?? 1) : editQuantityG;
 
   const name = state.mode === "create" ? state.food.name : state.entry.name;
@@ -123,6 +182,40 @@ function LogFoodForm({
       : scaleEntryPreview(state.entry, quantityG);
   const isPending = logFood.isPending || updateLog.isPending;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
+
+  const handleUnitChange = (value: string) => {
+    if (value === "__add") {
+      setShowAddPortion(true);
+      return; // keep the current unit; the sub-form drives the new selection
+    }
+    setUnitValue(value);
+  };
+
+  const portionGrams = parsePortionGrams(newGrams);
+  const canAddPortion = newLabel.trim().length > 0 && portionGrams !== null;
+
+  const handleAddPortion = () => {
+    if (state.mode !== "create" || portionGrams === null || newLabel.trim().length === 0) return;
+    addServing.mutate(
+      { label: newLabel.trim(), grams: portionGrams },
+      {
+        onSuccess: (created) => {
+          setExtraServings((prev) => (prev.some((s) => s.id === created.id) ? prev : [...prev, created]));
+          setUnitValue(created.id);
+          setCount(1);
+          setShowAddPortion(false);
+          setNewLabel("");
+          setNewGrams("");
+        },
+      },
+    );
+  };
+
+  const handleRemovePortion = (serving: FoodServing) => {
+    setExtraServings((prev) => prev.filter((s) => s.id !== serving.id));
+    if (unitValue === serving.id) setUnitValue("g");
+    removeServing.mutate(serving.id);
+  };
 
   const handleSubmit = () => {
     if (!validQuantity) return;
@@ -169,7 +262,7 @@ function LogFoodForm({
                 onChange={(e) => setCount(Number(e.target.value))}
                 data-testid="input-quantity"
               />
-              <Select value={unitValue} onValueChange={setUnitValue}>
+              <Select value={selectedUnit?.value ?? "g"} onValueChange={handleUnitChange}>
                 <SelectTrigger className="flex-1" data-testid="select-unit">
                   <SelectValue />
                 </SelectTrigger>
@@ -179,11 +272,88 @@ function LogFoodForm({
                       {o.label}
                     </SelectItem>
                   ))}
+                  <SelectSeparator />
+                  <SelectItem value="__add" data-testid="select-add-portion">
+                    + Add portion…
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {selectedUnit && selectedUnit.value !== "g" && (
               <p className="text-xs text-muted-foreground">= {Math.round(quantityG)} g</p>
+            )}
+
+            {showAddPortion && (
+              <div className="space-y-2 rounded-md border p-2">
+                <p className="text-xs text-muted-foreground">New portion</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="e.g. 1 slice"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    data-testid="input-portion-label"
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    inputMode="decimal"
+                    placeholder="grams"
+                    className="w-24"
+                    value={newGrams}
+                    onChange={(e) => setNewGrams(e.target.value)}
+                    data-testid="input-portion-grams"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowAddPortion(false);
+                      setNewLabel("");
+                      setNewGrams("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleAddPortion}
+                    disabled={!canAddPortion || addServing.isPending}
+                    data-testid="button-save-portion"
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {personalServings.length > 0 && (
+              <div className="space-y-1 pt-1">
+                <p className="text-xs text-muted-foreground">Your portions</p>
+                {personalServings.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      {s.label} · {Math.round(s.grams)} g
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      aria-label={`Remove ${s.label}`}
+                      disabled={removeServing.isPending}
+                      onClick={() => handleRemovePortion(s)}
+                      data-testid="button-remove-portion"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         ) : (

@@ -806,15 +806,24 @@ export const foods = pgTable("foods", {
 export type Food = typeof foods.$inferSelect;
 export type InsertFood = typeof foods.$inferInsert;
 
-// Named portions for a food ("1 cup", "1 medium"). Created now; the Phase 1 UI
-// only uses foods.serving_size_g — multi-portion logging arrives in Phase 2.
+// Named portions for a food ("1 cup", "1 slice", "1 medium"). A NULL
+// created_by_user_id is a SHARED seed/enrichment portion (USDA food-detail
+// portions cached on first access, or the seed servings created alongside a
+// custom food); a non-null owner is a user's PERSONAL portion on a (possibly
+// shared) food, returned only to that user.
 export const foodServings = pgTable("food_servings", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
   foodId: varchar("food_id", { length: 255 }).notNull().references(() => foods.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
   grams: real("grams").notNull(),
+  // Owner of a personal portion. NULL = shared (USDA enrichment / custom-food seed
+  // servings). cascade (unlike foods' set null): a serving is never referenced by a
+  // log entry — entries store grams, not a serving id — so dropping a deleted user's
+  // portions loses nothing and avoids a stray label appearing on a shared food.
+  createdByUserId: varchar("created_by_user_id", { length: 255 }).references(() => users.id, { onDelete: "cascade" }),
 }, (table) => [
   index("idx_food_servings_food_id").on(table.foodId),
+  index("idx_food_servings_created_by_user_id").on(table.createdByUserId),
   check("food_servings_grams_positive_check", sql`grams > 0`),
 ]);
 export type FoodServing = typeof foodServings.$inferSelect;

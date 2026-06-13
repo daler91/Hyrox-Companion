@@ -352,7 +352,7 @@ describe("nutrition routes", () => {
       expect((await request(app).get("/api/v1/nutrition/foods/missing")).status).toBe(404);
     });
 
-    it("adds (owner-scoped) and removes a serving", async () => {
+    it("adds a personal portion to a visible food and removes a serving", async () => {
       vi.mocked(storage.nutrition.createServing).mockResolvedValue({ id: "s1" });
       expect((await request(app).post("/api/v1/nutrition/foods/c1/servings").send({ label: "1 cup", grams: 240 })).status).toBe(201);
 

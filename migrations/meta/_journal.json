@@ -477,6 +477,13 @@
       "when": 1780955614300,
       "tag": "0067_tense_warbird",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1781375362436,
+      "tag": "0068_cooing_blob",
+      "breakpoints": true
     }
   ]
 }
