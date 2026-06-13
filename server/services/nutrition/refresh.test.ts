@@ -1,4 +1,3 @@
-import type { Food } from "@shared/schema";
 import { describe, expect, it, vi } from "vitest";
 
 // Mock the side-effectful imports so loading refresh.ts doesn't pull in the DB.
@@ -8,29 +7,8 @@ vi.mock("./fatsecretClient", () => ({ getFatSecretFoodById: vi.fn() }));
 vi.mock("./offClient", () => ({ resolveBarcode: vi.fn() }));
 vi.mock("./usdaClient", () => ({ fetchUsdaFoodById: vi.fn() }));
 
+import { makeFood as food } from "./foodTestFixture";
 import { isStaleFood, STALE_AFTER_MS } from "./refresh";
-
-function food(over: Partial<Food>): Food {
-  return {
-    id: "id1",
-    source: "usda",
-    sourceId: "1",
-    name: "X",
-    brand: null,
-    servingSizeG: null,
-    caloriesPer100g: 1,
-    proteinPer100g: null,
-    carbPer100g: null,
-    fatPer100g: null,
-    fiberPer100g: null,
-    micros: null,
-    lastFetchedAt: new Date(),
-    createdByUserId: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...over,
-  };
-}
 
 describe("isStaleFood", () => {
   it("is stale when never stamped (legacy cached row)", () => {

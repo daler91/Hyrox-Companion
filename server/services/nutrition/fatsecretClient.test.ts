@@ -54,7 +54,15 @@ import {
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
 const err = (status: number) => ({ ok: false, status, json: async () => ({}), headers: { get: () => null } });
-const isTokenUrl = (url: unknown) => String(url).includes("oauth.fatsecret.com");
+// Compare the host exactly (not a substring) so this can't be fooled by a URL
+// like "oauth.fatsecret.com.evil.test" — and to satisfy CodeQL.
+const isTokenUrl = (url: unknown) => {
+  try {
+    return new URL(String(url)).hostname === "oauth.fatsecret.com";
+  } catch {
+    return false;
+  }
+};
 
 const SEARCH_BODY = {
   foods_search: {

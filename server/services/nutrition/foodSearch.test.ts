@@ -1,4 +1,3 @@
-import type { Food } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../storage", () => ({
@@ -15,29 +14,8 @@ import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { searchFatSecretFoods } from "./fatsecretClient";
 import { searchFoods } from "./foodSearch";
+import { makeFood as food } from "./foodTestFixture";
 import { searchUsdaFoods } from "./usdaClient";
-
-function food(over: Partial<Food>): Food {
-  return {
-    id: "id1",
-    source: "usda",
-    sourceId: "1",
-    name: "Banana",
-    brand: null,
-    servingSizeG: null,
-    caloriesPer100g: 89,
-    proteinPer100g: 1.1,
-    carbPer100g: 23,
-    fatPer100g: 0.3,
-    fiberPer100g: 2.6,
-    micros: null,
-    lastFetchedAt: null,
-    createdByUserId: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...over,
-  };
-}
 
 const mappedUsda = {
   source: "usda" as const,

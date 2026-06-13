@@ -1,4 +1,3 @@
-import type { Food } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../storage", () => ({
@@ -11,30 +10,9 @@ vi.mock("./refresh", () => ({ refreshStaleFoodsInBackground: vi.fn() }));
 import { storage } from "../../storage";
 import { lookupBarcode } from "./barcode";
 import { resolveFatSecretBarcode } from "./fatsecretClient";
+import { makeFood as food } from "./foodTestFixture";
 import { resolveBarcode } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
-
-function food(over: Partial<Food> = {}): Food {
-  return {
-    id: "id1",
-    source: "fatsecret",
-    sourceId: "555",
-    name: "Banana",
-    brand: null,
-    servingSizeG: null,
-    caloriesPer100g: 89,
-    proteinPer100g: 1.1,
-    carbPer100g: 23,
-    fatPer100g: 0.3,
-    fiberPer100g: 2.6,
-    micros: null,
-    lastFetchedAt: new Date(),
-    createdByUserId: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...over,
-  };
-}
 
 const mapped = {
   source: "fatsecret" as const,
