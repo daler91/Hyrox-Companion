@@ -164,68 +164,60 @@ function PlannedPrescription({
   // card: collapsing would unmount the editors and could drop debounced
   // cell edits.
   return (
-    <>
-      <CoachRationaleSection
-        rationale={entry.aiRationale}
-        title="Why this workout"
-        testId={`log-rationale-${entry.id}`}
-      />
-
-      <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
-        <div className="space-y-3">
-          <StructureBlocksEditor
-            value={planSets.structureBlocks}
-            onChange={(next) => planSets.updateStructure.mutate(next)}
-            exerciseSets={planSets.exerciseSets}
-            onUpdateSet={planSets.patchSetDebounced}
-            onAddSet={planSets.addSet.mutate}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-          />
-          <ExerciseTable
-            workoutId={entry.planDayId!}
-            exerciseSets={planSets.exerciseSets}
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
-            onUpdateSet={planSets.patchSetDebounced}
-            onAddSet={planSets.addSet.mutate}
-            onDeleteSet={planSets.deleteSet.mutate}
-            saveState={{
-              isSaving: planSets.isSaving,
-              lastSavedAt: planSets.lastSavedAt,
-            }}
-            onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
-            defaultExpanded
-            hasUnparsedText={hasUnparsedText}
-            structureBlocks={planSets.structureBlocks}
-          />
-          <ParseFailureAlert
-            entryId={entry.id}
-            visible={parseHelperVisible}
-            retryParse={planSets.retryParse}
-          />
-          <PrescriptionEditor
-            entryId={entry.id}
-            hasSets={planSets.exerciseSets.length > 0}
-            mainWorkout={entry.mainWorkout}
-            accessory={entry.accessory}
-            notes={entry.notes}
-            showNotes={showPrescriptionNotes}
-            onSaveField={(field, value) =>
-              planSets.updatePrescription.mutate({
-                [field]: value.trim().length === 0 ? null : value,
-              })
-            }
-            onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
-            onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
-            isParsingText={planSets.reparseFreeText.isPending}
-            isParsingImage={planSets.reparseFromImage.isPending}
-            title="Coach's text / photo"
-            compact
-          />
-        </div>
-      </DetailSection>
-    </>
+    <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
+      <div className="space-y-3">
+        <StructureBlocksEditor
+          value={planSets.structureBlocks}
+          onChange={(next) => planSets.updateStructure.mutate(next)}
+          exerciseSets={planSets.exerciseSets}
+          onUpdateSet={planSets.patchSetDebounced}
+          onAddSet={planSets.addSet.mutate}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+        />
+        <ExerciseTable
+          workoutId={entry.planDayId!}
+          exerciseSets={planSets.exerciseSets}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onUpdateSet={planSets.patchSetDebounced}
+          onAddSet={planSets.addSet.mutate}
+          onDeleteSet={planSets.deleteSet.mutate}
+          saveState={{
+            isSaving: planSets.isSaving,
+            lastSavedAt: planSets.lastSavedAt,
+          }}
+          onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
+          defaultExpanded
+          hasUnparsedText={hasUnparsedText}
+          structureBlocks={planSets.structureBlocks}
+        />
+        <ParseFailureAlert
+          entryId={entry.id}
+          visible={parseHelperVisible}
+          retryParse={planSets.retryParse}
+        />
+        <PrescriptionEditor
+          entryId={entry.id}
+          hasSets={planSets.exerciseSets.length > 0}
+          mainWorkout={entry.mainWorkout}
+          accessory={entry.accessory}
+          notes={entry.notes}
+          showNotes={showPrescriptionNotes}
+          onSaveField={(field, value) =>
+            planSets.updatePrescription.mutate({
+              [field]: value.trim().length === 0 ? null : value,
+            })
+          }
+          onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
+          onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
+          isParsingText={planSets.reparseFreeText.isPending}
+          isParsingImage={planSets.reparseFromImage.isPending}
+          title="Coach's text / photo"
+          compact
+        />
+      </div>
+    </DetailSection>
   );
 }
 
@@ -369,16 +361,9 @@ function LogSheetPrescriptionContent({
 }: LogSheetPrescriptionContentProps) {
   if (!entry.planDayId) {
     return (
-      <>
-        <CoachRationaleSection
-          rationale={entry.aiRationale}
-          title="Why this workout"
-          testId={`log-rationale-${entry.id}`}
-        />
-        <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
-          <WorkoutPrescriptionSummary entry={entry} />
-        </DetailSection>
-      </>
+      <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
+        <WorkoutPrescriptionSummary entry={entry} />
+      </DetailSection>
     );
   }
 
@@ -624,6 +609,16 @@ export function LogSheet({
           })}
           testId={`log-summary-${entry.id}`}
         />
+        <CoachRationaleSection
+          rationale={entry.aiRationale}
+          title="Why this workout"
+          testId={`log-rationale-${entry.id}`}
+        />
+
+        {/* Pre-workout fuelling guidance sits above the exercise table so
+            it's read before training, not after. */}
+        {featureFlags.nutritionEnabled && entry.planDayId && <FuellingPlanPanel entry={entry} />}
+
         <LogSheetPrescriptionContent
           entry={entry}
           planSets={planSets}
@@ -631,8 +626,6 @@ export function LogSheet({
           distanceUnit={distanceUnit}
           isEditMode={isEditMode}
         />
-
-        {featureFlags.nutritionEnabled && entry.planDayId && <FuellingPlanPanel entry={entry} />}
 
         <LogSheetFooter
           entry={entry}

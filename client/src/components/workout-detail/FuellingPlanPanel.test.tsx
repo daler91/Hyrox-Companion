@@ -62,7 +62,8 @@ describe("FuellingPlanPanel", () => {
     expect(screen.getByTestId("fuelling-plan-estimate-note")).toBeInTheDocument();
   });
 
-  it("prefers the saved expected values over the exercise-table estimate", () => {
+  it("prefers the saved expected values over the exercise-table estimate", async () => {
+    const user = userEvent.setup();
     const entry = makeEntry({
       expectedDurationMin: 90,
       expectedRpe: 9,
@@ -72,8 +73,26 @@ describe("FuellingPlanPanel", () => {
     });
     renderWithClient(<FuellingPlanPanel entry={entry} />);
 
+    // The adjusters are collapsed once a duration is known — open them first.
+    await user.click(screen.getByTestId("fuelling-plan-adjust"));
     expect(screen.getByTestId("fuelling-plan-duration")).toHaveValue(90);
     expect(screen.queryByTestId("fuelling-plan-estimate-note")).not.toBeInTheDocument();
+  });
+
+  it("collapses the adjusters by default once a duration is known, and shows the assumption", () => {
+    const entry = makeEntry({ expectedDurationMin: 60, expectedRpe: 7 });
+    renderWithClient(<FuellingPlanPanel entry={entry} />);
+
+    const adjust = screen.getByTestId("fuelling-plan-adjust");
+    expect(adjust).toHaveTextContent("Adjust session estimate · 60 min · RPE 7");
+    // <details> ancestor is closed so the controls are not exposed.
+    expect(adjust.closest("details")).not.toHaveAttribute("open");
+  });
+
+  it("opens the adjusters by default when there is nothing to estimate from", () => {
+    renderWithClient(<FuellingPlanPanel entry={makeEntry()} />);
+
+    expect(screen.getByTestId("fuelling-plan-adjust").closest("details")).toHaveAttribute("open");
   });
 
   it("shows a baseline target plus a hint when there is nothing to estimate from", () => {
@@ -96,6 +115,7 @@ describe("FuellingPlanPanel", () => {
     const user = userEvent.setup();
     renderWithClient(<FuellingPlanPanel entry={makeEntry({ expectedDurationMin: 60 })} />);
 
+    await user.click(screen.getByTestId("fuelling-plan-adjust"));
     await user.click(screen.getByTestId("button-rpe-8"));
 
     await waitFor(() =>
