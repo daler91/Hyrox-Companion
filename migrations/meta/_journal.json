@@ -484,6 +484,13 @@
       "when": 1781375362436,
       "tag": "0068_cooing_blob",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1781387981335,
+      "tag": "0069_heavy_scarecrow",
+      "breakpoints": true
     }
   ]
 }

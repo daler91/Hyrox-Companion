@@ -92,18 +92,25 @@ export const barcodeLookupSchema = z.object({
 });
 export type BarcodeLookupInput = z.infer<typeof barcodeLookupSchema>;
 
+// Sane per-100g ceilings, shared by custom-food validation and the external-food
+// import sanity guard (server/services/nutrition/sanitize.ts) so user-entered and
+// cached foods obey one rulebook — a real food never exceeds these per 100g.
+export const CALORIES_PER_100G_MAX = 1000;
+export const MACRO_PER_100G_MAX = 200;
+export const SERVING_SIZE_G_MAX = 100_000;
+
 // An optional, non-negative per-100g macro for a user-entered custom food.
 const macro = (max: number) => z.number().nonnegative().max(max).nullable().optional();
 
 const customFoodFields = {
   name: z.string().trim().min(1).max(200),
   brand: z.string().trim().max(200).nullable().optional(),
-  caloriesPer100g: macro(1000),
-  proteinPer100g: macro(200),
-  carbPer100g: macro(200),
-  fatPer100g: macro(200),
-  fiberPer100g: macro(200),
-  servingSizeG: z.number().positive().max(100_000).nullable().optional(),
+  caloriesPer100g: macro(CALORIES_PER_100G_MAX),
+  proteinPer100g: macro(MACRO_PER_100G_MAX),
+  carbPer100g: macro(MACRO_PER_100G_MAX),
+  fatPer100g: macro(MACRO_PER_100G_MAX),
+  fiberPer100g: macro(MACRO_PER_100G_MAX),
+  servingSizeG: z.number().positive().max(SERVING_SIZE_G_MAX).nullable().optional(),
 };
 
 export const servingInputSchema = z.object({

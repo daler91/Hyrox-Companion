@@ -71,6 +71,26 @@ describe("mapOffProduct", () => {
     expect(m?.servingSizeG).toBe(30);
     expect(m?.fiberPer100g).toBe(2.1);
   });
+
+  it("rejects a low-completeness product that also lacks calories", () => {
+    expect(
+      mapOffProduct("1", { product_name: "X", completeness: 0.2, nutriments: { proteins_100g: 5 } }),
+    ).toBeNull();
+  });
+
+  it("keeps a low-completeness product when it has calories", () => {
+    const m = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.2,
+      nutriments: { "energy-kcal_100g": 100 },
+    });
+    expect(m?.caloriesPer100g).toBe(100);
+  });
+
+  it("keeps a product with unknown completeness (doesn't hold it against them)", () => {
+    const m = mapOffProduct("1", { product_name: "X", nutriments: { proteins_100g: 5 } });
+    expect(m?.proteinPer100g).toBe(5);
+  });
 });
 
 describe("resolveBarcode", () => {

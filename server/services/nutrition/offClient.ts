@@ -14,8 +14,11 @@ import type { MappedFood } from "./types";
 
 const OFF_PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";
 const OFF_FIELDS =
-  "code,product_name,brands,nutriments,serving_quantity,serving_size,status,status_verbose";
+  "code,product_name,brands,nutriments,serving_quantity,serving_size,completeness,status,status_verbose";
 const OFF_TIMEOUT_MS = 8_000;
+// Floor for OFF's crowd-sourced data-quality score (0–1). Below this AND with no
+// energy value, a product is too sparse to trust (see isAcceptableOffProduct).
+const OFF_MIN_COMPLETENESS = 0.5;
 
 // First custom User-Agent in the codebase (OFF policy: AppName/Version (contact)).
 const OFF_USER_AGENT = `HyroxCompanion/1.0 (${env.APP_URL ?? "https://fitai.coach"})`;
@@ -34,6 +37,8 @@ interface OffProduct {
   brands?: string;
   serving_quantity?: number | string;
   serving_size?: string;
+  // OFF data-quality score in [0,1]; gates the lowest-quality entries.
+  completeness?: number | string;
   nutriments?: OffNutriments;
 }
 
@@ -74,11 +79,26 @@ function extractMicros(nutriments: OffNutriments): Record<string, number> | null
   return Object.keys(micros).length > 0 ? micros : null;
 }
 
+/**
+ * Reject the lowest-quality crowd-sourced OFF entries before caching. A product
+ * missing its core energy value AND explicitly flagged low-completeness is too
+ * unreliable to log from — better to 404 the scan (the user can add a custom
+ * food) than cache a misleading row. Anything with calories, or an unknown /
+ * decent completeness, passes; the per-field sanitize guard still clamps bad
+ * numbers afterwards.
+ */
+function isAcceptableOffProduct(product: OffProduct): boolean {
+  if (num(product.nutriments?.["energy-kcal_100g"]) !== null) return true;
+  const completeness = num(product.completeness);
+  return completeness === null || completeness >= OFF_MIN_COMPLETENESS;
+}
+
 export function mapOffProduct(code: string, product: OffProduct): MappedFood | null {
   const name = product.product_name?.trim();
   if (!name) return null;
+  if (!isAcceptableOffProduct(product)) return null;
   const n = product.nutriments ?? {};
-  return {
+  const mapped: MappedFood = {
     source: "off",
     sourceId: code,
     name,
@@ -91,6 +111,7 @@ export function mapOffProduct(code: string, product: OffProduct): MappedFood | n
     fiberPer100g: num(n.fiber_100g ?? n.fibre_100g),
     micros: extractMicros(n),
   };
+  return mapped;
 }
 
 /**

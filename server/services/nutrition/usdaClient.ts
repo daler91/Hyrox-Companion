@@ -1,6 +1,7 @@
 import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS } from "./micros";
+import type { MappedFood } from "./types";
 
 /**
  * USDA FoodData Central client. Turns a search term into a list of foods whose
@@ -298,5 +299,41 @@ export async function fetchUsdaFoodPortions(
     return out;
   } catch {
     return [];
+  }
+}
+
+/**
+ * Fetch a single USDA food's full detail by fdcId and map to our per-100g shape.
+ * The detail endpoint carries a far richer `foodNutrients` set than search
+ * (notably most micronutrients), so this backs both micro enrichment (FR-5.1, on
+ * food-detail open) and the cache-staleness refresh. Best-effort: null on any
+ * error or a key-less config. Reuses `mapUsdaSearchFood` — its nutrient reader
+ * already reads through the detail endpoint's nested `nutrient`/`amount` shape.
+ */
+export async function fetchUsdaFoodById(
+  fdcId: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<MappedFood | null> {
+  const apiKey = env.USDA_API_KEY;
+  if (!apiKey) return null;
+  const url = `${FDC_DETAIL_URL}/${encodeURIComponent(fdcId)}?api_key=${encodeURIComponent(apiKey)}&format=full`;
+
+  try {
+    const raw = await retryWithJitter(
+      async () => {
+        const timeout = AbortSignal.timeout(USDA_TIMEOUT_MS);
+        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+        const res = await fetch(url, { signal });
+        if (res.status === 429 || res.status >= 500) {
+          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
+        }
+        if (!res.ok) throw new Error(`USDA detail failed with HTTP ${res.status}`);
+        return (await res.json()) as UsdaSearchFood;
+      },
+      { retries: 1, label: "usda-detail" },
+    );
+    return mapUsdaSearchFood(raw);
+  } catch {
+    return null;
   }
 }

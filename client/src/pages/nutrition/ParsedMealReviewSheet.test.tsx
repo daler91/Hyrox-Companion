@@ -24,6 +24,7 @@ const FOOD: Food = {
   sourceId: "1",
   name: "Egg, scrambled",
   brand: null,
+  lastFetchedAt: null,
   createdByUserId: null,
   servingSizeG: null,
   caloriesPer100g: 150,

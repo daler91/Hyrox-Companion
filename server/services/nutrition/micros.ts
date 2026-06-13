@@ -23,13 +23,19 @@ export interface MicroDef {
   usdaId: string; // FDC nutrient ID (the API's `nutrientId`, not the legacy number)
   usdaUnit: "mg" | "ug"; // expected USDA unitName — disambiguates IU vs metric encodings
   offKey: string; // OFF nutriment base key; we read `${offKey}_100g` (in grams)
+  // FatSecret per-serving field name, set ONLY for micros FatSecret reports as an
+  // unambiguous metric amount already in this micro's `unit` (the mg minerals /
+  // electrolytes). Left undefined where FatSecret's historical %DV-vs-metric
+  // encoding is ambiguous (the vitamins) — those are enriched from USDA instead
+  // of risking a unit error.
+  fatsecretKey?: string;
 }
 
 export const MICRO_DEFS: readonly MicroDef[] = [
-  { key: "sodium", label: "Sodium", unit: "mg", rdi: 2300, usdaId: "1093", usdaUnit: "mg", offKey: "sodium" },
-  { key: "potassium", label: "Potassium", unit: "mg", rdi: 4700, usdaId: "1092", usdaUnit: "mg", offKey: "potassium" },
-  { key: "calcium", label: "Calcium", unit: "mg", rdi: 1300, usdaId: "1087", usdaUnit: "mg", offKey: "calcium" },
-  { key: "iron", label: "Iron", unit: "mg", rdi: 18, usdaId: "1089", usdaUnit: "mg", offKey: "iron" },
+  { key: "sodium", label: "Sodium", unit: "mg", rdi: 2300, usdaId: "1093", usdaUnit: "mg", offKey: "sodium", fatsecretKey: "sodium" },
+  { key: "potassium", label: "Potassium", unit: "mg", rdi: 4700, usdaId: "1092", usdaUnit: "mg", offKey: "potassium", fatsecretKey: "potassium" },
+  { key: "calcium", label: "Calcium", unit: "mg", rdi: 1300, usdaId: "1087", usdaUnit: "mg", offKey: "calcium", fatsecretKey: "calcium" },
+  { key: "iron", label: "Iron", unit: "mg", rdi: 18, usdaId: "1089", usdaUnit: "mg", offKey: "iron", fatsecretKey: "iron" },
   { key: "magnesium", label: "Magnesium", unit: "mg", rdi: 420, usdaId: "1090", usdaUnit: "mg", offKey: "magnesium" },
   { key: "zinc", label: "Zinc", unit: "mg", rdi: 11, usdaId: "1095", usdaUnit: "mg", offKey: "zinc" },
   { key: "vitaminC", label: "Vitamin C", unit: "mg", rdi: 90, usdaId: "1162", usdaUnit: "mg", offKey: "vitamin-c" },
