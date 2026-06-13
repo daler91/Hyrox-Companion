@@ -186,6 +186,7 @@ function PlannedPrescription({
           saveState={{
             isSaving: planSets.isSaving,
             lastSavedAt: planSets.lastSavedAt,
+            lastSaveErrorAt: planSets.lastSaveErrorAt,
           }}
           onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
           defaultExpanded
@@ -231,7 +232,7 @@ function ParseFailureAlert({ entryId, visible, retryParse }: ParseFailureAlertPr
   if (!visible) return null;
   return (
     <output
-      className="block rounded-md border border-amber-400/50 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+      className="block rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground"
       data-testid={`log-parse-failed-${entryId}`}
     >
       <span className="block">
@@ -241,7 +242,7 @@ function ParseFailureAlert({ entryId, visible, retryParse }: ParseFailureAlertPr
         <Button
           type="button"
           variant="ghost"
-          className="h-auto p-0 text-amber-900"
+          className="h-auto p-0 text-warning"
           onClick={retryParse}
           data-testid={`log-parse-retry-${entryId}`}
         >

@@ -414,8 +414,8 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       {showPlannedDiff && (
         <span
           className={cn(
-            "text-center text-[10px] leading-none text-muted-foreground",
-            "font-medium text-amber-700 dark:text-amber-300",
+            "text-center text-[10px] leading-none",
+            "font-medium text-warning",
           )}
           data-testid={`planned-${field}-${set.id}`}
         >

@@ -124,6 +124,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     deleteSet,
     isSaving,
     lastSavedAt,
+    lastSaveErrorAt,
     markSaved,
   } = useExerciseSetsForOwner<WorkoutWithSets>({
     ownerId: workoutId,
@@ -454,6 +455,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     isHydrating,
     isSaving,
     lastSavedAt,
+    lastSaveErrorAt,
     updateSet,
     patchSetDebounced,
     flushPendingSetPatches,
