@@ -21,6 +21,7 @@ import { serializeWorkoutStructure } from "@/lib/workoutStructureSummary";
 import { ExerciseTable } from "./ExerciseTable";
 import { DetailSection } from "./shared/DetailSection";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 
 interface AdhocLogSheetProps {
@@ -440,47 +441,53 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         </DetailSection>
 
         <DetailSection title="Workout" icon={Dumbbell}>
-          <div className="space-y-3">
-            <ExerciseTable
-              workoutId={ADHOC_DRAFT_ID}
-              exerciseSets={exerciseSets}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onUpdateSet={handleUpdateSet}
-              onAddSet={handleAddSet}
-              onDeleteSet={handleDeleteSet}
-              defaultExpanded
-            />
-            <PrescriptionEditor
-              entryId={ADHOC_DRAFT_ID}
-              hasSets={exerciseSets.length > 0}
-              mainWorkout={mainWorkout}
-              accessory={accessory}
-              notes={notes}
-              showNotes={false}
-              onSaveField={(field, value) => {
-                const next = value;
-                if (field === "mainWorkout") setMainWorkout(next);
-                else if (field === "accessory") setAccessory(next);
-                else if (field === "notes") setNotes(next);
-              }}
-              onParseText={() => {
-                if (!mainWorkout.trim()) {
-                  toast({
-                    title: "Add coach text first",
-                    description: "Paste a workout into the text box, then tap Parse.",
-                  });
-                  return;
-                }
-                parseTextMutation.mutate(mainWorkout);
-              }}
-              onParseImage={(payload) => parseImageMutation.mutate(payload)}
-              isParsingText={parseTextMutation.isPending}
-              isParsingImage={parseImageMutation.isPending}
-              title="Coach's text / photo"
-              compact
-            />
-          </div>
+          <WorkoutContentsLayout
+            exerciseSets={exerciseSets}
+            isParsing={parseTextMutation.isPending || parseImageMutation.isPending}
+            source={
+              <PrescriptionEditor
+                entryId={ADHOC_DRAFT_ID}
+                hasSets={exerciseSets.length > 0}
+                mainWorkout={mainWorkout}
+                accessory={accessory}
+                notes={notes}
+                showNotes={false}
+                onSaveField={(field, value) => {
+                  const next = value;
+                  if (field === "mainWorkout") setMainWorkout(next);
+                  else if (field === "accessory") setAccessory(next);
+                  else if (field === "notes") setNotes(next);
+                }}
+                onParseText={() => {
+                  if (!mainWorkout.trim()) {
+                    toast({
+                      title: "Add coach text first",
+                      description: "Paste a workout into the text box, then tap Parse.",
+                    });
+                    return;
+                  }
+                  parseTextMutation.mutate(mainWorkout);
+                }}
+                onParseImage={(payload) => parseImageMutation.mutate(payload)}
+                isParsingText={parseTextMutation.isPending}
+                isParsingImage={parseImageMutation.isPending}
+                title="Coach's text / photo"
+                compact
+              />
+            }
+            table={
+              <ExerciseTable
+                workoutId={ADHOC_DRAFT_ID}
+                exerciseSets={exerciseSets}
+                weightUnit={weightUnit}
+                distanceUnit={distanceUnit}
+                onUpdateSet={handleUpdateSet}
+                onAddSet={handleAddSet}
+                onDeleteSet={handleDeleteSet}
+                defaultExpanded
+              />
+            }
+          />
         </DetailSection>
 
         <DetailSection title="Effort & notes" icon={Gauge}>

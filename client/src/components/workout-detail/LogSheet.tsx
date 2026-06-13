@@ -19,6 +19,7 @@ import { FuellingPlanPanel } from "./FuellingPlanPanel";
 import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
@@ -165,59 +166,72 @@ function PlannedPrescription({
   // cell edits.
   return (
     <DetailSection title="Workout" icon={Dumbbell} testId={`log-workout-${entry.id}`}>
-      <div className="space-y-3">
-        <StructureBlocksEditor
-          value={planSets.structureBlocks}
-          onChange={(next) => planSets.updateStructure.mutate(next)}
-          exerciseSets={planSets.exerciseSets}
-          onUpdateSet={planSets.patchSetDebounced}
-          onAddSet={planSets.addSet.mutate}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-        />
-        <ExerciseTable
-          workoutId={entry.planDayId!}
-          exerciseSets={planSets.exerciseSets}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          onUpdateSet={planSets.patchSetDebounced}
-          onAddSet={planSets.addSet.mutate}
-          onDeleteSet={planSets.deleteSet.mutate}
-          saveState={{
-            isSaving: planSets.isSaving,
-            lastSavedAt: planSets.lastSavedAt,
-            lastSaveErrorAt: planSets.lastSaveErrorAt,
-          }}
-          onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
-          defaultExpanded
-          hasUnparsedText={hasUnparsedText}
-          structureBlocks={planSets.structureBlocks}
-        />
-        <ParseFailureAlert
-          entryId={entry.id}
-          visible={parseHelperVisible}
-          retryParse={planSets.retryParse}
-        />
-        <PrescriptionEditor
-          entryId={entry.id}
-          hasSets={planSets.exerciseSets.length > 0}
-          mainWorkout={entry.mainWorkout}
-          accessory={entry.accessory}
-          notes={entry.notes}
-          showNotes={showPrescriptionNotes}
-          onSaveField={(field, value) =>
-            planSets.updatePrescription.mutate({
-              [field]: value.trim().length === 0 ? null : value,
-            })
-          }
-          onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
-          onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
-          isParsingText={planSets.reparseFreeText.isPending}
-          isParsingImage={planSets.reparseFromImage.isPending}
-          title="Coach's text / photo"
-          compact
-        />
-      </div>
+      <WorkoutContentsLayout
+        exerciseSets={planSets.exerciseSets}
+        sourceLabel={hasUnparsedText ? "from coach text" : null}
+        structureBlockCount={planSets.structureBlocks.length}
+        isParsing={planSets.reparseFreeText.isPending || planSets.reparseFromImage.isPending}
+        source={
+          <PrescriptionEditor
+            entryId={entry.id}
+            hasSets={planSets.exerciseSets.length > 0}
+            mainWorkout={entry.mainWorkout}
+            accessory={entry.accessory}
+            notes={entry.notes}
+            showNotes={showPrescriptionNotes}
+            onSaveField={(field, value) =>
+              planSets.updatePrescription.mutate({
+                [field]: value.trim().length === 0 ? null : value,
+              })
+            }
+            onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
+            onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
+            isParsingText={planSets.reparseFreeText.isPending}
+            isParsingImage={planSets.reparseFromImage.isPending}
+            title="Coach's text / photo"
+            compact
+          />
+        }
+        table={
+          <ExerciseTable
+            workoutId={entry.planDayId!}
+            exerciseSets={planSets.exerciseSets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onUpdateSet={planSets.patchSetDebounced}
+            onAddSet={planSets.addSet.mutate}
+            onDeleteSet={planSets.deleteSet.mutate}
+            saveState={{
+              isSaving: planSets.isSaving,
+              lastSavedAt: planSets.lastSavedAt,
+              lastSaveErrorAt: planSets.lastSaveErrorAt,
+            }}
+            onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
+            defaultExpanded
+            hasUnparsedText={hasUnparsedText}
+            structureBlocks={planSets.structureBlocks}
+          />
+        }
+        belowTable={
+          <ParseFailureAlert
+            entryId={entry.id}
+            visible={parseHelperVisible}
+            retryParse={planSets.retryParse}
+          />
+        }
+        structure={
+          <StructureBlocksEditor
+            value={planSets.structureBlocks}
+            onChange={(next) => planSets.updateStructure.mutate(next)}
+            exerciseSets={planSets.exerciseSets}
+            onUpdateSet={planSets.patchSetDebounced}
+            onAddSet={planSets.addSet.mutate}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            headerless
+          />
+        }
+      />
     </DetailSection>
   );
 }

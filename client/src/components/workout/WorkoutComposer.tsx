@@ -1,5 +1,5 @@
 import type { ExerciseName } from "@shared/schema";
-import { CheckCircle2, ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
@@ -8,6 +8,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { DraftExerciseTable } from "@/components/workout/DraftExerciseTable";
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { WorkoutTextMode } from "@/components/workout/WorkoutTextMode";
+import { WorkoutContentsStatus } from "@/components/workout-detail/shared/WorkoutContentsStatus";
 import type { toast as toastFn } from "@/hooks/use-toast";
 import type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "@/lib/api";
 import type { CompressedImage } from "@/lib/image";
@@ -266,41 +267,6 @@ export function WorkoutComposer({
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
       />
-    </div>
-  );
-}
-interface WorkoutContentsStatusProps {
-  readonly exerciseCount: number;
-  readonly hasDescription: boolean;
-}
-function WorkoutContentsStatus({ exerciseCount, hasDescription }: WorkoutContentsStatusProps) {
-  let label = "Empty";
-  let detail = "Add exercise rows or a description";
-  if (exerciseCount > 0) {
-    label = `${exerciseCount} exercise${exerciseCount === 1 ? "" : "s"}`;
-    detail = hasDescription ? "Structured rows with source text" : "Structured rows ready";
-  } else if (hasDescription) {
-    label = "Description captured";
-    detail = "No exercise rows yet";
-  }
-
-  return (
-    <div
-      className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-      role="status"
-      aria-live="polite"
-      data-testid="workout-contents-status"
-    >
-      <div className="min-w-0">
-        <div className="text-xs font-medium uppercase text-muted-foreground">Workout contents</div>
-        <div className="truncate font-medium">{label}</div>
-      </div>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {exerciseCount > 0 ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
-        ) : null}
-        <span>{detail}</span>
-      </div>
     </div>
   );
 }
