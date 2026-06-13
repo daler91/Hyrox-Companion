@@ -66,6 +66,7 @@ import {
   POST_WINDOW_MS,
   PRE_WINDOW_MS,
 } from "../../services/nutrition/sessionFuelling";
+import { getPlannedSessionEstimate } from "../../services/sessionEstimate/plannedSessionEstimate";
 import { storage } from "../../storage";
 import { getLocalDateStr } from "../../timezone";
 import { getUserId } from "../../types";
@@ -128,6 +129,33 @@ async function buildDecoratedBlockPoints(
     training.workoutLogs,
     targets,
     training.dailyLoads,
+  );
+}
+
+/**
+ * System estimate (distance-aware + personalized from logged run pace + a small AI
+ * nudge) of a planned session's duration/effort, to prefill the fuelling panel. The
+ * client layers the athlete's saved overrides on top. userId-scoped: a foreign/missing
+ * plan day resolves to null → 404 (no leak).
+ */
+async function handlePlannedSessionEstimate(
+  req: Request<{ planDayId: string }>,
+  res: Response,
+): Promise<void> {
+  const estimate = await getPlannedSessionEstimate(req.params.planDayId, getUserId(req));
+  if (!estimate) {
+    sendNotFound(res, "Plan day not found");
+    return;
+  }
+  res.json(estimate);
+}
+
+function registerPlannedSessionEstimateRoute(router: Router): void {
+  router.get(
+    "/api/v1/nutrition/planned-session-estimate/:planDayId",
+    isAuthenticated,
+    rateLimiter("nutritionRead", 60),
+    asyncHandler(handlePlannedSessionEstimate),
   );
 }
 
@@ -393,6 +421,9 @@ export function registerNutritionRoutes(router: Router): void {
       res.json(response);
     }),
   );
+
+  // Phase 3b — planned-session duration/effort estimate to prefill the fuelling panel.
+  registerPlannedSessionEstimateRoute(router);
 
   // FR-3.3 — block view: daily intake macros vs training UTSS over a range.
   // Calls calculateTrainingLoad directly for the FULL range (training-overview's

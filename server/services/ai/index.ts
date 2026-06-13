@@ -198,6 +198,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     nutrition.nextSessionFuelling = buildNextSessionFuelling(
       upcomingDays[0],
       user?.bodyweightKg ?? null,
+      user?.distanceUnit ?? "km",
     );
   }
 

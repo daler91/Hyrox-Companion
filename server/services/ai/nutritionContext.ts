@@ -66,10 +66,12 @@ export async function buildNutritionTrainingContext(
 export function buildNextSessionFuelling(
   day: UpcomingPlannedDay,
   bodyweightKg: number | null,
+  distanceUnit: string | null = null,
 ): NonNullable<NutritionCoachContext["nextSessionFuelling"]> {
   const estimate = estimatePlannedSession({
     structureBlocks: day.structureBlocks ?? [],
     exerciseSets: day.exerciseSets,
+    distanceUnit,
   });
   const durationMin = day.expectedDurationMin ?? estimate.durationMin;
   const rpe = day.expectedRpe ?? estimate.rpe;

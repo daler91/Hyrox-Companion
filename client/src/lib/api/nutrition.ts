@@ -18,6 +18,7 @@ import type {
   NutritionTarget,
   NutritionTargetsResponse,
   ParseMealResponse,
+  PlannedSessionEstimateResponse,
   RecipeListItem,
   RecipeWithIngredients,
   RepeatDayInput,
@@ -114,6 +115,14 @@ export const nutrition = {
   // --- Phase 3: fuelling around a session / block intake-vs-load ---
   getSessionFuelling: (workoutId: string) =>
     typedRequest<SessionFuellingResponse>("GET", `${base}/session-fuelling/${enc(workoutId)}`),
+
+  // Phase 3b — system estimate of a planned session's duration/effort, used to
+  // prefill the fuelling panel (the athlete's saved overrides still win client-side).
+  getPlannedSessionEstimate: (planDayId: string) =>
+    typedRequest<PlannedSessionEstimateResponse>(
+      "GET",
+      `${base}/planned-session-estimate/${enc(planDayId)}`,
+    ),
 
   getBlock: (from: string, to?: string) =>
     typedRequest<BlockViewResponse>(

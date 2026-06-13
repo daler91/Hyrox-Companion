@@ -25,6 +25,7 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
     const estimate = estimatePlannedSession({
       structureBlocks: entry.structureBlocks ?? [],
       exerciseSets: entry.exerciseSets ?? [],
+      distanceUnit: preferences?.distanceUnit ?? null,
     });
     return computeSessionFuellingTarget({
       durationMin: entry.expectedDurationMin ?? estimate.durationMin,
@@ -37,6 +38,7 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
     entry.expectedDurationMin,
     entry.expectedRpe,
     bodyweightKg,
+    preferences?.distanceUnit,
   ]);
 
   if (target.preCarbG <= 0) return null;

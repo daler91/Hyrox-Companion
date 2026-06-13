@@ -275,6 +275,26 @@ export interface SessionFuellingResponse {
   gap?: SessionFuellingGap | null;
 }
 
+/**
+ * System-computed duration/effort estimate for a PLANNED session, used to prefill the
+ * fuelling panel. Deterministic (distance-aware) base, personalized from the athlete's
+ * logged run pace, and lightly refined by AI — all grounded so values never go extreme.
+ * The client still lets the athlete override; these are the seed, not a prescription.
+ */
+export interface PlannedSessionEstimateResponse {
+  planDayId: string;
+  /** Estimated session length (minutes), or null when there's nothing to estimate from. */
+  durationMin: number | null;
+  /** Estimated intensity (RPE 1–10), or null when unknown. */
+  rpe: number | null;
+  /** Short human rationale when AI refined the estimate, else null. */
+  rationale: string | null;
+  /** Where the duration came from, for UI transparency. */
+  source: "structure" | "sets" | "none";
+  /** true when AI adjusted the deterministic+personalized value (vs pure heuristic). */
+  refined: boolean;
+}
+
 /** FR-3.3 — one day on the block view: daily intake macros + training UTSS. */
 export interface BlockViewPoint {
   date: string;
