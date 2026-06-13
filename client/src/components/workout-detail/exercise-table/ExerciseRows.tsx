@@ -423,7 +423,7 @@ const GroupRow = memo(function GroupRow({
             {prescriptionSegments}
             {plannedDiffSummary && (
               <span
-                className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                className="rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning"
                 data-testid="exercise-row-planned-diff"
               >
                 {plannedDiffSummary}

@@ -164,7 +164,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     deleteInvalidateQueries: (id) => [QUERY_KEYS.planDayExercises(id)],
     cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
   });
-  const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, addSet, deleteSet, isSaving, lastSavedAt } = exerciseSetOps;
+  const { updateSet, patchSetDebounced, flushPendingSetPatches, getPendingPatches, addSet, deleteSet, isSaving, lastSavedAt, lastSaveErrorAt } = exerciseSetOps;
 
   // Plan-day Parse: POST /reparse -> the AI provider parses mainWorkout/accessory into
   // structured rows, replacing this day's prescription. React Query's server
@@ -320,6 +320,7 @@ export function usePlanDayExercises(planDayId: string | null) {
     error: exercisesQuery.error,
     isSaving,
     lastSavedAt,
+    lastSaveErrorAt,
     updateSet,
     patchSetDebounced,
     flushPendingSetPatches,

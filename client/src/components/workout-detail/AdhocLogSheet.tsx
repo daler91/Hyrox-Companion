@@ -211,7 +211,10 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const [title, setTitle] = useState("Workout");
+  // Empty default + "Workout" placeholder (not a pre-filled value) so the
+  // user never has to clear the field on a quick log. Save still falls back
+  // to "Workout" via `title.trim() || "Workout"`.
+  const [title, setTitle] = useState("");
   const [date, setDate] = useState(todayStr());
   const [mainWorkout, setMainWorkout] = useState("");
   const [accessory, setAccessory] = useState("");
@@ -221,7 +224,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const [exerciseSets, setExerciseSets] = useState<ExerciseSet[]>([]);
 
   const resetState = () => {
-    setTitle("Workout");
+    setTitle("");
     setDate(todayStr());
     setMainWorkout("");
     setAccessory("");

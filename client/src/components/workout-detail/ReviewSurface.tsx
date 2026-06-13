@@ -15,7 +15,6 @@ import { getStatusBadge } from "@/components/timeline/timeline-workout-card/util
 import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/WorkoutStravaStats";
 import { Button } from "@/components/ui/button";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
-import { Separator } from "@/components/ui/separator";
 import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -375,17 +374,21 @@ function ReviewDetailsColumn({
       <MafTestTagSection workoutLogId={workoutLogId} workout={detail.workout ?? null} />
       <MigrationReviewCallout reviewFlag={reviewFlag} onResolveReview={onResolveReview} />
 
-      <Separator />
-
-      <ReviewActionButtons
-        entry={entry}
-        confirmingDelete={confirmingDelete}
-        currentCoachSeedText={currentCoachSeedText}
-        onAskCoach={onAskCoach}
-        onMarkPlanned={onMarkPlanned}
-        onDelete={onDelete}
-        onDeleteClick={onDeleteClick}
-      />
+      {/* Pinned to the bottom of the scroll area so Ask coach / Reopen /
+          Delete stay reachable on a long review without scrolling to the end.
+          `sticky` resolves against whichever ancestor scrolls (desktop dialog,
+          split-coach details column, or mobile bottom sheet). */}
+      <div className="sticky bottom-0 z-10 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <ReviewActionButtons
+          entry={entry}
+          confirmingDelete={confirmingDelete}
+          currentCoachSeedText={currentCoachSeedText}
+          onAskCoach={onAskCoach}
+          onMarkPlanned={onMarkPlanned}
+          onDelete={onDelete}
+          onDeleteClick={onDeleteClick}
+        />
+      </div>
     </>
   );
 }
@@ -549,6 +552,7 @@ function ReviewActualsSection({
           saveState={{
             isSaving: detail.isSaving,
             lastSavedAt: detail.lastSavedAt,
+            lastSaveErrorAt: detail.lastSaveErrorAt,
           }}
           hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
           onOpenConversionHelper={parseVisibleReference}
@@ -613,7 +617,7 @@ function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReview
   };
 
   return (
-    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+    <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
       <p className="font-medium">Migration review: {reviewFlag.status}</p>
       {reviewFlag.reason ? <p className="text-muted-foreground">{reviewFlag.reason}</p> : null}
       <div className="mt-2 flex gap-2">

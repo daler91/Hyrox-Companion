@@ -39,8 +39,13 @@ export function useExerciseSetsForOwner<TSnapshot>({
   cellSaveDebounceMs = 350,
 }: Params<TSnapshot>) {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [lastSaveErrorAt, setLastSaveErrorAt] = useState<number | null>(null);
   const [activeOwnerId, setActiveOwnerId] = useState(ownerId);
   const markSaved = () => setLastSavedAt(Date.now());
+  // Records the most recent failed set write so the save pill can show an
+  // honest "Couldn't save" state. A later markSaved() supersedes it — the pill
+  // compares timestamps — so no explicit clear is needed on a subsequent save.
+  const markError = () => setLastSaveErrorAt(Date.now());
 
   // Per-set sequence guard (W13): each set PATCH bumps its set's counter on
   // mutate; onSuccess only writes the server row back if its PATCH is still the
@@ -74,6 +79,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
       markSaved();
     },
     onError: (_err, _vars, ctx) => {
+      markError();
       const prev = (ctx as { prev?: TSnapshot } | undefined)?.prev;
       if (ownerId && prev) restoreSnapshot(ownerId, prev);
     },
@@ -86,6 +92,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
   if (ownerId !== activeOwnerId) {
     setActiveOwnerId(ownerId);
     setLastSavedAt(null);
+    setLastSaveErrorAt(null);
     cancelPending();
   }
 
@@ -96,6 +103,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
       patchCachedSets((sets) => [...sets, serverSet]);
       markSaved();
     },
+    onError: () => markError(),
     errorToast: "Couldn't add that exercise",
     invalidateQueries: ownerId ? addInvalidateQueries?.(ownerId) : undefined,
   });
@@ -112,6 +120,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     },
     onSuccess: () => markSaved(),
     onError: (_err, _vars, ctx) => {
+      markError();
       const prev = (ctx as { prev?: TSnapshot } | undefined)?.prev;
       if (ownerId && prev) restoreSnapshot(ownerId, prev);
     },
@@ -133,6 +142,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     deleteSet,
     isSaving: pendingMutationCount > 0,
     lastSavedAt,
+    lastSaveErrorAt,
     markSaved,
   };
 }
