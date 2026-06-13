@@ -22,6 +22,13 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
   const results = data?.results ?? [];
   const showResults = debounced.trim().length >= MIN_QUERY_LENGTH;
 
+  const statusText =
+    showResults && !isFetching
+      ? results.length === 0
+        ? "No foods found"
+        : `${results.length} result${results.length === 1 ? "" : "s"} found`
+      : "";
+
   return (
     <div className="space-y-2">
       <div className="relative">
@@ -35,6 +42,9 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
           data-testid="input-food-search"
         />
       </div>
+      <span role="status" aria-live="polite" className="sr-only">
+        {statusText}
+      </span>
 
       {data?.apiDegraded && (
         <p className="text-xs text-muted-foreground" data-testid="text-search-degraded">
