@@ -2,7 +2,7 @@ import { estimatePlannedSession } from "@shared/plannedSessionEstimate";
 import type { TimelineEntry } from "@shared/schema";
 import { computeSessionFuellingTarget } from "@shared/sessionFuellingTargets";
 import { useQuery } from "@tanstack/react-query";
-import { UtensilsCrossed } from "lucide-react";
+import { ChevronDown, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RpeSelector } from "@/components/RpeSelector";
@@ -110,6 +110,13 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
     usingEstimate: entry.expectedDurationMin == null && estimate.source !== "none",
   });
 
+  const adjustSummary = [
+    durationDraft != null ? `${durationDraft} min` : null,
+    rpeDraft != null ? `RPE ${rpeDraft}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm" data-testid="fuelling-plan-panel">
       <div className="flex items-center gap-2">
@@ -132,37 +139,53 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
         </p>
       )}
 
-      <div className="space-y-2 border-t pt-2">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-medium text-muted-foreground">Expected duration (min)</span>
-          <NumberStepper
-            value={durationDraft}
-            onChange={(value) => {
-              setDurationDraft(value);
-              persist({ expectedDurationMin: value ?? null });
-            }}
-            min={1}
-            max={600}
-            stepOptions={[5, 15]}
-            placeholder="min"
-            ariaLabel="Expected duration in minutes"
-            testId="fuelling-plan-duration"
-            className="w-32"
+      {/* Duration/effort feed the fuel target — collapse them behind a
+          disclosure so they don't read like a second RPE-logging input next
+          to the "How hard?" selector below. Open by default only when there's
+          no duration to estimate from, since the hint asks the user to set one. */}
+      <details className="group border-t pt-2" open={durationDraft == null || undefined}>
+        <summary
+          className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden"
+          data-testid="fuelling-plan-adjust"
+        >
+          <span>Adjust session estimate{adjustSummary ? ` · ${adjustSummary}` : ""}</span>
+          <ChevronDown
+            className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+            aria-hidden
           />
+        </summary>
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-muted-foreground">Expected duration (min)</span>
+            <NumberStepper
+              value={durationDraft}
+              onChange={(value) => {
+                setDurationDraft(value);
+                persist({ expectedDurationMin: value ?? null });
+              }}
+              min={1}
+              max={600}
+              stepOptions={[5, 15]}
+              placeholder="min"
+              ariaLabel="Expected duration in minutes"
+              testId="fuelling-plan-duration"
+              className="w-32"
+            />
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Expected effort</span>
+            <RpeSelector
+              value={rpeDraft}
+              onChange={(value) => {
+                setRpeDraft(value);
+                persist({ expectedRpe: value });
+              }}
+              showLabel={false}
+              compact
+            />
+          </div>
         </div>
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-muted-foreground">Expected effort</span>
-          <RpeSelector
-            value={rpeDraft}
-            onChange={(value) => {
-              setRpeDraft(value);
-              persist({ expectedRpe: value });
-            }}
-            showLabel={false}
-            compact
-          />
-        </div>
-      </div>
+      </details>
 
       <p
         className="text-[11px] text-muted-foreground/70"
