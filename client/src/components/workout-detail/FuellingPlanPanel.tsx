@@ -60,8 +60,9 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
       estimatePlannedSession({
         structureBlocks: entry.structureBlocks ?? [],
         exerciseSets: entry.exerciseSets ?? [],
+        distanceUnit: preferences?.distanceUnit ?? null,
       }),
-    [entry.structureBlocks, entry.exerciseSets],
+    [entry.structureBlocks, entry.exerciseSets, preferences?.distanceUnit],
   );
 
   // Saved expected values win; otherwise seed from the exercise-table estimate.
@@ -71,6 +72,37 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   const [rpeDraft, setRpeDraft] = useState<number | null>(
     entry.expectedRpe ?? estimate.rpe ?? null,
   );
+
+  // Once the athlete adjusts a field this session, stop auto-applying the async
+  // server estimate to it so we never clobber their edit.
+  const touchedDuration = useRef(false);
+  const touchedRpe = useRef(false);
+
+  // Always-on server estimate: distance-aware, personalized from the athlete's logged
+  // run pace, and lightly AI-refined. The local deterministic seed above renders
+  // instantly; this swaps in when it resolves. Skipped once both expected values are
+  // saved (the override already wins) — keeps it off the AI budget for set sessions.
+  const hasBothOverrides = entry.expectedDurationMin != null && entry.expectedRpe != null;
+  const { data: serverEstimate } = useQuery({
+    queryKey: QUERY_KEYS.nutritionPlannedSessionEstimate(entry.planDayId ?? ""),
+    queryFn: () => api.nutrition.getPlannedSessionEstimate(entry.planDayId ?? ""),
+    enabled: Boolean(entry.planDayId) && !hasBothOverrides,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!serverEstimate) return;
+    if (
+      entry.expectedDurationMin == null &&
+      !touchedDuration.current &&
+      serverEstimate.durationMin != null
+    ) {
+      setDurationDraft(serverEstimate.durationMin);
+    }
+    if (entry.expectedRpe == null && !touchedRpe.current && serverEstimate.rpe != null) {
+      setRpeDraft(serverEstimate.rpe);
+    }
+  }, [serverEstimate, entry.expectedDurationMin, entry.expectedRpe]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -134,7 +166,11 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
       </div>
 
       {hint && (
-        <p className="text-[11px] text-muted-foreground/80" data-testid={hint.testId}>
+        <p
+          className="text-[11px] text-muted-foreground/80"
+          data-testid={hint.testId}
+          title={serverEstimate?.refined ? (serverEstimate.rationale ?? undefined) : undefined}
+        >
           {hint.text}
         </p>
       )}
@@ -160,6 +196,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
             <NumberStepper
               value={durationDraft}
               onChange={(value) => {
+                touchedDuration.current = true;
                 setDurationDraft(value);
                 persist({ expectedDurationMin: value ?? null });
               }}
@@ -177,6 +214,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
             <RpeSelector
               value={rpeDraft}
               onChange={(value) => {
+                touchedRpe.current = true;
                 setRpeDraft(value);
                 persist({ expectedRpe: value });
               }}

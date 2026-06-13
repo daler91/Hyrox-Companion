@@ -84,6 +84,8 @@ export const QUERY_KEYS = {
   nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id] as const,
   nutritionSessionFuelling: (workoutId: string) =>
     ["/api/v1/nutrition/session-fuelling", workoutId] as const,
+  nutritionPlannedSessionEstimate: (planDayId: string) =>
+    ["/api/v1/nutrition/planned-session-estimate", planDayId] as const,
   nutritionBlock: (from: string, to: string) =>
     ["/api/v1/nutrition/block", from, to] as const,
   nutritionRange: (from: string, to: string) =>

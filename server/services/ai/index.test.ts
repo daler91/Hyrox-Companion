@@ -372,7 +372,7 @@ describe("buildTrainingContext", () => {
 
     const ctx = await buildTrainingContext(USER_ID);
 
-    expect(buildNextSessionFuelling).toHaveBeenCalledWith(upcomingDay, 75);
+    expect(buildNextSessionFuelling).toHaveBeenCalledWith(upcomingDay, 75, "km");
     expect(ctx.nutrition?.nextSessionFuelling).toEqual(fuelling);
   });
 

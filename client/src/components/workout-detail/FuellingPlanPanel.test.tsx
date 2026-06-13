@@ -10,10 +10,19 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
 
 vi.mock("@/lib/api", () => ({
-  api: { plans: { updateDayWithoutPlan: vi.fn().mockResolvedValue({}) } },
+  api: {
+    plans: { updateDayWithoutPlan: vi.fn().mockResolvedValue({}) },
+    // Default: never resolves, so the deterministic seed is what tests observe unless
+    // a test opts into a server estimate via mockResolvedValueOnce.
+    nutrition: { getPlannedSessionEstimate: vi.fn(() => new Promise(() => {})) },
+  },
   QUERY_KEYS: {
     preferences: ["/api/v1/preferences"],
     timeline: ["/api/v1/timeline"],
+    nutritionPlannedSessionEstimate: (planDayId: string) => [
+      "/api/v1/nutrition/planned-session-estimate",
+      planDayId,
+    ],
   },
 }));
 
@@ -109,6 +118,29 @@ describe("FuellingPlanPanel", () => {
     );
 
     expect(screen.getByTestId("fuelling-plan-bodyweight-hint")).toBeInTheDocument();
+  });
+
+  it("swaps in the server estimate (personalized + AI) when the athlete hasn't overridden", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.nutrition.getPlannedSessionEstimate).mockResolvedValueOnce({
+      planDayId: "day-1",
+      durationMin: 48, // distinct from the local deterministic 9000 m estimate (~54)
+      rpe: 3,
+      rationale: "personalized to your pace",
+      source: "sets",
+      refined: true,
+    });
+    const entry = makeEntry({
+      exerciseSets: [
+        { exerciseName: "recovery_run", plannedDistance: 9000 },
+      ] as unknown as TimelineEntry["exerciseSets"],
+    });
+    renderWithClient(<FuellingPlanPanel entry={entry} />);
+
+    await user.click(screen.getByTestId("fuelling-plan-adjust"));
+    await waitFor(() =>
+      expect(screen.getByTestId("fuelling-plan-duration")).toHaveValue(48),
+    );
   });
 
   it("persists an edited expected effort to the plan day", async () => {
