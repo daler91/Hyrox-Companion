@@ -1,0 +1,3 @@
+ALTER TABLE "food_servings" ADD COLUMN "created_by_user_id" varchar(255);--> statement-breakpoint
+ALTER TABLE "food_servings" ADD CONSTRAINT "food_servings_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "idx_food_servings_created_by_user_id" ON "food_servings" USING btree ("created_by_user_id");

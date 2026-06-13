@@ -9,6 +9,7 @@ import type {
   Food,
   FoodLogEntry,
   FoodSearchResponse,
+  FoodServing,
   FoodWithServingsResponse,
   FuellingRangeResponse,
   MicroSummaryResponse,
@@ -20,6 +21,7 @@ import type {
   RecipeWithIngredients,
   RepeatDayInput,
   RepeatDayResponse,
+  ServingInput,
   SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
@@ -127,6 +129,27 @@ export function useFoodWithServings(id: string | null) {
     queryFn: () => api.nutrition.getFood(id as string),
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Add a personal named portion (e.g. "1 slice") to a food while logging. No
+ *  success toast — selecting the new portion in the dialog is the feedback.
+ *  Invalidates the food detail so the serving list refetches with it included. */
+export function useAddServing(foodId: string) {
+  return useApiMutation<FoodServing, Error, ServingInput>({
+    mutationFn: (input) => api.nutrition.addServing(foodId, input),
+    invalidateQueries: [QUERY_KEYS.nutritionFood(foodId)],
+    errorToast: "Couldn't add that portion",
+  });
+}
+
+/** Remove one of the user's own personal portions from a food. */
+export function useRemoveServing(foodId: string) {
+  return useApiMutation<{ success: boolean }, Error, string>({
+    mutationFn: (servingId) => api.nutrition.removeServing(foodId, servingId),
+    invalidateQueries: [QUERY_KEYS.nutritionFood(foodId)],
+    successToast: "Portion removed",
+    errorToast: "Couldn't remove that portion",
   });
 }
 
