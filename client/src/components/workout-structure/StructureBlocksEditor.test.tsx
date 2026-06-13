@@ -36,6 +36,20 @@ describe("StructureBlocksEditor", () => {
     expect(screen.getByTestId("structure-blocks-add-toggle")).toBeInTheDocument();
   });
 
+  it("keeps the titled section and default add label without headerless", () => {
+    render(<StructureBlocksEditor onChange={vi.fn()} />);
+    expect(screen.getByText("Workout blocks")).toBeInTheDocument();
+    expect(screen.getByTestId("structure-blocks-add-toggle")).toHaveTextContent("Add workout block");
+  });
+
+  it("hides the section header and relabels the add button in headerless mode", () => {
+    render(<StructureBlocksEditor onChange={vi.fn()} headerless />);
+    expect(screen.queryByText("Workout blocks")).not.toBeInTheDocument();
+    expect(screen.getByTestId("structure-blocks-add-toggle")).toHaveTextContent(
+      "Add structure (advanced)",
+    );
+  });
+
   it("adds an EMOM block via the add button and surfaces it in onChange", () => {
     render(<Harness />);
 

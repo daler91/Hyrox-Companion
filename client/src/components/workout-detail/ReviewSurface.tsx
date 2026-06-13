@@ -31,6 +31,7 @@ import { MafTestTagSection } from "./MafTestTagSection";
 import { CoachRationaleSection, DetailSection } from "./shared/DetailSection";
 import type { PrescriptionTextPayload } from "./shared/PrescriptionEditor";
 import { PrescriptionEditor } from "./shared/PrescriptionEditor";
+import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPlanDayPicker } from "./shared/WorkoutPlanDayPicker";
 import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
@@ -529,65 +530,77 @@ function ReviewActualsSection({
   // would unmount the editors and could drop debounced cell edits.
   return (
     <DetailSection title="Results" icon={Dumbbell} testId={`review-results-${entry.id}`}>
-      <div className="space-y-3">
-        <StructureBlocksEditor
-          value={structureBlocks}
-          onChange={(next) => detail.updateStructure.mutate(next)}
-          exerciseSets={exerciseSets}
-          onUpdateSet={detail.patchSetDebounced}
-          onAddSet={detail.addSet.mutate}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          showScoreControls
-          onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
-        />
-        <ExerciseTable
-          workoutId={workoutLogId}
-          exerciseSets={exerciseSets}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          onUpdateSet={detail.patchSetDebounced}
-          onAddSet={detail.addSet.mutate}
-          onDeleteSet={detail.deleteSet.mutate}
-          saveState={{
-            isSaving: detail.isSaving,
-            lastSavedAt: detail.lastSavedAt,
-            lastSaveErrorAt: detail.lastSaveErrorAt,
-          }}
-          hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
-          onOpenConversionHelper={parseVisibleReference}
-          defaultExpanded
-          showPlannedDiffs={showPlannedDiffs}
-          structureBlocks={structureBlocks}
-        />
-        <PrescriptionEditor
-          entryId={entry.id}
-          hasSets={exerciseSets.length > 0}
-          mainWorkout={referenceMainWorkout}
-          accessory={referenceAccessory}
-          notes={null}
-          showNotes={false}
-          onSaveField={(field, value) => {
-            // Notes are owned by the effort/notes block below (writes
-            // through updateNote with optimistic patches); ignore any
-            // stray notes saves so we can't double-write to the same
-            // column.
-            if (field === "notes") return;
-            const normalized = value.trim().length === 0 ? null : value;
-            detail.updateReference.mutate(
-              field === "mainWorkout"
-                ? { prescribedMainWorkout: normalized }
-                : { prescribedAccessory: normalized },
-            );
-          }}
-          onParseText={handleExplicitTextParse}
-          onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
-          isParsingText={detail.reparseFreeText.isPending}
-          isParsingImage={detail.reparseFromImage.isPending}
-          title="Workout description"
-          compact
-        />
-      </div>
+      <WorkoutContentsLayout
+        exerciseSets={exerciseSets}
+        sourceLabel={hasReferenceText ? "from coach text" : null}
+        structureBlockCount={(structureBlocks ?? []).length}
+        summaryLabel="Results contents"
+        isParsing={detail.reparseFreeText.isPending || detail.reparseFromImage.isPending}
+        source={
+          <PrescriptionEditor
+            entryId={entry.id}
+            hasSets={exerciseSets.length > 0}
+            mainWorkout={referenceMainWorkout}
+            accessory={referenceAccessory}
+            notes={null}
+            showNotes={false}
+            onSaveField={(field, value) => {
+              // Notes are owned by the effort/notes block below (writes
+              // through updateNote with optimistic patches); ignore any
+              // stray notes saves so we can't double-write to the same
+              // column.
+              if (field === "notes") return;
+              const normalized = value.trim().length === 0 ? null : value;
+              detail.updateReference.mutate(
+                field === "mainWorkout"
+                  ? { prescribedMainWorkout: normalized }
+                  : { prescribedAccessory: normalized },
+              );
+            }}
+            onParseText={handleExplicitTextParse}
+            onParseImage={(payload) => detail.reparseFromImage.mutate(payload)}
+            isParsingText={detail.reparseFreeText.isPending}
+            isParsingImage={detail.reparseFromImage.isPending}
+            title="Workout description"
+            compact
+          />
+        }
+        table={
+          <ExerciseTable
+            workoutId={workoutLogId}
+            exerciseSets={exerciseSets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onUpdateSet={detail.patchSetDebounced}
+            onAddSet={detail.addSet.mutate}
+            onDeleteSet={detail.deleteSet.mutate}
+            saveState={{
+              isSaving: detail.isSaving,
+              lastSavedAt: detail.lastSavedAt,
+              lastSaveErrorAt: detail.lastSaveErrorAt,
+            }}
+            hasUnparsedText={hasReferenceText && exerciseSets.length === 0}
+            onOpenConversionHelper={parseVisibleReference}
+            defaultExpanded
+            showPlannedDiffs={showPlannedDiffs}
+            structureBlocks={structureBlocks}
+          />
+        }
+        structure={
+          <StructureBlocksEditor
+            value={structureBlocks}
+            onChange={(next) => detail.updateStructure.mutate(next)}
+            exerciseSets={exerciseSets}
+            onUpdateSet={detail.patchSetDebounced}
+            onAddSet={detail.addSet.mutate}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            showScoreControls
+            onScoreChange={(blockId, score) => detail.updateBlockScore.mutate({ blockId, score })}
+            headerless
+          />
+        }
+      />
     </DetailSection>
   );
 }

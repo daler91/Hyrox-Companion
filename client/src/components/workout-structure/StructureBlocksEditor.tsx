@@ -35,6 +35,13 @@ interface Props {
   readonly distanceUnit?: "km" | "miles";
   readonly showScoreControls?: boolean;
   readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
+  /**
+   * Demote the block builder to an advanced affordance: hide the "Workout
+   * blocks" title + helper text and relabel the empty-state button to
+   * "Add structure (advanced)". Defaults to false so the /log builder keeps
+   * its titled section.
+   */
+  readonly headerless?: boolean;
 }
 
 interface StructureBlockCardProps {
@@ -136,6 +143,7 @@ export function StructureBlocksEditor({
   distanceUnit = "km",
   showScoreControls = false,
   onScoreChange,
+  headerless = false,
 }: Props) {
   const normalizedValue = normalizeValue(value);
   const [drafts, setDrafts] = useState<DraftBlock[]>(() => draftsFromValue(normalizedValue));
@@ -219,15 +227,17 @@ export function StructureBlocksEditor({
 
   return (
     <section className="space-y-3" data-testid="structure-blocks-editor" aria-label="Workout blocks">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Workout blocks
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Add an EMOM, AMRAP, or fixed-round block. Each one explains itself, and you build it
-          top to bottom.
-        </p>
-      </div>
+      {!headerless ? (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Workout blocks
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Add an EMOM, AMRAP, or fixed-round block. Each one explains itself, and you build it
+            top to bottom.
+          </p>
+        </div>
+      ) : null}
 
       {hasBlocks
         ? drafts.map((draft, idx) => {
@@ -303,7 +313,7 @@ export function StructureBlocksEditor({
           data-testid="structure-blocks-add-toggle"
         >
           <Plus className="mr-1 size-3.5" aria-hidden />
-          Add workout block
+          {headerless ? "Add structure (advanced)" : "Add workout block"}
         </Button>
       )}
     </section>
