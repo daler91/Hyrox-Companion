@@ -11,7 +11,7 @@ import {
 import type { FuellingDayPoint, TimelineEntry } from "@shared/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { format } from "date-fns";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import {
@@ -69,6 +69,27 @@ const dndAnnouncements: Announcements = {
   },
   onDragCancel: ({ active }) => `Cancelled; the workout stayed on ${draggedFromDate(active)}.`,
 };
+
+// scrollToIndex only guarantees the today row is *mounted*; it scrolls within the
+// virtualizer's own coordinate space, which ignores the non-virtualized header above
+// the list and so undershoots. Phase 2 reads the true pixel position from the live DOM
+// node (it's in normal flow, so the browser accounts for the current header height).
+// The row can take a frame or two to mount + measure, so retry across a few frames,
+// then bail. Returns the rAF handle so callers can cancel a pending retry on cleanup.
+const SCROLL_TO_TODAY_MAX_FRAMES = 10;
+
+function scrollTodayIntoViewWhenReady(
+  todayRef: RefObject<HTMLDivElement | null>,
+  framesLeft = SCROLL_TO_TODAY_MAX_FRAMES,
+): number | undefined {
+  const el = todayRef.current;
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return undefined;
+  }
+  if (framesLeft <= 0) return undefined;
+  return requestAnimationFrame(() => scrollTodayIntoViewWhenReady(todayRef, framesLeft - 1));
+}
 
 export default function Timeline() {
   useDocumentTitle("Timeline");
@@ -286,8 +307,10 @@ export default function Timeline() {
       return;
     }
 
-    rowVirtualizer.scrollToIndex(todayIndex, { align: "start", behavior: "smooth" });
-  }, [allVisibleGroups, rowVirtualizer, scrollToToday]);
+    // Phase 1: mount the today row (instant); phase 2: land precisely on the real node.
+    rowVirtualizer.scrollToIndex(todayIndex, { align: "center" });
+    scrollTodayIntoViewWhenReady(todayRef);
+  }, [allVisibleGroups, rowVirtualizer, scrollToToday, todayRef]);
 
   useEffect(() => {
     if (timelineLoading) return undefined;
@@ -303,13 +326,19 @@ export default function Timeline() {
       return undefined;
     }
 
+    let rafId: number | undefined;
     const timerId = setTimeout(() => {
-      rowVirtualizer.scrollToIndex(todayIndex, { align: "center", behavior: "smooth" });
+      // Phase 1: mount the today row (instant); phase 2: land precisely on the real node.
+      rowVirtualizer.scrollToIndex(todayIndex, { align: "center" });
+      rafId = scrollTodayIntoViewWhenReady(todayRef);
       initialTodayScrollKeyRef.current = scrollKey;
     }, SCROLL_TO_TODAY_DELAY_MS);
 
-    return () => clearTimeout(timerId);
-  }, [allVisibleGroups, rowVirtualizer, selectedPlanId, timelineLoading]);
+    return () => {
+      clearTimeout(timerId);
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+  }, [allVisibleGroups, rowVirtualizer, selectedPlanId, timelineLoading, todayRef]);
 
   const isWorkoutSurfaceOpen = Boolean(
     previewEntry ||

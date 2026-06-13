@@ -13,7 +13,10 @@ const timelineMocks = vi.hoisted(() => ({ setCoachOpen: vi.fn() }));
 const workoutActionMocks = vi.hoisted(() => ({ handleMarkComplete: vi.fn() }));
 const apiMocks = vi.hoisted(() => ({ updatePreferences: vi.fn() }));
 const viewportState = vi.hoisted(() => ({ isMobile: false }));
-const dataMocks = vi.hoisted(() => ({ scrollToToday: vi.fn() }));
+const dataMocks = vi.hoisted(() => ({
+  scrollToToday: vi.fn(),
+  todayRef: { current: null as HTMLElement | null },
+}));
 const virtualizerMocks = vi.hoisted(() => ({
   getVirtualItems: vi.fn(() => [{ key: "0", index: 0, start: 0, end: 300, size: 300 }]),
   measureElement: vi.fn(),
@@ -80,7 +83,7 @@ vi.mock("@/hooks/useTimelineState", () => ({
       timelineLoading,
       annotations: [],
       isNewUser: false,
-      todayRef: { current: null },
+      todayRef: dataMocks.todayRef,
       scrollToToday: dataMocks.scrollToToday,
     },
     filters: {
@@ -411,6 +414,7 @@ describe("Timeline surface sync", () => {
     apiMocks.updatePreferences.mockReset();
     apiMocks.updatePreferences.mockResolvedValue({});
     dataMocks.scrollToToday.mockReset();
+    dataMocks.todayRef.current = null;
     virtualizerMocks.getVirtualItems.mockReset();
     virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0, end: 300, size: 300 }]);
     virtualizerMocks.measureElement.mockReset();
@@ -667,11 +671,38 @@ describe("Timeline surface sync", () => {
       vi.advanceTimersByTime(SCROLL_TO_TODAY_DELAY_MS);
     });
 
-    expect(virtualizerMocks.scrollToIndex).toHaveBeenCalledWith(1, {
-      align: "center",
-      behavior: "smooth",
-    });
+    expect(virtualizerMocks.scrollToIndex).toHaveBeenCalledWith(1, { align: "center" });
     expect(dataMocks.scrollToToday).not.toHaveBeenCalled();
+  });
+
+  it("lands precisely on the mounted today row via scrollIntoView", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+    viewportState.isMobile = true;
+    openWorkoutId = null;
+
+    // Simulate the today row being mounted: scrollToIndex only guarantees the row
+    // exists; the precise landing reads the real DOM node so the header above the
+    // virtualized list is accounted for.
+    const scrollIntoView = vi.fn();
+    dataMocks.todayRef.current = { scrollIntoView } as unknown as HTMLElement;
+
+    const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
+    const todayEntry = makeEntry({ id: "today", date: "2026-05-15", planDayId: "today-day" });
+    timelineData = [pastEntry, todayEntry];
+    setVisibleTimelineGroups({
+      past: [["2026-05-14", [pastEntry]]],
+      future: [["2026-05-15", [todayEntry]]],
+    });
+
+    renderTimeline();
+
+    act(() => {
+      vi.advanceTimersByTime(SCROLL_TO_TODAY_DELAY_MS);
+    });
+
+    expect(virtualizerMocks.scrollToIndex).toHaveBeenCalledWith(1, { align: "center" });
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });
 
   it("does not force-scroll when today is absent from the visible timeline groups", () => {
