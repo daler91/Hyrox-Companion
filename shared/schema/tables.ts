@@ -749,9 +749,11 @@ export const mafWorkoutAnalysis = pgTable("maf_workout_analysis", {
 // USDA / Open Food Facts / a user custom food — never from AI (BRD §7).
 // ---------------------------------------------------------------------------
 
-// Where a food's reference data came from. USDA is the Phase 1 source; `off`
-// (Open Food Facts) and `custom` are reserved for Phase 2.
-export const FOOD_SOURCES = ["usda", "off", "custom"] as const;
+// Where a food's reference data came from. `usda` (FoodData Central) and `off`
+// (Open Food Facts) are the original cached external sources; `fatsecret` is the
+// verified branded/barcode source (FR — higher-quality branded data); `custom`
+// is a user-entered food / recipe-backing food.
+export const FOOD_SOURCES = ["usda", "off", "fatsecret", "custom"] as const;
 export type FoodSource = (typeof FOOD_SOURCES)[number];
 
 // Meal slot a log entry is filed under. pre_workout / post_workout exist so the
@@ -771,7 +773,8 @@ export type FoodEntryMethod = (typeof FOOD_ENTRY_METHODS)[number];
 export const foods = pgTable("foods", {
   id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
   source: varchar("source", { length: 16 }).notNull(),
-  // USDA fdcId (or OFF barcode). NULL only for user custom foods (Phase 2).
+  // External identity: USDA fdcId, OFF barcode, or FatSecret food_id. NULL only
+  // for user custom foods.
   sourceId: varchar("source_id", { length: 255 }),
   name: text("name").notNull(),
   brand: text("brand"),
@@ -784,6 +787,11 @@ export const foods = pgTable("foods", {
   fiberPer100g: real("fiber_per_100g"),
   // Long tail of micronutrients (per 100g), reserved for the Phase 5 panel.
   micros: jsonb("micros").$type<Record<string, number>>(),
+  // When this external row was last fetched/refreshed from its upstream source.
+  // NULL for rows cached before freshness tracking and for custom foods (no
+  // upstream to refresh). Drives the lazy staleness re-fetch in food search /
+  // barcode lookup so reformulated products self-heal over time.
+  lastFetchedAt: timestamp("last_fetched_at", { withTimezone: true }),
   // Owner of a user custom food / recipe-backing food (Phase 2). NULL = the
   // shared USDA/OFF reference cache. `set null` on user delete (NOT cascade) so
   // logged history survives — a food referenced by food_log_entries can't be
@@ -801,7 +809,7 @@ export const foods = pgTable("foods", {
   // is intentionally NOT enabled; fuzzy ranking would go in its own migration.
   index("idx_foods_name_lower").on(sql`lower(${table.name})`),
   index("idx_foods_created_by_user_id").on(table.createdByUserId),
-  check("foods_source_check", sql`source IN ('usda', 'off', 'custom')`),
+  check("foods_source_check", sql`source IN ('usda', 'off', 'fatsecret', 'custom')`),
 ]);
 export type Food = typeof foods.$inferSelect;
 export type InsertFood = typeof foods.$inferInsert;

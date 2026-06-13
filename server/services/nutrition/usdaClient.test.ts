@@ -27,7 +27,7 @@ vi.mock("../../utils/httpRetry", async () => {
 });
 
 import { env } from "../../env";
-import { fetchUsdaFoodPortions, mapUsdaSearchFood, searchUsdaFoods } from "./usdaClient";
+import { fetchUsdaFoodById, fetchUsdaFoodPortions, mapUsdaSearchFood, searchUsdaFoods } from "./usdaClient";
 
 const okResponse = (body: unknown) => ({
   ok: true,
@@ -218,5 +218,46 @@ describe("fetchUsdaFoodPortions", () => {
     (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
     expect(await fetchUsdaFoodPortions("123")).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("fetchUsdaFoodById", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const detail = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
+
+  it("maps the detail endpoint's nested nutrients, including micros", async () => {
+    fetchMock.mockResolvedValue(
+      detail({
+        fdcId: 123,
+        description: "Spinach, raw",
+        foodNutrients: [
+          { nutrient: { id: 1008, unitName: "KCAL" }, amount: 23 },
+          { nutrient: { id: 1003, unitName: "G" }, amount: 2.9 },
+          { nutrient: { id: 1093, unitName: "MG" }, amount: 79 },
+        ],
+      }),
+    );
+    const m = await fetchUsdaFoodById("123");
+    expect(m).toMatchObject({ source: "usda", sourceId: "123", name: "Spinach, raw", caloriesPer100g: 23, proteinPer100g: 2.9 });
+    expect(m?.micros).toMatchObject({ sodium: 79 });
+  });
+
+  it("returns null without an API key (no call)", async () => {
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
+    expect(await fetchUsdaFoodById("123")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns null on an API error (best-effort)", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}), headers: { get: () => null } });
+    expect(await fetchUsdaFoodById("123")).toBeNull();
   });
 });

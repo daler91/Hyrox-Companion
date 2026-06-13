@@ -29,6 +29,7 @@ import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { computeRecipeFood } from "../services/nutrition/recipe";
 import { type LogEntryWithFood, roundMacros, scaleNutrition } from "../services/nutrition/rollup";
+import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
 
 const DEFAULT_SEARCH_LIMIT = 25;
@@ -103,9 +104,20 @@ export class NutritionStorage {
   /** Cache USDA/OFF results into `foods`, upserting on (source, source_id). */
   async upsertFoods(mapped: MappedFood[], executor: DbExecutor = db): Promise<Food[]> {
     if (mapped.length === 0) return [];
-    // Dedupe within the batch so ON CONFLICT can't try to touch one row twice.
+    // Sanity-clamp every external food at this single cache boundary so a NaN /
+    // negative / absurd upstream value can never poison a cached row (and thus
+    // every future log of that food); unusable records are dropped. Also dedupe
+    // within the batch so ON CONFLICT can't try to touch one row twice.
     const byKey = new Map<string, MappedFood>();
-    for (const m of mapped) byKey.set(`${m.source}:${m.sourceId}`, m);
+    for (const m of mapped) {
+      const clean = sanitizeMappedFood(m);
+      if (clean) byKey.set(`${clean.source}:${clean.sourceId}`, clean);
+    }
+    if (byKey.size === 0) return [];
+    // One freshness instant for the whole batch, stamped on insert AND update so
+    // every cache write records when the row was last pulled from its source —
+    // the anchor for the lazy staleness re-fetch.
+    const now = new Date();
     const values = [...byKey.values()].map((m) => ({
       source: m.source,
       sourceId: m.sourceId,
@@ -118,6 +130,7 @@ export class NutritionStorage {
       fatPer100g: m.fatPer100g,
       fiberPer100g: m.fiberPer100g,
       micros: m.micros,
+      lastFetchedAt: now,
     }));
 
     return executor
@@ -136,7 +149,8 @@ export class NutritionStorage {
           fatPer100g: sql`excluded.fat_per_100g`,
           fiberPer100g: sql`excluded.fiber_per_100g`,
           micros: sql`excluded.micros`,
-          updatedAt: new Date(),
+          lastFetchedAt: now,
+          updatedAt: now,
         },
       })
       .returning();

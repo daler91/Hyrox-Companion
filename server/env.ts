@@ -103,6 +103,17 @@ const envSchema = z.object({
   // Free USDA FoodData Central API key for live food search. Optional: when
   // unset the module still works, degrading to locally-cached foods only (NFR-5).
   USDA_API_KEY: z.string().optional(),
+  // FatSecret Platform API (OAuth2 client-credentials) — verified branded/barcode
+  // food data. Optional: when unset (or when the egress IP isn't whitelisted by
+  // FatSecret) food search/barcode degrade to USDA + Open Food Facts as before.
+  FATSECRET_CLIENT_ID: z.string().optional(),
+  FATSECRET_CLIENT_SECRET: z.string().optional(),
+  // Space-delimited OAuth scopes. "basic" (US dataset) is the free-tier default;
+  // paid Premier tiers can request e.g. "basic premier barcode localization".
+  FATSECRET_SCOPE: z.string().default("basic"),
+  // Optional localization, honoured only on a localization-enabled scope/tier.
+  FATSECRET_REGION: z.string().optional(),
+  FATSECRET_LANGUAGE: z.string().optional(),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],
@@ -147,6 +158,15 @@ const envSchema = z.object({
   {
     message: "❌ FATAL: pk_live_ Clerk keys detected but NODE_ENV is not 'production' — set NODE_ENV=production on this deploy",
     path: ["NODE_ENV"],
+  },
+).refine(
+  // FatSecret needs BOTH the client id and secret to authenticate; exactly one
+  // set is a half-configuration that would silently never work. Zero set is the
+  // supported "disabled" default (search/barcode fall back to USDA/OFF).
+  (data) => Boolean(data.FATSECRET_CLIENT_ID) === Boolean(data.FATSECRET_CLIENT_SECRET),
+  {
+    message: "❌ FATAL: FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set together (or both omitted)",
+    path: ["FATSECRET_CLIENT_SECRET"],
   },
 );
 
