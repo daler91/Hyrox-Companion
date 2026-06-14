@@ -26,18 +26,41 @@ describe("MealSection", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("fires edit and delete callbacks", async () => {
+  it("fires edit callback on edit click", async () => {
     const onEdit = vi.fn();
-    const onDelete = vi.fn();
     const user = userEvent.setup();
-    render(<MealSection label="Breakfast" entries={[ENTRY]} onEdit={onEdit} onDelete={onDelete} />);
+    render(<MealSection label="Breakfast" entries={[ENTRY]} onEdit={onEdit} onDelete={vi.fn()} />);
 
     expect(screen.getByText("Banana")).toBeInTheDocument();
     await user.click(screen.getByTestId("button-edit-e1"));
     expect(onEdit).toHaveBeenCalledWith(ENTRY);
+  });
+
+  it("requires confirmation before deleting", async () => {
+    const onDelete = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MealSection label="Breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
+    );
 
     await user.click(screen.getByTestId("button-delete-e1"));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByText("Delete food entry?")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("confirm-delete-food-log"));
     expect(onDelete).toHaveBeenCalledWith("e1");
+  });
+
+  it("cancels delete when dismissed", async () => {
+    const onDelete = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MealSection label="Breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
+    );
+
+    await user.click(screen.getByTestId("button-delete-e1"));
+    await user.click(screen.getByTestId("cancel-delete-food-log"));
+    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it("shows an AI badge only for nl/photo entries", () => {
