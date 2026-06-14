@@ -4,7 +4,7 @@ vi.mock("../../env", () => ({
   env: {
     FATSECRET_CLIENT_ID: "cid",
     FATSECRET_CLIENT_SECRET: "csec",
-    FATSECRET_SCOPE: "basic",
+    FATSECRET_SCOPE: "basic premier barcode",
     FATSECRET_REGION: undefined,
     FATSECRET_LANGUAGE: undefined,
   },
@@ -48,6 +48,7 @@ import {
   __resetFatSecretTokenCacheForTests,
   getFatSecretFoodById,
   mapFatSecretFood,
+  mapFatSecretV1Food,
   resolveFatSecretBarcode,
   searchFatSecretFoods,
 } from "./fatsecretClient";
@@ -63,6 +64,11 @@ const isTokenUrl = (url: unknown) => {
     return false;
   }
 };
+/** URL-encoded request body of the last non-token API call. */
+function lastApiBody(mockFetch: ReturnType<typeof vi.fn>): string {
+  const call = mockFetch.mock.calls.find((c) => !isTokenUrl(c[0]));
+  return String((call?.[1] as { body: string }).body);
+}
 
 const SEARCH_BODY = {
   foods_search: {
@@ -184,6 +190,45 @@ describe("mapFatSecretFood", () => {
   });
 });
 
+describe("mapFatSecretV1Food (Basic tier description parsing)", () => {
+  it("parses a per-serving description into per-100g", () => {
+    const m = mapFatSecretV1Food({
+      food_id: "33691",
+      food_name: "Clif Bar",
+      brand_name: "Clif",
+      food_description: "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g",
+    });
+    expect(m).toMatchObject({ source: "fatsecret", sourceId: "33691", name: "Clif Bar", brand: "Clif", servingSizeG: 68 });
+    expect(m?.caloriesPer100g).toBeCloseTo((250 * 100) / 68);
+    expect(m?.proteinPer100g).toBeCloseTo((9 * 100) / 68);
+    expect(m?.fiberPer100g).toBeNull();
+  });
+
+  it("parses a Per 100g description directly", () => {
+    const m = mapFatSecretV1Food({
+      food_id: "1",
+      food_name: "Banana",
+      food_description: "Per 100g - Calories: 89kcal | Fat: 0.33g | Carbs: 22.84g | Protein: 1.09g",
+    });
+    expect(m?.caloriesPer100g).toBeCloseTo(89);
+    expect(m?.carbPer100g).toBeCloseTo(22.84);
+  });
+
+  it("drops a volume-only (ml) basis it can't convert to grams", () => {
+    expect(
+      mapFatSecretV1Food({
+        food_id: "2",
+        food_name: "Juice",
+        food_description: "Per 1 cup (240ml) - Calories: 110kcal | Fat: 0g | Carbs: 26g | Protein: 1g",
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null without a description", () => {
+    expect(mapFatSecretV1Food({ food_id: "3", food_name: "X" })).toBeNull();
+  });
+});
+
 describe("FatSecret API operations", () => {
   const fetchMock = vi.fn();
 
@@ -193,6 +238,7 @@ describe("FatSecret API operations", () => {
     __resetFatSecretTokenCacheForTests();
     (env as Record<string, unknown>).FATSECRET_CLIENT_ID = "cid";
     (env as Record<string, unknown>).FATSECRET_CLIENT_SECRET = "csec";
+    (env as Record<string, unknown>).FATSECRET_SCOPE = "basic premier barcode";
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -284,8 +330,7 @@ describe("FatSecret API operations", () => {
       });
       const food = await resolveFatSecretBarcode("0049000028");
       expect(food).toMatchObject({ source: "fatsecret", sourceId: "555", name: "Banana", caloriesPer100g: 89 });
-      const idCallBody = String((fetchMock.mock.calls.find((c) => !isTokenUrl(c[0]))?.[1] as { body: string }).body);
-      expect(idCallBody).toContain("barcode=0000049000028"); // left-padded to 13 digits
+      expect(lastApiBody(fetchMock)).toContain("barcode=0000049000028"); // left-padded to 13 digits
     });
 
     it("returns null for an unknown barcode (food_id 0)", async () => {
@@ -314,6 +359,48 @@ describe("FatSecret API operations", () => {
     it("returns null on an error envelope", async () => {
       stubFetch(() => ok({ error: { code: 106 } }));
       expect(await getFatSecretFoodById("999")).toBeNull();
+    });
+  });
+
+  // Reuses the parent fetchMock / stubFetch / setup; only the scope differs.
+  describe("on the free Basic (v1) tier", () => {
+    beforeEach(() => {
+      (env as Record<string, unknown>).FATSECRET_SCOPE = "basic";
+    });
+
+    const V1_BODY = {
+      foods: {
+        food: [
+          {
+            food_id: "33691",
+            food_name: "Clif Bar",
+            food_type: "Brand",
+            brand_name: "Clif",
+            food_description: "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g",
+          },
+        ],
+      },
+    };
+
+    it("uses the v1 foods.search method (not the Premier v3)", async () => {
+      stubFetch(() => ok(V1_BODY));
+      const result = await searchFatSecretFoods("clif");
+      expect(result).toMatchObject({ reached: true });
+      expect(result.foods).toHaveLength(1); // parsing itself is covered by the unit tests
+
+      const body = lastApiBody(fetchMock);
+      expect(body).toContain("method=foods.search");
+      expect(body).not.toContain("foods.search.v3");
+    });
+
+    it("skips FatSecret barcode entirely without the barcode scope", async () => {
+      expect(await resolveFatSecretBarcode("0049000028")).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled(); // no wasted call — straight to OFF
+    });
+
+    it("skips food.get (detail/refresh) without the premier scope", async () => {
+      expect(await getFatSecretFoodById("33691")).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

@@ -50,6 +50,20 @@ function credentials(): { id: string; secret: string } | null {
   return { id, secret };
 }
 
+/** Configured OAuth scopes (space-delimited). */
+function scopes(): string[] {
+  return env.FATSECRET_SCOPE.split(/\s+/).filter(Boolean);
+}
+/** Premier-tier methods (foods.search.v3, food.get.v4) need the `premier` scope.
+ *  The free Basic tier only has `basic` and must use the v1 methods. */
+function hasPremierScope(): boolean {
+  return scopes().includes("premier");
+}
+/** Barcode lookup needs the dedicated `barcode` scope (Premier tiers only). */
+function hasBarcodeScope(): boolean {
+  return scopes().includes("barcode");
+}
+
 // ---------------------------------------------------------------------------
 // OAuth2 token management
 // ---------------------------------------------------------------------------
@@ -222,6 +236,9 @@ interface FatSecretFood {
   food_name?: string;
   brand_name?: string;
   food_type?: string;
+  // v1 `foods.search` returns macros only as a summary string, e.g.
+  // "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g".
+  food_description?: string;
   servings?: { serving?: FatSecretServing | FatSecretServing[] };
 }
 
@@ -293,6 +310,35 @@ function extractMicros(serving: FatSecretServing, grams: number): Record<string,
   return Object.keys(micros).length > 0 ? micros : null;
 }
 
+/** Assemble a per-100g MappedFood from a FatSecret food + its computed macros.
+ *  Shared by the v3 and v1 mappers so the row shape lives in one place. */
+function toMappedFatSecretFood(
+  raw: FatSecretFood,
+  grams: number,
+  macros: {
+    calories: number | null;
+    protein: number | null;
+    carb: number | null;
+    fat: number | null;
+    fiber: number | null;
+    micros: Record<string, number> | null;
+  },
+): MappedFood {
+  return {
+    source: "fatsecret",
+    sourceId: String(raw.food_id),
+    name: (raw.food_name ?? "").trim(),
+    brand: raw.brand_name?.trim() || null,
+    servingSizeG: grams,
+    caloriesPer100g: macros.calories,
+    proteinPer100g: macros.protein,
+    carbPer100g: macros.carb,
+    fatPer100g: macros.fat,
+    fiberPer100g: macros.fiber,
+    micros: macros.micros,
+  };
+}
+
 /** Map one FatSecret food (with inline servings) into our per-100g shape, or null
  *  when unusable (no name/id, or only volume servings). */
 export function mapFatSecretFood(raw: FatSecretFood): MappedFood | null {
@@ -309,25 +355,71 @@ export function mapFatSecretFood(raw: FatSecretFood): MappedFood | null {
     return n === null ? null : (n * 100) / grams;
   };
 
-  const mapped: MappedFood = {
-    source: "fatsecret",
-    sourceId: String(foodId),
-    name,
-    brand: raw.brand_name?.trim() || null,
-    servingSizeG: grams,
-    caloriesPer100g: per100(serving.calories),
-    proteinPer100g: per100(serving.protein),
-    carbPer100g: per100(serving.carbohydrate),
-    fatPer100g: per100(serving.fat),
-    fiberPer100g: per100(serving.fiber),
+  return toMappedFatSecretFood(raw, grams, {
+    calories: per100(serving.calories),
+    protein: per100(serving.protein),
+    carb: per100(serving.carbohydrate),
+    fat: per100(serving.fat),
+    fiber: per100(serving.fiber),
     micros: extractMicros(serving, grams),
-  };
-  return mapped;
+  });
 }
 
 function normalizeFoodList(food: FatSecretFood | FatSecretFood[] | undefined): FatSecretFood[] {
   if (!food) return [];
   return Array.isArray(food) ? food : [food];
+}
+
+// --- Basic (v1) tier: parse macros from the food_description summary string ----
+
+/** Read a "Label: <number>" field from a v1 description. */
+function readDescriptionField(desc: string, pattern: RegExp): number | null {
+  const m = pattern.exec(desc);
+  return m ? num(m[1]) : null;
+}
+
+/** The gram basis a v1 `food_description` is stated per ("Per 100g", "Per 1 bar
+ *  (68g)", "Per 1 oz", …). null for a volume basis (ml / fl oz) we can't convert. */
+function parseDescriptionGrams(desc: string): number | null {
+  const paren = /\(([\d.]+)\s*(g|ml|oz|fl\s*oz)\)/i.exec(desc);
+  if (paren) {
+    const amount = num(paren[1]);
+    const unit = paren[2].toLowerCase().replace(/\s+/g, "");
+    if (amount === null || amount <= 0) return null;
+    if (unit === "g") return amount;
+    if (unit === "oz") return amount * OZ_TO_GRAMS;
+    return null; // ml / fl oz — volume, skip
+  }
+  const direct = /^Per\s+([\d.]+)\s*(g|oz)\b/i.exec(desc);
+  if (direct) {
+    const amount = num(direct[1]);
+    if (amount === null || amount <= 0) return null;
+    return direct[2].toLowerCase() === "oz" ? amount * OZ_TO_GRAMS : amount;
+  }
+  return null;
+}
+
+/** Map a Basic-tier (v1) search result — whose macros live in `food_description`
+ *  rather than structured servings — into per-100g. fiber/micros aren't in the v1
+ *  summary (left null). null when the basis is volume-only or unparseable. */
+export function mapFatSecretV1Food(raw: FatSecretFood): MappedFood | null {
+  const foodId = raw.food_id;
+  const name = raw.food_name?.trim();
+  const desc = raw.food_description;
+  if ((typeof foodId !== "string" && typeof foodId !== "number") || !name || !desc) return null;
+
+  const grams = parseDescriptionGrams(desc);
+  if (grams === null || grams <= 0) return null;
+  const per100 = (value: number | null): number | null => (value === null ? null : (value * 100) / grams);
+
+  return toMappedFatSecretFood(raw, grams, {
+    calories: per100(readDescriptionField(desc, /Calories:\s*([\d.]+)/i)),
+    protein: per100(readDescriptionField(desc, /Protein:\s*([\d.]+)/i)),
+    carb: per100(readDescriptionField(desc, /Carb(?:s|ohydrate)?:\s*([\d.]+)/i)),
+    fat: per100(readDescriptionField(desc, /Fat:\s*([\d.]+)/i)),
+    fiber: null,
+    micros: null,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -352,13 +444,17 @@ export async function searchFatSecretFoods(
   opts: { signal?: AbortSignal } = {},
 ): Promise<FatSecretSearchResult> {
   if (!credentials()) return { foods: [], reached: false };
+  // Premier exposes foods.search.v3 (servings inline); the free Basic tier only
+  // has v1 foods.search, whose macros come back as a description string we parse.
+  const premier = hasPremierScope();
   const body = await callFatSecret<FatSecretSearchResponse>(
     {
-      method: "foods.search.v3",
+      method: premier ? "foods.search.v3" : "foods.search",
       search_expression: query,
       max_results: String(FATSECRET_MAX_RESULTS),
-      ...(env.FATSECRET_REGION ? { region: env.FATSECRET_REGION } : {}),
-      ...(env.FATSECRET_LANGUAGE ? { language: env.FATSECRET_LANGUAGE } : {}),
+      // region/language need the localization scope (Premier); omit on Basic.
+      ...(premier && env.FATSECRET_REGION ? { region: env.FATSECRET_REGION } : {}),
+      ...(premier && env.FATSECRET_LANGUAGE ? { language: env.FATSECRET_LANGUAGE } : {}),
     },
     opts.signal,
   );
@@ -369,10 +465,10 @@ export async function searchFatSecretFoods(
     logger.warn({ code: body.error.code, message: body.error.message }, "[nutrition] FatSecret search error");
     return { foods: [], reached: false };
   }
-  const foods = normalizeFoodList(body.foods_search?.results?.food ?? body.foods?.food)
-    .map(mapFatSecretFood)
-    .filter((f): f is MappedFood => f !== null);
-  return { foods, reached: true };
+  const mapped = premier
+    ? normalizeFoodList(body.foods_search?.results?.food).map(mapFatSecretFood)
+    : normalizeFoodList(body.foods?.food).map(mapFatSecretV1Food);
+  return { foods: mapped.filter((f): f is MappedFood => f !== null), reached: true };
 }
 
 /** Fetch a FatSecret food's full detail by food_id, mapped to per-100g. Shared by
@@ -381,6 +477,7 @@ export async function getFatSecretFoodById(
   foodId: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<MappedFood | null> {
+  if (!hasPremierScope()) return null; // food.get.v4 is Premier-only
   const body = await callFatSecret<FatSecretFoodGetResponse>(
     { method: "food.get.v4", food_id: foodId },
     opts.signal,
@@ -401,6 +498,9 @@ export async function resolveFatSecretBarcode(
   code: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<MappedFood | null> {
+  // Barcode needs the `barcode` scope (Premier); on Basic, skip straight to Open
+  // Food Facts rather than spend a call that will fail.
+  if (!hasBarcodeScope()) return null;
   const idBody = await callFatSecret<FatSecretBarcodeResponse>(
     { method: "food.find_id_for_barcode", barcode: toGtin13(code) },
     opts.signal,
