@@ -21,6 +21,7 @@ import { resolveSpoonacularBarcode } from "./spoonacularClient";
 export async function lookupBarcode(code: string): Promise<Food | null> {
   const cached = await storage.nutrition.getFoodBySourceId("off", code);
   if (cached) {
+    logger.info({ code, source: cached.source }, "[nutrition] barcode resolved from cache");
     refreshStaleFoodsInBackground([cached]);
     return cached;
   }
@@ -28,7 +29,11 @@ export async function lookupBarcode(code: string): Promise<Food | null> {
   // Spoonacular first (branded barcode strength); fall back to OFF only when it
   // has nothing (unknown barcode or unavailable).
   const mapped = (await resolveSpoonacularBarcode(code)) ?? (await resolveBarcode(code));
-  if (!mapped) return null;
+  if (!mapped) {
+    logger.info({ code }, "[nutrition] barcode not recognized by Spoonacular or Open Food Facts");
+    return null;
+  }
+  logger.info({ code, source: mapped.source }, "[nutrition] barcode resolved");
 
   try {
     const [food] = await storage.nutrition.upsertFoods([mapped]);
