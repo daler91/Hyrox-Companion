@@ -156,13 +156,19 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
         <h3 className="text-sm font-semibold">Fuel for this session</h3>
       </div>
 
-      <div className="space-y-1">
-        <PreCarbTargetLine preCarbG={target.preCarbG} testId="fuelling-plan-pre-target" />
-        <PostTargetLine
-          postCarbG={target.postCarbG}
-          postProteinG={target.postProteinG}
-          testId="fuelling-plan-post-target"
-        />
+      <div className="space-y-2">
+        <div className="space-y-0.5">
+          <p className="text-xs font-medium text-muted-foreground">Before training</p>
+          <PreCarbTargetLine preCarbG={target.preCarbG} testId="fuelling-plan-pre-target" />
+        </div>
+        <div className="space-y-0.5">
+          <p className="text-xs font-medium text-muted-foreground">After training</p>
+          <PostTargetLine
+            postCarbG={target.postCarbG}
+            postProteinG={target.postProteinG}
+            testId="fuelling-plan-post-target"
+          />
+        </div>
       </div>
 
       {hint && (
