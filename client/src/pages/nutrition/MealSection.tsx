@@ -1,6 +1,8 @@
 import type { FoodLogEntryWithNutrition } from "@shared/schema";
 import { Pencil, Sparkles, Trash2 } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -14,6 +16,7 @@ interface MealSectionProps {
 
 /** One meal's logged entries with edit/delete (FR-1.6). Hidden when empty. */
 export function MealSection({ label, entries, onEdit, onDelete, deletingId }: MealSectionProps) {
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0) return null;
   const calories = entries.reduce((sum, e) => sum + e.nutrition.calories, 0);
 
@@ -69,7 +72,7 @@ export function MealSection({ label, entries, onEdit, onDelete, deletingId }: Me
                       variant="ghost"
                       size="icon"
                       aria-label={`Delete ${e.name}`}
-                      onClick={() => onDelete(e.id)}
+                      onClick={() => setPendingDelete({ id: e.id, name: e.name })}
                       disabled={deletingId === e.id}
                       data-testid={`button-delete-${e.id}`}
                     >
@@ -85,6 +88,24 @@ export function MealSection({ label, entries, onEdit, onDelete, deletingId }: Me
           </li>
         ))}
       </ul>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        title="Delete food entry?"
+        description={`"${pendingDelete?.name}" will be removed from this meal.`}
+        confirmText="Delete"
+        isDestructive
+        isPending={deletingId === pendingDelete?.id}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          onDelete(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+        confirmTestId="confirm-delete-food-log"
+        cancelTestId="cancel-delete-food-log"
+      />
     </section>
   );
 }
