@@ -190,7 +190,13 @@ export default function Nutrition() {
         <NutritionInsightsPanel />
       </div>
 
-      <LogFoodDialog state={dialog} date={date} onClose={() => setDialog(null)} />
+      <LogFoodDialog
+        state={dialog}
+        date={date}
+        onClose={() => setDialog(null)}
+        todayTotals={summary?.totals ?? EMPTY_TOTALS}
+        effectiveTarget={summary?.effectiveTarget ?? null}
+      />
       <BarcodeScanner
         open={barcodeOpen}
         onClose={() => setBarcodeOpen(false)}

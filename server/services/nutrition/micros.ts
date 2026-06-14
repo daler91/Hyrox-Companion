@@ -1,4 +1,4 @@
-import type { MicroSummaryRow } from "@shared/schema";
+import type { MicroDisplayDef, MicroSummaryRow, MicroUnit } from "@shared/schema";
 
 import { type LogEntryWithFood, sumMicros } from "./rollup";
 
@@ -13,13 +13,7 @@ import { type LogEntryWithFood, sumMicros } from "./rollup";
  * `*_100g` nutriments in GRAMS, so the OFF path multiplies by `OFF_GRAMS_TO_UNIT`
  * (×1000 → mg, ×1e6 → mcg) — the single guard against the classic 1000× mistake.
  */
-export type MicroUnit = "mg" | "mcg";
-
-export interface MicroDef {
-  key: string;
-  label: string;
-  unit: MicroUnit;
-  rdi: number; // FDA Daily Value, in `unit`
+export interface MicroDef extends MicroDisplayDef {
   usdaId: string; // FDC nutrient ID (the API's `nutrientId`, not the legacy number)
   usdaUnit: "mg" | "ug"; // expected USDA unitName — disambiguates IU vs metric encodings
   offKey: string; // OFF nutriment base key; we read `${offKey}_100g` (in grams)
