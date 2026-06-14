@@ -6,6 +6,7 @@ vi.mock("../../storage", () => ({
 vi.mock("./spoonacularClient", () => ({ resolveSpoonacularBarcode: vi.fn() }));
 vi.mock("./offClient", () => ({ resolveBarcode: vi.fn() }));
 vi.mock("./refresh", () => ({ refreshStaleFoodsInBackground: vi.fn() }));
+vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 import { storage } from "../../storage";
 import { lookupBarcode } from "./barcode";
@@ -78,5 +79,13 @@ describe("lookupBarcode", () => {
 
     expect(await lookupBarcode("0000000000000")).toBeNull();
     expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
+  });
+
+  it("degrades to null (no throw) when caching the resolved food fails", async () => {
+    vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
+    vi.mocked(resolveSpoonacularBarcode).mockResolvedValue(mapped);
+    vi.mocked(storage.nutrition.upsertFoods).mockRejectedValue(new Error("constraint violation"));
+
+    expect(await lookupBarcode("0049000028")).toBeNull();
   });
 });

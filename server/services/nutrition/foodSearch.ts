@@ -5,6 +5,7 @@ import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { refreshStaleFoodsInBackground } from "./refresh";
 import { searchSpoonacularFoods } from "./spoonacularClient";
+import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
 
 /**
@@ -32,6 +33,20 @@ function labelKey(food: Food): string | null {
 /** Merge source tiers in priority order, deduped by identity (`source:sourceId`)
  *  and, for branded items, by brand+name so the same product from two sources is
  *  shown once. */
+/** Cache a provider's mapped results, degrading to cache-only (never throwing) if
+ *  the write fails. A transient DB error — or the brief window after a deploy but
+ *  before an additive `foods` migration (e.g. a new `source` value) is applied —
+ *  must not 500 the search; the live results are simply skipped that request. */
+async function cacheResults(mapped: MappedFood[], provider: string): Promise<Food[]> {
+  if (mapped.length === 0) return [];
+  try {
+    return await storage.nutrition.upsertFoods(mapped);
+  } catch (err) {
+    logger.warn({ err, provider }, "[nutrition] caching search results failed; serving cache only");
+    return [];
+  }
+}
+
 function mergeFoods(tiers: Food[][]): Food[] {
   const seenKey = new Set<string>();
   const seenLabel = new Set<string>();
@@ -63,9 +78,7 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   let spoonacularLive = false;
   if (spoonSettled.status === "fulfilled") {
     spoonacularLive = spoonSettled.value.reached;
-    if (spoonSettled.value.foods.length > 0) {
-      spoonacular = await storage.nutrition.upsertFoods(spoonSettled.value.foods);
-    }
+    spoonacular = await cacheResults(spoonSettled.value.foods, "spoonacular");
   } else {
     logger.warn({ err: spoonSettled.reason, query }, "[nutrition] Spoonacular search failed; continuing");
   }
@@ -76,9 +89,7 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
     // USDA returns [] WITHOUT a live call when no API key is set; with a key, a
     // fulfilled result (even empty) means the API was reached.
     usdaLive = Boolean(env.USDA_API_KEY);
-    if (usdaSettled.value.length > 0) {
-      usda = await storage.nutrition.upsertFoods(usdaSettled.value);
-    }
+    usda = await cacheResults(usdaSettled.value, "usda");
   } else {
     logger.warn({ err: usdaSettled.reason, query }, "[nutrition] USDA search failed; returning cached foods only");
   }

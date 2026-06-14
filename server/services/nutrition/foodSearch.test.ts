@@ -115,6 +115,19 @@ describe("searchFoods", () => {
     expect(result.results[0].id).toBe("usda1");
   });
 
+  it("degrades to cache (no throw) when caching the live results fails", async () => {
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
+    vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
+    vi.mocked(storage.nutrition.upsertFoods).mockRejectedValue(new Error("constraint violation"));
+
+    const result = await searchFoods("banana", "u1");
+    // USDA was reached, so not degraded — but its uncacheable results are dropped,
+    // leaving only the local cache. The request must not throw.
+    expect(result.apiDegraded).toBe(false);
+    expect(result.results.map((f) => f.id)).toEqual(["local1"]);
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
   it("suppresses a cross-source brand+name near-duplicate (Spoonacular wins)", async () => {
     vi.mocked(searchSpoonacularFoods).mockResolvedValue({ foods: [mappedSpoon], reached: true });
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);

@@ -1,5 +1,6 @@
 import type { Food } from "@shared/schema";
 
+import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { resolveBarcode } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
@@ -29,6 +30,14 @@ export async function lookupBarcode(code: string): Promise<Food | null> {
   const mapped = (await resolveSpoonacularBarcode(code)) ?? (await resolveBarcode(code));
   if (!mapped) return null;
 
-  const [food] = await storage.nutrition.upsertFoods([mapped]);
-  return food ?? null;
+  try {
+    const [food] = await storage.nutrition.upsertFoods([mapped]);
+    return food ?? null;
+  } catch (err) {
+    // A caching failure (transient DB error, or the window before an additive
+    // `foods` migration lands) shouldn't surface as a 500 — treat it as "not
+    // resolved" (404) so the scan degrades cleanly rather than crashing.
+    logger.warn({ err, source: mapped.source }, "[nutrition] caching barcode result failed");
+    return null;
+  }
 }
