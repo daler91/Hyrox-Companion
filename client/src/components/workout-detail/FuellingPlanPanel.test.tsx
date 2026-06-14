@@ -66,7 +66,9 @@ describe("FuellingPlanPanel", () => {
     });
     renderWithClient(<FuellingPlanPanel entry={entry} />);
 
+    expect(screen.getByText("Before training")).toBeInTheDocument();
     expect(screen.getByTestId("fuelling-plan-pre-target")).toHaveTextContent("carbs");
+    expect(screen.getByText("After training")).toBeInTheDocument();
     expect(screen.getByTestId("fuelling-plan-post-target")).toHaveTextContent("protein");
     expect(screen.getByTestId("fuelling-plan-estimate-note")).toBeInTheDocument();
   });
