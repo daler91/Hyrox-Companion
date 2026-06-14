@@ -111,6 +111,60 @@ describe("mapSpoonacularProduct", () => {
     ).toBeNull();
   });
 
+  it("infers grams from Spoonacular's servings.raw text", () => {
+    const m = mapSpoonacularProduct({
+      id: 10,
+      title: "Clif Bar",
+      nutrition: { nutrients: [{ name: "Calories", amount: 250, unit: "kcal" }] },
+      servings: { number: 1, raw: "1 bar (68 g)" },
+    });
+    expect(m?.servingSizeG).toBe(68);
+    expect(m?.caloriesPer100g).toBeCloseTo((250 * 100) / 68, 4);
+  });
+
+  it("infers a serving weight from an oz net-weight in the title (per-1 serving)", () => {
+    const m = mapSpoonacularProduct({
+      id: 11,
+      title: "CLIF Bar Energy Bars, 18 Ct, 2.4 oz",
+      nutrition: { nutrients: [{ name: "Calories", amount: 250, unit: "kcal" }] },
+      servings: { number: 1 },
+    });
+    expect(m?.servingSizeG).toBeCloseTo(2.4 * 28.349523125, 4);
+  });
+
+  it("rejects an implausible container weight in the title (16 oz jar)", () => {
+    expect(
+      mapSpoonacularProduct({
+        id: 12,
+        title: "Peanut Butter 16 oz Jar",
+        nutrition: { nutrients: [{ name: "Calories", amount: 190, unit: "kcal" }] },
+        servings: { number: 1 },
+      }),
+    ).toBeNull(); // ~454 g > 250 g serving cap → no weight → dropped
+  });
+
+  it("does not treat a 'g' macro figure in the title as a serving weight", () => {
+    expect(
+      mapSpoonacularProduct({
+        id: 13,
+        title: "Protein Bar 9g Protein",
+        nutrition: { nutrients: [{ name: "Calories", amount: 250, unit: "kcal" }] },
+        servings: { number: 1 },
+      }),
+    ).toBeNull(); // only "oz" is read from titles; "9g" is ignored → dropped
+  });
+
+  it("does not infer a title weight when nutrition is per multiple servings", () => {
+    expect(
+      mapSpoonacularProduct({
+        id: 14,
+        title: "Energy Bars 2.4 oz",
+        nutrition: { nutrients: [{ name: "Calories", amount: 250, unit: "kcal" }] },
+        servings: { number: 12 },
+      }),
+    ).toBeNull(); // servings.number > 1 → title inference skipped → dropped
+  });
+
   it("returns null without an id or title", () => {
     expect(mapSpoonacularProduct({ title: "X", nutrition: { weightPerServing: { amount: 10, unit: "g" } } })).toBeNull();
     expect(mapSpoonacularProduct({ id: 5, nutrition: { weightPerServing: { amount: 10, unit: "g" } } })).toBeNull();

@@ -95,8 +95,9 @@ interface SpoonacularProduct {
   title?: string;
   brand?: string;
   upc?: string;
-  // The label serving; `size`+`unit` give the per-serving weight when in grams.
-  servings?: { number?: number; size?: number | string; unit?: string };
+  // The label serving. `size`+`unit` give the per-serving weight when in grams;
+  // `raw` is Spoonacular's own serving description, e.g. "1 bar (68g)".
+  servings?: { number?: number; size?: number | string; unit?: string; raw?: string };
   nutrition?: {
     nutrients?: SpoonacularNutrient[];
     // Preferred per-serving weight, e.g. { amount: 31, unit: "g" }.
@@ -137,13 +138,60 @@ function weightToGrams(amount: number | string | undefined, unit: string | undef
   }
 }
 
-/** The per-serving weight in grams: prefer `nutrition.weightPerServing`, fall
- *  back to `servings` (size+unit). null when neither is a convertible weight. */
+/** Parse an explicit gram/oz weight out of Spoonacular's own serving text
+ *  (`servings.raw`), e.g. "1 bar (68g)" or "2.4 oz". Trustworthy because it's the
+ *  source's stated serving, so a wide [1, 1000]g sanity range is fine. */
+function parseGramsFromServingText(raw: string | undefined): number | null {
+  if (!raw) return null;
+  // Prefer a parenthetical gram weight: "1 bar (68 g)".
+  const paren = /\(\s*([\d.]+)\s*g\s*\)/i.exec(raw);
+  if (paren) {
+    const grams = num(paren[1]);
+    if (grams !== null && grams > 0 && grams <= 1000) return grams;
+  }
+  const match = /([\d.]+)\s*(g|oz)\b/i.exec(raw);
+  if (match) {
+    const grams = weightToGrams(match[1], match[2]);
+    if (grams !== null && grams > 0 && grams <= 1000) return grams;
+  }
+  return null;
+}
+
+/** Last-resort: infer a serving weight from a net-weight token in the product
+ *  TITLE, e.g. "... 2.4 oz". Deliberately narrow to bound the guesswork:
+ *   - only "oz" (US net-weight unit) — a "g" in a title is usually a macro figure
+ *     ("9g Protein"), not the net weight;
+ *   - only a plausible single-serving weight (5–250 g), so a container size
+ *     ("16 oz jar") is rejected;
+ *   - caller only applies it when nutrition is stated per single serving.
+ *  The per-100g sanity clamp in sanitizeMappedFood is the final backstop. */
+function parseServingGramsFromTitle(title: string | undefined): number | null {
+  if (!title) return null;
+  const match = /([\d.]+)\s*oz\b/i.exec(title);
+  const grams = match ? weightToGrams(match[1], "oz") : null;
+  return grams !== null && grams >= 5 && grams <= 250 ? grams : null;
+}
+
+/** The per-serving weight in grams, best-effort. Prefer structured fields
+ *  (`weightPerServing`, then `servings.size`); fall back to Spoonacular's serving
+ *  text; and only when nutrition is per single serving, infer a net weight from
+ *  the title. null when no weight can be established (the food is then dropped). */
 function servingGrams(product: SpoonacularProduct): number | null {
   const wps = product.nutrition?.weightPerServing;
   const fromWeightPerServing = weightToGrams(wps?.amount, wps?.unit);
   if (fromWeightPerServing !== null) return fromWeightPerServing;
-  return weightToGrams(product.servings?.size, product.servings?.unit);
+
+  const fromSize = weightToGrams(product.servings?.size, product.servings?.unit);
+  if (fromSize !== null) return fromSize;
+
+  const fromRaw = parseGramsFromServingText(product.servings?.raw);
+  if (fromRaw !== null) return fromRaw;
+
+  const servingCount = product.servings?.number;
+  if (servingCount === undefined || servingCount === 1) {
+    return parseServingGramsFromTitle(product.title);
+  }
+  return null;
 }
 
 /** Read a nutrient by exact (case-insensitive) name. When `expectedUnit` is
@@ -242,7 +290,13 @@ export async function getSpoonacularFoodById(
     // gram-convertible serving (the exact wall that made FatSecret Basic useless).
     // Surface the serving fields so it's obvious from the logs when that happens.
     logger.info(
-      { id, title: product.title, weightPerServing: product.nutrition?.weightPerServing, servings: product.servings },
+      {
+        id,
+        title: product.title,
+        weightPerServing: product.nutrition?.weightPerServing,
+        servings: product.servings,
+        nutrientCount: product.nutrition?.nutrients?.length ?? 0,
+      },
       "[nutrition] Spoonacular product dropped (no gram-convertible serving or unusable)",
     );
   }
