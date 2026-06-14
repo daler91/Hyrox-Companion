@@ -85,7 +85,10 @@ async function spoonacularGet<T>(
 // ---------------------------------------------------------------------------
 
 interface SpoonacularNutrient {
+  // Spoonacular labels nutrients `name` in recipe/menu responses but `title` in
+  // some food-product responses — read whichever is present.
   name?: string;
+  title?: string;
   amount?: number | string;
   unit?: string;
 }
@@ -205,7 +208,7 @@ function readNutrient(
 ): number | null {
   const target = name.trim().toLowerCase();
   for (const n of nutrients) {
-    if ((n.name ?? "").trim().toLowerCase() !== target) continue;
+    if ((n.name ?? n.title ?? "").trim().toLowerCase() !== target) continue;
     const amount = num(n.amount);
     if (amount === null) continue;
     if (expectedUnit && normalizeUnit(n.unit) !== expectedUnit) continue;
@@ -243,18 +246,34 @@ export function mapSpoonacularProduct(product: SpoonacularProduct): MappedFood |
     return value === null ? null : (value * 100) / grams;
   };
 
+  const caloriesPer100g = per100("Calories", "kcal");
+  const proteinPer100g = per100("Protein", "g");
+  const carbPer100g = per100("Carbohydrates", "g");
+  // Exact-name match so "Fat" is never confused with "Saturated Fat"/"Trans Fat".
+  const fatPer100g = per100("Fat", "g");
+  const fiberPer100g = per100("Fiber", "g");
+
+  // Spoonacular returns some low-quality grocery listings with a full nutrient
+  // array whose amounts are all zero (a placeholder record). With a recovered
+  // serving weight those would otherwise cache as a useless 0-calorie food, so
+  // drop a product that carries no positive macro at all (the sanitize guard
+  // only drops all-NULL, not all-ZERO).
+  const hasUsableNutrition = [caloriesPer100g, proteinPer100g, carbPer100g, fatPer100g].some(
+    (value) => value !== null && value > 0,
+  );
+  if (!hasUsableNutrition) return null;
+
   return {
     source: "spoonacular",
     sourceId: String(id),
     name,
     brand: product.brand?.trim() || null,
     servingSizeG: grams,
-    caloriesPer100g: per100("Calories", "kcal"),
-    proteinPer100g: per100("Protein", "g"),
-    carbPer100g: per100("Carbohydrates", "g"),
-    // Exact-name match so "Fat" is never confused with "Saturated Fat"/"Trans Fat".
-    fatPer100g: per100("Fat", "g"),
-    fiberPer100g: per100("Fiber", "g"),
+    caloriesPer100g,
+    proteinPer100g,
+    carbPer100g,
+    fatPer100g,
+    fiberPer100g,
     micros: extractMicros(nutrients, grams),
   };
 }
@@ -286,16 +305,21 @@ export async function getSpoonacularFoodById(
   if (!product) return null;
   const mapped = mapSpoonacularProduct(product);
   if (!mapped) {
-    // Diagnostic: the most likely reason a branded product is dropped is no
-    // gram-convertible serving (the exact wall that made FatSecret Basic useless).
-    // Surface the serving fields so it's obvious from the logs when that happens.
+    // Diagnostic: a dropped product is usually missing a gram-convertible serving
+    // OR has placeholder nutrition (all-zero amounts). Surface the serving fields
+    // AND a raw sample of the energy/macro nutrients so the logs show, beyond
+    // doubt, whether the source data itself is empty vs. a mapping problem.
+    const nutrients = product.nutrition?.nutrients ?? [];
     logger.info(
       {
         id,
         title: product.title,
         weightPerServing: product.nutrition?.weightPerServing,
         servings: product.servings,
-        nutrientCount: product.nutrition?.nutrients?.length ?? 0,
+        nutrientCount: nutrients.length,
+        // Raw nutrient objects exactly as returned, so the logs show the real
+        // field names (name vs. title) and amounts beyond any doubt.
+        sample: nutrients.slice(0, 4),
       },
       "[nutrition] Spoonacular product dropped (no gram-convertible serving or unusable)",
     );
