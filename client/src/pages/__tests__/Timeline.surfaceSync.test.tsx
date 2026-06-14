@@ -702,7 +702,7 @@ describe("Timeline surface sync", () => {
     });
 
     expect(virtualizerMocks.scrollToIndex).toHaveBeenCalledWith(1, { align: "center" });
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
   });
 
   it("does not force-scroll when today is absent from the visible timeline groups", () => {
