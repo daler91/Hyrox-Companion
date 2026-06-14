@@ -443,7 +443,10 @@ export async function searchFatSecretFoods(
   query: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<FatSecretSearchResult> {
-  if (!credentials()) return { foods: [], reached: false };
+  if (!credentials()) {
+    logger.info("[nutrition] FatSecret search skipped — no credentials configured");
+    return { foods: [], reached: false };
+  }
   // Premier exposes foods.search.v3 (servings inline); the free Basic tier only
   // has v1 foods.search, whose macros come back as a description string we parse.
   const premier = hasPremierScope();
@@ -461,14 +464,30 @@ export async function searchFatSecretFoods(
   if (!body) return { foods: [], reached: false };
   if (body.error) {
     // A genuine "no match" still means FatSecret was reached and live.
-    if (isNotFoundError(body.error.code)) return { foods: [], reached: true };
+    if (isNotFoundError(body.error.code)) {
+      logger.info({ code: body.error.code }, "[nutrition] FatSecret search: reached, no results");
+      return { foods: [], reached: true };
+    }
     logger.warn({ code: body.error.code, message: body.error.message }, "[nutrition] FatSecret search error");
     return { foods: [], reached: false };
   }
-  const mapped = premier
-    ? normalizeFoodList(body.foods_search?.results?.food).map(mapFatSecretFood)
-    : normalizeFoodList(body.foods?.food).map(mapFatSecretV1Food);
-  return { foods: mapped.filter((f): f is MappedFood => f !== null), reached: true };
+  const rawList = premier
+    ? normalizeFoodList(body.foods_search?.results?.food)
+    : normalizeFoodList(body.foods?.food);
+  const foods = (premier ? rawList.map(mapFatSecretFood) : rawList.map(mapFatSecretV1Food)).filter(
+    (f): f is MappedFood => f !== null,
+  );
+  // TEMP diagnostics — confirm FatSecret returns + maps results on the Basic tier.
+  logger.info(
+    {
+      tier: premier ? "v3" : "v1",
+      rawCount: rawList.length,
+      mappedCount: foods.length,
+      sample: rawList[0]?.food_description ?? rawList[0]?.food_name ?? null,
+    },
+    "[nutrition] FatSecret search diagnostics",
+  );
+  return { foods, reached: true };
 }
 
 /** Fetch a FatSecret food's full detail by food_id, mapped to per-100g. Shared by
