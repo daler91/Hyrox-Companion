@@ -4,6 +4,7 @@ import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { getFatSecretFoodById } from "./fatsecretClient";
 import { resolveBarcode } from "./offClient";
+import { getSpoonacularFoodById } from "./spoonacularClient";
 import type { MappedFood } from "./types";
 import { fetchUsdaFoodById } from "./usdaClient";
 
@@ -37,6 +38,8 @@ async function refetch(food: Food): Promise<MappedFood | null> {
       return resolveBarcode(food.sourceId); // OFF foods are keyed by the barcode
     case "fatsecret":
       return getFatSecretFoodById(food.sourceId); // keyed by FatSecret food_id
+    case "spoonacular":
+      return getSpoonacularFoodById(food.sourceId); // keyed by Spoonacular product id
     case "usda":
       return fetchUsdaFoodById(food.sourceId); // keyed by fdcId
     default:

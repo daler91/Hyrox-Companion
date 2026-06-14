@@ -1,12 +1,12 @@
 /**
- * Shape of a food mapped from an external source (USDA, Open Food Facts, or
- * FatSecret) into our per-100g `foods` columns, ready for
+ * Shape of a food mapped from an external source (USDA, Open Food Facts,
+ * FatSecret, or Spoonacular) into our per-100g `foods` columns, ready for
  * `NutritionStorage.upsertFoods`, which runs every record through
  * `sanitizeMappedFood` (./sanitize) so a corrupt upstream value can never reach
  * the cache. Custom foods don't go through this — they're user-entered directly.
  */
 export interface MappedFood {
-  source: "usda" | "off" | "fatsecret";
+  source: "usda" | "off" | "fatsecret" | "spoonacular";
   sourceId: string;
   name: string;
   brand: string | null;

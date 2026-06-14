@@ -114,6 +114,11 @@ const envSchema = z.object({
   // Optional localization, honoured only on a localization-enabled scope/tier.
   FATSECRET_REGION: z.string().optional(),
   FATSECRET_LANGUAGE: z.string().optional(),
+  // Spoonacular API key — verified branded/packaged + UPC barcode food data. A
+  // single API key (no OAuth, no IP whitelisting). Optional: when unset, food
+  // search/barcode degrade to USDA + Open Food Facts as before. Free-tier daily
+  // point quota is small, so every resolved food is cached in `foods` and reused.
+  SPOONACULAR_API_KEY: z.string().optional(),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],

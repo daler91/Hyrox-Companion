@@ -29,23 +29,29 @@ export interface MicroDef {
   // encoding is ambiguous (the vitamins) — those are enriched from USDA instead
   // of risking a unit error.
   fatsecretKey?: string;
+  // Spoonacular nutrient `name` (e.g. "Sodium", "Vitamin C"). Spoonacular tags
+  // every nutrient with an explicit unit, so the mapper reads by this name and
+  // accepts the value ONLY when that unit matches this micro's `unit` — which
+  // automatically skips the vitamins Spoonacular reports in IU (Vitamin A/D),
+  // sidestepping the IU↔metric ambiguity rather than guessing a conversion.
+  spoonacularName?: string;
 }
 
 export const MICRO_DEFS: readonly MicroDef[] = [
-  { key: "sodium", label: "Sodium", unit: "mg", rdi: 2300, usdaId: "1093", usdaUnit: "mg", offKey: "sodium", fatsecretKey: "sodium" },
-  { key: "potassium", label: "Potassium", unit: "mg", rdi: 4700, usdaId: "1092", usdaUnit: "mg", offKey: "potassium", fatsecretKey: "potassium" },
-  { key: "calcium", label: "Calcium", unit: "mg", rdi: 1300, usdaId: "1087", usdaUnit: "mg", offKey: "calcium", fatsecretKey: "calcium" },
-  { key: "iron", label: "Iron", unit: "mg", rdi: 18, usdaId: "1089", usdaUnit: "mg", offKey: "iron", fatsecretKey: "iron" },
-  { key: "magnesium", label: "Magnesium", unit: "mg", rdi: 420, usdaId: "1090", usdaUnit: "mg", offKey: "magnesium" },
-  { key: "zinc", label: "Zinc", unit: "mg", rdi: 11, usdaId: "1095", usdaUnit: "mg", offKey: "zinc" },
-  { key: "vitaminC", label: "Vitamin C", unit: "mg", rdi: 90, usdaId: "1162", usdaUnit: "mg", offKey: "vitamin-c" },
-  { key: "vitaminA", label: "Vitamin A", unit: "mcg", rdi: 900, usdaId: "1106", usdaUnit: "ug", offKey: "vitamin-a" },
-  { key: "vitaminD", label: "Vitamin D", unit: "mcg", rdi: 20, usdaId: "1114", usdaUnit: "ug", offKey: "vitamin-d" },
-  { key: "vitaminE", label: "Vitamin E", unit: "mg", rdi: 15, usdaId: "1109", usdaUnit: "mg", offKey: "vitamin-e" },
-  { key: "vitaminK", label: "Vitamin K", unit: "mcg", rdi: 120, usdaId: "1185", usdaUnit: "ug", offKey: "vitamin-k" },
-  { key: "vitaminB6", label: "Vitamin B6", unit: "mg", rdi: 1.7, usdaId: "1175", usdaUnit: "mg", offKey: "vitamin-b6" },
-  { key: "vitaminB12", label: "Vitamin B12", unit: "mcg", rdi: 2.4, usdaId: "1178", usdaUnit: "ug", offKey: "vitamin-b12" },
-  { key: "folate", label: "Folate", unit: "mcg", rdi: 400, usdaId: "1177", usdaUnit: "ug", offKey: "vitamin-b9" },
+  { key: "sodium", label: "Sodium", unit: "mg", rdi: 2300, usdaId: "1093", usdaUnit: "mg", offKey: "sodium", fatsecretKey: "sodium", spoonacularName: "Sodium" },
+  { key: "potassium", label: "Potassium", unit: "mg", rdi: 4700, usdaId: "1092", usdaUnit: "mg", offKey: "potassium", fatsecretKey: "potassium", spoonacularName: "Potassium" },
+  { key: "calcium", label: "Calcium", unit: "mg", rdi: 1300, usdaId: "1087", usdaUnit: "mg", offKey: "calcium", fatsecretKey: "calcium", spoonacularName: "Calcium" },
+  { key: "iron", label: "Iron", unit: "mg", rdi: 18, usdaId: "1089", usdaUnit: "mg", offKey: "iron", fatsecretKey: "iron", spoonacularName: "Iron" },
+  { key: "magnesium", label: "Magnesium", unit: "mg", rdi: 420, usdaId: "1090", usdaUnit: "mg", offKey: "magnesium", spoonacularName: "Magnesium" },
+  { key: "zinc", label: "Zinc", unit: "mg", rdi: 11, usdaId: "1095", usdaUnit: "mg", offKey: "zinc", spoonacularName: "Zinc" },
+  { key: "vitaminC", label: "Vitamin C", unit: "mg", rdi: 90, usdaId: "1162", usdaUnit: "mg", offKey: "vitamin-c", spoonacularName: "Vitamin C" },
+  { key: "vitaminA", label: "Vitamin A", unit: "mcg", rdi: 900, usdaId: "1106", usdaUnit: "ug", offKey: "vitamin-a", spoonacularName: "Vitamin A" },
+  { key: "vitaminD", label: "Vitamin D", unit: "mcg", rdi: 20, usdaId: "1114", usdaUnit: "ug", offKey: "vitamin-d", spoonacularName: "Vitamin D" },
+  { key: "vitaminE", label: "Vitamin E", unit: "mg", rdi: 15, usdaId: "1109", usdaUnit: "mg", offKey: "vitamin-e", spoonacularName: "Vitamin E" },
+  { key: "vitaminK", label: "Vitamin K", unit: "mcg", rdi: 120, usdaId: "1185", usdaUnit: "ug", offKey: "vitamin-k", spoonacularName: "Vitamin K" },
+  { key: "vitaminB6", label: "Vitamin B6", unit: "mg", rdi: 1.7, usdaId: "1175", usdaUnit: "mg", offKey: "vitamin-b6", spoonacularName: "Vitamin B6" },
+  { key: "vitaminB12", label: "Vitamin B12", unit: "mcg", rdi: 2.4, usdaId: "1178", usdaUnit: "ug", offKey: "vitamin-b12", spoonacularName: "Vitamin B12" },
+  { key: "folate", label: "Folate", unit: "mcg", rdi: 400, usdaId: "1177", usdaUnit: "ug", offKey: "vitamin-b9", spoonacularName: "Folate" },
 ];
 
 // OFF `*_100g` values are in grams; multiply to reach the stored unit.

@@ -4,7 +4,7 @@ vi.mock("../../storage", () => ({
   storage: { nutrition: { searchLocalFoods: vi.fn(), upsertFoods: vi.fn() } },
 }));
 vi.mock("./usdaClient", () => ({ searchUsdaFoods: vi.fn() }));
-vi.mock("./fatsecretClient", () => ({ searchFatSecretFoods: vi.fn() }));
+vi.mock("./spoonacularClient", () => ({ searchSpoonacularFoods: vi.fn() }));
 vi.mock("./refresh", () => ({ refreshStaleFoodsInBackground: vi.fn() }));
 vi.mock("../../env", () => ({ env: { USDA_API_KEY: "test-key" } }));
 vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
@@ -12,9 +12,9 @@ vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: 
 import { env } from "../../env";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
-import { searchFatSecretFoods } from "./fatsecretClient";
 import { searchFoods } from "./foodSearch";
 import { makeFood as food } from "./foodTestFixture";
+import { searchSpoonacularFoods } from "./spoonacularClient";
 import { searchUsdaFoods } from "./usdaClient";
 
 const mappedUsda = {
@@ -30,30 +30,30 @@ const mappedUsda = {
   fiberPer100g: 2.6,
   micros: null,
 };
-const mappedFs = { ...mappedUsda, source: "fatsecret" as const, sourceId: "fs1" };
+const mappedSpoon = { ...mappedUsda, source: "spoonacular" as const, sourceId: "sp1" };
 
 describe("searchFoods", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
-    // Default: FatSecret unconfigured/unreached, USDA + local empty.
-    vi.mocked(searchFatSecretFoods).mockResolvedValue({ foods: [], reached: false });
+    // Default: Spoonacular unconfigured/unreached, USDA + local empty.
+    vi.mocked(searchSpoonacularFoods).mockResolvedValue({ foods: [], reached: false });
     vi.mocked(searchUsdaFoods).mockResolvedValue([]);
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([]);
   });
 
-  it("ranks FatSecret ahead of USDA ahead of local, not degraded", async () => {
+  it("ranks Spoonacular ahead of USDA ahead of local, not degraded", async () => {
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1", source: "custom", sourceId: null })]);
-    vi.mocked(searchFatSecretFoods).mockResolvedValue({ foods: [mappedFs], reached: true });
+    vi.mocked(searchSpoonacularFoods).mockResolvedValue({ foods: [mappedSpoon], reached: true });
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
     vi.mocked(storage.nutrition.upsertFoods)
-      .mockResolvedValueOnce([food({ id: "fs1", source: "fatsecret", sourceId: "fs1" })])
+      .mockResolvedValueOnce([food({ id: "sp1", source: "spoonacular", sourceId: "sp1" })])
       .mockResolvedValueOnce([food({ id: "usda1", source: "usda", sourceId: "1" })]);
 
     const result = await searchFoods("banana", "u1");
 
     expect(result.apiDegraded).toBe(false);
-    expect(result.results.map((f) => f.id)).toEqual(["fs1", "usda1", "local1"]);
+    expect(result.results.map((f) => f.id)).toEqual(["sp1", "usda1", "local1"]);
   });
 
   it("is not degraded when USDA returns no matches but the key is set", async () => {
@@ -66,9 +66,9 @@ describe("searchFoods", () => {
     expect(result.results.map((f) => f.id)).toEqual(["local1"]);
   });
 
-  it("is not degraded when FatSecret reached the API even with no matches (USDA off)", async () => {
+  it("is not degraded when Spoonacular reached the API even with no matches (USDA off)", async () => {
     (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
-    vi.mocked(searchFatSecretFoods).mockResolvedValue({ foods: [], reached: true });
+    vi.mocked(searchSpoonacularFoods).mockResolvedValue({ foods: [], reached: true });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
 
     const result = await searchFoods("banana", "u1");
@@ -84,8 +84,8 @@ describe("searchFoods", () => {
     expect(result.results).toHaveLength(1);
   });
 
-  it("returns results and is not degraded when FatSecret throws but USDA succeeds", async () => {
-    vi.mocked(searchFatSecretFoods).mockRejectedValue(new Error("fs down"));
+  it("returns results and is not degraded when Spoonacular throws but USDA succeeds", async () => {
+    vi.mocked(searchSpoonacularFoods).mockRejectedValue(new Error("spoon down"));
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
     vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([food({ id: "usda1" })]);
 
@@ -95,7 +95,7 @@ describe("searchFoods", () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
-  it("flags degraded and returns cache when USDA throws and FatSecret is unconfigured", async () => {
+  it("flags degraded and returns cache when USDA throws and Spoonacular is unconfigured", async () => {
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
     vi.mocked(searchUsdaFoods).mockRejectedValue(new Error("USDA down"));
 
@@ -115,14 +115,14 @@ describe("searchFoods", () => {
     expect(result.results[0].id).toBe("usda1");
   });
 
-  it("suppresses a cross-source brand+name near-duplicate (FatSecret wins)", async () => {
-    vi.mocked(searchFatSecretFoods).mockResolvedValue({ foods: [mappedFs], reached: true });
+  it("suppresses a cross-source brand+name near-duplicate (Spoonacular wins)", async () => {
+    vi.mocked(searchSpoonacularFoods).mockResolvedValue({ foods: [mappedSpoon], reached: true });
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
     vi.mocked(storage.nutrition.upsertFoods)
-      .mockResolvedValueOnce([food({ id: "fs1", source: "fatsecret", sourceId: "fs1", brand: "Clif", name: "Clif Bar" })])
+      .mockResolvedValueOnce([food({ id: "sp1", source: "spoonacular", sourceId: "sp1", brand: "Clif", name: "Clif Bar" })])
       .mockResolvedValueOnce([food({ id: "usda1", source: "usda", sourceId: "1", brand: "Clif", name: "Clif Bar" })]);
 
     const result = await searchFoods("clif", "u1");
-    expect(result.results.map((f) => f.id)).toEqual(["fs1"]); // USDA near-dup suppressed
+    expect(result.results.map((f) => f.id)).toEqual(["sp1"]); // USDA near-dup suppressed
   });
 });
