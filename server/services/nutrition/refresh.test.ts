@@ -5,6 +5,7 @@ vi.mock("../../storage", () => ({ storage: { nutrition: { upsertFoods: vi.fn() }
 vi.mock("../../logger", () => ({ logger: { warn: vi.fn() } }));
 vi.mock("./fatsecretClient", () => ({ getFatSecretFoodById: vi.fn() }));
 vi.mock("./spoonacularClient", () => ({ getSpoonacularFoodById: vi.fn() }));
+vi.mock("./edamamClient", () => ({ getEdamamFoodById: vi.fn() }));
 vi.mock("./offClient", () => ({ resolveBarcode: vi.fn() }));
 vi.mock("./usdaClient", () => ({ fetchUsdaFoodById: vi.fn() }));
 

@@ -3,17 +3,17 @@ import type { Food, FoodSearchResponse } from "@shared/schema";
 import { env } from "../../env";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
+import { searchEdamamFoods } from "./edamamClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
-import { searchSpoonacularFoods } from "./spoonacularClient";
 import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
 
 /**
  * Food search orchestration (FR-1.1). Queries the local `foods` cache plus the
- * live providers — Spoonacular (verified branded, preferred) and USDA — concurrently,
+ * live providers — Edamam (curated branded, preferred) and USDA — concurrently,
  * caching any hits back into `foods`. Provider failures are swallowed so manual
  * logging keeps working from cache (NFR-5), surfaced via `apiDegraded`. Results
- * rank Spoonacular → USDA → local, deduped.
+ * rank Edamam → USDA → local, deduped.
  */
 
 const LOCAL_LIMIT = 25;
@@ -69,18 +69,18 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
 
   // Query the live providers concurrently; one failing must not sink the other.
-  const [spoonSettled, usdaSettled] = await Promise.allSettled([
-    searchSpoonacularFoods(query),
+  const [edamamSettled, usdaSettled] = await Promise.allSettled([
+    searchEdamamFoods(query),
     searchUsdaFoods(query),
   ]);
 
-  let spoonacular: Food[] = [];
-  let spoonacularLive = false;
-  if (spoonSettled.status === "fulfilled") {
-    spoonacularLive = spoonSettled.value.reached;
-    spoonacular = await cacheResults(spoonSettled.value.foods, "spoonacular");
+  let edamam: Food[] = [];
+  let edamamLive = false;
+  if (edamamSettled.status === "fulfilled") {
+    edamamLive = edamamSettled.value.reached;
+    edamam = await cacheResults(edamamSettled.value.foods, "edamam");
   } else {
-    logger.warn({ err: spoonSettled.reason, query }, "[nutrition] Spoonacular search failed; continuing");
+    logger.warn({ err: edamamSettled.reason, query }, "[nutrition] Edamam search failed; continuing");
   }
 
   let usda: Food[] = [];
@@ -95,18 +95,18 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   }
 
   // Cache-only ⇒ degraded: no live provider reached its API (matches the prior
-  // USDA-only behavior when Spoonacular is unconfigured).
-  const apiDegraded = !spoonacularLive && !usdaLive;
+  // USDA-only behavior when Edamam is unconfigured).
+  const apiDegraded = !edamamLive && !usdaLive;
 
-  const results = mergeFoods([spoonacular, usda, local]);
+  const results = mergeFoods([edamam, usda, local]);
   // Diagnostic: where the merged results came from, so it's clear in the logs
-  // whether Spoonacular is actually contributing branded hits vs. all-USDA.
+  // whether Edamam is actually contributing branded hits vs. all-USDA.
   logger.info(
     {
       query,
-      spoonacularLive,
+      edamamLive,
       usdaLive,
-      spoonacular: spoonacular.length,
+      edamam: edamam.length,
       usda: usda.length,
       local: local.length,
       results: results.length,

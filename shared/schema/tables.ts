@@ -750,10 +750,10 @@ export const mafWorkoutAnalysis = pgTable("maf_workout_analysis", {
 // ---------------------------------------------------------------------------
 
 // Where a food's reference data came from. `usda` (FoodData Central) and `off`
-// (Open Food Facts) are the original cached external sources; `fatsecret` and
-// `spoonacular` are verified branded/barcode sources (FR — higher-quality branded
-// data); `custom` is a user-entered food / recipe-backing food.
-export const FOOD_SOURCES = ["usda", "off", "fatsecret", "spoonacular", "custom"] as const;
+// (Open Food Facts) are the original cached external sources; `fatsecret`,
+// `spoonacular`, and `edamam` are branded/barcode sources (FR — higher-quality
+// branded data); `custom` is a user-entered food / recipe-backing food.
+export const FOOD_SOURCES = ["usda", "off", "fatsecret", "spoonacular", "edamam", "custom"] as const;
 export type FoodSource = (typeof FOOD_SOURCES)[number];
 
 // Meal slot a log entry is filed under. pre_workout / post_workout exist so the
@@ -809,7 +809,7 @@ export const foods = pgTable("foods", {
   // is intentionally NOT enabled; fuzzy ranking would go in its own migration.
   index("idx_foods_name_lower").on(sql`lower(${table.name})`),
   index("idx_foods_created_by_user_id").on(table.createdByUserId),
-  check("foods_source_check", sql`source IN ('usda', 'off', 'fatsecret', 'spoonacular', 'custom')`),
+  check("foods_source_check", sql`source IN ('usda', 'off', 'fatsecret', 'spoonacular', 'edamam', 'custom')`),
 ]);
 export type Food = typeof foods.$inferSelect;
 export type InsertFood = typeof foods.$inferInsert;

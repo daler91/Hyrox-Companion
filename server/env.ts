@@ -119,6 +119,12 @@ const envSchema = z.object({
   // search/barcode degrade to USDA + Open Food Facts as before. Free-tier daily
   // point quota is small, so every resolved food is cached in `foods` and reused.
   SPOONACULAR_API_KEY: z.string().optional(),
+  // Edamam Food Database API — curated branded/generic + UPC barcode food data,
+  // returned on a per-100g basis. App id + key from https://developer.edamam.com.
+  // Both must be set together (or both omitted). Optional: when unset, food
+  // search/barcode degrade to USDA + Open Food Facts as before.
+  EDAMAM_APP_ID: z.string().optional(),
+  EDAMAM_APP_KEY: z.string().optional(),
 }).refine((data) => !(data.NODE_ENV === "production" && data.ALLOW_DEV_AUTH_BYPASS === "true"), {
   message: "❌ FATAL: ALLOW_DEV_AUTH_BYPASS cannot be enabled in production environment",
   path: ["ALLOW_DEV_AUTH_BYPASS"],
@@ -172,6 +178,14 @@ const envSchema = z.object({
   {
     message: "❌ FATAL: FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET must be set together (or both omitted)",
     path: ["FATSECRET_CLIENT_SECRET"],
+  },
+).refine(
+  // Edamam needs BOTH the app id and key; exactly one set is a half-configuration
+  // that would silently never work. Zero set is the supported "disabled" default.
+  (data) => Boolean(data.EDAMAM_APP_ID) === Boolean(data.EDAMAM_APP_KEY),
+  {
+    message: "❌ FATAL: EDAMAM_APP_ID and EDAMAM_APP_KEY must be set together (or both omitted)",
+    path: ["EDAMAM_APP_KEY"],
   },
 );
 

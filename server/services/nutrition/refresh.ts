@@ -2,6 +2,7 @@ import type { Food } from "@shared/schema";
 
 import { logger } from "../../logger";
 import { storage } from "../../storage";
+import { getEdamamFoodById } from "./edamamClient";
 import { getFatSecretFoodById } from "./fatsecretClient";
 import { resolveBarcode } from "./offClient";
 import { getSpoonacularFoodById } from "./spoonacularClient";
@@ -40,6 +41,8 @@ async function refetch(food: Food): Promise<MappedFood | null> {
       return getFatSecretFoodById(food.sourceId); // keyed by FatSecret food_id
     case "spoonacular":
       return getSpoonacularFoodById(food.sourceId); // keyed by Spoonacular product id
+    case "edamam":
+      return getEdamamFoodById(food.sourceId, food.name); // re-search by name, match foodId
     case "usda":
       return fetchUsdaFoodById(food.sourceId); // keyed by fdcId
     default:

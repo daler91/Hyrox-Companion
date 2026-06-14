@@ -3,21 +3,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../storage", () => ({
   storage: { nutrition: { getFoodBySourceId: vi.fn(), upsertFoods: vi.fn() } },
 }));
-vi.mock("./spoonacularClient", () => ({ resolveSpoonacularBarcode: vi.fn() }));
+vi.mock("./edamamClient", () => ({ resolveEdamamBarcode: vi.fn() }));
 vi.mock("./offClient", () => ({ resolveBarcode: vi.fn() }));
 vi.mock("./refresh", () => ({ refreshStaleFoodsInBackground: vi.fn() }));
 vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 import { storage } from "../../storage";
 import { lookupBarcode } from "./barcode";
+import { resolveEdamamBarcode } from "./edamamClient";
 import { makeFood as food } from "./foodTestFixture";
 import { resolveBarcode } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
-import { resolveSpoonacularBarcode } from "./spoonacularClient";
 
 const mapped = {
-  source: "spoonacular" as const,
-  sourceId: "555",
+  source: "edamam" as const,
+  sourceId: "food_555",
   name: "Banana",
   brand: null,
   servingSizeG: null,
@@ -39,27 +39,27 @@ describe("lookupBarcode", () => {
     const result = await lookupBarcode("0049000028");
 
     expect(result).toBe(cached);
-    expect(resolveSpoonacularBarcode).not.toHaveBeenCalled();
+    expect(resolveEdamamBarcode).not.toHaveBeenCalled();
     expect(resolveBarcode).not.toHaveBeenCalled();
     expect(refreshStaleFoodsInBackground).toHaveBeenCalledWith([cached]);
   });
 
-  it("resolves via Spoonacular on a cache miss and upserts (no OFF fallback)", async () => {
+  it("resolves via Edamam on a cache miss and upserts (no OFF fallback)", async () => {
     vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
-    vi.mocked(resolveSpoonacularBarcode).mockResolvedValue(mapped);
-    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([food({ id: "sp" })]);
+    vi.mocked(resolveEdamamBarcode).mockResolvedValue(mapped);
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([food({ id: "ed" })]);
 
     const result = await lookupBarcode("0049000028");
 
-    expect(result?.id).toBe("sp");
-    expect(resolveSpoonacularBarcode).toHaveBeenCalledOnce();
+    expect(result?.id).toBe("ed");
+    expect(resolveEdamamBarcode).toHaveBeenCalledOnce();
     expect(resolveBarcode).not.toHaveBeenCalled();
     expect(storage.nutrition.upsertFoods).toHaveBeenCalledWith([mapped]);
   });
 
-  it("falls back to Open Food Facts when Spoonacular has nothing", async () => {
+  it("falls back to Open Food Facts when Edamam has nothing", async () => {
     vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
-    vi.mocked(resolveSpoonacularBarcode).mockResolvedValue(null);
+    vi.mocked(resolveEdamamBarcode).mockResolvedValue(null);
     const offMapped = { ...mapped, source: "off" as const, sourceId: "0049000028" };
     vi.mocked(resolveBarcode).mockResolvedValue(offMapped);
     vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([food({ id: "off", source: "off" })]);
@@ -67,14 +67,14 @@ describe("lookupBarcode", () => {
     const result = await lookupBarcode("0049000028");
 
     expect(result?.id).toBe("off");
-    expect(resolveSpoonacularBarcode).toHaveBeenCalledOnce();
+    expect(resolveEdamamBarcode).toHaveBeenCalledOnce();
     expect(resolveBarcode).toHaveBeenCalledOnce();
     expect(storage.nutrition.upsertFoods).toHaveBeenCalledWith([offMapped]);
   });
 
   it("returns null when neither provider recognizes the barcode", async () => {
     vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
-    vi.mocked(resolveSpoonacularBarcode).mockResolvedValue(null);
+    vi.mocked(resolveEdamamBarcode).mockResolvedValue(null);
     vi.mocked(resolveBarcode).mockResolvedValue(null);
 
     expect(await lookupBarcode("0000000000000")).toBeNull();
@@ -83,7 +83,7 @@ describe("lookupBarcode", () => {
 
   it("degrades to null (no throw) when caching the resolved food fails", async () => {
     vi.mocked(storage.nutrition.getFoodBySourceId).mockResolvedValue(undefined);
-    vi.mocked(resolveSpoonacularBarcode).mockResolvedValue(mapped);
+    vi.mocked(resolveEdamamBarcode).mockResolvedValue(mapped);
     vi.mocked(storage.nutrition.upsertFoods).mockRejectedValue(new Error("constraint violation"));
 
     expect(await lookupBarcode("0049000028")).toBeNull();
