@@ -498,6 +498,13 @@
       "when": 1781446104836,
       "tag": "0070_ancient_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1781456392063,
+      "tag": "0071_awesome_domino",
+      "breakpoints": true
     }
   ]
 }
