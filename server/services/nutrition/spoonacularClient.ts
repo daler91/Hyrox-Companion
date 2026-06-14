@@ -85,7 +85,10 @@ async function spoonacularGet<T>(
 // ---------------------------------------------------------------------------
 
 interface SpoonacularNutrient {
+  // Spoonacular labels nutrients `name` in recipe/menu responses but `title` in
+  // some food-product responses — read whichever is present.
   name?: string;
+  title?: string;
   amount?: number | string;
   unit?: string;
 }
@@ -205,7 +208,7 @@ function readNutrient(
 ): number | null {
   const target = name.trim().toLowerCase();
   for (const n of nutrients) {
-    if ((n.name ?? "").trim().toLowerCase() !== target) continue;
+    if ((n.name ?? n.title ?? "").trim().toLowerCase() !== target) continue;
     const amount = num(n.amount);
     if (amount === null) continue;
     if (expectedUnit && normalizeUnit(n.unit) !== expectedUnit) continue;
@@ -302,16 +305,21 @@ export async function getSpoonacularFoodById(
   if (!product) return null;
   const mapped = mapSpoonacularProduct(product);
   if (!mapped) {
-    // Diagnostic: the most likely reason a branded product is dropped is no
-    // gram-convertible serving (the exact wall that made FatSecret Basic useless).
-    // Surface the serving fields so it's obvious from the logs when that happens.
+    // Diagnostic: a dropped product is usually missing a gram-convertible serving
+    // OR has placeholder nutrition (all-zero amounts). Surface the serving fields
+    // AND a raw sample of the energy/macro nutrients so the logs show, beyond
+    // doubt, whether the source data itself is empty vs. a mapping problem.
+    const nutrients = product.nutrition?.nutrients ?? [];
     logger.info(
       {
         id,
         title: product.title,
         weightPerServing: product.nutrition?.weightPerServing,
         servings: product.servings,
-        nutrientCount: product.nutrition?.nutrients?.length ?? 0,
+        nutrientCount: nutrients.length,
+        // Raw nutrient objects exactly as returned, so the logs show the real
+        // field names (name vs. title) and amounts beyond any doubt.
+        sample: nutrients.slice(0, 4),
       },
       "[nutrition] Spoonacular product dropped (no gram-convertible serving or unusable)",
     );

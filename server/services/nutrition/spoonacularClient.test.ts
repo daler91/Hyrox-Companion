@@ -165,6 +165,24 @@ describe("mapSpoonacularProduct", () => {
     ).toBeNull(); // servings.number > 1 → title inference skipped → dropped
   });
 
+  it("reads nutrients labeled with `title` (food-product shape), not only `name`", () => {
+    const m = mapSpoonacularProduct({
+      id: 30,
+      title: "Some Product",
+      nutrition: {
+        nutrients: [
+          { title: "Calories", amount: 200, unit: "kcal" },
+          { title: "Protein", amount: 10, unit: "g" },
+          { title: "Sodium", amount: 100, unit: "mg" },
+        ],
+        weightPerServing: { amount: 50, unit: "g" },
+      },
+    });
+    expect(m?.caloriesPer100g).toBe(400);
+    expect(m?.proteinPer100g).toBe(20);
+    expect(m?.micros?.sodium).toBe(200);
+  });
+
   it("drops a product whose nutrients are all zero (Spoonacular placeholder record)", () => {
     expect(
       mapSpoonacularProduct({
