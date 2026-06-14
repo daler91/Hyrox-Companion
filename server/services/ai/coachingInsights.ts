@@ -72,11 +72,12 @@ function updateExerciseDatesFromSets(
   record: Record<string, string | null>,
   exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
   date: string,
-  allStations: string[],
+  allStationsSet: Set<string>,
 ): void {
   for (const es of exerciseSets) {
     const name = es.exerciseName.toLowerCase();
-    if (allStations.includes(name)) updateLastTrained(record, name, date);
+    // ⚡ Perf: Use Set for O(1) lookups instead of Array.includes() which is O(N)
+    if (allStationsSet.has(name)) updateLastTrained(record, name, date);
     if (RUNNING_EXERCISE_NAMES.has(name)) updateLastTrained(record, "running", date);
   }
 }
@@ -91,12 +92,13 @@ function updateExerciseDatesFromFocus(record: Record<string, string | null>, foc
 export function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
   const today = toDateStr();
   const allStations = [...FUNCTIONAL_EXERCISE_NAMES, "running"];
+  const allStationsSet = new Set(allStations);
   const lastTrainedDate: Record<string, string | null> = {};
   for (const station of allStations) lastTrainedDate[station] = null;
 
   for (const entry of timeline) {
     if (entry.status !== "completed" || !entry.date) continue;
-    if (entry.exerciseSets) updateExerciseDatesFromSets(lastTrainedDate, entry.exerciseSets, entry.date, allStations);
+    if (entry.exerciseSets) updateExerciseDatesFromSets(lastTrainedDate, entry.exerciseSets, entry.date, allStationsSet);
     if (entry.focus) updateExerciseDatesFromFocus(lastTrainedDate, entry.focus, entry.date);
   }
 
