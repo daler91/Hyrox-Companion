@@ -236,7 +236,17 @@ export async function getSpoonacularFoodById(
     opts.signal,
   );
   if (!product) return null;
-  return mapSpoonacularProduct(product);
+  const mapped = mapSpoonacularProduct(product);
+  if (!mapped) {
+    // Diagnostic: the most likely reason a branded product is dropped is no
+    // gram-convertible serving (the exact wall that made FatSecret Basic useless).
+    // Surface the serving fields so it's obvious from the logs when that happens.
+    logger.info(
+      { id, title: product.title, weightPerServing: product.nutrition?.weightPerServing, servings: product.servings },
+      "[nutrition] Spoonacular product dropped (no gram-convertible serving or unusable)",
+    );
+  }
+  return mapped;
 }
 
 /**
@@ -249,7 +259,10 @@ export async function searchSpoonacularFoods(
   query: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<SpoonacularSearchResult> {
-  if (!env.SPOONACULAR_API_KEY) return { foods: [], reached: false };
+  if (!env.SPOONACULAR_API_KEY) {
+    logger.info("[nutrition] Spoonacular search skipped — SPOONACULAR_API_KEY not set");
+    return { foods: [], reached: false };
+  }
 
   const search = await spoonacularGet<SpoonacularSearchResponse>(
     "/food/products/search",
@@ -258,18 +271,29 @@ export async function searchSpoonacularFoods(
   );
   if (!search) return { foods: [], reached: false }; // unavailable / quota spent
 
+  const searchHits = search.products?.length ?? 0;
   const ids = (search.products ?? [])
     .map((p) => p.id)
     .filter((id): id is number | string => typeof id === "number" || typeof id === "string")
     .map(String)
     .slice(0, SPOONACULAR_MAX_PRODUCTS);
-  if (ids.length === 0) return { foods: [], reached: true }; // reached, no matches
+  if (ids.length === 0) {
+    logger.info({ query, searchHits }, "[nutrition] Spoonacular search: reached, no products");
+    return { foods: [], reached: true };
+  }
 
   const settled = await Promise.allSettled(ids.map((id) => getSpoonacularFoodById(id, opts)));
   const foods: MappedFood[] = [];
   for (const result of settled) {
     if (result.status === "fulfilled" && result.value) foods.push(result.value);
   }
+  // Diagnostic: how many the search returned vs. how many we detail-fetched and
+  // successfully mapped. A high detailFetched with low mapped = products are being
+  // dropped (see the per-product drop log above for the reason).
+  logger.info(
+    { query, searchHits, detailFetched: ids.length, mapped: foods.length },
+    "[nutrition] Spoonacular search diagnostics",
+  );
   return { foods, reached: true };
 }
 

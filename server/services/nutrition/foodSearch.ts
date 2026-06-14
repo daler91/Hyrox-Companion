@@ -99,6 +99,21 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   const apiDegraded = !spoonacularLive && !usdaLive;
 
   const results = mergeFoods([spoonacular, usda, local]);
+  // Diagnostic: where the merged results came from, so it's clear in the logs
+  // whether Spoonacular is actually contributing branded hits vs. all-USDA.
+  logger.info(
+    {
+      query,
+      spoonacularLive,
+      usdaLive,
+      spoonacular: spoonacular.length,
+      usda: usda.length,
+      local: local.length,
+      results: results.length,
+      apiDegraded,
+    },
+    "[nutrition] food search result mix",
+  );
   // Self-heal stale cached rows in the background; never blocks the response.
   refreshStaleFoodsInBackground(results);
   return { results, apiDegraded };
