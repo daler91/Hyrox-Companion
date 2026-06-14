@@ -64,6 +64,11 @@ const isTokenUrl = (url: unknown) => {
     return false;
   }
 };
+/** URL-encoded request body of the last non-token API call. */
+function lastApiBody(mockFetch: ReturnType<typeof vi.fn>): string {
+  const call = mockFetch.mock.calls.find((c) => !isTokenUrl(c[0]));
+  return String((call?.[1] as { body: string }).body);
+}
 
 const SEARCH_BODY = {
   foods_search: {
@@ -325,8 +330,7 @@ describe("FatSecret API operations", () => {
       });
       const food = await resolveFatSecretBarcode("0049000028");
       expect(food).toMatchObject({ source: "fatsecret", sourceId: "555", name: "Banana", caloriesPer100g: 89 });
-      const idCallBody = String((fetchMock.mock.calls.find((c) => !isTokenUrl(c[0]))?.[1] as { body: string }).body);
-      expect(idCallBody).toContain("barcode=0000049000028"); // left-padded to 13 digits
+      expect(lastApiBody(fetchMock)).toContain("barcode=0000049000028"); // left-padded to 13 digits
     });
 
     it("returns null for an unknown barcode (food_id 0)", async () => {
@@ -357,59 +361,46 @@ describe("FatSecret API operations", () => {
       expect(await getFatSecretFoodById("999")).toBeNull();
     });
   });
-});
 
-describe("FatSecret on the free Basic (v1) tier", () => {
-  const fetchMock = vi.fn();
+  // Reuses the parent fetchMock / stubFetch / setup; only the scope differs.
+  describe("on the free Basic (v1) tier", () => {
+    beforeEach(() => {
+      (env as Record<string, unknown>).FATSECRET_SCOPE = "basic";
+    });
 
-  beforeEach(() => {
-    fetchMock.mockReset();
-    vi.stubGlobal("fetch", fetchMock);
-    __resetFatSecretTokenCacheForTests();
-    (env as Record<string, unknown>).FATSECRET_CLIENT_ID = "cid";
-    (env as Record<string, unknown>).FATSECRET_CLIENT_SECRET = "csec";
-    (env as Record<string, unknown>).FATSECRET_SCOPE = "basic";
-  });
-  afterEach(() => vi.unstubAllGlobals());
+    const V1_BODY = {
+      foods: {
+        food: [
+          {
+            food_id: "33691",
+            food_name: "Clif Bar",
+            food_type: "Brand",
+            brand_name: "Clif",
+            food_description: "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g",
+          },
+        ],
+      },
+    };
 
-  const V1_BODY = {
-    foods: {
-      food: [
-        {
-          food_id: "33691",
-          food_name: "Clif Bar",
-          food_type: "Brand",
-          brand_name: "Clif",
-          food_description: "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g",
-        },
-      ],
-    },
-  };
+    it("uses the v1 foods.search method (not the Premier v3)", async () => {
+      stubFetch(() => ok(V1_BODY));
+      const result = await searchFatSecretFoods("clif");
+      expect(result).toMatchObject({ reached: true });
+      expect(result.foods).toHaveLength(1); // parsing itself is covered by the unit tests
 
-  it("calls the v1 foods.search method and parses the description", async () => {
-    fetchMock.mockImplementation(async (url: unknown) =>
-      isTokenUrl(url) ? ok({ access_token: "T", expires_in: 86400 }) : ok(V1_BODY),
-    );
-    const result = await searchFatSecretFoods("clif");
-    expect(result.reached).toBe(true);
-    expect(result.foods).toHaveLength(1);
-    expect(result.foods[0]).toMatchObject({ source: "fatsecret", sourceId: "33691", caloriesPer100g: (250 * 100) / 68 });
+      const body = lastApiBody(fetchMock);
+      expect(body).toContain("method=foods.search");
+      expect(body).not.toContain("foods.search.v3");
+    });
 
-    const apiCall = fetchMock.mock.calls.find((c) => !isTokenUrl(c[0]));
-    const body = String((apiCall?.[1] as { body: string }).body);
-    expect(body).toContain("method=foods.search");
-    expect(body).not.toContain("foods.search.v3"); // v1, not the Premier method
-  });
+    it("skips FatSecret barcode entirely without the barcode scope", async () => {
+      expect(await resolveFatSecretBarcode("0049000028")).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled(); // no wasted call — straight to OFF
+    });
 
-  it("skips FatSecret barcode entirely without the barcode scope", async () => {
-    fetchMock.mockImplementation(async () => ok({}));
-    expect(await resolveFatSecretBarcode("0049000028")).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled(); // no wasted call — straight to OFF
-  });
-
-  it("skips food.get (detail/refresh) without the premier scope", async () => {
-    fetchMock.mockImplementation(async () => ok({}));
-    expect(await getFatSecretFoodById("33691")).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
+    it("skips food.get (detail/refresh) without the premier scope", async () => {
+      expect(await getFatSecretFoodById("33691")).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 });

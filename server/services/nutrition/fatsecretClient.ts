@@ -310,6 +310,35 @@ function extractMicros(serving: FatSecretServing, grams: number): Record<string,
   return Object.keys(micros).length > 0 ? micros : null;
 }
 
+/** Assemble a per-100g MappedFood from a FatSecret food + its computed macros.
+ *  Shared by the v3 and v1 mappers so the row shape lives in one place. */
+function toMappedFatSecretFood(
+  raw: FatSecretFood,
+  grams: number,
+  macros: {
+    calories: number | null;
+    protein: number | null;
+    carb: number | null;
+    fat: number | null;
+    fiber: number | null;
+    micros: Record<string, number> | null;
+  },
+): MappedFood {
+  return {
+    source: "fatsecret",
+    sourceId: String(raw.food_id),
+    name: (raw.food_name ?? "").trim(),
+    brand: raw.brand_name?.trim() || null,
+    servingSizeG: grams,
+    caloriesPer100g: macros.calories,
+    proteinPer100g: macros.protein,
+    carbPer100g: macros.carb,
+    fatPer100g: macros.fat,
+    fiberPer100g: macros.fiber,
+    micros: macros.micros,
+  };
+}
+
 /** Map one FatSecret food (with inline servings) into our per-100g shape, or null
  *  when unusable (no name/id, or only volume servings). */
 export function mapFatSecretFood(raw: FatSecretFood): MappedFood | null {
@@ -326,20 +355,14 @@ export function mapFatSecretFood(raw: FatSecretFood): MappedFood | null {
     return n === null ? null : (n * 100) / grams;
   };
 
-  const mapped: MappedFood = {
-    source: "fatsecret",
-    sourceId: String(foodId),
-    name,
-    brand: raw.brand_name?.trim() || null,
-    servingSizeG: grams,
-    caloriesPer100g: per100(serving.calories),
-    proteinPer100g: per100(serving.protein),
-    carbPer100g: per100(serving.carbohydrate),
-    fatPer100g: per100(serving.fat),
-    fiberPer100g: per100(serving.fiber),
+  return toMappedFatSecretFood(raw, grams, {
+    calories: per100(serving.calories),
+    protein: per100(serving.protein),
+    carb: per100(serving.carbohydrate),
+    fat: per100(serving.fat),
+    fiber: per100(serving.fiber),
     micros: extractMicros(serving, grams),
-  };
-  return mapped;
+  });
 }
 
 function normalizeFoodList(food: FatSecretFood | FatSecretFood[] | undefined): FatSecretFood[] {
@@ -389,20 +412,14 @@ export function mapFatSecretV1Food(raw: FatSecretFood): MappedFood | null {
   if (grams === null || grams <= 0) return null;
   const per100 = (value: number | null): number | null => (value === null ? null : (value * 100) / grams);
 
-  const mapped: MappedFood = {
-    source: "fatsecret",
-    sourceId: String(foodId),
-    name,
-    brand: raw.brand_name?.trim() || null,
-    servingSizeG: grams,
-    caloriesPer100g: per100(readDescriptionField(desc, /Calories:\s*([\d.]+)/i)),
-    proteinPer100g: per100(readDescriptionField(desc, /Protein:\s*([\d.]+)/i)),
-    carbPer100g: per100(readDescriptionField(desc, /Carb(?:s|ohydrate)?:\s*([\d.]+)/i)),
-    fatPer100g: per100(readDescriptionField(desc, /Fat:\s*([\d.]+)/i)),
-    fiberPer100g: null,
+  return toMappedFatSecretFood(raw, grams, {
+    calories: per100(readDescriptionField(desc, /Calories:\s*([\d.]+)/i)),
+    protein: per100(readDescriptionField(desc, /Protein:\s*([\d.]+)/i)),
+    carb: per100(readDescriptionField(desc, /Carb(?:s|ohydrate)?:\s*([\d.]+)/i)),
+    fat: per100(readDescriptionField(desc, /Fat:\s*([\d.]+)/i)),
+    fiber: null,
     micros: null,
-  };
-  return mapped;
+  });
 }
 
 // ---------------------------------------------------------------------------
