@@ -84,7 +84,7 @@ function scrollTodayIntoViewWhenReady(
 ): number | undefined {
   const el = todayRef.current;
   if (el) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
     return undefined;
   }
   if (framesLeft <= 0) return undefined;
