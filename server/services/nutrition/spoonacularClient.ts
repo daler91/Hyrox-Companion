@@ -243,18 +243,34 @@ export function mapSpoonacularProduct(product: SpoonacularProduct): MappedFood |
     return value === null ? null : (value * 100) / grams;
   };
 
+  const caloriesPer100g = per100("Calories", "kcal");
+  const proteinPer100g = per100("Protein", "g");
+  const carbPer100g = per100("Carbohydrates", "g");
+  // Exact-name match so "Fat" is never confused with "Saturated Fat"/"Trans Fat".
+  const fatPer100g = per100("Fat", "g");
+  const fiberPer100g = per100("Fiber", "g");
+
+  // Spoonacular returns some low-quality grocery listings with a full nutrient
+  // array whose amounts are all zero (a placeholder record). With a recovered
+  // serving weight those would otherwise cache as a useless 0-calorie food, so
+  // drop a product that carries no positive macro at all (the sanitize guard
+  // only drops all-NULL, not all-ZERO).
+  const hasUsableNutrition = [caloriesPer100g, proteinPer100g, carbPer100g, fatPer100g].some(
+    (value) => value !== null && value > 0,
+  );
+  if (!hasUsableNutrition) return null;
+
   return {
     source: "spoonacular",
     sourceId: String(id),
     name,
     brand: product.brand?.trim() || null,
     servingSizeG: grams,
-    caloriesPer100g: per100("Calories", "kcal"),
-    proteinPer100g: per100("Protein", "g"),
-    carbPer100g: per100("Carbohydrates", "g"),
-    // Exact-name match so "Fat" is never confused with "Saturated Fat"/"Trans Fat".
-    fatPer100g: per100("Fat", "g"),
-    fiberPer100g: per100("Fiber", "g"),
+    caloriesPer100g,
+    proteinPer100g,
+    carbPer100g,
+    fatPer100g,
+    fiberPer100g,
     micros: extractMicros(nutrients, grams),
   };
 }
