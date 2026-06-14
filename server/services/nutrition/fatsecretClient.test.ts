@@ -4,7 +4,7 @@ vi.mock("../../env", () => ({
   env: {
     FATSECRET_CLIENT_ID: "cid",
     FATSECRET_CLIENT_SECRET: "csec",
-    FATSECRET_SCOPE: "basic",
+    FATSECRET_SCOPE: "basic premier barcode",
     FATSECRET_REGION: undefined,
     FATSECRET_LANGUAGE: undefined,
   },
@@ -48,6 +48,7 @@ import {
   __resetFatSecretTokenCacheForTests,
   getFatSecretFoodById,
   mapFatSecretFood,
+  mapFatSecretV1Food,
   resolveFatSecretBarcode,
   searchFatSecretFoods,
 } from "./fatsecretClient";
@@ -184,6 +185,45 @@ describe("mapFatSecretFood", () => {
   });
 });
 
+describe("mapFatSecretV1Food (Basic tier description parsing)", () => {
+  it("parses a per-serving description into per-100g", () => {
+    const m = mapFatSecretV1Food({
+      food_id: "33691",
+      food_name: "Clif Bar",
+      brand_name: "Clif",
+      food_description: "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g",
+    });
+    expect(m).toMatchObject({ source: "fatsecret", sourceId: "33691", name: "Clif Bar", brand: "Clif", servingSizeG: 68 });
+    expect(m?.caloriesPer100g).toBeCloseTo((250 * 100) / 68);
+    expect(m?.proteinPer100g).toBeCloseTo((9 * 100) / 68);
+    expect(m?.fiberPer100g).toBeNull();
+  });
+
+  it("parses a Per 100g description directly", () => {
+    const m = mapFatSecretV1Food({
+      food_id: "1",
+      food_name: "Banana",
+      food_description: "Per 100g - Calories: 89kcal | Fat: 0.33g | Carbs: 22.84g | Protein: 1.09g",
+    });
+    expect(m?.caloriesPer100g).toBeCloseTo(89);
+    expect(m?.carbPer100g).toBeCloseTo(22.84);
+  });
+
+  it("drops a volume-only (ml) basis it can't convert to grams", () => {
+    expect(
+      mapFatSecretV1Food({
+        food_id: "2",
+        food_name: "Juice",
+        food_description: "Per 1 cup (240ml) - Calories: 110kcal | Fat: 0g | Carbs: 26g | Protein: 1g",
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null without a description", () => {
+    expect(mapFatSecretV1Food({ food_id: "3", food_name: "X" })).toBeNull();
+  });
+});
+
 describe("FatSecret API operations", () => {
   const fetchMock = vi.fn();
 
@@ -193,6 +233,7 @@ describe("FatSecret API operations", () => {
     __resetFatSecretTokenCacheForTests();
     (env as Record<string, unknown>).FATSECRET_CLIENT_ID = "cid";
     (env as Record<string, unknown>).FATSECRET_CLIENT_SECRET = "csec";
+    (env as Record<string, unknown>).FATSECRET_SCOPE = "basic premier barcode";
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -315,5 +356,60 @@ describe("FatSecret API operations", () => {
       stubFetch(() => ok({ error: { code: 106 } }));
       expect(await getFatSecretFoodById("999")).toBeNull();
     });
+  });
+});
+
+describe("FatSecret on the free Basic (v1) tier", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    __resetFatSecretTokenCacheForTests();
+    (env as Record<string, unknown>).FATSECRET_CLIENT_ID = "cid";
+    (env as Record<string, unknown>).FATSECRET_CLIENT_SECRET = "csec";
+    (env as Record<string, unknown>).FATSECRET_SCOPE = "basic";
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const V1_BODY = {
+    foods: {
+      food: [
+        {
+          food_id: "33691",
+          food_name: "Clif Bar",
+          food_type: "Brand",
+          brand_name: "Clif",
+          food_description: "Per 1 bar (68g) - Calories: 250kcal | Fat: 5.00g | Carbs: 44.00g | Protein: 9.00g",
+        },
+      ],
+    },
+  };
+
+  it("calls the v1 foods.search method and parses the description", async () => {
+    fetchMock.mockImplementation(async (url: unknown) =>
+      isTokenUrl(url) ? ok({ access_token: "T", expires_in: 86400 }) : ok(V1_BODY),
+    );
+    const result = await searchFatSecretFoods("clif");
+    expect(result.reached).toBe(true);
+    expect(result.foods).toHaveLength(1);
+    expect(result.foods[0]).toMatchObject({ source: "fatsecret", sourceId: "33691", caloriesPer100g: (250 * 100) / 68 });
+
+    const apiCall = fetchMock.mock.calls.find((c) => !isTokenUrl(c[0]));
+    const body = String((apiCall?.[1] as { body: string }).body);
+    expect(body).toContain("method=foods.search");
+    expect(body).not.toContain("foods.search.v3"); // v1, not the Premier method
+  });
+
+  it("skips FatSecret barcode entirely without the barcode scope", async () => {
+    fetchMock.mockImplementation(async () => ok({}));
+    expect(await resolveFatSecretBarcode("0049000028")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled(); // no wasted call — straight to OFF
+  });
+
+  it("skips food.get (detail/refresh) without the premier scope", async () => {
+    fetchMock.mockImplementation(async () => ok({}));
+    expect(await getFatSecretFoodById("33691")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
