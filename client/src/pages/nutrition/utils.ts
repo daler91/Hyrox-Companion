@@ -1,4 +1,5 @@
-import type { Food, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
+import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
+import { MICRO_DISPLAY_DEFS } from "@shared/schema";
 
 const YMD = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
@@ -53,6 +54,84 @@ export function previewNutrition(food: Food, quantityG: number): NutritionMacroT
   };
 }
 
+/**
+ * Client-side per-100g scaling of a food's micronutrient map for the live
+ * preview (display only). Mirrors the server's scaleMicros: only keys the food
+ * actually carries survive (absent ≠ zero), and a non-positive quantity yields
+ * an empty map.
+ */
+export function previewMicrosScaled(
+  food: Pick<Food, "micros">,
+  quantityG: number,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!food.micros || !(quantityG > 0)) return out;
+  for (const [key, per100g] of Object.entries(food.micros)) {
+    if (typeof per100g === "number" && Number.isFinite(per100g)) {
+      out[key] = scale(per100g, quantityG);
+    }
+  }
+  return out;
+}
+
+/**
+ * Turn a scaled micro map into display rows via the shared curated defs — the
+ * same shape the server's buildMicroSummary emits, so the row UI is reusable.
+ * Micros with no data are omitted (absent ≠ zero).
+ */
+export function buildPreviewMicroRows(microsScaled: Record<string, number>): MicroSummaryRow[] {
+  const rows: MicroSummaryRow[] = [];
+  for (const def of MICRO_DISPLAY_DEFS) {
+    const amount = microsScaled[def.key];
+    if (amount == null) continue;
+    rows.push({
+      key: def.key,
+      label: def.label,
+      unit: def.unit,
+      amount: round1(amount),
+      rdi: def.rdi,
+      pctRdi: Math.round((amount / def.rdi) * 100),
+    });
+  }
+  return rows;
+}
+
+/** Atwater factors: protein & carb 4 kcal/g, fat 9 kcal/g. */
+const KCAL_PER_G = { protein: 4, carb: 4, fat: 9 } as const;
+
+export interface MacroEnergyShare {
+  g: number;
+  kcal: number;
+  pct: number;
+}
+
+export interface MacroEnergyShares {
+  protein: MacroEnergyShare;
+  carb: MacroEnergyShare;
+  fat: MacroEnergyShare;
+  /** Energy derived from the macros (P*4 + C*4 + F*9). Can differ from a food's
+   *  label calories; the ring normalises by this so the slices sum to 100%. */
+  totalKcal: number;
+}
+
+/** Split macro grams into their energy contributions and % shares for the
+ *  calorie-breakdown ring. All-zero input yields zero shares (empty ring). */
+export function macroEnergyShares(
+  m: Pick<NutritionMacroTotals, "protein" | "carb" | "fat">,
+): MacroEnergyShares {
+  const pKcal = Math.max(0, m.protein) * KCAL_PER_G.protein;
+  const cKcal = Math.max(0, m.carb) * KCAL_PER_G.carb;
+  const fKcal = Math.max(0, m.fat) * KCAL_PER_G.fat;
+  const totalKcal = pKcal + cKcal + fKcal;
+  const pct = (kcal: number) => (totalKcal > 0 ? Math.round((kcal / totalKcal) * 100) : 0);
+  return {
+    protein: { g: m.protein, kcal: pKcal, pct: pct(pKcal) },
+    carb: { g: m.carb, kcal: cKcal, pct: pct(cKcal) },
+    fat: { g: m.fat, kcal: fKcal, pct: pct(fKcal) },
+    totalKcal,
+  };
+}
+
 export const MEAL_LABELS: Record<string, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
@@ -104,6 +183,57 @@ export function computeTargetProgress(
       target: goal,
       pct: Math.round((value / goal) * 100),
       remaining: round1(goal - value),
+    });
+  }
+  return rows;
+}
+
+/** One macro's "effect on the day": today's running total, this serving's
+ *  addition, and where that lands against the goal. Percentages are uncapped. */
+export interface GoalContributionRow {
+  key: "calories" | "protein" | "carb" | "fat";
+  label: string;
+  current: number;
+  added: number;
+  projected: number;
+  target: number;
+  currentPct: number;
+  projectedPct: number;
+}
+
+/**
+ * How logging `serving` moves today's running `totals` toward the target — one
+ * row per macro the user has set a goal for. Reuses computeTargetProgress for
+ * both the current and the projected (totals + serving) points, so the same
+ * unset-goal skipping applies. Empty when no target is set.
+ */
+export function projectGoalContribution(
+  todayTotals: NutritionMacroTotals,
+  serving: NutritionMacroTotals,
+  target: TargetLike | null,
+): GoalContributionRow[] {
+  if (!target) return [];
+  const projectedTotals: NutritionMacroTotals = {
+    calories: todayTotals.calories + serving.calories,
+    protein: todayTotals.protein + serving.protein,
+    carb: todayTotals.carb + serving.carb,
+    fat: todayTotals.fat + serving.fat,
+    fiber: todayTotals.fiber + serving.fiber,
+  };
+  const currentByKey = new Map(computeTargetProgress(todayTotals, target).map((r) => [r.key, r]));
+  const rows: GoalContributionRow[] = [];
+  for (const projected of computeTargetProgress(projectedTotals, target)) {
+    const current = currentByKey.get(projected.key);
+    if (!current) continue;
+    rows.push({
+      key: projected.key,
+      label: projected.label,
+      current: current.value,
+      added: round1(projected.value - current.value),
+      projected: projected.value,
+      target: projected.target,
+      currentPct: current.pct,
+      projectedPct: projected.pct,
     });
   }
   return rows;

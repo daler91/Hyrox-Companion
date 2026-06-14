@@ -158,4 +158,38 @@ describe("LogFoodDialog", () => {
       ),
     );
   });
+
+  it("shows goal impact and micronutrients when data and targets are present", async () => {
+    const microFood: Food = { ...FOOD, micros: { sodium: 200, vitaminC: 9 } };
+    // The detail fetch returns the enriched food (with micros) — it overrides the
+    // search-result food once it resolves, mirroring the real endpoint.
+    vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: microFood, servings: [] });
+    const user = userEvent.setup();
+    renderWithClient(
+      <LogFoodDialog
+        state={{ mode: "create", food: microFood }}
+        date="2026-06-07"
+        onClose={vi.fn()}
+        todayTotals={{ calories: 1000, protein: 75, carb: 100, fat: 40, fiber: 8 }}
+        effectiveTarget={{
+          calories: 2000,
+          proteinG: 150,
+          carbG: 200,
+          fatG: 80,
+          carbDeltaG: 0,
+          utss: 0,
+          scaled: false,
+        }}
+      />,
+    );
+
+    // "Effect on today's goals" renders on the default Summary tab.
+    expect(screen.getByTestId("goal-contrib")).toBeInTheDocument();
+    expect(screen.getByTestId("goal-contrib-protein")).toBeInTheDocument();
+
+    // Micros come from the food; the Nutrients tab reveals them.
+    await user.click(screen.getByTestId("tab-nutrients"));
+    expect(await screen.findByTestId("preview-micro-sodium")).toBeInTheDocument();
+    expect(screen.getByTestId("preview-micro-vitaminC")).toBeInTheDocument();
+  });
 });

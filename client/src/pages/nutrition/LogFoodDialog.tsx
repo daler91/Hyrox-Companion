@@ -1,4 +1,5 @@
 import {
+  type EffectiveTargetSummary,
   type Food,
   type FoodLogEntryWithNutrition,
   type FoodServing,
@@ -10,15 +11,9 @@ import { Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import {
   Select,
   SelectContent,
@@ -27,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useAddServing,
   useFoodWithServings,
@@ -35,7 +31,19 @@ import {
   useUpdateLog,
 } from "@/hooks/useNutrition";
 
-import { loggedAtForDate, MEAL_LABELS, previewNutrition } from "./utils";
+import { CalorieBreakdownRing } from "./CalorieBreakdownRing";
+import { GoalContributionRows } from "./GoalContributionRows";
+import { MacroRows } from "./MacroRows";
+import { MicronutrientPreviewPanel } from "./MicronutrientPreviewPanel";
+import {
+  buildPreviewMicroRows,
+  loggedAtForDate,
+  macroEnergyShares,
+  MEAL_LABELS,
+  previewMicrosScaled,
+  previewNutrition,
+  projectGoalContribution,
+} from "./utils";
 
 /** Either creating a log from a searched/quick-add/barcode food, or editing an entry. */
 export type LogDialogState =
@@ -47,14 +55,6 @@ interface UnitOption {
   label: string;
   grams: number;
 }
-
-const PREVIEW_FIELDS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
-  { key: "calories", label: "kcal" },
-  { key: "protein", label: "P" },
-  { key: "carb", label: "C" },
-  { key: "fat", label: "F" },
-  { key: "fiber", label: "Fib" },
-];
 
 function defaultMealForNow(): MealType {
   const hour = new Date().getHours();
@@ -93,18 +93,25 @@ function LogFoodForm({
   state,
   date,
   onClose,
+  todayTotals,
+  effectiveTarget,
 }: {
   readonly state: LogDialogState;
   readonly date: string;
   readonly onClose: () => void;
+  readonly todayTotals: NutritionMacroTotals | null;
+  readonly effectiveTarget: EffectiveTargetSummary | null;
 }) {
   const logFood = useLogFood(date);
   const updateLog = useUpdateLog(date);
   const isCreate = state.mode === "create";
   const foodId = state.mode === "create" ? state.food.id : "";
 
-  // Named servings for the unit selector (create mode) — also enriches USDA portions.
-  const servingsQuery = useFoodWithServings(state.mode === "create" ? state.food.id : null);
+  // Food + named servings. Fetched in both modes: create uses the servings for
+  // the unit selector; both use the enriched food (USDA micros are filled in on
+  // first detail fetch) for the micronutrient preview.
+  const detailFoodId = state.mode === "create" ? state.food.id : state.entry.foodId;
+  const servingsQuery = useFoodWithServings(detailFoodId);
   const addServing = useAddServing(foodId);
   const removeServing = useRemoveServing(foodId);
 
@@ -127,6 +134,7 @@ function LogFoodForm({
   const [mealType, setMealType] = useState<MealType>(() =>
     state.mode === "create" ? defaultMealForNow() : state.entry.mealType,
   );
+  const [tab, setTab] = useState<"summary" | "nutrients">("summary");
 
   // Add-portion sub-form + the just-added portion held optimistically until the
   // food-detail refetch (triggered by the mutation) surfaces it from the server.
@@ -183,6 +191,15 @@ function LogFoodForm({
   const isPending = logFood.isPending || updateLog.isPending;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
 
+  // Rich preview derived from the live serving (display only).
+  const macroShares = macroEnergyShares(preview);
+  const enrichedFood: Food | null =
+    servingsQuery.data?.food ?? (state.mode === "create" ? state.food : null);
+  const microRows = buildPreviewMicroRows(
+    enrichedFood ? previewMicrosScaled(enrichedFood, quantityG) : {},
+  );
+  const goalRows = todayTotals ? projectGoalContribution(todayTotals, preview, effectiveTarget) : [];
+
   const handleUnitChange = (value: string) => {
     if (value === "__add") {
       setShowAddPortion(true);
@@ -236,170 +253,179 @@ function LogFoodForm({
   };
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>{isCreate ? "Log food" : "Edit entry"}</DialogTitle>
-      </DialogHeader>
+    <div className="space-y-4">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{name}</p>
+        {brand && <p className="truncate text-sm text-muted-foreground">{brand}</p>}
+      </div>
 
-      <div className="space-y-4">
-        <div className="min-w-0">
-          <p className="truncate font-medium">{name}</p>
-          {brand && <p className="truncate text-sm text-muted-foreground">{brand}</p>}
-        </div>
-
-        {isCreate ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="log-quantity">Amount</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="log-quantity"
-                type="number"
-                min={0}
-                step="any"
-                inputMode="decimal"
-                className="w-24"
-                value={Number.isFinite(count) ? count : ""}
-                onChange={(e) => setCount(Number(e.target.value))}
-                data-testid="input-quantity"
-              />
-              <Select value={selectedUnit?.value ?? "g"} onValueChange={handleUnitChange}>
-                <SelectTrigger className="flex-1" data-testid="select-unit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {unitOptions.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                  <SelectSeparator />
-                  <SelectItem value="__add" data-testid="select-add-portion">
-                    + Add portion…
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedUnit && selectedUnit.value !== "g" && (
-              <p className="text-xs text-muted-foreground">= {Math.round(quantityG)} g</p>
-            )}
-
-            {showAddPortion && (
-              <div className="space-y-2 rounded-md border p-2">
-                <p className="text-xs text-muted-foreground">New portion</p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="e.g. 1 slice"
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    data-testid="input-portion-label"
-                  />
-                  <Input
-                    type="number"
-                    min={0}
-                    step="any"
-                    inputMode="decimal"
-                    placeholder="grams"
-                    className="w-24"
-                    value={newGrams}
-                    onChange={(e) => setNewGrams(e.target.value)}
-                    data-testid="input-portion-grams"
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowAddPortion(false);
-                      setNewLabel("");
-                      setNewGrams("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleAddPortion}
-                    disabled={!canAddPortion || addServing.isPending}
-                    data-testid="button-save-portion"
-                  >
-                    Add
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {personalServings.length > 0 && (
-              <div className="space-y-1 pt-1">
-                <p className="text-xs text-muted-foreground">Your portions</p>
-                {personalServings.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-sm"
-                  >
-                    <span className="min-w-0 truncate">
-                      {s.label} · {Math.round(s.grams)} g
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0"
-                      aria-label={`Remove ${s.label}`}
-                      disabled={removeServing.isPending}
-                      onClick={() => handleRemovePortion(s)}
-                      data-testid="button-remove-portion"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <Label htmlFor="log-quantity">Quantity (grams)</Label>
+      {isCreate ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="log-quantity">Amount</Label>
+          <div className="flex items-center gap-2">
             <Input
               id="log-quantity"
               type="number"
-              min={1}
-              inputMode="numeric"
-              value={Number.isFinite(editQuantityG) ? editQuantityG : ""}
-              onChange={(e) => setEditQuantityG(Number(e.target.value))}
+              min={0}
+              step="any"
+              inputMode="decimal"
+              className="w-24"
+              value={Number.isFinite(count) ? count : ""}
+              onChange={(e) => setCount(Number(e.target.value))}
               data-testid="input-quantity"
             />
-          </div>
-        )}
-
-        <div className="space-y-1.5">
-          <Label htmlFor="log-meal">Meal</Label>
-          <Select value={mealType} onValueChange={(v) => setMealType(v as MealType)}>
-            <SelectTrigger id="log-meal" data-testid="select-meal-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MEAL_TYPES.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {MEAL_LABELS[m]}
+            <Select value={selectedUnit?.value ?? "g"} onValueChange={handleUnitChange}>
+              <SelectTrigger className="flex-1" data-testid="select-unit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {unitOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                <SelectItem value="__add" data-testid="select-add-portion">
+                  + Add portion…
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedUnit && selectedUnit.value !== "g" && (
+            <p className="text-xs text-muted-foreground">= {Math.round(quantityG)} g</p>
+          )}
 
-        <div className="grid grid-cols-5 gap-2 rounded-md bg-muted/40 p-3 text-center">
-          {PREVIEW_FIELDS.map((f) => (
-            <div key={f.key}>
-              <div className="text-sm font-semibold tabular-nums" data-testid={`preview-${f.key}`}>
-                {preview[f.key]}
+          {showAddPortion && (
+            <div className="space-y-2 rounded-md border p-2">
+              <p className="text-xs text-muted-foreground">New portion</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="e.g. 1 slice"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  data-testid="input-portion-label"
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  placeholder="grams"
+                  className="w-24"
+                  value={newGrams}
+                  onChange={(e) => setNewGrams(e.target.value)}
+                  data-testid="input-portion-grams"
+                />
               </div>
-              <div className="text-[10px] uppercase text-muted-foreground">{f.label}</div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowAddPortion(false);
+                    setNewLabel("");
+                    setNewGrams("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleAddPortion}
+                  disabled={!canAddPortion || addServing.isPending}
+                  data-testid="button-save-portion"
+                >
+                  Add
+                </Button>
+              </div>
             </div>
-          ))}
+          )}
+
+          {personalServings.length > 0 && (
+            <div className="space-y-1 pt-1">
+              <p className="text-xs text-muted-foreground">Your portions</p>
+              {personalServings.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-sm"
+                >
+                  <span className="min-w-0 truncate">
+                    {s.label} · {Math.round(s.grams)} g
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    aria-label={`Remove ${s.label}`}
+                    disabled={removeServing.isPending}
+                    onClick={() => handleRemovePortion(s)}
+                    data-testid="button-remove-portion"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Label htmlFor="log-quantity">Quantity (grams)</Label>
+          <Input
+            id="log-quantity"
+            type="number"
+            min={1}
+            inputMode="numeric"
+            value={Number.isFinite(editQuantityG) ? editQuantityG : ""}
+            onChange={(e) => setEditQuantityG(Number(e.target.value))}
+            data-testid="input-quantity"
+          />
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="log-meal">Meal</Label>
+        <Select value={mealType} onValueChange={(v) => setMealType(v as MealType)}>
+          <SelectTrigger id="log-meal" data-testid="select-meal-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MEAL_TYPES.map((m) => (
+              <SelectItem key={m} value={m}>
+                {MEAL_LABELS[m]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <DialogFooter>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "summary" | "nutrients")}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="summary" data-testid="tab-summary">
+            Summary
+          </TabsTrigger>
+          <TabsTrigger value="nutrients" data-testid="tab-nutrients">
+            Nutrients
+            {microRows.length > 0 && (
+              <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="summary" className="space-y-4 pt-2">
+          <div className="rounded-md bg-muted/40 p-3">
+            <CalorieBreakdownRing shares={macroShares} calories={preview.calories} />
+          </div>
+          <MacroRows totals={preview} shares={macroShares} />
+          <GoalContributionRows rows={goalRows} />
+        </TabsContent>
+
+        <TabsContent value="nutrients" className="pt-2">
+          <MicronutrientPreviewPanel rows={microRows} isLoading={servingsQuery.isLoading} />
+        </TabsContent>
+      </Tabs>
+
+      <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-background pt-3">
         <Button variant="ghost" onClick={onClose} disabled={isPending}>
           Cancel
         </Button>
@@ -410,8 +436,8 @@ function LogFoodForm({
         >
           {isCreate ? "Log it" : "Save"}
         </Button>
-      </DialogFooter>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -424,23 +450,36 @@ export function LogFoodDialog({
   state,
   date,
   onClose,
+  todayTotals,
+  effectiveTarget,
 }: {
   readonly state: LogDialogState | null;
   readonly date: string;
   readonly onClose: () => void;
+  readonly todayTotals?: NutritionMacroTotals | null;
+  readonly effectiveTarget?: EffectiveTargetSummary | null;
 }) {
   const formKey = getFormKey(state);
 
   return (
-    <Dialog
+    <ResponsiveSheet
       open={state !== null}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      title={state?.mode === "edit" ? "Edit entry" : "Log food"}
+      testId="dialog-log-food"
     >
-      <DialogContent data-testid="dialog-log-food">
-        {state && <LogFoodForm key={formKey} state={state} date={date} onClose={onClose} />}
-      </DialogContent>
-    </Dialog>
+      {state && (
+        <LogFoodForm
+          key={formKey}
+          state={state}
+          date={date}
+          onClose={onClose}
+          todayTotals={todayTotals ?? null}
+          effectiveTarget={effectiveTarget ?? null}
+        />
+      )}
+    </ResponsiveSheet>
   );
 }
