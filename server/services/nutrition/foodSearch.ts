@@ -3,16 +3,17 @@ import type { Food, FoodSearchResponse } from "@shared/schema";
 import { env } from "../../env";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
-import { searchFatSecretFoods } from "./fatsecretClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
+import { searchSpoonacularFoods } from "./spoonacularClient";
+import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
 
 /**
  * Food search orchestration (FR-1.1). Queries the local `foods` cache plus the
- * live providers — FatSecret (verified branded, preferred) and USDA — concurrently,
+ * live providers — Spoonacular (verified branded, preferred) and USDA — concurrently,
  * caching any hits back into `foods`. Provider failures are swallowed so manual
  * logging keeps working from cache (NFR-5), surfaced via `apiDegraded`. Results
- * rank FatSecret → USDA → local, deduped.
+ * rank Spoonacular → USDA → local, deduped.
  */
 
 const LOCAL_LIMIT = 25;
@@ -32,6 +33,20 @@ function labelKey(food: Food): string | null {
 /** Merge source tiers in priority order, deduped by identity (`source:sourceId`)
  *  and, for branded items, by brand+name so the same product from two sources is
  *  shown once. */
+/** Cache a provider's mapped results, degrading to cache-only (never throwing) if
+ *  the write fails. A transient DB error — or the brief window after a deploy but
+ *  before an additive `foods` migration (e.g. a new `source` value) is applied —
+ *  must not 500 the search; the live results are simply skipped that request. */
+async function cacheResults(mapped: MappedFood[], provider: string): Promise<Food[]> {
+  if (mapped.length === 0) return [];
+  try {
+    return await storage.nutrition.upsertFoods(mapped);
+  } catch (err) {
+    logger.warn({ err, provider }, "[nutrition] caching search results failed; serving cache only");
+    return [];
+  }
+}
+
 function mergeFoods(tiers: Food[][]): Food[] {
   const seenKey = new Set<string>();
   const seenLabel = new Set<string>();
@@ -54,20 +69,18 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
 
   // Query the live providers concurrently; one failing must not sink the other.
-  const [fsSettled, usdaSettled] = await Promise.allSettled([
-    searchFatSecretFoods(query),
+  const [spoonSettled, usdaSettled] = await Promise.allSettled([
+    searchSpoonacularFoods(query),
     searchUsdaFoods(query),
   ]);
 
-  let fatsecret: Food[] = [];
-  let fatsecretLive = false;
-  if (fsSettled.status === "fulfilled") {
-    fatsecretLive = fsSettled.value.reached;
-    if (fsSettled.value.foods.length > 0) {
-      fatsecret = await storage.nutrition.upsertFoods(fsSettled.value.foods);
-    }
+  let spoonacular: Food[] = [];
+  let spoonacularLive = false;
+  if (spoonSettled.status === "fulfilled") {
+    spoonacularLive = spoonSettled.value.reached;
+    spoonacular = await cacheResults(spoonSettled.value.foods, "spoonacular");
   } else {
-    logger.warn({ err: fsSettled.reason, query }, "[nutrition] FatSecret search failed; continuing");
+    logger.warn({ err: spoonSettled.reason, query }, "[nutrition] Spoonacular search failed; continuing");
   }
 
   let usda: Food[] = [];
@@ -76,18 +89,16 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
     // USDA returns [] WITHOUT a live call when no API key is set; with a key, a
     // fulfilled result (even empty) means the API was reached.
     usdaLive = Boolean(env.USDA_API_KEY);
-    if (usdaSettled.value.length > 0) {
-      usda = await storage.nutrition.upsertFoods(usdaSettled.value);
-    }
+    usda = await cacheResults(usdaSettled.value, "usda");
   } else {
     logger.warn({ err: usdaSettled.reason, query }, "[nutrition] USDA search failed; returning cached foods only");
   }
 
   // Cache-only ⇒ degraded: no live provider reached its API (matches the prior
-  // USDA-only behavior when FatSecret is unconfigured).
-  const apiDegraded = !fatsecretLive && !usdaLive;
+  // USDA-only behavior when Spoonacular is unconfigured).
+  const apiDegraded = !spoonacularLive && !usdaLive;
 
-  const results = mergeFoods([fatsecret, usda, local]);
+  const results = mergeFoods([spoonacular, usda, local]);
   // Self-heal stale cached rows in the background; never blocks the response.
   refreshStaleFoodsInBackground(results);
   return { results, apiDegraded };

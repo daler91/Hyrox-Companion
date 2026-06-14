@@ -477,16 +477,6 @@ export async function searchFatSecretFoods(
   const foods = (premier ? rawList.map(mapFatSecretFood) : rawList.map(mapFatSecretV1Food)).filter(
     (f): f is MappedFood => f !== null,
   );
-  // TEMP diagnostics — confirm FatSecret returns + maps results on the Basic tier.
-  logger.info(
-    {
-      tier: premier ? "v3" : "v1",
-      rawCount: rawList.length,
-      mappedCount: foods.length,
-      sample: rawList[0]?.food_description ?? rawList[0]?.food_name ?? null,
-    },
-    "[nutrition] FatSecret search diagnostics",
-  );
   return { foods, reached: true };
 }
 
