@@ -1,11 +1,10 @@
-import type { Food } from "@shared/schema";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { BANANA } from "@/test/factories/foodFactory";
+import { renderWithClient } from "@/test/support/renderWithClient";
 
 import { QuickAddBar } from "./QuickAddBar";
 
@@ -16,30 +15,6 @@ vi.mock("@/lib/api", () => ({
     nutritionFavorites: ["/api/v1/nutrition/favorites"],
   },
 }));
-
-const BANANA: Food = {
-  id: "f1",
-  source: "usda",
-  sourceId: "1",
-  name: "Banana",
-  brand: null,
-  servingSizeG: 118,
-  caloriesPer100g: 89,
-  proteinPer100g: 1.1,
-  carbPer100g: 23,
-  fatPer100g: 0.3,
-  fiberPer100g: 2.6,
-  micros: null,
-  lastFetchedAt: null,
-  createdByUserId: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
-
-function renderWithClient(ui: ReactNode) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
-}
 
 describe("QuickAddBar", () => {
   beforeEach(() => {
