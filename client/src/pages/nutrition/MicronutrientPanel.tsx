@@ -1,3 +1,4 @@
+import { MicroRow } from "@/components/nutrition/MicroRow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMicros } from "@/hooks/useNutrition";
 
@@ -24,21 +25,7 @@ export function MicronutrientPanel({ date }: { readonly date: string }) {
     return (
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
         {micros.map((m) => (
-          <div key={m.key} data-testid={`micro-${m.key}`}>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-xs font-medium">{m.label}</span>
-              <span className="text-[10px] tabular-nums text-muted-foreground">{m.pctRdi}%</span>
-            </div>
-            <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full ${m.pctRdi >= 100 ? "bg-emerald-500" : "bg-primary"}`}
-                style={{ width: `${Math.min(m.pctRdi, 100)}%` }}
-              />
-            </div>
-            <span className="mt-0.5 block text-[10px] tabular-nums text-muted-foreground">
-              {m.amount} / {m.rdi} {m.unit}
-            </span>
-          </div>
+          <MicroRow key={m.key} m={m} />
         ))}
       </div>
     );
