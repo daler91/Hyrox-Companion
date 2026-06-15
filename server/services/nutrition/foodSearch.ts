@@ -51,16 +51,17 @@ function mergeFoods(tiers: Food[][]): Food[] {
   const seenKey = new Set<string>();
   const seenLabel = new Set<string>();
   const out: Food[] = [];
-  for (const tier of tiers) {
-    for (const food of tier) {
-      const key = food.sourceId ? `${food.source}:${food.sourceId}` : `id:${food.id}`;
-      if (seenKey.has(key)) continue;
-      const label = labelKey(food);
-      if (label && seenLabel.has(label)) continue;
-      seenKey.add(key);
-      if (label) seenLabel.add(label);
-      out.push(food);
-    }
+  // Flatten the priority tiers into one ordered stream (`flat` concatenates in
+  // tier order, preserving Edamam → USDA → local ranking) so dedup is a single
+  // pass rather than a nested loop.
+  for (const food of tiers.flat()) {
+    const key = food.sourceId ? `${food.source}:${food.sourceId}` : `id:${food.id}`;
+    if (seenKey.has(key)) continue;
+    const label = labelKey(food);
+    if (label && seenLabel.has(label)) continue;
+    seenKey.add(key);
+    if (label) seenLabel.add(label);
+    out.push(food);
   }
   return out.slice(0, MAX_RESULTS);
 }
