@@ -250,3 +250,26 @@ export function formatDateLabel(dateStr: string): string {
     day: "numeric",
   });
 }
+
+// Immutable list editing for the nutrition dialogs' keyed rows (servings,
+// ingredients). Pure and shared so the dialogs don't inline deep update/remove
+// callbacks (which nest past the readable limit inside `.map` + event handlers).
+
+/** Immutably merge `patch` into the row at `index`; other rows are untouched. */
+export function updateAt<T>(arr: T[], index: number, patch: Partial<T>): T[] {
+  return arr.map((row, j) => (j === index ? { ...row, ...patch } : row));
+}
+
+/** Immutably drop the element at `index`. */
+export function removeAt<T>(arr: T[], index: number): T[] {
+  return arr.filter((_, j) => j !== index);
+}
+
+/**
+ * Append `item` only when no existing element shares its key. Returns the SAME
+ * array reference when the item is already present, so React can skip a
+ * redundant render (matches the prior `prev.some(...) ? prev : [...prev, item]`).
+ */
+export function appendUnique<T>(arr: T[], item: T, keyOf: (x: T) => string): T[] {
+  return arr.some((x) => keyOf(x) === keyOf(item)) ? arr : [...arr, item];
+}

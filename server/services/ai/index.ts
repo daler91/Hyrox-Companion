@@ -52,13 +52,69 @@ function mapTestTrendDirection(
   return trendDirectionMap[trend];
 }
 
+function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermediate" | "advanced" {
+  if (totalWorkouts < 20) return "beginner";
+  if (totalWorkouts < 80) return "intermediate";
+  return "advanced";
+}
+
+type UpcomingPlannedDay = Awaited<
+  ReturnType<typeof storage.timeline.getUpcomingPlannedDays>
+>[number];
+
+/** Shape an upcoming plan day for the coach context, falling back to the planned
+ *  prescription for sets that haven't been logged yet. */
+function mapUpcomingWorkout(
+  d: UpcomingPlannedDay,
+): NonNullable<TrainingContext["upcomingWorkouts"]>[number] {
+  return {
+    planDayId: d.planDayId,
+    date: d.date,
+    focus: d.focus,
+    mainWorkout: d.mainWorkout,
+    accessory: d.accessory,
+    notes: d.notes,
+    aiSource: d.aiSource,
+    aiRationale: d.aiRationale,
+    aiNoteUpdatedAt: d.aiNoteUpdatedAt,
+    aiInputsUsed: d.aiInputsUsed,
+    ...((d.exerciseSets?.length ?? 0) > 0
+      ? {
+          // Upcoming plan-day sets carry their prescription in planned*
+          // (actuals stay null until logged) — fall back so the coach sees
+          // the prescribed numbers, not blanks.
+          exerciseDetails: d.exerciseSets.map((es) => ({
+            exerciseName: es.exerciseName,
+            customLabel: es.customLabel,
+            category: es.category,
+            setNumber: es.setNumber,
+            reps: es.reps ?? es.plannedReps,
+            weight: es.weight ?? es.plannedWeight,
+            distance: es.distance ?? es.plannedDistance,
+            time: es.time ?? es.plannedTime,
+            notes: es.notes,
+            sortOrder: es.sortOrder,
+          })),
+        }
+      : {}),
+  };
+}
+
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
   const today = todayUtcDate();
   const loadHistoryStart = addDays(today, -70);
   // Build the (optional) fuelling slice concurrently with the training reads; it
   // short-circuits to undefined when nutrition is off or the athlete has no data.
   const nutritionPromise = buildNutritionTrainingContext(userId);
-  const [timeline, activePlanRecord, user, upcomingDays, loadWorkoutLogs, loadExerciseSets, loadTags] = await Promise.all([
+  const [
+    timeline,
+    activePlanRecord,
+    user,
+    upcomingDays,
+    loadWorkoutLogs,
+    loadExerciseSets,
+    loadTags,
+  ] = await Promise.all([
     // Bound to recent history: this internal caller has no caller-supplied
     // limit, so an unbounded getTimeline() would hydrate the user's entire
     // history (all exercise sets) on every coach/chat context build. See
@@ -112,14 +168,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
     return days >= 0 && days <= 7;
   }).length;
-  let experienceLevel: "beginner" | "intermediate" | "advanced";
-  if (totalWorkouts < 20) {
-    experienceLevel = "beginner";
-  } else if (totalWorkouts < 80) {
-    experienceLevel = "intermediate";
-  } else {
-    experienceLevel = "advanced";
-  }
+  const experienceLevel = classifyExperienceLevel(totalWorkouts);
 
   const decisionTree = decideTrainingState({
     profile: {
@@ -217,37 +266,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ...(user?.distanceUnit ? { distanceUnit: user.distanceUnit } : {}),
     ...(nutrition ? { nutrition } : {}),
     recentWorkouts: recentWorkouts.slice(0, 10),
-    upcomingWorkouts: upcomingDays.map((d) => ({
-      planDayId: d.planDayId,
-      date: d.date,
-      focus: d.focus,
-      mainWorkout: d.mainWorkout,
-      accessory: d.accessory,
-      notes: d.notes,
-      aiSource: d.aiSource,
-      aiRationale: d.aiRationale,
-      aiNoteUpdatedAt: d.aiNoteUpdatedAt,
-      aiInputsUsed: d.aiInputsUsed,
-      ...((d.exerciseSets?.length ?? 0) > 0
-        ? {
-            // Upcoming plan-day sets carry their prescription in planned*
-            // (actuals stay null until logged) — fall back so the coach sees
-            // the prescribed numbers, not blanks.
-            exerciseDetails: d.exerciseSets.map((es) => ({
-              exerciseName: es.exerciseName,
-              customLabel: es.customLabel,
-              category: es.category,
-              setNumber: es.setNumber,
-              reps: es.reps ?? es.plannedReps,
-              weight: es.weight ?? es.plannedWeight,
-              distance: es.distance ?? es.plannedDistance,
-              time: es.time ?? es.plannedTime,
-              notes: es.notes,
-              sortOrder: es.sortOrder,
-            })),
-          }
-        : {}),
-    })),
+    upcomingWorkouts: upcomingDays.map(mapUpcomingWorkout),
     exerciseBreakdown,
     structuredExerciseStats,
     activePlan,
