@@ -13,6 +13,7 @@ import { createDefaultSet } from "@/components/ExerciseInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberStepper } from "@/components/ui/number-stepper";
@@ -179,17 +180,26 @@ function renderGhostIconButton(opts: {
   icon: React.ReactNode;
 }) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      onClick={opts.onClick}
-      aria-label={opts.ariaLabel}
-      className={opts.className}
-      data-testid={opts.testId}
-    >
-      {opts.icon}
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={opts.onClick}
+            aria-label={opts.ariaLabel}
+            className={opts.className}
+            data-testid={opts.testId}
+          >
+            {opts.icon}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{opts.ariaLabel}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
