@@ -2,45 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../env", () => ({ env: { USDA_API_KEY: "test-key" } }));
 
-// Keep RetryableHttpError / parseRetryAfter / isTransientNetworkError real, but
-// strip the backoff delays from retryWithJitter so retry tests run instantly.
-vi.mock("../../utils/httpRetry", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/httpRetry")>("../../utils/httpRetry");
-  return {
-    ...actual,
-    retryWithJitter: async (fn: () => Promise<unknown>, opts?: { retries?: number }) => {
-      const retries = opts?.retries ?? 0;
-      let lastErr: unknown;
-      for (let i = 0; i <= retries; i++) {
-        try {
-          return await fn();
-        } catch (err) {
-          lastErr = err;
-          const retryable =
-            err instanceof actual.RetryableHttpError || actual.isTransientNetworkError(err);
-          if (!retryable || i >= retries) throw err;
-        }
-      }
-      throw lastErr;
-    },
-  };
-});
+// httpRetry mocked to strip backoff delays (manual mock in __mocks__/httpRetry).
+vi.mock("../../utils/httpRetry");
 
 import { env } from "../../env";
+import { errResponse, ok as okResponse } from "./httpClientTestSupport";
 import { fetchUsdaFoodById, fetchUsdaFoodPortions, mapUsdaSearchFood, searchUsdaFoods } from "./usdaClient";
-
-const okResponse = (body: unknown) => ({
-  ok: true,
-  status: 200,
-  json: async () => body,
-  headers: { get: () => null },
-});
-const errResponse = (status: number) => ({
-  ok: false,
-  status,
-  json: async () => ({}),
-  headers: { get: () => null },
-});
 
 describe("mapUsdaSearchFood", () => {
   it("maps a Foundation food's per-100g nutrients", () => {
@@ -186,7 +153,7 @@ describe("fetchUsdaFoodPortions", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const detail = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
+  const detail = okResponse;
 
   it("maps foodPortions to label + grams (label precedence; skips no-gram)", async () => {
     fetchMock.mockResolvedValue(
@@ -231,7 +198,7 @@ describe("fetchUsdaFoodById", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const detail = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
+  const detail = okResponse;
 
   it("maps the detail endpoint's nested nutrients, including micros", async () => {
     fetchMock.mockResolvedValue(

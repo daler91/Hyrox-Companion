@@ -20,28 +20,8 @@ vi.mock("../../sharedRuntimeState", () => ({
   deleteRuntimeCache: vi.fn(async () => {}),
 }));
 
-// Keep the real error classes; strip backoff delays.
-vi.mock("../../utils/httpRetry", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/httpRetry")>("../../utils/httpRetry");
-  return {
-    ...actual,
-    retryWithJitter: async (fn: () => Promise<unknown>, opts?: { retries?: number }) => {
-      const retries = opts?.retries ?? 0;
-      let lastErr: unknown;
-      for (let i = 0; i <= retries; i++) {
-        try {
-          return await fn();
-        } catch (err) {
-          lastErr = err;
-          const retryable =
-            err instanceof actual.RetryableHttpError || actual.isTransientNetworkError(err);
-          if (!retryable || i >= retries) throw err;
-        }
-      }
-      throw lastErr;
-    },
-  };
-});
+// httpRetry mocked to strip backoff delays (manual mock in __mocks__/httpRetry).
+vi.mock("../../utils/httpRetry");
 
 import { env } from "../../env";
 import {
@@ -52,9 +32,8 @@ import {
   resolveFatSecretBarcode,
   searchFatSecretFoods,
 } from "./fatsecretClient";
+import { errResponse as err, ok } from "./httpClientTestSupport";
 
-const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
-const err = (status: number) => ({ ok: false, status, json: async () => ({}), headers: { get: () => null } });
 // Compare the host exactly (not a substring) so this can't be fooled by a URL
 // like "oauth.fatsecret.com.evil.test" — and to satisfy CodeQL.
 const isTokenUrl = (url: unknown) => {

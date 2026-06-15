@@ -1,36 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Keep RetryableHttpError / isTransientNetworkError real; strip backoff delays.
-vi.mock("../../utils/httpRetry", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/httpRetry")>("../../utils/httpRetry");
-  return {
-    ...actual,
-    retryWithJitter: async (fn: () => Promise<unknown>, opts?: { retries?: number }) => {
-      const retries = opts?.retries ?? 0;
-      let lastErr: unknown;
-      for (let i = 0; i <= retries; i++) {
-        try {
-          return await fn();
-        } catch (err) {
-          lastErr = err;
-          const retryable =
-            err instanceof actual.RetryableHttpError || actual.isTransientNetworkError(err);
-          if (!retryable || i >= retries) throw err;
-        }
-      }
-      throw lastErr;
-    },
-  };
-});
+// httpRetry mocked to strip backoff delays (manual mock in __mocks__/httpRetry).
+vi.mock("../../utils/httpRetry");
 
 vi.mock("../../env", () => ({ env: { EDAMAM_APP_ID: "test-id", EDAMAM_APP_KEY: "test-key" } }));
 vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 import { env } from "../../env";
 import { mapEdamamFood, resolveEdamamBarcode, searchEdamamFoods } from "./edamamClient";
-
-const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
-const errResponse = (status: number) => ({ ok: false, status, json: async () => ({}), headers: { get: () => null } });
+import { errResponse, ok } from "./httpClientTestSupport";
 
 const HINT = {
   food: {
