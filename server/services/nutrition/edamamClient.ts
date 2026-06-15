@@ -2,6 +2,7 @@ import { env } from "../../env";
 import { logger } from "../../logger";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import type { MappedFood } from "./types";
+import { num } from "./utils";
 
 /**
  * Edamam Food Database client. A curated source of branded/packaged + generic
@@ -65,14 +66,6 @@ interface EdamamHint {
 
 interface EdamamParserResponse {
   hints?: EdamamHint[];
-}
-
-function num(value: number | string | null | undefined): number | null {
-  let n: number;
-  if (typeof value === "string") n = Number(value);
-  else if (typeof value === "number") n = value;
-  else n = Number.NaN;
-  return Number.isFinite(n) ? n : null;
 }
 
 /** The labelled "Serving" measure's gram weight, surfaced as the default serving
