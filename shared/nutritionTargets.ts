@@ -62,7 +62,10 @@ export interface BmrInput {
  */
 export function calculateBmr(input: BmrInput): number {
   const base = 10 * input.bodyweightKg + 6.25 * input.heightCm - 5 * input.ageYears;
-  const sexTerm = input.sex === "male" ? 5 : input.sex === "female" ? -161 : (5 + -161) / 2;
+  let sexTerm: number;
+  if (input.sex === "male") sexTerm = 5;
+  else if (input.sex === "female") sexTerm = -161;
+  else sexTerm = (5 + -161) / 2;
   return base + sexTerm;
 }
 
@@ -104,12 +107,9 @@ export function calculateNutritionTarget(input: NutritionTargetInput): Nutrition
   const tdee = bmr * ACTIVITY_MULTIPLIERS[input.activityLevel];
 
   const dailyKcalFromRate = (Math.abs(input.goalRateKgPerWeek) * KCAL_PER_KG_BODYWEIGHT) / DAYS_PER_WEEK;
-  const goalCalorieDelta =
-    input.goalDirection === "lose"
-      ? -dailyKcalFromRate
-      : input.goalDirection === "gain"
-        ? dailyKcalFromRate
-        : 0;
+  let goalCalorieDelta = 0;
+  if (input.goalDirection === "lose") goalCalorieDelta = -dailyKcalFromRate;
+  else if (input.goalDirection === "gain") goalCalorieDelta = dailyKcalFromRate;
 
   let calories = tdee + goalCalorieDelta;
 

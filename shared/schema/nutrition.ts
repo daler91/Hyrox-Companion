@@ -146,7 +146,6 @@ export type CreateRecipeInput = z.infer<typeof createRecipeSchema>;
 
 // Editing replaces the whole recipe (name + servings + ingredient list).
 export const updateRecipeSchema = createRecipeSchema;
-export type UpdateRecipeInput = CreateRecipeInput;
 
 // ---------------------------------------------------------------------------
 // Response shapes — shared so the client and server can't drift apart.

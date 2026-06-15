@@ -59,7 +59,9 @@ function parseJson(responseText: string): unknown {
 /** Validate the AI payload leniently: drop malformed items, keep the rest. */
 function validateMealItems(raw: unknown): MealParseRaw {
   const shape = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const rawItems = Array.isArray(shape.items) ? shape.items : Array.isArray(raw) ? raw : [];
+  let rawItems: unknown[] = [];
+  if (Array.isArray(shape.items)) rawItems = shape.items;
+  else if (Array.isArray(raw)) rawItems = raw;
   const items: ParsedMealItem[] = [];
   for (const candidate of rawItems) {
     const parsed = parsedMealItemSchema.safeParse(candidate);

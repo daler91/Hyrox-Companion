@@ -38,6 +38,10 @@ function target(effectiveFrom: string, opts: Partial<NutritionTarget> = {}): Nut
   } as NutritionTarget;
 }
 
+function point(date: string, over: Partial<BlockViewPoint> = {}): BlockViewPoint {
+  return { date, calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0, utss: 0, ...over };
+}
+
 describe("buildFuellingRange", () => {
   it("fills every day in the range with zero totals and a null target when there's no data", () => {
     const days = buildFuellingRange([], [], [], { from: "2026-06-01", to: "2026-06-03" });
@@ -129,10 +133,6 @@ describe("buildFuellingRange", () => {
 });
 
 describe("decorateBlockPointsWithOutcomes", () => {
-  function point(date: string, over: Partial<BlockViewPoint> = {}): BlockViewPoint {
-    return { date, calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0, utss: 0, ...over };
-  }
-
   it("attaches the day's carb target and averages multi-workout outcomes", () => {
     const points = decorateBlockPointsWithOutcomes(
       [point("2026-06-01"), point("2026-06-02")],

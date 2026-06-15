@@ -27,7 +27,7 @@ describe("clampMacro", () => {
   });
 
   it("rejects NaN / Infinity / negative / over-ceiling / nullish as null", () => {
-    expect(clampMacro(NaN, 200)).toBeNull();
+    expect(clampMacro(Number.NaN, 200)).toBeNull();
     expect(clampMacro(Infinity, 200)).toBeNull();
     expect(clampMacro(-1, 200)).toBeNull();
     expect(clampMacro(201, 200)).toBeNull();
@@ -45,7 +45,7 @@ describe("sanitizeMappedFood", () => {
 
   it("nulls individual NaN / negative / absurd macros without dropping the food", () => {
     const out = sanitizeMappedFood(
-      food({ caloriesPer100g: NaN, proteinPer100g: -5, carbPer100g: 9999, fatPer100g: 2 }),
+      food({ caloriesPer100g: Number.NaN, proteinPer100g: -5, carbPer100g: 9999, fatPer100g: 2 }),
     );
     expect(out).not.toBeNull();
     expect(out?.caloriesPer100g).toBeNull(); // NaN
@@ -96,11 +96,13 @@ describe("sanitizeMappedFood", () => {
   });
 
   it("drops bad micro entries but keeps the good ones", () => {
-    const out = sanitizeMappedFood(food({ micros: { sodium: 50, potassium: NaN, calcium: -1 } }));
+    const out = sanitizeMappedFood(
+      food({ micros: { sodium: 50, potassium: Number.NaN, calcium: -1 } }),
+    );
     expect(out?.micros).toEqual({ sodium: 50 });
   });
 
   it("nulls the micro map when nothing survives", () => {
-    expect(sanitizeMappedFood(food({ micros: { sodium: NaN } }))?.micros).toBeNull();
+    expect(sanitizeMappedFood(food({ micros: { sodium: Number.NaN } }))?.micros).toBeNull();
   });
 });

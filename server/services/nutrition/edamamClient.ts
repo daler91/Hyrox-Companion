@@ -68,7 +68,10 @@ interface EdamamParserResponse {
 }
 
 function num(value: number | string | null | undefined): number | null {
-  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+  let n: number;
+  if (typeof value === "string") n = Number(value);
+  else if (typeof value === "number") n = value;
+  else n = Number.NaN;
   return Number.isFinite(n) ? n : null;
 }
 

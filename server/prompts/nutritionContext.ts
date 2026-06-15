@@ -74,5 +74,6 @@ function buildNextSessionLine(s: NutritionCtx["nextSessionFuelling"]): string | 
     .join(" at ");
   const pre = s.preCarbG > 0 ? `aim ~${s.preCarbG}g carbs beforehand` : "no pre-fuelling needed";
   const basis = s.estimated ? "; estimated from the planned exercises" : "";
-  return `- Next planned session (${s.date}, ${s.focus}${effort ? `, ${effort}` : ""}): ${pre}, then ~${s.postCarbG}g carbs + ${s.postProteinG}g protein to recover${basis}.`;
+  const effortSuffix = effort ? `, ${effort}` : "";
+  return `- Next planned session (${s.date}, ${s.focus}${effortSuffix}): ${pre}, then ~${s.postCarbG}g carbs + ${s.postProteinG}g protein to recover${basis}.`;
 }

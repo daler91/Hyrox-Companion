@@ -37,12 +37,12 @@ function median(values: number[]): number {
 /** Seconds per meter for a run log, from avgSpeed when present, else distance/duration. */
 function logSecPerMeter(log: WorkoutLog): number | null {
   const distanceMeters = log.distanceMeters ?? 0;
-  const speed =
-    log.avgSpeed && log.avgSpeed > 0
-      ? log.avgSpeed
-      : distanceMeters > 0 && log.duration && log.duration > 0
-        ? distanceMeters / (log.duration * 60) // duration is minutes app-wide
-        : null;
+  let speed: number | null = null;
+  if (log.avgSpeed && log.avgSpeed > 0) {
+    speed = log.avgSpeed;
+  } else if (distanceMeters > 0 && log.duration && log.duration > 0) {
+    speed = distanceMeters / (log.duration * 60); // duration is minutes app-wide
+  }
   if (speed == null || speed < MIN_RUN_SPEED_MS || speed > MAX_RUN_SPEED_MS) return null;
   return 1 / speed;
 }

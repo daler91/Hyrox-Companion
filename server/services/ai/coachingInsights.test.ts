@@ -55,6 +55,14 @@ function gapsByStation(timeline: TimelineEntry[]): Record<string, number | null>
   );
 }
 
+function weightEntry(date: string, weight: number): TimelineEntry {
+  return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: BACK_SQUAT, weight })] });
+}
+
+function timeEntry(date: string, time: number): TimelineEntry {
+  return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: "rowing", time })] });
+}
+
 describe("computeRpeTrend", () => {
   it("reports insufficient_data with no averages for fewer than 3 rated workouts", () => {
     expect(computeRpeTrend(recentsWithRpe([8, 7]))).toEqual({
@@ -339,14 +347,6 @@ describe("computeExerciseGaps", () => {
 });
 
 describe("computeProgressionFlags", () => {
-  function weightEntry(date: string, weight: number): TimelineEntry {
-    return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: BACK_SQUAT, weight })] });
-  }
-
-  function timeEntry(date: string, time: number): TimelineEntry {
-    return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: "rowing", time })] });
-  }
-
   it("returns no flags for an empty timeline", () => {
     expect(computeProgressionFlags([])).toEqual([]);
   });
