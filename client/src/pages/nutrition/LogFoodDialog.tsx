@@ -133,6 +133,57 @@ function resolveSelectedUnit(
   );
 }
 
+/** Initial amount: a new food seeds 1 named serving (or 100 g); edit mode starts
+ *  at 0 because it drives quantity via grams instead. */
+function initialCount(state: LogDialogState, hasServingSize: boolean): number {
+  if (state.mode !== "create") return 0;
+  return hasServingSize ? 1 : 100;
+}
+
+/** Initial unit: the synthetic "__serving" when a new food has a known serving, else grams. */
+function initialUnitValue(state: LogDialogState, hasServingSize: boolean): string {
+  return state.mode === "create" && hasServingSize ? "__serving" : "g";
+}
+
+/** Initial grams for edit mode (rounded); 0 in create mode where count drives it. */
+function initialEditGrams(state: LogDialogState): number {
+  return state.mode === "edit" ? Math.round(state.entry.quantityG) : 0;
+}
+
+/** Initial meal: the time-of-day default for a new log, else the entry's own meal. */
+function initialMealType(state: LogDialogState): MealType {
+  return state.mode === "create" ? defaultMealForNow() : state.entry.mealType;
+}
+
+/** Fields that differ by mode — from the picked Food (create) or the existing
+ *  entry (edit) — resolved once so the form body stays mode-agnostic. */
+function deriveFoodFields(state: LogDialogState): {
+  foodId: string;
+  detailFoodId: string;
+  servingSizeG: number | null;
+  name: string;
+  brand: string | null;
+} {
+  if (state.mode === "create") {
+    const { food } = state;
+    return {
+      foodId: food.id,
+      detailFoodId: food.id,
+      servingSizeG: food.servingSizeG,
+      name: food.name,
+      brand: food.brand,
+    };
+  }
+  const { entry } = state;
+  return {
+    foodId: "",
+    detailFoodId: entry.foodId,
+    servingSizeG: null,
+    name: entry.name,
+    brand: entry.brand,
+  };
+}
+
 /**
  * Inner form, mounted with a `key` per food/entry so opening a different item
  * remounts it and re-seeds the `useState` initializers — no reset effect needed.
@@ -153,36 +204,25 @@ function LogFoodForm({
   const logFood = useLogFood(date);
   const updateLog = useUpdateLog(date);
   const isCreate = state.mode === "create";
-  const foodId = state.mode === "create" ? state.food.id : "";
+  const { foodId, detailFoodId, servingSizeG, name, brand } = deriveFoodFields(state);
 
   // Food + named servings. Fetched in both modes: create uses the servings for
   // the unit selector; both use the enriched food (USDA micros are filled in on
   // first detail fetch) for the micronutrient preview.
-  const detailFoodId = state.mode === "create" ? state.food.id : state.entry.foodId;
   const servingsQuery = useFoodWithServings(detailFoodId);
   const addServing = useAddServing(foodId);
   const removeServing = useRemoveServing(foodId);
 
-  const servingSizeG = state.mode === "create" ? state.food.servingSizeG : null;
   const hasServingSize = servingSizeG != null && servingSizeG > 0;
 
   // create mode: a count + a unit (grams / named portion). When the food has a
   // known serving we seed "1 portion" instead of a raw 100 g — the synthetic
   // "__serving" option is derivable from the food up front, so no effect is
   // needed and there's no flash before the named servings load. edit mode: grams.
-  const [count, setCount] = useState(() => {
-    if (state.mode !== "create") return 0;
-    return hasServingSize ? 1 : 100;
-  });
-  const [unitValue, setUnitValue] = useState(() =>
-    state.mode === "create" && hasServingSize ? "__serving" : "g",
-  );
-  const [editQuantityG, setEditQuantityG] = useState(() =>
-    state.mode === "edit" ? Math.round(state.entry.quantityG) : 0,
-  );
-  const [mealType, setMealType] = useState<MealType>(() =>
-    state.mode === "create" ? defaultMealForNow() : state.entry.mealType,
-  );
+  const [count, setCount] = useState(() => initialCount(state, hasServingSize));
+  const [unitValue, setUnitValue] = useState(() => initialUnitValue(state, hasServingSize));
+  const [editQuantityG, setEditQuantityG] = useState(() => initialEditGrams(state));
+  const [mealType, setMealType] = useState<MealType>(() => initialMealType(state));
   const [tab, setTab] = useState<"summary" | "nutrients">("summary");
 
   // Add-portion sub-form + the just-added portion held optimistically until the
@@ -212,8 +252,6 @@ function LogFoodForm({
   const selectedUnit = resolveSelectedUnit(unitOptions, unitValue, servingSizeG);
   const quantityG = isCreate ? count * (selectedUnit?.grams ?? 1) : editQuantityG;
 
-  const name = state.mode === "create" ? state.food.name : state.entry.name;
-  const brand = state.mode === "create" ? state.food.brand : state.entry.brand;
   const preview =
     state.mode === "create"
       ? previewNutrition(state.food, quantityG)

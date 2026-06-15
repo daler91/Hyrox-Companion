@@ -38,10 +38,10 @@ function buildAvgLine(n: NutritionCtx): string {
 
 function buildTargetParts(target: NonNullable<NutritionCtx["target"]>): string[] {
   return [
-    target.calories != null ? `${target.calories} kcal` : null,
-    target.proteinG != null ? `${target.proteinG}g protein` : null,
-    target.carbG != null ? `${target.carbG}g carbs` : null,
-    target.fatG != null ? `${target.fatG}g fat` : null,
+    target.calories == null ? null : `${target.calories} kcal`,
+    target.proteinG == null ? null : `${target.proteinG}g protein`,
+    target.carbG == null ? null : `${target.carbG}g carbs`,
+    target.fatG == null ? null : `${target.fatG}g fat`,
   ].filter((part): part is string => part != null);
 }
 
@@ -67,8 +67,8 @@ function buildLowMicrosLine(lowMicros: NutritionCtx["lowMicros"]): string | null
 function buildNextSessionLine(s: NutritionCtx["nextSessionFuelling"]): string | null {
   if (!s) return null;
   const effort = [
-    s.durationMin != null ? `~${s.durationMin} min` : null,
-    s.rpe != null ? `RPE ${s.rpe}` : null,
+    s.durationMin == null ? null : `~${s.durationMin} min`,
+    s.rpe == null ? null : `RPE ${s.rpe}`,
   ]
     .filter(Boolean)
     .join(" at ");

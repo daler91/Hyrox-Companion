@@ -143,8 +143,8 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   });
 
   const adjustSummary = [
-    durationDraft != null ? `${durationDraft} min` : null,
-    rpeDraft != null ? `RPE ${rpeDraft}` : null,
+    durationDraft == null ? null : `${durationDraft} min`,
+    rpeDraft == null ? null : `RPE ${rpeDraft}`,
   ]
     .filter(Boolean)
     .join(" · ");

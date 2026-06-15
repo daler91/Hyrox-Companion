@@ -65,7 +65,7 @@ export function previewMicrosScaled(
   quantityG: number,
 ): Record<string, number> {
   const out: Record<string, number> = {};
-  if (!food.micros || !(quantityG > 0)) return out;
+  if (!food.micros || quantityG <= 0 || Number.isNaN(quantityG)) return out;
   for (const [key, per100g] of Object.entries(food.micros)) {
     if (typeof per100g === "number" && Number.isFinite(per100g)) {
       out[key] = scale(per100g, quantityG);

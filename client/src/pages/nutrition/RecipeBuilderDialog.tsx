@@ -259,16 +259,16 @@ export function RecipeBuilderDialog({
       }}
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto" data-testid="dialog-recipe">
-        {!ready ? (
-          <div className="flex justify-center p-6">
-            <LoadingSpinner />
-          </div>
-        ) : (
+        {ready ? (
           <RecipeBuilderForm
             key={recipeId ?? "create"}
             initial={recipeQuery.data ?? null}
             onClose={onClose}
           />
+        ) : (
+          <div className="flex justify-center p-6">
+            <LoadingSpinner />
+          </div>
         )}
       </DialogContent>
     </Dialog>

@@ -40,7 +40,7 @@ function isValidYmd(s: string): boolean {
 /** Initial day from an optional ?date=YYYY-MM-DD deep-link (the Timeline fuelling
  *  chip links here), falling back to today when absent or malformed. */
 function initialDate(): string {
-  const param = new URLSearchParams(window.location.search).get("date");
+  const param = new URLSearchParams(globalThis.location.search).get("date");
   return param && isValidYmd(param) ? param : todayStr();
 }
 

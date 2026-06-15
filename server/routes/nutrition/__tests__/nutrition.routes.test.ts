@@ -580,7 +580,7 @@ describe("nutrition routes", () => {
         new Map([
           ["f1", { id: "f1" }],
           ["f2", { id: "f2" }],
-        ]) as never,
+        ]),
       );
       vi.mocked(storage.nutrition.createLogEntriesBatch).mockResolvedValue([
         { id: "e1" },
@@ -628,7 +628,7 @@ describe("nutrition routes", () => {
 
   describe("Phase 5: targets (FR-5.2)", () => {
     it("returns the current target (for today) plus history", async () => {
-      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue({ id: "t1", calories: 2000 } as never);
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue({ id: "t1", calories: 2000 });
       vi.mocked(storage.nutrition.listTargets).mockResolvedValue([{ id: "t1" }, { id: "t0" }] as never);
 
       const res = await request(app).get("/api/v1/nutrition/targets");
@@ -638,7 +638,7 @@ describe("nutrition routes", () => {
     });
 
     it("creates a target, defaulting effectiveFrom to the user's local today", async () => {
-      vi.mocked(storage.nutrition.createTarget).mockResolvedValue({ id: "t1" } as never);
+      vi.mocked(storage.nutrition.createTarget).mockResolvedValue({ id: "t1" });
       const res = await request(app)
         .post("/api/v1/nutrition/targets")
         .send({ calories: 2200, proteinG: 160 });
@@ -698,7 +698,7 @@ describe("nutrition routes", () => {
       vi.mocked(storage.analyticsResults.get).mockResolvedValue({
         payload: { insights: "# Eat up", generatedAt: "2026-06-01T00:00:00.000Z" },
         generatedAt: new Date("2026-06-01T00:00:00.000Z"),
-      } as never);
+      });
       vi.mocked(storage.nutrition.getLatestLogDate).mockResolvedValue("2026-06-07");
 
       const res = await request(app).get("/api/v1/nutrition/insights");
