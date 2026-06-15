@@ -71,7 +71,15 @@ function AcwrTooltip({
 export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: TrainingLoadOverview }>) {
   const chartData = trainingLoad.trend.filter((point) => point.acwr != null);
   const hasTrend = chartData.length > 1;
-  const yMax = Math.max(2, ...chartData.map((point) => point.acwr ?? 0));
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N) intermediate array allocation and spread operator (.map(...))
+  // with an O(N) linear scan to avoid memory overhead and potential stack limits.
+  let yMax = 2;
+  for (const point of chartData) {
+    if (point.acwr != null && point.acwr > yMax) {
+      yMax = point.acwr;
+    }
+  }
   const restrictionCount = trainingLoad.activeRestrictions.length;
 
   return (
