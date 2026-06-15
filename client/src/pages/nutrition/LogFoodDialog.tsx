@@ -36,6 +36,7 @@ import { GoalContributionRows } from "./GoalContributionRows";
 import { MacroRows } from "./MacroRows";
 import { MicronutrientPreviewPanel } from "./MicronutrientPreviewPanel";
 import {
+  appendUnique,
   buildPreviewMicroRows,
   loggedAtForDate,
   macroEnergyShares,
@@ -73,7 +74,10 @@ function parsePortionGrams(value: string): number | null {
 }
 
 /** Scale an existing entry's nutrition proportionally for the edit preview. */
-function scaleEntryPreview(entry: FoodLogEntryWithNutrition, quantityG: number): NutritionMacroTotals {
+function scaleEntryPreview(
+  entry: FoodLogEntryWithNutrition,
+  quantityG: number,
+): NutritionMacroTotals {
   const factor = entry.quantityG > 0 ? quantityG / entry.quantityG : 0;
   const r1 = (v: number) => Math.round(v * 10) / 10;
   return {
@@ -83,6 +87,50 @@ function scaleEntryPreview(entry: FoodLogEntryWithNutrition, quantityG: number):
     fat: r1(entry.nutrition.fat * factor),
     fiber: r1(entry.nutrition.fiber * factor),
   };
+}
+
+/** Servings visible to the user (fetched + optimistic), de-duped by id, by grams. */
+function computeMergedServings(
+  fetched: readonly FoodServing[],
+  extra: readonly FoodServing[],
+): FoodServing[] {
+  const byId = new Map<string, FoodServing>();
+  for (const s of fetched) byId.set(s.id, s);
+  for (const s of extra) if (!byId.has(s.id)) byId.set(s.id, s);
+  return [...byId.values()].sort((a, b) => a.grams - b.grams);
+}
+
+/** Grams + each named serving as selectable units, plus a synthetic "__serving"
+ *  fallback for the food's default serving size when no named portion covers it. */
+function computeUnitOptions(
+  mergedServings: readonly FoodServing[],
+  servingSizeG: number | null,
+): UnitOption[] {
+  const opts: UnitOption[] = [{ value: "g", label: "grams", grams: 1 }];
+  for (const s of mergedServings) opts.push({ value: s.id, label: s.label, grams: s.grams });
+  const size = servingSizeG;
+  if (size != null && size > 0 && !mergedServings.some((s) => Math.abs(s.grams - size) < 0.5)) {
+    opts.push({ value: "__serving", label: `1 serving (${Math.round(size)} g)`, grams: size });
+  }
+  return opts;
+}
+
+/** Resolve the active unit, resilient to a stale selection: exact match, then a
+ *  portion matching the serving size, then any portion, then grams. */
+function resolveSelectedUnit(
+  unitOptions: readonly UnitOption[],
+  unitValue: string,
+  servingSizeG: number | null,
+): UnitOption | undefined {
+  const size = servingSizeG;
+  return (
+    unitOptions.find((o) => o.value === unitValue) ??
+    (size != null && size > 0
+      ? unitOptions.find((o) => o.value !== "g" && Math.abs(o.grams - size) < 0.5)
+      : undefined) ??
+    unitOptions.find((o) => o.value !== "g") ??
+    unitOptions[0]
+  );
 }
 
 /**
@@ -146,23 +194,13 @@ function LogFoodForm({
   // Servings visible to the user (fetched + optimistic), de-duped by id, by grams.
   const mergedServings = useMemo<FoodServing[]>(() => {
     if (state.mode !== "create") return [];
-    const byId = new Map<string, FoodServing>();
-    for (const s of servingsQuery.data?.servings ?? []) byId.set(s.id, s);
-    for (const s of extraServings) if (!byId.has(s.id)) byId.set(s.id, s);
-    return [...byId.values()].sort((a, b) => a.grams - b.grams);
+    return computeMergedServings(servingsQuery.data?.servings ?? [], extraServings);
   }, [state.mode, servingsQuery.data, extraServings]);
 
   const unitOptions = useMemo<UnitOption[]>(() => {
-    const opts: UnitOption[] = [{ value: "g", label: "grams", grams: 1 }];
-    if (state.mode !== "create") return opts;
-    for (const s of mergedServings) opts.push({ value: s.id, label: s.label, grams: s.grams });
-    // Fall back to the food's default serving size as a portion when no named
-    // serving already covers it (within 0.5 g).
-    if (hasServingSize && !mergedServings.some((s) => Math.abs(s.grams - servingSizeG) < 0.5)) {
-      opts.push({ value: "__serving", label: `1 serving (${Math.round(servingSizeG)} g)`, grams: servingSizeG });
-    }
-    return opts;
-  }, [state.mode, mergedServings, hasServingSize, servingSizeG]);
+    if (state.mode !== "create") return [{ value: "g", label: "grams", grams: 1 }];
+    return computeUnitOptions(mergedServings, servingSizeG);
+  }, [state.mode, mergedServings, servingSizeG]);
 
   // The user's own portions (non-null owner) are removable; shared USDA ones aren't.
   const personalServings = useMemo(
@@ -170,16 +208,7 @@ function LogFoodForm({
     [mergedServings],
   );
 
-  // Resolve the active unit, resilient to a stale selection: once a named serving
-  // matching the serving size loads, the synthetic "__serving" is de-duped out, so
-  // fall through to that matching portion, then any portion, then grams.
-  const selectedUnit =
-    unitOptions.find((o) => o.value === unitValue) ??
-    (hasServingSize
-      ? unitOptions.find((o) => o.value !== "g" && Math.abs(o.grams - servingSizeG) < 0.5)
-      : undefined) ??
-    unitOptions.find((o) => o.value !== "g") ??
-    unitOptions[0];
+  const selectedUnit = resolveSelectedUnit(unitOptions, unitValue, servingSizeG);
   const quantityG = isCreate ? count * (selectedUnit?.grams ?? 1) : editQuantityG;
 
   const name = state.mode === "create" ? state.food.name : state.entry.name;
@@ -198,7 +227,9 @@ function LogFoodForm({
   const microRows = buildPreviewMicroRows(
     enrichedFood ? previewMicrosScaled(enrichedFood, quantityG) : {},
   );
-  const goalRows = todayTotals ? projectGoalContribution(todayTotals, preview, effectiveTarget) : [];
+  const goalRows = todayTotals
+    ? projectGoalContribution(todayTotals, preview, effectiveTarget)
+    : [];
 
   const handleUnitChange = (value: string) => {
     if (value === "__add") {
@@ -211,20 +242,20 @@ function LogFoodForm({
   const portionGrams = parsePortionGrams(newGrams);
   const canAddPortion = newLabel.trim().length > 0 && portionGrams !== null;
 
+  const handlePortionAdded = (created: FoodServing) => {
+    setExtraServings((prev) => appendUnique(prev, created, (s) => s.id));
+    setUnitValue(created.id);
+    setCount(1);
+    setShowAddPortion(false);
+    setNewLabel("");
+    setNewGrams("");
+  };
+
   const handleAddPortion = () => {
     if (state.mode !== "create" || portionGrams === null || newLabel.trim().length === 0) return;
     addServing.mutate(
       { label: newLabel.trim(), grams: portionGrams },
-      {
-        onSuccess: (created) => {
-          setExtraServings((prev) => (prev.some((s) => s.id === created.id) ? prev : [...prev, created]));
-          setUnitValue(created.id);
-          setCount(1);
-          setShowAddPortion(false);
-          setNewLabel("");
-          setNewGrams("");
-        },
-      },
+      { onSuccess: handlePortionAdded },
     );
   };
 
@@ -248,7 +279,10 @@ function LogFoodForm({
         { onSuccess: onClose },
       );
     } else {
-      updateLog.mutate({ id: state.entry.id, data: { quantityG, mealType } }, { onSuccess: onClose });
+      updateLog.mutate(
+        { id: state.entry.id, data: { quantityG, mealType } },
+        { onSuccess: onClose },
+      );
     }
   };
 

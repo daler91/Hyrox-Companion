@@ -65,6 +65,33 @@ function mergeFoods(tiers: Food[][]): Food[] {
   return out.slice(0, MAX_RESULTS);
 }
 
+/** Re-key a settled provider result to the uniform `{ foods, live }` shape so
+ *  both providers (Edamam's `{ foods, reached }` and USDA's bare array) flow
+ *  through one resolver. Rejections pass through untouched. */
+function toUniform<I, O>(
+  settled: PromiseSettledResult<I>,
+  map: (value: I) => O,
+): PromiseSettledResult<O> {
+  return settled.status === "fulfilled"
+    ? { status: "fulfilled", value: map(settled.value) }
+    : settled;
+}
+
+/** Resolve one provider's settled search: cache its hits (carrying the live flag),
+ *  or log and degrade to cache-only on rejection. */
+async function resolveProvider(
+  settled: PromiseSettledResult<{ foods: MappedFood[]; live: boolean }>,
+  provider: string,
+  query: string,
+  warnMsg: string,
+): Promise<{ foods: Food[]; live: boolean }> {
+  if (settled.status !== "fulfilled") {
+    logger.warn({ err: settled.reason, query }, warnMsg);
+    return { foods: [], live: false };
+  }
+  return { foods: await cacheResults(settled.value.foods, provider), live: settled.value.live };
+}
+
 export async function searchFoods(query: string, userId: string): Promise<FoodSearchResponse> {
   const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
 
@@ -74,25 +101,21 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
     searchUsdaFoods(query),
   ]);
 
-  let edamam: Food[] = [];
-  let edamamLive = false;
-  if (edamamSettled.status === "fulfilled") {
-    edamamLive = edamamSettled.value.reached;
-    edamam = await cacheResults(edamamSettled.value.foods, "edamam");
-  } else {
-    logger.warn({ err: edamamSettled.reason, query }, "[nutrition] Edamam search failed; continuing");
-  }
-
-  let usda: Food[] = [];
-  let usdaLive = false;
-  if (usdaSettled.status === "fulfilled") {
-    // USDA returns [] WITHOUT a live call when no API key is set; with a key, a
-    // fulfilled result (even empty) means the API was reached.
-    usdaLive = Boolean(env.USDA_API_KEY);
-    usda = await cacheResults(usdaSettled.value, "usda");
-  } else {
-    logger.warn({ err: usdaSettled.reason, query }, "[nutrition] USDA search failed; returning cached foods only");
-  }
+  // Resolve sequentially (Edamam then USDA) so the two cache writes never race.
+  const { foods: edamam, live: edamamLive } = await resolveProvider(
+    toUniform(edamamSettled, (v) => ({ foods: v.foods, live: v.reached })),
+    "edamam",
+    query,
+    "[nutrition] Edamam search failed; continuing",
+  );
+  // USDA returns [] WITHOUT a live call when no API key is set; with a key, a
+  // fulfilled result (even empty) means the API was reached.
+  const { foods: usda, live: usdaLive } = await resolveProvider(
+    toUniform(usdaSettled, (v) => ({ foods: v, live: Boolean(env.USDA_API_KEY) })),
+    "usda",
+    query,
+    "[nutrition] USDA search failed; returning cached foods only",
+  );
 
   // Cache-only ⇒ degraded: no live provider reached its API (matches the prior
   // USDA-only behavior when Edamam is unconfigured).

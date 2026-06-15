@@ -244,15 +244,13 @@ describe("resolveStructureBlocksForPersist", () => {
 const AMRAP_SCORE: StructureBlockScore = { type: "amrap", rounds: 5 };
 
 // Stubs the owned-block lookup query chain used by updateWorkoutStructureBlockScore.
+// Built bottom-up so each link is its own function rather than a deeply nested literal.
 function mockBlockLookup(rows: unknown[]): void {
-  const chain = {
-    from: () => ({
-      innerJoin: () => ({
-        where: () => ({ limit: () => Promise.resolve(rows) }),
-      }),
-    }),
-  };
-  vi.mocked(db.select).mockReturnValue(chain as unknown as ReturnType<typeof db.select>);
+  const limit = () => Promise.resolve(rows);
+  const where = () => ({ limit });
+  const innerJoin = () => ({ where });
+  const from = () => ({ innerJoin });
+  vi.mocked(db.select).mockReturnValue({ from } as unknown as ReturnType<typeof db.select>);
 }
 
 describe("updateWorkoutStructureBlockScore", () => {

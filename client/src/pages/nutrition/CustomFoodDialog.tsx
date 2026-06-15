@@ -14,7 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateCustomFood, useUpdateCustomFood } from "@/hooks/useNutrition";
 
+import { removeAt, updateAt } from "./utils";
+
 export type CustomFoodDialogState = { mode: "create" } | { mode: "edit"; food: Food };
+
+type ServingDraft = { label: string; grams: string };
 
 const MACRO_FIELDS = [
   { field: "caloriesPer100g", label: "Calories" },
@@ -37,7 +41,13 @@ function numToStr(n: number | null | undefined): string {
   return n == null ? "" : String(n);
 }
 
-function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogState; readonly onClose: () => void }) {
+function CustomFoodForm({
+  state,
+  onClose,
+}: {
+  readonly state: CustomFoodDialogState;
+  readonly onClose: () => void;
+}) {
   const isCreate = state.mode === "create";
   const food = isCreate ? null : state.food;
   const createFood = useCreateCustomFood();
@@ -53,7 +63,7 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
     fiberPer100g: numToStr(food?.fiberPer100g),
   }));
   const [servingSizeG, setServingSizeG] = useState(numToStr(food?.servingSizeG));
-  const [servings, setServings] = useState<{ label: string; grams: string }[]>([]);
+  const [servings, setServings] = useState<ServingDraft[]>([]);
 
   const isPending = createFood.isPending || updateFood.isPending;
   const valid = name.trim().length > 0;
@@ -73,7 +83,10 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
     if (isCreate) {
       const cleanServings = servings
         .map((s) => ({ label: s.label.trim(), grams: parseNum(s.grams) }))
-        .filter((s): s is { label: string; grams: number } => s.label.length > 0 && s.grams !== null && s.grams > 0);
+        .filter(
+          (s): s is { label: string; grams: number } =>
+            s.label.length > 0 && s.grams !== null && s.grams > 0,
+        );
       createFood.mutate(
         { ...fields, servings: cleanServings.length > 0 ? cleanServings : undefined },
         { onSuccess: onClose },
@@ -82,6 +95,11 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
       updateFood.mutate({ id: food.id, data: fields }, { onSuccess: onClose });
     }
   };
+
+  const addServingRow = () => setServings((prev) => [...prev, { label: "", grams: "" }]);
+  const updateServing = (i: number, patch: Partial<ServingDraft>) =>
+    setServings((prev) => updateAt(prev, i, patch));
+  const removeServing = (i: number) => setServings((prev) => removeAt(prev, i));
 
   return (
     <>
@@ -92,18 +110,30 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="cf-name">Name</Label>
-          <Input id="cf-name" value={name} onChange={(e) => setName(e.target.value)} data-testid="input-custom-name" />
+          <Input
+            id="cf-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            data-testid="input-custom-name"
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="cf-brand">Brand (optional)</Label>
-          <Input id="cf-brand" value={brand} onChange={(e) => setBrand(e.target.value)} data-testid="input-custom-brand" />
+          <Input
+            id="cf-brand"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            data-testid="input-custom-brand"
+          />
         </div>
 
         <p className="text-xs text-muted-foreground">Nutrition per 100 g</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {MACRO_FIELDS.map((m) => (
             <div key={m.field} className="space-y-1">
-              <Label htmlFor={`cf-${m.field}`} className="text-xs">{m.label}</Label>
+              <Label htmlFor={`cf-${m.field}`} className="text-xs">
+                {m.label}
+              </Label>
               <Input
                 id={`cf-${m.field}`}
                 type="number"
@@ -116,7 +146,9 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
             </div>
           ))}
           <div className="space-y-1">
-            <Label htmlFor="cf-serving" className="text-xs">Serving (g)</Label>
+            <Label htmlFor="cf-serving" className="text-xs">
+              Serving (g)
+            </Label>
             <Input
               id="cf-serving"
               type="number"
@@ -137,7 +169,7 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setServings((prev) => [...prev, { label: "", grams: "" }])}
+                onClick={addServingRow}
                 data-testid="button-add-serving"
               >
                 <Plus className="mr-1 h-3 w-3" /> Add
@@ -148,7 +180,7 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
                 <Input
                   placeholder="e.g. 1 cup"
                   value={s.label}
-                  onChange={(e) => setServings((prev) => prev.map((row, j) => (j === i ? { ...row, label: e.target.value } : row)))}
+                  onChange={(e) => updateServing(i, { label: e.target.value })}
                 />
                 <Input
                   type="number"
@@ -156,14 +188,14 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
                   placeholder="grams"
                   className="w-24"
                   value={s.grams}
-                  onChange={(e) => setServings((prev) => prev.map((row, j) => (j === i ? { ...row, grams: e.target.value } : row)))}
+                  onChange={(e) => updateServing(i, { grams: e.target.value })}
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   aria-label="Remove serving"
-                  onClick={() => setServings((prev) => prev.filter((_, j) => j !== i))}
+                  onClick={() => removeServing(i)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -174,8 +206,14 @@ function CustomFoodForm({ state, onClose }: { readonly state: CustomFoodDialogSt
       </div>
 
       <DialogFooter>
-        <Button variant="ghost" onClick={onClose} disabled={isPending}>Cancel</Button>
-        <Button onClick={submit} disabled={!valid || isPending} data-testid="button-save-custom-food">
+        <Button variant="ghost" onClick={onClose} disabled={isPending}>
+          Cancel
+        </Button>
+        <Button
+          onClick={submit}
+          disabled={!valid || isPending}
+          data-testid="button-save-custom-food"
+        >
           {isCreate ? "Save food" : "Save"}
         </Button>
       </DialogFooter>
@@ -192,7 +230,12 @@ export function CustomFoodDialog({
 }) {
   const key = state?.mode === "edit" ? `edit:${state.food.id}` : "create";
   return (
-    <Dialog open={state !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={state !== null}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent data-testid="dialog-custom-food">
         {state && <CustomFoodForm key={key} state={state} onClose={onClose} />}
       </DialogContent>
