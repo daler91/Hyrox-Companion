@@ -92,7 +92,7 @@ export function FuellingCorrelationCard({
               <MetricRow
                 label="Session RPE"
                 comparison={result.rpe}
-                format={(n) => String(n)}
+                format={String}
                 deltaText={rpeDeltaText(result.rpe)}
                 testId="fuelling-correlation-rpe"
               />

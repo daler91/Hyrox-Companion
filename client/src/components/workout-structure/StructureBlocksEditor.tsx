@@ -227,7 +227,7 @@ export function StructureBlocksEditor({
 
   return (
     <section className="space-y-3" data-testid="structure-blocks-editor" aria-label="Workout blocks">
-      {!headerless ? (
+      {!headerless && (
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Workout blocks
@@ -237,7 +237,7 @@ export function StructureBlocksEditor({
             top to bottom.
           </p>
         </div>
-      ) : null}
+      )}
 
       {hasBlocks
         ? drafts.map((draft, idx) => {
