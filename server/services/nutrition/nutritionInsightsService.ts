@@ -35,12 +35,12 @@ function formatNutritionContext(s: NutritionSummary): string {
 }
 
 function buildTargetParts(target: NonNullable<NutritionSummary["target"]>): string[] {
-  return [
-    target.calories != null ? `${target.calories} kcal` : null,
-    target.proteinG != null ? `${target.proteinG} g protein` : null,
-    target.carbG != null ? `${target.carbG} g carbs` : null,
-    target.fatG != null ? `${target.fatG} g fat` : null,
-  ].filter((part): part is string => part != null);
+  const parts: string[] = [];
+  if (target.calories != null) parts.push(`${target.calories} kcal`);
+  if (target.proteinG != null) parts.push(`${target.proteinG} g protein`);
+  if (target.carbG != null) parts.push(`${target.carbG} g carbs`);
+  if (target.fatG != null) parts.push(`${target.fatG} g fat`);
+  return parts;
 }
 
 function formatTargetLine(target: NutritionSummary["target"]): string {
