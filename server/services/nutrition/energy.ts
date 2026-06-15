@@ -1,18 +1,25 @@
 import { computeEnergyBalance, type EnergyBalanceSummary } from "@shared/energyBalance";
-import type { ActivityLevel } from "@shared/nutritionTargets";
+import type { ActivityLevel, BmrSex } from "@shared/nutritionTargets";
 
 import { storage } from "../../storage";
 
-const ACTIVITY_LEVELS: readonly ActivityLevel[] = [
+const ACTIVITY_LEVELS: ReadonlySet<ActivityLevel> = new Set<ActivityLevel>([
   "sedentary",
   "light",
   "moderate",
   "active",
   "very_active",
-];
+]);
 
 function toActivityLevel(value: string | null | undefined): ActivityLevel | null {
-  return ACTIVITY_LEVELS.includes(value as ActivityLevel) ? (value as ActivityLevel) : null;
+  return ACTIVITY_LEVELS.has(value as ActivityLevel) ? (value as ActivityLevel) : null;
+}
+
+// Same mapping as the targets calculator: "prefer_not_to_say"/null → neutral BMR.
+function toBmrSex(gender: string | null | undefined): BmrSex {
+  if (gender === "male") return "male";
+  if (gender === "female") return "female";
+  return null;
 }
 
 /**
@@ -44,8 +51,7 @@ export async function resolveDayEnergy(
     bodyweightKg: user.bodyweightKg ?? null,
     heightCm: user.heightCm ?? null,
     ageYears: user.age ?? null,
-    // Same mapping as the targets calculator: "prefer_not_to_say"/null → neutral BMR.
-    sex: user.gender === "male" ? "male" : user.gender === "female" ? "female" : null,
+    sex: toBmrSex(user.gender),
     activityLevel: toActivityLevel(user.activityLevel),
   });
 }

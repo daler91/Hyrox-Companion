@@ -121,7 +121,7 @@ describe("resolveStructureStepTimeTarget", () => {
   });
 
   it("skips a non-finite candidate and uses the next key", () => {
-    expect(resolveStructureStepTimeTarget(targets({ targetTime: NaN, time: 45 }))).toBe(45);
+    expect(resolveStructureStepTimeTarget(targets({ targetTime: Number.NaN, time: 45 }))).toBe(45);
   });
 
   it("returns null when the only candidate is non-finite", () => {

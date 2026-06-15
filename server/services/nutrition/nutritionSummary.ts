@@ -107,8 +107,9 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
   const lowMicros = micros
     .filter((m) => m.pctRdi < 50)
     .map((m) => ({ label: m.label, pctRdi: m.pctRdi }));
-  const microStatus: NutritionSummary["microStatus"] =
-    micros.length === 0 ? "no_data" : lowMicros.length > 0 ? "low" : "all_ok";
+  let microStatus: NutritionSummary["microStatus"] = "all_ok";
+  if (micros.length === 0) microStatus = "no_data";
+  else if (lowMicros.length > 0) microStatus = "low";
 
   return {
     windowDays: NUTRITION_SUMMARY_WINDOW_DAYS,

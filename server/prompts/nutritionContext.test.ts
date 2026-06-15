@@ -35,7 +35,7 @@ const NEXT_SESSION: NonNullable<NutritionCoachContext["nextSessionFuelling"]> = 
 
 describe("buildNutritionSection", () => {
   it("returns an empty string when no nutrition context is present", () => {
-    expect(buildNutritionSection(ctx(undefined))).toBe("");
+    expect(buildNutritionSection(ctx())).toBe("");
   });
 
   it("renders averages, target, high-load days and low micros", () => {
