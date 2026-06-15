@@ -22,12 +22,10 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
   const results = data?.results ?? [];
   const showResults = debounced.trim().length >= MIN_QUERY_LENGTH;
 
-  const statusText =
-    showResults && !isFetching
-      ? results.length === 0
-        ? "No foods found"
-        : `${results.length} result${results.length === 1 ? "" : "s"} found`
-      : "";
+  const plural = results.length === 1 ? "" : "s";
+  const resultsText =
+    results.length === 0 ? "No foods found" : `${results.length} result${plural} found`;
+  const statusText = showResults && !isFetching ? resultsText : "";
 
   return (
     <div className="space-y-2">

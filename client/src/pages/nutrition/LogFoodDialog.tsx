@@ -170,9 +170,10 @@ function LogFoodForm({
   // known serving we seed "1 portion" instead of a raw 100 g — the synthetic
   // "__serving" option is derivable from the food up front, so no effect is
   // needed and there's no flash before the named servings load. edit mode: grams.
-  const [count, setCount] = useState(() =>
-    state.mode === "create" ? (hasServingSize ? 1 : 100) : 0,
-  );
+  const [count, setCount] = useState(() => {
+    if (state.mode !== "create") return 0;
+    return hasServingSize ? 1 : 100;
+  });
   const [unitValue, setUnitValue] = useState(() =>
     state.mode === "create" && hasServingSize ? "__serving" : "g",
   );

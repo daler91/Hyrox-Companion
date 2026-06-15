@@ -65,14 +65,18 @@ export function setupErrorReporting(): void {
 }
 
 /**
- * Apply a runtime opt-out change (Settings toggle) immediately instead of on
- * next reload: enabling inits Sentry once the privacy notice is acknowledged;
- * disabling closes the client. Persisting the preference is the caller's job.
+ * Apply a runtime opt-in (Settings toggle) immediately instead of on next
+ * reload: inits Sentry once the privacy notice is acknowledged. Persisting the
+ * preference is the caller's job.
  */
-export function applyErrorReportingPreference(enabled: boolean): void { // NOSONAR a single boolean toggle is clearer here; the only caller already branches
-  if (enabled) {
-    if (hasAcknowledgedPrivacyNotice()) start();
-  } else {
-    stop();
-  }
+export function startErrorReporting(): void {
+  if (hasAcknowledgedPrivacyNotice()) start();
+}
+
+/**
+ * Apply a runtime opt-out (Settings toggle) immediately instead of on next
+ * reload: closes the client. Persisting the preference is the caller's job.
+ */
+export function stopErrorReporting(): void {
+  stop();
 }

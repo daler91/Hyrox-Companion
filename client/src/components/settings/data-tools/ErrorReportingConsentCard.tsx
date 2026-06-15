@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { applyErrorReportingPreference } from "@/lib/errorReporting";
+import { startErrorReporting, stopErrorReporting } from "@/lib/errorReporting";
 import {
   disableErrorReporting,
   enableErrorReporting,
@@ -18,14 +18,15 @@ export function ErrorReportingConsentCard() {
   const [enabled, setEnabled] = useState<boolean>(() => isErrorReportingEnabled());
 
   const handleChange = (next: boolean) => {
+    // Persist the per-processor consent, then apply it to the live Sentry client
+    // now so the toggle takes effect without a reload.
     if (next) {
       enableErrorReporting();
+      startErrorReporting();
     } else {
       disableErrorReporting();
+      stopErrorReporting();
     }
-    // Persisted above; apply to the live Sentry client now so the toggle takes
-    // effect without a reload.
-    applyErrorReportingPreference(next);
     setEnabled(next);
   };
 

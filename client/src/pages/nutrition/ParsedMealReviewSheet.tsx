@@ -170,6 +170,7 @@ function ReviewForm({
   const loggable = rows.filter(isLoggable);
   const unresolved = rows.length - loggable.length;
   const canLog = loggable.length > 0 && !logBatch.isPending;
+  const logButtonLabel = `Log ${loggable.length} item${loggable.length === 1 ? "" : "s"}`;
 
   const submit = () => {
     if (loggable.length === 0) return;
@@ -240,9 +241,7 @@ function ReviewForm({
             Cancel
           </Button>
           <Button onClick={submit} disabled={!canLog} data-testid="button-log-meal-batch">
-            {logBatch.isPending
-              ? "Logging…"
-              : `Log ${loggable.length} item${loggable.length === 1 ? "" : "s"}`}
+            {logBatch.isPending ? "Logging…" : logButtonLabel}
           </Button>
         </div>
       </DialogFooter>
