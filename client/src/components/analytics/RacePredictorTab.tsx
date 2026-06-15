@@ -137,11 +137,17 @@ export function RacePredictorTab() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => query.refetch()}
+          onClick={refresh}
+          disabled={isRefreshing}
+          aria-label="Retry loading prediction"
           data-testid="race-prediction-retry"
         >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
+          {isRefreshing ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          )}
+          {isRefreshing ? "Retrying…" : "Retry"}
         </Button>
       </div>
     );
