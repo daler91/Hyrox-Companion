@@ -51,9 +51,8 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
     >
       <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
       <span>
-        Fuel ~
-        <span className="font-medium tabular-nums text-foreground">{target.preCarbG}g</span> carbs
-        before
+        Fuel ~<span className="font-medium tabular-nums text-foreground">{target.preCarbG}g</span>{" "}
+        carbs before
       </span>
     </span>
   );

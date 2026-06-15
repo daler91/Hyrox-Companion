@@ -10,40 +10,46 @@ export function MicronutrientPanel({ date }: { readonly date: string }) {
   const { data, isLoading } = useMicros(date);
   const micros = data?.micros ?? [];
 
+  const renderBody = () => {
+    if (isLoading && micros.length === 0) {
+      return <p className="text-xs text-muted-foreground">Loading…</p>;
+    }
+    if (micros.length === 0) {
+      return (
+        <p className="text-xs text-muted-foreground" data-testid="micro-empty">
+          No micronutrient data yet. Re-search a food to pull micros from USDA / Open Food Facts.
+        </p>
+      );
+    }
+    return (
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+        {micros.map((m) => (
+          <div key={m.key} data-testid={`micro-${m.key}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-xs font-medium">{m.label}</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{m.pctRdi}%</span>
+            </div>
+            <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full ${m.pctRdi >= 100 ? "bg-emerald-500" : "bg-primary"}`}
+                style={{ width: `${Math.min(m.pctRdi, 100)}%` }}
+              />
+            </div>
+            <span className="mt-0.5 block text-[10px] tabular-nums text-muted-foreground">
+              {m.amount} / {m.rdi} {m.unit}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <Card data-testid="micro-panel">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Micronutrients</CardTitle>
       </CardHeader>
-      <CardContent>
-        {isLoading && micros.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : micros.length === 0 ? (
-          <p className="text-xs text-muted-foreground" data-testid="micro-empty">
-            No micronutrient data yet. Re-search a food to pull micros from USDA / Open Food Facts.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-            {micros.map((m) => (
-              <div key={m.key} data-testid={`micro-${m.key}`}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-xs font-medium">{m.label}</span>
-                  <span className="text-[10px] tabular-nums text-muted-foreground">{m.pctRdi}%</span>
-                </div>
-                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={`h-full ${m.pctRdi >= 100 ? "bg-emerald-500" : "bg-primary"}`}
-                    style={{ width: `${Math.min(m.pctRdi, 100)}%` }}
-                  />
-                </div>
-                <span className="mt-0.5 block text-[10px] tabular-nums text-muted-foreground">
-                  {m.amount} / {m.rdi} {m.unit}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+      <CardContent>{renderBody()}</CardContent>
     </Card>
   );
 }

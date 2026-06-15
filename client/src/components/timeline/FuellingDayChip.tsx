@@ -32,12 +32,11 @@ export function FuellingDayChip({
   if (!calories && !protein && !hasIntake) return null;
 
   const caloriesOver = calories ? calories.pct > 100 : false;
+  const proteinLabel = protein ? `, ${protein.value} of ${protein.target} g protein` : "";
+  const postWorkoutLabel = hasPostWorkoutFuel ? ", post-workout meal logged" : "";
   const label = calories
-    ? `Fuelling: ${calories.value} of ${calories.target} kcal` +
-      (protein ? `, ${protein.value} of ${protein.target} g protein` : "") +
-      (hasPostWorkoutFuel ? ", post-workout meal logged" : "")
-    : `Fuelling: ${totals.calories} kcal logged` +
-      (hasPostWorkoutFuel ? ", post-workout meal logged" : "");
+    ? `Fuelling: ${calories.value} of ${calories.target} kcal${proteinLabel}${postWorkoutLabel}`
+    : `Fuelling: ${totals.calories} kcal logged${postWorkoutLabel}`;
 
   return (
     <button

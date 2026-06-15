@@ -18,7 +18,7 @@ import { removeAt, updateAt } from "./utils";
 
 export type CustomFoodDialogState = { mode: "create" } | { mode: "edit"; food: Food };
 
-type ServingDraft = { label: string; grams: string };
+type ServingDraft = { id: string; label: string; grams: string };
 
 const MACRO_FIELDS = [
   { field: "caloriesPer100g", label: "Calories" },
@@ -96,7 +96,8 @@ function CustomFoodForm({
     }
   };
 
-  const addServingRow = () => setServings((prev) => [...prev, { label: "", grams: "" }]);
+  const addServingRow = () =>
+    setServings((prev) => [...prev, { id: crypto.randomUUID(), label: "", grams: "" }]);
   const updateServing = (i: number, patch: Partial<ServingDraft>) =>
     setServings((prev) => updateAt(prev, i, patch));
   const removeServing = (i: number) => setServings((prev) => removeAt(prev, i));
@@ -176,7 +177,7 @@ function CustomFoodForm({
               </Button>
             </div>
             {servings.map((s, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={s.id} className="flex items-center gap-2">
                 <Input
                   placeholder="e.g. 1 cup"
                   value={s.label}

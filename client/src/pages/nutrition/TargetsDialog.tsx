@@ -1,4 +1,8 @@
-import { calculateNutritionTarget, defaultPeriodizationConfig } from "@shared/nutritionTargets";
+import {
+  type BmrSex,
+  calculateNutritionTarget,
+  defaultPeriodizationConfig,
+} from "@shared/nutritionTargets";
 import type { NutritionTarget } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
@@ -40,12 +44,11 @@ function numToStr(n: number | null | undefined): string {
 /** Profile fields required before a target can be auto-calculated. */
 function canCalculateFromProfile(p: UserPreferences | undefined): p is UserPreferences {
   return (
-    p != null &&
-    p.bodyweightKg != null &&
-    p.heightCm != null &&
-    p.age != null &&
-    p.activityLevel != null &&
-    p.weightGoalDirection != null
+    p?.bodyweightKg != null &&
+    p?.heightCm != null &&
+    p?.age != null &&
+    p?.activityLevel != null &&
+    p?.weightGoalDirection != null
   );
 }
 
@@ -78,11 +81,14 @@ function TargetsForm({
 
   const calculate = () => {
     if (!canCalculate) return;
+    let sex: BmrSex = null;
+    if (profile.gender === "male") sex = "male";
+    else if (profile.gender === "female") sex = "female";
     const result = calculateNutritionTarget({
       bodyweightKg: profile.bodyweightKg!,
       heightCm: profile.heightCm!,
       ageYears: profile.age!,
-      sex: profile.gender === "male" ? "male" : profile.gender === "female" ? "female" : null,
+      sex,
       activityLevel: profile.activityLevel!,
       goalDirection: profile.weightGoalDirection!,
       goalRateKgPerWeek: profile.weightGoalRateKgPerWeek ?? 0,
@@ -100,11 +106,15 @@ function TargetsForm({
     if (!valid) return;
     // Periodisation only makes sense with a carb baseline to scale.
     const scaling = periodize && parsed.carbG != null;
-    const config = scaling
-      ? current?.periodizationEnabled && current.referenceUtss != null && current.carbGramsPerUtss != null
-        ? { referenceUtss: current.referenceUtss, carbGramsPerUtss: current.carbGramsPerUtss }
-        : defaultPeriodizationConfig(parsed.carbG!, 0)
-      : null;
+    let config: { referenceUtss: number; carbGramsPerUtss: number } | null = null;
+    if (scaling) {
+      config =
+        current?.periodizationEnabled &&
+        current.referenceUtss != null &&
+        current.carbGramsPerUtss != null
+          ? { referenceUtss: current.referenceUtss, carbGramsPerUtss: current.carbGramsPerUtss }
+          : defaultPeriodizationConfig(parsed.carbG!, 0);
+    }
     setTarget.mutate(
       {
         ...parsed,
@@ -137,13 +147,12 @@ function TargetsForm({
           <Calculator className="h-4 w-4 mr-2" aria-hidden="true" />
           Calculate from profile
         </Button>
-        {canCalculate ? (
-          calcNote ? (
-            <p className="text-xs text-muted-foreground" data-testid="text-calc-note">
-              {calcNote}
-            </p>
-          ) : null
-        ) : (
+        {canCalculate && calcNote ? (
+          <p className="text-xs text-muted-foreground" data-testid="text-calc-note">
+            {calcNote}
+          </p>
+        ) : null}
+        {!canCalculate && (
           <p className="text-xs text-muted-foreground">
             Add your bodyweight, height, age, activity level and weight goal in Settings to
             auto-calculate.

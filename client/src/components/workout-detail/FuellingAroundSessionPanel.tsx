@@ -55,11 +55,13 @@ function FuellingGroup({
   readonly testId: string;
   readonly targetLine?: ReactNode;
 }) {
+  const plural = count === 1 ? "" : "s";
+  const itemCountLabel = count > 0 ? ` · ${count} item${plural}` : "";
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-muted-foreground">
         {title}
-        {count > 0 ? ` · ${count} item${count === 1 ? "" : "s"}` : ""}
+        {itemCountLabel}
       </p>
       {count > 0 ? (
         <MacroChips totals={totals} emphasizeProtein={emphasizeProtein} testId={testId} />
