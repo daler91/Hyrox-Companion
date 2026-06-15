@@ -2,6 +2,7 @@ import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS, OFF_GRAMS_TO_UNIT } from "./micros";
 import type { MappedFood } from "./types";
+import { num } from "./utils";
 
 /**
  * Open Food Facts client (FR-2.1). Resolves a barcode to a food whose macros are
@@ -45,14 +46,6 @@ interface OffProduct {
 interface OffResponse {
   status?: number;
   product?: OffProduct;
-}
-
-function num(value: unknown): number | null {
-  let n: number;
-  if (typeof value === "string") n = Number(value);
-  else if (typeof value === "number") n = value;
-  else n = Number.NaN;
-  return Number.isFinite(n) ? n : null;
 }
 
 /** Grams from `serving_quantity` (number) or the leading number of a "30 g" `serving_size`. */

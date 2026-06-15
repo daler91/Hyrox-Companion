@@ -3,6 +3,7 @@ import { logger } from "../../logger";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS } from "./micros";
 import type { MappedFood } from "./types";
+import { num, OZ_TO_GRAMS } from "./utils";
 
 /**
  * Spoonacular grocery-products client. A verified, frequently-updated source for
@@ -31,8 +32,6 @@ const SPOONACULAR_TIMEOUT_MS = 8_000;
 // Products to detail-fetch per search. Bounds the free-tier point cost — one
 // search (1 pt) + N product-info calls (1 pt each) ≈ N+1 points per query.
 const SPOONACULAR_MAX_PRODUCTS = 5;
-// Matches usdaClient.ts/fatsecretClient.ts so an oz serving converts identically.
-const OZ_TO_GRAMS = 28.349523125;
 
 // ---------------------------------------------------------------------------
 // HTTP
@@ -110,15 +109,6 @@ interface SpoonacularProduct {
 
 interface SpoonacularSearchResponse {
   products?: { id?: number | string; title?: string }[];
-}
-
-/** Coerce Spoonacular's numbers (occasionally strings) to a finite number. */
-function num(value: number | string | null | undefined): number | null {
-  let n: number;
-  if (typeof value === "string") n = Number(value);
-  else if (typeof value === "number") n = value;
-  else n = Number.NaN;
-  return Number.isFinite(n) ? n : null;
 }
 
 /** Normalize a unit for comparison: lower-case and fold the microgram spellings

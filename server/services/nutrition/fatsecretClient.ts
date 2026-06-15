@@ -4,6 +4,7 @@ import { deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "../../shar
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS } from "./micros";
 import type { MappedFood } from "./types";
+import { num, OZ_TO_GRAMS } from "./utils";
 
 /**
  * FatSecret Platform API client. The verified, frequently-updated source for
@@ -26,8 +27,6 @@ const FATSECRET_TOKEN_URL = "https://oauth.fatsecret.com/connect/token";
 const FATSECRET_API_URL = "https://platform.fatsecret.com/rest/server.api";
 const FATSECRET_TIMEOUT_MS = 8_000;
 const FATSECRET_MAX_RESULTS = 25;
-// Matches usdaClient.ts exactly so an oz serving converts identically everywhere.
-const OZ_TO_GRAMS = 28.349523125;
 
 const TOKEN_CACHE_KEY = "fatsecret:token";
 // Refresh a minute before the real expiry so an in-flight call never races it.
@@ -257,15 +256,6 @@ interface FatSecretFoodGetResponse {
   food?: FatSecretFood;
 }
 
-/** FatSecret returns numbers as strings ("120.000"); coerce to a finite number. */
-function num(value: string | number | null | undefined): number | null {
-  let n: number;
-  if (typeof value === "string") n = Number(value);
-  else if (typeof value === "number") n = value;
-  else n = Number.NaN;
-  return Number.isFinite(n) ? n : null;
-}
-
 /** Convert a FatSecret metric serving to grams. Volume (ml) is skipped — no
  *  density to convert with — matching the USDA/OFF clients' weight-only behavior. */
 function metricServingToGrams(amount: number | null, unit: string | undefined): number | null {
@@ -307,7 +297,7 @@ function extractMicros(serving: FatSecretServing, grams: number): Record<string,
   const micros: Record<string, number> = {};
   for (const def of MICRO_DEFS) {
     if (!def.fatsecretKey) continue;
-    const perServing = num(serving[def.fatsecretKey] as string | number | undefined);
+    const perServing = num(serving[def.fatsecretKey]);
     if (perServing !== null && perServing >= 0) micros[def.key] = (perServing * 100) / grams;
   }
   return Object.keys(micros).length > 0 ? micros : null;

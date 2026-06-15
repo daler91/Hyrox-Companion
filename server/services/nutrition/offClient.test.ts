@@ -1,32 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Keep RetryableHttpError / isTransientNetworkError real; strip backoff delays.
-vi.mock("../../utils/httpRetry", async () => {
-  const actual = await vi.importActual<typeof import("../../utils/httpRetry")>("../../utils/httpRetry");
-  return {
-    ...actual,
-    retryWithJitter: async (fn: () => Promise<unknown>, opts?: { retries?: number }) => {
-      const retries = opts?.retries ?? 0;
-      let lastErr: unknown;
-      for (let i = 0; i <= retries; i++) {
-        try {
-          return await fn();
-        } catch (err) {
-          lastErr = err;
-          const retryable =
-            err instanceof actual.RetryableHttpError || actual.isTransientNetworkError(err);
-          if (!retryable || i >= retries) throw err;
-        }
-      }
-      throw lastErr;
-    },
-  };
-});
+// httpRetry mocked to strip backoff delays (manual mock in __mocks__/httpRetry).
+vi.mock("../../utils/httpRetry");
 
+import { errResponse, ok } from "./httpClientTestSupport";
 import { mapOffProduct, resolveBarcode } from "./offClient";
-
-const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
-const errResponse = (status: number) => ({ ok: false, status, json: async () => ({}), headers: { get: () => null } });
 
 const PRODUCT = {
   product_name: "Nutella",

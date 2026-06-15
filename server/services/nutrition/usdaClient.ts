@@ -2,6 +2,7 @@ import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS } from "./micros";
 import type { MappedFood } from "./types";
+import { OZ_TO_GRAMS } from "./utils";
 
 /**
  * USDA FoodData Central client. Turns a search term into a list of foods whose
@@ -137,7 +138,7 @@ function servingToGrams(size?: number, unit?: string): number | null {
     case "kg":
       return size * 1000;
     case "oz":
-      return size * 28.349523125;
+      return size * OZ_TO_GRAMS;
     case "lb":
       return size * 453.59237;
     default:
