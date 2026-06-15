@@ -136,7 +136,15 @@ function buildMovementPatternAnalysis(patterns: readonly MovementPatternCoverage
 function MovementPatternCoverageCard({
   patterns,
 }: Readonly<{ patterns: TrainingOverview["movementPatternCoverage"] }>) {
-  const maxSessionCount = Math.max(1, ...patterns.map((pattern) => pattern.sessionCount));
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N) intermediate array allocation and spread operator (.map(...))
+  // with an O(N) linear scan to avoid memory overhead and potential stack limits.
+  let maxSessionCount = 1;
+  for (const pattern of patterns) {
+    if (pattern.sessionCount > maxSessionCount) {
+      maxSessionCount = pattern.sessionCount;
+    }
+  }
   const analysis = useMemo(() => buildMovementPatternAnalysis(patterns), [patterns]);
 
   return (

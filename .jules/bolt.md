@@ -8,3 +8,6 @@ Learned to replace N+1 sequential database inserts in loops with bulk array inse
 ## 2026-06-14 - Use Sets instead of array.includes() inside loops
 **Learning:** Calling `Array.includes()` (an O(N) operation) inside a loop creates an O(N*M) time complexity bottleneck. In functions processing large arrays or nested arrays (like iterating through `exerciseSets` and checking against a predefined `allStations` array), this can significantly slow down execution.
 **Action:** Convert the static target array into a `Set` outside the loop and use `Set.has()` (an O(1) operation) inside the loop to drop the overall time complexity to O(N+M).
+## 2026-06-15 - Avoid Math.max with array spread
+**Learning:** Using `Math.max(default, ...array.map(fn))` or `Math.min()` with the spread operator on a mapped array allocates an unnecessary intermediate array and can throw a 'Maximum call stack size exceeded' error if the data array is very large. It also incurs an O(N) memory allocation overhead.
+**Action:** Replace `Math.max` and `Math.min` spread calls with an O(N) linear scan using a `for...of` loop to find the extremum safely and efficiently.

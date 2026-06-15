@@ -447,7 +447,15 @@ function MuscleCoverageTile({
 export function MuscleHeatMapCard({
   muscles,
 }: Readonly<{ muscles: TrainingOverview["muscleGroupCoverage"] }>) {
-  const maxTotalSets = Math.max(1, ...muscles.map((muscle) => muscle.totalSets));
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N) intermediate array allocation and spread operator (.map(...))
+  // with an O(N) linear scan to avoid memory overhead and potential stack limits.
+  let maxTotalSets = 1;
+  for (const muscle of muscles) {
+    if (muscle.totalSets > maxTotalSets) {
+      maxTotalSets = muscle.totalSets;
+    }
+  }
   const analysis = useMemo(() => buildMuscleHeatMapAnalysis(muscles), [muscles]);
   const coverageByMuscle = useMemo(
     () => new Map(muscles.map((muscle) => [muscle.muscle, muscle])),
