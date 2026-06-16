@@ -1,3 +1,4 @@
+import { computeMealFuelTargets, type MealFuelTargets, type WorkoutTiming } from "@shared/mealFuelling";
 import {
   type AddFavoriteInput,
   addFavoriteSchema,
@@ -107,6 +108,95 @@ async function getUserTimezone(userId: string): Promise<string> {
 /** Round to 1 dp — the macro display precision used across the nutrition surface. */
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+interface DayTrainingContext {
+  durationMin: number | null;
+  rpe: number | null;
+  hasWorkout: boolean;
+  timing: WorkoutTiming;
+}
+
+/** Intensity-weighted volume, to pick the day's primary session for fuelling.
+ *  Unknown RPE assumes a moderate 5 (matches the session calculator's default). */
+function sessionSignificance(durationMin: number | null, rpe: number | null): number {
+  return (durationMin ?? 0) * (rpe ?? 5);
+}
+
+function pickPrimary<T>(items: T[], score: (item: T) => number): T {
+  return items.reduce((best, cur) => (score(cur) > score(best) ? cur : best));
+}
+
+/**
+ * The day's primary training session for the per-meal fuel targets: the most
+ * significant LOGGED workout, else the most significant PLANNED day (so a
+ * morning's targets show before the session is logged), else a rest day. v1
+ * always reports "am_pre_breakfast" for a workout day — the future workout
+ * time-of-day field is the ONLY thing that would vary `timing` here (the pure
+ * engine already branches on it).
+ */
+async function resolveDayTrainingContext(userId: string, logDate: string): Promise<DayTrainingContext> {
+  const logged = await storage.analytics.getWorkoutLogsByDateRange(userId, logDate, logDate);
+  if (logged.length > 0) {
+    const primary = pickPrimary(logged, (w) => sessionSignificance(w.duration ?? null, w.rpe ?? null));
+    return { durationMin: primary.duration ?? null, rpe: primary.rpe ?? null, hasWorkout: true, timing: "am_pre_breakfast" };
+  }
+  const planned = await storage.analytics.getPlannedDaysForDate(userId, logDate);
+  if (planned.length > 0) {
+    const primary = pickPrimary(planned, (p) => sessionSignificance(p.expectedDurationMin, p.expectedRpe));
+    return { durationMin: primary.expectedDurationMin, rpe: primary.expectedRpe, hasWorkout: true, timing: "am_pre_breakfast" };
+  }
+  return { durationMin: null, rpe: null, hasWorkout: false, timing: "none" };
+}
+
+/**
+ * The day's per-meal fuel targets: distribute the effective daily target across
+ * meals with the primary session's pre/post anchors placed first. Called only
+ * when an effective target exists, so the (cheap, single-day) workout/plan
+ * lookups stay gated. Returns null only when the target carries no macros at all.
+ */
+async function resolveMealFuelTargets(userId: string, logDate: string, effectiveTarget: EffectiveTargetSummary, bodyweightKg: number | null): Promise<MealFuelTargets | null> {
+  const training = await resolveDayTrainingContext(userId, logDate);
+  const session = training.hasWorkout
+    ? computeSessionFuellingTarget({ durationMin: training.durationMin, rpe: training.rpe, bodyweightKg })
+    : null;
+  return computeMealFuelTargets({
+    daily: {
+      calories: effectiveTarget.calories,
+      proteinG: effectiveTarget.proteinG,
+      carbG: effectiveTarget.carbG,
+      fatG: effectiveTarget.fatG,
+    },
+    session,
+    bodyweightKg,
+    workoutTiming: training.timing,
+    hasWorkout: training.hasWorkout,
+  });
+}
+
+/**
+ * FR-1.3 — the daily view: running totals + entries bucketed by meal, the day's
+ * effective target, per-meal fuel targets, and the energy balance. One user
+ * fetch drives both the local "today" and the fuelling bodyweight.
+ */
+async function handleDailySummary(req: Request, res: Response): Promise<void> {
+  const userId = getUserId(req);
+  const { date } = req.query as unknown as DailySummaryQuery;
+  const user = await storage.users.getUser(userId);
+  const logDate = date ?? getLocalDateStr(new Date(), user?.userTimezone ?? "UTC");
+  const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
+  const base = buildDailySummary(logDate, rows);
+  const [effectiveTarget, energy] = await Promise.all([
+    resolveEffectiveTarget(userId, logDate),
+    resolveDayEnergy(userId, logDate, base.totals.calories),
+  ]);
+  // Per-meal fuel targets ride on the day's effective target; gated on one
+  // existing so flat-target / no-target users pay nothing extra.
+  const mealTargets = effectiveTarget
+    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null)
+    : null;
+  const summary: DailySummaryResponse = { ...base, effectiveTarget, mealTargets, energy };
+  res.json(summary);
 }
 
 /**
@@ -355,19 +445,7 @@ export function registerNutritionRoutes(router: Router): void {
     isAuthenticated,
     rateLimiter("nutritionRead", 60),
     validateQuery(dailySummaryQuerySchema),
-    asyncHandler(async (req: Request, res: Response) => {
-      const userId = getUserId(req);
-      const { date } = req.query as unknown as DailySummaryQuery;
-      const logDate = date ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
-      const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
-      const base = buildDailySummary(logDate, rows);
-      const [effectiveTarget, energy] = await Promise.all([
-        resolveEffectiveTarget(userId, logDate),
-        resolveDayEnergy(userId, logDate, base.totals.calories),
-      ]);
-      const summary: DailySummaryResponse = { ...base, effectiveTarget, energy };
-      res.json(summary);
-    }),
+    asyncHandler(handleDailySummary),
   );
 
   // ---- Phase 3 (Integration): relate fuelling to training ------------------

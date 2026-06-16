@@ -166,6 +166,26 @@ Where fuelling meets the rest of the app.
   (e.g. from Strava/Garmin) it windows by clock time; otherwise it falls back to
   the explicit `pre_workout` / `post_workout` meal tags. Surfaced in the workout
   detail sheet via `FuellingAroundSessionPanel`.
+- **Per-meal fuel targets** (on `GET /summary`, `DailySummaryResponse.mealTargets`)
+  — the headline nutrition×training integration. The day's effective target is
+  distributed **across the day's meals** so the athlete sees the fuel required for
+  _each_ meal, with the primary session's pre/post anchors placed first: carbs are
+  front-loaded into a `pre_workout` slot and **breakfast as the post-workout
+  recovery meal**, protein spread evenly (with a recovery-meal floor), and fat kept
+  off the workout-adjacent meals. Each meal carries a `role` + one-line `rationale`.
+  The engine is the pure, DB-free `shared/mealFuelling.ts` (`computeMealFuelTargets`),
+  reusing `computeSessionFuellingTarget` for the anchors so the numbers match the
+  session-fuelling panel exactly. The route resolves the day's primary session (most
+  significant **logged** workout, else the most significant **planned** day so
+  targets show before the morning session is logged) via `resolveDayTrainingContext`;
+  the lookups are gated on an effective target existing, so no-target users pay
+  nothing. Targets are computed on the fly (no new table) and surfaced per meal in
+  `MealSection` (target header + progress bars + rationale, shown even before
+  anything is logged).
+  - **v1 assumption:** the workout is in the **morning, before breakfast**
+    (`workoutTiming: "am_pre_breakfast"`). The single seam for a future workout
+    **time-of-day** field is `workoutTiming` — adding a value (e.g. `pm_post_dinner`)
+    and its slot/role branch in `mealFuelling.ts` is all that changes.
 - **Block view** (`GET /block`, FR-3.3) — a daily series joining intake macros to
   training **UTSS** (unified training stress) over a date range, zero-filled so
   every day has a point. Rendered in **Analytics → Fuelling** (`FuellingTab` →

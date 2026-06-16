@@ -46,6 +46,7 @@ vi.mock("../../../storage", () => ({
     workouts: { getWorkoutLog: vi.fn() },
     analytics: {
       getWorkoutLogsByDateRange: vi.fn(),
+      getPlannedDaysForDate: vi.fn(),
       getAllExerciseSetsWithDates: vi.fn(),
       getExerciseLoadTags: vi.fn(),
     },
@@ -104,6 +105,10 @@ describe("nutrition routes", () => {
     app = buildApp();
     // Chicago is UTC-5 in June, so an 02:30Z instant is the previous local day.
     vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago" });
+    // Default to a rest day for the per-meal fuelling lookups; tests that exercise
+    // a workout override these.
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+    vi.mocked(storage.analytics.getPlannedDaysForDate).mockResolvedValue([]);
   });
 
   describe("POST /logs", () => {
@@ -214,6 +219,8 @@ describe("nutrition routes", () => {
       const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
       expect(res.status).toBe(200);
       expect(res.body.effectiveTarget).toBeNull();
+      // No target ⇒ no per-meal targets either.
+      expect(res.body.mealTargets).toBeNull();
       // No BMR profile either → no energy block, and no training-data reads.
       expect(res.body.energy).toBeNull();
       expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
@@ -240,7 +247,7 @@ describe("nutrition routes", () => {
       expect(res.body.energy).toMatchObject({ basis: "measured", outKcal: 2676, inKcal: 89 });
     });
 
-    it("returns a flat effective target without querying training load", async () => {
+    it("returns a flat effective target (no periodisation) with per-meal targets", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
       vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue({
         id: "t1", userId: "test_user", calories: 2000, proteinG: 150, carbG: 200, fatG: 60,
@@ -249,7 +256,10 @@ describe("nutrition routes", () => {
       const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
       expect(res.status).toBe(200);
       expect(res.body.effectiveTarget).toMatchObject({ carbG: 200, carbDeltaG: 0, scaled: false });
-      expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+      // Flat target ⇒ no UTSS/periodisation computation (no exercise-set read), but
+      // per-meal targets still need the day's session, so the cheap lookup runs.
+      expect(storage.analytics.getAllExerciseSetsWithDates).not.toHaveBeenCalled();
+      expect(res.body.mealTargets).not.toBeNull();
     });
 
     it("scales a periodised target using the day's training load (1-day window)", async () => {
@@ -270,6 +280,54 @@ describe("nutrition routes", () => {
         "2026-06-07",
         "2026-06-07",
       );
+    });
+
+    const FLAT_TARGET = {
+      id: "t1", userId: "test_user", calories: 2600, proteinG: 180, carbG: 320, fatG: 80,
+      periodizationEnabled: false, referenceUtss: null, carbGramsPerUtss: null, effectiveFrom: "2026-06-01",
+    };
+
+    it("builds per-meal fuel targets around a logged morning workout", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75 });
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+        { date: "2026-06-07", duration: 60, rpe: 6 },
+      ] as never);
+
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets).not.toBeNull();
+      expect(res.body.mealTargets.breakfast.role).toBe("post_workout_recovery");
+      expect(res.body.mealTargets.pre_workout).toBeDefined();
+      // The literal post_workout slot stays inactive under the AM assumption.
+      expect(res.body.mealTargets.post_workout).toBeUndefined();
+    });
+
+    it("builds rest-day per-meal targets when nothing is scheduled or logged", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets).not.toBeNull();
+      expect(res.body.mealTargets.pre_workout).toBeUndefined();
+      expect(res.body.mealTargets.breakfast.role).toBe("standard");
+    });
+
+    it("uses a planned (not-yet-logged) session for the day's fuel targets", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75 });
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getPlannedDaysForDate).mockResolvedValue([
+        { focus: "Run", expectedDurationMin: 60, expectedRpe: 8 },
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets.breakfast.role).toBe("post_workout_recovery");
+      expect(res.body.mealTargets.pre_workout).toBeDefined();
+      expect(storage.analytics.getPlannedDaysForDate).toHaveBeenCalledWith("test_user", "2026-06-07");
     });
   });
 

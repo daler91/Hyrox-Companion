@@ -80,6 +80,28 @@ export class AnalyticsStorage {
       }));
   }
 
+  /**
+   * Planned (not-yet-logged) plan days scheduled for `date`, for the per-meal
+   * fuelling targets: their expected duration/effort drive a morning session's
+   * fuel anchors before the workout is logged. User-scoped via the parent plan
+   * (filtered in memory like getMissedWorkoutsForDate); `status = 'planned'`
+   * excludes completed/missed/skipped days (a completed day already has a log).
+   */
+  async getPlannedDaysForDate(userId: string, date: string): Promise<{ focus: string; expectedDurationMin: number | null; expectedRpe: number | null }[]> {
+    const days = await db.query.planDays.findMany({
+      where: and(eq(planDays.scheduledDate, date), eq(planDays.status, "planned")),
+      columns: { focus: true, expectedDurationMin: true, expectedRpe: true },
+      with: { plan: { columns: { userId: true } } },
+    });
+    return days
+      .filter((d) => d.plan?.userId === userId)
+      .map((d) => ({
+        focus: d.focus,
+        expectedDurationMin: d.expectedDurationMin ?? null,
+        expectedRpe: d.expectedRpe ?? null,
+      }));
+  }
+
   async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
     const [logs] = await db
       .select({
