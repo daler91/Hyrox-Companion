@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { expect, vi } from "vitest";
 
@@ -81,6 +82,17 @@ export async function chooseSelectOption(label: string, option: string) {
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
 
+// Settings is split into tabs; Radix unmounts the inactive panels, so a spec
+// must activate the owning tab before its fields exist in the DOM. The global
+// save bar lives outside the tabs and stays reachable regardless.
+export async function goToSettingsTab(
+  id: "account" | "training" | "integrations" | "notifications" | "data",
+) {
+  // Radix Tabs activate on focus (automatic activation), which fireEvent.click
+  // doesn't dispatch in jsdom — userEvent does, so the panel actually switches.
+  await userEvent.click(await screen.findByTestId(`tab-${id}`));
+}
+
 export function defaultSettings() {
   return {
     weightUnit: "kg",
@@ -107,6 +119,7 @@ export function seedDefaultSettings(qc: QueryClient) {
 }
 
 export async function makeSettingsDirty() {
+  await goToSettingsTab("training");
   fireEvent.click(await screen.findByTestId("select-weekly-goal"));
   fireEvent.click(await screen.findByRole("option", { name: "6" }));
   expect(await screen.findByTestId("button-save-settings")).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { calculateMafHr } from "@shared/maf";
 import { useMutation,useQuery } from "@tanstack/react-query";
-import { Loader2, RotateCw } from "lucide-react";
+import { Bell, Database, Dumbbell, Link2, Loader2, RotateCw, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
@@ -8,7 +8,13 @@ import { AccountDangerZone } from "@/components/settings/AccountDangerZone";
 import { CoachingSection } from "@/components/settings/CoachingSection";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
 import { GarminSection } from "@/components/settings/GarminSection";
-import { PreferencesSection } from "@/components/settings/PreferencesSection";
+import { AiCoachCard } from "@/components/settings/preferences/AiCoachCard";
+import { AthleteProfileCard } from "@/components/settings/preferences/AthleteProfileCard";
+import { BodyCompositionCard } from "@/components/settings/preferences/BodyCompositionCard";
+import { EmailNotificationsCard } from "@/components/settings/preferences/EmailNotificationsCard";
+import { TrainingGoalsCard } from "@/components/settings/preferences/TrainingGoalsCard";
+import { UnitsPreferencesCard } from "@/components/settings/preferences/UnitsPreferencesCard";
+import { WorkoutReviewCard } from "@/components/settings/preferences/WorkoutReviewCard";
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
@@ -34,17 +40,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastAction } from "@/components/ui/toast";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
+import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
 import { queryClient } from "@/lib/queryClient";
 
 type Preferences = UserPreferences;
+
+// Tab ids double as the `?tab=` deep-link value. `account` is the default
+// landing tab (omitted from the URL by useUrlQueryState).
+const SETTINGS_TABS = ["account", "training", "integrations", "notifications", "data"] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 // The save mutation sends weeklyGoal as a number; local form state stores
 // it as a string so the <Input type="number"> can hold a partially-typed
@@ -197,6 +210,7 @@ export default function Settings() {
   const { user } = useAuth();
   const [location, setLocation] = useLocation();
   const search = useSearch();
+  const [activeTab, setActiveTab] = useUrlQueryState<SettingsTab>("tab", "account", SETTINGS_TABS);
   const [weightUnit, setWeightUnit] = useState("kg");
   const [distanceUnit, setDistanceUnit] = useState("km");
   const [division, setDivision] = useState("open");
@@ -322,22 +336,28 @@ export default function Settings() {
 
   useEffect(() => {
     const params = new URLSearchParams(search);
-    const stravaStatus = params.get("strava");
-    if (stravaStatus === "connected") {
+    const stravaResult = params.get("strava");
+    if (stravaResult !== "connected" && stravaResult !== "error") {
+      return;
+    }
+    if (stravaResult === "connected") {
       toast({
         title: "Strava Connected",
         description: "Your Strava account has been successfully connected.",
       });
-      setLocation("/settings", { replace: true });
-    } else if (stravaStatus === "error") {
+    } else {
       toast({
         title: "Connection Failed",
         description: "Failed to connect to Strava. Please try again.",
         variant: "destructive",
       });
-      setLocation("/settings", { replace: true });
     }
-  }, [search, toast, setLocation]);
+    // Land the user on the Integrations tab and clear the `strava` callback
+    // param. setActiveTab syncs the hook/Tabs state; setLocation strips the
+    // param from the URL (the tab is preserved via the query string).
+    setActiveTab("integrations");
+    setLocation("/settings?tab=integrations", { replace: true });
+  }, [search, toast, setLocation, setActiveTab]);
 
   const {
     data: preferences,
@@ -628,114 +648,163 @@ export default function Settings() {
         </p>
       </div>
 
-      <ProfileSection userName={userName} />
-
-      <StravaSection
-        stravaStatus={stravaStatus}
-        stravaLoading={stravaLoading}
-      />
-
-      <GarminSection
-        garminStatus={garminStatus}
-        garminLoading={garminLoading}
-      />
-
-      <PreferencesSection
-        weightUnit={weightUnit}
-        distanceUnit={distanceUnit}
-        division={division}
-        gender={gender}
-        ageInput={ageInput}
-        bodyweightKg={bodyweightKg}
-        heightCm={heightCm}
-        activityLevel={activityLevel}
-        weightGoalDirection={weightGoalDirection}
-        weightGoalRateKgPerWeek={weightGoalRateKgPerWeek}
-        weeklyGoal={weeklyGoal}
-        emailNotifications={emailNotifications}
-        emailWeeklySummary={emailWeeklySummary}
-        emailMissedReminder={emailMissedReminder}
-        showAdherenceInsights={showAdherenceInsights}
-        aiCoachEnabled={aiCoachEnabled}
-        onWeightUnitChange={(v) => {
-          setWeightUnit(v);
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value as SettingsTab);
         }}
-        onDistanceUnitChange={(v) => {
-          setDistanceUnit(v);
-        }}
-        onDivisionChange={setDivision}
-        onGenderChange={setGender}
-        onAgeInputChange={setAgeInput}
-        onBodyweightKgChange={setBodyweightKg}
-        onHeightCmChange={setHeightCm}
-        onActivityLevelChange={setActivityLevel}
-        onWeightGoalDirectionChange={setWeightGoalDirection}
-        onWeightGoalRateKgPerWeekChange={setWeightGoalRateKgPerWeek}
-        onWeeklyGoalChange={(v) => {
-          setWeeklyGoal(v);
-        }}
-        onEmailNotificationsChange={(v) => {
-          setEmailNotifications(v);
-        }}
-        onEmailWeeklySummaryChange={(v) => {
-          setEmailWeeklySummary(v);
-        }}
-        onEmailMissedReminderChange={(v) => {
-          setEmailMissedReminder(v);
-        }}
-        onShowAdherenceInsightsChange={(v) => {
-          setShowAdherenceInsights(v);
-        }}
-        onAiCoachEnabledChange={(v) => {
-          setAiCoachEnabled(v);
-        }}
-      />
-      <TrainingStyleSection
-        trainingStyleId={trainingStyleId}
-        onTrainingStyleIdChange={setTrainingStyleId}
-        hasRequiredMafInputs={hasRequiredMafInputs()}
-        mafAgeInput={mafAgeInput}
-        mafConsistencyInput={mafConsistencyInput}
-        mafTrendInput={mafTrendInput}
-        mafHrDataAvailableInput={mafHrDataAvailableInput}
-        onMafAgeInputChange={setMafAgeInput}
-        onMafConsistencyInputChange={setMafConsistencyInput}
-        onMafTrendInputChange={setMafTrendInput}
-        onMafHrDataAvailableInputChange={setMafHrDataAvailableInput}
-        styleAuditEntries={styleAuditEntries}
-      />
-      <PushNotificationSection />
-
-      <CoachingSection />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Getting Started</CardTitle>
-          <CardDescription>
-            Run the welcome flow again if you skipped it or want to pick a different training plan.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            data-testid="button-rerun-onboarding"
-            onClick={() => {
-              unsavedChangesPrompt.requestNavigation(
-                "/?onboarding=run",
-                undefined,
-                clearLocalOnboardingComplete,
-              );
-            }}
+        className="w-full"
+      >
+        <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5 sm:gap-0">
+          <TabsTrigger value="account" data-testid="tab-account">
+            <User className="h-4 w-4 mr-2" aria-hidden="true" />
+            Account
+          </TabsTrigger>
+          <TabsTrigger value="training" data-testid="tab-training">
+            <Dumbbell className="h-4 w-4 mr-2" aria-hidden="true" />
+            Training
+          </TabsTrigger>
+          <TabsTrigger value="integrations" data-testid="tab-integrations">
+            <Link2 className="h-4 w-4 mr-2" aria-hidden="true" />
+            Integrations
+          </TabsTrigger>
+          <TabsTrigger value="notifications" data-testid="tab-notifications">
+            <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger
+            value="data"
+            data-testid="tab-data"
+            className="col-span-2 sm:col-span-1"
           >
-            <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
-            Run setup again
-          </Button>
-        </CardContent>
-      </Card>
+            <Database className="h-4 w-4 mr-2" aria-hidden="true" />
+            Data &amp; Privacy
+          </TabsTrigger>
+        </TabsList>
 
-      <DataToolsSection />
+        <TabsContent value="account" className="space-y-6">
+          <ProfileSection userName={userName} />
+          <UnitsPreferencesCard
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            onWeightUnitChange={(v) => {
+              setWeightUnit(v);
+            }}
+            onDistanceUnitChange={(v) => {
+              setDistanceUnit(v);
+            }}
+          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Getting Started</CardTitle>
+              <CardDescription>
+                Run the welcome flow again if you skipped it or want to pick a different training plan.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                data-testid="button-rerun-onboarding"
+                onClick={() => {
+                  unsavedChangesPrompt.requestNavigation(
+                    "/?onboarding=run",
+                    undefined,
+                    clearLocalOnboardingComplete,
+                  );
+                }}
+              >
+                <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                Run setup again
+              </Button>
+            </CardContent>
+          </Card>
+          <AccountDangerZone />
+        </TabsContent>
 
-      <AccountDangerZone />
+        <TabsContent value="training" className="space-y-6">
+          <AthleteProfileCard
+            division={division}
+            gender={gender}
+            age={ageInput}
+            onDivisionChange={setDivision}
+            onGenderChange={setGender}
+            onAgeChange={setAgeInput}
+          />
+          <BodyCompositionCard
+            weightUnit={weightUnit}
+            bodyweightKg={bodyweightKg}
+            heightCm={heightCm}
+            activityLevel={activityLevel}
+            weightGoalDirection={weightGoalDirection}
+            weightGoalRateKgPerWeek={weightGoalRateKgPerWeek}
+            onBodyweightKgChange={setBodyweightKg}
+            onHeightCmChange={setHeightCm}
+            onActivityLevelChange={setActivityLevel}
+            onWeightGoalDirectionChange={setWeightGoalDirection}
+            onWeightGoalRateKgPerWeekChange={setWeightGoalRateKgPerWeek}
+          />
+          <TrainingGoalsCard
+            weeklyGoal={weeklyGoal}
+            onWeeklyGoalChange={(v) => {
+              setWeeklyGoal(v);
+            }}
+          />
+          <TrainingStyleSection
+            trainingStyleId={trainingStyleId}
+            onTrainingStyleIdChange={setTrainingStyleId}
+            hasRequiredMafInputs={hasRequiredMafInputs()}
+            mafAgeInput={mafAgeInput}
+            mafConsistencyInput={mafConsistencyInput}
+            mafTrendInput={mafTrendInput}
+            mafHrDataAvailableInput={mafHrDataAvailableInput}
+            onMafAgeInputChange={setMafAgeInput}
+            onMafConsistencyInputChange={setMafConsistencyInput}
+            onMafTrendInputChange={setMafTrendInput}
+            onMafHrDataAvailableInputChange={setMafHrDataAvailableInput}
+            styleAuditEntries={styleAuditEntries}
+          />
+          <WorkoutReviewCard
+            showAdherenceInsights={showAdherenceInsights}
+            onShowAdherenceInsightsChange={(v) => {
+              setShowAdherenceInsights(v);
+            }}
+          />
+          <AiCoachCard
+            aiCoachEnabled={aiCoachEnabled}
+            onAiCoachEnabledChange={(v) => {
+              setAiCoachEnabled(v);
+            }}
+          />
+          <CoachingSection />
+        </TabsContent>
+
+        <TabsContent value="integrations" className="space-y-6">
+          <StravaSection stravaStatus={stravaStatus} stravaLoading={stravaLoading} />
+          <GarminSection garminStatus={garminStatus} garminLoading={garminLoading} />
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-6">
+          <EmailNotificationsCard
+            emailNotifications={emailNotifications}
+            emailWeeklySummary={emailWeeklySummary}
+            emailMissedReminder={emailMissedReminder}
+            onEmailNotificationsChange={(v) => {
+              setEmailNotifications(v);
+            }}
+            onEmailWeeklySummaryChange={(v) => {
+              setEmailWeeklySummary(v);
+            }}
+            onEmailMissedReminderChange={(v) => {
+              setEmailMissedReminder(v);
+            }}
+          />
+          <PushNotificationSection />
+        </TabsContent>
+
+        <TabsContent value="data" className="space-y-6">
+          <DataToolsSection />
+        </TabsContent>
+      </Tabs>
 
       {hasChanges && (
         <div className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40">

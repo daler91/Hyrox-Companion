@@ -1,8 +1,15 @@
 import { setupAuthIntercepts } from "../support/authIntercepts";
 
-function visitSettings(options?: Parameters<typeof setupAuthIntercepts>[0]) {
+type SettingsTab = "account" | "training" | "integrations" | "notifications" | "data";
+
+// Settings is split into deep-linkable tabs (`?tab=`), and Radix unmounts the
+// inactive panels, so each assertion visits the tab that owns its control.
+function visitSettings(
+  tab?: SettingsTab,
+  options?: Parameters<typeof setupAuthIntercepts>[0],
+) {
   setupAuthIntercepts(options);
-  cy.visit("/settings");
+  cy.visit(tab ? `/settings?tab=${tab}` : "/settings");
   cy.wait("@authUser");
   cy.wait("@preferences");
   cy.wait("@stravaStatus");
@@ -10,55 +17,50 @@ function visitSettings(options?: Parameters<typeof setupAuthIntercepts>[0]) {
 
 describe("Settings Page", () => {
   describe("default state", () => {
-    beforeEach(() => {
-      visitSettings();
-    });
-
     it("displays the user display name", () => {
+      visitSettings("account");
       cy.getBySel("text-display-name").should("contain", "Test Athlete");
     });
 
-    for (const selector of [
-      "select-weight-unit",
-      "select-distance-unit",
-      "select-weekly-goal",
-      "switch-email-notifications",
-      "button-export-csv",
-      "button-export-json",
-      "button-find-unstructured",
-    ]) {
-      it(`shows ${selector}`, () => {
+    const tabSelectors: Array<[string, SettingsTab]> = [
+      ["select-weight-unit", "account"],
+      ["select-distance-unit", "account"],
+      ["select-weekly-goal", "training"],
+      ["switch-email-notifications", "notifications"],
+      ["button-export-csv", "data"],
+      ["button-export-json", "data"],
+      ["button-find-unstructured", "data"],
+    ];
+
+    for (const [selector, tab] of tabSelectors) {
+      it(`shows ${selector} on the ${tab} tab`, () => {
+        visitSettings(tab);
         cy.getBySel(selector).should("exist");
       });
     }
 
     it("hides save button when no changes", () => {
+      visitSettings();
       cy.getBySel("button-save-settings").should("not.exist");
     });
   });
 
   describe("Strava disconnected", () => {
-    beforeEach(() => {
-      visitSettings({ stravaStatus: { connected: false } });
-    });
-
     it("shows connect Strava button when not connected", () => {
+      visitSettings("integrations", { stravaStatus: { connected: false } });
       cy.getBySel("button-connect-strava").should("exist");
     });
   });
 
   describe("Strava connected", () => {
-    beforeEach(() => {
-      visitSettings({
+    it("shows sync and disconnect buttons when Strava is connected", () => {
+      visitSettings("integrations", {
         stravaStatus: {
           connected: true,
           athleteId: "12345",
           lastSyncedAt: new Date().toISOString(),
         },
       });
-    });
-
-    it("shows sync and disconnect buttons when Strava is connected", () => {
       cy.getBySel("button-sync-strava").should("exist");
       cy.getBySel("button-disconnect-strava").should("exist");
     });

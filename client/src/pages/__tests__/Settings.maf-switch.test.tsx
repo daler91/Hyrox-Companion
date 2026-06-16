@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   chooseSelectOption,
   defaultSettings,
+  goToSettingsTab,
   makeSettingsDirty,
   renderSettings,
   seedDefaultSettings,
@@ -37,6 +38,9 @@ describe("Settings MAF style switch", () => {
     });
     renderSettings(qc);
 
+    // Email switches live on the Notifications tab; the AI-coach switch on
+    // Training. Assert each on its own tab (inactive panels are unmounted).
+    await goToSettingsTab("notifications");
     expect(await screen.findByTestId("switch-email-notifications")).toHaveAttribute(
       "data-state",
       "unchecked",
@@ -49,7 +53,9 @@ describe("Settings MAF style switch", () => {
       "data-state",
       "unchecked",
     );
-    expect(screen.getByTestId("switch-ai-coach-enabled")).toHaveAttribute(
+
+    await goToSettingsTab("training");
+    expect(await screen.findByTestId("switch-ai-coach-enabled")).toHaveAttribute(
       "data-state",
       "unchecked",
     );
@@ -72,6 +78,7 @@ describe("Settings MAF style switch", () => {
       mafTrend: null,
     });
     renderSettings(qc);
+    await goToSettingsTab("training");
 
     const balancedLabels = await screen.findAllByText("Balanced");
     fireEvent.click(balancedLabels[0]);
@@ -107,6 +114,7 @@ describe("Settings MAF style switch", () => {
     vi.mocked(settingsHarness.updatePreferences).mockResolvedValue({});
 
     renderSettings(qc);
+    await goToSettingsTab("training");
 
     const balancedLabels = await screen.findAllByText("Balanced");
     fireEvent.click(balancedLabels[0]);
@@ -201,6 +209,9 @@ describe("Settings MAF style switch", () => {
     renderSettings(qc);
 
     await makeSettingsDirty();
+    // makeSettingsDirty leaves us on the Training tab; the rerun button lives
+    // on the Account tab. Switching tabs keeps the unsaved-changes state.
+    await goToSettingsTab("account");
 
     fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
 

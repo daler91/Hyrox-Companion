@@ -116,18 +116,13 @@ A date range selector filters data across all tabs (30 days, 90 days, 6 months, 
 
 ### Settings (`client/src/pages/Settings.tsx`)
 
-User preferences and account management. Organized into sections:
+User preferences and account management. Organized into five deep-linkable tabs (`?tab=account|training|integrations|notifications|data`, default `account`) driven by `useUrlQueryState` and mirroring the Analytics tab pattern. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
 
-- **ProfileSection** -- Displays user name and avatar.
-- **StravaSection** -- Connect/disconnect Strava, view sync status. Handles OAuth callback query parameters (`?strava=connected` or `?strava=error`).
-- **GarminSection** -- Email/password credential form for the Garmin Connect link, status/last-sync badge, and a manual "Sync now" button. Surfaces the `lastError` banner when a prior sync left the connection in a broken state and disables sync buttons when the global 429 circuit breaker is tripped.
-- **PreferencesSection** -- Weight unit (kg/lb), distance unit (km/mi), weekly workout goal. Email toggles are now split: a master `emailNotifications` switch plus nested per-type toggles for the weekly summary and the missed-workout reminder (the nested pair is disabled and grayed out when the master is off). The AI-coach toggle is the **consent gate** for AI provider calls -- it defaults off for new users, and the AI features in the app are hidden or disabled until the user flips it on.
-- **TrainingStyleSection** -- Balanced vs. MAF Method training-style selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes and downstream recalculation intent.
-- **PushNotificationSection** -- Browser Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification action when the current browser and server VAPID configuration support push.
-- **CoachingSection** -- AI coaching configuration and materials management.
-- **DataToolsSection** -- Data export and account deletion. The "Delete account" flow confirms with a hold-to-delete button, then calls `DELETE /api/v1/account` and hard-redirects to the landing page after Clerk sign-out.
-
-Changes are tracked locally and saved via a single "Save Settings" button.
+- **Account** (`?tab=account`, default) -- **ProfileSection** (user name and avatar), **UnitsPreferencesCard** (weight unit kg/lb, distance unit km/mi), a "Getting Started" card to re-run onboarding, and the account **DangerZone** (delete account → hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
+- **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **TrainingGoalsCard** (weekly workout goal), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled), and **CoachingSection** (AI coaching configuration and materials management).
+- **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync now"; surfaces the `lastError` banner and disables sync when the global 429 circuit breaker is tripped).
+- **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch plus nested per-type toggles for the weekly summary and missed-workout reminder, disabled/grayed when the master is off) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
+- **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `ExportDataCard`, and the error-reporting consent card).
 
 ### Privacy (`client/src/pages/Privacy.tsx`)
 
@@ -207,10 +202,10 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `ProfileSection` -- User profile display.
 - `StravaSection` -- Strava connection management.
 - `GarminSection` -- Garmin Connect credential form, status display, manual sync button.
-- `PreferencesSection` -- Unit preferences, weekly goal, master email toggle + nested per-type email toggles (`emailWeeklySummary`, `emailMissedReminder`), AI consent toggle (`aiCoachEnabled`).
+- `AccountDangerZone` -- Account deletion (hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
 - `TrainingStyleSection` -- Balanced/MAF style selector, MAF setup dialog, style transition notice, and local settings audit.
 - `PushNotificationSection` -- Web Push subscribe/unsubscribe and test-notification controls.
-- `DataToolsSection` -- Data export + account deletion (hold-to-confirm → `DELETE /api/v1/account`).
+- `DataToolsSection` -- Structure old workouts, data export, and error-reporting consent.
 - `CoachingSection` -- AI coaching configuration.
 - `coaching/CoachingMaterialList` -- Uploaded coaching materials list.
 - `coaching/CoachingUploadDialog` -- Upload dialog for coaching materials.
@@ -218,7 +213,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `coaching/useCoachingUpload.ts` -- Upload logic hook.
 - `data-tools/` -- `ExportDataCard`, `StructureOldWorkoutsCard`, and the `useWorkoutReparseTools` hook backing `DataToolsSection`.
 - `garmin/` -- `GarminConnectForm`, `GarminErrorBanner`, `GarminStatusRow`, and the `useGarminConnectionController` hook backing `GarminSection`.
-- `preferences/` -- `AiCoachCard`, `EmailNotificationsCard`, `TrainingGoalsCard`, `UnitsPreferencesCard`, `WorkoutReviewCard`, and `PreferenceRows` backing `PreferencesSection`.
+- `preferences/` -- `UnitsPreferencesCard`, `AthleteProfileCard`, `BodyCompositionCard`, `TrainingGoalsCard`, `EmailNotificationsCard`, `WorkoutReviewCard`, `AiCoachCard`, and the shared `PreferenceRows`. These cards are composed directly into the Settings tabs.
 
 ### `timeline/` -- Timeline Page Components
 
