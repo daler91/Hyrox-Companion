@@ -163,7 +163,7 @@ export function TrainingStyleSection({
       )}
 
       {styleSwitchBlockedMessage && (
-        <p className="text-sm text-destructive" data-testid="maf-switch-blocked">
+        <p className="text-sm text-destructive" role="alert" data-testid="maf-switch-blocked">
           {styleSwitchBlockedMessage}
         </p>
       )}
@@ -268,9 +268,7 @@ export function TrainingStyleSection({
               <Label htmlFor="maf-consistency-select">Consistency</Label>
               <Select
                 value={draftMafConsistencyInput}
-                onValueChange={(value: MafConsistencyInput) =>
-                  setDraftMafConsistencyInput(value)
-                }
+                onValueChange={(value: MafConsistencyInput) => setDraftMafConsistencyInput(value)}
               >
                 <SelectTrigger id="maf-consistency-select">
                   <SelectValue placeholder="Consistency (required)" />
@@ -315,7 +313,11 @@ export function TrainingStyleSection({
                 </SelectContent>
               </Select>
             </div>
-            {mafSetupError && <p className="text-sm text-destructive">{mafSetupError}</p>}
+            {mafSetupError && (
+              <p className="text-sm text-destructive" role="alert">
+                {mafSetupError}
+              </p>
+            )}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
