@@ -124,7 +124,16 @@ function sessionSignificance(durationMin: number | null, rpe: number | null): nu
 }
 
 function pickPrimary<T>(items: T[], score: (item: T) => number): T {
-  return items.reduce((best, cur) => (score(cur) > score(best) ? cur : best));
+  let best = items[0];
+  let bestScore = score(best);
+  for (let i = 1; i < items.length; i++) {
+    const s = score(items[i]);
+    if (s > bestScore) {
+      best = items[i];
+      bestScore = s;
+    }
+  }
+  return best;
 }
 
 /**
