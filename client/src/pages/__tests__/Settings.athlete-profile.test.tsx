@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   chooseSelectOption,
   defaultSettings,
+  goToSettingsTab,
   makeSettingsDirty,
   renderSettings,
   seedSettings,
@@ -27,6 +28,7 @@ describe("Settings race profile persistence", () => {
     const qc = new QueryClient();
     seedSettings(qc, defaultSettings());
     renderSettings(qc);
+    await goToSettingsTab("training");
 
     await chooseSelectOption("Select gender", "Men");
 
@@ -44,6 +46,7 @@ describe("Settings race profile persistence", () => {
     const qc = new QueryClient();
     seedSettings(qc, defaultSettings());
     renderSettings(qc);
+    await goToSettingsTab("training");
 
     await chooseSelectOption("Select division", "Pro");
 
@@ -64,6 +67,7 @@ describe("Settings race profile persistence", () => {
     const qc = new QueryClient();
     seedSettings(qc, defaultSettings());
     renderSettings(qc);
+    await goToSettingsTab("training");
 
     fireEvent.change(await screen.findByTestId("input-athlete-age"), {
       target: { value: "34" },
