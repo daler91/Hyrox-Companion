@@ -24,6 +24,8 @@ interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerci
   readonly setDate: (value: string) => void;
   readonly rpe: number | null;
   readonly setRpe: (value: number | null) => void;
+  readonly timeOfDayMin: number | null;
+  readonly setTimeOfDayMin: (value: number | null) => void;
   readonly durationMinutes: string;
   readonly setDurationMinutes: (value: string) => void;
   readonly distance: string;
@@ -73,6 +75,8 @@ export function LogWorkoutStepperLayout({
   setDate,
   rpe,
   setRpe,
+  timeOfDayMin,
+  setTimeOfDayMin,
   durationMinutes,
   setDurationMinutes,
   distance,
@@ -215,6 +219,8 @@ export function LogWorkoutStepperLayout({
           <ReflectStep
             rpe={rpe}
             setRpe={setRpe}
+            timeOfDayMin={timeOfDayMin}
+            setTimeOfDayMin={setTimeOfDayMin}
             durationMinutes={durationMinutes}
             setDurationMinutes={setDurationMinutes}
             distance={distance}

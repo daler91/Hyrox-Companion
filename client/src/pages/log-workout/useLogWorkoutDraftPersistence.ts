@@ -29,6 +29,7 @@ interface UseLogWorkoutDraftPersistenceOptions {
   readonly freeText: string;
   readonly notes: string;
   readonly rpe: number | null;
+  readonly timeOfDayMin: number | null;
   readonly durationMinutes: string;
   readonly distance: string;
   readonly avgHeartrate: string;
@@ -51,6 +52,7 @@ export function useLogWorkoutDraftPersistence({
   freeText,
   notes,
   rpe,
+  timeOfDayMin,
   durationMinutes,
   distance,
   avgHeartrate,
@@ -84,6 +86,7 @@ export function useLogWorkoutDraftPersistence({
         freeText,
         notes,
         rpe,
+        timeOfDayMin,
         durationMinutes,
         distance,
         avgHeartrate,
@@ -106,6 +109,7 @@ export function useLogWorkoutDraftPersistence({
     freeText,
     notes,
     rpe,
+    timeOfDayMin,
     durationMinutes,
     distance,
     avgHeartrate,

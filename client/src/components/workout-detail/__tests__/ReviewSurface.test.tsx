@@ -130,6 +130,7 @@ function makeDetail(overrides: Record<string, unknown> = {}) {
     updateBlockScore: { mutate: vi.fn() },
     updateNote: { mutate: vi.fn() },
     updateRpe: { mutate: vi.fn() },
+    updateTimeOfDay: { mutate: vi.fn() },
     updateReference: { mutate: vi.fn() },
     updatePlanDay: { mutate: vi.fn(), isPending: false },
     reparseFreeText: { mutate: vi.fn(), isPending: false },
@@ -259,5 +260,35 @@ describe("ReviewSurface", () => {
     renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
 
     expectWorkoutTitleRename(onRenameTitle, "entry-1", "Renamed strength");
+  });
+
+  it("shows the session-time picker for a manual log and saves edits via updateTimeOfDay", () => {
+    const updateTimeOfDay = { mutate: vi.fn() };
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({ startedAt: null, timeOfDayMin: 6 * 60 }),
+        updateTimeOfDay,
+      }),
+    );
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    const input = screen.getByTestId("input-review-time-of-day");
+    expect(input).toHaveValue("06:00");
+
+    fireEvent.change(input, { target: { value: "18:30" } });
+    expect(updateTimeOfDay.mutate).toHaveBeenCalledWith(18 * 60 + 30);
+  });
+
+  it("hides the session-time picker when the workout has a device start time", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({ startedAt: new Date("2026-05-06T12:00:00Z"), timeOfDayMin: null }),
+      }),
+    );
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    expect(screen.queryByTestId("input-review-time-of-day")).not.toBeInTheDocument();
   });
 });

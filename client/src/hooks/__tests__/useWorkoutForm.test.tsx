@@ -430,6 +430,50 @@ describe('useWorkoutForm', () => {
       });
     });
 
+    it('includes timeOfDayMin in the payload when a session time is set', async () => {
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
+
+      act(() => {
+        result.current.setTitle('Evening Run');
+        result.current.setDate('2024-05-01');
+        result.current.setFreeText('Ran 5k');
+        result.current.setTimeOfDayMin(18 * 60); // 18:00 local
+      });
+
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+          'POST',
+          '/api/v1/workouts',
+          expect.objectContaining({ timeOfDayMin: 1080 }),
+          expect.any(AbortSignal),
+          expect.objectContaining({ "X-Idempotency-Key": expect.any(String) }),
+        );
+      });
+    });
+
+    it('omits timeOfDayMin from the payload when no session time is set', async () => {
+      const { result } = renderFormHook({ ...defaultProps, useTextMode: true });
+
+      act(() => {
+        result.current.setTitle('Untimed Run');
+        result.current.setFreeText('Ran 5k');
+      });
+
+      act(() => {
+        result.current.handleSave();
+      });
+
+      await waitFor(() => {
+        expect(queryClientLib.apiRequest).toHaveBeenCalled();
+      });
+      const body = vi.mocked(queryClientLib.apiRequest).mock.calls[0]?.[2] as Record<string, unknown>;
+      expect(body).not.toHaveProperty('timeOfDayMin');
+    });
+
     it('saves successfully in Builder Mode', async () => {
       const mockExercise: StructuredExercise = {
         exerciseName: 'back_squat',

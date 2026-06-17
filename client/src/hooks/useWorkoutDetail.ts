@@ -419,6 +419,35 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save that RPE",
   });
 
+  // Inline session-time edit for a manual log without a device start time.
+  // Optimistic like updateFocus: patch the cached workout so the picker
+  // reflects the choice immediately, then invalidate the timeline so the day's
+  // per-meal fuel timing recomputes. Roll back only timeOfDayMin on error.
+  const updateTimeOfDay = useApiMutation({
+    mutationFn: (timeOfDayMin: number | null) =>
+      api.workouts.update(workoutId!, { timeOfDayMin }),
+    onMutate: async (timeOfDayMin) => {
+      if (!workoutId) return undefined;
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+      const prevTimeOfDayMin = queryClient.getQueryData<WorkoutWithSets>(
+        QUERY_KEYS.workout(workoutId),
+      )?.timeOfDayMin;
+      patchCachedWorkout({ timeOfDayMin });
+      return { prevTimeOfDayMin };
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
+    },
+    onError: (_err, _vars, ctx) => {
+      const prevTimeOfDayMin = (ctx as { prevTimeOfDayMin?: number | null } | undefined)
+        ?.prevTimeOfDayMin;
+      if (workoutId && prevTimeOfDayMin !== undefined) {
+        patchCachedWorkout({ timeOfDayMin: prevTimeOfDayMin });
+      }
+    },
+    errorToast: "Couldn't save the session time",
+  });
+
   // Connect/disconnect this workout to a plan day. Optimistically patches the
   // cached workout's planId/planDayId so the picker reflects the choice
   // instantly; invalidates timeline + plans so the workout moves into (or out
@@ -471,6 +500,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateReference,
     updateFocus,
     updateRpe,
+    updateTimeOfDay,
     updatePlanDay,
   };
 }

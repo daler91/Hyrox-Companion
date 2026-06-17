@@ -15,6 +15,7 @@ interface BuildWorkoutSavePayloadInput {
   readonly freeText: string;
   readonly notes: string;
   readonly rpe: number | null;
+  readonly timeOfDayMin?: number | null;
   readonly durationMinutes?: string;
   readonly distance?: string;
   readonly avgHeartrate?: string;
@@ -45,6 +46,7 @@ interface PayloadBaseInput {
   readonly date: string;
   readonly notes: string;
   readonly rpe: number | null;
+  readonly timeOfDayMin?: number | null;
   readonly durationMinutes?: string;
   readonly distance?: string;
   readonly avgHeartrate?: string;
@@ -58,6 +60,7 @@ function buildBasePayload({
   date,
   notes,
   rpe,
+  timeOfDayMin,
   durationMinutes,
   distance,
   avgHeartrate,
@@ -81,6 +84,7 @@ function buildBasePayload({
     ...(distanceMeters == null ? {} : { distanceMeters }),
     ...(avgHr == null ? {} : { avgHeartrate: avgHr }),
     ...(maxHr == null ? {} : { maxHeartrate: maxHr }),
+    ...(timeOfDayMin == null ? {} : { timeOfDayMin }),
     ...(planDayId ? { planDayId } : {}),
   };
 }
@@ -269,6 +273,7 @@ export function buildWorkoutSavePayload({
   freeText,
   notes,
   rpe,
+  timeOfDayMin,
   durationMinutes,
   distance,
   avgHeartrate,
@@ -291,6 +296,7 @@ export function buildWorkoutSavePayload({
     date,
     notes,
     rpe,
+    timeOfDayMin,
     durationMinutes,
     distance,
     avgHeartrate,
@@ -305,6 +311,7 @@ export function buildWorkoutSavePayload({
       date,
       notes,
       rpe,
+      timeOfDayMin,
       durationMinutes,
       distance,
       avgHeartrate,
