@@ -87,10 +87,10 @@ export class AnalyticsStorage {
    * (filtered in memory like getMissedWorkoutsForDate); `status = 'planned'`
    * excludes completed/missed/skipped days (a completed day already has a log).
    */
-  async getPlannedDaysForDate(userId: string, date: string): Promise<{ focus: string; expectedDurationMin: number | null; expectedRpe: number | null }[]> {
+  async getPlannedDaysForDate(userId: string, date: string): Promise<{ focus: string; expectedDurationMin: number | null; expectedRpe: number | null; plannedTimeOfDayMin: number | null }[]> {
     const days = await db.query.planDays.findMany({
       where: and(eq(planDays.scheduledDate, date), eq(planDays.status, "planned")),
-      columns: { focus: true, expectedDurationMin: true, expectedRpe: true },
+      columns: { focus: true, expectedDurationMin: true, expectedRpe: true, plannedTimeOfDayMin: true },
       with: { plan: { columns: { userId: true } } },
     });
     return days
@@ -99,6 +99,7 @@ export class AnalyticsStorage {
         focus: d.focus,
         expectedDurationMin: d.expectedDurationMin ?? null,
         expectedRpe: d.expectedRpe ?? null,
+        plannedTimeOfDayMin: d.plannedTimeOfDayMin ?? null,
       }));
   }
 

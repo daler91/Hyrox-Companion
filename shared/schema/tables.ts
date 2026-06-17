@@ -197,10 +197,15 @@ export const planDays = pgTable("plan_days", {
   // falls back to a moderate-session baseline.
   expectedDurationMin: integer("expected_duration_min"),
   expectedRpe: integer("expected_rpe"),
+  // Planned local start time as minutes-from-midnight (0–1439), nullable. Drives
+  // which meals are the pre/recovery meals in the per-meal fuel targets (morning
+  // vs midday vs evening session); null falls back to the morning assumption.
+  plannedTimeOfDayMin: integer("planned_time_of_day_min"),
 }, (table) => [
   check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
   check("plan_days_expected_duration_check", sql`expected_duration_min IS NULL OR (expected_duration_min BETWEEN 1 AND 600)`),
   check("plan_days_expected_rpe_check", sql`expected_rpe IS NULL OR (expected_rpe BETWEEN 1 AND 10)`),
+  check("plan_days_time_of_day_check", sql`planned_time_of_day_min IS NULL OR (planned_time_of_day_min BETWEEN 0 AND 1439)`),
   index("idx_plan_days_plan_id").on(table.planId),
   index("idx_plan_days_scheduled_date").on(table.scheduledDate),
   index("idx_plan_days_status").on(table.status),
@@ -233,6 +238,11 @@ export const workoutLogs = pgTable("workout_logs", {
   // session-fuelling targets and cardio load both read it as minutes).
   duration: integer("duration"),
   rpe: integer("rpe"),
+  // Manual log's local start time as minutes-from-midnight (0–1439), nullable.
+  // Device imports use the precise startedAt instant instead; this is the
+  // manual-entry equivalent that drives meal placement in the per-meal fuel
+  // targets (morning vs midday vs evening session).
+  timeOfDayMin: integer("time_of_day_min"),
   planDayId: varchar("plan_day_id", { length: 255 }).references(() => planDays.id, { onDelete: "set null" }),
   planId: varchar("plan_id", { length: 255 }).references(() => trainingPlans.id, { onDelete: "set null" }),
   source: varchar("source", { length: 255 }).default("manual"),
@@ -274,6 +284,7 @@ export const workoutLogs = pgTable("workout_logs", {
     .on(table.userId, table.garminActivityId)
     .where(sql`${table.garminActivityId} IS NOT NULL`),
   check("rpe_range_check", sql`${table.rpe} IS NULL OR (${table.rpe} >= 1 AND ${table.rpe} <= 10)`),
+  check("workout_logs_time_of_day_check", sql`${table.timeOfDayMin} IS NULL OR (${table.timeOfDayMin} >= 0 AND ${table.timeOfDayMin} <= 1439)`),
 ]);
 
 // Strava OAuth connection storage

@@ -26,6 +26,9 @@ export const insertPlanDaySchema = createInsertSchema(planDays)
     status: z.enum(["planned", "completed", "missed", "skipped"]).default("planned"),
     expectedDurationMin: z.number().int().min(1).max(600).nullable().optional(),
     expectedRpe: z.number().int().min(1).max(10).nullable().optional(),
+    // Planned local start time as minutes-from-midnight (0–1439); drives which
+    // meals are the pre/recovery meals in the per-meal fuel targets.
+    plannedTimeOfDayMin: z.number().int().min(0).max(1439).nullable().optional(),
   });
 
 export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({

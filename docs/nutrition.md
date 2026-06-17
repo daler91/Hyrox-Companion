@@ -182,10 +182,13 @@ Where fuelling meets the rest of the app.
   nothing. Targets are computed on the fly (no new table) and surfaced per meal in
   `MealSection` (target header + progress bars + rationale, shown even before
   anything is logged).
-  - **v1 assumption:** the workout is in the **morning, before breakfast**
-    (`workoutTiming: "am_pre_breakfast"`). The single seam for a future workout
-    **time-of-day** field is `workoutTiming` — adding a value (e.g. `pm_post_dinner`)
-    and its slot/role branch in `mealFuelling.ts` is all that changes.
+  - **Session timing:** the workout's local time-of-day selects which meals are the
+    pre/recovery meals (`workoutTiming` = `am_pre_breakfast` | `midday` | `evening`):
+    morning → a `pre_workout` slot + breakfast recovery; midday → breakfast carb-loads,
+    lunch recovers; evening → lunch carb-loads, dinner recovers. The time comes from the
+    plan day's `plannedTimeOfDayMin`, a manual log's `timeOfDayMin`, or a device import's
+    `startedAt` (`resolveDayTrainingContext` → `timingFromLocalHour`); unset falls back to
+    the morning assumption.
 - **Block view** (`GET /block`, FR-3.3) — a daily series joining intake macros to
   training **UTSS** (unified training stress) over a date range, zero-filled so
   every day has a point. Rendered in **Analytics → Fuelling** (`FuellingTab` →

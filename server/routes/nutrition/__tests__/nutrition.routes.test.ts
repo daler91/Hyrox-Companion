@@ -329,6 +329,35 @@ describe("nutrition routes", () => {
       expect(res.body.mealTargets.pre_workout).toBeDefined();
       expect(storage.analytics.getPlannedDaysForDate).toHaveBeenCalledWith("test_user", "2026-06-07");
     });
+
+    it("places recovery on lunch for a planned midday session", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75 });
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      vi.mocked(storage.analytics.getPlannedDaysForDate).mockResolvedValue([
+        { focus: "Run", expectedDurationMin: 60, expectedRpe: 6, plannedTimeOfDayMin: 720 }, // 12:00 local
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets.lunch.role).toBe("post_workout_recovery");
+      expect(res.body.mealTargets.pre_workout).toBeUndefined();
+    });
+
+    it("derives an evening timing from a device startedAt (dinner recovery)", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75 });
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+        // 23:30Z is 18:30 in Chicago (UTC-5 in June) → evening.
+        { date: "2026-06-07", duration: 60, rpe: 6, startedAt: new Date("2026-06-07T23:30:00Z") },
+      ] as never);
+
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets.dinner.role).toBe("post_workout_recovery");
+      expect(res.body.mealTargets.pre_workout).toBeUndefined();
+    });
   });
 
   describe("search / recent / favorites", () => {

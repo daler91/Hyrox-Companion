@@ -505,6 +505,13 @@
       "when": 1781456392063,
       "tag": "0071_awesome_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1781657298504,
+      "tag": "0072_wooden_cobalt_man",
+      "breakpoints": true
     }
   ]
 }

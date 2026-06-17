@@ -69,7 +69,7 @@ import {
 } from "../../services/nutrition/sessionFuelling";
 import { getPlannedSessionEstimate } from "../../services/sessionEstimate/plannedSessionEstimate";
 import { storage } from "../../storage";
-import { getLocalDateStr } from "../../timezone";
+import { getLocalDateStr, getLocalHour } from "../../timezone";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 
@@ -136,24 +136,54 @@ function pickPrimary<T>(items: T[], score: (item: T) => number): T {
   return best;
 }
 
+/** Map a session's local hour to a meal-timing bucket. Unknown time defaults to
+ *  the morning assumption so users who set no time keep the prior behaviour. */
+function timingFromLocalHour(hour: number | null): WorkoutTiming {
+  if (hour == null || hour < 11) return "am_pre_breakfast";
+  if (hour < 15) return "midday";
+  return "evening";
+}
+
+/** Local hour (0–23) from minutes-from-midnight, or null when unset. */
+function minutesToLocalHour(min: number | null | undefined): number | null {
+  return min == null ? null : Math.floor(min / 60);
+}
+
 /**
  * The day's primary training session for the per-meal fuel targets: the most
  * significant LOGGED workout, else the most significant PLANNED day (so a
- * morning's targets show before the session is logged), else a rest day. v1
- * always reports "am_pre_breakfast" for a workout day — the future workout
- * time-of-day field is the ONLY thing that would vary `timing` here (the pure
- * engine already branches on it).
+ * morning's targets show before the session is logged), else a rest day. The
+ * session's local time-of-day — device `startedAt`, manual `timeOfDayMin`, or the
+ * plan day's `plannedTimeOfDayMin` — selects the morning/midday/evening timing.
  */
-async function resolveDayTrainingContext(userId: string, logDate: string): Promise<DayTrainingContext> {
+async function resolveDayTrainingContext(
+  userId: string,
+  logDate: string,
+  tz: string,
+): Promise<DayTrainingContext> {
   const logged = await storage.analytics.getWorkoutLogsByDateRange(userId, logDate, logDate);
   if (logged.length > 0) {
     const primary = pickPrimary(logged, (w) => sessionSignificance(w.duration ?? null, w.rpe ?? null));
-    return { durationMin: primary.duration ?? null, rpe: primary.rpe ?? null, hasWorkout: true, timing: "am_pre_breakfast" };
+    const hour =
+      primary.startedAt != null
+        ? getLocalHour(primary.startedAt, tz)
+        : minutesToLocalHour(primary.timeOfDayMin);
+    return {
+      durationMin: primary.duration ?? null,
+      rpe: primary.rpe ?? null,
+      hasWorkout: true,
+      timing: timingFromLocalHour(hour),
+    };
   }
   const planned = await storage.analytics.getPlannedDaysForDate(userId, logDate);
   if (planned.length > 0) {
     const primary = pickPrimary(planned, (p) => sessionSignificance(p.expectedDurationMin, p.expectedRpe));
-    return { durationMin: primary.expectedDurationMin, rpe: primary.expectedRpe, hasWorkout: true, timing: "am_pre_breakfast" };
+    return {
+      durationMin: primary.expectedDurationMin,
+      rpe: primary.expectedRpe,
+      hasWorkout: true,
+      timing: timingFromLocalHour(minutesToLocalHour(primary.plannedTimeOfDayMin)),
+    };
   }
   return { durationMin: null, rpe: null, hasWorkout: false, timing: "none" };
 }
@@ -164,8 +194,8 @@ async function resolveDayTrainingContext(userId: string, logDate: string): Promi
  * when an effective target exists, so the (cheap, single-day) workout/plan
  * lookups stay gated. Returns null only when the target carries no macros at all.
  */
-async function resolveMealFuelTargets(userId: string, logDate: string, effectiveTarget: EffectiveTargetSummary, bodyweightKg: number | null): Promise<MealFuelTargets | null> {
-  const training = await resolveDayTrainingContext(userId, logDate);
+async function resolveMealFuelTargets(userId: string, logDate: string, effectiveTarget: EffectiveTargetSummary, bodyweightKg: number | null, tz: string): Promise<MealFuelTargets | null> {
+  const training = await resolveDayTrainingContext(userId, logDate, tz);
   const session = training.hasWorkout
     ? computeSessionFuellingTarget({ durationMin: training.durationMin, rpe: training.rpe, bodyweightKg })
     : null;
@@ -202,7 +232,7 @@ async function handleDailySummary(req: Request, res: Response): Promise<void> {
   // Per-meal fuel targets ride on the day's effective target; gated on one
   // existing so flat-target / no-target users pay nothing extra.
   const mealTargets = effectiveTarget
-    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null)
+    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null, user?.userTimezone ?? "UTC")
     : null;
   const summary: DailySummaryResponse = { ...base, effectiveTarget, mealTargets, energy };
   res.json(summary);
