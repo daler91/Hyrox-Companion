@@ -1,13 +1,8 @@
 import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS, OFF_GRAMS_TO_UNIT } from "./micros";
-import { isRelevantMatch } from "./relevance";
 import type { MappedFood } from "./types";
 import { num } from "./utils";
-
-// Back-compat alias: OFF search gates on the shared relevance check, same as the
-// other providers now do. Re-exported under the original name for existing imports.
-export { isRelevantMatch as isRelevantOffMatch };
 
 /**
  * Open Food Facts client (FR-1.1 + FR-2.1). Two operations, both mapping OFF's
@@ -166,9 +161,10 @@ interface OffSearchResponse {
 
 /**
  * Free-text search Open Food Facts (FR-1.1), supplementing USDA/Edamam in the
- * search orchestrator. Returns per-100g mapped foods whose name/brand matches the
- * query (see `isRelevantMatch`) — the relevance gate is what makes these
- * crowd-sourced hits trustworthy enough to surface alongside the curated sources.
+ * search orchestrator. Returns every per-100g-mappable product UNGATED — the
+ * orchestrator applies the shared relevance gate to all providers uniformly, and
+ * its fallback relies on receiving the ungated hits, so filtering here would both
+ * double-gate OFF and blank an OFF-only deployment whenever the gate is over-strict.
  *
  * Never throws: any failure (network, or OFF's tight search rate limit → 429 after
  * a retry) degrades to `{ foods: [], reached: false }`, so search falls back to the
@@ -216,7 +212,7 @@ export async function searchOffFoods(
       const code = product.code?.trim();
       if (!code) continue;
       const mapped = mapOffProduct(code, product);
-      if (mapped && isRelevantMatch(query, mapped)) foods.push(mapped);
+      if (mapped) foods.push(mapped);
     }
     return { foods, reached: true };
   } catch {

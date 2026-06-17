@@ -21,6 +21,8 @@ describe("stem", () => {
     expect(stem("berries")).toBe("berry");
     expect(stem("peaches")).toBe("peach");
     expect(stem("boxes")).toBe("box");
+    expect(stem("tomatoes")).toBe("tomato"); // -oes, else it would overshoot to "tomatoe"
+    expect(stem("mangoes")).toBe("mango");
   });
 
   it("leaves non-plurals and short tokens unchanged", () => {
@@ -58,6 +60,8 @@ describe("relevanceScore", () => {
     expect(relevanceScore("berries", food("Berry Mix"))).toBeGreaterThanOrEqual(2);
     expect(relevanceScore("oats", food("Rolled Oat"))).toBeGreaterThanOrEqual(2);
     expect(relevanceScore("tomato", food("Tomatoes, red, ripe"))).toBeGreaterThanOrEqual(2);
+    // Plural query → singular food name (the -oes case): "tomatoes" must match "Tomato".
+    expect(relevanceScore("tomatoes", food("Tomato, raw"))).toBeGreaterThanOrEqual(2);
   });
 });
 

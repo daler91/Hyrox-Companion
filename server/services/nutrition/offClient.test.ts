@@ -4,8 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../utils/httpRetry");
 
 import { errResponse, ok } from "./httpClientTestSupport";
-import { isRelevantOffMatch, mapOffProduct, resolveBarcode, searchOffFoods } from "./offClient";
-import type { MappedFood } from "./types";
+import { mapOffProduct, resolveBarcode, searchOffFoods } from "./offClient";
 
 const PRODUCT = {
   product_name: "Nutella",
@@ -118,46 +117,6 @@ describe("resolveBarcode", () => {
   });
 });
 
-describe("isRelevantOffMatch", () => {
-  const food = (name: string, brand: string | null = null): MappedFood => ({
-    source: "off",
-    sourceId: "x",
-    name,
-    brand,
-    servingSizeG: null,
-    caloriesPer100g: null,
-    proteinPer100g: null,
-    carbPer100g: null,
-    fatPer100g: null,
-    fiberPer100g: null,
-    micros: null,
-  });
-
-  it("matches when every query token prefixes a word in the name", () => {
-    expect(isRelevantOffMatch("greek yogurt", food("Greek Yogurt 0% Fat"))).toBe(true);
-  });
-
-  it("matches a word prefix (choc → Chocolate)", () => {
-    expect(isRelevantOffMatch("choc", food("Chocolate Bar"))).toBe(true);
-  });
-
-  it("matches against the brand, not just the name", () => {
-    expect(isRelevantOffMatch("dole", food("Banana", "Dole"))).toBe(true);
-  });
-
-  it("rejects when any query token is absent from name and brand", () => {
-    expect(isRelevantOffMatch("banana split", food("Banana"))).toBe(false);
-  });
-
-  it("requires a word boundary (mid-word substring does not match)", () => {
-    expect(isRelevantOffMatch("ogurt", food("Yogurt"))).toBe(false);
-  });
-
-  it("is false for an empty / punctuation-only query", () => {
-    expect(isRelevantOffMatch("   ", food("Banana"))).toBe(false);
-  });
-});
-
 describe("searchOffFoods", () => {
   const fetchMock = vi.fn();
 
@@ -185,11 +144,11 @@ describe("searchOffFoods", () => {
     nutriments: { "energy-kcal_100g": 500 },
   };
 
-  it("returns only OFF hits whose name/brand matches the query", async () => {
+  it("maps every product ungated (the orchestrator applies the relevance gate)", async () => {
     fetchMock.mockResolvedValue(ok({ products: [banana, cookie] }));
     const { foods, reached } = await searchOffFoods("banana");
     expect(reached).toBe(true);
-    expect(foods.map((f) => f.sourceId)).toEqual(["111"]);
+    expect(foods.map((f) => f.sourceId)).toEqual(["111", "222"]);
     expect(foods[0]).toMatchObject({
       source: "off",
       name: "Banana",

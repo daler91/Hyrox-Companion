@@ -28,15 +28,16 @@ export function tokenize(text: string): string[] {
 }
 
 /**
- * Conservative English plural normalizer: "berries"→"berry", "peaches"→"peach",
- * "oats"→"oat", while "glass" stays "glass". Deliberately NOT a full Porter/Snowball
- * stemmer — aggressive stemming invents matches. It's only ever applied as a UNION
- * with raw-prefix matching (below), so it can add matches a strict prefix would miss
- * but never remove one a strict prefix would have allowed.
+ * Conservative English plural normalizer: "berries"→"berry", "tomatoes"→"tomato",
+ * "peaches"→"peach", "oats"→"oat", while "glass" stays "glass". Deliberately NOT a
+ * full Porter/Snowball stemmer — aggressive stemming invents matches. The `-oes`
+ * rule matters because without it "tomatoes" stems to "tomatoe" (longer than the
+ * singular), so a plural query would miss a singular "Tomato" food name.
  */
 export function stem(token: string): string {
   if (token.length <= 3) return token;
   if (token.endsWith("ies")) return `${token.slice(0, -3)}y`;
+  if (token.endsWith("oes")) return token.slice(0, -2); // tomatoes→tomato, mangoes→mango
   if (/(s|sh|ch|x|z)es$/.test(token)) return token.slice(0, -2);
   if (token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
   return token;
