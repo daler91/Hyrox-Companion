@@ -44,6 +44,9 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
       .max(10, "RPE must be at most 10")
       .optional()
       .nullable(),
+    // Manual local start time as minutes-from-midnight (0–1439); device imports
+    // set startedAt instead. Drives meal placement in the per-meal fuel targets.
+    timeOfDayMin: z.number().int().min(0).max(1439).nullable().optional(),
     // Manual distance/HR entry. distanceMeters is canonical meters (matching
     // Strava/Garmin sync); HR bounds reject obvious typos while covering all
     // physiological values.
@@ -110,6 +113,9 @@ export type TimelineEntry = {
   // plan day. Drives the pre-session fuelling target before the workout is logged.
   expectedDurationMin?: number | null;
   expectedRpe?: number | null;
+  // Planned local start time (minutes-from-midnight); selects the morning/midday/
+  // evening meal timing in the per-meal fuel targets.
+  plannedTimeOfDayMin?: number | null;
   planDayId?: string | null;
   workoutLogId?: string | null;
   weekNumber?: number;

@@ -15,6 +15,20 @@ import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
 interface ExpectedSessionUpdate {
   expectedDurationMin?: number | null;
   expectedRpe?: number | null;
+  plannedTimeOfDayMin?: number | null;
+}
+
+/** Minutes-from-midnight ↔ the "HH:MM" value an <input type="time"> uses. */
+function minutesToHhmm(min: number | null | undefined): string {
+  if (min == null) return "";
+  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+
+function hhmmToMinutes(value: string): number | null {
+  if (!value) return null;
+  const [h, m] = value.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
 }
 
 function planHint(opts: {
@@ -72,6 +86,8 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   const [rpeDraft, setRpeDraft] = useState<number | null>(
     entry.expectedRpe ?? estimate.rpe ?? null,
   );
+  // Local start time (HH:MM); selects the morning/midday/evening meal timing.
+  const [timeOfDay, setTimeOfDay] = useState<string>(minutesToHhmm(entry.plannedTimeOfDayMin));
 
   // Once the athlete adjusts a field this session, stop auto-applying the async
   // server estimate to it so we never clobber their edit.
@@ -145,6 +161,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
   const adjustSummary = [
     durationDraft == null ? null : `${durationDraft} min`,
     rpeDraft == null ? null : `RPE ${rpeDraft}`,
+    timeOfDay ? `at ${timeOfDay}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -226,6 +243,21 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
               }}
               showLabel={false}
               compact
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-muted-foreground">Session time</span>
+            <input
+              type="time"
+              value={timeOfDay}
+              onChange={(e) => {
+                const next = e.target.value;
+                setTimeOfDay(next);
+                persist({ plannedTimeOfDayMin: hhmmToMinutes(next) });
+              }}
+              aria-label="Planned session start time"
+              data-testid="fuelling-plan-time"
+              className="w-32 rounded-md border bg-background px-2 py-1 text-sm"
             />
           </div>
         </div>

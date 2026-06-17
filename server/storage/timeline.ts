@@ -101,6 +101,7 @@ function createPlannedDayEntry(
     planDayId: day.id,
     expectedDurationMin: day.expectedDurationMin,
     expectedRpe: day.expectedRpe,
+    plannedTimeOfDayMin: day.plannedTimeOfDayMin,
     weekNumber: day.weekNumber,
     dayName: day.dayName,
     planName: row.planName,

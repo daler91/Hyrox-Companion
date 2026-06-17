@@ -134,4 +134,40 @@ describe("computeMealFuelTargets", () => {
     expect(kcal).toBeCloseTo(2000, 0);
     for (const t of Object.values(targets)) expect(t?.reasonCodes).toContain("calorie_only_target");
   });
+
+  it("places recovery on lunch for a midday session and carb-loads breakfast", () => {
+    const targets = computeMealFuelTargets({
+      daily: DAILY,
+      session: AM_SESSION,
+      bodyweightKg: 75,
+      workoutTiming: "midday",
+      hasWorkout: true,
+    }) as MealFuelTargets;
+
+    expect(targets.pre_workout).toBeUndefined(); // no fasted pre slot at midday
+    expect(targets.lunch?.role).toBe("post_workout_recovery");
+    expect(targets.lunch?.carbG).toBe(53); // post-carb floor lands on lunch
+    expect(targets.breakfast?.reasonCodes).toContain("pre_session_carbs");
+    expect(sum(targets, "carbG")).toBeCloseTo(DAILY.carbG, 1);
+    expect(sum(targets, "proteinG")).toBeCloseTo(DAILY.proteinG, 1);
+    expect(sum(targets, "fatG")).toBeCloseTo(DAILY.fatG, 1);
+  });
+
+  it("places recovery on dinner for an evening session and carb-loads lunch", () => {
+    const targets = computeMealFuelTargets({
+      daily: DAILY,
+      session: AM_SESSION,
+      bodyweightKg: 75,
+      workoutTiming: "evening",
+      hasWorkout: true,
+    }) as MealFuelTargets;
+
+    expect(targets.dinner?.role).toBe("post_workout_recovery");
+    expect(targets.dinner?.carbG).toBe(53);
+    expect(targets.lunch?.reasonCodes).toContain("pre_session_carbs");
+    expect(targets.breakfast?.role).toBe("standard");
+    expect(sum(targets, "carbG")).toBeCloseTo(DAILY.carbG, 1);
+    expect(sum(targets, "proteinG")).toBeCloseTo(DAILY.proteinG, 1);
+    expect(sum(targets, "fatG")).toBeCloseTo(DAILY.fatG, 1);
+  });
 });
