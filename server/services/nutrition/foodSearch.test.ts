@@ -5,6 +5,7 @@ vi.mock("../../storage", () => ({
 }));
 vi.mock("./usdaClient", () => ({ searchUsdaFoods: vi.fn() }));
 vi.mock("./edamamClient", () => ({ searchEdamamFoods: vi.fn() }));
+vi.mock("./offClient", () => ({ searchOffFoods: vi.fn() }));
 vi.mock("./refresh", () => ({ refreshStaleFoodsInBackground: vi.fn() }));
 vi.mock("../../env", () => ({ env: { USDA_API_KEY: "test-key" } }));
 vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
@@ -15,6 +16,7 @@ import { storage } from "../../storage";
 import { searchEdamamFoods } from "./edamamClient";
 import { searchFoods } from "./foodSearch";
 import { makeFood as food } from "./foodTestFixture";
+import { searchOffFoods } from "./offClient";
 import { searchUsdaFoods } from "./usdaClient";
 
 const mappedUsda = {
@@ -31,19 +33,23 @@ const mappedUsda = {
   micros: null,
 };
 const mappedEdamam = { ...mappedUsda, source: "edamam" as const, sourceId: "ed1" };
+const mappedOff = { ...mappedUsda, source: "off" as const, sourceId: "off1" };
 
 describe("searchFoods", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
-    // Default: Edamam unconfigured/unreached, USDA + local empty.
+    // Default: Edamam unconfigured/unreached, USDA + OFF + local empty.
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: false });
     vi.mocked(searchUsdaFoods).mockResolvedValue([]);
+    vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: false });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([]);
   });
 
   it("ranks Edamam ahead of USDA ahead of local, not degraded", async () => {
-    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1", source: "custom", sourceId: null })]);
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([
+      food({ id: "local1", source: "custom", sourceId: null }),
+    ]);
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [mappedEdamam], reached: true });
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
     vi.mocked(storage.nutrition.upsertFoods)
@@ -106,9 +112,13 @@ describe("searchFoods", () => {
   });
 
   it("dedupes a food present in both the live result and local cache", async () => {
-    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "localdup", source: "usda", sourceId: "1" })]);
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([
+      food({ id: "localdup", source: "usda", sourceId: "1" }),
+    ]);
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
-    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([food({ id: "usda1", source: "usda", sourceId: "1" })]);
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "usda1", source: "usda", sourceId: "1" }),
+    ]);
 
     const result = await searchFoods("banana", "u1");
     expect(result.results).toHaveLength(1);
@@ -132,10 +142,50 @@ describe("searchFoods", () => {
     vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [mappedEdamam], reached: true });
     vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
     vi.mocked(storage.nutrition.upsertFoods)
-      .mockResolvedValueOnce([food({ id: "ed1", source: "edamam", sourceId: "ed1", brand: "Clif", name: "Clif Bar" })])
-      .mockResolvedValueOnce([food({ id: "usda1", source: "usda", sourceId: "1", brand: "Clif", name: "Clif Bar" })]);
+      .mockResolvedValueOnce([
+        food({ id: "ed1", source: "edamam", sourceId: "ed1", brand: "Clif", name: "Clif Bar" }),
+      ])
+      .mockResolvedValueOnce([
+        food({ id: "usda1", source: "usda", sourceId: "1", brand: "Clif", name: "Clif Bar" }),
+      ]);
 
     const result = await searchFoods("clif", "u1");
     expect(result.results.map((f) => f.id)).toEqual(["ed1"]); // USDA near-dup suppressed
+  });
+
+  it("ranks OFF results after USDA and before local, caching its hits", async () => {
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([
+      food({ id: "local1", source: "custom", sourceId: null }),
+    ]);
+    vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
+    vi.mocked(searchOffFoods).mockResolvedValue({ foods: [mappedOff], reached: true });
+    vi.mocked(storage.nutrition.upsertFoods)
+      .mockResolvedValueOnce([food({ id: "usda1", source: "usda", sourceId: "1" })]) // USDA cached first
+      .mockResolvedValueOnce([food({ id: "off1", source: "off", sourceId: "off1" })]); // then OFF
+
+    const result = await searchFoods("banana", "u1");
+
+    expect(result.apiDegraded).toBe(false);
+    expect(result.results.map((f) => f.id)).toEqual(["usda1", "off1", "local1"]);
+  });
+
+  it("keeps search live (not degraded) when only OFF reaches its API", async () => {
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined; // USDA + Edamam unconfigured
+    vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: true });
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
+
+    const result = await searchFoods("banana", "u1");
+    expect(result.apiDegraded).toBe(false);
+  });
+
+  it("flags degraded only when OFF also fails to reach its API", async () => {
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = undefined;
+    vi.mocked(searchOffFoods).mockRejectedValue(new Error("off down"));
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([food({ id: "local1" })]);
+
+    const result = await searchFoods("banana", "u1");
+    expect(result.apiDegraded).toBe(true);
+    expect(result.results.map((f) => f.id)).toEqual(["local1"]);
+    expect(logger.warn).toHaveBeenCalled();
   });
 });

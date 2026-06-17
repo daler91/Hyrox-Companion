@@ -5,17 +5,28 @@ import type { MappedFood } from "./types";
 import { num } from "./utils";
 
 /**
- * Open Food Facts client (FR-2.1). Resolves a barcode to a food whose macros are
- * normalized to a PER-100-GRAM basis, ready to cache in `foods` (source='off').
- * Like the USDA client, this is the one place OFF's response shape is interpreted.
+ * Open Food Facts client (FR-1.1 + FR-2.1). Two operations, both mapping OFF's
+ * response into a food whose macros are normalized to a PER-100-GRAM basis, ready
+ * to cache in `foods` (source='off'): `resolveBarcode` (a single product by code)
+ * and `searchOffFoods` (free-text search, supplementing USDA/Edamam). Like the
+ * USDA client, this is the one place OFF's response shape is interpreted.
  *
- * OFF requires a descriptive User-Agent for reads and rate-limits ~15 req/min/IP,
- * so callers must hit the local cache first and cache every resolve.
+ * OFF requires a descriptive User-Agent for reads and rate-limits ~15 req/min/IP
+ * (and its search endpoint far more tightly), so callers must hit the local cache
+ * first and cache every resolve.
  */
 
 const OFF_PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";
+const OFF_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 const OFF_FIELDS =
   "code,product_name,brands,nutriments,serving_quantity,serving_size,completeness,status,status_verbose";
+// Search returns the same product shape, keyed by `code` (the barcode) which
+// becomes the cached food's sourceId; status fields are product-lookup only.
+const OFF_SEARCH_FIELDS =
+  "code,product_name,brands,nutriments,serving_quantity,serving_size,completeness";
+// OFF's text-search endpoint is rate-limited far more tightly than product
+// lookups (~10 req/min/IP), so keep the page small and cache every hit.
+const OFF_SEARCH_PAGE_SIZE = 20;
 const OFF_TIMEOUT_MS = 8_000;
 // Floor for OFF's crowd-sourced data-quality score (0–1). Below this AND with no
 // energy value, a product is too sparse to trust (see isAcceptableOffProduct).
@@ -142,4 +153,101 @@ export async function resolveBarcode(
 
   if (!raw || raw.status === 0 || !raw.product) return null;
   return mapOffProduct(code, raw.product);
+}
+
+interface OffSearchResponse {
+  products?: (OffProduct & { code?: string })[];
+}
+
+/** Lowercase alphanumeric word tokens, e.g. "Greek Yoghurt 0%!" → ["greek","yoghurt","0"]. */
+function offTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Relevance gate for OFF text search — the explicit requirement: only surface an
+ * OFF hit when it actually matches the typed text. OFF's crowd-sourced full-text
+ * search also matches on ingredients/categories, so a bare query returns plenty of
+ * loosely-related products; we require EVERY query token to begin a word in the
+ * product's name or brand (a prefix match, mirroring the local cache's prefix
+ * `ILIKE`). So "yogurt" matches "Greek Yogurt" and "choc" matches "Chocolate Bar",
+ * but "chip" does not match "Chocolate". Conservative by design — better to drop a
+ * borderline OFF result (USDA/Edamam/cache still answer) than pad search with
+ * off-topic products.
+ */
+export function isRelevantOffMatch(query: string, food: MappedFood): boolean {
+  const queryTokens = offTokens(query);
+  if (queryTokens.length === 0) return false;
+  // Pad with spaces so a leading-space probe matches a word boundary (start of
+  // any token), giving prefix-anchored matching without a per-token loop.
+  const haystack = ` ${offTokens(`${food.name} ${food.brand ?? ""}`).join(" ")} `;
+  return queryTokens.every((token) => haystack.includes(` ${token}`));
+}
+
+/**
+ * Free-text search Open Food Facts (FR-1.1), supplementing USDA/Edamam in the
+ * search orchestrator. Returns per-100g mapped foods whose name/brand matches the
+ * query (see `isRelevantOffMatch`) — the relevance gate is what makes these
+ * crowd-sourced hits trustworthy enough to surface alongside the curated sources.
+ *
+ * Never throws: any failure (network, or OFF's tight search rate limit → 429 after
+ * a retry) degrades to `{ foods: [], reached: false }`, so search falls back to the
+ * other providers + cache. `reached` is true whenever the API answered (even with
+ * zero matches), so the orchestrator can treat OFF as a live source for the
+ * degraded flag. The URL carries no secrets (OFF search needs no key).
+ */
+export async function searchOffFoods(
+  query: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<{ foods: MappedFood[]; reached: boolean }> {
+  const params = new URLSearchParams({
+    search_terms: query,
+    search_simple: "1",
+    action: "process",
+    json: "1",
+    page_size: String(OFF_SEARCH_PAGE_SIZE),
+    fields: OFF_SEARCH_FIELDS,
+  });
+  const url = `${OFF_SEARCH_URL}?${params.toString()}`;
+
+  try {
+    const raw = await retryWithJitter(
+      async (): Promise<OffSearchResponse> => {
+        const timeout = AbortSignal.timeout(OFF_TIMEOUT_MS);
+        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+        const res = await fetch(url, {
+          headers: { "User-Agent": OFF_USER_AGENT, Accept: "application/json" },
+          signal,
+        });
+        if (res.status === 429 || res.status >= 500) {
+          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
+        }
+        if (!res.ok) throw new Error(`OFF search failed with HTTP ${res.status}`);
+        return (await res.json()) as OffSearchResponse;
+      },
+      // Only one retry — the search endpoint's tight rate limit means hammering a
+      // transient failure just burns the budget; a miss degrades cleanly.
+      { retries: 1, label: "off-search" },
+    );
+
+    const products = Array.isArray(raw.products) ? raw.products : [];
+    const foods: MappedFood[] = [];
+    for (const product of products) {
+      const code = product.code?.trim();
+      if (!code) continue;
+      const mapped = mapOffProduct(code, product);
+      if (mapped && isRelevantOffMatch(query, mapped)) foods.push(mapped);
+    }
+    return { foods, reached: true };
+  } catch {
+    // Any failure (network, or OFF's tight search rate limit → 429 after a retry)
+    // degrades to no results; the orchestrator's "result mix" log records OFF as
+    // not reached (offLive:false), so the miss is still observable.
+    return { foods: [], reached: false };
+  }
 }
