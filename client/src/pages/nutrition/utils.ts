@@ -137,6 +137,7 @@ export const MEAL_LABELS: Record<string, string> = {
   lunch: "Lunch",
   dinner: "Dinner",
   snack: "Snack",
+  snack_pm: "Afternoon snack",
   pre_workout: "Pre-workout",
   post_workout: "Post-workout",
 };

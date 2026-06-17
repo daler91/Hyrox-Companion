@@ -123,4 +123,37 @@ describe("MealSection", () => {
     );
     expect(screen.getByTestId("ai-badge-e1")).toBeInTheDocument();
   });
+
+  it("opens the per-meal target editor when a target + handler are provided", async () => {
+    const onEditTarget = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[]}
+        target={TARGET}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onEditTarget={onEditTarget}
+      />,
+    );
+    await user.click(screen.getByTestId("button-edit-meal-target-breakfast"));
+    expect(onEditTarget).toHaveBeenCalledWith("breakfast");
+  });
+
+  it("labels an overridden target 'Custom'", () => {
+    render(
+      <MealSection
+        label="Dinner"
+        mealType="dinner"
+        entries={[]}
+        target={{ ...TARGET, reasonCodes: ["standard_split", "user_override"] }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onEditTarget={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Custom")).toBeInTheDocument();
+  });
 });

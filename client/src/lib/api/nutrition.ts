@@ -13,6 +13,8 @@ import type {
   FoodServing,
   FoodWithServingsResponse,
   FuellingRangeResponse,
+  MealTarget,
+  MealType,
   MicroSummaryResponse,
   NutritionInsightsResponse,
   NutritionTarget,
@@ -27,6 +29,7 @@ import type {
   SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
+  UpsertMealTargetInput,
   UpsertNutritionTargetInput,
 } from "@shared/schema";
 
@@ -154,6 +157,13 @@ export const nutrition = {
 
   setTarget: (data: UpsertNutritionTargetInput) =>
     typedRequest<NutritionTarget>("POST", `${base}/targets`, data),
+
+  // Per-meal target overrides (fine-tune one meal). Clearing reverts to computed.
+  setMealTargetOverride: (data: UpsertMealTargetInput) =>
+    typedRequest<MealTarget>("POST", `${base}/meal-targets`, data),
+
+  clearMealTargetOverride: (mealType: MealType) =>
+    typedRequest<{ success: boolean }>("DELETE", `${base}/meal-targets/${enc(mealType)}`),
 
   getMicros: (date?: string) =>
     typedRequest<MicroSummaryResponse>(

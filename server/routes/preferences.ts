@@ -41,6 +41,7 @@ function serializePreferences(user: {
   distanceUnit: string | null;
   userTimezone: string;
   weeklyGoal: number | null;
+  mealSchedule: number | null;
   emailNotifications: boolean | null;
   emailWeeklySummary: boolean | null;
   emailMissedReminder: boolean | null;
@@ -72,6 +73,7 @@ function serializePreferences(user: {
     distanceUnit: user.distanceUnit ?? "km",
     userTimezone: user.userTimezone,
     weeklyGoal: user.weeklyGoal ?? 5,
+    mealSchedule: user.mealSchedule ?? 4,
     emailNotifications: user.emailNotifications ?? false,
     emailWeeklySummary: user.emailWeeklySummary ?? false,
     emailMissedReminder: user.emailMissedReminder ?? false,

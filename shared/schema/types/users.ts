@@ -16,6 +16,9 @@ export const updateUserPreferencesSchema = z.object({
   distanceUnit: z.enum(["km", "miles"]).optional(),
   userTimezone: ianaTimezoneSchema.optional(),
   weeklyGoal: z.number().min(1).max(14).optional(),
+  // Meal-pattern preset: how many eating meals/day the per-meal fuel targets are
+  // split across. 3 = breakfast/lunch/dinner, 4 = +snack, 5 = +afternoon snack.
+  mealSchedule: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
   // Master toggle — when false, no email is ever sent regardless of
   // the per-type flags below. Kept for backward compatibility with
   // older clients that only know about this field.

@@ -1,4 +1,4 @@
-import { computeMealFuelTargets, type MealFuelTargets, type WorkoutTiming } from "@shared/mealFuelling";
+import { applyMealTargetOverrides, computeMealFuelTargets, DEFAULT_MEAL_SCHEDULE, type MealFuelOverride, type MealFuelTargets, type MealScheduleCount, type WorkoutTiming } from "@shared/mealFuelling";
 import {
   type AddFavoriteInput,
   addFavoriteSchema,
@@ -23,6 +23,7 @@ import {
   type FoodSearchQuery,
   foodSearchQuerySchema,
   type FuellingRangeResponse,
+  MEAL_TYPES,
   type MealType,
   type MicroSummaryResponse,
   type NutritionInsightsResponse,
@@ -43,6 +44,8 @@ import {
   type UpdateFoodLogInput,
   updateFoodLogSchema,
   updateRecipeSchema,
+  type UpsertMealTargetInput,
+  upsertMealTargetSchema,
   type UpsertNutritionTargetInput,
   upsertNutritionTargetSchema,
 } from "@shared/schema";
@@ -194,12 +197,20 @@ async function resolveDayTrainingContext(
  * when an effective target exists, so the (cheap, single-day) workout/plan
  * lookups stay gated. Returns null only when the target carries no macros at all.
  */
-async function resolveMealFuelTargets(userId: string, logDate: string, effectiveTarget: EffectiveTargetSummary, bodyweightKg: number | null, tz: string): Promise<MealFuelTargets | null> {
-  const training = await resolveDayTrainingContext(userId, logDate, tz);
+/** Coerce the stored meal_schedule (3/4/5, nullable) to a valid count. */
+function normalizeMealSchedule(value: number | null | undefined): MealScheduleCount {
+  return value === 3 || value === 5 ? value : DEFAULT_MEAL_SCHEDULE;
+}
+
+async function resolveMealFuelTargets(userId: string, logDate: string, effectiveTarget: EffectiveTargetSummary, bodyweightKg: number | null, tz: string, mealSchedule: MealScheduleCount): Promise<MealFuelTargets | null> {
+  const [training, overrides] = await Promise.all([
+    resolveDayTrainingContext(userId, logDate, tz),
+    storage.nutrition.getMealTargetOverrides(userId, logDate),
+  ]);
   const session = training.hasWorkout
     ? computeSessionFuellingTarget({ durationMin: training.durationMin, rpe: training.rpe, bodyweightKg })
     : null;
-  return computeMealFuelTargets({
+  const computed = computeMealFuelTargets({
     daily: {
       calories: effectiveTarget.calories,
       proteinG: effectiveTarget.proteinG,
@@ -210,7 +221,15 @@ async function resolveMealFuelTargets(userId: string, logDate: string, effective
     bodyweightKg,
     workoutTiming: training.timing,
     hasWorkout: training.hasWorkout,
+    mealSchedule,
   });
+  // Layer any per-meal overrides on top of the computed split (active meals only).
+  if (!computed || overrides.size === 0) return computed;
+  const overrideMap: Partial<Record<MealType, MealFuelOverride>> = {};
+  for (const [meal, row] of overrides) {
+    overrideMap[meal] = { calories: row.calories, carbG: row.carbG, proteinG: row.proteinG, fatG: row.fatG };
+  }
+  return applyMealTargetOverrides(computed, overrideMap);
 }
 
 /**
@@ -232,7 +251,7 @@ async function handleDailySummary(req: Request, res: Response): Promise<void> {
   // Per-meal fuel targets ride on the day's effective target; gated on one
   // existing so flat-target / no-target users pay nothing extra.
   const mealTargets = effectiveTarget
-    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null, user?.userTimezone ?? "UTC")
+    ? await resolveMealFuelTargets(userId, logDate, effectiveTarget, user?.bodyweightKg ?? null, user?.userTimezone ?? "UTC", normalizeMealSchedule(user?.mealSchedule))
     : null;
   const summary: DailySummaryResponse = { ...base, effectiveTarget, mealTargets, energy };
   res.json(summary);
@@ -764,6 +783,35 @@ export function registerNutritionRoutes(router: Router): void {
       const effectiveFrom = body.effectiveFrom ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
       const target = await storage.nutrition.createTarget(userId, { ...body, effectiveFrom });
       res.status(201).json(target);
+    },
+  );
+
+  // Phase 3 — per-meal target overrides (fine-tune one meal's macros/calories).
+  // POST upserts (defaults effectiveFrom to local today); DELETE clears a meal.
+  protectedPost(
+    router,
+    "/api/v1/nutrition/meal-targets",
+    { limiter: rateLimiter("nutritionWrite", 30), validation: [validateBody(upsertMealTargetSchema)] },
+    async (req: Request, res: Response) => {
+      const userId = getUserId(req);
+      const body = req.body as UpsertMealTargetInput;
+      const effectiveFrom = body.effectiveFrom ?? getLocalDateStr(new Date(), await getUserTimezone(userId));
+      const row = await storage.nutrition.upsertMealTarget(userId, { ...body, effectiveFrom });
+      res.status(201).json(row);
+    },
+  );
+
+  protectedDelete(
+    router,
+    "/api/v1/nutrition/meal-targets/:mealType",
+    { limiter: rateLimiter("nutritionWrite", 30) },
+    async (req: Request<{ mealType: string }>, res: Response) => {
+      const { mealType } = req.params;
+      if (!(MEAL_TYPES as readonly string[]).includes(mealType)) {
+        return sendNotFound(res, "Unknown meal");
+      }
+      await storage.nutrition.deleteMealTarget(getUserId(req), mealType as MealType);
+      res.json({ success: true });
     },
   );
 
