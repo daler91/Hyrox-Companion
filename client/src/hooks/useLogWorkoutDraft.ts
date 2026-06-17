@@ -6,10 +6,11 @@ import { exerciseSetsToStructured } from "@/lib/exerciseUtils";
 
 const DRAFT_STORAGE_KEY = "fitai-log-workout-draft";
 const DRAFT_ANNOUNCED_KEY = "fitai-log-workout-draft-announced";
-// v4 adds manual `distance`/`avgHeartrate`/`maxHeartrate`; v3 added `durationMinutes`.
-// Older drafts (v2/v3) hydrate the missing fields as blank. v1 drafts are silently
-// dropped on load (cleared on save) so the upgrade cost is negligible.
-const DRAFT_VERSION = 4;
+// v5 adds manual `timeOfDayMin` (session start time); v4 added
+// `distance`/`avgHeartrate`/`maxHeartrate`; v3 added `durationMinutes`.
+// Older drafts (v2/v3/v4) hydrate the missing fields as blank/null. v1 drafts are
+// silently dropped on load (cleared on save) so the upgrade cost is negligible.
+const DRAFT_VERSION = 5;
 
 export type WorkoutStep = 1 | 2 | 3;
 export const FIRST_STEP: WorkoutStep = 1;
@@ -27,6 +28,7 @@ export interface LogWorkoutDraft {
   freeText: string;
   notes: string;
   rpe: number | null;
+  timeOfDayMin: number | null;
   durationMinutes: string;
   distance: string;
   avgHeartrate: string;
@@ -57,6 +59,7 @@ function isBlank(draft: LoadedDraft): boolean {
     draft.freeText.trim() === "" &&
     draft.notes.trim() === "" &&
     draft.rpe === null &&
+    draft.timeOfDayMin == null &&
     (draft.durationMinutes ?? "").trim() === "" &&
     (draft.distance ?? "").trim() === "" &&
     (draft.avgHeartrate ?? "").trim() === "" &&
@@ -73,7 +76,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
     const raw = globalThis.window.localStorage.getItem(getStorageKey(userKey));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LogWorkoutDraft;
-    if (parsed.version !== DRAFT_VERSION && parsed.version !== 3 && parsed.version !== 2) return null;
+    if (parsed.version !== DRAFT_VERSION && parsed.version !== 4 && parsed.version !== 3 && parsed.version !== 2) return null;
     if (parsed.userKey !== userKey) return null;
     return {
       title: parsed.title ?? "",
@@ -81,6 +84,7 @@ export function loadLogWorkoutDraft(userKey: string): LoadedDraft | null {
       freeText: parsed.freeText ?? "",
       notes: parsed.notes ?? "",
       rpe: parsed.rpe ?? null,
+      timeOfDayMin: parsed.timeOfDayMin ?? null,
       durationMinutes: parsed.durationMinutes ?? "",
       distance: parsed.distance ?? "",
       avgHeartrate: parsed.avgHeartrate ?? "",
@@ -135,6 +139,7 @@ export function saveLogWorkoutDraftFromTimelineEntry(
     freeText: prescription,
     notes: "",
     rpe: null,
+    timeOfDayMin: null,
     durationMinutes: entry.duration == null ? "" : String(entry.duration),
     // Distance needs the user's unit to convert meters → display, which this
     // seeder has no context for (and no production caller yet), so leave it

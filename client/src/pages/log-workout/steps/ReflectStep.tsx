@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WorkoutNotesCard } from "@/components/workout/WorkoutNotesCard";
 import { WorkoutPlanDayPicker } from "@/components/workout-detail/shared/WorkoutPlanDayPicker";
+import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { StepFooter } from "../StepFooter";
 
 interface ReflectStepProps {
   readonly rpe: number | null;
   readonly setRpe: (value: number | null) => void;
+  readonly timeOfDayMin: number | null;
+  readonly setTimeOfDayMin: (value: number | null) => void;
   readonly durationMinutes: string;
   readonly setDurationMinutes: (value: string) => void;
   readonly distance: string;
@@ -47,6 +50,8 @@ interface ReflectStepProps {
 export function ReflectStep({
   rpe,
   setRpe,
+  timeOfDayMin,
+  setTimeOfDayMin,
   durationMinutes,
   setDurationMinutes,
   distance,
@@ -121,6 +126,19 @@ export function ReflectStep({
               onChange={(event) => setDurationMinutes(event.target.value)}
               data-testid="input-duration-minutes"
             />
+          </div>
+          <div className="space-y-2 pt-3">
+            <Label htmlFor="workout-time-of-day">Time of day</Label>
+            <Input
+              id="workout-time-of-day"
+              type="time"
+              value={minutesToHhmm(timeOfDayMin)}
+              onChange={(event) => setTimeOfDayMin(hhmmToMinutes(event.target.value))}
+              data-testid="input-time-of-day"
+            />
+            <p className="text-xs text-muted-foreground">
+              When you trained — places your recovery meal at the right time of day.
+            </p>
           </div>
           <div className="space-y-2 pt-3">
             <Label htmlFor="workout-distance">Distance ({distanceLabel})</Label>

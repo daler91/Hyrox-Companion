@@ -22,6 +22,10 @@ export function useWorkoutFormState(initialValues?: WorkoutFormInitialValues) {
   const [maxHeartrate, setMaxHeartrate] = useState(initialValues?.maxHeartrate ?? "");
   const [planId, setPlanId] = useState<string | null>(initialValues?.planId ?? null);
   const [planDayId, setPlanDayId] = useState<string | null>(initialValues?.planDayId ?? null);
+  // Manual session start time (minutes-from-midnight, 0–1439) for loggers
+  // without a synced wearable. Selects the day's morning/midday/evening meal
+  // timing in the nutrition fuel targets.
+  const [timeOfDayMin, setTimeOfDayMin] = useState<number | null>(initialValues?.timeOfDayMin ?? null);
 
   return {
     title,
@@ -46,5 +50,7 @@ export function useWorkoutFormState(initialValues?: WorkoutFormInitialValues) {
     setPlanId,
     planDayId,
     setPlanDayId,
+    timeOfDayMin,
+    setTimeOfDayMin,
   };
 }

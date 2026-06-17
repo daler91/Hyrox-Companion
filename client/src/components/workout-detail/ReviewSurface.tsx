@@ -14,6 +14,8 @@ import { useEffect, useState } from "react";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/WorkoutStravaStats";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -22,6 +24,7 @@ import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { featureFlags } from "@/lib/featureFlags";
 import { apiRequest } from "@/lib/queryClient";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
+import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
@@ -173,6 +176,15 @@ export function ReviewSurface({
     detail.updateRpe.mutate({ rpe: next, forWorkoutId: workoutLogId });
   };
 
+  // The manual session-time picker only makes sense when there's no device
+  // start time — a Strava/Garmin `startedAt` already wins in the fuel-timing
+  // resolver — so gate it on a loaded workout with a null startedAt.
+  const canSetTimeOfDay = !!workoutLogId && workout != null && workout.startedAt == null;
+  const handleTimeOfDayChange = (next: number | null) => {
+    if (!workoutLogId) return;
+    detail.updateTimeOfDay.mutate(next);
+  };
+
   const handleSaveNote = (next: string | null) => {
     if (!workoutLogId) return;
     detail.updateNote.mutate(next);
@@ -257,8 +269,10 @@ export function ReviewSurface({
           reviewFlag={reviewFlag}
           confirmingDelete={confirmingDelete}
           currentCoachSeedText={currentCoachSeedText}
+          timeOfDayMin={workout?.timeOfDayMin ?? null}
           onRpeChange={handleRpeChange}
           onSaveNote={handleSaveNote}
+          onTimeOfDayChange={canSetTimeOfDay ? handleTimeOfDayChange : undefined}
           onAskCoach={onAskCoach}
           onMarkPlanned={onMarkPlanned}
           onDelete={onDelete}
@@ -303,8 +317,10 @@ interface ReviewDetailsColumnProps {
   readonly reviewFlag: MigrationReviewFlag;
   readonly confirmingDelete: boolean;
   readonly currentCoachSeedText: string;
+  readonly timeOfDayMin: number | null;
   readonly onRpeChange: (next: number | null) => void;
   readonly onSaveNote: (next: string | null) => void;
+  readonly onTimeOfDayChange?: (next: number | null) => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
@@ -328,8 +344,10 @@ function ReviewDetailsColumn({
   reviewFlag,
   confirmingDelete,
   currentCoachSeedText,
+  timeOfDayMin,
   onRpeChange,
   onSaveNote,
+  onTimeOfDayChange,
   onAskCoach,
   onMarkPlanned,
   onDelete,
@@ -364,8 +382,10 @@ function ReviewDetailsColumn({
         isStrava={isStrava}
         rpe={rpe}
         notes={notes}
+        timeOfDayMin={timeOfDayMin}
         onRpeChange={onRpeChange}
         onSaveNote={onSaveNote}
+        onTimeOfDayChange={onTimeOfDayChange}
       />
       <CoachRationaleSection rationale={entry.aiRationale} testId={`review-rationale-${entry.id}`} />
       {featureFlags.nutritionEnabled && workoutLogId ? (
@@ -418,8 +438,10 @@ interface ReviewEffortNotesProps {
   readonly isStrava: boolean;
   readonly rpe: number | null;
   readonly notes: string | null;
+  readonly timeOfDayMin: number | null;
   readonly onRpeChange: (next: number | null) => void;
   readonly onSaveNote: (next: string | null) => void;
+  readonly onTimeOfDayChange?: (next: number | null) => void;
 }
 
 /**
@@ -432,20 +454,42 @@ function ReviewEffortNotes({
   isStrava,
   rpe,
   notes,
+  timeOfDayMin,
   onRpeChange,
   onSaveNote,
+  onTimeOfDayChange,
 }: ReviewEffortNotesProps) {
   if (isStrava) return null;
 
   return (
     <DetailSection title="Effort & notes" icon={Gauge}>
-      <WorkoutEffortNotes
-        rpe={rpe}
-        onRpeChange={onRpeChange}
-        note={notes}
-        onNoteChange={onSaveNote}
-        debounceNote
-      />
+      <div className="space-y-4">
+        <WorkoutEffortNotes
+          rpe={rpe}
+          onRpeChange={onRpeChange}
+          note={notes}
+          onNoteChange={onSaveNote}
+          debounceNote
+        />
+        {onTimeOfDayChange && (
+          <div className="space-y-1">
+            <Label htmlFor="review-time-of-day" className="text-sm font-medium">
+              Session time
+            </Label>
+            <Input
+              id="review-time-of-day"
+              type="time"
+              value={minutesToHhmm(timeOfDayMin)}
+              onChange={(event) => onTimeOfDayChange(hhmmToMinutes(event.target.value))}
+              data-testid="input-review-time-of-day"
+              className="w-36"
+            />
+            <p className="text-xs text-muted-foreground">
+              When you trained — sets the recovery-meal timing for this day.
+            </p>
+          </div>
+        )}
+      </div>
     </DetailSection>
   );
 }

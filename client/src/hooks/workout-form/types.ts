@@ -8,6 +8,7 @@ export interface WorkoutFormInitialValues {
   freeText?: string;
   notes?: string;
   rpe?: number | null;
+  timeOfDayMin?: number | null;
   durationMinutes?: string;
   distance?: string;
   avgHeartrate?: string;

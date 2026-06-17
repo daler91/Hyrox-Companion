@@ -38,6 +38,7 @@ export function useWorkoutForm({
       freeText: form.freeText,
       notes: form.notes,
       rpe: form.rpe,
+      timeOfDayMin: form.timeOfDayMin,
       durationMinutes: form.durationMinutes,
       distance: form.distance,
       avgHeartrate: form.avgHeartrate,

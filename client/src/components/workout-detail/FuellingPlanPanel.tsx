@@ -9,6 +9,7 @@ import { RpeSelector } from "@/components/RpeSelector";
 import { NumberStepper } from "@/components/ui/number-stepper";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
+import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
 
@@ -16,19 +17,6 @@ interface ExpectedSessionUpdate {
   expectedDurationMin?: number | null;
   expectedRpe?: number | null;
   plannedTimeOfDayMin?: number | null;
-}
-
-/** Minutes-from-midnight ↔ the "HH:MM" value an <input type="time"> uses. */
-function minutesToHhmm(min: number | null | undefined): string {
-  if (min == null) return "";
-  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
-}
-
-function hhmmToMinutes(value: string): number | null {
-  if (!value) return null;
-  const [h, m] = value.split(":").map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
 }
 
 function planHint(opts: {

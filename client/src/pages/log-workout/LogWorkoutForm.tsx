@@ -80,6 +80,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setPlanId,
     planDayId,
     setPlanDayId,
+    timeOfDayMin,
+    setTimeOfDayMin,
     voiceInput,
     notesVoiceInput,
     saveMutation,
@@ -104,6 +106,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
           maxHeartrate: initialDraft.maxHeartrate,
           planId: initialDraft.planId,
           planDayId: initialDraft.planDayId,
+          timeOfDayMin: initialDraft.timeOfDayMin,
         }
       : undefined,
     onSaveSuccess: () => clearLogWorkoutDraft(userKey),
@@ -145,6 +148,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     freeText,
     notes,
     rpe,
+    timeOfDayMin,
     durationMinutes,
     distance,
     avgHeartrate,
@@ -180,6 +184,8 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
       setDate={setDate}
       rpe={rpe}
       setRpe={setRpe}
+      timeOfDayMin={timeOfDayMin}
+      setTimeOfDayMin={setTimeOfDayMin}
       durationMinutes={durationMinutes}
       setDurationMinutes={setDurationMinutes}
       distance={distance}
