@@ -239,7 +239,7 @@ export async function generateJSON(userId: string, storage: IStorage) {
   };
 }
 
-const CSV_FORMULA_CHARACTERS = /^[+\-=@|]/;
+const CSV_FORMULA_CHARACTERS = /^[+\-=@|\t\r]/;
 const CSV_QUOTABLE_CHARACTERS = /[,\n"]/;
 
 function escapeCsv(val: string | null | undefined): string {
