@@ -102,17 +102,10 @@ const PROTEIN_G_PER_KG_PER_MEAL = 0.35;
 const PROTEIN_PER_MEAL_MIN_G = 20;
 const PROTEIN_PER_MEAL_MAX_G = 45;
 
-// Base split weights over the eating meals; the remainder of each macro (after
-// the session anchors) is distributed by these, renormalised over whichever
-// meals actually receive it (so 3/4/5-meal schedules all work).
-const BASE_CARB_WEIGHTS: Partial<Record<MealType, number>> = {
-  breakfast: 0.25,
-  lunch: 0.3,
-  dinner: 0.3,
-  snack: 0.15,
-  snack_pm: 0.15,
-};
-const BASE_FAT_WEIGHTS: Partial<Record<MealType, number>> = {
+// Even-ish base split weights across the eating meals — used alike for the carb,
+// fat, and calorie remainder (after the session anchors), renormalised over
+// whichever meals actually receive it (so 3/4/5-meal schedules all work).
+const MEAL_SPLIT_WEIGHTS: Partial<Record<MealType, number>> = {
   breakfast: 0.25,
   lunch: 0.3,
   dinner: 0.3,
@@ -121,15 +114,6 @@ const BASE_FAT_WEIGHTS: Partial<Record<MealType, number>> = {
 };
 // The recovery meal stays leaner — carbs/protein forward, fat held back.
 const RECOVERY_FAT_WEIGHT = 0.1;
-
-// Fallback split when a target carries calories but no macros to break down.
-const CALORIE_WEIGHTS: Partial<Record<MealType, number>> = {
-  breakfast: 0.25,
-  lunch: 0.3,
-  dinner: 0.3,
-  snack: 0.15,
-  snack_pm: 0.15,
-};
 
 /** The meal that absorbs reconciliation drift so Σ meals == daily: the trailing
  *  snack when present, else the last eating meal. */
@@ -181,7 +165,8 @@ function splitByWeights(
     for (const meal of Object.keys(weights) as MealType[]) out.set(meal, 0);
     return out;
   }
-  for (const [meal, w] of Object.entries(weights) as [MealType, number][]) {
+  for (const meal of Object.keys(weights) as MealType[]) {
+    const w = weights[meal] ?? 0;
     out.set(meal, round1((total * w) / sumW));
   }
   return out;
@@ -193,7 +178,10 @@ function pickWeights(
   meals: MealType[],
 ): Partial<Record<MealType, number>> {
   const out: Partial<Record<MealType, number>> = {};
-  for (const meal of meals) if (base[meal] != null) out[meal] = base[meal];
+  for (const meal of meals) {
+    const w = base[meal];
+    if (w != null) out[meal] = w;
+  }
   return out;
 }
 
@@ -242,7 +230,7 @@ function allocateCarbs(
   const anchored = slotCarb + preMealCarb + postFloor;
   const anchorExceeds = anchored > dailyCarbG + 0.05;
   const remaining = Math.max(0, round1(dailyCarbG - anchored));
-  const split = splitByWeights(remaining, pickWeights(BASE_CARB_WEIGHTS, distMeals));
+  const split = splitByWeights(remaining, pickWeights(MEAL_SPLIT_WEIGHTS, distMeals));
   for (const meal of distMeals) map.set(meal, split.get(meal) ?? 0);
   // Front-load the pre carbs onto the pre meal (midday/evening), on top of its share.
   if (plan?.preMeal) map.set(plan.preMeal, round1((map.get(plan.preMeal) ?? 0) + preMealCarb));
@@ -303,7 +291,7 @@ function allocateFat(
   const recovery = plan?.recoveryMeal ?? null;
   const weights: Partial<Record<MealType, number>> = {};
   for (const meal of eatingMeals) {
-    weights[meal] = meal === recovery ? RECOVERY_FAT_WEIGHT : (BASE_FAT_WEIGHTS[meal] ?? 0);
+    weights[meal] = meal === recovery ? RECOVERY_FAT_WEIGHT : (MEAL_SPLIT_WEIGHTS[meal] ?? 0);
   }
   const split = splitByWeights(dailyFatG, weights);
   for (const meal of eatingMeals) map.set(meal, split.get(meal) ?? 0);
@@ -448,7 +436,7 @@ function buildCalorieOnly(
   const preShare = hasPreSlot ? Math.min(dailyCalories, 120) : 0;
   const kcalMap = new Map<MealType, number>();
   if (hasPreSlot) kcalMap.set("pre_workout", preShare);
-  const split = splitByWeights(Math.max(0, dailyCalories - preShare), pickWeights(CALORIE_WEIGHTS, eatingMeals));
+  const split = splitByWeights(Math.max(0, dailyCalories - preShare), pickWeights(MEAL_SPLIT_WEIGHTS, eatingMeals));
   for (const meal of eatingMeals) kcalMap.set(meal, split.get(meal) ?? 0);
   reconcileToDaily(kcalMap, dailyCalories, flexMeal);
 
@@ -491,7 +479,9 @@ export function applyMealTargetOverrides(
   overrides: Partial<Record<MealType, MealFuelOverride>>,
 ): MealFuelTargets {
   const out: MealFuelTargets = {};
-  for (const [key, target] of Object.entries(targets) as [MealType, MealFuelTarget][]) {
+  for (const key of Object.keys(targets) as MealType[]) {
+    const target = targets[key];
+    if (!target) continue;
     const ov = overrides[key];
     if (!ov || (ov.calories == null && ov.carbG == null && ov.proteinG == null && ov.fatG == null)) {
       out[key] = target;

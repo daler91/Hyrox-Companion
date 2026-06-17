@@ -1,6 +1,5 @@
 import type { MealFuelTarget, MealType } from "@shared/schema";
 import { RotateCcw } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,30 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useClearMealTargetOverride, useSetMealTargetOverride } from "@/hooks/useNutrition";
 
+import { MacroTargetInputs, useMacroTargetForm } from "./macroTargetForm";
 import { MEAL_LABELS } from "./utils";
-
-const FIELDS = [
-  { key: "calories", label: "Calories (kcal)" },
-  { key: "proteinG", label: "Protein (g)" },
-  { key: "carbG", label: "Carbs (g)" },
-  { key: "fatG", label: "Fat (g)" },
-] as const;
-type FieldKey = (typeof FIELDS)[number]["key"];
-
-function parseNum(s: string): number | null {
-  const t = s.trim();
-  if (t === "") return null;
-  const n = Number(t);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-function numToStr(n: number | null | undefined): string {
-  return n == null ? "" : String(n);
-}
 
 export interface MealTargetDialogState {
   readonly mealType: MealType;
@@ -54,20 +33,7 @@ function MealTargetForm({
 }) {
   const setOverride = useSetMealTargetOverride(date);
   const clearOverride = useClearMealTargetOverride(date);
-  const [values, setValues] = useState<Record<FieldKey, string>>(() => ({
-    calories: numToStr(state.target.calories),
-    proteinG: numToStr(state.target.proteinG),
-    carbG: numToStr(state.target.carbG),
-    fatG: numToStr(state.target.fatG),
-  }));
-
-  const parsed = {
-    calories: parseNum(values.calories),
-    proteinG: parseNum(values.proteinG),
-    carbG: parseNum(values.carbG),
-    fatG: parseNum(values.fatG),
-  };
-  const valid = Object.values(parsed).some((v) => v != null);
+  const { values, setField, parsed, valid } = useMacroTargetForm(state.target);
   const pending = setOverride.isPending || clearOverride.isPending;
 
   const submit = () => {
@@ -85,24 +51,7 @@ function MealTargetForm({
         today.
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
-        {FIELDS.map((f) => (
-          <div key={f.key} className="space-y-1">
-            <Label htmlFor={`meal-target-${f.key}`} className="text-xs">
-              {f.label}
-            </Label>
-            <Input
-              id={`meal-target-${f.key}`}
-              type="number"
-              min={0}
-              inputMode="decimal"
-              value={values[f.key]}
-              onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-              data-testid={`input-meal-target-${f.key}`}
-            />
-          </div>
-        ))}
-      </div>
+      <MacroTargetInputs values={values} onChange={setField} idPrefix="meal-target" />
 
       <DialogFooter className="gap-2 sm:justify-between">
         {state.isOverridden ? (

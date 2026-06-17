@@ -142,6 +142,28 @@ export const MEAL_LABELS: Record<string, string> = {
   post_workout: "Post-workout",
 };
 
+/** Parse a non-negative number from a target form input; blank/invalid ⇒ null. */
+export function parseTargetInput(s: string): number | null {
+  const t = s.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Render a nullable target value for a form input (null ⇒ empty string). */
+export function targetInputValue(n: number | null | undefined): string {
+  return n == null ? "" : String(n);
+}
+
+/** The four macro/calorie fields shared by the daily + per-meal target editors. */
+export const MACRO_TARGET_FIELDS = [
+  { key: "calories", label: "Calories (kcal)" },
+  { key: "proteinG", label: "Protein (g)" },
+  { key: "carbG", label: "Carbs (g)" },
+  { key: "fatG", label: "Fat (g)" },
+] as const;
+export type MacroTargetFieldKey = (typeof MACRO_TARGET_FIELDS)[number]["key"];
+
 /** One macro's progress toward its target (FR-5.2). `pct` is uncapped (can exceed 100). */
 export interface TargetProgressRow {
   key: "calories" | "protein" | "carb" | "fat";

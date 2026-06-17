@@ -16,30 +16,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSetTarget } from "@/hooks/useNutrition";
 import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
 
-const FIELDS = [
-  { key: "calories", label: "Calories (kcal)" },
-  { key: "proteinG", label: "Protein (g)" },
-  { key: "carbG", label: "Carbs (g)" },
-  { key: "fatG", label: "Fat (g)" },
-] as const;
-type FieldKey = (typeof FIELDS)[number]["key"];
-
-function parseNum(s: string): number | null {
-  const t = s.trim();
-  if (t === "") return null;
-  const n = Number(t);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-function numToStr(n: number | null | undefined): string {
-  return n == null ? "" : String(n);
-}
+import { MacroTargetInputs, useMacroTargetForm } from "./macroTargetForm";
 
 /** Profile fields required before a target can be auto-calculated. */
 function canCalculateFromProfile(p: UserPreferences | undefined): p is UserPreferences {
@@ -61,22 +43,10 @@ function TargetsForm({
 }) {
   const setTarget = useSetTarget();
   const { data: profile } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
-  const [values, setValues] = useState<Record<FieldKey, string>>(() => ({
-    calories: numToStr(current?.calories),
-    proteinG: numToStr(current?.proteinG),
-    carbG: numToStr(current?.carbG),
-    fatG: numToStr(current?.fatG),
-  }));
+  const { values, setValues, setField, parsed, valid } = useMacroTargetForm(current);
   const [periodize, setPeriodize] = useState<boolean>(current?.periodizationEnabled ?? false);
   const [calcNote, setCalcNote] = useState<string | null>(null);
 
-  const parsed = {
-    calories: parseNum(values.calories),
-    proteinG: parseNum(values.proteinG),
-    carbG: parseNum(values.carbG),
-    fatG: parseNum(values.fatG),
-  };
-  const valid = Object.values(parsed).some((v) => v != null);
   const canCalculate = canCalculateFromProfile(profile);
 
   const calculate = () => {
@@ -160,24 +130,7 @@ function TargetsForm({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        {FIELDS.map((f) => (
-          <div key={f.key} className="space-y-1">
-            <Label htmlFor={`target-${f.key}`} className="text-xs">
-              {f.label}
-            </Label>
-            <Input
-              id={`target-${f.key}`}
-              type="number"
-              min={0}
-              inputMode="decimal"
-              value={values[f.key]}
-              onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-              data-testid={`input-target-${f.key}`}
-            />
-          </div>
-        ))}
-      </div>
+      <MacroTargetInputs values={values} onChange={setField} idPrefix="target" />
 
       <div className="flex items-center justify-between gap-4 rounded-md border p-3">
         <div className="space-y-0.5">
