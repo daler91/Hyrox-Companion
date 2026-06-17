@@ -1,5 +1,4 @@
 import { env } from "../../env";
-import { logger } from "../../logger";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS, OFF_GRAMS_TO_UNIT } from "./micros";
 import type { MappedFood } from "./types";
@@ -244,14 +243,11 @@ export async function searchOffFoods(
       const mapped = mapOffProduct(code, product);
       if (mapped && isRelevantOffMatch(query, mapped)) foods.push(mapped);
     }
-    // Counts only — never the raw `query` (user input must not reach the logs).
-    logger.info(
-      { productCount: products.length, relevant: foods.length },
-      "[nutrition] Open Food Facts search diagnostics",
-    );
     return { foods, reached: true };
-  } catch (err) {
-    logger.warn({ err }, "[nutrition] Open Food Facts search failed; degrading");
+  } catch {
+    // Any failure (network, or OFF's tight search rate limit → 429 after a retry)
+    // degrades to no results; the orchestrator's "result mix" log records OFF as
+    // not reached (offLive:false), so the miss is still observable.
     return { foods: [], reached: false };
   }
 }
