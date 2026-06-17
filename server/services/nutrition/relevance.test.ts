@@ -23,6 +23,8 @@ describe("stem", () => {
     expect(stem("boxes")).toBe("box");
     expect(stem("tomatoes")).toBe("tomato"); // -oes, else it would overshoot to "tomatoe"
     expect(stem("mangoes")).toBe("mango");
+    expect(stem("cheeses")).toBe("cheese"); // -ses keeps the "-se" singular, not "chees"
+    expect(stem("houses")).toBe("house");
   });
 
   it("leaves non-plurals and short tokens unchanged", () => {
@@ -62,6 +64,8 @@ describe("relevanceScore", () => {
     expect(relevanceScore("tomato", food("Tomatoes, red, ripe"))).toBeGreaterThanOrEqual(2);
     // Plural query → singular food name (the -oes case): "tomatoes" must match "Tomato".
     expect(relevanceScore("tomatoes", food("Tomato, raw"))).toBeGreaterThanOrEqual(2);
+    // -ses plural whose singular ends in "-se": "cheeses" must match "Cheese".
+    expect(relevanceScore("cheeses", food("Cheese, cheddar"))).toBeGreaterThanOrEqual(2);
   });
 
   it("does not let a shortened plural stem prefix-match an unrelated word", () => {

@@ -38,7 +38,11 @@ export function stem(token: string): string {
   if (token.length <= 3) return token;
   if (token.endsWith("ies")) return `${token.slice(0, -3)}y`;
   if (token.endsWith("oes")) return token.slice(0, -2); // tomatoes→tomato, mangoes→mango
-  if (/(s|sh|ch|x|z)es$/.test(token)) return token.slice(0, -2);
+  // "-ses": in food terms the singular almost always ends in "-se" (cheese→cheeses,
+  // house→houses), so strip only the trailing "s". Must precede the sibilant rule,
+  // which would otherwise strip "es" and corrupt "cheeses"→"chees".
+  if (token.endsWith("ses")) return token.slice(0, -1);
+  if (/(sh|ch|x|z)es$/.test(token)) return token.slice(0, -2); // dishes→dish, boxes→box
   if (token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
   return token;
 }
