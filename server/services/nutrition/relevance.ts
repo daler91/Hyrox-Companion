@@ -43,10 +43,13 @@ export function stem(token: string): string {
   return token;
 }
 
-/** A query token matches a word when either side's raw or stemmed form is a prefix
- *  of the other's — so "berries"↔"berry" match, but "chip" never matches "chocolate". */
+/** A query token matches a word if the query is a literal prefix of the word
+ *  ("choc"→"Chocolate") OR the two are the same word up to a plural (stem EQUALITY,
+ *  e.g. "berries"↔"Berry", "tomatoes"↔"Tomato"). Equality — not stem prefix — is
+ *  deliberate: a shortened plural stem like "pea" must NOT prefix-match an unrelated
+ *  word like "Peanut", which the gate would otherwise surface as a false match. */
 function wordMatches(queryToken: string, word: string): boolean {
-  return word.startsWith(queryToken) || stem(word).startsWith(stem(queryToken));
+  return word.startsWith(queryToken) || stem(word) === stem(queryToken);
 }
 
 /**

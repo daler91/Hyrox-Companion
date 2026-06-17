@@ -63,6 +63,13 @@ describe("relevanceScore", () => {
     // Plural query → singular food name (the -oes case): "tomatoes" must match "Tomato".
     expect(relevanceScore("tomatoes", food("Tomato, raw"))).toBeGreaterThanOrEqual(2);
   });
+
+  it("does not let a shortened plural stem prefix-match an unrelated word", () => {
+    // "peas" stems to "pea"; that must NOT match "Peanut" (stem equality, not prefix)...
+    expect(relevanceScore("peas", food("Peanut Butter"))).toBe(0);
+    // ...while a genuine plural/singular pair still matches.
+    expect(relevanceScore("peas", food("Pea Protein"))).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe("isRelevantMatch", () => {
