@@ -155,7 +155,9 @@ export function GeneratePlanScheduleStep({
         </div>
 
         {dateError ? (
-          <p className="text-xs text-destructive">{dateError}</p>
+          <p className="text-xs text-destructive" role="alert">
+            {dateError}
+          </p>
         ) : (
           <p className="text-xs text-muted-foreground">{planWeeks}-week plan</p>
         )}

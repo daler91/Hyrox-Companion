@@ -6,7 +6,10 @@ interface GarminErrorBannerProps {
 
 export function GarminErrorBanner({ error }: GarminErrorBannerProps) {
   return (
-    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+    <div
+      className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+      role="alert"
+    >
       <div className="flex items-start gap-2">
         <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
         <div>

@@ -142,7 +142,12 @@ export function BarcodeScanner({
         <div className="space-y-4">
           {detectorAvailable && !scanError && (
             <div className="overflow-hidden rounded-md border bg-black">
-              <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
+              <video
+                ref={videoRef}
+                className="aspect-video w-full object-cover"
+                muted
+                playsInline
+              />
             </div>
           )}
           {scanError && <p className="text-sm text-muted-foreground">{scanError}</p>}
@@ -176,7 +181,7 @@ export function BarcodeScanner({
           </form>
 
           {lookup.isError && (
-            <p className="text-sm text-destructive" data-testid="text-barcode-error">
+            <p className="text-sm text-destructive" role="alert" data-testid="text-barcode-error">
               Barcode not recognized.
             </p>
           )}

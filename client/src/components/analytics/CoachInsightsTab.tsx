@@ -31,12 +31,18 @@ function describeError(error: unknown): string {
     return "You're requesting insights too quickly. Please wait a moment and try again.";
   }
   if (
-    (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError"))
-    || (error instanceof Error && (error.message.toLowerCase().includes("timed out") || error.message.toLowerCase().includes("aborted")))
+    (error instanceof DOMException &&
+      (error.name === "AbortError" || error.name === "TimeoutError")) ||
+    (error instanceof Error &&
+      (error.message.toLowerCase().includes("timed out") ||
+        error.message.toLowerCase().includes("aborted")))
   ) {
     return "Generating insights is taking longer than expected. Please try again in a moment.";
   }
-  if (error instanceof Error && (error.message.includes("network") || error.message.includes("fetch"))) {
+  if (
+    error instanceof Error &&
+    (error.message.includes("network") || error.message.includes("fetch"))
+  ) {
     return "Network error — please check your connection and try again.";
   }
   return "Sorry, I couldn't generate your coach insights right now. Please try again.";
@@ -138,7 +144,8 @@ export function CoachInsightsTab() {
           </div>
         </div>
         <CardDescription>
-          AI-generated analysis of your training so far and how you&rsquo;re tracking against your goal.
+          AI-generated analysis of your training so far and how you&rsquo;re tracking against your
+          goal.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -156,6 +163,7 @@ export function CoachInsightsTab() {
             return (
               <div
                 className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+                role="alert"
                 data-testid="text-coach-insights-error"
               >
                 {errorMessage}
@@ -169,8 +177,8 @@ export function CoachInsightsTab() {
                 <Sparkles className="h-10 w-10 mx-auto text-muted-foreground/40" />
                 <div className="space-y-1 px-4">
                   <p className="text-sm text-muted-foreground">
-                    Generate a personalized analysis of your progress toward your goal, what&rsquo;s working,
-                    and what to focus on next.
+                    Generate a personalized analysis of your progress toward your goal, what&rsquo;s
+                    working, and what to focus on next.
                   </p>
                 </div>
               </div>
@@ -180,7 +188,10 @@ export function CoachInsightsTab() {
           return (
             <div className="space-y-4">
               {errorMessage && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                <div
+                  className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+                  role="alert"
+                >
                   {errorMessage}
                 </div>
               )}
@@ -192,7 +203,9 @@ export function CoachInsightsTab() {
                     script tags, event handlers, and javascript:/data: URLs so a
                     compromised provider or prompt-injection attempt can't run
                     arbitrary JS in the user's session (C2). */}
-                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{data?.insights ?? ""}</ReactMarkdown>
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>
+                  {data?.insights ?? ""}
+                </ReactMarkdown>
               </div>
             </div>
           );
