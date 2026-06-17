@@ -244,13 +244,14 @@ export async function searchOffFoods(
       const mapped = mapOffProduct(code, product);
       if (mapped && isRelevantOffMatch(query, mapped)) foods.push(mapped);
     }
+    // Counts only — never the raw `query` (user input must not reach the logs).
     logger.info(
-      { query, productCount: products.length, relevant: foods.length },
+      { productCount: products.length, relevant: foods.length },
       "[nutrition] Open Food Facts search diagnostics",
     );
     return { foods, reached: true };
   } catch (err) {
-    logger.warn({ err, query }, "[nutrition] Open Food Facts search failed; degrading");
+    logger.warn({ err }, "[nutrition] Open Food Facts search failed; degrading");
     return { foods: [], reached: false };
   }
 }
