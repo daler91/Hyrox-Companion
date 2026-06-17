@@ -4,16 +4,21 @@ import { env } from "../../env";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { searchEdamamFoods } from "./edamamClient";
+import { searchOffFoods } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
 import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
 
 /**
  * Food search orchestration (FR-1.1). Queries the local `foods` cache plus the
- * live providers — Edamam (curated branded, preferred) and USDA — concurrently,
- * caching any hits back into `foods`. Provider failures are swallowed so manual
- * logging keeps working from cache (NFR-5), surfaced via `apiDegraded`. Results
- * rank Edamam → USDA → local, deduped.
+ * live providers — Edamam (curated branded, preferred), USDA, and Open Food Facts
+ * — concurrently, caching any hits back into `foods`. OFF text search is noisy
+ * (crowd-sourced, matches on ingredients/categories), so the OFF client only
+ * returns hits whose name/brand actually matches the query (its relevance gate).
+ * Provider failures are swallowed so manual logging keeps working from cache
+ * (NFR-5), surfaced via `apiDegraded`. Results rank Edamam → USDA → OFF → local,
+ * deduped — OFF (no API key needed) keeps search live even when neither keyed
+ * provider is configured.
  */
 
 const LOCAL_LIMIT = 25;
@@ -96,13 +101,14 @@ async function resolveProvider(
 export async function searchFoods(query: string, userId: string): Promise<FoodSearchResponse> {
   const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
 
-  // Query the live providers concurrently; one failing must not sink the other.
-  const [edamamSettled, usdaSettled] = await Promise.allSettled([
+  // Query the live providers concurrently; one failing must not sink the others.
+  const [edamamSettled, usdaSettled, offSettled] = await Promise.allSettled([
     searchEdamamFoods(query),
     searchUsdaFoods(query),
+    searchOffFoods(query),
   ]);
 
-  // Resolve sequentially (Edamam then USDA) so the two cache writes never race.
+  // Resolve sequentially (Edamam → USDA → OFF) so the cache writes never race.
   const { foods: edamam, live: edamamLive } = await resolveProvider(
     toUniform(edamamSettled, (v) => ({ foods: v.foods, live: v.reached })),
     "edamam",
@@ -117,21 +123,31 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
     query,
     "[nutrition] USDA search failed; returning cached foods only",
   );
+  // OFF needs no API key, so a fulfilled result with `reached` means it answered;
+  // its own client already applied the relevance gate before returning hits.
+  const { foods: off, live: offLive } = await resolveProvider(
+    toUniform(offSettled, (v) => ({ foods: v.foods, live: v.reached })),
+    "off",
+    query,
+    "[nutrition] Open Food Facts search failed; continuing",
+  );
 
-  // Cache-only ⇒ degraded: no live provider reached its API (matches the prior
-  // USDA-only behavior when Edamam is unconfigured).
-  const apiDegraded = !edamamLive && !usdaLive;
+  // Cache-only ⇒ degraded: no live provider reached its API. OFF (keyless) counts,
+  // so a working OFF call keeps search live even with no USDA/Edamam credentials.
+  const apiDegraded = !edamamLive && !usdaLive && !offLive;
 
-  const results = mergeFoods([edamam, usda, local]);
+  const results = mergeFoods([edamam, usda, off, local]);
   // Diagnostic: where the merged results came from, so it's clear in the logs
-  // whether Edamam is actually contributing branded hits vs. all-USDA.
+  // which sources are actually contributing hits.
   logger.info(
     {
       query,
       edamamLive,
       usdaLive,
+      offLive,
       edamam: edamam.length,
       usda: usda.length,
+      off: off.length,
       local: local.length,
       results: results.length,
       apiDegraded,

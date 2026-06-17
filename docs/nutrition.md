@@ -118,10 +118,15 @@ last two exist so the Phase 3 training views can bucket fuelling around sessions
 The everyday loop: find a food, log it, see your day.
 
 - **Food search** (`GET /foods/search`, FR-1.1) — merges the local cache (fast,
-  case-insensitive prefix match) with live USDA results (relevance-ordered),
-  de-duplicates by identity, caches USDA hits on the way through, and caps at 30
-  results. Falls back to cached-only with an `apiDegraded` flag when USDA is
-  unreachable.
+  case-insensitive prefix match) with live results from Edamam, USDA, and Open
+  Food Facts (queried concurrently), de-duplicates by identity, caches external
+  hits on the way through, and caps at 30 results. Results rank Edamam → USDA →
+  OFF → local. OFF text search is crowd-sourced and noisy (it matches on
+  ingredients/categories too), so the OFF client applies a **relevance gate** —
+  only hits whose name or brand actually matches every query token are surfaced.
+  OFF needs no API key, so a working OFF call keeps search live even when neither
+  keyed provider is configured; the search falls back to cached-only with an
+  `apiDegraded` flag only when no provider reaches its API.
 - **Log a food** (`POST /logs`, FR-1.2) — pick a food + quantity in grams + meal;
   the server derives `logDate` from the instant and the user's timezone.
 - **Daily summary** (`GET /summary`, FR-1.3) — the day's entries grouped by meal
@@ -242,7 +247,7 @@ a forced client flag can't reach it).
 
 | Method | Path | Purpose | Rate bucket (max/window) |
 |--------|------|---------|--------------------------|
-| GET | `/foods/search` | Search local cache + USDA | `nutritionSearch` (30) |
+| GET | `/foods/search` | Search local cache + Edamam + USDA + Open Food Facts | `nutritionSearch` (30) |
 | GET | `/foods/recent` | Recently logged foods | `nutritionRead` (60) |
 | GET | `/foods/custom` | User's custom foods | `nutritionRead` (60) |
 | POST | `/foods/barcode` | Barcode → food (OFF) | `nutritionBarcode` (30) |
@@ -357,13 +362,18 @@ mirrors the existing `coachInsightsService` pattern.
 
 ## 8. External data sources (USDA & Open Food Facts)
 
+Three external sources feed search/barcode (Edamam, USDA, Open Food Facts); the
+two flagship ones are compared below. Edamam (curated branded/generic, per-100g)
+is the preferred search tier when configured (`EDAMAM_APP_ID`/`EDAMAM_APP_KEY`).
+
 | | USDA FoodData Central | Open Food Facts |
 |---|---|---|
-| Used for | Food **search** + named portions | **Barcode** lookup |
-| Endpoint | `/fdc/v1/foods/search`, `/food/{id}` | `/api/v2/product/{code}.json` |
+| Used for | Food **search** + named portions | Food **search** + **barcode** lookup |
+| Endpoint | `/fdc/v1/foods/search`, `/food/{id}` | `/cgi/search.pl` (search), `/api/v2/product/{code}.json` (barcode) |
 | Auth | `USDA_API_KEY` (free) — **missing key ⇒ degraded, cached-only** | none; custom `User-Agent` required by policy |
 | Caching | Upserted into `foods` keyed by `(usda, fdcId)`; portions cached in `food_servings` | Upserted into `foods` keyed by `(off, barcode)` |
-| Timeout / retries | 8 s/attempt; retry 429/5xx with jitter (2 search, 1 detail) | 8 s; 2 retries; cache-first to respect ~15 req/min/IP |
+| Timeout / retries | 8 s/attempt; retry 429/5xx with jitter (2 search, 1 detail) | 8 s; 2 retries (barcode), 1 retry (search — tighter ~10 req/min/IP limit); cache-first |
+| Result quality | Lab-verified; trusted as-is | Crowd-sourced; search hits pass a **relevance gate** (every query token must prefix a word in the name/brand) before being surfaced |
 | Unit handling | Per-100g already; energy nutrient IDs `1008/2047/2048`; micros read unit-filtered (mg/µg) | `*_100g` reported in **grams** → multiplied by `1000`/`1e6` to mg/mcg (the one guard against the classic 1000× error) |
 
 There is **no TTL** on the cache — once a food is fetched it persists indefinitely.
@@ -567,8 +577,8 @@ shared/schema/
 server/services/nutrition/
   types.ts                      MappedFood (source → per-100g shape)
   usdaClient.ts                 USDA FoodData Central client + portions
-  offClient.ts                  Open Food Facts client (barcode)
-  foodSearch.ts                 local + USDA merge, degradation flag
+  offClient.ts                  Open Food Facts client (search + barcode)
+  foodSearch.ts                 Edamam + USDA + OFF + local merge, degradation flag
   foodDetail.ts                 food + lazily-enriched named servings
   barcode.ts                    cache-first barcode resolution
   mealParser.ts                 NL/photo → items (Gemini)
