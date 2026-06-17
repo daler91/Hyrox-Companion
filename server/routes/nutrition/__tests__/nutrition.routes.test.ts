@@ -80,6 +80,9 @@ vi.mock("../../../storage", () => ({
       getCurrentTarget: vi.fn(),
       listTargets: vi.fn(),
       createTarget: vi.fn(),
+      getMealTargetOverrides: vi.fn(),
+      upsertMealTarget: vi.fn(),
+      deleteMealTarget: vi.fn(),
       getLatestLogDate: vi.fn(),
     },
   },
@@ -109,6 +112,8 @@ describe("nutrition routes", () => {
     // a workout override these.
     vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
     vi.mocked(storage.analytics.getPlannedDaysForDate).mockResolvedValue([]);
+    // Per-meal overrides default to none; the override-merge tests set their own.
+    vi.mocked(storage.nutrition.getMealTargetOverrides).mockResolvedValue(new Map());
   });
 
   describe("POST /logs", () => {
@@ -357,6 +362,68 @@ describe("nutrition routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.mealTargets.dinner.role).toBe("post_workout_recovery");
       expect(res.body.mealTargets.pre_workout).toBeUndefined();
+    });
+
+    it("honours a 5-meal schedule (afternoon snack appears)", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75, mealSchedule: 5 });
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets.snack_pm).toBeDefined();
+    });
+
+    it("honours a 3-meal schedule (snack dropped; dinner is the flex meal)", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75, mealSchedule: 3 });
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets.snack).toBeUndefined();
+      expect(res.body.mealTargets.dinner.role).toBe("flex_remainder");
+    });
+
+    it("merges a per-meal override over the computed target", async () => {
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
+      vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
+      vi.mocked(storage.nutrition.getMealTargetOverrides).mockResolvedValue(
+        new Map([["dinner", { mealType: "dinner", calories: null, proteinG: null, carbG: 123, fatG: null }]]) as never,
+      );
+      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+      expect(res.status).toBe(200);
+      expect(res.body.mealTargets.dinner.carbG).toBe(123);
+      expect(res.body.mealTargets.dinner.reasonCodes).toContain("user_override");
+    });
+  });
+
+  describe("per-meal target overrides", () => {
+    it("POST upserts an override (effectiveFrom defaults to local today)", async () => {
+      vi.mocked(storage.nutrition.upsertMealTarget).mockResolvedValue({ id: "mt1" } as never);
+      const res = await request(app)
+        .post("/api/v1/nutrition/meal-targets")
+        .send({ mealType: "dinner", carbG: 120 });
+      expect(res.status).toBe(201);
+      expect(storage.nutrition.upsertMealTarget).toHaveBeenCalledWith(
+        "test_user",
+        expect.objectContaining({ mealType: "dinner", carbG: 120, effectiveFrom: expect.any(String) }),
+      );
+    });
+
+    it("POST rejects an override with no values set", async () => {
+      const res = await request(app).post("/api/v1/nutrition/meal-targets").send({ mealType: "dinner" });
+      expect(res.status).toBe(400);
+    });
+
+    it("DELETE clears a meal's override", async () => {
+      vi.mocked(storage.nutrition.deleteMealTarget).mockResolvedValue(undefined);
+      const res = await request(app).delete("/api/v1/nutrition/meal-targets/dinner");
+      expect(res.status).toBe(200);
+      expect(storage.nutrition.deleteMealTarget).toHaveBeenCalledWith("test_user", "dinner");
+    });
+
+    it("DELETE rejects an unknown meal type", async () => {
+      const res = await request(app).delete("/api/v1/nutrition/meal-targets/brunch");
+      expect(res.status).toBe(404);
     });
   });
 

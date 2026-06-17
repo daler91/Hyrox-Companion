@@ -12,6 +12,8 @@ import type {
   FoodServing,
   FoodWithServingsResponse,
   FuellingRangeResponse,
+  MealTarget,
+  MealType,
   MicroSummaryResponse,
   NutritionInsightsResponse,
   NutritionTarget,
@@ -25,6 +27,7 @@ import type {
   SessionFuellingResponse,
   UpdateCustomFoodInput,
   UpdateFoodLogInput,
+  UpsertMealTargetInput,
   UpsertNutritionTargetInput,
 } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
@@ -328,6 +331,26 @@ export function useSetTarget() {
     invalidateQueries: [QUERY_KEYS.nutritionTargets],
     successToast: "Targets saved",
     errorToast: "Couldn't save targets",
+  });
+}
+
+/** Pin one meal's macro/calorie target (per-meal fuelling override). */
+export function useSetMealTargetOverride(date: string) {
+  return useApiMutation<MealTarget, Error, UpsertMealTargetInput>({
+    mutationFn: (data) => api.nutrition.setMealTargetOverride(data),
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date)],
+    successToast: "Meal target saved",
+    errorToast: "Couldn't save meal target",
+  });
+}
+
+/** Clear one meal's override, reverting it to the suggested split. */
+export function useClearMealTargetOverride(date: string) {
+  return useApiMutation<{ success: boolean }, Error, MealType>({
+    mutationFn: (mealType) => api.nutrition.clearMealTargetOverride(mealType),
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date)],
+    successToast: "Reset to suggested",
+    errorToast: "Couldn't reset that meal",
   });
 }
 

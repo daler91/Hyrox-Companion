@@ -12,11 +12,12 @@ import { useDeleteLog, useNutritionDay, useNutritionTargets, useRepeatDay } from
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
-import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { DescribeMealButton } from "./nutrition/DescribeMealButton";
+import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { FoodSearch } from "./nutrition/FoodSearch";
 import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
+import { MealTargetDialog, type MealTargetDialogState } from "./nutrition/MealTargetDialog";
 import { MicronutrientPanel } from "./nutrition/MicronutrientPanel";
 import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
@@ -59,6 +60,7 @@ export default function Nutrition() {
   const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const [mealReview, setMealReview] = useState<{ result: ParseMealResponse; entryMethod: "nl" | "photo" } | null>(null);
   const [targetsOpen, setTargetsOpen] = useState(false);
+  const [mealTargetEdit, setMealTargetEdit] = useState<MealTargetDialogState | null>(null);
 
   const day = useNutritionDay(date);
   const targets = useNutritionTargets();
@@ -123,6 +125,12 @@ export default function Nutrition() {
             onEdit={(entry) => setDialog({ mode: "edit", entry })}
             onDelete={(id) => deleteLog.mutate(id)}
             deletingId={deleteLog.isPending ? deleteLog.variables : undefined}
+            onEditTarget={(m) => {
+              const t = summary?.mealTargets?.[m];
+              if (t) {
+                setMealTargetEdit({ mealType: m, target: t, isOverridden: t.reasonCodes.includes("user_override") });
+              }
+            }}
           />
         ))}
         {isEmpty && <div className="flex justify-center">{repeatPrevButton}</div>}
@@ -221,6 +229,7 @@ export default function Nutrition() {
         onClose={() => setMealReview(null)}
       />
       <TargetsDialog open={targetsOpen} current={currentTarget} onClose={() => setTargetsOpen(false)} />
+      <MealTargetDialog date={date} state={mealTargetEdit} onClose={() => setMealTargetEdit(null)} />
     </PageContainer>
   );
 }

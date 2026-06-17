@@ -12,6 +12,7 @@ import { AiCoachCard } from "@/components/settings/preferences/AiCoachCard";
 import { AthleteProfileCard } from "@/components/settings/preferences/AthleteProfileCard";
 import { BodyCompositionCard } from "@/components/settings/preferences/BodyCompositionCard";
 import { EmailNotificationsCard } from "@/components/settings/preferences/EmailNotificationsCard";
+import { NutritionPreferencesCard } from "@/components/settings/preferences/NutritionPreferencesCard";
 import { TrainingGoalsCard } from "@/components/settings/preferences/TrainingGoalsCard";
 import { UnitsPreferencesCard } from "@/components/settings/preferences/UnitsPreferencesCard";
 import { WorkoutReviewCard } from "@/components/settings/preferences/WorkoutReviewCard";
@@ -91,6 +92,7 @@ interface PreferencesSnapshot
     | "weightGoalRateKgPerWeek"
   > {
   weeklyGoal: string;
+  mealSchedule: 3 | 4 | 5;
   division: string;
   gender: string;
   age: number | null;
@@ -139,6 +141,7 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
     weightGoalDirection: preferences.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
     weeklyGoal: String(preferences.weeklyGoal || 5),
+    mealSchedule: (preferences.mealSchedule ?? 4),
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
     emailMissedReminder: preferences.emailMissedReminder ?? false,
@@ -165,6 +168,7 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     weightGoalDirection: payload.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: payload.weightGoalRateKgPerWeek ?? null,
     weeklyGoal: String(payload.weeklyGoal),
+    mealSchedule: (payload.mealSchedule ?? 4),
     emailNotifications: payload.emailNotifications,
     emailWeeklySummary: payload.emailWeeklySummary,
     emailMissedReminder: payload.emailMissedReminder,
@@ -191,6 +195,7 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     weightGoalDirection: snapshot.weightGoalDirection,
     weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
     weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
+    mealSchedule: snapshot.mealSchedule,
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
     emailMissedReminder: snapshot.emailMissedReminder,
@@ -222,6 +227,7 @@ export default function Settings() {
   const [weightGoalDirection, setWeightGoalDirection] = useState("");
   const [weightGoalRateKgPerWeek, setWeightGoalRateKgPerWeek] = useState<number | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState("5");
+  const [mealSchedule, setMealSchedule] = useState<3 | 4 | 5>(4);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [emailWeeklySummary, setEmailWeeklySummary] = useState(false);
   const [emailMissedReminder, setEmailMissedReminder] = useState(false);
@@ -259,6 +265,7 @@ export default function Settings() {
     weightGoalDirection: null,
     weightGoalRateKgPerWeek: null,
     weeklyGoal: "5",
+    mealSchedule: 4,
     emailNotifications: false,
     emailWeeklySummary: false,
     emailMissedReminder: false,
@@ -298,6 +305,7 @@ export default function Settings() {
       weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
       weightGoalRateKgPerWeek,
       weeklyGoal,
+      mealSchedule,
       emailNotifications,
       emailWeeklySummary,
       emailMissedReminder,
@@ -320,6 +328,7 @@ export default function Settings() {
       weightGoalDirection,
       weightGoalRateKgPerWeek,
       weeklyGoal,
+      mealSchedule,
       emailNotifications,
       emailWeeklySummary,
       emailMissedReminder,
@@ -394,6 +403,7 @@ export default function Settings() {
       setWeightGoalDirection(preferences.weightGoalDirection ?? "");
       setWeightGoalRateKgPerWeek(preferences.weightGoalRateKgPerWeek ?? null);
       setWeeklyGoal(String(preferences.weeklyGoal || 5));
+      setMealSchedule((preferences.mealSchedule ?? 4));
       setEmailNotifications(preferences.emailNotifications ?? false);
       setEmailWeeklySummary(preferences.emailWeeklySummary ?? false);
       setEmailMissedReminder(preferences.emailMissedReminder ?? false);
@@ -455,6 +465,7 @@ export default function Settings() {
               setWeightGoalDirection(previous.weightGoalDirection ?? "");
               setWeightGoalRateKgPerWeek(previous.weightGoalRateKgPerWeek);
               setWeeklyGoal(previous.weeklyGoal);
+              setMealSchedule(previous.mealSchedule);
               setEmailNotifications(previous.emailNotifications);
               setEmailWeeklySummary(previous.emailWeeklySummary);
               setEmailMissedReminder(previous.emailMissedReminder);
@@ -542,6 +553,7 @@ export default function Settings() {
       weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
       weightGoalRateKgPerWeek,
       weeklyGoal: Number.parseInt(weeklyGoal, 10),
+      mealSchedule,
       emailNotifications,
       emailWeeklySummary,
       emailMissedReminder,
@@ -571,6 +583,7 @@ export default function Settings() {
     weightGoalDirection,
     weightGoalRateKgPerWeek,
     weeklyGoal,
+    mealSchedule,
     emailNotifications,
     emailWeeklySummary,
     emailMissedReminder,
@@ -742,6 +755,10 @@ export default function Settings() {
             onActivityLevelChange={setActivityLevel}
             onWeightGoalDirectionChange={setWeightGoalDirection}
             onWeightGoalRateKgPerWeekChange={setWeightGoalRateKgPerWeek}
+          />
+          <NutritionPreferencesCard
+            mealSchedule={mealSchedule}
+            onMealScheduleChange={setMealSchedule}
           />
           <TrainingGoalsCard
             weeklyGoal={weeklyGoal}

@@ -512,6 +512,13 @@
       "when": 1781657298504,
       "tag": "0072_wooden_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1781696743951,
+      "tag": "0073_yellow_gambit",
+      "breakpoints": true
     }
   ]
 }

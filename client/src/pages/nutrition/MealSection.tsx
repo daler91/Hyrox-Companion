@@ -1,5 +1,5 @@
 import type { FoodLogEntryWithNutrition, MealFuelTarget, MealRole, MealType, NutritionMacroTotals } from "@shared/schema";
-import { Pencil, Sparkles, Trash2 } from "lucide-react";
+import { Pencil, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -18,6 +18,8 @@ interface MealSectionProps {
   readonly onEdit: (entry: FoodLogEntryWithNutrition) => void;
   readonly onDelete: (id: string) => void;
   readonly deletingId?: string;
+  /** Open the per-meal target override editor (only shown when a target exists). */
+  readonly onEditTarget?: (mealType: MealType) => void;
 }
 
 const ROLE_CAPTION: Record<MealRole, string> = {
@@ -45,7 +47,7 @@ function sumNutrition(entries: readonly FoodLogEntryWithNutrition[]): NutritionM
 /** One meal's fuel target + logged entries (per-meal fuelling). Shows the target
  *  even before anything is logged; hidden only when there's neither a target nor
  *  an entry. */
-export function MealSection({ label, mealType, entries, target, onEdit, onDelete, deletingId }: MealSectionProps) {
+export function MealSection({ label, mealType, entries, target, onEdit, onDelete, deletingId, onEditTarget }: MealSectionProps) {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0 && !target) return null;
 
@@ -60,7 +62,9 @@ export function MealSection({ label, mealType, entries, target, onEdit, onDelete
         fatG: target.fatG,
       }).filter((r) => r.key !== "calories")
     : [];
-  const caption = target ? ROLE_CAPTION[target.role] : "";
+  const isCustomTarget = !!target?.reasonCodes.includes("user_override");
+  let caption = "";
+  if (target) caption = isCustomTarget ? "Custom" : ROLE_CAPTION[target.role];
 
   return (
     <section data-testid={`meal-section-${label.toLowerCase()}`}>
@@ -70,11 +74,25 @@ export function MealSection({ label, mealType, entries, target, onEdit, onDelete
             <h2 className="text-sm font-semibold">{label}</h2>
             {caption && <span className="text-[11px] font-medium text-primary">{caption}</span>}
           </div>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {target
-              ? `${Math.round(logged.calories)} / ${Math.round(target.calories)} kcal`
-              : `${Math.round(logged.calories)} kcal`}
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {target
+                ? `${Math.round(logged.calories)} / ${Math.round(target.calories)} kcal`
+                : `${Math.round(logged.calories)} kcal`}
+            </span>
+            {target && onEditTarget && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground"
+                aria-label={`Adjust ${label} target`}
+                onClick={() => onEditTarget(mealType)}
+                data-testid={`button-edit-meal-target-${mealType}`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
         {target && (
           <div className="mt-1.5 space-y-1" data-testid={`meal-target-${mealType}`}>

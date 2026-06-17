@@ -445,6 +445,24 @@ export const upsertNutritionTargetSchema = z
   });
 export type UpsertNutritionTargetInput = z.infer<typeof upsertNutritionTargetSchema>;
 
+// Set/replace a single meal's target OVERRIDE (per-meal fuelling fine-tune).
+// Versioned by effectiveFrom like the daily target; any value left null falls
+// back to the engine-computed number for that meal.
+export const upsertMealTargetSchema = z
+  .object({
+    mealType,
+    calories: targetValue,
+    proteinG: targetValue,
+    carbG: targetValue,
+    fatG: targetValue,
+    // Day the override takes effect; server defaults to the user's local today.
+    effectiveFrom: isoDate.optional(),
+  })
+  .refine((v) => [v.calories, v.proteinG, v.carbG, v.fatG].some((x) => x != null), {
+    message: "Set at least one value",
+  });
+export type UpsertMealTargetInput = z.infer<typeof upsertMealTargetSchema>;
+
 export interface NutritionTargetsResponse {
   // The target effective for the requested day (latest effectiveFrom <= day), or null.
   current: NutritionTarget | null;

@@ -582,6 +582,28 @@
             "minimum": 1,
             "maximum": 14
           },
+          "mealSchedule": {
+            "anyOf": [
+              {
+                "type": "number",
+                "enum": [
+                  3
+                ]
+              },
+              {
+                "type": "number",
+                "enum": [
+                  4
+                ]
+              },
+              {
+                "type": "number",
+                "enum": [
+                  5
+                ]
+              }
+            ]
+          },
           "emailNotifications": {
             "type": "boolean"
           },

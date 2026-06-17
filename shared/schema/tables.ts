@@ -36,6 +36,10 @@ export const users = pgTable("users", {
   // defaults to "UTC" so the column is non-null pre-detection.
   userTimezone: varchar("user_timezone", { length: 64 }).default("UTC").notNull(),
   weeklyGoal: integer("weekly_goal").default(5),
+  // Per-user meal-pattern preset: how many eating meals/day the per-meal fuel
+  // targets are split across (3, 4, or 5). Default 4 preserves the prior fixed
+  // breakfast/lunch/dinner/snack split.
+  mealSchedule: integer("meal_schedule").default(4),
   // Master email toggle. When false, no email is ever sent. When true,
   // the per-type toggles below decide which email categories actually
   // go out. New users must explicitly opt in (GDPR compliance).
@@ -769,7 +773,7 @@ export type FoodSource = (typeof FOOD_SOURCES)[number];
 
 // Meal slot a log entry is filed under. pre_workout / post_workout exist so the
 // Phase 3 training-integration views can bucket fuelling around sessions.
-export const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "pre_workout", "post_workout"] as const;
+export const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "snack_pm", "pre_workout", "post_workout"] as const;
 export type MealType = (typeof MEAL_TYPES)[number];
 
 // How an entry was created. Phase 1 only ever writes "manual"; the others are
@@ -876,7 +880,7 @@ export const foodLogEntries = pgTable("food_log_entries", {
   index("idx_food_log_entries_user_logged_at").on(table.userId, table.loggedAt),
   index("idx_food_log_entries_food_id").on(table.foodId),
   check("food_log_entries_quantity_positive_check", sql`quantity_g > 0`),
-  check("food_log_entries_meal_type_check", sql`meal_type IN ('breakfast','lunch','dinner','snack','pre_workout','post_workout')`),
+  check("food_log_entries_meal_type_check", sql`meal_type IN ('breakfast','lunch','dinner','snack','snack_pm','pre_workout','post_workout')`),
   check("food_log_entries_entry_method_check", sql`entry_method IN ('manual','barcode','nl','photo')`),
 ]);
 export type FoodLogEntry = typeof foodLogEntries.$inferSelect;
@@ -903,6 +907,24 @@ export const nutritionTargets = pgTable("nutrition_targets", {
   index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),
 ]);
 export type NutritionTarget = typeof nutritionTargets.$inferSelect;
+
+// Per-meal target OVERRIDES, versioned by effective_from (mirrors nutrition_targets).
+// A null field ⇒ use the engine-computed value for that meal; a set field pins it.
+// Keyed by meal_type so it aligns with the per-meal fuel targets and the daily view.
+export const mealTargets = pgTable("meal_targets", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  mealType: varchar("meal_type", { length: 16 }).notNull(),
+  calories: real("calories"),
+  proteinG: real("protein_g"),
+  carbG: real("carb_g"),
+  fatG: real("fat_g"),
+  effectiveFrom: date("effective_from").notNull(),
+}, (table) => [
+  index("idx_meal_targets_user_effective").on(table.userId, table.effectiveFrom),
+  check("meal_targets_meal_type_check", sql`meal_type IN ('breakfast','lunch','dinner','snack','snack_pm','pre_workout','post_workout')`),
+]);
+export type MealTarget = typeof mealTargets.$inferSelect;
 
 // Per-user favourites over the shared `foods` cache (FR-1.5).
 export const foodFavorites = pgTable("food_favorites", {

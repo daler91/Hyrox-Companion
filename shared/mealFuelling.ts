@@ -13,6 +13,9 @@
  * The recovery meal carries the post carb + protein floors from the session
  * target; fat is kept low there (lean recovery) and off the pre slot.
  *
+ * How many eating meals the day is split across is per-user configurable
+ * (`mealSchedule`: 3/4/5); the workout pre slot is layered on top per timing.
+ *
  * Browser-safe and DB-free, mirroring shared/sessionFuellingTargets.ts: typed
  * Input/Result shapes, `reasonCodes` + `rationale` for transparency, no I/O.
  * The numbers are coaching guidance (the daily target split, with the session
@@ -54,6 +57,12 @@ export interface MealFuelSessionAnchor {
   postProteinG: number;
 }
 
+/** How many eating meals per day the daily target is split across. */
+export type MealScheduleCount = 3 | 4 | 5;
+
+/** The default (and pre-feature) split: breakfast / lunch / dinner / snack. */
+export const DEFAULT_MEAL_SCHEDULE: MealScheduleCount = 4;
+
 export interface MealFuelInput {
   daily: MealFuelDailyTarget;
   /** The primary workout's session anchors, or null on a rest day. */
@@ -61,10 +70,28 @@ export interface MealFuelInput {
   bodyweightKg: number | null;
   workoutTiming: WorkoutTiming;
   hasWorkout: boolean;
+  /** Eating meals/day (3/4/5). Defaults to 4 — the prior fixed split. */
+  mealSchedule?: MealScheduleCount;
 }
 
 /** Targets keyed by meal. Inactive slots are OMITTED (not zero-filled). */
 export type MealFuelTargets = Partial<Record<MealType, MealFuelTarget>>;
+
+/**
+ * The eating meals (in render order) for a meals-per-day preset. The workout
+ * `pre_workout` slot is layered on top per timing; the trailing snack(s) are the
+ * flex tail that absorbs reconciliation drift.
+ */
+export function resolveEatingMeals(schedule: MealScheduleCount): MealType[] {
+  switch (schedule) {
+    case 3:
+      return ["breakfast", "lunch", "dinner"];
+    case 5:
+      return ["breakfast", "lunch", "dinner", "snack", "snack_pm"];
+    default:
+      return ["breakfast", "lunch", "dinner", "snack"];
+  }
+}
 
 const KCAL_PER_G = { protein: 4, carb: 4, fat: 9 } as const;
 
@@ -75,38 +102,26 @@ const PROTEIN_G_PER_KG_PER_MEAL = 0.35;
 const PROTEIN_PER_MEAL_MIN_G = 20;
 const PROTEIN_PER_MEAL_MAX_G = 45;
 
-// The eating meals the daily target is split across (the workout pre slot is
-// layered on top per timing). A later phase makes this per-user configurable.
-const BASE_MEALS: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
-
-// Base split weights over the eating meals; the remainder of each macro (after
-// the session anchors) is distributed by these, renormalised over whichever
-// meals actually receive it.
-const BASE_CARB_WEIGHTS: Partial<Record<MealType, number>> = {
+// Even-ish base split weights across the eating meals — used alike for the carb,
+// fat, and calorie remainder (after the session anchors), renormalised over
+// whichever meals actually receive it (so 3/4/5-meal schedules all work).
+const MEAL_SPLIT_WEIGHTS: Partial<Record<MealType, number>> = {
   breakfast: 0.25,
   lunch: 0.3,
   dinner: 0.3,
   snack: 0.15,
-};
-const BASE_FAT_WEIGHTS: Partial<Record<MealType, number>> = {
-  breakfast: 0.25,
-  lunch: 0.3,
-  dinner: 0.3,
-  snack: 0.15,
+  snack_pm: 0.15,
 };
 // The recovery meal stays leaner — carbs/protein forward, fat held back.
 const RECOVERY_FAT_WEIGHT = 0.1;
 
-// Fallback split when a target carries calories but no macros to break down.
-const CALORIE_WEIGHTS: Partial<Record<MealType, number>> = {
-  breakfast: 0.25,
-  lunch: 0.3,
-  dinner: 0.3,
-  snack: 0.15,
-};
-
-// The flexible meal that absorbs reconciliation drift so Σ meals == daily.
-const FLEX_MEAL: MealType = "snack";
+/** The meal that absorbs reconciliation drift so Σ meals == daily: the trailing
+ *  snack when present, else the last eating meal. */
+function resolveFlexMeal(eatingMeals: MealType[]): MealType {
+  if (eatingMeals.includes("snack_pm")) return "snack_pm";
+  if (eatingMeals.includes("snack")) return "snack";
+  return eatingMeals.at(-1) ?? "dinner";
+}
 
 interface TimingPlan {
   /** The post-workout recovery meal (carb + protein floors, leaner fat). */
@@ -150,7 +165,8 @@ function splitByWeights(
     for (const meal of Object.keys(weights) as MealType[]) out.set(meal, 0);
     return out;
   }
-  for (const [meal, w] of Object.entries(weights) as [MealType, number][]) {
+  for (const meal of Object.keys(weights) as MealType[]) {
+    const w = weights[meal] ?? 0;
     out.set(meal, round1((total * w) / sumW));
   }
   return out;
@@ -162,20 +178,27 @@ function pickWeights(
   meals: MealType[],
 ): Partial<Record<MealType, number>> {
   const out: Partial<Record<MealType, number>> = {};
-  for (const meal of meals) if (base[meal] != null) out[meal] = base[meal];
+  for (const meal of meals) {
+    const w = base[meal];
+    if (w != null) out[meal] = w;
+  }
   return out;
 }
 
 /** Push the rounding/anchor residue into the flex meal so Σ == daily target.
  *  Returns true when the flex meal had to be clamped at 0 (residual remains). */
-function reconcileToDaily(map: Map<MealType, number>, dailyTotal: number | null): boolean {
+function reconcileToDaily(
+  map: Map<MealType, number>,
+  dailyTotal: number | null,
+  flexMeal: MealType,
+): boolean {
   if (dailyTotal == null) return false;
   let sum = 0;
   for (const v of map.values()) sum += v;
   const drift = round1(dailyTotal - sum);
-  if (drift === 0 || !map.has(FLEX_MEAL)) return false;
-  const next = round1((map.get(FLEX_MEAL) ?? 0) + drift);
-  map.set(FLEX_MEAL, Math.max(0, next));
+  if (drift === 0 || !map.has(flexMeal)) return false;
+  const next = round1((map.get(flexMeal) ?? 0) + drift);
+  map.set(flexMeal, Math.max(0, next));
   return next < 0;
 }
 
@@ -184,6 +207,7 @@ function allocateCarbs(
   session: MealFuelSessionAnchor | null,
   plan: TimingPlan | null,
   hasPreSlot: boolean,
+  eatingMeals: MealType[],
 ): { map: Map<MealType, number>; anchorExceeds: boolean } {
   const map = new Map<MealType, number>();
   const recovery = plan?.recoveryMeal ?? null;
@@ -194,7 +218,7 @@ function allocateCarbs(
 
   if (hasPreSlot) map.set("pre_workout", slotCarb);
   if (recovery) map.set(recovery, postFloor);
-  const distMeals = BASE_MEALS.filter((meal) => meal !== recovery);
+  const distMeals = eatingMeals.filter((meal) => meal !== recovery);
 
   if (dailyCarbG == null) {
     // No daily carb target: just the session anchors (other meals 0).
@@ -206,7 +230,7 @@ function allocateCarbs(
   const anchored = slotCarb + preMealCarb + postFloor;
   const anchorExceeds = anchored > dailyCarbG + 0.05;
   const remaining = Math.max(0, round1(dailyCarbG - anchored));
-  const split = splitByWeights(remaining, pickWeights(BASE_CARB_WEIGHTS, distMeals));
+  const split = splitByWeights(remaining, pickWeights(MEAL_SPLIT_WEIGHTS, distMeals));
   for (const meal of distMeals) map.set(meal, split.get(meal) ?? 0);
   // Front-load the pre carbs onto the pre meal (midday/evening), on top of its share.
   if (plan?.preMeal) map.set(plan.preMeal, round1((map.get(plan.preMeal) ?? 0) + preMealCarb));
@@ -219,6 +243,7 @@ function allocateProtein(
   plan: TimingPlan | null,
   hasPreSlot: boolean,
   bodyweightKg: number | null,
+  eatingMeals: MealType[],
 ): { map: Map<MealType, number>; floorBound: boolean } {
   const map = new Map<MealType, number>();
   if (hasPreSlot) map.set("pre_workout", 0);
@@ -234,19 +259,19 @@ function allocateProtein(
             PROTEIN_PER_MEAL_MAX_G,
           )
         : PROTEIN_PER_MEAL_FALLBACK_G;
-    for (const meal of BASE_MEALS) map.set(meal, perMeal);
+    for (const meal of eatingMeals) map.set(meal, perMeal);
     if (recovery) map.set(recovery, Math.max(perMeal, floor));
     return { map, floorBound: recovery != null && floor > perMeal };
   }
 
-  const even = round1(dailyProteinG / BASE_MEALS.length);
+  const even = round1(dailyProteinG / eatingMeals.length);
   const floorBound = recovery != null && floor > even;
   if (floorBound) {
     map.set(recovery, floor);
-    const rest = round1((dailyProteinG - floor) / (BASE_MEALS.length - 1));
-    for (const meal of BASE_MEALS) if (meal !== recovery) map.set(meal, Math.max(0, rest));
+    const rest = round1((dailyProteinG - floor) / (eatingMeals.length - 1));
+    for (const meal of eatingMeals) if (meal !== recovery) map.set(meal, Math.max(0, rest));
   } else {
-    for (const meal of BASE_MEALS) map.set(meal, even);
+    for (const meal of eatingMeals) map.set(meal, even);
   }
   return { map, floorBound };
 }
@@ -255,20 +280,21 @@ function allocateFat(
   dailyFatG: number | null,
   plan: TimingPlan | null,
   hasPreSlot: boolean,
+  eatingMeals: MealType[],
 ): Map<MealType, number> {
   const map = new Map<MealType, number>();
   if (hasPreSlot) map.set("pre_workout", 0);
   if (dailyFatG == null) {
-    for (const meal of BASE_MEALS) map.set(meal, 0);
+    for (const meal of eatingMeals) map.set(meal, 0);
     return map;
   }
   const recovery = plan?.recoveryMeal ?? null;
   const weights: Partial<Record<MealType, number>> = {};
-  for (const meal of BASE_MEALS) {
-    weights[meal] = meal === recovery ? RECOVERY_FAT_WEIGHT : (BASE_FAT_WEIGHTS[meal] ?? 0);
+  for (const meal of eatingMeals) {
+    weights[meal] = meal === recovery ? RECOVERY_FAT_WEIGHT : (MEAL_SPLIT_WEIGHTS[meal] ?? 0);
   }
   const split = splitByWeights(dailyFatG, weights);
-  for (const meal of BASE_MEALS) map.set(meal, split.get(meal) ?? 0);
+  for (const meal of eatingMeals) map.set(meal, split.get(meal) ?? 0);
   return map;
 }
 
@@ -309,6 +335,9 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
     return null;
   }
 
+  const eatingMeals = resolveEatingMeals(input.mealSchedule ?? DEFAULT_MEAL_SCHEDULE);
+  const flexMeal = resolveFlexMeal(eatingMeals);
+
   // A workout day needs the flag, the session anchors, and a timing with a plan;
   // otherwise we degrade gracefully to a rest-day split.
   const plan = input.hasWorkout && input.session != null ? resolveTimingPlan(input.workoutTiming) : null;
@@ -320,34 +349,35 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
 
   const activeMeals: MealType[] = [
     ...(hasPreSlot ? (["pre_workout"] as MealType[]) : []),
-    ...BASE_MEALS,
+    ...eatingMeals,
   ];
 
   const roles = new Map<MealType, MealRole>();
   if (hasPreSlot) roles.set("pre_workout", "pre_workout_fast_carbs");
-  for (const meal of BASE_MEALS) roles.set(meal, "standard");
-  roles.set("snack", "flex_remainder");
+  for (const meal of eatingMeals) roles.set(meal, "standard");
+  roles.set(flexMeal, "flex_remainder");
   if (recovery) roles.set(recovery, "post_workout_recovery");
 
   const noMacros = daily.proteinG == null && daily.carbG == null && daily.fatG == null;
   if (noMacros) {
     // Calorie-only target: split kcal by weight, no macro breakdown to give.
-    return buildCalorieOnly(activeMeals, roles, hasPreSlot, daily.calories ?? 0);
+    return buildCalorieOnly(activeMeals, roles, hasPreSlot, daily.calories ?? 0, eatingMeals, flexMeal);
   }
 
-  const { map: carbMap, anchorExceeds } = allocateCarbs(daily.carbG, session, plan, hasPreSlot);
+  const { map: carbMap, anchorExceeds } = allocateCarbs(daily.carbG, session, plan, hasPreSlot, eatingMeals);
   const { map: proteinMap, floorBound } = allocateProtein(
     daily.proteinG,
     session,
     plan,
     hasPreSlot,
     input.bodyweightKg,
+    eatingMeals,
   );
-  const fatMap = allocateFat(daily.fatG, plan, hasPreSlot);
+  const fatMap = allocateFat(daily.fatG, plan, hasPreSlot, eatingMeals);
 
-  const carbClamped = reconcileToDaily(carbMap, daily.carbG);
-  reconcileToDaily(proteinMap, daily.proteinG);
-  reconcileToDaily(fatMap, daily.fatG);
+  const carbClamped = reconcileToDaily(carbMap, daily.carbG, flexMeal);
+  reconcileToDaily(proteinMap, daily.proteinG, flexMeal);
+  reconcileToDaily(fatMap, daily.fatG, flexMeal);
 
   const usedBodyweightFallback =
     daily.proteinG == null && (input.bodyweightKg == null || input.bodyweightKg <= 0);
@@ -399,14 +429,16 @@ function buildCalorieOnly(
   roles: Map<MealType, MealRole>,
   hasPreSlot: boolean,
   dailyCalories: number,
+  eatingMeals: MealType[],
+  flexMeal: MealType,
 ): MealFuelTargets {
   // Give the pre-workout slot a small, fixed share; split the rest by weights.
   const preShare = hasPreSlot ? Math.min(dailyCalories, 120) : 0;
   const kcalMap = new Map<MealType, number>();
   if (hasPreSlot) kcalMap.set("pre_workout", preShare);
-  const split = splitByWeights(Math.max(0, dailyCalories - preShare), CALORIE_WEIGHTS);
-  for (const meal of BASE_MEALS) kcalMap.set(meal, split.get(meal) ?? 0);
-  reconcileToDaily(kcalMap, dailyCalories);
+  const split = splitByWeights(Math.max(0, dailyCalories - preShare), pickWeights(MEAL_SPLIT_WEIGHTS, eatingMeals));
+  for (const meal of eatingMeals) kcalMap.set(meal, split.get(meal) ?? 0);
+  reconcileToDaily(kcalMap, dailyCalories, flexMeal);
 
   const out: MealFuelTargets = {};
   for (const meal of activeMeals) {
@@ -420,6 +452,56 @@ function buildCalorieOnly(
       role,
       reasonCodes: ["calorie_only_target"],
       rationale: `~${calories} kcal — set carb/protein/fat goals for a full per-meal breakdown.`,
+    };
+  }
+  return out;
+}
+
+/** A per-meal override: any field null ⇒ keep the computed value for that meal. */
+export interface MealFuelOverride {
+  calories?: number | null;
+  carbG?: number | null;
+  proteinG?: number | null;
+  fatG?: number | null;
+}
+
+/**
+ * Apply user per-meal overrides on top of the computed targets. Only meals that
+ * are active that day are touched; a null field keeps the computed number.
+ * Calories are recomputed from the final macros (matching the engine) whenever a
+ * macro is overridden, else an explicit calorie override is honoured. The edited
+ * meal is flagged with a `user_override` reason code. We deliberately do NOT
+ * re-reconcile — an explicit edit is the athlete's intent, not a cue to silently
+ * move macros they didn't touch (so the day's sum may differ, which is expected).
+ */
+export function applyMealTargetOverrides(
+  targets: MealFuelTargets,
+  overrides: Partial<Record<MealType, MealFuelOverride>>,
+): MealFuelTargets {
+  const out: MealFuelTargets = {};
+  for (const key of Object.keys(targets) as MealType[]) {
+    const target = targets[key];
+    if (!target) continue;
+    const ov = overrides[key];
+    if (!ov || (ov.calories == null && ov.carbG == null && ov.proteinG == null && ov.fatG == null)) {
+      out[key] = target;
+      continue;
+    }
+    const carbG = round1(ov.carbG ?? target.carbG);
+    const proteinG = round1(ov.proteinG ?? target.proteinG);
+    const fatG = round1(ov.fatG ?? target.fatG);
+    const macroOverridden = ov.carbG != null || ov.proteinG != null || ov.fatG != null;
+    const calories = macroOverridden
+      ? Math.round(proteinG * KCAL_PER_G.protein + carbG * KCAL_PER_G.carb + fatG * KCAL_PER_G.fat)
+      : Math.round(ov.calories ?? target.calories);
+    out[key] = {
+      ...target,
+      calories,
+      carbG,
+      proteinG,
+      fatG,
+      reasonCodes: [...target.reasonCodes, "user_override"],
+      rationale: "Custom target you set for this meal.",
     };
   }
   return out;

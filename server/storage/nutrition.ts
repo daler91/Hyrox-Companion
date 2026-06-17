@@ -10,6 +10,8 @@ import {
   foods,
   type FoodServing,
   foodServings,
+  type MealTarget,
+  mealTargets,
   type MealType,
   type NutritionMacroTotals,
   type NutritionTarget,
@@ -21,6 +23,7 @@ import {
   type RecipeWithIngredients,
   type ServingInput,
   type UpdateCustomFoodInput,
+  type UpsertMealTargetInput,
   type UpsertNutritionTargetInput,
 } from "@shared/schema";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
@@ -841,5 +844,67 @@ export class NutritionStorage {
         .returning();
       return row;
     });
+  }
+
+  // --- per-meal target overrides (Phase 3) ----------------------------------
+
+  /**
+   * Per-meal overrides effective on `onDate`, keyed by meal — the latest version
+   * (effectiveFrom <= onDate) for each meal type. Drives the merge over the
+   * engine-computed per-meal fuel targets.
+   */
+  async getMealTargetOverrides(userId: string, onDate: string): Promise<Map<MealType, MealTarget>> {
+    const rows = await db
+      .select()
+      .from(mealTargets)
+      .where(and(eq(mealTargets.userId, userId), lte(mealTargets.effectiveFrom, onDate)))
+      .orderBy(desc(mealTargets.effectiveFrom));
+    const byMeal = new Map<MealType, MealTarget>();
+    for (const row of rows) {
+      const meal = row.mealType as MealType;
+      if (!byMeal.has(meal)) byMeal.set(meal, row);
+    }
+    return byMeal;
+  }
+
+  /**
+   * Create/replace a meal's override for a given effectiveFrom. One row per
+   * (user, mealType, effectiveFrom) via delete-then-insert, mirroring createTarget.
+   */
+  async upsertMealTarget(
+    userId: string,
+    data: UpsertMealTargetInput & { effectiveFrom: string },
+  ): Promise<MealTarget> {
+    return db.transaction(async (tx) => {
+      await tx
+        .delete(mealTargets)
+        .where(
+          and(
+            eq(mealTargets.userId, userId),
+            eq(mealTargets.mealType, data.mealType),
+            eq(mealTargets.effectiveFrom, data.effectiveFrom),
+          ),
+        );
+      const [row] = await tx
+        .insert(mealTargets)
+        .values({
+          userId,
+          mealType: data.mealType,
+          calories: data.calories ?? null,
+          proteinG: data.proteinG ?? null,
+          carbG: data.carbG ?? null,
+          fatG: data.fatG ?? null,
+          effectiveFrom: data.effectiveFrom,
+        })
+        .returning();
+      return row;
+    });
+  }
+
+  /** Clear a meal's override entirely (revert that meal to the computed target). */
+  async deleteMealTarget(userId: string, mealType: MealType): Promise<void> {
+    await db
+      .delete(mealTargets)
+      .where(and(eq(mealTargets.userId, userId), eq(mealTargets.mealType, mealType)));
   }
 }

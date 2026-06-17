@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeMealFuelTargets, type MealFuelTargets } from "./mealFuelling";
+import { applyMealTargetOverrides, computeMealFuelTargets, type MealFuelTargets, resolveEatingMeals } from "./mealFuelling";
 
 // A typical morning session for a 75kg athlete (matches sessionFuellingTargets):
 // computeSessionFuellingTarget({ durationMin: 60, rpe: 6, bodyweightKg: 75 }).
@@ -169,5 +169,116 @@ describe("computeMealFuelTargets", () => {
     expect(sum(targets, "carbG")).toBeCloseTo(DAILY.carbG, 1);
     expect(sum(targets, "proteinG")).toBeCloseTo(DAILY.proteinG, 1);
     expect(sum(targets, "fatG")).toBeCloseTo(DAILY.fatG, 1);
+  });
+});
+
+describe("meal schedule presets (3/4/5)", () => {
+  it("3 meals: drops the snack(s) and reconciles onto dinner as the flex meal", () => {
+    const targets = computeMealFuelTargets({
+      daily: { calories: 2200, proteinG: 165, carbG: 250, fatG: 70 },
+      session: null,
+      bodyweightKg: 75,
+      workoutTiming: "none",
+      hasWorkout: false,
+      mealSchedule: 3,
+    }) as MealFuelTargets;
+
+    expect(Object.keys(targets).sort((a, b) => a.localeCompare(b))).toEqual(["breakfast", "dinner", "lunch"]);
+    expect(targets.snack).toBeUndefined();
+    expect(targets.snack_pm).toBeUndefined();
+    expect(targets.dinner?.role).toBe("flex_remainder");
+    expect(sum(targets, "carbG")).toBeCloseTo(250, 1);
+    expect(sum(targets, "proteinG")).toBeCloseTo(165, 1);
+    expect(sum(targets, "fatG")).toBeCloseTo(70, 1);
+  });
+
+  it("5 meals: adds an afternoon snack as the flex meal and still reconciles", () => {
+    const targets = computeMealFuelTargets({
+      daily: DAILY,
+      session: null,
+      bodyweightKg: 75,
+      workoutTiming: "none",
+      hasWorkout: false,
+      mealSchedule: 5,
+    }) as MealFuelTargets;
+
+    expect(Object.keys(targets)).toHaveLength(5);
+    expect(targets.snack_pm?.role).toBe("flex_remainder");
+    expect(sum(targets, "carbG")).toBeCloseTo(DAILY.carbG, 1);
+    expect(sum(targets, "proteinG")).toBeCloseTo(DAILY.proteinG, 1);
+    expect(sum(targets, "fatG")).toBeCloseTo(DAILY.fatG, 1);
+  });
+
+  it("defaults to the 4-meal split when mealSchedule is omitted", () => {
+    const targets = computeMealFuelTargets({
+      daily: DAILY,
+      session: null,
+      bodyweightKg: 75,
+      workoutTiming: "none",
+      hasWorkout: false,
+    }) as MealFuelTargets;
+    expect(Object.keys(targets).sort((a, b) => a.localeCompare(b))).toEqual(["breakfast", "dinner", "lunch", "snack"]);
+    expect(targets.snack_pm).toBeUndefined();
+  });
+
+  it("3-meal evening workout: recovery on dinner wins over the flex role", () => {
+    const targets = computeMealFuelTargets({
+      daily: DAILY,
+      session: AM_SESSION,
+      bodyweightKg: 75,
+      workoutTiming: "evening",
+      hasWorkout: true,
+      mealSchedule: 3,
+    }) as MealFuelTargets;
+    expect(targets.dinner?.role).toBe("post_workout_recovery");
+    expect(targets.dinner?.carbG).toBe(53);
+    expect(sum(targets, "carbG")).toBeCloseTo(DAILY.carbG, 1);
+  });
+
+  it("resolveEatingMeals maps each count to its ordered meal list", () => {
+    expect(resolveEatingMeals(3)).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(resolveEatingMeals(4)).toEqual(["breakfast", "lunch", "dinner", "snack"]);
+    expect(resolveEatingMeals(5)).toEqual(["breakfast", "lunch", "dinner", "snack", "snack_pm"]);
+  });
+});
+
+describe("applyMealTargetOverrides", () => {
+  const base = computeMealFuelTargets({
+    daily: DAILY,
+    session: null,
+    bodyweightKg: 75,
+    workoutTiming: "none",
+    hasWorkout: false,
+  }) as MealFuelTargets;
+
+  it("pins overridden macros, recomputes calories, and flags user_override", () => {
+    const merged = applyMealTargetOverrides(base, { dinner: { carbG: 999 } });
+    expect(merged.dinner?.carbG).toBe(999);
+    expect(merged.dinner?.calories).toBe(
+      Math.round(
+        (merged.dinner?.proteinG ?? 0) * 4 + (merged.dinner?.carbG ?? 0) * 4 + (merged.dinner?.fatG ?? 0) * 9,
+      ),
+    );
+    expect(merged.dinner?.reasonCodes).toContain("user_override");
+    // Untouched meals keep their original (reference-equal) target.
+    expect(merged.breakfast).toBe(base.breakfast);
+  });
+
+  it("honours an explicit calorie-only override without touching macros", () => {
+    const merged = applyMealTargetOverrides(base, { lunch: { calories: 700 } });
+    expect(merged.lunch?.calories).toBe(700);
+    expect(merged.lunch?.carbG).toBe(base.lunch?.carbG);
+  });
+
+  it("ignores overrides for meals that aren't active that day", () => {
+    const merged = applyMealTargetOverrides(base, { snack_pm: { carbG: 50 } });
+    expect(merged.snack_pm).toBeUndefined();
+  });
+
+  it("treats an all-null override as a no-op", () => {
+    const merged = applyMealTargetOverrides(base, {
+      dinner: { calories: null, carbG: null, proteinG: null, fatG: null },
+    });
+    expect(merged.dinner).toBe(base.dinner);
   });
 });

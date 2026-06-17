@@ -24,6 +24,8 @@ export interface UserPreferences {
   /** IANA timezone name (e.g. "America/Chicago"). Auto-detected on first sign-in. */
   userTimezone: string;
   weeklyGoal: number;
+  /** Meals-per-day preset (3/4/5) the per-meal fuel targets are split across. */
+  mealSchedule?: 3 | 4 | 5;
   /** Master email toggle — when false, no emails are sent regardless of sub-toggles. */
   emailNotifications: boolean;
   /** Per-type toggle for the Monday weekly summary email. */
