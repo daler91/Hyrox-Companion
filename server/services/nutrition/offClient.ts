@@ -1,8 +1,13 @@
 import { env } from "../../env";
 import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS, OFF_GRAMS_TO_UNIT } from "./micros";
+import { isRelevantMatch } from "./relevance";
 import type { MappedFood } from "./types";
 import { num } from "./utils";
+
+// Back-compat alias: OFF search gates on the shared relevance check, same as the
+// other providers now do. Re-exported under the original name for existing imports.
+export { isRelevantMatch as isRelevantOffMatch };
 
 /**
  * Open Food Facts client (FR-1.1 + FR-2.1). Two operations, both mapping OFF's
@@ -159,40 +164,10 @@ interface OffSearchResponse {
   products?: (OffProduct & { code?: string })[];
 }
 
-/** Lowercase alphanumeric word tokens, e.g. "Greek Yoghurt 0%!" → ["greek","yoghurt","0"]. */
-function offTokens(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-/**
- * Relevance gate for OFF text search — the explicit requirement: only surface an
- * OFF hit when it actually matches the typed text. OFF's crowd-sourced full-text
- * search also matches on ingredients/categories, so a bare query returns plenty of
- * loosely-related products; we require EVERY query token to begin a word in the
- * product's name or brand (a prefix match, mirroring the local cache's prefix
- * `ILIKE`). So "yogurt" matches "Greek Yogurt" and "choc" matches "Chocolate Bar",
- * but "chip" does not match "Chocolate". Conservative by design — better to drop a
- * borderline OFF result (USDA/Edamam/cache still answer) than pad search with
- * off-topic products.
- */
-export function isRelevantOffMatch(query: string, food: MappedFood): boolean {
-  const queryTokens = offTokens(query);
-  if (queryTokens.length === 0) return false;
-  // Pad with spaces so a leading-space probe matches a word boundary (start of
-  // any token), giving prefix-anchored matching without a per-token loop.
-  const haystack = ` ${offTokens(`${food.name} ${food.brand ?? ""}`).join(" ")} `;
-  return queryTokens.every((token) => haystack.includes(` ${token}`));
-}
-
 /**
  * Free-text search Open Food Facts (FR-1.1), supplementing USDA/Edamam in the
  * search orchestrator. Returns per-100g mapped foods whose name/brand matches the
- * query (see `isRelevantOffMatch`) — the relevance gate is what makes these
+ * query (see `isRelevantMatch`) — the relevance gate is what makes these
  * crowd-sourced hits trustworthy enough to surface alongside the curated sources.
  *
  * Never throws: any failure (network, or OFF's tight search rate limit → 429 after
@@ -241,7 +216,7 @@ export async function searchOffFoods(
       const code = product.code?.trim();
       if (!code) continue;
       const mapped = mapOffProduct(code, product);
-      if (mapped && isRelevantOffMatch(query, mapped)) foods.push(mapped);
+      if (mapped && isRelevantMatch(query, mapped)) foods.push(mapped);
     }
     return { foods, reached: true };
   } catch {

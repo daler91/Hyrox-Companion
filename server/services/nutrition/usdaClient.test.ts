@@ -7,7 +7,12 @@ vi.mock("../../utils/httpRetry");
 
 import { env } from "../../env";
 import { errResponse, ok as okResponse } from "./httpClientTestSupport";
-import { fetchUsdaFoodById, fetchUsdaFoodPortions, mapUsdaSearchFood, searchUsdaFoods } from "./usdaClient";
+import {
+  fetchUsdaFoodById,
+  fetchUsdaFoodPortions,
+  mapUsdaSearchFood,
+  searchUsdaFoods,
+} from "./usdaClient";
 
 describe("mapUsdaSearchFood", () => {
   it("maps a Foundation food's per-100g nutrients", () => {
@@ -73,18 +78,30 @@ describe("mapUsdaSearchFood", () => {
   });
 
   it("returns null per-nutrient when missing and null for an unusable record", () => {
-    expect(mapUsdaSearchFood({ fdcId: 1, description: "x", foodNutrients: [] })?.proteinPer100g).toBeNull();
+    expect(
+      mapUsdaSearchFood({ fdcId: 1, description: "x", foodNutrients: [] })?.proteinPer100g,
+    ).toBeNull();
     expect(mapUsdaSearchFood({ description: "no id" })).toBeNull();
   });
 
   it("converts serving units to grams and skips volume units", () => {
     expect(
-      mapUsdaSearchFood({ fdcId: 1, description: "x", servingSize: 1, servingSizeUnit: "oz", foodNutrients: [] })
-        ?.servingSizeG,
+      mapUsdaSearchFood({
+        fdcId: 1,
+        description: "x",
+        servingSize: 1,
+        servingSizeUnit: "oz",
+        foodNutrients: [],
+      })?.servingSizeG,
     ).toBeCloseTo(28.349523125);
     expect(
-      mapUsdaSearchFood({ fdcId: 1, description: "x", servingSize: 100, servingSizeUnit: "ml", foodNutrients: [] })
-        ?.servingSizeG,
+      mapUsdaSearchFood({
+        fdcId: 1,
+        description: "x",
+        servingSize: 100,
+        servingSizeUnit: "ml",
+        foodNutrients: [],
+      })?.servingSizeG,
     ).toBeNull();
   });
 });
@@ -113,7 +130,13 @@ describe("searchUsdaFoods", () => {
     fetchMock.mockResolvedValue(
       okResponse({
         foods: [
-          { fdcId: 1, description: "Banana", foodNutrients: [{ nutrientId: 1008, nutrientNumber: "208", unitName: "kcal", value: 89 }] },
+          {
+            fdcId: 1,
+            description: "Banana",
+            foodNutrients: [
+              { nutrientId: 1008, nutrientNumber: "208", unitName: "kcal", value: 89 },
+            ],
+          },
         ],
       }),
     );
@@ -123,8 +146,17 @@ describe("searchUsdaFoods", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it("requires all query words for precision (requireAllWords)", async () => {
+    fetchMock.mockResolvedValue(okResponse({ foods: [] }));
+    await searchUsdaFoods("greek yogurt");
+    const init = fetchMock.mock.calls[0][1] as { body: string };
+    expect(JSON.parse(init.body)).toMatchObject({ requireAllWords: true, pageSize: 25 });
+  });
+
   it("retries a 429 then succeeds", async () => {
-    fetchMock.mockResolvedValueOnce(errResponse(429)).mockResolvedValueOnce(okResponse({ foods: [] }));
+    fetchMock
+      .mockResolvedValueOnce(errResponse(429))
+      .mockResolvedValueOnce(okResponse({ foods: [] }));
     const result = await searchUsdaFoods("x");
     expect(result).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -177,7 +209,12 @@ describe("fetchUsdaFoodPortions", () => {
   });
 
   it("returns [] on API error (best-effort)", async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}), headers: { get: () => null } });
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+      headers: { get: () => null },
+    });
     expect(await fetchUsdaFoodPortions("123")).toEqual([]);
   });
 
@@ -213,7 +250,13 @@ describe("fetchUsdaFoodById", () => {
       }),
     );
     const m = await fetchUsdaFoodById("123");
-    expect(m).toMatchObject({ source: "usda", sourceId: "123", name: "Spinach, raw", caloriesPer100g: 23, proteinPer100g: 2.9 });
+    expect(m).toMatchObject({
+      source: "usda",
+      sourceId: "123",
+      name: "Spinach, raw",
+      caloriesPer100g: 23,
+      proteinPer100g: 2.9,
+    });
     expect(m?.micros).toMatchObject({ sodium: 79 });
   });
 
@@ -224,7 +267,12 @@ describe("fetchUsdaFoodById", () => {
   });
 
   it("returns null on an API error (best-effort)", async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}), headers: { get: () => null } });
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+      headers: { get: () => null },
+    });
     expect(await fetchUsdaFoodById("123")).toBeNull();
   });
 });

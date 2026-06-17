@@ -188,4 +188,65 @@ describe("searchFoods", () => {
     expect(result.results.map((f) => f.id)).toEqual(["local1"]);
     expect(logger.warn).toHaveBeenCalled();
   });
+
+  it("drops a USDA result that doesn't match the query, keeping the relevant one", async () => {
+    vi.mocked(searchUsdaFoods).mockResolvedValue([
+      mappedUsda, // "Banana"
+      { ...mappedUsda, sourceId: "2", name: "Chocolate Bar" },
+    ]);
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "usda-banana", source: "usda", sourceId: "1", name: "Banana" }),
+      food({ id: "usda-choc", source: "usda", sourceId: "2", name: "Chocolate Bar" }),
+    ]);
+
+    const result = await searchFoods("banana", "u1");
+    expect(result.results.map((f) => f.id)).toEqual(["usda-banana"]);
+  });
+
+  it("drops an Edamam result that doesn't match the query", async () => {
+    vi.mocked(searchEdamamFoods).mockResolvedValue({
+      foods: [mappedEdamam, { ...mappedEdamam, sourceId: "ed2", name: "Granola Cereal" }],
+      reached: true,
+    });
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "ed-banana", source: "edamam", sourceId: "ed1", name: "Banana" }),
+      food({ id: "ed-granola", source: "edamam", sourceId: "ed2", name: "Granola Cereal" }),
+    ]);
+
+    const result = await searchFoods("banana", "u1");
+    expect(result.results.map((f) => f.id)).toEqual(["ed-banana"]);
+  });
+
+  it("ranks a stronger name match above a weaker one from a higher-priority provider", async () => {
+    vi.mocked(searchEdamamFoods).mockResolvedValue({
+      foods: [{ ...mappedEdamam, name: "Banana Bread" }],
+      reached: true,
+    });
+    vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]); // exact "Banana"
+    vi.mocked(storage.nutrition.upsertFoods)
+      .mockResolvedValueOnce([
+        food({ id: "ed-bread", source: "edamam", sourceId: "ed1", name: "Banana Bread" }),
+      ])
+      .mockResolvedValueOnce([
+        food({ id: "usda-banana", source: "usda", sourceId: "1", name: "Banana" }),
+      ]);
+
+    const result = await searchFoods("banana", "u1");
+    // USDA's exact "Banana" outranks Edamam's "Banana Bread" despite the lower tier.
+    expect(result.results.map((f) => f.id)).toEqual(["usda-banana", "ed-bread"]);
+  });
+
+  it("falls back to ungated results when the gate would empty everything", async () => {
+    vi.mocked(searchUsdaFoods).mockResolvedValue([
+      { ...mappedUsda, sourceId: "9", name: "Chocolate Bar" },
+    ]);
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "usda-choc", source: "usda", sourceId: "9", name: "Chocolate Bar" }),
+    ]);
+
+    // Gate("banana") drops the only (off-topic) hit and there's no local match, so
+    // the fallback surfaces it rather than returning a blank screen.
+    const result = await searchFoods("banana", "u1");
+    expect(result.results.map((f) => f.id)).toEqual(["usda-choc"]);
+  });
 });
