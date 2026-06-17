@@ -8,14 +8,16 @@ import { useMemo } from "react";
 import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
 
 /**
- * Compact pre-session fuelling target on a PLANNED timeline card (Phase 3b).
+ * Compact pre + post fuelling target on a PLANNED timeline card (Phase 3b).
  * Mirrors the FuellingPlanPanel's inputs — the athlete's saved expected
  * duration/RPE on the plan day, else an estimate from the planned exercise
- * table — so the card and the detail sheet always quote the same number.
- * Renders nothing when the session needs no pre-fuelling (short and easy), so
- * easy days stay uncluttered. The caller gates on the nutrition flag and on
- * the entry being a planned plan-day. Static (not a button): the card itself
- * opens the detail sheet, where the full panel lives.
+ * table — so the card and the detail sheet always quote the same numbers.
+ * Shows the pre-session carbs (when the session is long/hard enough to warrant
+ * them) and the post-session recovery carbs + protein, so the card carries the
+ * whole fuel plan for the session. Renders nothing only when there's no useful
+ * target at all. The caller gates on the nutrition flag and on the entry being a
+ * planned plan-day. Static (not a button): the card itself opens the detail
+ * sheet, where the full panel lives.
  */
 export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry }) {
   const { data: preferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
@@ -41,7 +43,9 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
     preferences?.distanceUnit,
   ]);
 
-  if (target.preCarbG <= 0) return null;
+  const hasPre = target.preCarbG > 0;
+  const hasPost = target.postCarbG > 0 || target.postProteinG > 0;
+  if (!hasPre && !hasPost) return null;
 
   return (
     <span
@@ -50,9 +54,20 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
       data-testid={`fuelling-target-chip-${entry.id}`}
     >
       <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
-      <span>
-        Fuel ~<span className="font-medium tabular-nums text-foreground">{target.preCarbG}g</span>{" "}
-        carbs before
+      <span className="tabular-nums">
+        Fuel{" "}
+        {hasPre ? (
+          <>
+            ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs before
+          </>
+        ) : null}
+        {hasPre && hasPost ? " · " : null}
+        {hasPost ? (
+          <>
+            ~<span className="font-medium text-foreground">{target.postCarbG}g</span> C +{" "}
+            <span className="font-medium text-foreground">{target.postProteinG}g</span> P after
+          </>
+        ) : null}
       </span>
     </span>
   );
