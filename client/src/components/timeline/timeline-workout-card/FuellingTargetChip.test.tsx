@@ -66,17 +66,31 @@ describe("FuellingTargetChip", () => {
     expect(screen.getByTestId("fuelling-target-chip-entry-1")).toHaveTextContent("61g");
   });
 
-  it("renders nothing when the session needs no pre-fuelling", () => {
+  it("shows the post-recovery target even when no pre-fuelling is needed", () => {
     renderWithClient(
       <FuellingTargetChip entry={makeEntry({ expectedDurationMin: 30, expectedRpe: 3 })} />,
     );
 
-    expect(screen.queryByTestId("fuelling-target-chip-entry-1")).not.toBeInTheDocument();
+    const chip = screen.getByTestId("fuelling-target-chip-entry-1");
+    expect(chip).toHaveTextContent("after");
+    expect(chip).not.toHaveTextContent("before");
   });
 
   it("falls back to the baseline target when bodyweight is unknown", () => {
     renderWithClient(<FuellingTargetChip entry={makeEntry()} />, null);
 
     expect(screen.getByTestId("fuelling-target-chip-entry-1")).toHaveTextContent("30g");
+  });
+
+  it("shows both pre-fuel and post-recovery for a moderate session", () => {
+    renderWithClient(
+      <FuellingTargetChip entry={makeEntry({ expectedDurationMin: 60, expectedRpe: 6 })} />,
+    );
+
+    const chip = screen.getByTestId("fuelling-target-chip-entry-1");
+    expect(chip).toHaveTextContent("before");
+    expect(chip).toHaveTextContent("after");
+    expect(chip).toHaveTextContent("53g"); // post carbs (60min/rpe6/75kg)
+    expect(chip).toHaveTextContent("23g"); // post protein
   });
 });
