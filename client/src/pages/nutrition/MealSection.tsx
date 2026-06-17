@@ -63,7 +63,8 @@ export function MealSection({ label, mealType, entries, target, onEdit, onDelete
       }).filter((r) => r.key !== "calories")
     : [];
   const isCustomTarget = !!target?.reasonCodes.includes("user_override");
-  const caption = target ? (isCustomTarget ? "Custom" : ROLE_CAPTION[target.role]) : "";
+  let caption = "";
+  if (target) caption = isCustomTarget ? "Custom" : ROLE_CAPTION[target.role];
 
   return (
     <section data-testid={`meal-section-${label.toLowerCase()}`}>

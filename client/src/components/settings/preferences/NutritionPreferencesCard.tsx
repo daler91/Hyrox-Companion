@@ -1,10 +1,12 @@
+import type { MealScheduleCount } from "@shared/mealFuelling";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { PreferenceSelectRow } from "./PreferenceRows";
 
 interface NutritionPreferencesCardProps {
-  readonly mealSchedule: 3 | 4 | 5;
-  readonly onMealScheduleChange: (value: 3 | 4 | 5) => void;
+  readonly mealSchedule: MealScheduleCount;
+  readonly onMealScheduleChange: (value: MealScheduleCount) => void;
 }
 
 export function NutritionPreferencesCard({
@@ -22,7 +24,7 @@ export function NutritionPreferencesCard({
           label="Meals per day"
           description="How many meals your per-meal fuel targets are spread across"
           value={String(mealSchedule)}
-          onValueChange={(v) => onMealScheduleChange(Number(v) as 3 | 4 | 5)}
+          onValueChange={(v) => onMealScheduleChange(Number(v) as MealScheduleCount)}
           options={[
             { value: "3", label: "3 meals" },
             { value: "4", label: "4 meals" },

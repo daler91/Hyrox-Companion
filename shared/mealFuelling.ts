@@ -120,7 +120,7 @@ const RECOVERY_FAT_WEIGHT = 0.1;
 function resolveFlexMeal(eatingMeals: MealType[]): MealType {
   if (eatingMeals.includes("snack_pm")) return "snack_pm";
   if (eatingMeals.includes("snack")) return "snack";
-  return eatingMeals[eatingMeals.length - 1];
+  return eatingMeals.at(-1) ?? "dinner";
 }
 
 interface TimingPlan {

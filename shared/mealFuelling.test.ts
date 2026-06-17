@@ -183,7 +183,7 @@ describe("meal schedule presets (3/4/5)", () => {
       mealSchedule: 3,
     }) as MealFuelTargets;
 
-    expect(Object.keys(targets).sort()).toEqual(["breakfast", "dinner", "lunch"]);
+    expect(Object.keys(targets).sort((a, b) => a.localeCompare(b))).toEqual(["breakfast", "dinner", "lunch"]);
     expect(targets.snack).toBeUndefined();
     expect(targets.snack_pm).toBeUndefined();
     expect(targets.dinner?.role).toBe("flex_remainder");
@@ -217,7 +217,7 @@ describe("meal schedule presets (3/4/5)", () => {
       workoutTiming: "none",
       hasWorkout: false,
     }) as MealFuelTargets;
-    expect(Object.keys(targets).sort()).toEqual(["breakfast", "dinner", "lunch", "snack"]);
+    expect(Object.keys(targets).sort((a, b) => a.localeCompare(b))).toEqual(["breakfast", "dinner", "lunch", "snack"]);
     expect(targets.snack_pm).toBeUndefined();
   });
 
