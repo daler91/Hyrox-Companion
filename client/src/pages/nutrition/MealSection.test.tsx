@@ -1,4 +1,4 @@
-import type { FoodLogEntryWithNutrition } from "@shared/schema";
+import type { FoodLogEntryWithNutrition, MealFuelTarget } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -18,18 +18,61 @@ const ENTRY: FoodLogEntryWithNutrition = {
   nutrition: { calories: 105, protein: 1.3, carb: 27, fat: 0.4, fiber: 3.1 },
 };
 
+const TARGET: MealFuelTarget = {
+  calories: 464,
+  carbG: 53,
+  proteinG: 45,
+  fatG: 8,
+  role: "post_workout_recovery",
+  reasonCodes: ["post_workout_recovery"],
+  rationale: "Your post-workout refuel — 53g carbs + 45g protein to recover.",
+};
+
 describe("MealSection", () => {
-  it("renders nothing when there are no entries", () => {
+  it("renders nothing when there are no entries and no target", () => {
     const { container } = render(
-      <MealSection label="Breakfast" entries={[]} onEdit={vi.fn()} onDelete={vi.fn()} />,
+      <MealSection label="Breakfast" mealType="breakfast" entries={[]} onEdit={vi.fn()} onDelete={vi.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders the per-meal target even when nothing is logged", () => {
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[]}
+        target={TARGET}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("meal-target-breakfast")).toBeInTheDocument();
+    expect(screen.getByText("Post-workout refuel")).toBeInTheDocument();
+    expect(screen.getByText(TARGET.rationale)).toBeInTheDocument();
+    expect(screen.getByText("0/53g")).toBeInTheDocument(); // carb target, nothing logged
+    expect(screen.getByTestId("meal-empty-breakfast")).toBeInTheDocument();
+  });
+
+  it("shows logged progress against the meal target", () => {
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        target={TARGET}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("27/53g")).toBeInTheDocument(); // logged carbs vs target
+    expect(screen.getByText("Banana")).toBeInTheDocument();
   });
 
   it("fires edit callback on edit click", async () => {
     const onEdit = vi.fn();
     const user = userEvent.setup();
-    render(<MealSection label="Breakfast" entries={[ENTRY]} onEdit={onEdit} onDelete={vi.fn()} />);
+    render(<MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={onEdit} onDelete={vi.fn()} />);
 
     expect(screen.getByText("Banana")).toBeInTheDocument();
     await user.click(screen.getByTestId("button-edit-e1"));
@@ -40,7 +83,7 @@ describe("MealSection", () => {
     const onDelete = vi.fn();
     const user = userEvent.setup();
     render(
-      <MealSection label="Breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
+      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
     );
 
     await user.click(screen.getByTestId("button-delete-e1"));
@@ -55,7 +98,7 @@ describe("MealSection", () => {
     const onDelete = vi.fn();
     const user = userEvent.setup();
     render(
-      <MealSection label="Breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
+      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
     );
 
     await user.click(screen.getByTestId("button-delete-e1"));
@@ -65,13 +108,14 @@ describe("MealSection", () => {
 
   it("shows an AI badge only for nl/photo entries", () => {
     const { rerender } = render(
-      <MealSection label="Breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={vi.fn()} />,
+      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={vi.fn()} />,
     );
     expect(screen.queryByTestId("ai-badge-e1")).not.toBeInTheDocument();
 
     rerender(
       <MealSection
         label="Breakfast"
+        mealType="breakfast"
         entries={[{ ...ENTRY, entryMethod: "nl" }]}
         onEdit={vi.fn()}
         onDelete={vi.fn()}

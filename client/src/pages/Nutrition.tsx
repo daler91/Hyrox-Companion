@@ -76,6 +76,19 @@ export default function Nutrition() {
 
   const summary = day.data;
   const isEmpty = !!summary && MEAL_TYPES.every((m) => summary.meals[m].length === 0);
+  const hasMealTargets = !!summary?.mealTargets;
+
+  const repeatPrevButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => repeatDay.mutate({ sourceDate: addDays(date, -1), targetDate: date })}
+      disabled={repeatDay.isPending}
+      data-testid="button-repeat-prev"
+    >
+      <CopyPlus className="mr-2 h-4 w-4" /> Repeat previous day
+    </Button>
+  );
 
   let dayBody: ReactNode;
   if (day.isLoading) {
@@ -84,38 +97,35 @@ export default function Nutrition() {
         <LoadingSpinner />
       </div>
     );
-  } else if (isEmpty) {
+  } else if (isEmpty && !hasMealTargets) {
+    // Nothing logged and no targets to plan around — the classic empty prompt.
     dayBody = (
       <div
         className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
         data-testid="text-empty-day"
       >
         <p>Nothing logged for {formatDateLabel(date).toLowerCase()}.</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-3"
-          onClick={() => repeatDay.mutate({ sourceDate: addDays(date, -1), targetDate: date })}
-          disabled={repeatDay.isPending}
-          data-testid="button-repeat-prev"
-        >
-          <CopyPlus className="mr-2 h-4 w-4" /> Repeat previous day
-        </Button>
+        <div className="mt-3">{repeatPrevButton}</div>
       </div>
     );
   } else {
+    // Render the meal sections — per-meal fuel targets show even before anything
+    // is logged. Offer a compact repeat shortcut while the day is still empty.
     dayBody = (
       <div className="space-y-4">
         {MEAL_TYPES.map((m) => (
           <MealSection
             key={m}
             label={MEAL_LABELS[m]}
+            mealType={m}
             entries={summary?.meals[m] ?? []}
+            target={summary?.mealTargets?.[m] ?? null}
             onEdit={(entry) => setDialog({ mode: "edit", entry })}
             onDelete={(id) => deleteLog.mutate(id)}
             deletingId={deleteLog.isPending ? deleteLog.variables : undefined}
           />
         ))}
+        {isEmpty && <div className="flex justify-center">{repeatPrevButton}</div>}
       </div>
     );
   }

@@ -169,7 +169,7 @@ export function summariseEntries(rows: LogEntryWithFood[]): {
 export function buildDailySummary(
   logDate: string,
   rows: LogEntryWithFood[],
-): Omit<DailySummaryResponse, "effectiveTarget"> {
+): Omit<DailySummaryResponse, "effectiveTarget" | "mealTargets"> {
   const meals = emptyMeals();
   const rawTotals = emptyTotals();
 
