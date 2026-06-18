@@ -7,6 +7,10 @@ vi.mock("./usdaClient", () => ({ searchUsdaFoods: vi.fn() }));
 vi.mock("./edamamClient", () => ({ searchEdamamFoods: vi.fn() }));
 vi.mock("./offClient", () => ({ searchOffFoods: vi.fn() }));
 vi.mock("./refresh", () => ({ refreshStaleFoodsInBackground: vi.fn() }));
+// Semantic search is mocked here: it's covered in semanticSearch.test.ts, and the
+// real module transitively loads the DB/AI/vector layer. Default no-op ([]) keeps
+// every existing assertion unchanged (semantic is purely additive).
+vi.mock("./semanticSearch", () => ({ maybeSemanticSearch: vi.fn() }));
 vi.mock("../../env", () => ({ env: { USDA_API_KEY: "test-key" } }));
 vi.mock("../../logger", () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
@@ -17,6 +21,7 @@ import { searchEdamamFoods } from "./edamamClient";
 import { searchFoods } from "./foodSearch";
 import { makeFood as food } from "./foodTestFixture";
 import { searchOffFoods } from "./offClient";
+import { maybeSemanticSearch } from "./semanticSearch";
 import { searchUsdaFoods } from "./usdaClient";
 
 const mappedUsda = {
@@ -44,6 +49,7 @@ describe("searchFoods", () => {
     vi.mocked(searchUsdaFoods).mockResolvedValue([]);
     vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: false });
     vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([]);
+    vi.mocked(maybeSemanticSearch).mockResolvedValue([]);
   });
 
   it("ranks Edamam ahead of USDA ahead of local, not degraded", async () => {
@@ -260,5 +266,32 @@ describe("searchFoods", () => {
 
     const result = await searchFoods("yoghrt", "u1");
     expect(result.results.map((f) => f.id)).toEqual(["fuzzy", "noise"]);
+  });
+
+  it("appends semantic matches as a low-priority tier when the keyword set is thin", async () => {
+    // Keyword/fuzzy found nothing; semantic surfaces a conceptually related food.
+    vi.mocked(maybeSemanticSearch).mockResolvedValue([
+      food({ id: "sem1", source: "usda", sourceId: "s1", name: "Grilled Chicken Breast" }),
+    ]);
+
+    const result = await searchFoods("post workout protein", "u1");
+
+    // Called with the thin merged count (0 here) so it knows to fire.
+    expect(maybeSemanticSearch).toHaveBeenCalledWith("post workout protein", "u1", 0);
+    expect(result.results.map((f) => f.id)).toEqual(["sem1"]);
+  });
+
+  it("dedupes a semantic match that's already a keyword hit (keyword copy wins)", async () => {
+    vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "usda1", source: "usda", sourceId: "1", name: "Banana" }),
+    ]);
+    // Semantic returns the same source:sourceId — it must collapse, not double up.
+    vi.mocked(maybeSemanticSearch).mockResolvedValue([
+      food({ id: "sem-dup", source: "usda", sourceId: "1", name: "Banana" }),
+    ]);
+
+    const result = await searchFoods("banana", "u1");
+    expect(result.results.map((f) => f.id)).toEqual(["usda1"]);
   });
 });

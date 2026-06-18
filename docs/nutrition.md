@@ -338,13 +338,14 @@ toggles and entry deletes use optimistic/pending UI.
 
 ## 7. AI usage & safety
 
-Three AI touchpoints, all on Gemini, all opt-in and budgeted:
+Four AI touchpoints, all on Gemini, all opt-in and budgeted:
 
 | Touchpoint | Model role | Default model | Output |
 |------------|-----------|---------------|--------|
 | Describe a meal (`/parse/text`) | `fast` | `gemini-2.5-flash-lite` | JSON items (portion estimate only) |
 | Snap a meal (`/parse/photo`) | vision | `gemini-2.5-flash` | JSON items from the image |
 | Nutrition insights (`/insights`) | `reasoning` | `gemini-3.1-pro-preview` | Markdown analysis |
+| Semantic food search (`/foods/search`, off by default) | embedding | `gemini-embedding-001` | Extra related foods, appended when keyword/fuzzy is sparse |
 
 Safety properties:
 
@@ -352,6 +353,14 @@ Safety properties:
   coach enabled (403); `aiBudgetCheck` blocks at a rolling 24h spend of **$2.00**
   (429) and warns past **$1.50** via an `X-AI-Budget-Warning` header. An
   `AI_FEATURES_ENABLED=false` kill switch 503s all AI routes.
+- **Semantic search is soft-gated, not a hard AI route.** `/foods/search` keeps
+  keyword/fuzzy search working for everyone (no `aiConsentCheck`/`aiBudgetCheck`
+  middleware — those would 403/429 plain search). The embedding step
+  (`semanticSearch.ts`) instead checks the flag, consent, and budget *inline* and
+  only fires when the keyword/fuzzy set is thin (< 5 hits), so it stays off the hot
+  path; any failure (no key/consent/budget, vector error) degrades silently to the
+  keyword results. Query embeddings are LRU-cached, and foods are embedded by a
+  bounded background cron, so repeated searches don't re-bill.
 - **Numbers are never AI-sourced.** The parser returns a name + grams; nutrition
   is resolved from real `foods` rows. Insights are instructed to use *only* the
   supplied aggregates and not to invent foods or numbers.
@@ -394,10 +403,11 @@ There is **no TTL** on the cache — once a food is fetched it persists indefini
 | `VITE_NUTRITION_ENABLED` | client (build) | Gates the page route + sidebar nav (`featureFlags.nutritionEnabled`, default `true`). |
 | `USDA_API_KEY` | server | Enables live food search; absent ⇒ graceful degradation. |
 | `NUTRITION_FUZZY_ENABLED` | server | `default "true"`. Gates the pg_trgm trigram (typo) arm of local search; `"false"` falls back to exact substring (kill switch / pre-migration). Synonyms + diacritics are unaffected. |
-| `GEMINI_API_KEY` / `GEMINI_MODEL` / `GEMINI_VISION_MODEL` / `GEMINI_SUGGESTIONS_MODEL` | server | The three AI touchpoints. |
+| `NUTRITION_SEMANTIC_ENABLED` | server | `default "false"`. Gates **semantic (embeddings) search** — both the query-time vector lookup and the background embedding-backfill cron. Requires `AI_FEATURES_ENABLED != "false"` + `GEMINI_API_KEY`; reuses the pgvector pool (`VECTOR_DATABASE_URL`, falls back to the main DB). Safe to leave off — keyword/fuzzy search is unaffected. |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` / `GEMINI_VISION_MODEL` / `GEMINI_SUGGESTIONS_MODEL` | server | The four AI touchpoints (incl. `gemini-embedding-001` for semantic search). |
 | `AI_FEATURES_ENABLED` | server | Global AI kill switch. |
 
-Gate the two `NUTRITION_*` flags together per tier (`.env.example` notes this).
+Gate the `NUTRITION_*` flags together per tier (`.env.example` notes this).
 
 ---
 
@@ -484,8 +494,14 @@ The biggest unrealised value is connecting fuelling to the race itself:
   mid-string matches, searches **brand** as well as name, strips **diacritics**, and
   is **synonym-aware** (`synonyms.ts`) — the local query is expanded to synonym forms
   so it retrieves rows stored under an alias; fuzzy hits rank just below real matches.
-  _Remaining:_ provider-side synonym query-expansion (deferred), and **semantic
-  (embeddings) search** (Phase 2, flag-gated — see roadmap below).
+- **[DONE] Semantic (embeddings) search.** Flag-gated (`NUTRITION_SEMANTIC_ENABLED`,
+  default off) and off the hot path: when keyword/fuzzy returns few hits, the query is
+  embedded (`gemini-embedding-001`, LRU-cached) and matched by cosine similarity
+  against a `food_embeddings` vector table (populated by a bounded background cron),
+  so a conceptual query ("post-workout protein") can surface foods sharing no tokens.
+  Consent + budget are checked inline so plain search is never blocked
+  (`semanticSearch.ts` / `foodEmbeddings.ts`). _Remaining:_ provider-side synonym
+  query-expansion (deferred); on-upsert incremental embedding (currently cron-only).
 - **[P3] Backfill micronutrients.** Most cached foods carry no micros until a full
   re-fetch, so the micro panel is often sparse. Enrich micros when a food is opened
   in detail (as servings already are), or backfill popular foods.

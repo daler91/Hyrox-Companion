@@ -3,9 +3,11 @@ import cron from "node-cron";
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { pool } from "./db";
 import { runEmailCronJob } from "./emailScheduler";
+import { env } from "./env";
 import { logger } from "./logger";
 import { queue } from "./queue";
 import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
+import { embedMissingFoods } from "./services/nutrition/foodEmbeddings";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
@@ -18,6 +20,7 @@ let queueDepthTask: ReturnType<typeof cron.schedule> | null = null;
 let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null;
 let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let analyticsRecomputeTask: ReturnType<typeof cron.schedule> | null = null;
+let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -35,6 +38,7 @@ export const CRON_LOCK_KEYS = {
   startupEmailCatchUp: 42_010_007n,
   sharedRuntimeCleanup: 42_010_008n,
   analyticsRecompute: 42_010_009n,
+  nutritionEmbeddingBackfill: 42_010_010n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -243,6 +247,29 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Analytics recompute scheduled: hourly, fires at each user's local midnight");
 
+  // Phase 2 semantic food search: embed cached foods into the vector DB in bounded
+  // batches so vector search has data. No-op (returns before the lock) unless the
+  // feature is enabled and AI is configured. Every 30 min drains the initial backlog,
+  // then mostly idles (unchanged foods are skipped by text_hash).
+  nutritionEmbeddingTask = cron.schedule(
+    "*/30 * * * *",
+    async () => {
+      if (env.NUTRITION_SEMANTIC_ENABLED !== "true") return;
+      if (env.AI_FEATURES_ENABLED === "false" || !env.GEMINI_API_KEY) return;
+      await runCronJobWithLock("nutritionEmbeddingBackfill", async () => {
+        try {
+          const { embedded } = await embedMissingFoods();
+          if (embedded > 0) {
+            logger.info({ context: "cron", embedded }, `Food embedding backfill: embedded ${embedded} food(s)`);
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Food embedding backfill failed");
+        }
+      });
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "Food embedding backfill scheduled: every 30 min (when semantic search enabled)");
 
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
@@ -305,5 +332,9 @@ export async function stopCron(): Promise<void> {
   if (analyticsRecomputeTask) {
     await analyticsRecomputeTask.stop();
     analyticsRecomputeTask = null;
+  }
+  if (nutritionEmbeddingTask) {
+    await nutritionEmbeddingTask.stop();
+    nutritionEmbeddingTask = null;
   }
 }

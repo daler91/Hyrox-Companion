@@ -114,6 +114,13 @@ const envSchema = z
     // appears, or before the migration has run). Name+brand substring search and the
     // app-layer synonym/diacritic handling are unaffected by this flag.
     NUTRITION_FUZZY_ENABLED: z.enum(["true", "false"]).default("true"),
+    // Semantic (embeddings) food search — Phase 2. OFF by default. When "true" (and
+    // AI is enabled + the user has consented + is within budget), a sparse keyword
+    // result set is supplemented with vector-similarity matches over cached foods,
+    // and a background cron embeds foods into the vector DB. Reuses the existing
+    // pgvector + Gemini embedding infra; never runs on the hot path or for
+    // non-consented users. Independently shippable; safe to leave off.
+    NUTRITION_SEMANTIC_ENABLED: z.enum(["true", "false"]).default("false"),
     // Free USDA FoodData Central API key for live food search. Optional: when
     // unset the module still works, degrading to locally-cached foods only (NFR-5).
     USDA_API_KEY: z.string().optional(),
