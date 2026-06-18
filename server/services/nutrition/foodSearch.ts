@@ -6,19 +6,25 @@ import { storage } from "../../storage";
 import { searchEdamamFoods } from "./edamamClient";
 import { searchOffFoods } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
+import { isRelevantMatch, rankByRelevance } from "./relevance";
 import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
 
 /**
  * Food search orchestration (FR-1.1). Queries the local `foods` cache plus the
  * live providers — Edamam (curated branded, preferred), USDA, and Open Food Facts
- * — concurrently, caching any hits back into `foods`. OFF text search is noisy
- * (crowd-sourced, matches on ingredients/categories), so the OFF client only
- * returns hits whose name/brand actually matches the query (its relevance gate).
- * Provider failures are swallowed so manual logging keeps working from cache
- * (NFR-5), surfaced via `apiDegraded`. Results rank Edamam → USDA → OFF → local,
- * deduped — OFF (no API key needed) keeps search live even when neither keyed
+ * — concurrently, caching any hits back into `foods`. Provider failures are
+ * swallowed so manual logging keeps working from cache (NFR-5), surfaced via
+ * `apiDegraded` — OFF (no API key needed) keeps search live even when neither keyed
  * provider is configured.
+ *
+ * Provider full-text search is noisy (USDA/OFF match on ingredients/categories), so
+ * every LIVE provider's hits are passed through a shared relevance gate
+ * (`isRelevantMatch`) that requires the query to match the food's name/brand; the
+ * local cache is left ungated (already name-matched and holds custom foods). The
+ * merged, deduped results are then ranked by match quality (`rankByRelevance`) so
+ * the best matches surface first regardless of provider, with provider priority
+ * (Edamam → USDA → OFF → local) preserved only as a tie-breaker.
  */
 
 const LOCAL_LIMIT = 25;
@@ -68,7 +74,9 @@ function mergeFoods(tiers: Food[][]): Food[] {
     if (label) seenLabel.add(label);
     out.push(food);
   }
-  return out.slice(0, MAX_RESULTS);
+  // No cap here — the caller ranks the full deduped list by relevance first, then
+  // caps, so a strong match never gets cut before ranking can promote it.
+  return out;
 }
 
 /** Re-key a settled provider result to the uniform `{ foods, live }` shape so
@@ -136,7 +144,17 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   // so a working OFF call keeps search live even with no USDA/Edamam credentials.
   const apiDegraded = !edamamLive && !usdaLive && !offLive;
 
-  const results = mergeFoods([edamam, usda, off, local]);
+  // Gate the live providers to hits that actually match the query (their full-text
+  // search is noisy); local is left ungated — it's already name-matched by SQL and
+  // holds the user's own custom foods, which must never be filtered out.
+  const gate = (foods: Food[]): Food[] => foods.filter((food) => isRelevantMatch(query, food));
+  let merged = mergeFoods([gate(edamam), gate(usda), gate(off), local]);
+  // Fallback: if the gate removed everything (an over-strict miss or a typo, and no
+  // local hit), show the ungated results rather than a blank screen.
+  if (merged.length === 0) merged = mergeFoods([edamam, usda, off, local]);
+  // Rank by match quality (exact → name-prefix → token match), provider order kept
+  // only as a tie-breaker, then cap.
+  const results = rankByRelevance(query, merged).slice(0, MAX_RESULTS);
   // Diagnostic: where the merged results came from, so it's clear in the logs
   // which sources are actually contributing hits.
   logger.info(

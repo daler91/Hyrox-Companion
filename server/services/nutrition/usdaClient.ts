@@ -206,6 +206,10 @@ export async function searchUsdaFoods(
     query,
     dataType: ["Foundation", "SR Legacy", "Branded"],
     pageSize: USDA_PAGE_SIZE,
+    // Require every query word in the food's description so a broad full-text match
+    // (e.g. "banana" hitting "smoothie, contains banana") doesn't return off-topic
+    // foods. The orchestrator's relevance gate + ranking then refine name/brand fit.
+    requireAllWords: true,
   });
 
   const raw = await retryWithJitter(
@@ -231,9 +235,7 @@ export async function searchUsdaFoods(
   );
 
   const foods = Array.isArray(raw.foods) ? raw.foods : [];
-  return foods
-    .map(mapUsdaSearchFood)
-    .filter((f): f is UsdaFoodMapped => f !== null);
+  return foods.map(mapUsdaSearchFood).filter((f): f is UsdaFoodMapped => f !== null);
 }
 
 // USDA food-detail portions (FR-2.4): "1 cup" → grams. Only the /food/{id}

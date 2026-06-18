@@ -159,41 +159,12 @@ interface OffSearchResponse {
   products?: (OffProduct & { code?: string })[];
 }
 
-/** Lowercase alphanumeric word tokens, e.g. "Greek Yoghurt 0%!" → ["greek","yoghurt","0"]. */
-function offTokens(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-/**
- * Relevance gate for OFF text search — the explicit requirement: only surface an
- * OFF hit when it actually matches the typed text. OFF's crowd-sourced full-text
- * search also matches on ingredients/categories, so a bare query returns plenty of
- * loosely-related products; we require EVERY query token to begin a word in the
- * product's name or brand (a prefix match, mirroring the local cache's prefix
- * `ILIKE`). So "yogurt" matches "Greek Yogurt" and "choc" matches "Chocolate Bar",
- * but "chip" does not match "Chocolate". Conservative by design — better to drop a
- * borderline OFF result (USDA/Edamam/cache still answer) than pad search with
- * off-topic products.
- */
-export function isRelevantOffMatch(query: string, food: MappedFood): boolean {
-  const queryTokens = offTokens(query);
-  if (queryTokens.length === 0) return false;
-  // Pad with spaces so a leading-space probe matches a word boundary (start of
-  // any token), giving prefix-anchored matching without a per-token loop.
-  const haystack = ` ${offTokens(`${food.name} ${food.brand ?? ""}`).join(" ")} `;
-  return queryTokens.every((token) => haystack.includes(` ${token}`));
-}
-
 /**
  * Free-text search Open Food Facts (FR-1.1), supplementing USDA/Edamam in the
- * search orchestrator. Returns per-100g mapped foods whose name/brand matches the
- * query (see `isRelevantOffMatch`) — the relevance gate is what makes these
- * crowd-sourced hits trustworthy enough to surface alongside the curated sources.
+ * search orchestrator. Returns every per-100g-mappable product UNGATED — the
+ * orchestrator applies the shared relevance gate to all providers uniformly, and
+ * its fallback relies on receiving the ungated hits, so filtering here would both
+ * double-gate OFF and blank an OFF-only deployment whenever the gate is over-strict.
  *
  * Never throws: any failure (network, or OFF's tight search rate limit → 429 after
  * a retry) degrades to `{ foods: [], reached: false }`, so search falls back to the
@@ -241,7 +212,7 @@ export async function searchOffFoods(
       const code = product.code?.trim();
       if (!code) continue;
       const mapped = mapOffProduct(code, product);
-      if (mapped && isRelevantOffMatch(query, mapped)) foods.push(mapped);
+      if (mapped) foods.push(mapped);
     }
     return { foods, reached: true };
   } catch {
