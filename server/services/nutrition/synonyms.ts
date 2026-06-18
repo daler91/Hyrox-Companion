@@ -28,8 +28,13 @@ const SYNONYM_GROUPS: readonly (readonly string[])[] = [
 
 // Stemmed token → canonical group id (the group's first member). Built once.
 const CANONICAL = new Map<string, string>();
+// Stemmed token → all members of its group (for query expansion / retrieval).
+const GROUP_MEMBERS = new Map<string, readonly string[]>();
 for (const group of SYNONYM_GROUPS) {
-  for (const term of group) CANONICAL.set(term, group[0]);
+  for (const term of group) {
+    CANONICAL.set(term, group[0]);
+    GROUP_MEMBERS.set(term, group);
+  }
 }
 
 /**
@@ -39,4 +44,13 @@ for (const group of SYNONYM_GROUPS) {
  */
 export function canonicalize(token: string): string {
   return CANONICAL.get(token) ?? token;
+}
+
+/**
+ * All synonym forms for a (stemmed) token, including the token's own group members,
+ * for query expansion so the SQL layer can RETRIEVE a row stored under a synonym.
+ * Empty when the token has no registered synonym (caller keeps the original term).
+ */
+export function synonymsOf(token: string): readonly string[] {
+  return GROUP_MEMBERS.get(token) ?? [];
 }

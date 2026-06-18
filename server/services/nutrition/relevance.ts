@@ -12,7 +12,7 @@
  * and the DB `Food` row (post-cache), so it works at every stage of the pipeline.
  */
 
-import { canonicalize } from "./synonyms";
+import { canonicalize, synonymsOf } from "./synonyms";
 
 // Minimum pg_trgm similarity (matches the SQL threshold in storage/nutrition.ts) for
 // a fuzzy local hit to earn a fractional rank when no textual tier matches.
@@ -104,6 +104,29 @@ export function relevanceScore(query: string, food: NamedFood): number {
  *  Derived from the score so the gate and the ranking can never drift apart. */
 export function isRelevantMatch(query: string, food: NamedFood): boolean {
   return relevanceScore(query, food) >= 1;
+}
+
+/**
+ * Expand a search query into the verbatim query plus synonym variants, so the SQL
+ * layer can RETRIEVE a local food stored under a synonym ("courgette" also searches
+ * "zucchini"). Substitutes each token's synonyms, bounded to avoid blow-up. Returns
+ * unique normalized strings; the first is always the verbatim (normalized) query.
+ */
+export function expandQuery(query: string): string[] {
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
+  const MAX_VARIANTS = 8;
+  let variants: string[] = [""];
+  for (const token of tokens) {
+    const synonyms = synonymsOf(stem(token));
+    const options = synonyms.length > 0 ? synonyms : [token];
+    const next: string[] = [];
+    for (const prefix of variants) {
+      for (const option of options) next.push(prefix ? `${prefix} ${option}` : option);
+    }
+    variants = next.slice(0, MAX_VARIANTS);
+  }
+  return [...new Set([tokens.join(" "), ...variants])];
 }
 
 /**

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { isRelevantMatch, rankByRelevance, relevanceScore, stem, tokenize } from "./relevance";
+import {
+  expandQuery,
+  isRelevantMatch,
+  rankByRelevance,
+  relevanceScore,
+  stem,
+  tokenize,
+} from "./relevance";
 
 const food = (name: string, brand: string | null = null) => ({ name, brand });
 
@@ -107,6 +114,28 @@ describe("isRelevantMatch", () => {
   it("passes synonyms but keeps fuzzy hits below the gate", () => {
     expect(isRelevantMatch("yoghurt", food("Greek Yogurt"))).toBe(true); // synonym → score ≥ 1
     expect(isRelevantMatch("yoghrt", { name: "Yogurt", brand: null, _localSim: 0.6 })).toBe(false);
+  });
+});
+
+describe("expandQuery", () => {
+  it("adds synonym variants, keeping the verbatim query first", () => {
+    const variants = expandQuery("courgette");
+    expect(variants[0]).toBe("courgette");
+    expect(variants).toContain("zucchini");
+  });
+
+  it("substitutes a synonym token within a phrase", () => {
+    const variants = expandQuery("organic courgette");
+    expect(variants).toContain("organic courgette");
+    expect(variants).toContain("organic zucchini");
+  });
+
+  it("returns just the normalized query when no token has a synonym", () => {
+    expect(expandQuery("banana")).toEqual(["banana"]);
+  });
+
+  it("is empty for blank input", () => {
+    expect(expandQuery("   ")).toEqual([]);
   });
 });
 

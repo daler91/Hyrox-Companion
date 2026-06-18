@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canonicalize } from "./synonyms";
+import { canonicalize, synonymsOf } from "./synonyms";
 
 describe("canonicalize", () => {
   it("maps registered synonyms (either direction) to a shared canonical id", () => {
@@ -19,5 +19,13 @@ describe("canonicalize", () => {
   it("does not conflate tokens from different groups", () => {
     expect(canonicalize("zucchini")).not.toBe(canonicalize("eggplant"));
     expect(canonicalize("yogurt")).not.toBe(canonicalize("banana"));
+  });
+});
+
+describe("synonymsOf", () => {
+  it("returns the full group (either direction), or [] for an unknown token", () => {
+    expect([...synonymsOf("courgette")].sort()).toEqual(["courgette", "zucchini"]);
+    expect([...synonymsOf("zucchini")].sort()).toEqual(["courgette", "zucchini"]);
+    expect(synonymsOf("banana")).toEqual([]);
   });
 });

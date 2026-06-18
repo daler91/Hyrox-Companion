@@ -127,7 +127,9 @@ The everyday loop: find a food, log it, see your day.
   trigram fuzzy fallback** (typos / mid-word, e.g. "yoghrt" → "Yogurt"; migration
   0074, gated by `NUTRITION_FUZZY_ENABLED`); fuzzy hits rank just below real matches
   as "did you mean". Matching is **diacritic-insensitive** ("café" → "cafe") and
-  **synonym-aware** ("courgette" ↔ "zucchini"; `synonyms.ts`). OFF needs no API key,
+  **synonym-aware** — the local query is expanded so "courgette" also _retrieves_ a
+  local/custom "Zucchini" row (`synonyms.ts`; provider-side expansion is deferred).
+  OFF needs no API key,
   so a working OFF call keeps search live even when neither keyed provider is
   configured; search falls back to cached-only with an `apiDegraded` flag only when
   no provider reaches its API.
@@ -480,9 +482,10 @@ The biggest unrealised value is connecting fuelling to the race itself:
 - **[DONE] Fuzzy search + synonyms + accents.** Local search now uses a pg_trgm
   trigram fallback (migration 0074, gated by `NUTRITION_FUZZY_ENABLED`) for typos /
   mid-string matches, searches **brand** as well as name, strips **diacritics**, and
-  is **synonym-aware** (`synonyms.ts`); fuzzy hits rank just below real matches.
-  _Remaining:_ multi-word synonym + SQL/provider query-expansion (deferred), and
-  **semantic (embeddings) search** (Phase 2, flag-gated — see roadmap below).
+  is **synonym-aware** (`synonyms.ts`) — the local query is expanded to synonym forms
+  so it retrieves rows stored under an alias; fuzzy hits rank just below real matches.
+  _Remaining:_ provider-side synonym query-expansion (deferred), and **semantic
+  (embeddings) search** (Phase 2, flag-gated — see roadmap below).
 - **[P3] Backfill micronutrients.** Most cached foods carry no micros until a full
   re-fetch, so the micro panel is often sparse. Enrich micros when a food is opened
   in detail (as servings already are), or backfill popular foods.

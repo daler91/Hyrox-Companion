@@ -44,6 +44,7 @@ import { db, type DbExecutor } from "../db";
 import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
 import { computeRecipeFood } from "../services/nutrition/recipe";
+import { expandQuery } from "../services/nutrition/relevance";
 import { type LogEntryWithFood, roundMacros, scaleNutrition } from "../services/nutrition/rollup";
 import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
@@ -109,36 +110,44 @@ export class NutritionStorage {
    * recipes), matching NAME and BRAND case-insensitively. The fast/offline path and
    * the fallback when the live APIs are unavailable.
    *
-   * Matches by exact substring plus, when `NUTRITION_FUZZY_ENABLED` is on, a pg_trgm
-   * similarity fallback so typos/mid-word queries hit ("yoghrt" -> "Yogurt"). Each
-   * row carries `_localSim` (the trigram score) so the orchestrator's ranker can
-   * place fuzzy matches sensibly. Ordered name-prefix > name-substring > brand >
-   * trigram-only, then by similarity, then alphabetically.
+   * The query is expanded with synonyms (`expandQuery`) so a "courgette" search also
+   * retrieves a local "Zucchini" row. Each variant matches by exact substring plus,
+   * when `NUTRITION_FUZZY_ENABLED` is on, a pg_trgm similarity fallback so typos /
+   * mid-word queries hit ("yoghrt" -> "Yogurt"). Rows carry `_localSim` (trigram
+   * score vs the verbatim query) so the orchestrator's ranker can place typo hits;
+   * synonym hits are scored by the synonym-aware ranker, not `_localSim`. Ordered
+   * name-prefix > name-substring > brand > trigram-only, then similarity, then name.
    */
   async searchLocalFoods(
     query: string,
     userId: string,
     limit = DEFAULT_SEARCH_LIMIT,
   ): Promise<LocalFood[]> {
-    const q = query.trim().toLowerCase();
-    if (q.length === 0) return [];
-    const escaped = escapeLike(q);
-    const prefix = `${escaped}%`;
-    const contains = `%${escaped}%`;
+    const variants = expandQuery(query);
+    if (variants.length === 0) return [];
     const fuzzy = env.NUTRITION_FUZZY_ENABLED !== "false";
+    const primary = variants[0]; // the verbatim (normalized) query
+    const prefix = `${escapeLike(primary)}%`;
+    const primaryContains = `%${escapeLike(primary)}%`;
 
-    // Trigram similarity of the query vs name/brand. `0` (no similarity() call) when
-    // fuzzy is off, so the column is always present for ranking and we never touch
-    // pg_trgm unless it's enabled.
+    // Trigram similarity vs the verbatim query (ranks typo hits). `0` (no similarity()
+    // call) when fuzzy is off, so the column is always present and pg_trgm is only
+    // touched when enabled. Synonym hits don't rely on this — the ranker scores them.
     const sim = fuzzy
-      ? sql<number>`greatest(similarity(lower(${foods.name}), ${q}), coalesce(similarity(lower(${foods.brand}), ${q}), 0))`
+      ? sql<number>`greatest(similarity(lower(${foods.name}), ${primary}), coalesce(similarity(lower(${foods.brand}), ${primary}), 0))`
       : sql<number>`0`;
 
-    const nameLike = sql`lower(${foods.name}) like ${contains}`;
-    const brandLike = sql`(${foods.brand} is not null and lower(${foods.brand}) like ${contains})`;
-    const match = fuzzy
-      ? sql`(${nameLike} or ${brandLike} or ${sim} >= ${TRGM_SIMILARITY_THRESHOLD})`
-      : sql`(${nameLike} or ${brandLike})`;
+    // Retrieve a row if ANY variant (the query or a synonym form) matches name/brand
+    // by substring, or — when fuzzy — by trigram similarity. The synonym variants are
+    // what let "courgette" pull a local "Zucchini" row for the synonym-aware ranker.
+    const variantMatch = (v: string) => {
+      const contains = `%${escapeLike(v)}%`;
+      const base = sql`(lower(${foods.name}) like ${contains} or (${foods.brand} is not null and lower(${foods.brand}) like ${contains}))`;
+      return fuzzy
+        ? sql`(${base} or similarity(lower(${foods.name}), ${v}) >= ${TRGM_SIMILARITY_THRESHOLD} or coalesce(similarity(lower(${foods.brand}), ${v}), 0) >= ${TRGM_SIMILARITY_THRESHOLD})`
+        : base;
+    };
+    const match = sql.join(variants.map(variantMatch), sql` or `);
 
     return db
       .select({ ...getTableColumns(foods), _localSim: sim })
@@ -147,8 +156,8 @@ export class NutritionStorage {
       .orderBy(
         sql`case
           when lower(${foods.name}) like ${prefix} then 0
-          when lower(${foods.name}) like ${contains} then 1
-          when ${foods.brand} is not null and lower(${foods.brand}) like ${contains} then 2
+          when lower(${foods.name}) like ${primaryContains} then 1
+          when ${foods.brand} is not null and lower(${foods.brand}) like ${primaryContains} then 2
           else 3 end`,
         desc(sim),
         asc(foods.name),
