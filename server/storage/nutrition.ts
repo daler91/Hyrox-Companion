@@ -26,9 +26,22 @@ import {
   type UpsertMealTargetInput,
   type UpsertNutritionTargetInput,
 } from "@shared/schema";
-import { and, asc, count, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
+import { env } from "../env";
 import { AppError, ErrorCode } from "../errors";
 import { computeRecipeFood } from "../services/nutrition/recipe";
 import { type LogEntryWithFood, roundMacros, scaleNutrition } from "../services/nutrition/rollup";
@@ -36,6 +49,15 @@ import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
 
 const DEFAULT_SEARCH_LIMIT = 25;
+// Minimum pg_trgm similarity for a fuzzy (typo) match. Set explicitly in the
+// predicate rather than via the `pg_trgm.similarity_threshold` session GUC so it's
+// deterministic across pooled connections.
+const TRGM_SIMILARITY_THRESHOLD = 0.3;
+
+/** A local search hit carrying the pg_trgm similarity (0 when fuzzy is off) so the
+ *  orchestrator's ranker can promote good typo matches. Extends `Food`; the extra
+ *  field is computed at query time and never persisted. */
+export type LocalFood = Food & { _localSim?: number };
 
 /** Escape LIKE metacharacters in user input (backslash is the default escape char). */
 function escapeLike(value: string): string {
@@ -84,21 +106,51 @@ export class NutritionStorage {
 
   /**
    * Search foods visible to the user (shared cache + their own custom foods/
-   * recipes) case-insensitively, ranking prefix hits first. The fast/offline path
-   * and the fallback when the USDA API is unavailable.
+   * recipes), matching NAME and BRAND case-insensitively. The fast/offline path and
+   * the fallback when the live APIs are unavailable.
+   *
+   * Matches by exact substring plus, when `NUTRITION_FUZZY_ENABLED` is on, a pg_trgm
+   * similarity fallback so typos/mid-word queries hit ("yoghrt" -> "Yogurt"). Each
+   * row carries `_localSim` (the trigram score) so the orchestrator's ranker can
+   * place fuzzy matches sensibly. Ordered name-prefix > name-substring > brand >
+   * trigram-only, then by similarity, then alphabetically.
    */
-  async searchLocalFoods(query: string, userId: string, limit = DEFAULT_SEARCH_LIMIT): Promise<Food[]> {
+  async searchLocalFoods(
+    query: string,
+    userId: string,
+    limit = DEFAULT_SEARCH_LIMIT,
+  ): Promise<LocalFood[]> {
     const q = query.trim().toLowerCase();
     if (q.length === 0) return [];
     const escaped = escapeLike(q);
     const prefix = `${escaped}%`;
     const contains = `%${escaped}%`;
+    const fuzzy = env.NUTRITION_FUZZY_ENABLED !== "false";
+
+    // Trigram similarity of the query vs name/brand. `0` (no similarity() call) when
+    // fuzzy is off, so the column is always present for ranking and we never touch
+    // pg_trgm unless it's enabled.
+    const sim = fuzzy
+      ? sql<number>`greatest(similarity(lower(${foods.name}), ${q}), coalesce(similarity(lower(${foods.brand}), ${q}), 0))`
+      : sql<number>`0`;
+
+    const nameLike = sql`lower(${foods.name}) like ${contains}`;
+    const brandLike = sql`(${foods.brand} is not null and lower(${foods.brand}) like ${contains})`;
+    const match = fuzzy
+      ? sql`(${nameLike} or ${brandLike} or ${sim} >= ${TRGM_SIMILARITY_THRESHOLD})`
+      : sql`(${nameLike} or ${brandLike})`;
+
     return db
-      .select()
+      .select({ ...getTableColumns(foods), _localSim: sim })
       .from(foods)
-      .where(and(sql`lower(${foods.name}) like ${contains}`, visibleTo(userId)))
+      .where(and(match, visibleTo(userId)))
       .orderBy(
-        sql`case when lower(${foods.name}) like ${prefix} then 0 else 1 end`,
+        sql`case
+          when lower(${foods.name}) like ${prefix} then 0
+          when lower(${foods.name}) like ${contains} then 1
+          when ${foods.brand} is not null and lower(${foods.brand}) like ${contains} then 2
+          else 3 end`,
+        desc(sim),
         asc(foods.name),
       )
       .limit(limit);
@@ -250,7 +302,9 @@ export class NutritionStorage {
       .set({
         ...(patch.name !== undefined && { name: patch.name }),
         ...(patch.brand !== undefined && { brand: patch.brand ?? null }),
-        ...(patch.caloriesPer100g !== undefined && { caloriesPer100g: patch.caloriesPer100g ?? null }),
+        ...(patch.caloriesPer100g !== undefined && {
+          caloriesPer100g: patch.caloriesPer100g ?? null,
+        }),
         ...(patch.proteinPer100g !== undefined && { proteinPer100g: patch.proteinPer100g ?? null }),
         ...(patch.carbPer100g !== undefined && { carbPer100g: patch.carbPer100g ?? null }),
         ...(patch.fatPer100g !== undefined && { fatPer100g: patch.fatPer100g ?? null }),
@@ -324,7 +378,10 @@ export class NutritionStorage {
   }
 
   /** Cache enrichment servings (e.g. USDA portions) for a food. */
-  async cacheServings(foodId: string, servings: { label: string; grams: number }[]): Promise<FoodServing[]> {
+  async cacheServings(
+    foodId: string,
+    servings: { label: string; grams: number }[],
+  ): Promise<FoodServing[]> {
     if (servings.length === 0) return [];
     return db
       .insert(foodServings)
@@ -338,7 +395,11 @@ export class NutritionStorage {
    * of the same (food, label) for this user returns the existing row rather than
    * duplicating it. Always stamped with the owner, so it stays private to them.
    */
-  async createServing(userId: string, foodId: string, input: ServingInput): Promise<FoodServing | undefined> {
+  async createServing(
+    userId: string,
+    foodId: string,
+    input: ServingInput,
+  ): Promise<FoodServing | undefined> {
     const food = await this.getVisibleFoodById(userId, foodId);
     if (!food) return undefined;
     const [existing] = await db
@@ -416,7 +477,12 @@ export class NutritionStorage {
       rawInput?: string | null;
       loggedAt: Date;
       logDate: string;
-      items: { foodId: string; quantityG: number; mealType: MealType; parseConfidence?: number | null }[];
+      items: {
+        foodId: string;
+        quantityG: number;
+        mealType: MealType;
+        parseConfidence?: number | null;
+      }[];
     },
   ): Promise<FoodLogEntry[]> {
     if (data.items.length === 0) return [];
@@ -538,7 +604,10 @@ export class NutritionStorage {
     ];
     if (params.mealType) conditions.push(eq(foodLogEntries.mealType, params.mealType));
 
-    const sources = await db.select().from(foodLogEntries).where(and(...conditions));
+    const sources = await db
+      .select()
+      .from(foodLogEntries)
+      .where(and(...conditions));
     if (sources.length === 0) return 0;
 
     const rows = sources.map((s) => ({
@@ -593,7 +662,11 @@ export class NutritionStorage {
     const withFoods = input.ingredients.map((ing) => {
       const food = foodsById.get(ing.foodId);
       if (!food) {
-        throw new AppError(ErrorCode.VALIDATION_ERROR, "One or more ingredient foods were not found", 400);
+        throw new AppError(
+          ErrorCode.VALIDATION_ERROR,
+          "One or more ingredient foods were not found",
+          400,
+        );
       }
       return { food, quantityG: ing.quantityG };
     });
@@ -621,7 +694,10 @@ export class NutritionStorage {
   }
 
   async createRecipe(userId: string, input: CreateRecipeInput): Promise<Recipe> {
-    const foodsById = await this.getVisibleFoodsByIds(userId, input.ingredients.map((i) => i.foodId));
+    const foodsById = await this.getVisibleFoodsByIds(
+      userId,
+      input.ingredients.map((i) => i.foodId),
+    );
     const computed = this.computeFromInputs(input, foodsById);
 
     return db.transaction(async (tx) => {
@@ -645,7 +721,11 @@ export class NutritionStorage {
     });
   }
 
-  async updateRecipe(userId: string, id: string, input: CreateRecipeInput): Promise<Recipe | undefined> {
+  async updateRecipe(
+    userId: string,
+    id: string,
+    input: CreateRecipeInput,
+  ): Promise<Recipe | undefined> {
     const [existing] = await db
       .select()
       .from(recipes)
@@ -653,10 +733,17 @@ export class NutritionStorage {
     if (!existing) return undefined;
     // A recipe can't include its own backing food as an ingredient (self-loop).
     if (input.ingredients.some((i) => i.foodId === existing.foodId)) {
-      throw new AppError(ErrorCode.VALIDATION_ERROR, "A recipe can't include itself as an ingredient", 400);
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        "A recipe can't include itself as an ingredient",
+        400,
+      );
     }
 
-    const foodsById = await this.getVisibleFoodsByIds(userId, input.ingredients.map((i) => i.foodId));
+    const foodsById = await this.getVisibleFoodsByIds(
+      userId,
+      input.ingredients.map((i) => i.foodId),
+    );
     const computed = this.computeFromInputs(input, foodsById);
 
     await db.transaction(async (tx) => {
@@ -720,7 +807,10 @@ export class NutritionStorage {
       .orderBy(asc(recipes.name));
   }
 
-  async getRecipeWithIngredients(userId: string, id: string): Promise<RecipeWithIngredients | null> {
+  async getRecipeWithIngredients(
+    userId: string,
+    id: string,
+  ): Promise<RecipeWithIngredients | null> {
     const [recipe] = await db
       .select()
       .from(recipes)
