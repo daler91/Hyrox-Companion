@@ -249,4 +249,16 @@ describe("searchFoods", () => {
     const result = await searchFoods("banana", "u1");
     expect(result.results.map((f) => f.id)).toEqual(["usda-choc"]);
   });
+
+  it("surfaces a local fuzzy (typo) hit, ranked above unrelated cache rows", async () => {
+    // "yoghrt" is a typo; local cache (ungated) returns a fuzzy hit (carrying
+    // _localSim) plus an unrelated row. The fuzzy hit outranks the noise.
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue([
+      food({ id: "noise", source: "custom", sourceId: null, name: "Crackers" }),
+      { ...food({ id: "fuzzy", source: "off", sourceId: "o1", name: "Yoghurt" }), _localSim: 0.7 },
+    ]);
+
+    const result = await searchFoods("yoghrt", "u1");
+    expect(result.results.map((f) => f.id)).toEqual(["fuzzy", "noise"]);
+  });
 });

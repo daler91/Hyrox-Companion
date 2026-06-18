@@ -117,16 +117,22 @@ last two exist so the Phase 3 training views can bucket fuelling around sessions
 
 The everyday loop: find a food, log it, see your day.
 
-- **Food search** (`GET /foods/search`, FR-1.1) — merges the local cache (fast,
-  case-insensitive prefix match) with live results from Edamam, USDA, and Open
-  Food Facts (queried concurrently), de-duplicates by identity, caches external
-  hits on the way through, and caps at 30 results. Results rank Edamam → USDA →
-  OFF → local. OFF text search is crowd-sourced and noisy (it matches on
-  ingredients/categories too), so the OFF client applies a **relevance gate** —
-  only hits whose name or brand actually matches every query token are surfaced.
-  OFF needs no API key, so a working OFF call keeps search live even when neither
-  keyed provider is configured; the search falls back to cached-only with an
-  `apiDegraded` flag only when no provider reaches its API.
+- **Food search** (`GET /foods/search`, FR-1.1) — merges the local cache with live
+  results from Edamam, USDA, and Open Food Facts (queried concurrently),
+  de-duplicates by identity, caches external hits, and caps at 30 results. Live
+  provider hits pass a shared **relevance gate** (every query token must match the
+  food's name/brand); results are then **ranked by match quality** (exact → name
+  prefix → token match) with provider priority only as a tiebreaker. The local
+  cache matches **name and brand** with case-insensitive substring plus a **pg_trgm
+  trigram fuzzy fallback** (typos / mid-word, e.g. "yoghrt" → "Yogurt"; migration
+  0074, gated by `NUTRITION_FUZZY_ENABLED`); fuzzy hits rank just below real matches
+  as "did you mean". Matching is **diacritic-insensitive** ("café" → "cafe") and
+  **synonym-aware** — the local query is expanded so "courgette" also _retrieves_ a
+  local/custom "Zucchini" row (`synonyms.ts`; provider-side expansion is deferred).
+  OFF needs no API key,
+  so a working OFF call keeps search live even when neither keyed provider is
+  configured; search falls back to cached-only with an `apiDegraded` flag only when
+  no provider reaches its API.
 - **Log a food** (`POST /logs`, FR-1.2) — pick a food + quantity in grams + meal;
   the server derives `logDate` from the instant and the user's timezone.
 - **Daily summary** (`GET /summary`, FR-1.3) — the day's entries grouped by meal
@@ -387,6 +393,7 @@ There is **no TTL** on the cache — once a food is fetched it persists indefini
 | `NUTRITION_ENABLED` | server | `!= "true"` ⇒ the whole `/api/v1/nutrition` tree 404s. |
 | `VITE_NUTRITION_ENABLED` | client (build) | Gates the page route + sidebar nav (`featureFlags.nutritionEnabled`, default `true`). |
 | `USDA_API_KEY` | server | Enables live food search; absent ⇒ graceful degradation. |
+| `NUTRITION_FUZZY_ENABLED` | server | `default "true"`. Gates the pg_trgm trigram (typo) arm of local search; `"false"` falls back to exact substring (kill switch / pre-migration). Synonyms + diacritics are unaffected. |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` / `GEMINI_VISION_MODEL` / `GEMINI_SUGGESTIONS_MODEL` | server | The three AI touchpoints. |
 | `AI_FEATURES_ENABLED` | server | Global AI kill switch. |
 
@@ -472,9 +479,13 @@ The biggest unrealised value is connecting fuelling to the race itself:
 
 ### Search & data quality
 
-- **[P3] Fuzzy search.** Search is prefix `ILIKE` only (`pg_trgm` is intentionally
-  off), so typos and mid-string matches miss. A trigram index + ranking (its own
-  migration, as the schema comment anticipates) would noticeably improve hit rate.
+- **[DONE] Fuzzy search + synonyms + accents.** Local search now uses a pg_trgm
+  trigram fallback (migration 0074, gated by `NUTRITION_FUZZY_ENABLED`) for typos /
+  mid-string matches, searches **brand** as well as name, strips **diacritics**, and
+  is **synonym-aware** (`synonyms.ts`) — the local query is expanded to synonym forms
+  so it retrieves rows stored under an alias; fuzzy hits rank just below real matches.
+  _Remaining:_ provider-side synonym query-expansion (deferred), and **semantic
+  (embeddings) search** (Phase 2, flag-gated — see roadmap below).
 - **[P3] Backfill micronutrients.** Most cached foods carry no micros until a full
   re-fetch, so the micro panel is often sparse. Enrich micros when a food is opened
   in detail (as servings already are), or backfill popular foods.

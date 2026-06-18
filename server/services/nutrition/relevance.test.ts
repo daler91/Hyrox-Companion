@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { isRelevantMatch, rankByRelevance, relevanceScore, stem, tokenize } from "./relevance";
+import {
+  expandQuery,
+  isRelevantMatch,
+  rankByRelevance,
+  relevanceScore,
+  stem,
+  tokenize,
+} from "./relevance";
 
 const food = (name: string, brand: string | null = null) => ({ name, brand });
 
@@ -12,6 +19,11 @@ describe("tokenize", () => {
   it("is empty for blank / punctuation-only input", () => {
     expect(tokenize("   ")).toEqual([]);
     expect(tokenize("--")).toEqual([]);
+  });
+
+  it("strips diacritics so accented text matches its ASCII form", () => {
+    expect(tokenize("Café Latté")).toEqual(["cafe", "latte"]);
+    expect(tokenize("jalapeño")).toEqual(["jalapeno"]);
   });
 });
 
@@ -74,6 +86,22 @@ describe("relevanceScore", () => {
     // ...while a genuine plural/singular pair still matches.
     expect(relevanceScore("peas", food("Pea Protein"))).toBeGreaterThanOrEqual(2);
   });
+
+  it("matches regional/spelling synonyms and accented names", () => {
+    expect(relevanceScore("courgette", food("Zucchini Noodles"))).toBeGreaterThanOrEqual(2);
+    expect(relevanceScore("cilantro", food("Fresh Coriander"))).toBeGreaterThanOrEqual(2);
+    expect(relevanceScore("cafe", food("Café Mocha"))).toBeGreaterThanOrEqual(2);
+  });
+
+  it("gives a fuzzy local hit a fractional score below any real match", () => {
+    // "yoghrt" is a typo (not a registered synonym) → no token match; only _localSim ranks it.
+    const score = relevanceScore("yoghrt", { name: "Yogurt", brand: null, _localSim: 0.6 });
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThan(1);
+    expect(score).toBeCloseTo(0.74); // 0.5 + 0.4 * 0.6
+    // Below the similarity threshold → earns nothing.
+    expect(relevanceScore("yoghrt", { name: "Yogurt", brand: null, _localSim: 0.1 })).toBe(0);
+  });
 });
 
 describe("isRelevantMatch", () => {
@@ -81,6 +109,33 @@ describe("isRelevantMatch", () => {
     expect(isRelevantMatch("dole", food("Banana", "Dole"))).toBe(true); // brand match (score 1)
     expect(isRelevantMatch("chip", food("Chocolate"))).toBe(false);
     expect(isRelevantMatch("ogurt", food("Yogurt"))).toBe(false); // mid-word, not a prefix
+  });
+
+  it("passes synonyms but keeps fuzzy hits below the gate", () => {
+    expect(isRelevantMatch("yoghurt", food("Greek Yogurt"))).toBe(true); // synonym → score ≥ 1
+    expect(isRelevantMatch("yoghrt", { name: "Yogurt", brand: null, _localSim: 0.6 })).toBe(false);
+  });
+});
+
+describe("expandQuery", () => {
+  it("adds synonym variants, keeping the verbatim query first", () => {
+    const variants = expandQuery("courgette");
+    expect(variants[0]).toBe("courgette");
+    expect(variants).toContain("zucchini");
+  });
+
+  it("substitutes a synonym token within a phrase", () => {
+    const variants = expandQuery("organic courgette");
+    expect(variants).toContain("organic courgette");
+    expect(variants).toContain("organic zucchini");
+  });
+
+  it("returns just the normalized query when no token has a synonym", () => {
+    expect(expandQuery("banana")).toEqual(["banana"]);
+  });
+
+  it("is empty for blank input", () => {
+    expect(expandQuery("   ")).toEqual([]);
   });
 });
 
@@ -108,6 +163,21 @@ describe("rankByRelevance", () => {
     expect(rankByRelevance("banana", items).map((f) => f.name)).toEqual([
       "Banana",
       "Banana Nut Cereal",
+    ]);
+  });
+
+  it("ranks fuzzy local hits by similarity, above non-matches", () => {
+    // "yoghrt" is a typo (not a synonym), so none get a token match — only trigram
+    // similarity (_localSim) ranks them; the item with no similarity sorts last.
+    const items = [
+      { name: "Unrelated Snack", brand: null },
+      { name: "Yoghurt Low Fat", brand: null, _localSim: 0.5 }, // ~0.70
+      { name: "Yogurt", brand: null, _localSim: 0.8 }, // ~0.82
+    ];
+    expect(rankByRelevance("yoghrt", items).map((f) => f.name)).toEqual([
+      "Yogurt",
+      "Yoghurt Low Fat",
+      "Unrelated Snack",
     ]);
   });
 });

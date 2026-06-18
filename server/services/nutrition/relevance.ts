@@ -12,14 +12,26 @@
  * and the DB `Food` row (post-cache), so it works at every stage of the pipeline.
  */
 
+import { canonicalize, synonymsOf } from "./synonyms";
+
+// Minimum pg_trgm similarity (matches the SQL threshold in storage/nutrition.ts) for
+// a fuzzy local hit to earn a fractional rank when no textual tier matches.
+const FUZZY_MIN_SIMILARITY = 0.3;
+
 interface NamedFood {
   name: string;
   brand: string | null;
+  // Optional pg_trgm similarity attached by the local fuzzy search
+  // (`server/storage/nutrition.ts`); used only to rank typo matches (see below).
+  _localSim?: number;
 }
 
-/** Lowercase alphanumeric word tokens, e.g. "Greek Yoghurt 0%!" → ["greek","yoghurt","0"]. */
+/** Lowercase alphanumeric word tokens, with diacritics stripped so "Café"→["cafe"]
+ *  and "jalapeño"→["jalapeno"]. ASCII is unchanged: "Greek Yoghurt 0%!"→["greek","yoghurt","0"]. */
 export function tokenize(text: string): string[] {
   return text
+    .normalize("NFD")
+    .replace(/\p{Mn}/gu, "") // strip combining marks left by NFD (accents)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
@@ -48,12 +60,12 @@ export function stem(token: string): string {
 }
 
 /** A query token matches a word if the query is a literal prefix of the word
- *  ("choc"→"Chocolate") OR the two are the same word up to a plural (stem EQUALITY,
- *  e.g. "berries"↔"Berry", "tomatoes"↔"Tomato"). Equality — not stem prefix — is
- *  deliberate: a shortened plural stem like "pea" must NOT prefix-match an unrelated
- *  word like "Peanut", which the gate would otherwise surface as a false match. */
+ *  ("choc"→"Chocolate"), the two are the same word up to a plural ("berries"↔"Berry"),
+ *  or they're registered synonyms ("courgette"↔"zucchini"). Canonicalizing the stems
+ *  folds plural-equality and synonym-equality into one check; stem EQUALITY (not
+ *  prefix) keeps a shortened plural like "pea" from matching "Peanut". */
 function wordMatches(queryToken: string, word: string): boolean {
-  return word.startsWith(queryToken) || stem(word) === stem(queryToken);
+  return word.startsWith(queryToken) || canonicalize(stem(queryToken)) === canonicalize(stem(word));
 }
 
 /**
@@ -62,7 +74,10 @@ function wordMatches(queryToken: string, word: string): boolean {
  *   3 — the name begins with the full query (token-prefix)
  *   2 — every query token matches a word in the NAME
  *   1 — every query token matches a word in NAME + BRAND  (the gate floor)
+ *   0.5–0.9 — no token match, but a high trigram `_localSim` (a local fuzzy/typo hit)
  *   0 — otherwise (fails the relevance gate)
+ * Only the integer tiers (≥1) pass `isRelevantMatch`; the fractional fuzzy band ranks
+ * "did you mean" hits below every real match but above unrelated noise.
  */
 export function relevanceScore(query: string, food: NamedFood): number {
   const queryTokens = tokenize(query);
@@ -76,6 +91,12 @@ export function relevanceScore(query: string, food: NamedFood): number {
   if (queryTokens.every((token) => nameTokens.some((word) => wordMatches(token, word)))) return 2;
   const haystack = [...nameTokens, ...tokenize(food.brand ?? "")];
   if (queryTokens.every((token) => haystack.some((word) => wordMatches(token, word)))) return 1;
+  // Fuzzy fallback: a typo'd local hit ("yoghrt"→"Yogurt") has no token match but a
+  // high trigram similarity. Score it in (0,1) — above unrelated noise, below any
+  // genuine token match — so it ranks as a "did you mean" without ever beating one.
+  if (food._localSim !== undefined && food._localSim >= FUZZY_MIN_SIMILARITY) {
+    return 0.5 + 0.4 * Math.min(food._localSim, 1);
+  }
   return 0;
 }
 
@@ -83,6 +104,29 @@ export function relevanceScore(query: string, food: NamedFood): number {
  *  Derived from the score so the gate and the ranking can never drift apart. */
 export function isRelevantMatch(query: string, food: NamedFood): boolean {
   return relevanceScore(query, food) >= 1;
+}
+
+/**
+ * Expand a search query into the verbatim query plus synonym variants, so the SQL
+ * layer can RETRIEVE a local food stored under a synonym ("courgette" also searches
+ * "zucchini"). Substitutes each token's synonyms, bounded to avoid blow-up. Returns
+ * unique normalized strings; the first is always the verbatim (normalized) query.
+ */
+export function expandQuery(query: string): string[] {
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
+  const MAX_VARIANTS = 8;
+  let variants: string[] = [""];
+  for (const token of tokens) {
+    const synonyms = synonymsOf(stem(token));
+    const options = synonyms.length > 0 ? synonyms : [token];
+    const next: string[] = [];
+    for (const prefix of variants) {
+      for (const option of options) next.push(prefix ? `${prefix} ${option}` : option);
+    }
+    variants = next.slice(0, MAX_VARIANTS);
+  }
+  return [...new Set([tokens.join(" "), ...variants])];
 }
 
 /**

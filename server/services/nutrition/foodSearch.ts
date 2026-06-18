@@ -27,7 +27,9 @@ import { searchUsdaFoods } from "./usdaClient";
  * (Edamam → USDA → OFF → local) preserved only as a tie-breaker.
  */
 
-const LOCAL_LIMIT = 25;
+// Pull more local candidates than we'll show — fuzzy/trigram hits need headroom so
+// they aren't truncated before the relevance ranker runs (final cap is MAX_RESULTS).
+const LOCAL_LIMIT = 50;
 const MAX_RESULTS = 30;
 
 /** Normalized brand+name identity for cross-source near-duplicate suppression.
