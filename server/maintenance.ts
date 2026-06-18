@@ -162,6 +162,45 @@ async function ensureVectorSchema() {
         );
       }
     }
+
+    // food_embeddings (Phase 2 semantic food search): shared (non-per-user) vectors
+    // for the `foods` cache, keyed by foodId. Cross-DB to the main `foods` row, so no
+    // FK — visibility is re-checked when results are resolved. `text_hash` + `model`
+    // let the backfill skip foods whose embedded text is unchanged. Same halfvec/HNSW
+    // approach as document_chunks (3072 dims exceeds the native-vector HNSW limit).
+    const foodEmbTable = await client.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_name = 'food_embeddings'`,
+    );
+    if (foodEmbTable.rowCount === 0) {
+      await client.query(`
+        CREATE TABLE "food_embeddings" (
+          "food_id" varchar(255) PRIMARY KEY,
+          "embedding" vector(${EMBEDDING_DIMENSIONS}),
+          "model" varchar(64) NOT NULL,
+          "text_hash" varchar(64) NOT NULL,
+          "updated_at" timestamp DEFAULT now()
+        )
+      `);
+      logger.info({ context: "db" }, "Created food_embeddings table on vector DB");
+    }
+    const foodHnsw = await client.query(
+      `SELECT 1 FROM pg_indexes WHERE indexname = 'idx_food_embeddings_hnsw'`,
+    );
+    if (foodHnsw.rowCount === 0) {
+      try {
+        await client.query(`
+          CREATE INDEX idx_food_embeddings_hnsw
+          ON food_embeddings USING hnsw ((embedding::halfvec(${EMBEDDING_DIMENSIONS})) halfvec_cosine_ops)
+          WITH (m = 16, ef_construction = 64)
+        `);
+        logger.info({ context: "db" }, "Created HNSW index on food_embeddings.embedding");
+      } catch (indexError) {
+        logger.warn(
+          { context: "db", err: indexError, dimensions: EMBEDDING_DIMENSIONS },
+          "Could not create HNSW index on food_embeddings.embedding — semantic food search falls back to sequential scan (pgvector >= 0.7.0 needed).",
+        );
+      }
+    }
   } catch (error) {
     logger.error({ context: "db", err: error }, "Vector schema setup failed");
   } finally {

@@ -7,6 +7,7 @@ import { searchEdamamFoods } from "./edamamClient";
 import { searchOffFoods } from "./offClient";
 import { refreshStaleFoodsInBackground } from "./refresh";
 import { isRelevantMatch, rankByRelevance } from "./relevance";
+import { maybeSemanticSearch } from "./semanticSearch";
 import type { MappedFood } from "./types";
 import { searchUsdaFoods } from "./usdaClient";
 
@@ -154,6 +155,11 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   // Fallback: if the gate removed everything (an over-strict miss or a typo, and no
   // local hit), show the ungated results rather than a blank screen.
   if (merged.length === 0) merged = mergeFoods([edamam, usda, off, local]);
+  // Semantic (vector) augmentation — only when the keyword/fuzzy set is thin (off the
+  // hot path); flag-, consent-, and budget-gated inside, degrading silently. Appended
+  // as a low-priority tier (deduped), so conceptual matches show as "you might mean".
+  const semantic = await maybeSemanticSearch(query, userId, merged.length);
+  if (semantic.length > 0) merged = mergeFoods([merged, semantic]);
   // Rank by match quality (exact → name-prefix → token match), provider order kept
   // only as a tie-breaker, then cap.
   const results = rankByRelevance(query, merged).slice(0, MAX_RESULTS);
@@ -169,6 +175,7 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
       usda: usda.length,
       off: off.length,
       local: local.length,
+      semantic: semantic.length,
       results: results.length,
       apiDegraded,
     },
