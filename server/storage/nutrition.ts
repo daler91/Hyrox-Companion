@@ -147,7 +147,9 @@ export class NutritionStorage {
         ? sql`(${base} or similarity(lower(${foods.name}), ${v}) >= ${TRGM_SIMILARITY_THRESHOLD} or coalesce(similarity(lower(${foods.brand}), ${v}), 0) >= ${TRGM_SIMILARITY_THRESHOLD})`
         : base;
     };
-    const match = sql.join(variants.map(variantMatch), sql` or `);
+    // Wrap the OR-join in parens so the visibility AND below binds to the whole
+    // group, not just the last variant (SQL AND binds tighter than OR).
+    const match = sql`(${sql.join(variants.map(variantMatch), sql` or `)})`;
 
     return db
       .select({ ...getTableColumns(foods), _localSim: sim })

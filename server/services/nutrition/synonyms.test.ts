@@ -24,8 +24,9 @@ describe("canonicalize", () => {
 
 describe("synonymsOf", () => {
   it("returns the full group (either direction), or [] for an unknown token", () => {
-    expect([...synonymsOf("courgette")].sort()).toEqual(["courgette", "zucchini"]);
-    expect([...synonymsOf("zucchini")].sort()).toEqual(["courgette", "zucchini"]);
+    const sorted = (token: string) => [...synonymsOf(token)].sort((a, b) => a.localeCompare(b));
+    expect(sorted("courgette")).toEqual(["courgette", "zucchini"]);
+    expect(sorted("zucchini")).toEqual(["courgette", "zucchini"]);
     expect(synonymsOf("banana")).toEqual([]);
   });
 });
