@@ -1,15 +1,17 @@
-import { Activity, BarChart3, Brain, Calendar, Camera, CheckCircle2, Mic, RefreshCw, Sparkles, TrendingUp, Wand2 } from "lucide-react";
+import { Activity, Apple, BarChart3, BookOpen, Brain, Calendar, Camera, CheckCircle2, Flame, Mic, RefreshCw, Sparkles, TrendingUp, Wand2 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { featureFlags } from "@/lib/featureFlags";
 
 import { SectionHeading } from "./SectionHeading";
 
-const SOCIAL_PROOF = [
+const SOCIAL_PROOF: string[] = [
   "200+ Exercises",
   "Strava & Garmin Sync",
   "AI-Powered Coaching",
   "Voice & Photo Logging",
-] as const;
+  ...(featureFlags.nutritionEnabled ? ["Nutrition & Macros"] : []),
+];
 
 export function SocialProof() {
   return (
@@ -155,6 +157,48 @@ export function Features() {
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
                     <Sparkles className="h-3.5 w-3.5" />
                     Generate, import, or template
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {featureFlags.nutritionEnabled ? (
+            <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
+                    <Apple className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading font-semibold text-lg mb-2">Nutrition &amp; Fuelling</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                      Log meals by describing them, snapping a photo, or scanning a barcode — AI breaks down calories and macros. Set training-aware targets that scale your carbs to each day&apos;s load.
+                    </p>
+                    <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
+                      <Flame className="h-3.5 w-3.5" />
+                      AI macro tracking
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
+                  <BookOpen className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-semibold text-lg mb-2">Your Coaching Playbook</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    Upload your own coaching principles and documents. Your AI coach reads them and grounds its advice in your methodology — not generic templates.
+                  </p>
+                  <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    RAG-powered coaching
                   </div>
                 </div>
               </div>
