@@ -375,6 +375,7 @@ describe("Analytics Routes", () => {
           currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         }),
         undefined,
+        "kg",
       );
     });
     it("should pass date params to storage", async () => {
@@ -442,7 +443,20 @@ describe("Analytics Routes", () => {
           currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         }),
         undefined,
+        "kg",
       );
+    });
+
+    it("passes the user's weight unit into the overview calculator", async () => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5, weightUnit: "lbs" });
+      vi.mocked(calculateTrainingOverview).mockReturnValue(makeTrainingOverview());
+
+      await request(app).get("/api/v1/training-overview");
+
+      // weightUnit is the 8th positional arg into calculateTrainingOverview.
+      expect(vi.mocked(calculateTrainingOverview).mock.calls[0][7]).toBe("lbs");
     });
 
     testInvalidDates("/api/v1/training-overview");
