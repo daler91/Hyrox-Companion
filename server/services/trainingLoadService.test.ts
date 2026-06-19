@@ -71,6 +71,16 @@ function daysBefore(date: string, offset: number): string {
   return value.toISOString().split("T")[0];
 }
 
+// `count` consecutive identical training days (duration 60, RPE 6) ending on
+// `currentDate`, run through the load model — shared setup for the ACWR history
+// tests below.
+function steadyHistory(currentDate: string, count: number) {
+  const workoutLogs = Array.from({ length: count }, (_, i) =>
+    log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
+  );
+  return calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+}
+
 describe("trainingLoadService", () => {
   it("applies nonlinear RPE scaling and exercise modifiers to strength stress", () => {
     const deadliftTag = DEFAULT_EXERCISE_LOAD_TAGS.find((tag) => tag.exerciseName === "deadlift");
@@ -130,11 +140,7 @@ describe("trainingLoadService", () => {
     const currentDate = "2026-05-22";
     // 7 straight training days and nothing before them — the rolling 28-day
     // average would read ACWR ≈ 4 and cry "danger" at a brand-new athlete.
-    const workoutLogs = Array.from({ length: 7 }, (_, i) =>
-      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
-    );
-
-    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+    const { dailyLoads, overview } = steadyHistory(currentDate, 7);
 
     const today = dailyLoads.find((d) => d.date === currentDate);
     expect(today?.acwr).toBeNull();
@@ -145,11 +151,7 @@ describe("trainingLoadService", () => {
 
   it("computes ACWR once two weeks of logged history exist", () => {
     const currentDate = "2026-05-22";
-    const workoutLogs = Array.from({ length: 21 }, (_, i) =>
-      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
-    );
-
-    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+    const { dailyLoads, overview } = steadyHistory(currentDate, 21);
 
     const today = dailyLoads.find((d) => d.date === currentDate);
     expect(today?.acwr).not.toBeNull();
@@ -167,11 +169,7 @@ describe("trainingLoadService", () => {
     // would deflate the chronic baseline and read ACWR ≈ 1.55 ("danger") for an
     // athlete who has trained perfectly steadily. Coverage-adjusting the
     // denominator keeps acute ≈ chronic, so the zone is the sweet spot.
-    const workoutLogs = Array.from({ length: 18 }, (_, i) =>
-      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
-    );
-
-    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+    const { dailyLoads, overview } = steadyHistory(currentDate, 18);
 
     const today = dailyLoads.find((d) => d.date === currentDate);
     expect(today?.acwr).toBeCloseTo(1, 1);

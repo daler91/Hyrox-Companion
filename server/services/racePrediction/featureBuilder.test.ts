@@ -32,6 +32,21 @@ function set(
 
 const NOW = new Date("2026-05-30T00:00:00Z");
 
+// SkiErg station feature built from three full-station splits (240/252/270s);
+// the caller assigns each split's session (workoutLogId) + date to exercise the
+// session-grouping logic.
+function skiergSessionFeature(splits: Array<{ workoutLogId: string; date: string }>) {
+  const times = [4, 4.2, 4.5];
+  const sets = splits.map((s, i) =>
+    set("skierg", { time: times[i], distance: 1000, date: s.date, workoutLogId: s.workoutLogId }),
+  );
+  return buildRacePredictionFeatures(
+    sets,
+    { division: "open", gender: "male", weightUnit: "kg" },
+    NOW,
+  ).stationFeatures.skierg;
+}
+
 function expectedBenchmarkFinish(division: "open" | "pro", gender: "male" | "female"): number {
   const ref = getRaceReference(division, gender);
   const stations = HYROX_STATION_ORDER.reduce(
@@ -198,36 +213,28 @@ describe("buildRacePredictionFeatures", () => {
   });
 
   it("counts repeated sets in one session as a single independent sample", () => {
-    // Three full-station SkiErg intervals in the SAME workout (240/252/270s).
-    // They are correlated/fatigued, so they collapse to one sample whose split
-    // is the session median (252s); best stays the fastest single split (240s).
-    const features = buildRacePredictionFeatures(
-      [
-        set("skierg", { time: 4, distance: 1000, date: "2026-05-20", workoutLogId: "w1" }),
-        set("skierg", { time: 4.2, distance: 1000, date: "2026-05-20", workoutLogId: "w1" }),
-        set("skierg", { time: 4.5, distance: 1000, date: "2026-05-20", workoutLogId: "w1" }),
-      ],
-      { division: "open", gender: "male", weightUnit: "kg" },
-      NOW,
-    );
-    expect(features.stationFeatures.skierg.sampleSize).toBe(1);
-    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(252, 0);
-    expect(features.stationFeatures.skierg.bestSeconds).toBeCloseTo(240, 0);
+    // Three full-station SkiErg intervals (240/252/270s) in the SAME workout are
+    // correlated, so they collapse to one sample at the session median (252s);
+    // best stays the fastest single split (240s).
+    const skierg = skiergSessionFeature([
+      { workoutLogId: "w1", date: "2026-05-20" },
+      { workoutLogId: "w1", date: "2026-05-20" },
+      { workoutLogId: "w1", date: "2026-05-20" },
+    ]);
+    expect(skierg.sampleSize).toBe(1);
+    expect(skierg.medianSeconds).toBeCloseTo(252, 0);
+    expect(skierg.bestSeconds).toBeCloseTo(240, 0);
   });
 
   it("counts the same efforts across separate sessions as independent samples", () => {
-    // Identical splits to the previous test, but one per workout → three samples.
-    const features = buildRacePredictionFeatures(
-      [
-        set("skierg", { time: 4, distance: 1000, date: "2026-05-18", workoutLogId: "w1" }),
-        set("skierg", { time: 4.2, distance: 1000, date: "2026-05-20", workoutLogId: "w2" }),
-        set("skierg", { time: 4.5, distance: 1000, date: "2026-05-22", workoutLogId: "w3" }),
-      ],
-      { division: "open", gender: "male", weightUnit: "kg" },
-      NOW,
-    );
-    expect(features.stationFeatures.skierg.sampleSize).toBe(3);
-    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(252, 0);
+    // Identical splits, one per workout → three independent samples.
+    const skierg = skiergSessionFeature([
+      { workoutLogId: "w1", date: "2026-05-18" },
+      { workoutLogId: "w2", date: "2026-05-20" },
+      { workoutLogId: "w3", date: "2026-05-22" },
+    ]);
+    expect(skierg.sampleSize).toBe(3);
+    expect(skierg.medianSeconds).toBeCloseTo(252, 0);
   });
 
   it("converts feet-stored distance for miles users before projecting", () => {
