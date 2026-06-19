@@ -168,4 +168,12 @@ describe("defaultPeriodizationConfig", () => {
     expect(c.referenceUtss).toBe(50);
     expect(c.carbGramsPerUtss).toBe(3); // (300 / 50) × 0.5
   });
+
+  it("floors a near-zero recent average so the slope can't explode", () => {
+    // Without the floor, referenceUtss = 3 → carbGramsPerUtss = 50, so a single
+    // 50 UTSS day would add ~2350 g of carbs. Floored at 25 it stays bounded.
+    const c = defaultPeriodizationConfig(300, 3);
+    expect(c.referenceUtss).toBe(25);
+    expect(c.carbGramsPerUtss).toBe(6); // (300 / 25) × 0.5
+  });
 });
