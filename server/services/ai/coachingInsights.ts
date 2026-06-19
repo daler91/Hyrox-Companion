@@ -58,7 +58,16 @@ export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"
   else if (diff < -0.8) rpeTrend = "falling";
   else rpeTrend = "stable";
 
-  return { rpeTrend, avgRpeLast3: avgLast3, avgRpePrior3: avgPrior3, fatigueFlag: avgLast3 >= 8, undertrainingFlag: avgLast3 <= 4 };
+  // Additive/hybrid flags: an absolute backstop (sustained hard/easy load) OR a
+  // trend into a meaningfully hard/easy zone. This makes the booleans match what
+  // the coaching prompt claims ("fatigueFlag / RPE rising"): a sharp rise into
+  // RPE 7+ flags fatigue below the absolute 8, and a fall into RPE 5- flags
+  // undertraining above the absolute 4, while a stable, intentional RPE 8 block
+  // still flags via the backstop. The 7/5 trend bounds are tunable.
+  const fatigueFlag = avgLast3 >= 8 || (rpeTrend === "rising" && avgLast3 >= 7);
+  const undertrainingFlag = avgLast3 <= 4 || (rpeTrend === "falling" && avgLast3 <= 5);
+
+  return { rpeTrend, avgRpeLast3: avgLast3, avgRpePrior3: avgPrior3, fatigueFlag, undertrainingFlag };
 }
 
 function updateLastTrained(record: Record<string, string | null>, key: string, date: string): void {

@@ -154,6 +154,36 @@ describe("computeRpeTrend", () => {
     expect(result.avgRpeLast3).toBe(9);
     expect(result.avgRpePrior3).toBe(7);
   });
+
+  it("flags fatigue on a rise into the hard zone even below the absolute 8", () => {
+    // last3 = [7,7,7] -> 7.0; prior3 = [5,5] -> 5.0; diff = +2 -> rising.
+    const result = computeRpeTrend(recentsWithRpe([7, 7, 7, 5, 5]));
+    expect(result.rpeTrend).toBe("rising");
+    expect(result.fatigueFlag).toBe(true);
+    expect(result.undertrainingFlag).toBe(false);
+  });
+
+  it("does not flag fatigue on a rise that stays in the moderate zone", () => {
+    // last3 = [6,6,6] -> 6.0 (< 7 trend bound); prior3 = [3,3] -> 3.0; rising.
+    const result = computeRpeTrend(recentsWithRpe([6, 6, 6, 3, 3]));
+    expect(result.rpeTrend).toBe("rising");
+    expect(result.fatigueFlag).toBe(false);
+  });
+
+  it("flags undertraining on a fall into the easy zone even above the absolute 4", () => {
+    // last3 = [5,5,5] -> 5.0; prior3 = [8,8] -> 8.0; diff = -3 -> falling.
+    const result = computeRpeTrend(recentsWithRpe([5, 5, 5, 8, 8]));
+    expect(result.rpeTrend).toBe("falling");
+    expect(result.undertrainingFlag).toBe(true);
+    expect(result.fatigueFlag).toBe(false);
+  });
+
+  it("still flags fatigue for a sustained hard block with no upward trend", () => {
+    // Stable, intentional RPE 8 keeps the absolute backstop active.
+    const result = computeRpeTrend(recentsWithRpe([8, 8, 8, 8, 8, 8]));
+    expect(result.rpeTrend).toBe("stable");
+    expect(result.fatigueFlag).toBe(true);
+  });
 });
 
 describe("computePlanPhase", () => {

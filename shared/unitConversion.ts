@@ -35,8 +35,17 @@ export interface WorkoutDistanceDisplay {
  *
  * The `kgToUserWeight` / `userWeightToKg` helpers below are provided for
  * integration code that receives canonical units from third parties (e.g.
- * Strava/Garmin expose metric data); do NOT use them on values already
- * sourced from our own DB.
+ * Strava/Garmin expose metric data); do NOT use them to read-convert-write a
+ * stored value (consequence 1).
+ *
+ * Sanctioned read-only exception: the training-load service normalizes stored
+ * weights to canonical kg via `userWeightToKg(weight, user.weightUnit)` purely
+ * to compute UTSS (it never writes the result back). UTSS must represent
+ * physiological load, not the athlete's display unit, so the absolute governor
+ * thresholds and the weighted-vs-bodyweight mix stay comparable across kg and
+ * lb athletes. The only residual imperfection is the mid-history unit switch
+ * already noted in consequence 2; the proper fix remains the tracked
+ * canonicalization migration.
  */
 
 const KG_TO_LBS = 2.20462;

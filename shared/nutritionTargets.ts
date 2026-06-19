@@ -215,16 +215,27 @@ export function effectiveTarget(
 }
 
 /**
+ * Lower bound on the periodisation reference load. Without it, a very small but
+ * positive recent average (e.g. a deload week at 2-5 UTSS/day) yields an enormous
+ * carb-per-UTSS slope, so a single normal training day would add hundreds of
+ * grams of carbs. 25 ≈ a light-but-real daily training load.
+ */
+const MIN_REFERENCE_UTSS = 25;
+
+/**
  * Sensible periodisation defaults derived from a baseline target + the athlete's
  * typical daily load, computed where the target is created (the pure functions
  * above stay config-driven for testability). The slope is half-proportional so a
- * rest day (UTSS 0) keeps roughly half the baseline carbs rather than zero.
+ * rest day (UTSS 0) keeps roughly half the baseline carbs rather than zero. The
+ * reference is floored at MIN_REFERENCE_UTSS so a near-zero recent average can't
+ * blow up the slope.
  */
 export function defaultPeriodizationConfig(
   baselineCarbG: number,
   recentAvgDailyUtss: number,
 ): { referenceUtss: number; carbGramsPerUtss: number } {
-  const referenceUtss = recentAvgDailyUtss > 0 ? round1(recentAvgDailyUtss) : 50;
+  const rawReference = recentAvgDailyUtss > 0 ? recentAvgDailyUtss : 50;
+  const referenceUtss = round1(Math.max(MIN_REFERENCE_UTSS, rawReference));
   const carbGramsPerUtss = round1((baselineCarbG / referenceUtss) * 0.5);
   return { referenceUtss, carbGramsPerUtss };
 }

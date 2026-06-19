@@ -12,11 +12,14 @@
  *  - `time` is stored in MINUTES → multiply by 60 for seconds.
  *  - A logged set may be a *partial* effort (e.g. a 500 m SkiErg interval, not
  *    the full 1000 m race station), so each set's time is projected to the full
- *    race-station amount with Riegel's endurance power law (T2 = T1·(D2/D1)^1.06)
- *    over the logged distance/reps vs the station target. We only trust efforts
- *    within 0.5×–2× of the full amount; further-out efforts are too unreliable to
- *    extrapolate and are dropped (the station then falls back to its benchmark).
- *    A set with no logged distance/reps is assumed to be a full effort.
+ *    race-station amount with a power law (T2 = T1·(D2/D1)^EXP) over the logged
+ *    distance/reps vs the station target. The exponent is station-specific
+ *    (see STATION_PROJECTION_EXPONENT): endurance/erg/ballistic-rep work uses
+ *    Riegel's 1.06, while load-and-grind stations use a steeper exponent because
+ *    they fatigue faster than running pace. We only trust efforts within 0.5×–2×
+ *    of the full amount; further-out efforts are too unreliable to extrapolate
+ *    and are dropped (the station then falls back to its benchmark). A set with
+ *    no logged distance/reps is assumed to be a full effort.
  *  - logged distances are in the athlete's stored unit (m for km users, ft for
  *    miles users); we convert to meters with `storedDistanceToMeters` (read-only,
  *    so the read-convert-write drift caveat does not apply) before comparing.
@@ -50,11 +53,13 @@ import type { LoggedExerciseSetWithDate } from "../../storage/shared";
 export interface SegmentFeature {
   exerciseName: ExerciseName;
   kind: RaceSegmentKind;
-  /** Fastest logged completion in seconds, or null when never logged. */
+  /** Fastest single logged split in seconds, or null when never logged. */
   bestSeconds: number | null;
-  /** Median logged completion in seconds, or null when never logged. */
+  /** Median split across independent sessions (each session contributes its own
+   *  median), or null when never logged. */
   medianSeconds: number | null;
-  /** Count of logged sets with a usable time. */
+  /** Count of independent training sessions (workout logs) with a usable time —
+   *  repeated sets in one session count once. */
   sampleSize: number;
   /** Whole days since the most recent logged set, or null when never logged. */
   lastTrainedDaysAgo: number | null;
@@ -165,21 +170,47 @@ interface AthleteUnits {
   distanceUnit: string;
 }
 
-// Riegel's endurance power law (T2 = T1·(D2/D1)^EXP) projects a partial effort
-// to the full race amount slightly worse than linear, matching how pace fades
-// over distance/reps. 1.06 is Riegel's widely-used exponent.
-const RIEGEL_EXPONENT = 1.06;
+// Projection power law (T2 = T1·(D2/D1)^EXP) extrapolates a partial effort to
+// the full race amount slightly worse than linear, matching how pace/output
+// fades over distance/reps. Riegel's widely-used 1.06 fits true endurance, erg,
+// and ballistic-rep work (run/row/ski/wall balls). The load-and-grind stations
+// (sleds, carry, lunges, burpees) fatigue on grip/load/mechanics far faster than
+// running pace, so a single endurance exponent overstates their capacity at the
+// full amount; they get a steeper exponent. Tunable heuristics, not measured.
+const ENDURANCE_PROJECTION_EXPONENT = 1.06;
+const LOAD_GRIND_PROJECTION_EXPONENT = 1.1;
+
+const STATION_PROJECTION_EXPONENT: Record<HyroxStation, number> = {
+  skierg: ENDURANCE_PROJECTION_EXPONENT,
+  rowing: ENDURANCE_PROJECTION_EXPONENT,
+  wall_balls: ENDURANCE_PROJECTION_EXPONENT,
+  sled_push: LOAD_GRIND_PROJECTION_EXPONENT,
+  sled_pull: LOAD_GRIND_PROJECTION_EXPONENT,
+  farmers_carry: LOAD_GRIND_PROJECTION_EXPONENT,
+  sandbag_lunges: LOAD_GRIND_PROJECTION_EXPONENT,
+  burpee_broad_jump: LOAD_GRIND_PROJECTION_EXPONENT,
+};
+
+/** Projection exponent for a segment. Stations look up their own exponent; the
+ *  run leg (and any non-station) uses the endurance default. */
+function projectionExponentFor(kind: RaceSegmentKind, exerciseName: ExerciseName): number {
+  return kind === "station"
+    ? STATION_PROJECTION_EXPONENT[exerciseName as HyroxStation] ?? ENDURANCE_PROJECTION_EXPONENT
+    : ENDURANCE_PROJECTION_EXPONENT;
+}
+
 // Only trust an effort for projection when it covers between this fraction and
 // this multiple of the full race amount; further out, extrapolation is too
 // unreliable, so the set is dropped and the station falls back to its benchmark.
 const MIN_TRUST_RATIO = 0.5;
 const MAX_TRUST_RATIO = 2;
 
-/** Power-law factor (target → logged), or null when logged is outside the trust band. */
-function trustedFactor(target: number, logged: number): number | null {
+/** Power-law factor (target → logged) at `exponent`, or null when logged is
+ *  outside the trust band. */
+function trustedFactor(target: number, logged: number, exponent: number): number | null {
   const ratio = logged / target;
   if (ratio < MIN_TRUST_RATIO || ratio > MAX_TRUST_RATIO) return null;
-  return Math.pow(target / logged, RIEGEL_EXPONENT);
+  return Math.pow(target / logged, exponent);
 }
 
 /** A logged measure (distance or reps) usable for projection, or null otherwise. */
@@ -198,22 +229,26 @@ function projectionFactor(
   set: LoggedExerciseSetWithDate,
   target: SegmentTarget,
   distanceUnit: string,
+  exponent: number,
 ): number | null {
   if (target.distanceMeters != null) {
     const distance = usableMeasure(set.distance);
     if (distance == null) return 1;
-    return trustedFactor(target.distanceMeters, storedDistanceToMeters(distance, distanceUnit));
+    return trustedFactor(target.distanceMeters, storedDistanceToMeters(distance, distanceUnit), exponent);
   }
   if (target.reps != null) {
     const reps = usableMeasure(set.reps);
     if (reps == null) return 1;
-    return trustedFactor(target.reps, reps);
+    return trustedFactor(target.reps, reps, exponent);
   }
   return 1;
 }
 
 interface SegmentSetMetrics {
-  timesSeconds: number[];
+  /** One representative (median) projected split per training session. */
+  sessionTimesSeconds: number[];
+  /** Fastest single projected split across all sessions, or null. */
+  bestSeconds: number | null;
   loads: number[];
   mostRecent: string | null;
 }
@@ -222,16 +257,29 @@ function accumulateSetMetrics(
   sets: LoggedExerciseSetWithDate[],
   target: SegmentTarget,
   distanceUnit: string,
+  exponent: number,
 ): SegmentSetMetrics {
-  const timesSeconds: number[] = [];
+  // Group projected split times by session (workoutLogId) so repeated intervals
+  // logged in one workout count as a single, de-correlated sample instead of
+  // inflating confidence and dragging the median toward same-session fatigued
+  // efforts. Each session contributes its median split; sampleSize downstream is
+  // the number of independent sessions, not the raw set count.
+  const sessionSplits = new Map<string, number[]>();
   const loads: number[] = [];
   let mostRecent: string | null = null;
+  let bestSeconds: number | null = null;
 
   for (const set of sets) {
     if (set.time != null && Number.isFinite(set.time)) {
-      const factor = projectionFactor(set, target, distanceUnit);
+      const factor = projectionFactor(set, target, distanceUnit, exponent);
       // null → effort too far from the full station to trust; drop this split.
-      if (factor != null) timesSeconds.push(set.time * 60 * factor);
+      if (factor != null) {
+        const seconds = set.time * 60 * factor;
+        const bucket = sessionSplits.get(set.workoutLogId);
+        if (bucket) bucket.push(seconds);
+        else sessionSplits.set(set.workoutLogId, [seconds]);
+        if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
+      }
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
       loads.push(set.weight);
@@ -241,7 +289,9 @@ function accumulateSetMetrics(
     }
   }
 
-  return { timesSeconds, loads, mostRecent };
+  // median() is non-null here because every bucket has at least one split.
+  const sessionTimesSeconds = Array.from(sessionSplits.values(), (splits) => median(splits)!);
+  return { sessionTimesSeconds, bestSeconds, loads, mostRecent };
 }
 
 function buildSegmentFeature(
@@ -253,10 +303,11 @@ function buildSegmentFeature(
   units: AthleteUnits,
   now: Date,
 ): SegmentFeature {
-  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(
+  const { sessionTimesSeconds, bestSeconds, loads, mostRecent } = accumulateSetMetrics(
     sets,
     target,
     units.distanceUnit,
+    projectionExponentFor(kind, exerciseName),
   );
 
   const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
@@ -270,9 +321,9 @@ function buildSegmentFeature(
   return {
     exerciseName,
     kind,
-    bestSeconds: timesSeconds.length > 0 ? Math.min(...timesSeconds) : null,
-    medianSeconds: median(timesSeconds),
-    sampleSize: timesSeconds.length,
+    bestSeconds,
+    medianSeconds: median(sessionTimesSeconds),
+    sampleSize: sessionTimesSeconds.length,
     lastTrainedDaysAgo: mostRecent ? daysSince(mostRecent, now) : null,
     loggedLoadUserUnit,
     standardLoadUserUnit,

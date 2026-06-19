@@ -71,6 +71,16 @@ function daysBefore(date: string, offset: number): string {
   return value.toISOString().split("T")[0];
 }
 
+// `count` consecutive identical training days (duration 60, RPE 6) ending on
+// `currentDate`, run through the load model — shared setup for the ACWR history
+// tests below.
+function steadyHistory(currentDate: string, count: number) {
+  const workoutLogs = Array.from({ length: count }, (_, i) =>
+    log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
+  );
+  return calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+}
+
 describe("trainingLoadService", () => {
   it("applies nonlinear RPE scaling and exercise modifiers to strength stress", () => {
     const deadliftTag = DEFAULT_EXERCISE_LOAD_TAGS.find((tag) => tag.exerciseName === "deadlift");
@@ -82,6 +92,32 @@ describe("trainingLoadService", () => {
 
     expect(rpe7).toBeGreaterThan(0);
     expect(rpe10).toBeGreaterThan(rpe7 * 1.5);
+  });
+
+  it("normalizes weight to kg so kg and lb athletes get equal strength stress", () => {
+    const tag = DEFAULT_EXERCISE_LOAD_TAGS.find((t) => t.exerciseName === "deadlift")!;
+    const kgSet = { reps: 5, weight: 100, plannedReps: null, plannedWeight: null, distance: null, plannedDistance: null };
+    const lbSet = { ...kgSet, weight: 220.462 }; // 100 kg expressed in lbs
+
+    const kgStress = calculateStrengthStressScore(kgSet, tag, 8, "kg");
+    const lbStress = calculateStrengthStressScore(lbSet, tag, 8, "lbs");
+
+    expect(kgStress).toBeGreaterThan(0);
+    expect(lbStress).toBeCloseTo(kgStress, 1);
+  });
+
+  it("threads weightUnit through calculateTrainingLoad so UTSS is unit-normalized", () => {
+    const currentDate = "2026-05-22";
+    const mkLog = (id: string) =>
+      log({ id, date: currentDate, focus: "Strength", mainWorkout: "Deadlifts", rpe: 8 });
+    const mkSet = (logId: string, weight: number) =>
+      set({ workoutLogId: logId, exerciseName: "deadlift", category: "strength", reps: 5, weight });
+
+    const kg = calculateTrainingLoad([mkLog("k")], [mkSet("k", 100)], [], { currentDate, weightUnit: "kg" });
+    const lb = calculateTrainingLoad([mkLog("l")], [mkSet("l", 220.462)], [], { currentDate, weightUnit: "lbs" });
+
+    expect(kg.overview.currentUtss).toBeGreaterThan(0);
+    expect(lb.overview.currentUtss).toBeCloseTo(kg.overview.currentUtss, 1);
   });
 
   it("separates easy aerobic CSS from high-intensity cardio CSS", () => {
@@ -104,11 +140,7 @@ describe("trainingLoadService", () => {
     const currentDate = "2026-05-22";
     // 7 straight training days and nothing before them — the rolling 28-day
     // average would read ACWR ≈ 4 and cry "danger" at a brand-new athlete.
-    const workoutLogs = Array.from({ length: 7 }, (_, i) =>
-      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
-    );
-
-    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+    const { dailyLoads, overview } = steadyHistory(currentDate, 7);
 
     const today = dailyLoads.find((d) => d.date === currentDate);
     expect(today?.acwr).toBeNull();
@@ -119,11 +151,7 @@ describe("trainingLoadService", () => {
 
   it("computes ACWR once two weeks of logged history exist", () => {
     const currentDate = "2026-05-22";
-    const workoutLogs = Array.from({ length: 21 }, (_, i) =>
-      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
-    );
-
-    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+    const { dailyLoads, overview } = steadyHistory(currentDate, 21);
 
     const today = dailyLoads.find((d) => d.date === currentDate);
     expect(today?.acwr).not.toBeNull();
@@ -132,6 +160,21 @@ describe("trainingLoadService", () => {
     // Days before the guard window (first log + 13) still report insufficient.
     const early = dailyLoads.find((d) => d.date === daysBefore(currentDate, 8));
     expect(early?.zone).toBe("insufficient_data");
+  });
+
+  it("does not inflate ACWR for steady training before 28 days of history exist", () => {
+    const currentDate = "2026-05-22";
+    // 18 consecutive identical days. The chronic window is still 28 calendar
+    // days wide, but only 18 of them are real history. Dividing by a fixed 28
+    // would deflate the chronic baseline and read ACWR ≈ 1.55 ("danger") for an
+    // athlete who has trained perfectly steadily. Coverage-adjusting the
+    // denominator keeps acute ≈ chronic, so the zone is the sweet spot.
+    const { dailyLoads, overview } = steadyHistory(currentDate, 18);
+
+    const today = dailyLoads.find((d) => d.date === currentDate);
+    expect(today?.acwr).toBeCloseTo(1, 1);
+    expect(today?.zone).toBe("sweet_spot");
+    expect(overview.zone).toBe("sweet_spot");
   });
 
   it("flags posterior-chain overlap and downshifts next-day hill repeats", () => {

@@ -16,14 +16,17 @@ export async function fetchDailyTraining(
   from: string,
   to: string,
 ): Promise<{ dailyLoads: DailyUtss[]; workoutLogs: WorkoutLog[] }> {
-  const [workoutLogs, exerciseSets, loadTags] = await Promise.all([
+  const [workoutLogs, exerciseSets, loadTags, user] = await Promise.all([
     storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
     storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
     storage.analytics.getExerciseLoadTags(),
+    storage.users.getUser(userId),
   ]);
   return {
-    dailyLoads: calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, { currentDate: to })
-      .dailyLoads,
+    dailyLoads: calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
+      currentDate: to,
+      weightUnit: user?.weightUnit || "kg",
+    }).dailyLoads,
     workoutLogs,
   };
 }

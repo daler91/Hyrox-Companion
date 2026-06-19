@@ -9,6 +9,7 @@ import {
   type WorkoutLog,
   type WorkoutSuggestion,
 } from "@shared/schema";
+import { userWeightToKg } from "@shared/unitConversion";
 
 export type LoadVector = LoadGovernorVector;
 
@@ -274,9 +275,15 @@ export function calculateStrengthStressScore(
   set: Pick<TrainingLoadSet, "reps" | "weight" | "plannedReps" | "plannedWeight" | "distance" | "plannedDistance">,
   tag: ExerciseLoadTagInput,
   rpe?: number | null,
+  weightUnit: string = "kg",
 ): number {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
-  const weight = Number(set.weight ?? set.plannedWeight ?? 0);
+  // UTSS must represent physiological load, not the athlete's display unit, so
+  // normalize the stored weight (kept in the user's unit — see the S5 sentinel
+  // in shared/unitConversion) to canonical kg before computing tonnage. This
+  // keeps the absolute governor thresholds and the weighted-vs-bodyweight mix
+  // comparable across kg and lb athletes. Read-only: we never write this back.
+  const weight = userWeightToKg(Number(set.weight ?? set.plannedWeight ?? 0), weightUnit);
   const distance = Number(set.distance ?? set.plannedDistance ?? 0);
   let weightedTonnage = 0;
   if (weight > 0 && reps > 0) {
@@ -381,6 +388,28 @@ function sumUtss(days: Map<string, DailyTrainingLoad>, endDate: string, windowDa
   return total;
 }
 
+// Number of days the athlete has actually been training as of `date`, capped at
+// the 28-day chronic window. Used as the chronic denominator so the rolling sum
+// is divided by real history, not a fixed 28.
+function chronicCoverageDays(date: string, firstLogDate: string | null): number {
+  if (!firstLogDate) return 28;
+  const elapsed = Math.round((Date.parse(date) - Date.parse(firstLogDate)) / DAY_MS) + 1;
+  return Math.min(28, Math.max(1, elapsed));
+}
+
+// Coverage-adjusted chronic average UTSS. Dividing the 28-day sum by a fixed 28
+// before the athlete has 28 days of history treats the pre-history days as
+// genuine zero-load rest, deflating the baseline and inflating ACWR. Dividing by
+// the days actually trained fixes that; rest days *within* history still count
+// because the denominator is calendar-days-since-first-log, not logged-day count.
+function chronicAverage(
+  days: Map<string, DailyTrainingLoad>,
+  date: string,
+  firstLogDate: string | null,
+): number {
+  return sumUtss(days, date, 28) / chronicCoverageDays(date, firstLogDate);
+}
+
 export function resolveAcwrZone(acwr: number | null, chronicAvg: number): LoadGovernorAcwrZone {
   if (acwr == null || chronicAvg <= 0) return "insufficient_data";
   if (acwr < 0.8) return "undertraining";
@@ -389,11 +418,13 @@ export function resolveAcwrZone(acwr: number | null, chronicAvg: number): LoadGo
   return "danger";
 }
 
-// ACWR needs a real chronic baseline before the ratio means anything: the
-// rolling 28-day average treats missing days as genuine zero-load rest, which
-// is wrong for athletes whose history simply doesn't reach back that far —
-// 7 days of logs would read as ACWR ≈ 4 and flag a brand-new athlete as
-// "danger". Gate the ratio behind ~2 weeks of logged history instead.
+// ACWR needs a real chronic baseline before the ratio means anything. Two
+// guards keep a brand-new athlete out of false "danger":
+//   1. Gate the ratio behind ~2 weeks of logged history (ACWR_MIN_HISTORY_DAYS).
+//   2. Divide the 28-day chronic sum by the days actually trained, not a fixed
+//      28 (chronicAverage) — otherwise days 14–27 still treat pre-history days
+//      as zero-load rest and inflate ACWR (e.g. 18 steady days would read as
+//      "danger"). Rest days *within* history are genuine rest and still count.
 const ACWR_MIN_HISTORY_DAYS = 14;
 
 function applyAcwr(
@@ -411,7 +442,7 @@ function applyAcwr(
       continue;
     }
     const acuteAvg = sumUtss(days, date, 7) / 7;
-    const chronicAvg = sumUtss(days, date, 28) / 28;
+    const chronicAvg = chronicAverage(days, date, firstLogDate);
     const acwr = chronicAvg > 0 ? round(acuteAvg / chronicAvg, 2) : null;
     day.acwr = acwr;
     day.zone = resolveAcwrZone(acwr, chronicAvg);
@@ -549,10 +580,11 @@ function buildOverview(
   allDays: Map<string, DailyTrainingLoad>,
   currentDate: string,
   rangeStart: string,
+  firstLogDate: string | null,
 ): TrainingLoadOverview {
   const currentDay = getOrCreateDay(allDays, currentDate);
   const acuteAvg = round(sumUtss(allDays, currentDate, 7) / 7, 1);
-  const chronicAvg = round(sumUtss(allDays, currentDate, 28) / 28, 1);
+  const chronicAvg = round(chronicAverage(allDays, currentDate, firstLogDate), 1);
   // Single source of truth: applyAcwr already computed today's ratio/zone
   // (including the new-athlete history guard). Recomputing here from the
   // display-rounded averages used to drift by ±0.01 and bypassed the guard.
@@ -617,11 +649,12 @@ function applyStrengthLoad(
   log: Pick<WorkoutLog, "rpe">,
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
+  weightUnit: string,
 ): void {
   for (const set of sets) {
     if (!isStrengthSet(set)) continue;
     const setTag = getTag(tags, set.exerciseName, set.category);
-    const stress = calculateStrengthStressScore(set, setTag, log.rpe);
+    const stress = calculateStrengthStressScore(set, setTag, log.rpe, weightUnit);
     day.strengthStressScore += stress;
     updateVectorLoads(day.vectorLoads, stress, setTag);
   }
@@ -663,8 +696,9 @@ function applyWorkoutLoad(
   log: WorkoutLog,
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
+  weightUnit: string,
 ): void {
-  applyStrengthLoad(day, log, sets, tags);
+  applyStrengthLoad(day, log, sets, tags, weightUnit);
   applyCardioLoad(day, log, sets, tags);
   finalizeDailyLoad(day);
 }
@@ -673,9 +707,13 @@ export function calculateTrainingLoad(
   workoutLogs: readonly WorkoutLog[],
   exerciseSets: readonly TrainingLoadSet[],
   loadTags: readonly ExerciseLoadTagInput[] | readonly ExerciseLoadTag[] = [],
-  options: { currentDate?: string } = {},
+  options: { currentDate?: string; weightUnit?: string } = {},
 ): TrainingLoadComputation {
   const currentDate = options.currentDate ?? toIsoDate(new Date());
+  // Stored weights are in the athlete's display unit; normalize to canonical kg
+  // so UTSS represents physiological load. Defaults to kg for callers that don't
+  // supply the preference (and for the kg-native majority).
+  const weightUnit = options.weightUnit ?? "kg";
   const rangeStart = computeRangeStart(workoutLogs, currentDate);
   const tags = normalizeTags(loadTags);
   const setsByLog = buildSetMap(exerciseSets);
@@ -688,10 +726,11 @@ export function calculateTrainingLoad(
   for (const log of workoutLogs) {
     const day = getOrCreateDay(allDays, log.date);
     const sets = setsByLog.get(log.id) ?? [];
-    applyWorkoutLoad(day, log, sets, tags);
+    applyWorkoutLoad(day, log, sets, tags, weightUnit);
   }
 
-  applyAcwr(allDays, rangeStart, currentDate, earliestLogDate(workoutLogs));
+  const firstLogDate = earliestLogDate(workoutLogs);
+  applyAcwr(allDays, rangeStart, currentDate, firstLogDate);
 
   return {
     // ⚡ Bolt Performance Optimization:
@@ -702,6 +741,6 @@ export function calculateTrainingLoad(
       if (a.date > b.date) return 1;
       return 0;
     }),
-    overview: buildOverview(allDays, currentDate, rangeStart),
+    overview: buildOverview(allDays, currentDate, rangeStart, firstLogDate),
   };
 }

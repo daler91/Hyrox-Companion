@@ -163,6 +163,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const progressionFlags = computeProgressionFlags(timeline);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
+    weightUnit: user?.weightUnit || "kg",
   }).overview;
   const completedLast7d = recentWorkouts.filter((w) => {
     const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
