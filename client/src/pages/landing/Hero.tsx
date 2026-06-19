@@ -7,10 +7,12 @@ import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
+import { Eyebrow } from "./SectionHeading";
+
 function TimelineMockup() {
   return (
     <div className="w-full max-w-md mx-auto" role="img" aria-label="Preview of the training timeline showing today's completed workout, an AI-modified session for tomorrow, and a planned recovery day">
-      <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-lg overflow-hidden" aria-hidden="true">
+      <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-[0_24px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-accent/20 overflow-hidden" aria-hidden="true">
         <div className="px-4 py-3 border-b border-border/40 flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-red-400/60" />
           <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
@@ -153,21 +155,21 @@ export function LandingHeader() {
 export function Hero() {
   return (
     <section className="relative overflow-hidden py-20 md:py-28">
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/8 via-transparent to-transparent" />
+      <div className="bg-grid absolute inset-0 -z-10" aria-hidden="true" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-accent/10 via-transparent to-transparent" aria-hidden="true" />
+      <div className="accent-glow absolute right-0 top-1/4 -z-10 hidden h-[28rem] w-[28rem] lg:block" aria-hidden="true" />
       <div className="container mx-auto px-4 relative">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-center lg:text-left">
-            <div className="fade-up">
-              <Badge variant="outline" className="mb-4 px-3 py-1 text-xs font-medium">
-                <Sparkles className="h-3 w-3 mr-1.5" />
-                Now with AI Auto-Coaching
-              </Badge>
+            <div className="fade-up mb-4 flex justify-center lg:justify-start">
+              <Eyebrow icon={Sparkles}>Now with AI Auto-Coaching</Eyebrow>
             </div>
-            <h1 className="fade-up text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-5 leading-[1.1]">
+            <h1 className="fade-up font-heading text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-5 leading-[1.05]">
               Your AI
               <br />
-              <span className="text-primary">Fitness Coach</span>
+              <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                Fitness Coach
+              </span>
             </h1>
             <p className="fade-up text-lg md:text-xl text-muted-foreground mb-8 max-w-lg mx-auto lg:mx-0">
               Plan, track, and analyze every session. Our AI coach watches your progress and automatically adapts your upcoming workouts.
