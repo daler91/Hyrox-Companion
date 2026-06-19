@@ -84,6 +84,32 @@ describe("trainingLoadService", () => {
     expect(rpe10).toBeGreaterThan(rpe7 * 1.5);
   });
 
+  it("normalizes weight to kg so kg and lb athletes get equal strength stress", () => {
+    const tag = DEFAULT_EXERCISE_LOAD_TAGS.find((t) => t.exerciseName === "deadlift")!;
+    const kgSet = { reps: 5, weight: 100, plannedReps: null, plannedWeight: null, distance: null, plannedDistance: null };
+    const lbSet = { ...kgSet, weight: 220.462 }; // 100 kg expressed in lbs
+
+    const kgStress = calculateStrengthStressScore(kgSet, tag, 8, "kg");
+    const lbStress = calculateStrengthStressScore(lbSet, tag, 8, "lbs");
+
+    expect(kgStress).toBeGreaterThan(0);
+    expect(lbStress).toBeCloseTo(kgStress, 1);
+  });
+
+  it("threads weightUnit through calculateTrainingLoad so UTSS is unit-normalized", () => {
+    const currentDate = "2026-05-22";
+    const mkLog = (id: string) =>
+      log({ id, date: currentDate, focus: "Strength", mainWorkout: "Deadlifts", rpe: 8 });
+    const mkSet = (logId: string, weight: number) =>
+      set({ workoutLogId: logId, exerciseName: "deadlift", category: "strength", reps: 5, weight });
+
+    const kg = calculateTrainingLoad([mkLog("k")], [mkSet("k", 100)], [], { currentDate, weightUnit: "kg" });
+    const lb = calculateTrainingLoad([mkLog("l")], [mkSet("l", 220.462)], [], { currentDate, weightUnit: "lbs" });
+
+    expect(kg.overview.currentUtss).toBeGreaterThan(0);
+    expect(lb.overview.currentUtss).toBeCloseTo(kg.overview.currentUtss, 1);
+  });
+
   it("separates easy aerobic CSS from high-intensity cardio CSS", () => {
     const easy = calculateCardioStressScore(log({ duration: 45, rpe: 4 }), []);
     const interval = calculateCardioStressScore(log({ duration: 45, rpe: 10, mainWorkout: "Track intervals" }), []);

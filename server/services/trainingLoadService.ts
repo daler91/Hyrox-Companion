@@ -9,6 +9,7 @@ import {
   type WorkoutLog,
   type WorkoutSuggestion,
 } from "@shared/schema";
+import { userWeightToKg } from "@shared/unitConversion";
 
 export type LoadVector = LoadGovernorVector;
 
@@ -274,9 +275,15 @@ export function calculateStrengthStressScore(
   set: Pick<TrainingLoadSet, "reps" | "weight" | "plannedReps" | "plannedWeight" | "distance" | "plannedDistance">,
   tag: ExerciseLoadTagInput,
   rpe?: number | null,
+  weightUnit: string = "kg",
 ): number {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
-  const weight = Number(set.weight ?? set.plannedWeight ?? 0);
+  // UTSS must represent physiological load, not the athlete's display unit, so
+  // normalize the stored weight (kept in the user's unit — see the S5 sentinel
+  // in shared/unitConversion) to canonical kg before computing tonnage. This
+  // keeps the absolute governor thresholds and the weighted-vs-bodyweight mix
+  // comparable across kg and lb athletes. Read-only: we never write this back.
+  const weight = userWeightToKg(Number(set.weight ?? set.plannedWeight ?? 0), weightUnit);
   const distance = Number(set.distance ?? set.plannedDistance ?? 0);
   let weightedTonnage = 0;
   if (weight > 0 && reps > 0) {
@@ -642,11 +649,12 @@ function applyStrengthLoad(
   log: Pick<WorkoutLog, "rpe">,
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
+  weightUnit: string,
 ): void {
   for (const set of sets) {
     if (!isStrengthSet(set)) continue;
     const setTag = getTag(tags, set.exerciseName, set.category);
-    const stress = calculateStrengthStressScore(set, setTag, log.rpe);
+    const stress = calculateStrengthStressScore(set, setTag, log.rpe, weightUnit);
     day.strengthStressScore += stress;
     updateVectorLoads(day.vectorLoads, stress, setTag);
   }
@@ -688,8 +696,9 @@ function applyWorkoutLoad(
   log: WorkoutLog,
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
+  weightUnit: string,
 ): void {
-  applyStrengthLoad(day, log, sets, tags);
+  applyStrengthLoad(day, log, sets, tags, weightUnit);
   applyCardioLoad(day, log, sets, tags);
   finalizeDailyLoad(day);
 }
@@ -698,9 +707,13 @@ export function calculateTrainingLoad(
   workoutLogs: readonly WorkoutLog[],
   exerciseSets: readonly TrainingLoadSet[],
   loadTags: readonly ExerciseLoadTagInput[] | readonly ExerciseLoadTag[] = [],
-  options: { currentDate?: string } = {},
+  options: { currentDate?: string; weightUnit?: string } = {},
 ): TrainingLoadComputation {
   const currentDate = options.currentDate ?? toIsoDate(new Date());
+  // Stored weights are in the athlete's display unit; normalize to canonical kg
+  // so UTSS represents physiological load. Defaults to kg for callers that don't
+  // supply the preference (and for the kg-native majority).
+  const weightUnit = options.weightUnit ?? "kg";
   const rangeStart = computeRangeStart(workoutLogs, currentDate);
   const tags = normalizeTags(loadTags);
   const setsByLog = buildSetMap(exerciseSets);
@@ -713,7 +726,7 @@ export function calculateTrainingLoad(
   for (const log of workoutLogs) {
     const day = getOrCreateDay(allDays, log.date);
     const sets = setsByLog.get(log.id) ?? [];
-    applyWorkoutLoad(day, log, sets, tags);
+    applyWorkoutLoad(day, log, sets, tags, weightUnit);
   }
 
   const firstLogDate = earliestLogDate(workoutLogs);

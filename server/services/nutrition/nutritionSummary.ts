@@ -83,17 +83,19 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
     tz,
   );
 
-  const [rows, workoutLogs, exerciseSets, loadTags, target, todayRows] = await Promise.all([
+  const [rows, workoutLogs, exerciseSets, loadTags, target, todayRows, user] = await Promise.all([
     storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
     storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
     storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
     storage.analytics.getExerciseLoadTags(),
     storage.nutrition.getCurrentTarget(userId, to),
     storage.nutrition.listEntriesWithFoodForDate(userId, to),
+    storage.users.getUser(userId),
   ]);
 
   const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
     currentDate: to,
+    weightUnit: user?.weightUnit || "kg",
   });
   const points = buildBlockView(rows, dailyLoads, { from, to });
   const loggedDays = points.filter((p) => p.calories > 0);

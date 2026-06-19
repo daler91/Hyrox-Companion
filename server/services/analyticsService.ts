@@ -474,6 +474,7 @@ export function calculateTrainingOverview(
     currentDate?: string;
   },
   userTimezone = "UTC",
+  weightUnit = "kg",
 ): TrainingOverview {
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
@@ -484,7 +485,10 @@ export function calculateTrainingOverview(
     trainingLoadInput?.workoutLogs ?? workoutLogs,
     trainingLoadInput?.exerciseSets ?? exerciseSets,
     loadTags,
-    trainingLoadInput?.currentDate ? { currentDate: trainingLoadInput.currentDate } : {},
+    {
+      ...(trainingLoadInput?.currentDate ? { currentDate: trainingLoadInput.currentDate } : {}),
+      weightUnit,
+    },
   ).overview;
   const currentStats = computeOverviewStats(weeklySummaries);
   const completedDates = new Set(workoutLogs.map((log) => log.date));
