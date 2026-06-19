@@ -53,11 +53,13 @@ import type { LoggedExerciseSetWithDate } from "../../storage/shared";
 export interface SegmentFeature {
   exerciseName: ExerciseName;
   kind: RaceSegmentKind;
-  /** Fastest logged completion in seconds, or null when never logged. */
+  /** Fastest single logged split in seconds, or null when never logged. */
   bestSeconds: number | null;
-  /** Median logged completion in seconds, or null when never logged. */
+  /** Median split across independent sessions (each session contributes its own
+   *  median), or null when never logged. */
   medianSeconds: number | null;
-  /** Count of logged sets with a usable time. */
+  /** Count of independent training sessions (workout logs) with a usable time —
+   *  repeated sets in one session count once. */
   sampleSize: number;
   /** Whole days since the most recent logged set, or null when never logged. */
   lastTrainedDaysAgo: number | null;
@@ -243,7 +245,10 @@ function projectionFactor(
 }
 
 interface SegmentSetMetrics {
-  timesSeconds: number[];
+  /** One representative (median) projected split per training session. */
+  sessionTimesSeconds: number[];
+  /** Fastest single projected split across all sessions, or null. */
+  bestSeconds: number | null;
   loads: number[];
   mostRecent: string | null;
 }
@@ -254,15 +259,27 @@ function accumulateSetMetrics(
   distanceUnit: string,
   exponent: number,
 ): SegmentSetMetrics {
-  const timesSeconds: number[] = [];
+  // Group projected split times by session (workoutLogId) so repeated intervals
+  // logged in one workout count as a single, de-correlated sample instead of
+  // inflating confidence and dragging the median toward same-session fatigued
+  // efforts. Each session contributes its median split; sampleSize downstream is
+  // the number of independent sessions, not the raw set count.
+  const sessionSplits = new Map<string, number[]>();
   const loads: number[] = [];
   let mostRecent: string | null = null;
+  let bestSeconds: number | null = null;
 
   for (const set of sets) {
     if (set.time != null && Number.isFinite(set.time)) {
       const factor = projectionFactor(set, target, distanceUnit, exponent);
       // null → effort too far from the full station to trust; drop this split.
-      if (factor != null) timesSeconds.push(set.time * 60 * factor);
+      if (factor != null) {
+        const seconds = set.time * 60 * factor;
+        const bucket = sessionSplits.get(set.workoutLogId);
+        if (bucket) bucket.push(seconds);
+        else sessionSplits.set(set.workoutLogId, [seconds]);
+        if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
+      }
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
       loads.push(set.weight);
@@ -272,7 +289,9 @@ function accumulateSetMetrics(
     }
   }
 
-  return { timesSeconds, loads, mostRecent };
+  // median() is non-null here because every bucket has at least one split.
+  const sessionTimesSeconds = Array.from(sessionSplits.values(), (splits) => median(splits)!);
+  return { sessionTimesSeconds, bestSeconds, loads, mostRecent };
 }
 
 function buildSegmentFeature(
@@ -284,7 +303,7 @@ function buildSegmentFeature(
   units: AthleteUnits,
   now: Date,
 ): SegmentFeature {
-  const { timesSeconds, loads, mostRecent } = accumulateSetMetrics(
+  const { sessionTimesSeconds, bestSeconds, loads, mostRecent } = accumulateSetMetrics(
     sets,
     target,
     units.distanceUnit,
@@ -302,9 +321,9 @@ function buildSegmentFeature(
   return {
     exerciseName,
     kind,
-    bestSeconds: timesSeconds.length > 0 ? Math.min(...timesSeconds) : null,
-    medianSeconds: median(timesSeconds),
-    sampleSize: timesSeconds.length,
+    bestSeconds,
+    medianSeconds: median(sessionTimesSeconds),
+    sampleSize: sessionTimesSeconds.length,
     lastTrainedDaysAgo: mostRecent ? daysSince(mostRecent, now) : null,
     loggedLoadUserUnit,
     standardLoadUserUnit,

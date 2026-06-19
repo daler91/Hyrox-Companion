@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import type { LoggedExerciseSetWithDate } from "../../storage/shared";
 import { buildRacePredictionFeatures, MIN_PERSONAL_FRACTION } from "./featureBuilder";
 
+// Each set defaults to its own workoutLogId (one set = one session) so prior
+// expectations hold; tests exercising session de-duplication pass a shared
+// workoutLogId explicitly.
+let setSeq = 0;
 function set(
   exerciseName: string,
   fields: {
@@ -12,10 +16,12 @@ function set(
     distance?: number | null;
     reps?: number | null;
     date?: string;
+    workoutLogId?: string;
   },
 ): LoggedExerciseSetWithDate {
   return {
     exerciseName,
+    workoutLogId: fields.workoutLogId ?? `log-${setSeq++}`,
     time: fields.time ?? null,
     weight: fields.weight ?? null,
     distance: fields.distance ?? null,
@@ -189,6 +195,39 @@ describe("buildRacePredictionFeatures", () => {
     );
     expect(features.stationFeatures.sled_push.medianSeconds).toBeCloseTo(120 * 2 ** 1.1, 1);
     expect(120 * 2 ** 1.1).toBeGreaterThan(120 * 2 ** 1.06);
+  });
+
+  it("counts repeated sets in one session as a single independent sample", () => {
+    // Three full-station SkiErg intervals in the SAME workout (240/252/270s).
+    // They are correlated/fatigued, so they collapse to one sample whose split
+    // is the session median (252s); best stays the fastest single split (240s).
+    const features = buildRacePredictionFeatures(
+      [
+        set("skierg", { time: 4, distance: 1000, date: "2026-05-20", workoutLogId: "w1" }),
+        set("skierg", { time: 4.2, distance: 1000, date: "2026-05-20", workoutLogId: "w1" }),
+        set("skierg", { time: 4.5, distance: 1000, date: "2026-05-20", workoutLogId: "w1" }),
+      ],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.sampleSize).toBe(1);
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(252, 0);
+    expect(features.stationFeatures.skierg.bestSeconds).toBeCloseTo(240, 0);
+  });
+
+  it("counts the same efforts across separate sessions as independent samples", () => {
+    // Identical splits to the previous test, but one per workout → three samples.
+    const features = buildRacePredictionFeatures(
+      [
+        set("skierg", { time: 4, distance: 1000, date: "2026-05-18", workoutLogId: "w1" }),
+        set("skierg", { time: 4.2, distance: 1000, date: "2026-05-20", workoutLogId: "w2" }),
+        set("skierg", { time: 4.5, distance: 1000, date: "2026-05-22", workoutLogId: "w3" }),
+      ],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.sampleSize).toBe(3);
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(252, 0);
   });
 
   it("converts feet-stored distance for miles users before projecting", () => {
