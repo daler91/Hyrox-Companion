@@ -25,6 +25,7 @@ Production also requires `CSRF_SECRET`; it must differ from `ENCRYPTION_KEY`. In
 - [Authentication (Clerk)](#authentication-clerk)
 - [AI (Text Providers, Gemini Embeddings, Gemini Vision)](#ai-text-providers-gemini-embeddings-gemini-vision)
 - [Integrations](#integrations)
+- [Nutrition & Food Sources](#nutrition--food-sources)
 - [Web Push (VAPID)](#web-push-vapid)
 - [Error Tracking (Sentry)](#error-tracking-sentry)
 - [Runtime & Dev](#runtime--dev)
@@ -38,7 +39,7 @@ Production also requires `CSRF_SECRET`; it must differ from `ENCRYPTION_KEY`. In
 | Variable | Req? | Default | Who reads it |
 |---|---|---|---|
 | `DATABASE_URL` | **Required** | — | Server (`server/db.ts`), pg-boss queue. |
-| `VECTOR_DATABASE_URL` | Optional | falls back to `DATABASE_URL` | RAG ingest + retrieval (`server/vectorDb.ts`). |
+| `VECTOR_DATABASE_URL` | Optional | falls back to `DATABASE_URL` | RAG ingest + retrieval and semantic food search embeddings (`server/vectorDb.ts`; tables created on boot by `server/maintenance.ts`). |
 | `ENCRYPTION_KEY` | **Required** | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). |
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
 | `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/bootstrap/appConfig.ts`. |
@@ -90,7 +91,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | `AI_TEXT_BASE_URL` | Optional | profile default | Base URL override for OpenAI-compatible providers. Required for `custom`. |
 | `OPENAI_API_KEY` / `XAI_API_KEY` / `GROQ_API_KEY` / `TOGETHER_API_KEY` / `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` | Optional | - | Profile-specific OpenAI-compatible API keys. |
 | `ANTHROPIC_API_KEY` | Optional | - | Anthropic Messages API key. |
-| `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, and photo-to-workout parsing. |
+| `GEMINI_API_KEY` | Optional | - | Gemini text provider, RAG embeddings, semantic food search embeddings (`gemini-embedding-001`), and photo-to-workout parsing. |
 | `GEMINI_MODEL` | Optional | `gemini-2.5-flash-lite` | Legacy Gemini fast text model. |
 | `GEMINI_SUGGESTIONS_MODEL` | Optional | `gemini-3.1-pro-preview` | Legacy Gemini reasoning text model. |
 | `GEMINI_VISION_MODEL` | Optional | `gemini-2.5-flash` | Photo-to-workout parsing (`POST /api/v1/parse-exercises-from-image`). |
@@ -129,6 +130,25 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 ### Garmin Connect
 
 Garmin has **no environment variables**. The integration uses per-user email+password credentials the user enters in Settings (encrypted with `ENCRYPTION_KEY`). See [integrations.md § Garmin](integrations.md#garmin-connect-integration).
+
+---
+
+## Nutrition & Food Sources
+
+The nutrition module (food logging, targets, fuelling) ships on by default. It is gated by `NUTRITION_ENABLED` (server) and `VITE_NUTRITION_ENABLED` (client) — see [Feature Flags](#feature-flags) for those plus the two search-quality flags. Everything below is optional: with no provider configured, food search still works against the local cache plus Open Food Facts (no key required), flagging `apiDegraded` only when no provider is reachable. See [Nutrition & Fuelling](nutrition.md) for the full subsystem.
+
+Edamam is the active branded/packaged + barcode source when configured; USDA and Open Food Facts are the always-on fallbacks. Spoonacular and FatSecret are **superseded by Edamam and no longer wired into search/barcode** — their settings are retained for reference only.
+
+| Variable | Req? | Default | Notes |
+|---|---|---|---|
+| `USDA_API_KEY` | Optional | — | USDA FoodData Central live food search ([free key](https://fdc.nal.usda.gov/api-key-signup)). Absent ⇒ graceful degradation to cached-only results. |
+| `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` | Optional | — | Active branded/barcode source (nutrients returned per-100g). **Both or neither** — a half-configuration is a fatal boot error. |
+| `SPOONACULAR_API_KEY` | Optional | — | **Superseded by Edamam**; retained for reference, no longer wired into search/barcode. |
+| `FATSECRET_CLIENT_ID` / `FATSECRET_CLIENT_SECRET` | Optional | — | **Superseded by Edamam**; retained for reference. OAuth2 client-credentials; **both or neither** (half-config is fatal). Requires egress-IP whitelisting at the provider when used. |
+| `FATSECRET_SCOPE` | Optional | `basic` | Space-delimited OAuth scopes; `premier` / `barcode` unlock structured macros + barcode lookup. |
+| `FATSECRET_REGION` / `FATSECRET_LANGUAGE` | Optional | — | Optional localization (localization-enabled tier only). |
+
+Open Food Facts needs no key (their policy requires a custom `User-Agent`) and keeps search live even when no keyed provider is configured.
 
 ---
 
@@ -188,6 +208,9 @@ Rollout toggles, all parsed as the literal strings `"true"` / `"false"` in `serv
 | `EMOM_BUILDER_ENABLED` | `false` | Server-side gate for the EMOM workout builder. Keep aligned with the client `VITE_EMOM_BUILDER_ENABLED` flag for each deployment tier. |
 | `STRUCTURED_BLOCKS_ENABLED` | `true` | Enables the structured-blocks workout write path (`server/routes/structuredWriteGuard.ts`). |
 | `STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` | `false` | Escape hatch: when `true`, forces the legacy write path even if `STRUCTURED_BLOCKS_ENABLED` is `true`. |
+| `NUTRITION_ENABLED` | `true` | Server gate for the nutrition module. When not `"true"`, the whole `/api/v1/nutrition` tree returns `404`. Keep aligned with the client `VITE_NUTRITION_ENABLED` flag per tier. |
+| `NUTRITION_FUZZY_ENABLED` | `true` | `pg_trgm` trigram (typo / mid-word) arm of local food search; needs migration `0074`. `"false"` falls back to exact substring (kill switch / pre-migration). Synonyms and diacritic-insensitivity are unaffected. |
+| `NUTRITION_SEMANTIC_ENABLED` | `false` | Semantic (embeddings) food search and its background backfill cron. Requires `AI_FEATURES_ENABLED != "false"` + `GEMINI_API_KEY`, and reuses the pgvector pool (`VECTOR_DATABASE_URL`, falls back to the main DB). Off the hot path — fires only when keyword/fuzzy results are thin; safe to leave off. |
 
 `AI_FEATURES_ENABLED` is also a runtime flag — see [AI](#ai-text-providers-gemini-embeddings-gemini-vision).
 
@@ -202,6 +225,7 @@ Variables exposed to browser code must start with `VITE_` — Vite statically in
 | `VITE_CLERK_PUBLISHABLE_KEY` | `.env` | Browser-safe Clerk key. Mirrors `CLERK_PUBLISHABLE_KEY`. |
 | `VITE_SENTRY_DSN` | `.env` | Browser-safe Sentry DSN. Mirrors `SENTRY_DSN`. |
 | `VITE_EMOM_BUILDER_ENABLED` | `.env` | Client-side EMOM builder gate (`"true"`/`"false"`, default `false`). Keep aligned with the server `EMOM_BUILDER_ENABLED` flag. |
+| `VITE_NUTRITION_ENABLED` | `.env` | Client-side nutrition module gate (`"true"`/`"false"`, default `true`). Gates the page route + sidebar nav. Mirror with the server `NUTRITION_ENABLED` flag. |
 | `MODE` | Vite built-in | `development` \| `production` — used as Sentry environment tag. |
 | `DEV` / `PROD` | Vite built-ins | Boolean guards used by `isDevPreview`, `RagDebugBadge`, etc. |
 

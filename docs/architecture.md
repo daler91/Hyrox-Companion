@@ -414,6 +414,7 @@ graph TD
 - **ragRetrieval** delegates vector search to `ragService`, which queries the `pgvector` extension directly via a separate connection pool (`vectorPool`).
 - **pg-boss** uses the same PostgreSQL database for its job queue, keeping infrastructure simple.
 - **Storage** is a single abstraction layer over Drizzle ORM; all database access goes through it (including idempotency key caching via `IdempotencyStorage`).
+- **Nutrition** is a self-contained subsystem (`server/routes/nutrition/*`, `server/services/nutrition/*`) over the same storage layer. Food search fans out to external providers (Edamam, USDA, Open Food Facts) behind a relevance gate, with local `pg_trgm` fuzzy/synonym matching and an optional semantic-embeddings tier that reuses the `pgvector` pool; per-meal fuel targets are computed by the pure, DB-free `shared/mealFuelling.ts`. See [Nutrition & Fuelling](./nutrition.md).
 
 ---
 
@@ -477,6 +478,7 @@ Detailed documentation for each subsystem:
 | [Server Architecture](./server.md) | Express setup, middleware stack, route registration, error handling |
 | [Database](./database.md) | Drizzle schema, migrations, tables, indexes, pgvector setup |
 | [AI and RAG](./ai-and-rag.md) | Gemini integration, embedding pipeline, vector search, prompt construction |
+| [Nutrition & Fuelling](./nutrition.md) | Food logging, search (fuzzy/synonym/semantic), per-meal fuel targets, external food sources, AI meal parsing |
 | [State Management](./state-management.md) | TanStack Query, cache invalidation, optimistic updates, polling |
 | [API Reference](./api-reference.md) | Endpoint catalog, request/response shapes, status codes |
 | [Authentication](./authentication.md) | Clerk setup, JWT verification, dev auth bypass, webhook sync |
