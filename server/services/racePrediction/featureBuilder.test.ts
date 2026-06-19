@@ -176,6 +176,21 @@ describe("buildRacePredictionFeatures", () => {
     expect(features.stationFeatures.wall_balls.medianSeconds).toBeCloseTo(150 * 2 ** 1.06, 1);
   });
 
+  it("projects a load-grind station with a steeper exponent than endurance work", () => {
+    // Sled push fatigues on load/mechanics faster than an erg, so it uses 1.10,
+    // not Riegel's endurance 1.06. A 25 m effort (half the 50 m station) in 2:00
+    // projects to 120s * 2^1.10 — slower than the 120s * 2^1.06 an endurance
+    // station would yield from the same partial effort.
+    const target = getRaceReference("open", "male").stations.sled_push.distanceMeters!;
+    const features = buildRacePredictionFeatures(
+      [set("sled_push", { time: 2, distance: target / 2, date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.sled_push.medianSeconds).toBeCloseTo(120 * 2 ** 1.1, 1);
+    expect(120 * 2 ** 1.1).toBeGreaterThan(120 * 2 ** 1.06);
+  });
+
   it("converts feet-stored distance for miles users before projecting", () => {
     // A miles user's full 1 km SkiErg is stored as ~3281 ft. Converted to meters
     // it's a full-station effort (~unchanged), NOT a 3281 m effort that would be
