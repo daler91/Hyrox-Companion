@@ -38,6 +38,19 @@ export default function Landing() {
         .float-animation {
           animation: float 4s ease-in-out infinite;
         }
+        /* Decorative, static (reduced-motion safe). Always aria-hidden. */
+        .bg-grid {
+          background-image:
+            linear-gradient(to right, hsl(var(--border) / 0.6) 1px, transparent 1px),
+            linear-gradient(to bottom, hsl(var(--border) / 0.6) 1px, transparent 1px);
+          background-size: 64px 64px;
+          -webkit-mask-image: radial-gradient(ellipse at top, #000 0%, transparent 70%);
+          mask-image: radial-gradient(ellipse at top, #000 0%, transparent 70%);
+        }
+        .accent-glow {
+          background: radial-gradient(circle at center, hsl(var(--accent) / 0.18) 0%, transparent 70%);
+          filter: blur(40px);
+        }
       `}</style>
 
       <LandingHeader />

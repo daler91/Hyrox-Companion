@@ -1,5 +1,7 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
+import { SectionHeading } from "./SectionHeading";
+
 const FAQS = [
   {
     question: "Is fitai.coach free to use?",
@@ -40,18 +42,22 @@ const FAQS = [
 
 export function Faq() {
   return (
-    <section id="faq" className="py-20 bg-muted/20">
+    <section id="faq" className="py-20 md:py-28 bg-muted/20">
       <div className="container mx-auto px-4 max-w-3xl">
-        <div className="fade-up text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-3">Frequently asked questions</h2>
-          <p className="text-muted-foreground text-base md:text-lg">
-            Short answers to the questions athletes ask before signing up.
-          </p>
-        </div>
+        <SectionHeading
+          eyebrow="FAQ"
+          title="Frequently asked questions"
+          description="Short answers to the questions athletes ask before signing up."
+        />
         <div className="fade-up">
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full space-y-3">
             {FAQS.map((item, index) => (
-              <AccordionItem key={item.question} value={`faq-${index}`} data-testid={`faq-item-${index}`}>
+              <AccordionItem
+                key={item.question}
+                value={`faq-${index}`}
+                data-testid={`faq-item-${index}`}
+                className="rounded-lg border border-border/60 bg-card/50 px-4"
+              >
                 <AccordionTrigger className="text-left text-base font-semibold">
                   {item.question}
                 </AccordionTrigger>

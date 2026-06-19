@@ -2,27 +2,29 @@ import { Activity, BarChart3, Brain, Calendar, Camera, CheckCircle2, Mic, Refres
 
 import { Card, CardContent } from "@/components/ui/card";
 
+import { SectionHeading } from "./SectionHeading";
+
+const SOCIAL_PROOF = [
+  "200+ Exercises",
+  "Strava & Garmin Sync",
+  "AI-Powered Coaching",
+  "Voice & Photo Logging",
+] as const;
+
 export function SocialProof() {
   return (
     <section className="py-12 border-y bg-muted/30">
       <div className="container mx-auto px-4">
-        <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <span className="text-sm font-medium">200+ Exercises</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <span className="text-sm font-medium">Strava &amp; Garmin Sync</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <span className="text-sm font-medium">AI-Powered Coaching</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-success" />
-            <span className="text-sm font-medium">Voice &amp; Photo Logging</span>
-          </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {SOCIAL_PROOF.map((label) => (
+            <div
+              key={label}
+              className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3.5 py-1.5"
+            >
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <span className="text-sm font-medium tabular-nums">{label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -33,23 +35,20 @@ export function Features() {
   return (
     <section id="features" className="py-20 md:py-28">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-14">
-          <h2 className="fade-up text-3xl md:text-4xl font-bold mb-4">
-            Everything You Need to Train Smarter
-          </h2>
-          <p className="fade-up text-lg text-muted-foreground max-w-2xl mx-auto">
-            From structured training plans to real-time AI coaching, every tool adapts to your fitness goals.
-          </p>
-        </div>
+        <SectionHeading
+          eyebrow="Features"
+          title="Everything You Need to Train Smarter"
+          description="From structured training plans to real-time AI coaching, every tool adapts to your fitness goals."
+        />
         <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-          <Card className="fade-up hover-elevate group relative overflow-hidden">
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
                   <Brain className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">AI Auto-Coach</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">AI Auto-Coach</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Log a workout and your AI coach reviews your performance, fatigue signals, and station gaps — then automatically adjusts your upcoming sessions to keep you progressing.
                   </p>
@@ -62,14 +61,14 @@ export function Features() {
             </CardContent>
           </Card>
 
-          <Card className="fade-up hover-elevate group relative overflow-hidden">
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
                   <Calendar className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">Training Timeline</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">Training Timeline</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     See your whole training journey in one view. Planned, completed, missed, and skipped sessions stay in chronological order — and timeline annotations capture injury, illness, or travel.
                   </p>
@@ -82,14 +81,14 @@ export function Features() {
             </CardContent>
           </Card>
 
-          <Card className="fade-up hover-elevate group relative overflow-hidden">
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
                   <Mic className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">Voice &amp; Photo Logging</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">Voice &amp; Photo Logging</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Log a session by typing, dictating, or snapping a photo of a whiteboard or printed plan. AI structures it into exercises, sets, reps, and loads for you to review.
                   </p>
@@ -102,14 +101,14 @@ export function Features() {
             </CardContent>
           </Card>
 
-          <Card className="fade-up hover-elevate group relative overflow-hidden">
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
                   <RefreshCw className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">Strava &amp; Garmin Sync</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">Strava &amp; Garmin Sync</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Connect Strava or Garmin Connect and completed activities import automatically. Heart rate, pace, power, and effort data flow straight to your timeline.
                   </p>
@@ -122,14 +121,14 @@ export function Features() {
             </CardContent>
           </Card>
 
-          <Card className="fade-up hover-elevate group relative overflow-hidden">
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
                   <BarChart3 className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">Analytics &amp; PRs</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">Analytics &amp; PRs</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Track completion rates, training streaks, and personal records across every exercise. See your volume, progression, and trends visualized over time.
                   </p>
@@ -142,14 +141,14 @@ export function Features() {
             </CardContent>
           </Card>
 
-          <Card className="fade-up hover-elevate group relative overflow-hidden">
+          <Card className="fade-up hover-elevate group relative border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.18)]">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
                   <Wand2 className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg mb-2">AI Plan Builder</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">AI Plan Builder</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Generate a personalized plan from your goal and schedule, import a CSV, or start from a built-in 8-week template. Your timeline is ready in minutes.
                   </p>
