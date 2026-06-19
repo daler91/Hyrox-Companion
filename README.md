@@ -1,7 +1,7 @@
 <div align="center">
   <img src="client/public/logo-primary.svg" width="96" alt="fitai.coach logo" />
   <h1>fitai.coach</h1>
-  <p><strong>AI-native training planning, workout logging, analytics, and coaching for Hyrox-style hybrid athletes.</strong></p>
+  <p><strong>AI-native training planning, workout logging, nutrition, analytics, and coaching for Hyrox-style hybrid athletes.</strong></p>
 
   <p>
     <a href="#features">Features</a> |
@@ -28,7 +28,7 @@
 
 ---
 
-fitai.coach helps athletes plan structured training, log complex workouts, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, RAG-backed coaching materials, and privacy controls that keep AI features opt-in.
+fitai.coach helps athletes plan structured training, log complex workouts, fuel correctly, understand progress, and adjust upcoming sessions with coach-grade AI context. It combines a timeline-first training log, plan import and generation, structured exercise tables, training-style controls, Strava and Garmin sync, nutrition and fuelling tracking, RAG-backed coaching materials, and privacy controls that keep AI features opt-in.
 
 ## Features
 
@@ -59,6 +59,15 @@ fitai.coach helps athletes plan structured training, log complex workouts, under
 
 - **Strava** - OAuth sync imports recent activities, deduplicates them per user, and stores encrypted tokens.
 - **Garmin Connect** - Email/password Garmin SSO sync imports recent activities with encrypted credentials and a strict safety stack: per-user locks, rate limits, minimum sync interval, global 429 circuit breaker, and audit logging.
+
+### Nutrition & Fuelling
+
+- **Food logging** - Log foods by database search, barcode scan, plain-English description, or meal photo, plus custom foods and recipes that roll up like any other food.
+- **Smart food search** - Local search matches name and brand with typo-tolerant `pg_trgm` fuzzy fallback, accent-insensitive matching, and synonym expansion, with optional semantic (embeddings) search that surfaces related foods when keyword results are thin.
+- **Trusted nutrition data** - Foods come from Edamam, USDA FoodData Central, and Open Food Facts, and every calorie and macro traces back to a real database row, with graceful degradation to cached-only results when a provider is unavailable.
+- **Targets and micronutrients** - Set versioned calorie and macro goals from a Mifflin-St Jeor TDEE estimate and track daily totals, including micronutrients against reference daily intakes.
+- **Per-meal fuel targets** - Distribute the day's target across a configurable 3/4/5-meal schedule with pre/post-workout fuelling windows anchored to each session's time of day.
+- **Fuelling vs. training** - See fuelling around each session and a block view of daily intake against training load (UTSS), with opt-in AI analysis of recent fuelling.
 
 ### Analytics & Export
 
@@ -103,8 +112,8 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 ### Backend
 
 - **Runtime**: Node.js >=20, Express 5, TypeScript 6
-- **Database**: PostgreSQL with Drizzle ORM
-- **Vector search**: pgvector, optionally on a separate `VECTOR_DATABASE_URL`
+- **Database**: PostgreSQL with Drizzle ORM, with `pg_trgm` trigram indexes for fuzzy food search
+- **Vector search**: pgvector, optionally on a separate `VECTOR_DATABASE_URL`, backing both RAG retrieval and semantic food search
 - **Authentication**: Clerk JWT middleware with local dev bypass support
 - **AI text providers**: Gemini by default, Anthropic, and OpenAI-compatible adapters
 - **Gemini-specific services**: embeddings and image parsing through `@google/genai`
@@ -261,7 +270,7 @@ Detailed documentation lives in [`docs/`](docs/):
 | [Server](docs/server.md)                       | Express bootstrap, middleware stack, routes, logging, graceful shutdown                    |
 | [Database](docs/database.md)                   | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer                        |
 | [AI and RAG](docs/ai-and-rag.md)               | Text provider layer, Gemini embeddings/vision, coaching context, RAG pipeline              |
-| [Nutrition & Fuelling](docs/nutrition.md)      | Food logging, USDA/Open Food Facts, barcode, recipes, AI meal parsing, fuelling vs. training |
+| [Nutrition & Fuelling](docs/nutrition.md)      | Food logging, food search (fuzzy/synonym/semantic), per-meal fuel targets, AI parsing      |
 | [State Management](docs/state-management.md)   | TanStack Query, custom hooks, offline queue, utility functions                             |
 | [API Reference](docs/api-reference.md)         | Endpoint catalog, request/response shapes, rate limits                                     |
 | [Authentication](docs/authentication.md)       | Clerk setup, user sync, dev auth bypass, protected routes                                  |
@@ -385,7 +394,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The current suite includes 265 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
+The current suite includes 330 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 

@@ -36,6 +36,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints (ex
 - [Strava Routes](#strava-routes)
 - [Garmin Routes](#garmin-routes)
 - [Timeline and Export Routes](#timeline-and-export-routes)
+- [Nutrition Routes](#nutrition-routes)
 
 ---
 
@@ -1399,7 +1400,54 @@ Export all training data as CSV or JSON.
 
 ---
 
+## Nutrition Routes
+
+**Base path:** `/api/v1/nutrition` (paths in the table are relative to it). **Files:** `server/routes/nutrition/*`.
+
+The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. These routes are **not yet registered with the OpenAPI registry**, so they are absent from [`docs/openapi.json`](openapi.json) and Swagger UI; this catalog and [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) are the reference until they are migrated.
+
+| Method | Path | Purpose | Rate limit (per min) |
+|---|---|---|---|
+| GET | `/foods/search` | Search local cache + Edamam + USDA + Open Food Facts (fuzzy / synonym / optional semantic) | `nutritionSearch` (30) |
+| GET | `/foods/recent` | Recently logged foods | `nutritionRead` (60) |
+| GET | `/foods/custom` | The user's custom foods | `nutritionRead` (60) |
+| POST | `/foods/barcode` | Barcode → food (Open Food Facts) | `nutritionBarcode` (30) |
+| POST | `/foods` | Create a custom food (+ servings) | `nutritionWrite` (30) |
+| GET | `/foods/:id` | Food + named servings | `nutritionRead` (60) |
+| PATCH | `/foods/:id` | Edit a custom food | `nutritionWrite` (30) |
+| DELETE | `/foods/:id` | Delete a custom food (`409` if referenced by a log) | `nutritionWrite` (30) |
+| POST | `/foods/:id/servings` | Add a named serving | `nutritionWrite` (30) |
+| DELETE | `/foods/:id/servings/:servingId` | Delete a serving | `nutritionWrite` (30) |
+| GET | `/favorites` | List favourites | `nutritionRead` (60) |
+| POST | `/favorites` | Add a favourite | `nutritionFav` (30) |
+| DELETE | `/favorites/:foodId` | Remove a favourite | `nutritionFav` (30) |
+| POST | `/logs` | Log a food | `nutritionLog` (60) |
+| PATCH | `/logs/:id` | Edit a log entry | `nutritionLog` (60) |
+| DELETE | `/logs/:id` | Delete a log entry | `nutritionLog` (60) |
+| POST | `/logs/repeat` | Repeat a day / meal | `nutritionLog` (20) |
+| POST | `/logs/batch` | Confirm reviewed parsed items | `nutritionLog` (60) |
+| GET | `/summary` | Daily totals + per-meal breakdown, incl. `mealTargets` | `nutritionRead` (60) |
+| GET | `/session-fuelling/:workoutId` | Pre/post-session fuelling windows | `nutritionRead` (60) |
+| GET | `/block` | Daily intake macros vs. training UTSS | `nutritionRead` (60) |
+| GET | `/targets` | Current target + history | `nutritionRead` (60) |
+| POST | `/targets` | Set / replace the target version | `nutritionWrite` (30) |
+| GET | `/micros` | The day's micronutrients vs. RDI | `nutritionRead` (60) |
+| POST | `/parse/text` | Natural-language meal → items **(AI)** | `parse` (5) + consent + budget |
+| POST | `/parse/photo` | Photo → items **(AI)** | `parse` (5) + consent + budget |
+| GET | `/insights` | Last stored AI nutrition analysis | `nutritionRead` (60) |
+| POST | `/insights` | Regenerate the analysis **(AI)** | `suggestions` (3) + consent + budget |
+| GET | `/recipes` | List recipes | `nutritionRead` (60) |
+| POST | `/recipes` | Create a recipe | `nutritionWrite` (30) |
+| GET | `/recipes/:id` | Recipe + ingredients + per-serving macros | `nutritionRead` (60) |
+| PATCH | `/recipes/:id` | Edit a recipe | `nutritionWrite` (30) |
+| DELETE | `/recipes/:id` | Delete a recipe | `nutritionWrite` (30) |
+
+See [Nutrition & Fuelling](nutrition.md) for request/response shapes, the per-100g scaling model, and AI safety details.
+
+---
+
 ## See Also
 
 - [AI and RAG](ai-and-rag.md) -- Architecture of the RAG pipeline, embedding strategy, and coaching material processing.
 - [Authentication](authentication.md) -- Clerk JWT setup, middleware configuration, and session management.
+- [Nutrition & Fuelling](nutrition.md) -- The full nutrition subsystem: data model, food search, fuelling, and AI usage.

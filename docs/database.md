@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~865 lines, 28 tables plus their Drizzle relations). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~1,600 lines, 37 tables plus their Drizzle relations); the seven nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -700,6 +700,13 @@ Durable "last computed result" for the expensive analytics surfaces (Coach Insig
 
 Written and read through `AnalyticsResultsStorage` (`server/storage/analyticsResults.ts`); refreshed by the `recompute-analytics` queue job. This durable store is distinct from the in-memory coalesced analytics cache described under [Performance Considerations](#performance-considerations).
 
+### Nutrition tables
+
+The nutrition module's seven tables — `foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `food_favorites`, `recipes`, and `recipe_ingredients` — are defined in the same `shared/schema/tables.ts` and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model) (including the per-100g storage invariant and the shared-cache visibility rules). Two schema details worth surfacing here:
+
+- **`foods.source`** is a `varchar(16)` with a CHECK constraint allowing `'usda'`, `'off'`, `'fatsecret'`, `'spoonacular'`, `'edamam'`, and `'custom'`. `(source, source_id)` is partial-unique where `source_id IS NOT NULL`, so custom foods (which have no `source_id`) are exempt. Edamam is the active branded source; `fatsecret` / `spoonacular` remain valid in the constraint but are superseded (see [env-reference § Nutrition](env-reference.md#nutrition--food-sources)).
+- **`food_embeddings`** backs semantic food search and lives on the vector database, created at startup rather than by a Drizzle migration — see [pgvector → Schema Bootstrapping](#schema-bootstrapping).
+
 ---
 
 ## Drizzle Relations
@@ -931,7 +938,9 @@ The `document_chunks` table is **not** managed by Drizzle migrations. Instead, i
 3. Migrate the `embedding` column from `text` to `vector` type if needed (for upgrades from earlier versions) — this must run before the HNSW index, since the index requires a vector column
 4. Create the `idx_document_chunks_embedding_hnsw` HNSW index on `embedding::halfvec(3072)` (`halfvec_cosine_ops`, `m = 16`, `ef_construction = 64`) if it does not already exist. This step is best-effort: if it fails (e.g. pgvector < 0.7.0, which lacks `halfvec`), a warning is logged and startup continues — vector search still works via sequential scan.
 
-Because this runs against the vector pool, the `document_chunks` table can live on a separate connection (`VECTOR_DATABASE_URL`) independent of the main migration history.
+The same `ensureVectorSchema()` pass also provisions **`food_embeddings`** for semantic food search: it `CREATE TABLE`s the table when missing and builds the `idx_food_embeddings_hnsw` HNSW index with the identical best-effort `halfvec` approach. Unlike `document_chunks`, it is keyed by `food_id` (one shared, non-per-user vector per cached food) with **no** foreign key to the main-database `foods` row — visibility is re-checked when results are resolved. Its columns are `food_id` (PK), `embedding vector(3072)`, `model`, `text_hash`, and `updated_at`; the `model` + `text_hash` pair lets the background backfill cron skip foods whose embedded text is unchanged. The query path and gating live in [Nutrition & Fuelling § AI usage](nutrition.md#7-ai-usage--safety).
+
+Because this runs against the vector pool, the `document_chunks` and `food_embeddings` tables can live on a separate connection (`VECTOR_DATABASE_URL`) independent of the main migration history.
 
 ---
 
@@ -1037,7 +1046,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **60 migrations**, `0000` through `0059`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **75 migrations**, `0000` through `0074`:
 
 ```
 migrations/
@@ -1073,7 +1082,7 @@ migrations/
     _journal.json
     0000_snapshot.json
     ...
-    0059_snapshot.json
+    0074_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.
@@ -1098,6 +1107,9 @@ Notable recent migrations:
 - `0055`: Adds `user_timezone` to `users`, enabling the per-user local-time gating used by the email and analytics-recompute crons.
 - `0058`: Adds `generation_started_at` to `training_plans`, the marker that lets the API reject a second plan generation while one is already in flight.
 - `0059`: Creates the `analytics_results` table — the durable store for the last computed Coach Insights / Race Prediction (instant-paint + midnight recompute).
+- `0062`–`0063`: Create the nutrition module tables (`foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `food_favorites`, `recipes`, `recipe_ingredients`).
+- `0069`–`0071`: Add `foods.last_fetched_at` (cache-freshness re-fetch) and expand the `foods.source` CHECK constraint to cover the branded providers (`edamam`, `fatsecret`, `spoonacular`).
+- `0074`: Enables the `pg_trgm` extension and adds trigram GIN indexes on `lower(foods.name)` / `lower(foods.brand)` for typo-tolerant ("did you mean") food search, gated at query time by `NUTRITION_FUZZY_ENABLED`.
 
 ### Startup Migration
 

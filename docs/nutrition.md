@@ -289,7 +289,9 @@ a forced client flag can't reach it).
 
 > **Note:** the nutrition routes are **not yet registered with the OpenAPI
 > registry** (`shared/openapi.ts`), so they're absent from `docs/openapi.json` and
-> `docs/api-reference.md`. Closing that gap is listed under improvements.
+> Swagger UI; [`docs/api-reference.md`](api-reference.md#nutrition-routes) carries a
+> manually-maintained catalog until they are migrated. Closing that gap is listed
+> under improvements.
 
 ---
 
