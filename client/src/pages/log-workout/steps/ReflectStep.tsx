@@ -105,7 +105,7 @@ export function ReflectStep({
             <button
               type="button"
               onClick={() => setRpeSkipped(true)}
-              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              className="rounded-sm text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               data-testid="button-skip-rpe"
             >
               {rpeSkipped
