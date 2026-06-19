@@ -134,6 +134,25 @@ describe("trainingLoadService", () => {
     expect(early?.zone).toBe("insufficient_data");
   });
 
+  it("does not inflate ACWR for steady training before 28 days of history exist", () => {
+    const currentDate = "2026-05-22";
+    // 18 consecutive identical days. The chronic window is still 28 calendar
+    // days wide, but only 18 of them are real history. Dividing by a fixed 28
+    // would deflate the chronic baseline and read ACWR ≈ 1.55 ("danger") for an
+    // athlete who has trained perfectly steadily. Coverage-adjusting the
+    // denominator keeps acute ≈ chronic, so the zone is the sweet spot.
+    const workoutLogs = Array.from({ length: 18 }, (_, i) =>
+      log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
+    );
+
+    const { dailyLoads, overview } = calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+
+    const today = dailyLoads.find((d) => d.date === currentDate);
+    expect(today?.acwr).toBeCloseTo(1, 1);
+    expect(today?.zone).toBe("sweet_spot");
+    expect(overview.zone).toBe("sweet_spot");
+  });
+
   it("flags posterior-chain overlap and downshifts next-day hill repeats", () => {
     const workoutLogs = [log({ id: "deadlift-day", focus: "Strength", mainWorkout: "Heavy deadlifts", rpe: 9 })];
     const sets = Array.from({ length: 4 }, (_, index) =>
