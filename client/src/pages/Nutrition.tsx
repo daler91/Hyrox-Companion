@@ -7,7 +7,12 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useDeleteLog, useNutritionDay, useNutritionTargets, useRepeatDay } from "@/hooks/useNutrition";
+import {
+  useDeleteLog,
+  useNutritionDay,
+  useNutritionTargets,
+  useRepeatDay,
+} from "@/hooks/useNutrition";
 
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
@@ -15,7 +20,7 @@ import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
 import { DescribeMealButton } from "./nutrition/DescribeMealButton";
 import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { FoodSearch } from "./nutrition/FoodSearch";
-import { type LogDialogState,LogFoodDialog } from "./nutrition/LogFoodDialog";
+import { type LogDialogState, LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
 import { MealTargetDialog, type MealTargetDialogState } from "./nutrition/MealTargetDialog";
 import { MicronutrientPanel } from "./nutrition/MicronutrientPanel";
@@ -57,8 +62,14 @@ export default function Nutrition() {
   const [dialog, setDialog] = useState<LogDialogState | null>(null);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
-  const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
-  const [mealReview, setMealReview] = useState<{ result: ParseMealResponse; entryMethod: "nl" | "photo" } | null>(null);
+  const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({
+    open: false,
+    id: null,
+  });
+  const [mealReview, setMealReview] = useState<{
+    result: ParseMealResponse;
+    entryMethod: "nl" | "photo";
+  } | null>(null);
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [mealTargetEdit, setMealTargetEdit] = useState<MealTargetDialogState | null>(null);
 
@@ -128,7 +139,11 @@ export default function Nutrition() {
             onEditTarget={(m) => {
               const t = summary?.mealTargets?.[m];
               if (t) {
-                setMealTargetEdit({ mealType: m, target: t, isOverridden: t.reasonCodes.includes("user_override") });
+                setMealTargetEdit({
+                  mealType: m,
+                  target: t,
+                  isOverridden: t.reasonCodes.includes("user_override"),
+                });
               }
             }}
           />
@@ -153,14 +168,15 @@ export default function Nutrition() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <button
-              type="button"
-              className="min-w-24 text-center text-sm font-medium hover:underline"
+            <Button
+              variant="ghost"
+              className="min-w-24 text-center text-sm font-medium"
               onClick={() => setDate(todayStr())}
+              aria-label={`Currently viewing ${formatDateLabel(date)}, click to jump to today`}
               data-testid="button-date-label"
             >
               {formatDateLabel(date)}
-            </button>
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -173,7 +189,10 @@ export default function Nutrition() {
           </div>
         </div>
 
-        <DailyTotalsHeader totals={summary?.totals ?? EMPTY_TOTALS} effectiveTarget={summary?.effectiveTarget ?? null} />
+        <DailyTotalsHeader
+          totals={summary?.totals ?? EMPTY_TOTALS}
+          effectiveTarget={summary?.effectiveTarget ?? null}
+        />
         <EnergyBalanceCard energy={summary?.energy ?? null} />
 
         <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
@@ -182,16 +201,36 @@ export default function Nutrition() {
         <div className="flex flex-wrap gap-2">
           <DescribeMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })} />
           <SnapMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })} />
-          <Button variant="outline" size="sm" onClick={() => setBarcodeOpen(true)} data-testid="button-scan-barcode">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBarcodeOpen(true)}
+            data-testid="button-scan-barcode"
+          >
             <ScanLine className="mr-2 h-4 w-4" /> Scan barcode
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setCustomFood({ mode: "create" })} data-testid="button-new-custom-food">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCustomFood({ mode: "create" })}
+            data-testid="button-new-custom-food"
+          >
             <Plus className="mr-2 h-4 w-4" /> Custom food
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setRecipe({ open: true, id: null })} data-testid="button-new-recipe">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRecipe({ open: true, id: null })}
+            data-testid="button-new-recipe"
+          >
             <ChefHat className="mr-2 h-4 w-4" /> Recipe
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setTargetsOpen(true)} data-testid="button-edit-targets">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setTargetsOpen(true)}
+            data-testid="button-edit-targets"
+          >
             <Target className="mr-2 h-4 w-4" /> Targets
           </Button>
         </div>
@@ -221,15 +260,27 @@ export default function Nutrition() {
         onResolved={(food) => setDialog({ mode: "create", food, entryMethod: "barcode" })}
       />
       <CustomFoodDialog state={customFood} onClose={() => setCustomFood(null)} />
-      <RecipeBuilderDialog open={recipe.open} recipeId={recipe.id} onClose={() => setRecipe({ open: false, id: null })} />
+      <RecipeBuilderDialog
+        open={recipe.open}
+        recipeId={recipe.id}
+        onClose={() => setRecipe({ open: false, id: null })}
+      />
       <ParsedMealReviewSheet
         result={mealReview?.result ?? null}
         date={date}
         entryMethod={mealReview?.entryMethod ?? "nl"}
         onClose={() => setMealReview(null)}
       />
-      <TargetsDialog open={targetsOpen} current={currentTarget} onClose={() => setTargetsOpen(false)} />
-      <MealTargetDialog date={date} state={mealTargetEdit} onClose={() => setMealTargetEdit(null)} />
+      <TargetsDialog
+        open={targetsOpen}
+        current={currentTarget}
+        onClose={() => setTargetsOpen(false)}
+      />
+      <MealTargetDialog
+        date={date}
+        state={mealTargetEdit}
+        onClose={() => setMealTargetEdit(null)}
+      />
     </PageContainer>
   );
 }
