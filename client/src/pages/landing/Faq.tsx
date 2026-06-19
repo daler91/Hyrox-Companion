@@ -1,8 +1,9 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { featureFlags } from "@/lib/featureFlags";
 
 import { SectionHeading } from "./SectionHeading";
 
-const FAQS = [
+const BASE_FAQS = [
   {
     question: "Is fitai.coach free to use?",
     answer:
@@ -38,11 +39,27 @@ const FAQS = [
     answer:
       "Yes. You can upload a CSV training plan during onboarding or from the Timeline page. We also ship an 8-week sample plan and can generate a custom plan from your goal description.",
   },
+  {
+    question: "Can the AI coach use my own coaching style?",
+    answer:
+      "Yes. Upload your own coaching principles or documents in Settings and the AI coach indexes them, then grounds its answers and plan adjustments in your methodology instead of relying on generic advice.",
+  },
+];
+
+const NUTRITION_FAQ = {
+  question: "Can I track my nutrition?",
+  answer:
+    "Yes. Log meals by describing them, snapping a photo, or scanning a barcode, and track calories, macros, and micronutrients. Set training-aware targets that scale your carbs to each day's load — or calculate them from your profile — and get on-demand AI insights on your fuelling.",
+};
+
+const FAQS = [
+  ...BASE_FAQS,
+  ...(featureFlags.nutritionEnabled ? [NUTRITION_FAQ] : []),
 ];
 
 export function Faq() {
   return (
-    <section id="faq" className="py-20 md:py-28 bg-muted/20">
+    <section id="faq" className="py-20 md:py-28">
       <div className="container mx-auto px-4 max-w-3xl">
         <SectionHeading
           eyebrow="FAQ"

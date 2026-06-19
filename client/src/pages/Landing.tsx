@@ -1,4 +1,5 @@
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { featureFlags } from "@/lib/featureFlags";
 
 import { CtaSection, LandingFooter } from "./landing/CtaFooter";
 import { ExerciseShowcase } from "./landing/ExerciseShowcase";
@@ -6,6 +7,7 @@ import { Faq } from "./landing/Faq";
 import { Features, SocialProof } from "./landing/Features";
 import { Hero, LandingHeader } from "./landing/Hero";
 import { HowItWorks } from "./landing/HowItWorks";
+import { NutritionShowcase } from "./landing/Nutrition";
 import { useInView } from "./landing/useInView";
 
 export default function Landing() {
@@ -61,6 +63,7 @@ export default function Landing() {
         <Features />
         <HowItWorks />
         <ExerciseShowcase />
+        {featureFlags.nutritionEnabled ? <NutritionShowcase /> : null}
         <Faq />
         <CtaSection />
       </main>
