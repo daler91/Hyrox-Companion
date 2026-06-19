@@ -4,7 +4,15 @@ import { Badge } from "@/components/ui/badge";
 
 import { SectionHeading } from "./SectionHeading";
 
-function MacroBar({ label, value, target, unit, width }: { label: string; value: number; target: number; unit: string; width: string }) {
+type MacroBarProps = Readonly<{
+  label: string;
+  value: number;
+  target: number;
+  unit: string;
+  width: string;
+}>;
+
+function MacroBar({ label, value, target, unit, width }: MacroBarProps) {
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between">
