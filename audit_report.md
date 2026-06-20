@@ -100,3 +100,32 @@ The analytics and training load formulas audited in this codebase are mathematic
 3.  Protecting aggregate metrics from data sparseness (e.g., gating ACWR ratios behind 14-day history).
 
 No significant mathematical flaws or conceptual deviations from established models were detected during this audit.
+
+## 6. Missing Principles & Opportunities for Improvement
+
+While the current formulas are mathematically sound implementations of their respective base models (e.g., standard Rolling Average Gabbett ACWR, Epley 1RM), the codebase lacks several advanced sports science principles that are considered modern industry standards:
+
+### 1. Exponentially Weighted Moving Averages (EWMA)
+*   **Current State:** The ACWR calculation uses simple Rolling Averages (RA). In a 28-day RA, a massive workload on Day 1 carries the exact same mathematical weight as a massive workload on Day 28. On Day 29, the Day 1 workload instantly drops to zero.
+*   **Missing Principle:** Physiologically, fatigue and fitness decay exponentially over time. A workout performed yesterday impacts you more today than a workout performed three weeks ago.
+*   **Recommendation:** Upgrade the ACWR model to use EWMA. EWMA assigns exponentially decreasing mathematical weights to older data points. This smooths out artificial "cliffs" when large loads drop out of the rolling window and aligns closer to true physiological decay models (like Banister's impulse-response model).
+
+### 2. Training Monotony and Strain (Foster's Model)
+*   **Current State:** The codebase calculates `UTSS` and aggregates it into averages (Acute/Chronic), but it does not measure the *variance* of the load day-to-day.
+*   **Missing Principle:** Training Monotony (Carl Foster, 1998). High workloads are well tolerated if they are interspersed with proper recovery (hard/easy days). The same workload achieved by doing the exact same moderate session every single day leads to overtraining and illness.
+*   **Recommendation:** Implement Monotony and Strain.
+    *   `Monotony = (Average Daily UTSS over 7 days) / (Standard Deviation of Daily UTSS over 7 days)`
+    *   `Strain = Total Weekly UTSS * Monotony`
+    *   A Monotony score > 2.0 is a strong mathematical predictor of overtraining, which the current ACWR model might miss if the total average load appears "safe".
+
+### 3. Training Stress Balance (TSB) / Form
+*   **Current State:** The application computes Chronic Load (Fitness) and Acute Load (Fatigue) and divides them (`Acute / Chronic`) to assess injury risk.
+*   **Missing Principle:** The application does not calculate *Training Stress Balance* (`Chronic - Acute`). TSB is standard in platforms like TrainingPeaks. While the ratio (ACWR) is best for injury prevention, the absolute difference (TSB) is critical for performance peaking and tapering. A positive TSB indicates the athlete is rested ("on form"), while a deeply negative TSB indicates heavy fatigue.
+*   **Recommendation:** Introduce TSB (`Chronic - Acute`) as a metric for race prediction and event tapering.
+
+### 4. Objective Physiological Load vs. Subjective RPE (TRIMP/TSS)
+*   **Current State:** Cardio stress relies heavily on `duration * Intensity Factor`, where Intensity Factor is derived either from RPE or coarse textual heuristics (e.g., matching the word "sprint").
+*   **Missing Principle:** The codebase defines HR fields (`avgHeartrate`, `maxHeartrate`, `avgWatts` on the `WorkoutLog` schema) but does not utilize them mathematically for load calculation. Subjective RPE is valuable, but objective metrics (HR, Power) are the gold standard for endurance load.
+*   **Recommendation:** Implement TRIMP (Training Impulse) using heart rate data, or TSS (Training Stress Score) using power data, when available.
+    *   **TRIMP (Banister):** `Duration * (Delta HR Ratio) * e^(b * Delta HR Ratio)`
+    *   This provides a continuous, exponential, and objective measure of internal physiological stress, rather than relying on textual fallbacks when a user forgets to log an RPE.
