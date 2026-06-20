@@ -203,4 +203,36 @@ describe("PATCH /api/v1/preferences", () => {
     expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", { weeklyGoal: 6 });
     expect(response.body.onboardingCompleted).toBe(true);
   });
+
+  it("rejects an out-of-range resting heart rate", async () => {
+    const response = await request(app).patch("/api/v1/preferences").send({ restingHr: 20 });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("persists heart-rate and power baselines when provided", async () => {
+    const response = await request(app)
+      .patch("/api/v1/preferences")
+      .send({ restingHr: 55, maxHr: 185, ftp: 280 });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+      restingHr: 55,
+      maxHr: 185,
+      ftp: 280,
+    });
+  });
+
+  it("accepts null heart-rate and power baselines to clear stored values", async () => {
+    const response = await request(app)
+      .patch("/api/v1/preferences")
+      .send({ restingHr: null, maxHr: null, ftp: null });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+      restingHr: null,
+      maxHr: null,
+      ftp: null,
+    });
+  });
 });

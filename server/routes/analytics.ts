@@ -280,6 +280,13 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
       },
       user?.userTimezone,
       user?.weightUnit ?? "kg",
+      {
+        age: user?.age ?? null,
+        gender: user?.gender ?? null,
+        restingHr: user?.restingHr ?? null,
+        maxHr: user?.maxHr ?? null,
+        ftp: user?.ftp ?? null,
+      },
     ));
   }));
 

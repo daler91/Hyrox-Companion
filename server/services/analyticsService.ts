@@ -20,7 +20,7 @@ import {
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate } from "../storage/shared";
-import { calculateTrainingLoad } from "./trainingLoadService";
+import { type AthleteLoadContext, calculateTrainingLoad } from "./trainingLoadService";
 import { getMondayWeekBoundaries } from "./weeklyProgress";
 
 // Analytics always operates on logged sets, so workoutLogId is guaranteed
@@ -475,6 +475,7 @@ export function calculateTrainingOverview(
   },
   userTimezone = "UTC",
   weightUnit = "kg",
+  athlete?: AthleteLoadContext,
 ): TrainingOverview {
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
@@ -488,6 +489,7 @@ export function calculateTrainingOverview(
     {
       ...(trainingLoadInput?.currentDate ? { currentDate: trainingLoadInput.currentDate } : {}),
       weightUnit,
+      ...(athlete ? { athlete } : {}),
     },
   ).overview;
   const currentStats = computeOverviewStats(weeklySummaries);

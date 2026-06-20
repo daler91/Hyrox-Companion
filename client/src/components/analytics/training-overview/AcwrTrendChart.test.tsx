@@ -15,6 +15,12 @@ describe("AcwrTrendChart", () => {
           chronicAvg: 60,
           acwr: 1.58,
           zone: "danger",
+          tsb: -35,
+          monotony: 2.4,
+          strain: 1980,
+          monotonyZone: "high_risk",
+          trimp: 142,
+          tss: null,
           flaggedVectors: ["posterior_chain"],
           activeRestrictions: [
             {
@@ -27,7 +33,9 @@ describe("AcwrTrendChart", () => {
             },
           ],
           downshiftRationale: "Recent hamstring/glute/back load conflicts with hills.",
-          trend: [{ date: "2026-05-22", utss: 118, acwr: 1.58, zone: "danger" }],
+          trend: [
+            { date: "2026-05-22", utss: 118, acwr: 1.58, zone: "danger", tsb: -35, monotony: 2.4, strain: 1980, trimp: 142 },
+          ],
         }}
       />,
     );
@@ -36,5 +44,10 @@ describe("AcwrTrendChart", () => {
     expect(screen.getByText("Danger load")).toBeInTheDocument();
     expect(screen.getByText(/UTSS 118 - ACWR 1.58/)).toBeInTheDocument();
     expect(screen.getByText(/Recent hamstring\/glute\/back load/)).toBeInTheDocument();
+    // New metrics: Form (TSB, signed) and Monotony.
+    expect(screen.getByText("form (TSB)")).toBeInTheDocument();
+    expect(screen.getByText("-35")).toBeInTheDocument();
+    expect(screen.getByText("monotony")).toBeInTheDocument();
+    expect(screen.getByText("2.40")).toBeInTheDocument();
   });
 });

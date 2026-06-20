@@ -22,11 +22,23 @@ export type LoadGovernorVector =
   | "unilateral_stability"
   | "elastic_tendon";
 
+// Foster training-monotony band. "high_risk" (>2.0) is a strong overtraining /
+// illness predictor; "elevated" (1.5–2.0) is an early warning.
+export type TrainingMonotonyZone = "ok" | "elevated" | "high_risk";
+
 export interface TrainingLoadTrendPoint {
   date: string;
   utss: number;
   acwr: number | null;
   zone: LoadGovernorAcwrZone;
+  /** Training Stress Balance (chronic − acute EWMA), "Form". Null until seeded. */
+  tsb: number | null;
+  /** Foster monotony (mean ÷ SD of trailing 7-day UTSS). Null when SD is 0. */
+  monotony: number | null;
+  /** Foster strain (weekly UTSS × monotony). Null when monotony is null. */
+  strain: number | null;
+  /** Display-only objective internal load (Banister TRIMP). Null without HR. */
+  trimp: number | null;
 }
 
 export interface TrainingLoadRestriction {
@@ -40,10 +52,23 @@ export interface TrainingLoadRestriction {
 
 export interface TrainingLoadOverview {
   currentUtss: number;
+  /** Acute fatigue: 7-day EWMA of UTSS. */
   acuteAvg: number;
+  /** Chronic fitness: 28-day EWMA of UTSS. */
   chronicAvg: number;
   acwr: number | null;
   zone: LoadGovernorAcwrZone;
+  /** Training Stress Balance / "Form" (chronicAvg − acuteAvg). Null until seeded. */
+  tsb: number | null;
+  /** Foster monotony for the trailing 7 days. Null when SD is 0. */
+  monotony: number | null;
+  /** Foster strain (weekly UTSS × monotony). Null when monotony is null. */
+  strain: number | null;
+  monotonyZone: TrainingMonotonyZone;
+  /** Display-only objective internal load (Banister TRIMP) for the current day. */
+  trimp: number | null;
+  /** Display-only objective external load (power TSS) for the current day. */
+  tss: number | null;
   flaggedVectors: LoadGovernorVector[];
   activeRestrictions: TrainingLoadRestriction[];
   downshiftRationale: string | null;

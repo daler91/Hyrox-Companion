@@ -26,6 +26,13 @@ export async function fetchDailyTraining(
     dailyLoads: calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
       currentDate: to,
       weightUnit: user?.weightUnit || "kg",
+      athlete: {
+        age: user?.age ?? null,
+        gender: user?.gender ?? null,
+        restingHr: user?.restingHr ?? null,
+        maxHr: user?.maxHr ?? null,
+        ftp: user?.ftp ?? null,
+      },
     }).dailyLoads,
     workoutLogs,
   };

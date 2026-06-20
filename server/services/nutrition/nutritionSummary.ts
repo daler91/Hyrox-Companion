@@ -96,6 +96,13 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
   const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
     currentDate: to,
     weightUnit: user?.weightUnit || "kg",
+    athlete: {
+      age: user?.age ?? null,
+      gender: user?.gender ?? null,
+      restingHr: user?.restingHr ?? null,
+      maxHr: user?.maxHr ?? null,
+      ftp: user?.ftp ?? null,
+    },
   });
   const points = buildBlockView(rows, dailyLoads, { from, to });
   const loggedDays = points.filter((p) => p.calories > 0);
