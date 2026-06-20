@@ -183,7 +183,7 @@ function AuthenticatedLayout() {
       {isDevPreview() && <DevModeBanner />}
       <SidebarProvider
         className="min-h-0 flex-1 overflow-hidden"
-        style={style as React.CSSProperties}
+        style={style}
         defaultOpen={getStoredSidebarOpen()}
       >
         <div className="flex min-h-0 flex-1 w-full overflow-hidden">
