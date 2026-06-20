@@ -122,7 +122,7 @@ export const MultiLineChart = memo(function MultiLineChart({
               cursor={{ stroke: MUTED_FG, strokeDasharray: GRID_DASH }}
               content={<MultiLineTooltip formatValue={valueFormatter} />}
             />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
             {referenceLine && (
               <ReferenceLine
                 y={referenceLine.value}
@@ -146,7 +146,7 @@ export const MultiLineChart = memo(function MultiLineChart({
                   name={s.label}
                   stroke={stroke}
                   strokeWidth={2}
-                  dot={{ r: 2, fill: stroke }}
+                  dot={{ r: 3, fill: stroke }}
                   activeDot={{ r: 5 }}
                   connectNulls
                 />
