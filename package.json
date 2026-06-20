@@ -101,7 +101,7 @@
     "helmet": "^8.2.0",
     "lucide-react": "^1.17.0",
     "mammoth": "^1.12.0",
-    "node-cron": "^4.2.1",
+    "node-cron": "^4.4.1",
     "p-limit": "^7.3.0",
     "pdfjs-dist": "^5.7.284",
     "pg": "^8.21.0",
