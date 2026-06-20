@@ -14,3 +14,6 @@ Learned to replace N+1 sequential database inserts in loops with bulk array inse
 ## 2026-06-17 - Fast Date Parsing
 **Learning:** Instantiating `new Date(dateStr).getTime()` just to get a numerical timestamp incurs significant overhead compared to using `Date.parse(dateStr)`. In areas like Analytics where date differences are computed extensively (e.g. over hundreds of movement patterns and muscle mappings), this simple replacement yields a ~60% speedup.
 **Action:** Always prefer `Date.parse(str)` when only the epoch timestamp is needed, avoiding intermediate object allocation.
+## 2026-06-20 - Array method chain optimization
+**Learning:** Chaining array methods like `.map()`, `.filter()`, and `.reduce()` creates intermediate arrays that add to garbage collection overhead and degrade performance. Finding the maximum value in an array using `Math.max(...array)` with the spread operator can also cause stack overflow errors on large arrays.
+**Action:** Replace chained array iterations and spread operators with a single `for...of` loop that computes the result in one `O(N)` pass with `O(1)` extra memory.

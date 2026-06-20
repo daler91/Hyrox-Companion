@@ -283,10 +283,14 @@ function setMinutes(
 
 /** Session RPE from the most intense planned set, or null when nothing is recognizable. */
 function setsRpe(sets: readonly PlannedSessionSet[]): number | null {
-  const rpes = sets
-    .map((s) => resolveRpe(s.exerciseName))
-    .filter((r): r is number => r != null);
-  return rpes.length > 0 ? Math.max(...rpes) : null;
+  let maxRpe: number | null = null;
+  for (const set of sets) {
+    const rpe = resolveRpe(set.exerciseName);
+    if (rpe != null && (maxRpe === null || rpe > maxRpe)) {
+      maxRpe = rpe;
+    }
+  }
+  return maxRpe;
 }
 
 export function estimatePlannedSession(input: PlannedSessionEstimateInput): PlannedSessionEstimate {
@@ -296,27 +300,44 @@ export function estimatePlannedSession(input: PlannedSessionEstimateInput): Plan
   const runPaceRatio = normalizeRunPaceRatio(input.runPaceRatio);
 
   // --- Duration: prefer structured block timing, else estimate from sets. ---
-  const blockTotal = blocks.reduce((acc, b) => acc + blockMinutes(b), 0);
+  let blockTotal = 0;
+  for (const b of blocks) {
+    blockTotal += blockMinutes(b);
+  }
+
   let durationMin: number | null = null;
   let source: PlannedSessionEstimate["source"] = "none";
   if (blockTotal > 0) {
     durationMin = clamp(Math.round(blockTotal), MIN_DURATION_MIN, MAX_DURATION_MIN);
     source = "structure";
   } else if (sets.length > 0) {
-    const setTimeMin = sets.reduce((acc, s) => acc + setMinutes(s, distanceUnit, runPaceRatio), 0);
+    let setTimeMin = 0;
+    for (const s of sets) {
+      setTimeMin += setMinutes(s, distanceUnit, runPaceRatio);
+    }
     durationMin = clamp(Math.round(setTimeMin), MIN_DURATION_MIN, MAX_DURATION_MIN);
     source = "sets";
   }
 
   // --- Intensity: hardest "main" block format, else hardest of any block, else from sets. ---
-  const rpeOf = (filter: (b: PlannedSessionBlock) => boolean): number[] =>
-    blocks
-      .filter(filter)
-      .map((b) => formatRpe(b.formatType))
-      .filter((r): r is number => r != null);
-  const mainRpes = rpeOf((b) => b.sectionType === "main");
-  const pool = mainRpes.length > 0 ? mainRpes : rpeOf(() => true);
-  const blockRpe = pool.length > 0 ? Math.max(...pool) : null;
+  let maxMainRpe: number | null = null;
+  let maxAnyRpe: number | null = null;
+
+  for (const block of blocks) {
+    const rpe = formatRpe(block.formatType);
+    if (rpe != null) {
+      if (maxAnyRpe === null || rpe > maxAnyRpe) {
+        maxAnyRpe = rpe;
+      }
+      if (block.sectionType === "main") {
+        if (maxMainRpe === null || rpe > maxMainRpe) {
+          maxMainRpe = rpe;
+        }
+      }
+    }
+  }
+
+  const blockRpe = maxMainRpe !== null ? maxMainRpe : maxAnyRpe;
   const rpe = blockRpe ?? setsRpe(sets);
 
   return { durationMin, rpe, source };
