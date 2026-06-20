@@ -520,4 +520,22 @@ describe("trainingLoadService", () => {
     expect(overview.strain).not.toBeNull();
     expect(overview.strain).toBeGreaterThan(0);
   });
+
+  it("threads power TSS and EWMA fitness/fatigue into the overview trend", () => {
+    const currentDate = "2026-05-22";
+    const logs = Array.from({ length: 5 }, (_, i) =>
+      log({ id: `t-${i}`, date: daysBefore(currentDate, i), duration: 60, avgHeartrate: 150, avgWatts: 200, rpe: 6 }),
+    );
+    const { overview } = calculateTrainingLoad(logs, [], [], {
+      currentDate,
+      athlete: { age: 30, gender: "male", ftp: 250 },
+    });
+    const todayPoint = overview.trend.find((p) => p.date === currentDate);
+    expect(todayPoint?.trimp).toBeGreaterThan(0);
+    expect(todayPoint?.tss).toBeGreaterThan(0);
+    expect(todayPoint?.acuteEwma).not.toBeNull();
+    expect(todayPoint?.chronicEwma).not.toBeNull();
+    // The trend's current-day TSS mirrors the overview's current-day TSS.
+    expect(todayPoint?.tss).toBe(overview.tss);
+  });
 });
