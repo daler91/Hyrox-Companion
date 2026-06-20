@@ -175,10 +175,11 @@ async function loadRaceReadiness(
       },
     });
     return computeRaceReadiness(overview.tsb);
-  } catch (err) {
-    // Don't log userId here — Bearer flags identifiers in log messages, and this
-    // non-critical fallback only needs the error to diagnose.
-    log.warn({ err }, "[race-predictor] readiness computation failed; omitting Form guidance");
+  } catch {
+    // Readiness is a non-critical annotation, so any failure falls back to
+    // "insufficient data". We log a static message with no variables — Bearer
+    // flags logged objects/identifiers in new code as potential info leakage.
+    log.warn("[race-predictor] readiness computation failed; omitting Form guidance");
     return computeRaceReadiness(null);
   }
 }
