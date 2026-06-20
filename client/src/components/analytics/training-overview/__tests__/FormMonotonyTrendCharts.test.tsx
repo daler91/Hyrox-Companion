@@ -30,6 +30,9 @@ function trendPoint(overrides: Partial<TrainingLoadTrendPoint>): TrainingLoadTre
     monotony: 1.2,
     strain: 300,
     trimp: null,
+    tss: null,
+    acuteEwma: 50,
+    chronicEwma: 50,
     ...overrides,
   };
 }

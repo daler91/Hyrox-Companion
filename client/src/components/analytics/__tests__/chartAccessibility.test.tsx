@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { type ExerciseAnalyticDay, MiniBarChart } from "../MiniBarChart";
 import { MiniLineChart } from "../MiniLineChart";
+import { MultiLineChart } from "../MultiLineChart";
 
 // recharts' ResponsiveContainer can't measure in jsdom; the role="img" wrapper
 // these tests assert on sits OUTSIDE it, so it renders regardless. This locks in
@@ -22,5 +23,17 @@ describe("chart accessibility", () => {
   it("MiniLineChart exposes a labelled image role for screen readers", () => {
     render(<MiniLineChart data={lineData} valueKey="avgRpe" color="primary" label="Avg RPE" />);
     expect(screen.getByRole("img", { name: "Avg RPE, line chart" })).toBeInTheDocument();
+  });
+
+  it("MultiLineChart exposes a labelled image role for screen readers", () => {
+    render(
+      <MultiLineChart
+        data={lineData}
+        series={[{ valueKey: "avgRpe", color: "primary", label: "Avg RPE" }]}
+        label="Load overlay"
+        testId="multi-line-chart-a11y"
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Load overlay, line chart" })).toBeInTheDocument();
   });
 });

@@ -783,6 +783,9 @@ function buildOverview(
       monotony: day.monotony,
       strain: day.strain,
       trimp: day.trimp,
+      tss: day.tss,
+      acuteEwma: day.acuteEwma,
+      chronicEwma: day.chronicEwma,
     };
   });
 

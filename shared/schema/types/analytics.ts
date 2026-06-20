@@ -39,6 +39,12 @@ export interface TrainingLoadTrendPoint {
   strain: number | null;
   /** Display-only objective internal load (Banister TRIMP). Null without HR. */
   trimp: number | null;
+  /** Display-only objective external load (power TSS). Null without power + FTP. */
+  tss: number | null;
+  /** Acute fatigue: 7-day EWMA of UTSS. Null until seeded at the first log. */
+  acuteEwma: number | null;
+  /** Chronic fitness: 28-day EWMA of UTSS. Null until seeded at the first log. */
+  chronicEwma: number | null;
 }
 
 export interface TrainingLoadRestriction {

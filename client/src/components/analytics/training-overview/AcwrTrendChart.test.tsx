@@ -34,7 +34,7 @@ describe("AcwrTrendChart", () => {
           ],
           downshiftRationale: "Recent hamstring/glute/back load conflicts with hills.",
           trend: [
-            { date: "2026-05-22", utss: 118, acwr: 1.58, zone: "danger", tsb: -35, monotony: 2.4, strain: 1980, trimp: 142 },
+            { date: "2026-05-22", utss: 118, acwr: 1.58, zone: "danger", tsb: -35, monotony: 2.4, strain: 1980, trimp: 142, tss: 95, acuteEwma: 130, chronicEwma: 95 },
           ],
         }}
       />,

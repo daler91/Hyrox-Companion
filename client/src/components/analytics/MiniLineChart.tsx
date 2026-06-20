@@ -10,17 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { CHART_CARD_CLASS, COLOR_GREEN, COLOR_PRIMARY, formatChartDate,GRID_BORDER, GRID_DASH, MUTED_FG } from "./chartConstants";
-
-const getStrokeColor = (colorStr: string): string => {
-  if (colorStr.includes("primary")) return COLOR_PRIMARY;
-  if (colorStr.includes("purple")) return "#a855f7";
-  if (colorStr.includes("blue")) return "#3b82f6";
-  if (colorStr.includes("green")) return COLOR_GREEN;
-  if (colorStr.includes("amber")) return "#f59e0b";
-  if (colorStr.includes("red")) return "#ef4444";
-  return "#64748b";
-};
+import { CHART_CARD_CLASS, COLOR_GREEN, formatChartDate, getStrokeColor, GRID_BORDER, GRID_DASH, MUTED_FG } from "./chartConstants";
 
 function LineChartTooltip({ active, payload, chartLabel, formatValue }: Readonly<{ active?: boolean; payload?: Array<{ value: number; payload?: Record<string, unknown> }>; chartLabel?: string; formatValue?: (value: number) => string }>) {
   if (!active || !payload?.length) return null;

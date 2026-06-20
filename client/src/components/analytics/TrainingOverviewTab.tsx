@@ -4,6 +4,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
 import { FormMonotonyTrendCharts } from "./training-overview/FormMonotonyTrendCharts";
+import { ObjectiveLoadTrendCharts } from "./training-overview/ObjectiveLoadTrendCharts";
 import { OverviewStatsGrid } from "./training-overview/OverviewStatsGrid";
 import { OverviewTrendCharts } from "./training-overview/OverviewTrendCharts";
 import { useTrainingOverviewData } from "./training-overview/useTrainingOverviewData";
@@ -45,6 +46,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
       {stats && <OverviewStatsGrid stats={stats} previousStats={previousStats} />}
       {overview.trainingLoad && <AcwrTrendChart trainingLoad={overview.trainingLoad} />}
       {overview.trainingLoad && <FormMonotonyTrendCharts trainingLoad={overview.trainingLoad} />}
+      {overview.trainingLoad && <ObjectiveLoadTrendCharts trainingLoad={overview.trainingLoad} />}
       <WeeklyWorkoutsChart
         weeklySummaries={overview.weeklySummaries}
         weeklyGoal={weeklyGoal}
