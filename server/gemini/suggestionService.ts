@@ -281,10 +281,10 @@ function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
 
   const lines = ["LOAD GOVERNOR (auto-regulation — binding):"];
   if (lg.acwr != null && lg.zone !== "insufficient_data") {
-    lines.push(`- ACWR ${lg.acwr.toFixed(2)} — ${lg.zone.replace(/_/g, " ").toUpperCase()} zone.`);
+    lines.push(`- ACWR ${lg.acwr.toFixed(2)} — ${lg.zone.replaceAll("_", " ").toUpperCase()} zone.`);
   }
   if (lg.flaggedVectors.length > 0) {
-    lines.push(`- Flagged tissue load: ${lg.flaggedVectors.map((v) => v.replace(/_/g, " ")).join(", ")}.`);
+    lines.push(`- Flagged tissue load: ${lg.flaggedVectors.map((v) => v.replaceAll("_", " ")).join(", ")}.`);
   }
   for (const restriction of lg.activeRestrictions) {
     lines.push(`- ${restriction.label}: ${restriction.rationale}`);
