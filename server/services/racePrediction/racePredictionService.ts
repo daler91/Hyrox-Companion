@@ -176,7 +176,9 @@ async function loadRaceReadiness(
     });
     return computeRaceReadiness(overview.tsb);
   } catch (err) {
-    log.warn({ err, userId }, "[race-predictor] readiness computation failed; omitting Form guidance");
+    // Don't log userId here — Bearer flags identifiers in log messages, and this
+    // non-critical fallback only needs the error to diagnose.
+    log.warn({ err }, "[race-predictor] readiness computation failed; omitting Form guidance");
     return computeRaceReadiness(null);
   }
 }
