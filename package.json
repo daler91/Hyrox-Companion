@@ -321,7 +321,22 @@
     "  exists elsewhere in the lockfile); the override forces every path to >=7.29.6. All",
     "  consumers are build/dev tooling, so runtime is unaffected. Dependabot cannot update",
     "  transitive deps for pnpm, so the override is required.",
-    "  Remove when eslint-plugin-react-hooks depends on @babel/core >=7.29.6."
+    "  Remove when eslint-plugin-react-hooks depends on @babel/core >=7.29.6.",
+    "",
+    "undici ^7.28.0: fixes six advisories in one bump (Dependabot issues #77-#83). High:",
+    "  SOCKS5 proxy pool reuse / cross-origin request routing (CVE-2026-6734) and TLS",
+    "  certificate validation bypass from a dropped requestTls option in the SOCKS5 ProxyAgent",
+    "  (CVE-2026-9697). Moderate: shared-cache whitespace bypass / cross-user info disclosure",
+    "  (CVE-2026-9678) and Set-Cookie percent-decoding HTTP header injection (CVE-2026-9679).",
+    "  Low: Set-Cookie SameSite substring-match downgrade (CVE-2026-11525) and keep-alive",
+    "  socket reuse HTTP response queue poisoning (CVE-2026-6733). All six are patched in",
+    "  undici 7.28.0 (the 8.x line got the same fixes at 8.2.0/8.5.0). Pulled transitively by",
+    "  jsdom 28.1.0 (which declares undici 7.24.7); jsdom is a devDependency used only as the",
+    "  vitest DOM environment, so runtime is unaffected. Constrained to ^7.28.0 to stay on the",
+    "  7.x line, since jsdom expects undici 7.x and an 8.x jump could raise the Node floor",
+    "  above our engines.node >=20. Dependabot cannot update transitive deps for pnpm, so the",
+    "  override is required to clear the advisories.",
+    "  Remove when jsdom depends on undici >=7.28.0."
   ],
   "overrides": {
     "esbuild": "0.28.1",
@@ -341,7 +356,8 @@
     "tmp": "^0.2.6",
     "form-data": "^4.0.6",
     "js-yaml": "^4.2.0",
-    "@babel/core": "^7.29.6"
+    "@babel/core": "^7.29.6",
+    "undici": "^7.28.0"
   },
   "devDependencies": {
     "@sentry/esbuild-plugin": "^5.3.0",
@@ -411,7 +427,8 @@
       "tmp": "^0.2.6",
       "form-data": "^4.0.6",
       "js-yaml": "^4.2.0",
-      "@babel/core": "^7.29.6"
+      "@babel/core": "^7.29.6",
+      "undici": "^7.28.0"
     }
   },
   "packageManager": "pnpm@9.12.0",
