@@ -13,7 +13,11 @@ vi.mock("../../logger", () => ({
 vi.mock("../../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
-    analytics: { getAllExerciseSetsWithDates: vi.fn() },
+    analytics: {
+      getAllExerciseSetsWithDates: vi.fn(),
+      getWorkoutLogsByDateRange: vi.fn(),
+      getExerciseLoadTags: vi.fn(),
+    },
   },
 }));
 vi.mock("../../ai/providers", () => ({ generateJsonText: vi.fn() }));
@@ -22,11 +26,30 @@ vi.mock("../aiUsageService", () => ({ checkAiBudget: vi.fn() }));
 import { generateJsonText } from "../../ai/providers";
 import { storage } from "../../storage";
 import { checkAiBudget } from "../aiUsageService";
+import { computeRaceReadiness } from "./racePredictionService";
 
 const getUser = vi.mocked(storage.users.getUser);
 const getSets = vi.mocked(storage.analytics.getAllExerciseSetsWithDates);
+const getWorkoutLogs = vi.mocked(storage.analytics.getWorkoutLogsByDateRange);
+const getLoadTags = vi.mocked(storage.analytics.getExerciseLoadTags);
 const mockGenerate = vi.mocked(generateJsonText);
 const mockBudget = vi.mocked(checkAiBudget);
+
+function isoDaysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+}
+
+/** `count` steady daily cardio logs ending today — yields a stable TSB ≈ 0. */
+function steadyWorkoutLogs(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `wl-${i}`,
+    userId: "u1",
+    date: isoDaysAgo(i),
+    duration: 60,
+    focus: "Run",
+    mainWorkout: "Steady run",
+  }));
+}
 
 function mockUser(overrides: Record<string, unknown> = {}) {
   getUser.mockResolvedValue({
@@ -72,6 +95,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   envState.AI_FEATURES_ENABLED = "true";
   getSets.mockResolvedValue([]);
+  getWorkoutLogs.mockResolvedValue([]);
+  getLoadTags.mockResolvedValue([]);
   mockBudget.mockResolvedValue({ allowed: true });
 });
 
@@ -263,5 +288,63 @@ describe("generateRacePrediction — AI clamp guardrail", () => {
     const result = await generateRacePrediction("u1");
 
     expect(result.segments.find((s) => s.index === 16)!.estimatedSeconds).toBe(350);
+  });
+});
+
+describe("computeRaceReadiness", () => {
+  it("returns insufficient_data with null TSB when form is unknown", () => {
+    const r = computeRaceReadiness(null);
+    expect(r.status).toBe("insufficient_data");
+    expect(r.tsb).toBeNull();
+    expect(r.guidance).toBeTruthy();
+  });
+
+  it("classifies TSB into taper bands and rounds the value", () => {
+    expect(computeRaceReadiness(20).status).toBe("peaked");
+    expect(computeRaceReadiness(10).status).toBe("fresh");
+    expect(computeRaceReadiness(0).status).toBe("neutral");
+    expect(computeRaceReadiness(-5).status).toBe("neutral");
+    expect(computeRaceReadiness(-18).status).toBe("fatigued");
+    expect(computeRaceReadiness(-40).status).toBe("very_fatigued");
+    // Boundaries (>= thresholds) and rounding.
+    expect(computeRaceReadiness(5).status).toBe("fresh");
+    expect(computeRaceReadiness(15).status).toBe("peaked");
+    expect(computeRaceReadiness(-10).status).toBe("neutral");
+    expect(computeRaceReadiness(-25).status).toBe("fatigued");
+    expect(computeRaceReadiness(12.6).tsb).toBe(13);
+  });
+});
+
+describe("generateRacePrediction — race readiness (Form)", () => {
+  it("reports insufficient_data readiness when there is no recent training load", async () => {
+    mockUser();
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.raceReadiness).toBeDefined();
+    expect(result.raceReadiness?.status).toBe("insufficient_data");
+    expect(result.raceReadiness?.tsb).toBeNull();
+  });
+
+  it("derives readiness from recent training load (steady block ⇒ race-ready/neutral)", async () => {
+    mockUser();
+    getWorkoutLogs.mockResolvedValue(steadyWorkoutLogs(21));
+    mockGenerate.mockResolvedValue({ text: validAiPayload(3500) });
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.raceReadiness?.status).toBe("neutral");
+    expect(result.raceReadiness?.tsb).toBe(0);
+  });
+
+  it("still includes readiness on the deterministic (AI-off) path", async () => {
+    mockUser({ aiCoachEnabled: false });
+    getWorkoutLogs.mockResolvedValue(steadyWorkoutLogs(21));
+
+    const result = await generateRacePrediction("u1");
+
+    expect(result.aiUsed).toBe(false);
+    expect(result.raceReadiness?.status).toBe("neutral");
   });
 });

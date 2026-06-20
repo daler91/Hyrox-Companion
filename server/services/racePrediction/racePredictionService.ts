@@ -17,6 +17,7 @@ import type {
   RacePredictionConfidence,
   RacePredictionPercentile,
   RacePredictionResponse,
+  RaceReadiness,
   RaceSegmentPrediction,
 } from "@shared/schema";
 import type { Logger } from "pino";
@@ -27,6 +28,7 @@ import { env } from "../../env";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
 import { checkAiBudget } from "../aiUsageService";
+import { calculateTrainingLoad, toIsoDate,type TrainingLoadSet } from "../trainingLoadService";
 import {
   buildRacePredictionFeatures,
   MAX_PERSONAL_FRACTION,
@@ -51,6 +53,7 @@ Rules:
 - Keep each estimate close to the segment's deterministicBaselineSeconds — a refinement, not a rewrite. Only go much faster than it when the athlete's own logged data clearly justifies it.
 - floorSeconds is an EXTREME world-class limit, not a target: never output below it, and do not approach it unless logged data proves that athlete is near-elite on that segment.
 - transitionTotalSeconds is the real median total "roxzone" (transition) time for this athlete's cohort. Your totalFinishSeconds must equal the sum of your 16 segment estimates PLUS a transition allowance close to transitionTotalSeconds (stay within roughly ±50% of it), and never less than the segment sum.
+- trainingReadiness reflects the athlete's CURRENT training form (TSB / Training Stress Balance: positive = rested/fresh, negative = fatigued; status is a coarse band). Do NOT change any segment estimate or the finish time based on it — the estimate already assumes a rested race day. Use it ONLY to add one short readiness/taper sentence to the narrative (fresh/peaked → keep sharp, avoid over-tapering; fatigued/very_fatigued → recommend recovery and a taper before race day). If status is "insufficient_data", omit readiness commentary.
 
 Return ONLY a JSON object (no prose, no markdown fences) with exactly these fields:
 {
@@ -80,6 +83,102 @@ function clamp(value: number, min: number, max: number): number {
 
 function normalizeStoredGender(gender: string | null | undefined): StoredGender {
   return gender === "male" || gender === "female" || gender === "prefer_not_to_say" ? gender : null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Lookback for the readiness load calc: long enough for the 28-day chronic EWMA
+// to stabilise, short enough to keep the (cached) prediction cheap.
+const READINESS_WINDOW_DAYS = 90;
+
+/**
+ * Map current Training Stress Balance (Form) to a race-readiness band + taper
+ * guidance. TSB is chronic − acute EWMA (positive = rested, negative = fatigued).
+ * This annotates the prediction only — the finish-time estimate already assumes a
+ * rested race day, so readiness never modifies the predicted time.
+ */
+export function computeRaceReadiness(tsb: number | null): RaceReadiness {
+  if (tsb == null) {
+    return {
+      tsb: null,
+      status: "insufficient_data",
+      guidance:
+        "Log a few more weeks of training so we can read your race-day form (TSB) and tailor a taper.",
+    };
+  }
+  const rounded = Math.round(tsb);
+  if (rounded >= 15) {
+    return {
+      tsb: rounded,
+      status: "peaked",
+      guidance:
+        "You're well-rested and sharp — ideal for race day. Keep a few light race-pace touches and avoid over-tapering into staleness.",
+    };
+  }
+  if (rounded >= 5) {
+    return {
+      tsb: rounded,
+      status: "fresh",
+      guidance:
+        "Good race form. A short sharpening taper — easy volume with a few race-pace efforts — will keep you fresh.",
+    };
+  }
+  if (rounded >= -10) {
+    return {
+      tsb: rounded,
+      status: "neutral",
+      guidance: "Balanced load and close to race-ready. Start a 7–10 day taper before your event to peak.",
+    };
+  }
+  if (rounded >= -25) {
+    return {
+      tsb: rounded,
+      status: "fatigued",
+      guidance:
+        "You're carrying training fatigue — productive now, but not race-ready. Plan a taper so you arrive fresh.",
+    };
+  }
+  return {
+    tsb: rounded,
+    status: "very_fatigued",
+    guidance:
+      "High fatigue load. Prioritise recovery and a deliberate taper before racing — current form would blunt your finish.",
+  };
+}
+
+/**
+ * Compute the athlete's current race readiness from their recent training load.
+ * Resilient: any failure (or no history) yields the insufficient-data readiness
+ * rather than breaking the prediction.
+ */
+async function loadRaceReadiness(
+  userId: string,
+  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null } | undefined,
+  sets: readonly TrainingLoadSet[],
+  log: RacePredictionLogger,
+): Promise<RaceReadiness> {
+  try {
+    const today = toIsoDate(new Date());
+    const from = toIsoDate(new Date(Date.now() - READINESS_WINDOW_DAYS * DAY_MS));
+    const [workoutLogs, loadTags] = await Promise.all([
+      storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
+      storage.analytics.getExerciseLoadTags(),
+    ]);
+    const { overview } = calculateTrainingLoad(workoutLogs, sets, loadTags, {
+      currentDate: today,
+      weightUnit: user?.weightUnit ?? "kg",
+      athlete: {
+        age: user?.age ?? null,
+        gender: user?.gender ?? null,
+        restingHr: user?.restingHr ?? null,
+        maxHr: user?.maxHr ?? null,
+        ftp: user?.ftp ?? null,
+      },
+    });
+    return computeRaceReadiness(overview.tsb);
+  } catch (err) {
+    log.warn({ err, userId }, "[race-predictor] readiness computation failed; omitting Form guidance");
+    return computeRaceReadiness(null);
+  }
 }
 
 /** Confidence for a single deterministic segment, from its logged sample size. */
@@ -131,7 +230,7 @@ function buildPercentile(
   };
 }
 
-function buildFeaturePromptPayload(features: RacePredictionFeatures): unknown {
+function buildFeaturePromptPayload(features: RacePredictionFeatures, readiness: RaceReadiness): unknown {
   return {
     division: features.division,
     gender: features.resolvedGender ?? "unspecified",
@@ -140,6 +239,9 @@ function buildFeaturePromptPayload(features: RacePredictionFeatures): unknown {
     weightUnit: features.weightUnit,
     transitionTotalSeconds: features.transitionSeconds,
     deterministicBaselineFinishSeconds: features.deterministicFinishSeconds,
+    // Current training form (Form / TSB). Narrative-only: never used to change
+    // the finish-time estimate (see system prompt rule).
+    trainingReadiness: { tsb: readiness.tsb, status: readiness.status },
     segments: RACE_SEGMENTS.map((segment, i) => {
       const baseline = features.baselineSegments[i];
       const base = {
@@ -179,6 +281,7 @@ function buildDeterministicResponse(
   features: RacePredictionFeatures,
   storedGender: StoredGender,
   reason: RacePredictionAiUnavailableReason | null,
+  readiness: RaceReadiness,
 ): RacePredictionResponse {
   const segments: RaceSegmentPrediction[] = features.baselineSegments.map((s) => ({
     index: s.index,
@@ -205,6 +308,7 @@ function buildDeterministicResponse(
     ageGroup: features.resolvedAgeGroup,
     ageGroupAssumed: features.ageGroupAssumed,
     percentile: buildPercentile(features, features.deterministicFinishSeconds),
+    raceReadiness: readiness,
     dataCompleteness: features.dataCompleteness,
     generatedAt: new Date().toISOString(),
   };
@@ -214,6 +318,7 @@ function buildAiResponse(
   features: RacePredictionFeatures,
   storedGender: StoredGender,
   ai: z.infer<typeof racePredictionAiSchema>,
+  readiness: RaceReadiness,
 ): RacePredictionResponse {
   const aiByIndex = new Map(ai.segments.map((s) => [s.index, s]));
 
@@ -276,6 +381,7 @@ function buildAiResponse(
     ageGroup: features.resolvedAgeGroup,
     ageGroupAssumed: features.ageGroupAssumed,
     percentile: buildPercentile(features, totalFinishSeconds),
+    raceReadiness: readiness,
     dataCompleteness: features.dataCompleteness,
     generatedAt: new Date().toISOString(),
   };
@@ -324,15 +430,19 @@ export async function generateRacePrediction(
     ageGroup: deriveAgeGroupFromAge(user?.age ?? user?.mafAge ?? null),
   });
 
+  // Current race-day form (TSB) → readiness band + taper guidance. Computed for
+  // both the AI and deterministic paths so taper guidance never depends on AI.
+  const readiness = await loadRaceReadiness(userId, user, sets ?? [], log);
+
   const blocker = await resolveAiBlocker(user, userId, log);
   if (blocker) {
-    return buildDeterministicResponse(features, storedGender, blocker);
+    return buildDeterministicResponse(features, storedGender, blocker, readiness);
   }
 
   try {
     const response = await generateJsonText({
       systemInstruction: RACE_PREDICTOR_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: JSON.stringify(buildFeaturePromptPayload(features)) }],
+      messages: [{ role: "user", content: JSON.stringify(buildFeaturePromptPayload(features, readiness)) }],
       modelRole: "reasoning",
       label: "race-predictor",
       feature: "race-predictor",
@@ -348,7 +458,7 @@ export async function generateRacePrediction(
         { err: parseErr },
         "[race-predictor] AI JSON.parse failed; using deterministic baseline",
       );
-      return buildDeterministicResponse(features, storedGender, "ai_error");
+      return buildDeterministicResponse(features, storedGender, "ai_error", readiness);
     }
 
     const parsed = racePredictionAiSchema.safeParse(raw);
@@ -357,15 +467,15 @@ export async function generateRacePrediction(
         { issues: parsed.error.issues },
         "[race-predictor] AI output failed validation; using deterministic baseline",
       );
-      return buildDeterministicResponse(features, storedGender, "ai_error");
+      return buildDeterministicResponse(features, storedGender, "ai_error", readiness);
     }
 
-    return buildAiResponse(features, storedGender, parsed.data);
+    return buildAiResponse(features, storedGender, parsed.data, readiness);
   } catch (err) {
     log.error(
       { err, userId },
       "[race-predictor] AI generation failed; using deterministic baseline",
     );
-    return buildDeterministicResponse(features, storedGender, "ai_error");
+    return buildDeterministicResponse(features, storedGender, "ai_error", readiness);
   }
 }
