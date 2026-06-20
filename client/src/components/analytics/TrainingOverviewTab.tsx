@@ -3,6 +3,7 @@ import { BarChart3 } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
+import { FormMonotonyTrendCharts } from "./training-overview/FormMonotonyTrendCharts";
 import { OverviewStatsGrid } from "./training-overview/OverviewStatsGrid";
 import { OverviewTrendCharts } from "./training-overview/OverviewTrendCharts";
 import { useTrainingOverviewData } from "./training-overview/useTrainingOverviewData";
@@ -43,6 +44,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
     <div className="space-y-6">
       {stats && <OverviewStatsGrid stats={stats} previousStats={previousStats} />}
       {overview.trainingLoad && <AcwrTrendChart trainingLoad={overview.trainingLoad} />}
+      {overview.trainingLoad && <FormMonotonyTrendCharts trainingLoad={overview.trainingLoad} />}
       <WeeklyWorkoutsChart
         weeklySummaries={overview.weeklySummaries}
         weeklyGoal={weeklyGoal}

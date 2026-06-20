@@ -56,6 +56,7 @@ export const MiniLineChart = memo(function MiniLineChart({
   color,
   label,
   referenceLine,
+  referenceLineColor,
   valueFormatter,
 }: Readonly<{
   data: readonly object[];
@@ -64,12 +65,15 @@ export const MiniLineChart = memo(function MiniLineChart({
   color: string;
   label: string;
   referenceLine?: { value: number; label: string };
+  /** Stroke/label colour for the reference line (Tailwind-ish, via getStrokeColor). Defaults to green. */
+  referenceLineColor?: string;
   /** Format the y-value for the axis ticks and tooltip (e.g. pace seconds → "m:ss"). */
   valueFormatter?: (value: number) => string;
 }>) {
   if (data.length === 0) return null;
 
   const strokeColor = getStrokeColor(color);
+  const refLineColor = referenceLineColor ? getStrokeColor(referenceLineColor) : COLOR_GREEN;
 
   return (
     <div className={CHART_CARD_CLASS}>
@@ -109,12 +113,12 @@ export const MiniLineChart = memo(function MiniLineChart({
             {referenceLine && (
               <ReferenceLine
                 y={referenceLine.value}
-                stroke={COLOR_GREEN}
+                stroke={refLineColor}
                 strokeDasharray="6 3"
                 label={{
                   value: referenceLine.label,
                   position: "right",
-                  fill: COLOR_GREEN,
+                  fill: refLineColor,
                   fontSize: 11,
                 }}
               />
