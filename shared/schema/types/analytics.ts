@@ -178,6 +178,24 @@ export interface RacePredictionPercentile {
   basis: "age_group" | "division_gender";
 }
 
+/** Race-day readiness band derived from current Training Stress Balance (Form).
+ *  "peaked"/"fresh" = rested, "fatigued"/"very_fatigued" = carrying load. */
+export type RaceReadinessStatus =
+  | "insufficient_data"
+  | "peaked"
+  | "fresh"
+  | "neutral"
+  | "fatigued"
+  | "very_fatigued";
+
+export interface RaceReadiness {
+  /** Current Training Stress Balance (chronic − acute EWMA), rounded. Null when history is insufficient. */
+  tsb: number | null;
+  status: RaceReadinessStatus;
+  /** Short, athlete-facing taper / race-peaking guidance derived from TSB. */
+  guidance: string;
+}
+
 export interface RacePredictionResponse {
   totalFinishSeconds: number;
   segments: RaceSegmentPrediction[];
@@ -199,6 +217,9 @@ export interface RacePredictionResponse {
   ageGroupAssumed: boolean;
   /** Where the finish ranks vs the real field, or null when no cohort applies. */
   percentile: RacePredictionPercentile | null;
+  /** Current training-form readiness + taper guidance (TSB-derived). Optional so
+   *  older cached predictions without it still deserialize. */
+  raceReadiness?: RaceReadiness | null;
   dataCompleteness: {
     stationsWithData: number;
     totalStations: number;

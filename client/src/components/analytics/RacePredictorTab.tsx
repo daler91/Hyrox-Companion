@@ -2,12 +2,15 @@ import type {
   RacePredictionBasis,
   RacePredictionConfidence,
   RacePredictionResponse,
+  RaceReadiness,
+  RaceReadinessStatus,
   RaceSegmentPrediction,
 } from "@shared/schema";
 import {
   AlertTriangle,
   Dumbbell,
   Footprints,
+  Gauge,
   Info,
   Loader2,
   RefreshCw,
@@ -112,6 +115,52 @@ function SegmentRow({ segment }: Readonly<{ segment: RaceSegmentPrediction }>) {
         {formatSecondsToMmSs(segment.estimatedSeconds)}
       </span>
     </div>
+  );
+}
+
+const READINESS_STYLES: Record<RaceReadinessStatus, { label: string; className: string; dot: string }> = {
+  peaked: { label: "Peaked", className: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
+  fresh: { label: "Fresh", className: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
+  neutral: { label: "Race-ready", className: "text-sky-600 dark:text-sky-400", dot: "bg-sky-500" },
+  fatigued: { label: "Fatigued", className: "text-amber-600 dark:text-amber-400", dot: "bg-amber-500" },
+  very_fatigued: { label: "Very fatigued", className: "text-red-600 dark:text-red-400", dot: "bg-red-500" },
+  insufficient_data: { label: "Not enough data", className: "text-muted-foreground", dot: "bg-muted-foreground/40" },
+};
+
+/** Signed TSB for display ("+12" / "-8" / "—" when unknown). */
+function formatTsb(value: number | null): string {
+  if (value == null) return "—";
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function ReadinessCard({ readiness }: Readonly<{ readiness: RaceReadiness }>) {
+  const style = READINESS_STYLES[readiness.status];
+  return (
+    <Card data-testid="race-readiness-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Gauge className="h-5 w-5 text-primary" aria-hidden="true" />
+          Race readiness
+        </CardTitle>
+        <CardDescription>Your current training form (TSB) and how to taper into race day.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className={cn("inline-block h-2.5 w-2.5 rounded-full", style.dot)} aria-hidden="true" />
+          <span className={cn("text-sm font-semibold", style.className)} data-testid="race-readiness-status">
+            {style.label}
+          </span>
+          {readiness.tsb != null && (
+            <span className="text-sm text-muted-foreground" data-testid="race-readiness-tsb">
+              Form {formatTsb(readiness.tsb)}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground" data-testid="race-readiness-guidance">
+          {readiness.guidance}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -251,6 +300,8 @@ export function RacePredictorTab() {
           )}
         </CardContent>
       </Card>
+
+      {data.raceReadiness && <ReadinessCard readiness={data.raceReadiness} />}
 
       {!data.aiUsed && (
         <div
