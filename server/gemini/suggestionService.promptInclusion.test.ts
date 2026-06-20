@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { createMockTrainingContext, createMockUpcomingWorkout } from "../../test/factories";
-import { buildSystemPrompt } from "../prompts";
+import { buildSystemPrompt, SUGGESTIONS_PROMPT } from "../prompts";
+import { restriction, summary } from "../services/trainingLoadGovernor.testHelpers";
 import { buildSuggestionsPrompt } from "./suggestionService";
 import type { TrainingContext } from "./types";
 
@@ -451,5 +452,74 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
 
     expect(prompt).toContain("Fuelling and Recovery (last 14 days, 8 days logged):");
     expect(prompt).toContain("Daily target: 2600 kcal");
+  });
+});
+
+describe("buildSuggestionsPrompt — load governor gating", () => {
+  const baseInsights = {
+    rpeTrend: "stable" as const,
+    fatigueFlag: false,
+    undertrainingFlag: false,
+    stationGaps: [],
+    progressionFlags: [],
+  };
+
+  it("injects a binding LOAD GOVERNOR block when a restriction is active", () => {
+    const ctx = createMockTrainingContext({
+      coachingInsights: {
+        ...baseInsights,
+        loadGovernor: summary(
+          [
+            restriction("posterior_chain_velocity_lock", {
+              label: "Posterior chain velocity lock",
+              vector: "posterior_chain",
+              rationale:
+                "Recent hamstring/glute/back load conflicts with hills, sprints, and high-velocity running.",
+            }),
+          ],
+          { zone: "danger", acwr: 1.62, flaggedVectors: ["posterior_chain"] },
+        ),
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+
+    expect(prompt).toContain("LOAD GOVERNOR (auto-regulation — binding):");
+    expect(prompt).toContain("ACWR 1.62 — DANGER zone.");
+    expect(prompt).toContain("Flagged tissue load: posterior chain.");
+    expect(prompt).toContain(
+      "Posterior chain velocity lock: Recent hamstring/glute/back load conflicts with hills, sprints, and high-velocity running.",
+    );
+  });
+
+  it("surfaces the block in the yellow zone even without a named restriction", () => {
+    const ctx = createMockTrainingContext({
+      coachingInsights: {
+        ...baseInsights,
+        loadGovernor: summary([], { zone: "yellow", acwr: 1.4 }),
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+
+    expect(prompt).toContain("LOAD GOVERNOR (auto-regulation — binding):");
+    expect(prompt).toContain("YELLOW zone.");
+  });
+
+  it("omits the block for a sweet-spot athlete with no restrictions", () => {
+    const ctx = createMockTrainingContext({
+      coachingInsights: {
+        ...baseInsights,
+        loadGovernor: summary([], { zone: "sweet_spot", acwr: 1.05 }),
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+
+    expect(prompt).not.toContain("LOAD GOVERNOR");
+  });
+
+  it("states the LOAD GOVERNOR override in the system prompt's hard constraints", () => {
+    expect(SUGGESTIONS_PROMPT).toContain("LOAD GOVERNOR auto-regulation OVERRIDES");
   });
 });
