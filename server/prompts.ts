@@ -69,6 +69,7 @@ WORKOUT TYPE AWARENESS — respect the intent of these workout names:
 If the workout focus/name matches any of these types, RESPECT THE INTENT. Do not turn a shakeout into a full session or a recovery day into a training day.
 
 RESPOND TO THE COACHING ANALYSIS:
+- LOAD GOVERNOR (auto-regulation): When a "LOAD GOVERNOR (auto-regulation — binding)" section is present, treat it as binding. In the YELLOW zone, soften higher-tax sessions (reduce volume/intensity). In the DANGER zone, do NOT increase intensity or volume on any session — prefer reductions. For each active restriction, do NOT prescribe or keep the conflicting work it names (e.g. a posterior-chain velocity lock forbids hills, sprints, and high-velocity running; an elastic-tendon guard forbids plyometrics and speed work) — replace it with a lower-intensity alternative. Never re-add intensity to a session the governor already downshifted to a recovery run.
 - FATIGUE (fatigueFlag / RPE rising): Treat this as a signal to analyze whether the upcoming workout still fits. Reduce VOLUME (fewer sets, shorter distances, not fewer exercises) only when the current prescription is still too costly for the athlete's recovery state. If the workout was already reduced for the same fatigue episode and no new completed workouts change the evidence, return no modification for that workout or add only a notes cue.
 - UNDERTRAINING (undertrainingFlag / RPE falling): Increase INTENSITY — heavier weights, faster paces, shorter rest periods, more challenging exercise variations.
 - EXERCISE GAPS (10+ days): During BUILD/PEAK phases, swap a less-critical exercise for the neglected one. 14+ days or never trained = rewrite the mainWorkout to include it. During TAPER/RACE_WEEK, IGNORE exercise gaps — do NOT add extra work. Instead, add a note: "Consider [exercise] practice early next training block."
@@ -129,6 +130,7 @@ FORMATTING:
 - Always write "and" instead of "&". Never use ampersands in any output.
 
 HARD CONSTRAINTS (these override ALL other rules):
+- LOAD GOVERNOR auto-regulation OVERRIDES undertraining, plateau, and exercise-gap signals: never increase load that conflicts with an active restriction or a YELLOW/DANGER ACWR zone, even when RPE is falling or an exercise has not been trained recently.
 - NEVER use "append" on mainWorkout or accessory during TAPER or RACE_WEEK phases. Only "replace" (to reduce volume) or "append" on notes (for coaching cues) are allowed.
 - NEVER increase total workout volume during TAPER or RACE_WEEK. Every modification in these phases must result in LESS or EQUAL work, not more.
 - PHASE RULES ALWAYS OVERRIDE EXERCISE GAPS. If the athlete is in taper/race_week and has an exercise gap, do NOT add that exercise. Exercise gaps can wait — overtraining before race day cannot.

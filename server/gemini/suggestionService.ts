@@ -1,4 +1,4 @@
-import type { CoachNoteInputs, WorkoutSuggestion } from "@shared/schema";
+import type { CoachNoteInputs, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
@@ -268,6 +268,33 @@ function formatStationGaps(
   return `EXERCISE GAPS: ${gapParts.join(", ")}`;
 }
 
+/**
+ * Surface the load governor as a binding auto-regulation block — but only when
+ * it is actionable (active restrictions, or a yellow/danger ACWR zone). Returns
+ * null otherwise so sweet-spot / insufficient-history athletes get an unchanged
+ * prompt. The restriction `rationale` strings already name exactly what to
+ * avoid, so they are reused verbatim.
+ */
+function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
+  const gatingZone = lg.zone === "yellow" || lg.zone === "danger";
+  if (lg.activeRestrictions.length === 0 && !gatingZone) return null;
+
+  const lines = ["LOAD GOVERNOR (auto-regulation — binding):"];
+  if (lg.acwr != null && lg.zone !== "insufficient_data") {
+    lines.push(`- ACWR ${lg.acwr.toFixed(2)} — ${lg.zone.replaceAll("_", " ").toUpperCase()} zone.`);
+  }
+  if (lg.flaggedVectors.length > 0) {
+    lines.push(`- Flagged tissue load: ${lg.flaggedVectors.map((v) => v.replaceAll("_", " ")).join(", ")}.`);
+  }
+  for (const restriction of lg.activeRestrictions) {
+    lines.push(`- ${restriction.label}: ${restriction.rationale}`);
+  }
+  lines.push(
+    `- Some upcoming sessions may already be auto-downshifted to a Recovery Run (load_governor); do not re-add intensity to those.`,
+  );
+  return lines.join("\n");
+}
+
 function formatCoachingAnalysis(
   insights: NonNullable<TrainingContext["coachingInsights"]>,
   planGoal?: string,
@@ -277,6 +304,11 @@ function formatCoachingAnalysis(
     formatRpeTrend(insights),
     formatStationGaps(insights.stationGaps),
   ];
+
+  if (insights.loadGovernor) {
+    const governorBlock = formatLoadGovernor(insights.loadGovernor);
+    if (governorBlock) lines.push(governorBlock);
+  }
 
   if (insights.planPhase) {
     const p = insights.planPhase;
