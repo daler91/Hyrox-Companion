@@ -192,7 +192,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
           no duration to estimate from, since the hint asks the user to set one. */}
       <details className="group border-t pt-2" open={durationDraft == null || undefined}>
         <summary
-          className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden"
+          className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md text-xs font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
           data-testid="fuelling-plan-adjust"
         >
           <span>Adjust session estimate{adjustSummary ? ` · ${adjustSummary}` : ""}</span>

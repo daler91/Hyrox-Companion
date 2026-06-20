@@ -83,7 +83,7 @@ export function DetailSection({
         open={defaultOpen || undefined}
         data-testid={testId}
       >
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
           {heading}
           <span className="flex items-center gap-2">
             {action}

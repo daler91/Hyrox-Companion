@@ -48,7 +48,7 @@ export function WorkoutPrescriptionSummary({ entry }: WorkoutPrescriptionSummary
           />
           {structuredText ? (
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-muted-foreground">Full prescription</summary>
+              <summary className="cursor-pointer rounded-sm text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Full prescription</summary>
               <p className="mt-1 text-sm text-muted-foreground">{structuredText}</p>
             </details>
           ) : null}
