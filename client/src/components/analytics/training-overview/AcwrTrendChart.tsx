@@ -1,4 +1,4 @@
-import type { LoadGovernorAcwrZone, TrainingLoadOverview } from "@shared/schema";
+import type { LoadGovernorAcwrZone, TrainingLoadOverview, TrainingMonotonyZone } from "@shared/schema";
 import {
   CartesianGrid,
   Line,
@@ -37,8 +37,34 @@ const ZONE_CLASSES: Record<LoadGovernorAcwrZone, string> = {
   danger: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
 };
 
+const MONOTONY_ZONE_CLASSES: Record<TrainingMonotonyZone, string> = {
+  ok: "text-foreground",
+  elevated: "text-amber-600 dark:text-amber-400",
+  high_risk: "text-red-600 dark:text-red-400",
+};
+
 function formatAcwr(value: number | null): string {
   return value == null ? "N/A" : value.toFixed(2);
+}
+
+function formatMonotony(value: number | null): string {
+  return value == null ? "N/A" : value.toFixed(2);
+}
+
+// TSB ("Form"): positive ⇒ rested/fresh, negative ⇒ carrying fatigue. Shown with
+// an explicit sign so a glance distinguishes freshness from accumulated load.
+function formatTsb(value: number | null): string {
+  if (value == null) return "N/A";
+  const rounded = Math.round(value);
+  return rounded > 0 ? `+${rounded}` : String(rounded);
+}
+
+function tsbClass(value: number | null): string {
+  if (value == null) return "text-foreground";
+  if (value >= 5) return "text-emerald-600 dark:text-emerald-400"; // fresh / tapered
+  if (value <= -25) return "text-red-600 dark:text-red-400"; // deep fatigue
+  if (value < 0) return "text-amber-600 dark:text-amber-400"; // building fatigue
+  return "text-foreground";
 }
 
 function AcwrTooltip({
@@ -46,7 +72,17 @@ function AcwrTooltip({
   payload,
 }: Readonly<{
   active?: boolean;
-  payload?: Array<{ value: number | null; payload?: { date: string; utss: number; zone: LoadGovernorAcwrZone } }>;
+  payload?: Array<{
+    value: number | null;
+    payload?: {
+      date: string;
+      utss: number;
+      zone: LoadGovernorAcwrZone;
+      tsb: number | null;
+      monotony: number | null;
+      trimp: number | null;
+    };
+  }>;
 }>) {
   if (!active || !payload?.length) return null;
   const point = payload[0]?.payload;
@@ -63,6 +99,20 @@ function AcwrTooltip({
         <span className="text-muted-foreground mr-2">UTSS:</span>
         <span className="font-medium">{point.utss}</span>
       </p>
+      <p>
+        <span className="text-muted-foreground mr-2">Form (TSB):</span>
+        <span className="font-medium">{formatTsb(point.tsb)}</span>
+      </p>
+      <p>
+        <span className="text-muted-foreground mr-2">Monotony:</span>
+        <span className="font-medium">{formatMonotony(point.monotony)}</span>
+      </p>
+      {point.trimp != null && (
+        <p>
+          <span className="text-muted-foreground mr-2">TRIMP:</span>
+          <span className="font-medium">{Math.round(point.trimp)}</span>
+        </p>
+      )}
       <p className="text-muted-foreground">{ZONE_LABELS[point.zone]}</p>
     </div>
   );
@@ -150,7 +200,7 @@ export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: Traini
         </div>
       )}
 
-      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <div>
           <span className="font-medium text-foreground">{Math.round(trainingLoad.acuteAvg)}</span>{" "}
           acute UTSS
@@ -159,6 +209,22 @@ export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: Traini
           <span className="font-medium text-foreground">{Math.round(trainingLoad.chronicAvg)}</span>{" "}
           chronic UTSS
         </div>
+        <div>
+          <span className={`font-medium ${tsbClass(trainingLoad.tsb)}`}>{formatTsb(trainingLoad.tsb)}</span>{" "}
+          form (TSB)
+        </div>
+        <div>
+          <span className={`font-medium ${MONOTONY_ZONE_CLASSES[trainingLoad.monotonyZone]}`}>
+            {formatMonotony(trainingLoad.monotony)}
+          </span>{" "}
+          monotony
+        </div>
+        {trainingLoad.trimp != null && (
+          <div>
+            <span className="font-medium text-foreground">{Math.round(trainingLoad.trimp)}</span>{" "}
+            TRIMP
+          </div>
+        )}
         <div>
           <span className="font-medium text-foreground">{restrictionCount}</span>{" "}
           active restriction{restrictionCount === 1 ? "" : "s"}

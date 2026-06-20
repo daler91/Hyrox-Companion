@@ -49,6 +49,12 @@ export interface UserPreferences {
   /** Body-composition inputs for calculated nutrition targets. Canonical units (kg/cm). */
   bodyweightKg?: number | null;
   heightCm?: number | null;
+  /** Resting heart rate (bpm) — sharpens objective TRIMP/intensity load. Optional. */
+  restingHr?: number | null;
+  /** Max heart rate (bpm) — overrides the age-estimated max in load calcs. Optional. */
+  maxHr?: number | null;
+  /** Functional threshold power (watts) — unlocks power-based TSS/intensity. Optional. */
+  ftp?: number | null;
   activityLevel?: "sedentary" | "light" | "moderate" | "active" | "very_active" | null;
   weightGoalDirection?: "lose" | "maintain" | "gain" | null;
   /** Magnitude of target weight change in kg/week; sign comes from weightGoalDirection. */

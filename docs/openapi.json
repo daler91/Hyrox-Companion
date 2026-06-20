@@ -677,6 +677,24 @@
             "exclusiveMinimum": true,
             "maximum": 300
           },
+          "restingHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 30,
+            "maximum": 120
+          },
+          "maxHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 120,
+            "maximum": 230
+          },
+          "ftp": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 50,
+            "maximum": 600
+          },
           "activityLevel": {
             "type": "string",
             "nullable": true,

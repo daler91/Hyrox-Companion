@@ -304,6 +304,12 @@ describe("Analytics Routes", () => {
       chronicAvg: 0,
       acwr: null,
       zone: "insufficient_data" as const,
+      tsb: null,
+      monotony: null,
+      strain: null,
+      monotonyZone: "ok" as const,
+      trimp: null,
+      tss: null,
       flaggedVectors: [],
       activeRestrictions: [],
       downshiftRationale: null,
@@ -376,6 +382,7 @@ describe("Analytics Routes", () => {
         }),
         undefined,
         "kg",
+        { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
       );
     });
     it("should pass date params to storage", async () => {
@@ -444,6 +451,7 @@ describe("Analytics Routes", () => {
         }),
         undefined,
         "kg",
+        { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
       );
     });
 

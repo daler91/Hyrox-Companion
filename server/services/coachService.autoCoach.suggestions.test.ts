@@ -76,6 +76,12 @@ function loadGovernorTrainingContext(): TrainingContext {
         chronicAvg: 65,
         acwr: 1.08,
         zone: "sweet_spot",
+        tsb: -5,
+        monotony: 1.2,
+        strain: 600,
+        monotonyZone: "ok",
+        trimp: null,
+        tss: null,
         flaggedVectors: ["posterior_chain"],
         activeRestrictions: [
           {

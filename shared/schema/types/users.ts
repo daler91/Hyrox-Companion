@@ -45,6 +45,11 @@ export const updateUserPreferencesSchema = z.object({
   // input edge before PATCHing.
   bodyweightKg: z.number().positive().max(500).nullable().optional(),
   heightCm: z.number().positive().max(300).nullable().optional(),
+  // Training-load physiological baselines for objective cardio load (TRIMP/TSS).
+  // Optional; absent values fall back to age-estimated max HR + a default resting HR.
+  restingHr: z.number().int().min(30).max(120).nullable().optional(),
+  maxHr: z.number().int().min(120).max(230).nullable().optional(),
+  ftp: z.number().int().min(50).max(600).nullable().optional(),
   activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]).nullable().optional(),
   weightGoalDirection: z.enum(["lose", "maintain", "gain"]).nullable().optional(),
   weightGoalRateKgPerWeek: z.number().nonnegative().max(2).nullable().optional(),

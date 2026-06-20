@@ -57,6 +57,9 @@ function serializePreferences(user: {
   age: number | null;
   bodyweightKg: number | null;
   heightCm: number | null;
+  restingHr: number | null;
+  maxHr: number | null;
+  ftp: number | null;
   activityLevel: string | null;
   weightGoalDirection: string | null;
   weightGoalRateKgPerWeek: number | null;
@@ -92,6 +95,9 @@ function serializePreferences(user: {
     age: user.age ?? null,
     bodyweightKg: user.bodyweightKg ?? null,
     heightCm: user.heightCm ?? null,
+    restingHr: user.restingHr ?? null,
+    maxHr: user.maxHr ?? null,
+    ftp: user.ftp ?? null,
     activityLevel: user.activityLevel ?? null,
     weightGoalDirection: user.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: user.weightGoalRateKgPerWeek ?? null,

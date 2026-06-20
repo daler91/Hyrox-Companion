@@ -12,6 +12,7 @@ import { AiCoachCard } from "@/components/settings/preferences/AiCoachCard";
 import { AthleteProfileCard } from "@/components/settings/preferences/AthleteProfileCard";
 import { BodyCompositionCard } from "@/components/settings/preferences/BodyCompositionCard";
 import { EmailNotificationsCard } from "@/components/settings/preferences/EmailNotificationsCard";
+import { HealthMetricsCard } from "@/components/settings/preferences/HealthMetricsCard";
 import { NutritionPreferencesCard } from "@/components/settings/preferences/NutritionPreferencesCard";
 import { TrainingGoalsCard } from "@/components/settings/preferences/TrainingGoalsCard";
 import { UnitsPreferencesCard } from "@/components/settings/preferences/UnitsPreferencesCard";
@@ -87,6 +88,9 @@ interface PreferencesSnapshot
     | "mafHrDataAvailable"
     | "bodyweightKg"
     | "heightCm"
+    | "restingHr"
+    | "maxHr"
+    | "ftp"
     | "activityLevel"
     | "weightGoalDirection"
     | "weightGoalRateKgPerWeek"
@@ -99,6 +103,10 @@ interface PreferencesSnapshot
   // Body-composition inputs, stored canonical (kg/cm) for stable dirty-tracking.
   bodyweightKg: number | null;
   heightCm: number | null;
+  // Training-load HR/power baselines (bpm/bpm/watts).
+  restingHr: number | null;
+  maxHr: number | null;
+  ftp: number | null;
   activityLevel: ActivityLevelValue | null;
   weightGoalDirection: WeightGoalDirectionValue | null;
   weightGoalRateKgPerWeek: number | null;
@@ -137,6 +145,9 @@ function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
     age: preferences.age ?? null,
     bodyweightKg: preferences.bodyweightKg ?? null,
     heightCm: preferences.heightCm ?? null,
+    restingHr: preferences.restingHr ?? null,
+    maxHr: preferences.maxHr ?? null,
+    ftp: preferences.ftp ?? null,
     activityLevel: preferences.activityLevel ?? null,
     weightGoalDirection: preferences.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
@@ -164,6 +175,9 @@ function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
     age: payload.age ?? null,
     bodyweightKg: payload.bodyweightKg ?? null,
     heightCm: payload.heightCm ?? null,
+    restingHr: payload.restingHr ?? null,
+    maxHr: payload.maxHr ?? null,
+    ftp: payload.ftp ?? null,
     activityLevel: payload.activityLevel ?? null,
     weightGoalDirection: payload.weightGoalDirection ?? null,
     weightGoalRateKgPerWeek: payload.weightGoalRateKgPerWeek ?? null,
@@ -191,6 +205,9 @@ function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
     age: snapshot.age,
     bodyweightKg: snapshot.bodyweightKg,
     heightCm: snapshot.heightCm,
+    restingHr: snapshot.restingHr,
+    maxHr: snapshot.maxHr,
+    ftp: snapshot.ftp,
     activityLevel: snapshot.activityLevel,
     weightGoalDirection: snapshot.weightGoalDirection,
     weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
@@ -223,6 +240,9 @@ export default function Settings() {
   const [ageInput, setAgeInput] = useState("");
   const [bodyweightKg, setBodyweightKg] = useState<number | null>(null);
   const [heightCm, setHeightCm] = useState<number | null>(null);
+  const [restingHrInput, setRestingHrInput] = useState("");
+  const [maxHrInput, setMaxHrInput] = useState("");
+  const [ftpInput, setFtpInput] = useState("");
   const [activityLevel, setActivityLevel] = useState("");
   const [weightGoalDirection, setWeightGoalDirection] = useState("");
   const [weightGoalRateKgPerWeek, setWeightGoalRateKgPerWeek] = useState<number | null>(null);
@@ -261,6 +281,9 @@ export default function Settings() {
     age: null,
     bodyweightKg: null,
     heightCm: null,
+    restingHr: null,
+    maxHr: null,
+    ftp: null,
     activityLevel: null,
     weightGoalDirection: null,
     weightGoalRateKgPerWeek: null,
@@ -301,6 +324,9 @@ export default function Settings() {
       age: ageInputToSnapshot(ageInput),
       bodyweightKg,
       heightCm,
+      restingHr: ageInputToSnapshot(restingHrInput),
+      maxHr: ageInputToSnapshot(maxHrInput),
+      ftp: ageInputToSnapshot(ftpInput),
       activityLevel: (activityLevel || null) as ActivityLevelValue | null,
       weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
       weightGoalRateKgPerWeek,
@@ -324,6 +350,9 @@ export default function Settings() {
       gender,
       bodyweightKg,
       heightCm,
+      restingHrInput,
+      maxHrInput,
+      ftpInput,
       activityLevel,
       weightGoalDirection,
       weightGoalRateKgPerWeek,
@@ -399,6 +428,9 @@ export default function Settings() {
       setAgeInput(preferences.age == null ? "" : String(preferences.age));
       setBodyweightKg(preferences.bodyweightKg ?? null);
       setHeightCm(preferences.heightCm ?? null);
+      setRestingHrInput(preferences.restingHr == null ? "" : String(preferences.restingHr));
+      setMaxHrInput(preferences.maxHr == null ? "" : String(preferences.maxHr));
+      setFtpInput(preferences.ftp == null ? "" : String(preferences.ftp));
       setActivityLevel(preferences.activityLevel ?? "");
       setWeightGoalDirection(preferences.weightGoalDirection ?? "");
       setWeightGoalRateKgPerWeek(preferences.weightGoalRateKgPerWeek ?? null);
@@ -461,6 +493,9 @@ export default function Settings() {
               setGender(previous.gender);
               setBodyweightKg(previous.bodyweightKg);
               setHeightCm(previous.heightCm);
+              setRestingHrInput(previous.restingHr == null ? "" : String(previous.restingHr));
+              setMaxHrInput(previous.maxHr == null ? "" : String(previous.maxHr));
+              setFtpInput(previous.ftp == null ? "" : String(previous.ftp));
               setActivityLevel(previous.activityLevel ?? "");
               setWeightGoalDirection(previous.weightGoalDirection ?? "");
               setWeightGoalRateKgPerWeek(previous.weightGoalRateKgPerWeek);
@@ -549,6 +584,9 @@ export default function Settings() {
       age: ageInputToSnapshot(ageInput),
       bodyweightKg,
       heightCm,
+      restingHr: ageInputToSnapshot(restingHrInput),
+      maxHr: ageInputToSnapshot(maxHrInput),
+      ftp: ageInputToSnapshot(ftpInput),
       activityLevel: (activityLevel || null) as ActivityLevelValue | null,
       weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
       weightGoalRateKgPerWeek,
@@ -579,6 +617,9 @@ export default function Settings() {
     ageInput,
     bodyweightKg,
     heightCm,
+    restingHrInput,
+    maxHrInput,
+    ftpInput,
     activityLevel,
     weightGoalDirection,
     weightGoalRateKgPerWeek,
@@ -755,6 +796,14 @@ export default function Settings() {
             onActivityLevelChange={setActivityLevel}
             onWeightGoalDirectionChange={setWeightGoalDirection}
             onWeightGoalRateKgPerWeekChange={setWeightGoalRateKgPerWeek}
+          />
+          <HealthMetricsCard
+            restingHr={restingHrInput}
+            maxHr={maxHrInput}
+            ftp={ftpInput}
+            onRestingHrChange={setRestingHrInput}
+            onMaxHrChange={setMaxHrInput}
+            onFtpChange={setFtpInput}
           />
           <NutritionPreferencesCard
             mealSchedule={mealSchedule}

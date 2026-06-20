@@ -1,4 +1,4 @@
-import type { CoachNoteInputs } from "@shared/schema";
+import type { CoachNoteInputs, TrainingLoadOverview } from "@shared/schema";
 
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
 
@@ -147,29 +147,10 @@ export interface TrainingContext {
       goal: number;
       trend: "increasing" | "stable" | "decreasing";
     };
-    loadGovernor?: {
-      currentUtss: number;
-      acuteAvg: number;
-      chronicAvg: number;
-      acwr: number | null;
-      zone: "insufficient_data" | "undertraining" | "sweet_spot" | "yellow" | "danger";
-      flaggedVectors: Array<"posterior_chain" | "anterior_chain" | "unilateral_stability" | "elastic_tendon">;
-      activeRestrictions: Array<{
-        id: string;
-        label: string;
-        severity: "info" | "caution" | "danger";
-        expiresOn: string | null;
-        vector?: "posterior_chain" | "anterior_chain" | "unilateral_stability" | "elastic_tendon";
-        rationale: string;
-      }>;
-      downshiftRationale: string | null;
-      trend: Array<{
-        date: string;
-        utss: number;
-        acwr: number | null;
-        zone: "insufficient_data" | "undertraining" | "sweet_spot" | "yellow" | "danger";
-      }>;
-    };
+    // Canonical training-load summary (shared with the analytics tab). Kept as a
+    // direct reference so the coaching prompt context never drifts from the
+    // source-of-truth shape in shared/schema.
+    loadGovernor?: TrainingLoadOverview;
     progressionFlags: Array<{
       exercise: string;
       flag: "plateau" | "progressing" | "regressing" | "new";
