@@ -10,7 +10,7 @@ import { and, desc, eq, gte, lte, type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
-import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates } from "./shared";
+import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
 
 export class AnalyticsStorage {
   async getExerciseLoadTags(): Promise<ExerciseLoadTag[]> {
@@ -19,6 +19,13 @@ export class AnalyticsStorage {
 
   async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<LoggedExerciseSetWithDate[]> {
     return await queryExerciseSetsWithDates(userId, { from, to });
+  }
+
+  // Column-slim fetch for the Personal Records endpoint (only the fields
+  // calculatePersonalRecords reads), so the all-time PR query doesn't hydrate
+  // full set rows (incl. JSON columns) for tens of thousands of sets.
+  async getExerciseSetsForPersonalRecords(userId: string, from?: string, to?: string): Promise<SlimLoggedExerciseSet[]> {
+    return await querySlimExerciseSetsWithDates(userId, { from, to });
   }
 
   async getWorkoutLogsByDateRange(userId: string, from?: string, to?: string): Promise<WorkoutLog[]> {
