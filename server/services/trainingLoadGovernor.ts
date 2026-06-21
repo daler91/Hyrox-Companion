@@ -159,14 +159,15 @@ function buildReducedRows(
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row.exerciseName, (counts.get(row.exerciseName) ?? 0) + 1);
 
+  const kept: PromptExerciseForLoad[] = [];
   const usedByExercise = new Map<string, number>();
-  const kept = rows.filter((row) => {
+  for (const row of rows) {
     const keep = Math.max(1, Math.round((counts.get(row.exerciseName) ?? 1) * keepFraction));
     const used = usedByExercise.get(row.exerciseName) ?? 0;
-    if (used >= keep) return false;
+    if (used >= keep) continue;
     usedByExercise.set(row.exerciseName, used + 1);
-    return true;
-  });
+    kept.push(row);
+  }
   if (kept.length === rows.length) return undefined;
 
   const setNumberByExercise = new Map<string, number>();
