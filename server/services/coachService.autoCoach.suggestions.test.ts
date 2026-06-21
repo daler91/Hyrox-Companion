@@ -80,8 +80,12 @@ function loadGovernorTrainingContext(): TrainingContext {
         monotony: 1.2,
         strain: 600,
         monotonyZone: "ok",
-        trimp: null,
+        hrTss: null,
+        hrZone: null,
         tss: null,
+        hrZones: [],
+        estimatedLthr: 0,
+        powerTssEstimated: true,
         flaggedVectors: ["posterior_chain"],
         activeRestrictions: [
           {

@@ -50,7 +50,7 @@ interface HealthMetricsCardProps {
 }
 
 /**
- * Optional HR/power baselines that sharpen objective training-load (TRIMP/TSS).
+ * Optional HR/power baselines that sharpen objective training-load (hrTSS/TSS).
  * All optional: when blank, the load model falls back to an age-estimated max HR
  * plus a default resting HR, and power-based TSS is skipped.
  */
@@ -67,7 +67,7 @@ export function HealthMetricsCard({
       <CardHeader>
         <CardTitle as="h2">Heart rate &amp; power</CardTitle>
         <CardDescription>
-          Optional — improves the accuracy of objective training-load (TRIMP/TSS) when your workouts
+          Optional — improves the accuracy of objective training-load (hrTSS/TSS) when your workouts
           carry heart-rate or power data. Left blank, we estimate from your age.
         </CardDescription>
       </CardHeader>

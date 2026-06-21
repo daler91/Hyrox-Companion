@@ -80,7 +80,7 @@ function AcwrTooltip({
       zone: LoadGovernorAcwrZone;
       tsb: number | null;
       monotony: number | null;
-      trimp: number | null;
+      hrTss: number | null;
     };
   }>;
 }>) {
@@ -107,10 +107,10 @@ function AcwrTooltip({
         <span className="text-muted-foreground mr-2">Monotony:</span>
         <span className="font-medium">{formatMonotony(point.monotony)}</span>
       </p>
-      {point.trimp != null && (
+      {point.hrTss != null && (
         <p>
-          <span className="text-muted-foreground mr-2">TRIMP:</span>
-          <span className="font-medium">{Math.round(point.trimp)}</span>
+          <span className="text-muted-foreground mr-2">hrTSS:</span>
+          <span className="font-medium">{Math.round(point.hrTss)}</span>
         </p>
       )}
       <p className="text-muted-foreground">{ZONE_LABELS[point.zone]}</p>
@@ -219,10 +219,10 @@ export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: Traini
           </span>{" "}
           monotony
         </div>
-        {trainingLoad.trimp != null && (
+        {trainingLoad.hrTss != null && (
           <div>
-            <span className="font-medium text-foreground">{Math.round(trainingLoad.trimp)}</span>{" "}
-            TRIMP
+            <span className="font-medium text-foreground">{Math.round(trainingLoad.hrTss)}</span>{" "}
+            hrTSS
           </div>
         )}
         <div>

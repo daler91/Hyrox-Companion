@@ -26,6 +26,20 @@ export type LoadGovernorVector =
 // illness predictor; "elevated" (1.5–2.0) is an early warning.
 export type TrainingMonotonyZone = "ok" | "elevated" | "high_risk";
 
+// Karvonen %HRR heart-rate zones (Z1 recovery → Z5 VO2max/anaerobic). Derived
+// from resting/max HR on the same HRR axis the load model already uses.
+export type HrZone = "z1" | "z2" | "z3" | "z4" | "z5";
+
+export interface HrZoneBoundary {
+  zone: HrZone;
+  /** Inclusive lower bpm edge (Z1 == resting HR). */
+  minHr: number;
+  /** Upper bpm edge (Z5 == max HR). */
+  maxHr: number;
+  /** %HRR lower edge for the zone (0, .6, .7, .8, .9). */
+  minHrr: number;
+}
+
 export interface TrainingLoadTrendPoint {
   date: string;
   utss: number;
@@ -37,9 +51,13 @@ export interface TrainingLoadTrendPoint {
   monotony: number | null;
   /** Foster strain (weekly UTSS × monotony). Null when monotony is null. */
   strain: number | null;
-  /** Display-only objective internal load (Banister TRIMP). Null without HR. */
-  trimp: number | null;
-  /** Display-only objective external load (power TSS). Null without power + FTP. */
+  /** Display-only objective internal load (hrTSS, 100-pt scale). Null without HR. */
+  hrTss: number | null;
+  /** Karvonen %HRR zone of the day's most intense HR session. Null without HR.
+   *  Per-session label (averages only), NOT time-in-zone. */
+  hrZone: HrZone | null;
+  /** Display-only objective external load (power TSS, estimated from avg power).
+   *  Null without power + FTP. */
   tss: number | null;
   /** Acute fatigue: 7-day EWMA of UTSS. Null until seeded at the first log. */
   acuteEwma: number | null;
@@ -71,10 +89,19 @@ export interface TrainingLoadOverview {
   /** Foster strain (weekly UTSS × monotony). Null when monotony is null. */
   strain: number | null;
   monotonyZone: TrainingMonotonyZone;
-  /** Display-only objective internal load (Banister TRIMP) for the current day. */
-  trimp: number | null;
-  /** Display-only objective external load (power TSS) for the current day. */
+  /** Display-only objective internal load (hrTSS) for the current day. */
+  hrTss: number | null;
+  /** Current-day Karvonen %HRR zone (most intense HR session). Null without HR. */
+  hrZone: HrZone | null;
+  /** Display-only objective external load (power TSS, estimated) for the current day. */
   tss: number | null;
+  /** Karvonen %HRR zone bpm boundaries (Z1–Z5) for this athlete (estimated
+   *  rest/max fallbacks applied). For the zone legend. */
+  hrZones: HrZoneBoundary[];
+  /** Estimated LTHR (bpm) anchoring hrTSS (~0.88×HRmax). */
+  estimatedLthr: number;
+  /** True when power TSS is estimated (NP≈avgWatts; no power stream available). */
+  powerTssEstimated: boolean;
   flaggedVectors: LoadGovernorVector[];
   activeRestrictions: TrainingLoadRestriction[];
   downshiftRationale: string | null;
