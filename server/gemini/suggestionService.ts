@@ -290,7 +290,7 @@ function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
     lines.push(`- ${restriction.label}: ${restriction.rationale}`);
   }
   lines.push(
-    `- Some upcoming sessions may already be auto-downshifted to a Recovery Run (load_governor); do not re-add intensity to those.`,
+    `- Some upcoming sessions may already be auto-adjusted by the governor (downshifted to a Recovery Run, or trimmed in volume); do not re-add intensity to those.`,
   );
   return lines.join("\n");
 }
