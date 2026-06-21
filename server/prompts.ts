@@ -364,6 +364,7 @@ RULES:
 4. Be SPECIFIC with prescriptions: "4x8 back squat at a specific load in the athlete's weight unit" not just "squats".
 5. Rest days should have dayName but focus="Rest", mainWorkout="Complete rest or light walk", accessory=null.
 6. Deload week should have reduced volume but similar exercise selection.
+7. If a "CURRENT LOAD POSTURE" line is provided, calibrate the OPENING week to it: when the athlete is carrying high recent load or is fatigued, start week 1 at moderate volume and intensity with no peak or simulation sessions in the first few days, and let them absorb load before ramping; when they are detrained or below baseline, ramp volume gently across the first 1-2 weeks instead of starting at full prescription. Later weeks follow the normal phase structure.
 7. Progressive overload: weights/distances should increase across weeks during BUILD/PEAK phases.
 
 CRITICAL SECURITY INSTRUCTION:
