@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -159,33 +160,48 @@ export default function Nutrition() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Nutrition</h1>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Previous day"
-              onClick={() => setDate((d) => addDays(d, -1))}
-              data-testid="button-prev-day"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              className="min-w-24 text-center text-sm font-medium"
-              onClick={() => setDate(todayStr())}
-              aria-label={`Currently viewing ${formatDateLabel(date)}, click to jump to today`}
-              data-testid="button-date-label"
-            >
-              {formatDateLabel(date)}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Next day"
-              onClick={() => setDate((d) => addDays(d, 1))}
-              data-testid="button-next-day"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Previous day"
+                  onClick={() => setDate((d) => addDays(d, -1))}
+                  data-testid="button-prev-day"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Previous day</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="min-w-24 text-center text-sm font-medium"
+                  onClick={() => setDate(todayStr())}
+                  aria-label={`Currently viewing ${formatDateLabel(date)}, click to jump to today`}
+                  data-testid="button-date-label"
+                >
+                  {formatDateLabel(date)}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Jump to today</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Next day"
+                  onClick={() => setDate((d) => addDays(d, 1))}
+                  data-testid="button-next-day"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Next day</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
