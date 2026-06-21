@@ -13,6 +13,7 @@ import { asyncHandler, rateLimiter } from "../routeUtils";
 import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
 import { storage } from "../storage";
+import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { getUserId } from "../types";
 
 const router = Router();
@@ -85,6 +86,15 @@ const getExerciseSetsCoalesced = createCoalescedCache(
   (userId, from, to) => storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
 );
 
+// Personal Records use a column-slim fetch (only the fields calculatePersonalRecords
+// reads), so they get their own coalesced cache namespaced with `pr-`.
+export const _prCacheForTesting = new Map<string, CacheEntry<SlimLoggedExerciseSet[]>>();
+const getPersonalRecordSetsCoalesced = createCoalescedCache(
+  _prCacheForTesting,
+  "pr-",
+  (userId, from, to) => storage.analytics.getExerciseSetsForPersonalRecords(userId, from, to),
+);
+
 export function validDate(val: unknown): string | undefined {
   if (!val) return undefined;
   const parsed = dateStringSchema.safeParse(val);
@@ -149,8 +159,8 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
     const dates = parseDateParams(req, res);
     if (!dates) return;
 
-    const allSets = await getExerciseSetsCoalesced(userId, dates.from, dates.to);
-    res.json(calculatePersonalRecords(allSets));
+    const prSets = await getPersonalRecordSetsCoalesced(userId, dates.from, dates.to);
+    res.json(calculatePersonalRecords(prSets));
   }));
 
 router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {

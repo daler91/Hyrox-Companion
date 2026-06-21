@@ -6,7 +6,7 @@ import { db } from "../../db";
 import { env } from "../../env";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
 import { storage } from "../../storage";
-import analyticsRouter, { _cacheForTesting, _workoutLogCacheForTesting, addCalendarDays,todayUtcYyyyMmDd, validDate } from "../analytics";
+import analyticsRouter, { _cacheForTesting, _prCacheForTesting, _workoutLogCacheForTesting, addCalendarDays,todayUtcYyyyMmDd, validDate } from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
 // Mock the clerkAuth middleware to simulate authentication
@@ -28,6 +28,7 @@ vi.mock("../../storage", () => ({
     analytics: {
       getExerciseLoadTags: vi.fn(),
       getAllExerciseSetsWithDates: vi.fn(),
+      getExerciseSetsForPersonalRecords: vi.fn(),
       getWorkoutLogsByDateRange: vi.fn(),
     },
     users: {
@@ -126,6 +127,7 @@ describe("Analytics Routes", () => {
     vi.clearAllMocks();
     env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
     _cacheForTesting.clear();
+    _prCacheForTesting.clear();
     _workoutLogCacheForTesting.clear();
     vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5 });
     vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
@@ -146,10 +148,10 @@ describe("Analytics Routes", () => {
     });
   };
 
-  const testEndpoint = (endpoint: string, mockMethod: ReturnType<typeof vi.fn>, expectedBody: Record<string, unknown>) => {
+  const testEndpoint = (endpoint: string, mockMethod: ReturnType<typeof vi.fn>, expectedBody: Record<string, unknown>, storageMethod: ReturnType<typeof vi.fn>) => {
     describe(`GET ${endpoint}`, () => {
       it("should return analytics for a user", async () => {
-        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+        vi.mocked(storageMethod).mockResolvedValue([
           { id: "set1", exerciseName: "Test", weight: "100", reps: 10 }
         ]);
 
@@ -158,7 +160,7 @@ describe("Analytics Routes", () => {
         const response = await request(app).get(endpoint);
 
         expect(response.status).toBe(200);
-        expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+        expect(storageMethod).toHaveBeenCalledWith("test_user_id", undefined, undefined);
         expect(mockMethod).toHaveBeenCalledWith([
           expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })
         ]);
@@ -166,24 +168,24 @@ describe("Analytics Routes", () => {
       });
 
       it("should handle from and to date queries properly", async () => {
-        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+        vi.mocked(storageMethod).mockResolvedValue([]);
         vi.mocked(mockMethod).mockReturnValue({});
 
         const response = await request(app).get(`${endpoint}?from=2024-01-01&to=2024-12-31`);
 
         expect(response.status).toBe(200);
-        expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+        expect(storageMethod).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
       });
 
       it("clamps a future 'to' date to today", async () => {
-        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+        vi.mocked(storageMethod).mockResolvedValue([]);
         vi.mocked(mockMethod).mockReturnValue({});
         // A distant future "to" should be silently clamped rather than
         // flowing through to the DB (otherwise users get an empty page).
         const response = await request(app).get(`${endpoint}?from=2020-01-01&to=2099-12-31`);
 
         expect(response.status).toBe(200);
-        const call = vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mock.calls[0];
+        const call = vi.mocked(storageMethod).mock.calls[0];
         expect(call[0]).toBe("test_user_id");
         expect(call[1]).toBe("2020-01-01");
         // Clamped value should be today's UTC date string — never 2099.
@@ -196,7 +198,7 @@ describe("Analytics Routes", () => {
       testInvalidDates(endpoint);
 
       it("should return 500 when storage throws an error", async () => {
-        vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockRejectedValue(new Error("Database error"));
+        vi.mocked(storageMethod).mockRejectedValue(new Error("Database error"));
 
         const response = await request(app).get(endpoint);
 
@@ -206,11 +208,11 @@ describe("Analytics Routes", () => {
     });
   };
 
-  testEndpoint("/api/v1/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } });
-  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } });
+  testEndpoint("/api/v1/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } }, storage.analytics.getExerciseSetsForPersonalRecords);
+  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } }, storage.analytics.getAllExerciseSetsWithDates);
 
   describe("getExerciseSetsCoalesced caching logic", () => {
-    const makeRequest = () => request(app).get("/api/v1/personal-records");
+    const makeRequest = () => request(app).get("/api/v1/exercise-analytics");
 
     it("should coalesce concurrent requests to the database", async () => {
       type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>>;

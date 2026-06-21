@@ -19,7 +19,7 @@ import {
 
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
 import { calculateStreak } from "../routeUtils";
-import type { LoggedExerciseSetWithDate } from "../storage/shared";
+import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storage/shared";
 import { type AthleteLoadContext, calculateTrainingLoad } from "./trainingLoadService";
 import { getMondayWeekBoundaries } from "./weeklyProgress";
 
@@ -28,7 +28,7 @@ import { getMondayWeekBoundaries } from "./weeklyProgress";
 // storage layer rather than the base ExerciseSet which allows null owners.
 export type ExerciseSetWithDate = LoggedExerciseSetWithDate;
 
-function getExerciseKey(set: ExerciseSetWithDate): string {
+function getExerciseKey(set: SlimLoggedExerciseSet): string {
   return set.exerciseName === "custom" && set.customLabel
     ? `custom:${set.customLabel}`
     : set.exerciseName;
@@ -44,13 +44,13 @@ function estimateOneRepMax(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30) * 10) / 10;
 }
 
-function updateMaxWeight(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+function updateMaxWeight(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   if (set.weight && (!pr.maxWeight || set.weight > pr.maxWeight.value)) {
     pr.maxWeight = { value: set.weight, date: set.date, workoutLogId: set.workoutLogId };
   }
 }
 
-function updateMaxDistance(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+function updateMaxDistance(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   if (set.distance && (!pr.maxDistance || set.distance > pr.maxDistance.value)) {
     pr.maxDistance = { value: set.distance, date: set.date, workoutLogId: set.workoutLogId };
   }
@@ -72,7 +72,7 @@ const TIME_LONGER_IS_BETTER = new Set<string>([
 ]);
 const TIME_NOT_A_PR_METRIC = new Set<string>(["amrap", "emom"]);
 
-function updateBestTime(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+function updateBestTime(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   if (!set.time || set.time <= 0) return;
   if (TIME_NOT_A_PR_METRIC.has(set.exerciseName)) return;
 
@@ -86,9 +86,9 @@ function updateBestTime(pr: PersonalRecord, set: ExerciseSetWithDate): void {
   }
 }
 
-type E1RMCandidate = ExerciseSetWithDate & { weight: number; reps: number };
+type E1RMCandidate = SlimLoggedExerciseSet & { weight: number; reps: number };
 
-function isE1RMCandidate(set: ExerciseSetWithDate): set is E1RMCandidate {
+function isE1RMCandidate(set: SlimLoggedExerciseSet): set is E1RMCandidate {
   return (
     set.category === "strength" &&
     !!set.weight &&
@@ -98,7 +98,7 @@ function isE1RMCandidate(set: ExerciseSetWithDate): set is E1RMCandidate {
   );
 }
 
-function updateE1RM(pr: PersonalRecord, set: ExerciseSetWithDate): void {
+function updateE1RM(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   if (!isE1RMCandidate(set)) return;
   const e1rm = estimateOneRepMax(set.weight, set.reps);
   if (!pr.estimated1RM || e1rm > pr.estimated1RM.value) {
@@ -106,7 +106,7 @@ function updateE1RM(pr: PersonalRecord, set: ExerciseSetWithDate): void {
   }
 }
 
-export function calculatePersonalRecords(allSets: ExerciseSetWithDate[]): Record<string, PersonalRecord> {
+export function calculatePersonalRecords(allSets: SlimLoggedExerciseSet[]): Record<string, PersonalRecord> {
   const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
 
   for (const set of allSets) {

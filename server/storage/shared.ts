@@ -112,3 +112,56 @@ export async function queryExerciseSetsWithDates(
   }
   return result;
 }
+
+// Column-slim variant for the Personal Records endpoint, which only reads a few
+// scalar fields. Projecting just those (no JSON intensity/load/tempo/standards,
+// no planned*/block columns) keeps the all-time PR fetch's payload + memory
+// bounded. Mirrors the row cap + truncation warning above.
+export type SlimLoggedExerciseSet = Pick<
+  ExerciseSet,
+  "exerciseName" | "customLabel" | "category" | "weight" | "reps" | "distance" | "time"
+> & { workoutLogId: string; date: string };
+
+export async function querySlimExerciseSetsWithDates(
+  userId: string,
+  filters?: { from?: string; to?: string },
+): Promise<SlimLoggedExerciseSet[]> {
+  const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
+  if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
+  if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
+
+  const logs = await db.query.workoutLogs.findMany({
+    where: and(...conditions),
+    columns: { id: true, date: true },
+    with: {
+      exerciseSets: {
+        columns: {
+          exerciseName: true,
+          customLabel: true,
+          category: true,
+          weight: true,
+          reps: true,
+          distance: true,
+          time: true,
+        },
+      },
+    },
+    orderBy: desc(workoutLogs.date),
+    limit: MAX_WORKOUT_LOGS_PER_QUERY,
+  });
+
+  if (logs.length >= MAX_WORKOUT_LOGS_PER_QUERY) {
+    logger.warn(
+      { userId, limit: MAX_WORKOUT_LOGS_PER_QUERY, from: filters?.from, to: filters?.to },
+      "querySlimExerciseSetsWithDates hit row cap — personal records may be truncated; consider narrowing the date range",
+    );
+  }
+
+  const result: SlimLoggedExerciseSet[] = [];
+  for (const log of logs) {
+    for (const set of log.exerciseSets) {
+      result.push({ ...set, workoutLogId: log.id, date: log.date });
+    }
+  }
+  return result;
+}
