@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { ErrorCode } from "../errors";
-import { createPendingPlan, executePlanGeneration } from "./planGenerationService";
+import { buildGenerationPrompt, createPendingPlan, describeStartLoadPosture, executePlanGeneration } from "./planGenerationService";
+import { summary } from "./trainingLoadGovernor.testHelpers";
 
 const mocks = vi.hoisted(() => {
   const generateContent = vi.fn();
@@ -28,6 +29,11 @@ const mocks = vi.hoisted(() => {
     },
     users: {
       getUser: vi.fn(),
+    },
+    analytics: {
+      getWorkoutLogsByDateRange: vi.fn(),
+      getAllExerciseSetsWithDates: vi.fn(),
+      getExerciseLoadTags: vi.fn(),
     },
   };
 });
@@ -57,6 +63,7 @@ vi.mock("../storage", () => ({
   storage: {
     plans: mocks.plans,
     users: mocks.users,
+    analytics: mocks.analytics,
   },
 }));
 
@@ -172,6 +179,42 @@ function getPromptText(call: unknown[]): string {
   return request.contents[0].parts[0].text;
 }
 
+describe("describeStartLoadPosture", () => {
+  it("calibrates down for danger / yellow / undertraining and stays silent otherwise", () => {
+    expect(describeStartLoadPosture(summary([], { zone: "danger", acwr: 1.6 }))).toContain("conservatively");
+    expect(describeStartLoadPosture(summary([], { zone: "yellow", acwr: 1.4 }))).toContain("Ease into week 1");
+    expect(describeStartLoadPosture(summary([], { zone: "undertraining", acwr: 0.7 }))).toContain("Ramp volume gently");
+    expect(describeStartLoadPosture(summary([], { zone: "sweet_spot", acwr: 1.0 }))).toBeNull();
+    expect(describeStartLoadPosture(summary([], { zone: "insufficient_data", acwr: null }))).toBeNull();
+  });
+
+  it("embeds the ACWR value when known", () => {
+    expect(describeStartLoadPosture(summary([], { zone: "danger", acwr: 1.62 }))).toContain("ACWR 1.62");
+  });
+});
+
+describe("buildGenerationPrompt — start-load posture", () => {
+  const input = { ...baseInput, totalWeeks: 4 } as Parameters<typeof buildGenerationPrompt>[0];
+  const units = { weightUnit: "kg", distanceUnit: "km" } as Parameters<typeof buildGenerationPrompt>[2];
+  const posture = "Carrying high recent load (ACWR 1.60); start week 1 conservatively.";
+
+  it("injects the posture into the opening (week 1) chunk", () => {
+    const prompt = buildGenerationPrompt(input, { startWeek: 1, endWeek: 2 }, units, posture);
+    expect(prompt).toContain("CURRENT LOAD POSTURE:");
+    expect(prompt).toContain(posture);
+  });
+
+  it("omits the posture from later chunks", () => {
+    const prompt = buildGenerationPrompt(input, { startWeek: 3, endWeek: 4 }, units, posture);
+    expect(prompt).not.toContain("CURRENT LOAD POSTURE");
+  });
+
+  it("omits the section when there is no posture", () => {
+    const prompt = buildGenerationPrompt(input, { startWeek: 1, endWeek: 2 }, units, null);
+    expect(prompt).not.toContain("CURRENT LOAD POSTURE");
+  });
+});
+
 describe("executePlanGeneration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -184,6 +227,9 @@ describe("executePlanGeneration", () => {
     mocks.plans.schedulePlan.mockResolvedValue(true);
     mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
     mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
+    mocks.analytics.getWorkoutLogsByDateRange.mockResolvedValue([]);
+    mocks.analytics.getAllExerciseSetsWithDates.mockResolvedValue([]);
+    mocks.analytics.getExerciseLoadTags.mockResolvedValue([]);
   });
 
   it("splits an 8-week request into four two-week chunks and persists days in order", async () => {

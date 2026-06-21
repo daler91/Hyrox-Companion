@@ -5,6 +5,7 @@ import {
   type GeneratePlanInput,
   type InsertExerciseSet,
   type ParsedExercise,
+  type TrainingLoadOverview,
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
@@ -17,9 +18,13 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
+import { calculateTrainingLoad, toIsoDate } from "./trainingLoadService";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
 const PLAN_GENERATION_CHUNK_WEEKS = 2;
+// Look-back window for the athlete's current training-load posture, matching the
+// coach/analytics load context.
+const LOAD_WINDOW_DAYS = 70;
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 // Structured exercises the model must include for non-rest generated days.
@@ -94,7 +99,7 @@ function buildGenerationUnitLines(unitPreferences: Required<UnitPreferences>): s
   ];
 }
 
-function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>): string {
+export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>, startLoadPosture?: string | null): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
     `Generate ${formatWeekRange(range)} of a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
@@ -125,6 +130,12 @@ function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRa
 
   if (input.restDays && input.restDays.length > 0) {
     lines.push(`- Rest Days: ${input.restDays.join(", ")} (these MUST be rest days every week, schedule all training on the remaining days)`);
+  }
+
+  // Current load posture only calibrates the opening week, so attach it to the
+  // chunk that contains week 1; later chunks follow the normal phase structure.
+  if (range.startWeek === 1 && startLoadPosture) {
+    lines.push(``, `CURRENT LOAD POSTURE:`, `- ${startLoadPosture}`);
   }
 
   // Include rest days in the total
@@ -323,9 +334,10 @@ async function generatePlanChunk(
   userId: string,
   range: WeekRange,
   unitPreferences: Required<UnitPreferences>,
+  startLoadPosture: string | null,
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
-  const prompt = buildGenerationPrompt(input, range, unitPreferences);
+  const prompt = buildGenerationPrompt(input, range, unitPreferences, startLoadPosture);
   const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
 
   const response = await generateJsonText({
@@ -347,11 +359,12 @@ async function generatePlanDays(
   input: NormalizedGeneratePlanInput,
   userId: string,
   unitPreferences: Required<UnitPreferences>,
+  startLoadPosture: string | null,
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
   const dayChunks = await Promise.all(
-    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences, signal)),
+    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences, startLoadPosture, signal)),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {
@@ -423,6 +436,58 @@ export async function createPendingPlan(
   return { ...plan, days: [] };
 }
 
+/**
+ * Turn the athlete's current training-load posture into one line of opening-week
+ * calibration guidance for the generator, or null when no special handling is
+ * warranted (sweet spot / not enough history). Exported for testing.
+ */
+export function describeStartLoadPosture(overview: TrainingLoadOverview): string | null {
+  const acwr = overview.acwr != null ? ` (ACWR ${overview.acwr.toFixed(2)})` : "";
+  switch (overview.zone) {
+    case "danger":
+      return `The athlete is carrying high recent load${acwr} and is currently fatigued. Start week 1 conservatively — moderate volume and intensity, no peak or simulation sessions in the first few days — and let them absorb load before ramping.`;
+    case "yellow":
+      return `The athlete's recent load is elevated${acwr}. Ease into week 1 (trim volume on the hardest sessions) before progressing normally.`;
+    case "undertraining":
+      return `The athlete is currently detrained / below their 28-day baseline${acwr}. Ramp volume gently across the first 1-2 weeks instead of starting at full prescription.`;
+    default:
+      return null; // sweet_spot / insufficient_data ⇒ no special calibration
+  }
+}
+
+// Compute the athlete's current load posture from recent history. Degrades to
+// null (plan generated without calibration) on any failure — never blocks plan
+// generation.
+async function computeStartLoadPosture(
+  userId: string,
+  user: Awaited<ReturnType<typeof storage.users.getUser>>,
+): Promise<string | null> {
+  try {
+    const today = toIsoDate(new Date());
+    const from = toIsoDate(new Date(Date.now() - LOAD_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+    const [workoutLogs, loadExerciseSets, loadTags] = await Promise.all([
+      storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
+      storage.analytics.getAllExerciseSetsWithDates(userId, from, today),
+      storage.analytics.getExerciseLoadTags(),
+    ]);
+    const { overview } = calculateTrainingLoad(workoutLogs, loadExerciseSets, loadTags, {
+      currentDate: today,
+      weightUnit: user?.weightUnit || "kg",
+      athlete: {
+        age: user?.age ?? null,
+        gender: user?.gender ?? null,
+        restingHr: user?.restingHr ?? null,
+        maxHr: user?.maxHr ?? null,
+        ftp: user?.ftp ?? null,
+      },
+    });
+    return describeStartLoadPosture(overview);
+  } catch {
+    logger.warn("[planGen] start-load posture unavailable; generating without it.");
+    return null;
+  }
+}
+
 export async function executePlanGeneration(
   planId: string,
   input: GeneratePlanInput,
@@ -443,7 +508,8 @@ export async function executePlanGeneration(
       weightUnit: standardizeWeightUnit(user?.weightUnit),
       distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
     };
-    const days = await generatePlanDays(normalized, userId, unitPreferences, signal);
+    const startLoadPosture = await computeStartLoadPosture(userId, user);
+    const days = await generatePlanDays(normalized, userId, unitPreferences, startLoadPosture, signal);
 
     // Plan days and their structured exercise sets are written inside a single
     // transaction so a failure in any step rolls the whole insertion back.
