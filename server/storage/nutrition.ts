@@ -940,6 +940,12 @@ export class NutritionStorage {
           periodizationEnabled: data.periodizationEnabled ?? false,
           referenceUtss: data.referenceUtss ?? null,
           carbGramsPerUtss: data.carbGramsPerUtss ?? null,
+          recoveryEnabled: data.recoveryEnabled ?? false,
+          recoveryProteinBumpFrac: data.recoveryProteinBumpFrac ?? null,
+          preloadCarbGramsPerUtss: data.preloadCarbGramsPerUtss ?? null,
+          preloadDaysAhead: data.preloadDaysAhead ?? null,
+          phaseAware: data.phaseAware ?? false,
+          maxCarbDeltaG: data.maxCarbDeltaG ?? null,
           effectiveFrom: data.effectiveFrom,
         })
         .returning();

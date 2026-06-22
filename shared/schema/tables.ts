@@ -1273,6 +1273,16 @@ export const nutritionTargets = pgTable(
     periodizationEnabled: boolean("periodization_enabled").notNull().default(false),
     referenceUtss: real("reference_utss"), // UTSS at which carbG == the baseline carbG
     carbGramsPerUtss: real("carb_grams_per_utss"), // ΔcarbG per +1 UTSS vs the reference
+    // Window-aware periodisation: the carb (and now protein) target also reflects
+    // PAST training (recovery after hard recent days) and FUTURE training (carb
+    // pre-loading ahead of big sessions + taper/race-week). Each is opt-in and
+    // NULL/false on pre-existing rows ⇒ identical single-day behaviour.
+    recoveryEnabled: boolean("recovery_enabled").notNull().default(false),
+    recoveryProteinBumpFrac: real("recovery_protein_bump_frac"), // extra protein (frac of baseline) when depleted
+    preloadCarbGramsPerUtss: real("preload_carb_grams_per_utss"), // ΔcarbG per +1 planned UTSS ahead; >0 ⇒ on
+    preloadDaysAhead: integer("preload_days_ahead"), // how many days ahead a session pulls carbs forward
+    phaseAware: boolean("phase_aware").notNull().default(false), // taper damping + race-week carb-load
+    maxCarbDeltaG: real("max_carb_delta_g"), // cap on the combined positive carb delta
     effectiveFrom: date("effective_from").notNull(),
   },
   (table) => [index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom)],

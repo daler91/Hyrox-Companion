@@ -177,8 +177,15 @@ describe("LogFoodDialog", () => {
           carbG: 200,
           fatG: 80,
           carbDeltaG: 0,
+          baseLoadDeltaG: 0,
+          recoveryDeltaG: 0,
+          preloadDeltaG: 0,
+          proteinDeltaG: 0,
           utss: 0,
           scaled: false,
+          reasonCodes: [],
+          explanation: "",
+          phase: null,
         }}
       />,
     );

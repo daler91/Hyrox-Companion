@@ -24,6 +24,12 @@ const CURRENT: NutritionTarget = {
   periodizationEnabled: false,
   referenceUtss: null,
   carbGramsPerUtss: null,
+  recoveryEnabled: false,
+  recoveryProteinBumpFrac: null,
+  preloadCarbGramsPerUtss: null,
+  preloadDaysAhead: null,
+  phaseAware: false,
+  maxCarbDeltaG: null,
   effectiveFrom: "2026-06-01",
 };
 
@@ -58,5 +64,37 @@ describe("TargetsDialog", () => {
   it("disables save when no field is set", () => {
     renderDialog(null);
     expect(screen.getByTestId("button-save-targets")).toBeDisabled();
+  });
+
+  it("persists the adaptive (recovery + phase) knobs when periodisation is on", async () => {
+    const user = userEvent.setup();
+    const periodized: NutritionTarget = {
+      ...CURRENT,
+      carbG: 250,
+      periodizationEnabled: true,
+      referenceUtss: 50,
+      carbGramsPerUtss: 2.5,
+      recoveryEnabled: true,
+      phaseAware: true,
+    };
+    vi.mocked(api.nutrition.setTarget).mockResolvedValue(periodized);
+    renderDialog(periodized);
+
+    // Both the load and the adaptive toggles seed on from the saved target.
+    expect(screen.getByTestId("switch-periodize")).toBeChecked();
+    expect(screen.getByTestId("switch-adaptive")).toBeChecked();
+
+    await user.click(screen.getByTestId("button-save-targets"));
+
+    await waitFor(() => expect(api.nutrition.setTarget).toHaveBeenCalledTimes(1));
+    expect(api.nutrition.setTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        periodizationEnabled: true,
+        recoveryEnabled: true,
+        phaseAware: true,
+        preloadCarbGramsPerUtss: expect.any(Number),
+        preloadDaysAhead: expect.any(Number),
+      }),
+    );
   });
 });

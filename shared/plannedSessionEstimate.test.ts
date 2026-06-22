@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { estimatePlannedSession } from "./plannedSessionEstimate";
+import { estimatePlannedDayUtss, estimatePlannedSession } from "./plannedSessionEstimate";
 
 describe("estimatePlannedSession", () => {
   it("returns nulls when there are no blocks or sets", () => {
@@ -229,5 +229,35 @@ describe("estimatePlannedSession", () => {
       runPaceRatio: 0.8,
     });
     expect(clampedExtreme.durationMin).toBe(atLowerBound.durationMin);
+  });
+});
+
+describe("estimatePlannedDayUtss", () => {
+  it("returns 0 when there is no usable duration", () => {
+    expect(estimatePlannedDayUtss({})).toBe(0);
+  });
+
+  it("prefers the athlete's saved expected duration and RPE", () => {
+    // IF = 0.6 + (8/10)² × 2 = 1.88; 60 min × 1.88 = 112.8
+    expect(estimatePlannedDayUtss({ expectedDurationMin: 60, expectedRpe: 8 })).toBe(112.8);
+  });
+
+  it("falls back to the structural estimate when expectations are absent", () => {
+    // for_time main block, 20 min cap → duration 20, rpe 8; 20 × 1.88 = 37.6
+    const utss = estimatePlannedDayUtss({
+      structureBlocks: [{ sectionType: "main", formatType: "for_time", timeCapMinutes: 20 }],
+    });
+    expect(utss).toBe(37.6);
+  });
+
+  it("assumes a moderate RPE when intensity is unknown", () => {
+    // IF = 0.6 + (5/10)² × 2 = 1.1; 50 × 1.1 = 55
+    expect(estimatePlannedDayUtss({ expectedDurationMin: 50 })).toBe(55);
+  });
+
+  it("scales with intensity — a harder session estimates more load", () => {
+    const easy = estimatePlannedDayUtss({ expectedDurationMin: 60, expectedRpe: 3 });
+    const hard = estimatePlannedDayUtss({ expectedDurationMin: 60, expectedRpe: 9 });
+    expect(hard).toBeGreaterThan(easy);
   });
 });
