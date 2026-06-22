@@ -1,4 +1,5 @@
 import { applyMealTargetOverrides, computeMealFuelTargets, DEFAULT_MEAL_SCHEDULE, type MealFuelOverride, type MealFuelTargets, type MealScheduleCount, type WorkoutTiming } from "@shared/mealFuelling";
+import { singleDayWindow } from "@shared/nutritionTargets";
 import {
   type AddFavoriteInput,
   addFavoriteSchema,
@@ -57,7 +58,7 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } 
 import { computeStale, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
-import { fetchDailyTraining, fetchDailyUtss } from "../../services/nutrition/dailyLoad";
+import { fetchDailyTraining, fetchDailyUtss, fetchTrainingLoadWindow } from "../../services/nutrition/dailyLoad";
 import { resolveDayEnergy } from "../../services/nutrition/energy";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
@@ -82,10 +83,15 @@ const RECIPE_NOT_FOUND = "Recipe not found";
 
 /**
  * Resolve the effective target for one day: the user's baseline target (the
- * version effective on that date) with carbs/calories scaled by that day's
- * actual training load (UTSS) when periodisation is enabled. Returns null when
- * no target is set. The (cheap, single-day) UTSS query runs ONLY for periodised
- * targets, so flat-target and no-target users pay nothing extra here.
+ * version effective on that date), made training-aware when periodisation is on.
+ * Carbs/calories (and protein, on recovery days) flex with a window of training:
+ * today's load, recent ACTUAL load (recovery after hard days), and upcoming
+ * PLANNED load + plan phase (carb pre-loading / taper / race week). Returns null
+ * when no target is set.
+ *
+ * Cost-gated: a flat target pays nothing; a load-only periodised target keeps the
+ * original cheap single-day query; the recent/upcoming/plan fetches run only when
+ * a recovery or future-facing knob is actually enabled.
  */
 async function resolveEffectiveTarget(
   userId: string,
@@ -93,13 +99,22 @@ async function resolveEffectiveTarget(
 ): Promise<EffectiveTargetSummary | null> {
   const baseline = await storage.nutrition.getCurrentTarget(userId, logDate);
   if (!baseline) return null;
-
-  let utss = 0;
-  if (baseline.periodizationEnabled) {
-    const dailyLoads = await fetchDailyUtss(userId, logDate, logDate);
-    utss = dailyLoads.find((d) => d.date === logDate)?.utss ?? 0;
+  if (!baseline.periodizationEnabled) {
+    return buildEffectiveTargetSummary(baseline, singleDayWindow(0));
   }
-  return buildEffectiveTargetSummary(baseline, utss);
+
+  const needRecovery = baseline.recoveryEnabled ?? false;
+  const includeFuture =
+    (baseline.preloadCarbGramsPerUtss ?? 0) > 0 || (baseline.phaseAware ?? false);
+  if (!needRecovery && !includeFuture) {
+    // Load-only periodisation: today's UTSS is all that matters.
+    const dailyLoads = await fetchDailyUtss(userId, logDate, logDate);
+    const dayUtss = dailyLoads.find((d) => d.date === logDate)?.utss ?? 0;
+    return buildEffectiveTargetSummary(baseline, singleDayWindow(dayUtss));
+  }
+
+  const window = await fetchTrainingLoadWindow(userId, logDate, { includeFuture });
+  return buildEffectiveTargetSummary(baseline, window);
 }
 
 /** Resolve the user's IANA timezone, defaulting to UTC pre-detection. */

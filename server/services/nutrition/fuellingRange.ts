@@ -1,4 +1,9 @@
-import { effectiveTarget } from "@shared/nutritionTargets";
+import {
+  effectiveTargetWindowed,
+  type PeriodizationConfig,
+  singleDayWindow,
+  type TrainingLoadWindow,
+} from "@shared/nutritionTargets";
 import type { BlockViewPoint, EffectiveTargetSummary, FuellingDayPoint, NutritionTarget } from "@shared/schema";
 
 import { type DailyUtss, eachDate, toUtssByDate } from "./blockView";
@@ -20,30 +25,43 @@ function baselineForDate(
   return null;
 }
 
+/** Map a stored target row's periodisation columns to the calculator's config. */
+export function periodizationConfigFromTarget(t: NutritionTarget): PeriodizationConfig {
+  return {
+    enabled: t.periodizationEnabled,
+    referenceUtss: t.referenceUtss ?? 0,
+    carbGramsPerUtss: t.carbGramsPerUtss ?? 0,
+    recoveryEnabled: t.recoveryEnabled ?? false,
+    recoveryProteinBumpFrac: t.recoveryProteinBumpFrac ?? undefined,
+    preloadCarbGramsPerUtss: t.preloadCarbGramsPerUtss ?? undefined,
+    preloadDaysAhead: t.preloadDaysAhead ?? undefined,
+    phaseAware: t.phaseAware ?? false,
+    maxCarbDeltaG: t.maxCarbDeltaG ?? undefined,
+  };
+}
+
 /**
- * Build a day's EffectiveTargetSummary from its baseline target + that day's
- * training load, reusing the shared `effectiveTarget` calculator. Shared with the
+ * Build a day's EffectiveTargetSummary from its baseline target + a training-load
+ * window, reusing the shared `effectiveTargetWindowed` calculator. Shared with the
  * daily-summary route's resolver so a day's target is derived identically
- * everywhere. Pure; carbs/calories scale with load only when periodisation is on.
+ * everywhere. The window carries today's load plus (for the daily view) recent
+ * actual load and upcoming planned load; the block/range analytics views pass a
+ * `singleDayWindow` so they stay load-correlation views. Pure; carbs/calories/
+ * protein flex only when periodisation (and the matching knob) is on.
  */
 export function buildEffectiveTargetSummary(
   baseline: NutritionTarget,
-  dayUtss: number,
+  window: TrainingLoadWindow,
 ): EffectiveTargetSummary {
-  const utss = baseline.periodizationEnabled ? dayUtss : 0;
-  const result = effectiveTarget(
+  const result = effectiveTargetWindowed(
     {
       calories: baseline.calories,
       proteinG: baseline.proteinG,
       carbG: baseline.carbG,
       fatG: baseline.fatG,
     },
-    utss,
-    {
-      enabled: baseline.periodizationEnabled,
-      referenceUtss: baseline.referenceUtss ?? 0,
-      carbGramsPerUtss: baseline.carbGramsPerUtss ?? 0,
-    },
+    window,
+    periodizationConfigFromTarget(baseline),
   );
   return {
     calories: result.calories,
@@ -51,8 +69,15 @@ export function buildEffectiveTargetSummary(
     carbG: result.carbG,
     fatG: result.fatG,
     carbDeltaG: result.carbDeltaG,
-    utss: Math.round(utss * 10) / 10,
+    baseLoadDeltaG: result.baseLoadDeltaG,
+    recoveryDeltaG: result.recoveryDeltaG,
+    preloadDeltaG: result.preloadDeltaG,
+    proteinDeltaG: result.proteinDeltaG,
+    utss: baseline.periodizationEnabled ? Math.round(window.dayUtss * 10) / 10 : 0,
     scaled: result.scaled,
+    reasonCodes: result.reasonCodes,
+    explanation: result.explanation,
+    phase: window.phase,
   };
 }
 
@@ -98,7 +123,7 @@ export function decorateBlockPointsWithOutcomes(
     return {
       ...point,
       carbTargetG: baseline
-        ? buildEffectiveTargetSummary(baseline, utssByDate.get(point.date) ?? 0).carbG
+        ? buildEffectiveTargetSummary(baseline, singleDayWindow(utssByDate.get(point.date) ?? 0)).carbG
         : null,
       avgRpe: meanOrNull(
         dayLogs.map((l) => l.rpe).filter((r): r is number => r != null),
@@ -141,7 +166,7 @@ export function buildFuellingRange(
       date,
       totals: roundMacros(sumNutrition(dayRows)),
       effectiveTarget: baseline
-        ? buildEffectiveTargetSummary(baseline, utssByDate.get(date) ?? 0)
+        ? buildEffectiveTargetSummary(baseline, singleDayWindow(utssByDate.get(date) ?? 0))
         : null,
       hasPostWorkoutFuel: dayRows.some((r) => r.mealType === "post_workout"),
     });

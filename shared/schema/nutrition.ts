@@ -188,12 +188,26 @@ export interface EffectiveTargetSummary {
   proteinG: number | null;
   carbG: number | null;
   fatG: number | null;
-  // Signed carb grams applied vs the baseline for this day's load (0 = flat).
+  // Signed carb grams applied vs the baseline (0 = flat). The total of the three
+  // components below.
   carbDeltaG: number;
+  // Breakdown of carbDeltaG so the UI can explain the "why":
+  //  • baseLoad — today's training load; • recovery — PAST hard days;
+  //  • preload — FUTURE big sessions / race week.
+  baseLoadDeltaG: number;
+  recoveryDeltaG: number;
+  preloadDeltaG: number;
+  // Signed protein grams applied vs the baseline (recovery bump; 0 otherwise).
+  proteinDeltaG: number;
   // The day's actual training load (UTSS) used for the scaling.
   utss: number;
   // True when carbs/calories were load-scaled (false ⇒ a flat baseline target).
   scaled: boolean;
+  // Transparency: machine-readable drivers + a one-line human explanation.
+  reasonCodes: string[];
+  explanation: string;
+  // Plan phase that informed the adjustment, when known (taper/race_week/…).
+  phase: "early" | "build" | "peak" | "taper" | "race_week" | null;
 }
 
 export interface DailySummaryResponse {
@@ -437,6 +451,14 @@ export const upsertNutritionTargetSchema = z
     periodizationEnabled: z.boolean().optional(),
     referenceUtss: z.number().nonnegative().max(1000).nullable().optional(),
     carbGramsPerUtss: z.number().nonnegative().max(100).nullable().optional(),
+    // Window-aware periodisation knobs (past recovery + future pre-load + phase).
+    // All optional; omitted ⇒ that behaviour stays off (single-day target).
+    recoveryEnabled: z.boolean().optional(),
+    recoveryProteinBumpFrac: z.number().nonnegative().max(1).nullable().optional(),
+    preloadCarbGramsPerUtss: z.number().nonnegative().max(100).nullable().optional(),
+    preloadDaysAhead: z.number().int().min(1).max(7).nullable().optional(),
+    phaseAware: z.boolean().optional(),
+    maxCarbDeltaG: z.number().nonnegative().max(1000).nullable().optional(),
     // Day the target takes effect; server defaults to the user's local today.
     effectiveFrom: isoDate.optional(),
   })

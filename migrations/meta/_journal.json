@@ -533,6 +533,13 @@
       "when": 1781961931800,
       "tag": "0075_awesome_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1782151187603,
+      "tag": "0076_secret_karma",
+      "breakpoints": true
     }
   ]
 }

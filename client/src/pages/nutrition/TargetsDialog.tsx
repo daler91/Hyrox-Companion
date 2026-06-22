@@ -45,6 +45,11 @@ function TargetsForm({
   const { data: profile } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
   const { values, setValues, setField, parsed, valid } = useMacroTargetForm(current);
   const [periodize, setPeriodize] = useState<boolean>(current?.periodizationEnabled ?? false);
+  // Adapt to PAST (recovery) + FUTURE (carb pre-load / taper / race week) training.
+  // New targets get the full model by default; existing ones reflect their saved flags.
+  const [adaptive, setAdaptive] = useState<boolean>(
+    current == null ? true : (current.recoveryEnabled ?? false) || (current.phaseAware ?? false),
+  );
   const [calcNote, setCalcNote] = useState<string | null>(null);
 
   const canCalculate = canCalculateFromProfile(profile);
@@ -76,21 +81,33 @@ function TargetsForm({
     if (!valid) return;
     // Periodisation only makes sense with a carb baseline to scale.
     const scaling = periodize && parsed.carbG != null;
-    let config: { referenceUtss: number; carbGramsPerUtss: number } | null = null;
-    if (scaling) {
-      config =
-        current?.periodizationEnabled &&
-        current.referenceUtss != null &&
-        current.carbGramsPerUtss != null
-          ? { referenceUtss: current.referenceUtss, carbGramsPerUtss: current.carbGramsPerUtss }
-          : defaultPeriodizationConfig(parsed.carbG!, 0);
-    }
+    const useAdaptive = scaling && adaptive;
+    const cfg = defaultPeriodizationConfig(parsed.carbG ?? 0, 0);
+    // Preserve an existing calibration where present; otherwise seed from defaults.
+    const referenceUtss =
+      current?.periodizationEnabled && current.referenceUtss != null
+        ? current.referenceUtss
+        : cfg.referenceUtss;
+    const carbGramsPerUtss =
+      current?.periodizationEnabled && current.carbGramsPerUtss != null
+        ? current.carbGramsPerUtss
+        : cfg.carbGramsPerUtss;
     setTarget.mutate(
       {
         ...parsed,
         periodizationEnabled: scaling,
-        referenceUtss: scaling ? config!.referenceUtss : null,
-        carbGramsPerUtss: scaling ? config!.carbGramsPerUtss : null,
+        referenceUtss: scaling ? referenceUtss : null,
+        carbGramsPerUtss: scaling ? carbGramsPerUtss : null,
+        recoveryEnabled: useAdaptive,
+        recoveryProteinBumpFrac: useAdaptive
+          ? (current?.recoveryProteinBumpFrac ?? cfg.recoveryProteinBumpFrac)
+          : null,
+        preloadCarbGramsPerUtss: useAdaptive
+          ? (current?.preloadCarbGramsPerUtss ?? cfg.preloadCarbGramsPerUtss)
+          : null,
+        preloadDaysAhead: useAdaptive ? (current?.preloadDaysAhead ?? cfg.preloadDaysAhead) : null,
+        phaseAware: useAdaptive,
+        maxCarbDeltaG: useAdaptive ? (current?.maxCarbDeltaG ?? cfg.maxCarbDeltaG) : null,
       },
       { onSuccess: onClose },
     );
@@ -151,6 +168,27 @@ function TargetsForm({
           aria-label="Scale carbs by training load"
         />
       </div>
+
+      {periodize && (
+        <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="target-adaptive" className="text-sm cursor-pointer">
+              Adapt to recent &amp; upcoming training
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Keep carbs (and a little extra protein) up while you recover from hard days, and
+              load carbs ahead of big sessions, your taper and race week.
+            </p>
+          </div>
+          <Switch
+            id="target-adaptive"
+            checked={adaptive}
+            onCheckedChange={setAdaptive}
+            data-testid="switch-adaptive"
+            aria-label="Adapt to recent and upcoming training"
+          />
+        </div>
+      )}
 
       <DialogFooter>
         <Button variant="ghost" onClick={onClose} disabled={setTarget.isPending}>

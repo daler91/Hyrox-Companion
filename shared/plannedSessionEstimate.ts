@@ -342,3 +342,36 @@ export function estimatePlannedSession(input: PlannedSessionEstimateInput): Plan
 
   return { durationMin, rpe, source };
 }
+
+/** Assumed session RPE when a planned day carries no usable intensity signal. */
+const ASSUMED_PLANNED_RPE = 5;
+
+export interface PlannedDayUtssInput extends PlannedSessionEstimateInput {
+  /** Athlete-saved expected duration (min); wins over the structural estimate. */
+  expectedDurationMin?: number | null;
+  /** Athlete-saved expected RPE (1–10); wins over the structural estimate. */
+  expectedRpe?: number | null;
+}
+
+/**
+ * Estimate a planned day's training load (UTSS) for FORWARD fuelling — so carbs
+ * can be brought forward ahead of a big upcoming session (see
+ * `effectiveTargetWindowed` in shared/nutritionTargets.ts). The athlete's saved
+ * expected duration/RPE win; otherwise both come from {@link estimatePlannedSession}.
+ *
+ * The session load mirrors the RPE branch of the training-load engine's cardio
+ * intensity factor (server/services/trainingLoadService.ts): `IF = 0.6 +
+ * (rpe/10)² × 2` and `UTSS ≈ duration × IF`, so a planned estimate sits on the
+ * SAME scale as the logged UTSS the periodisation reference is calibrated to.
+ * Strength tonnage is not modelled (planned weights are frequently absent), so
+ * this is a duration×intensity estimate rather than a full reconstruction.
+ * Returns 0 when there's no usable duration. Pure and DB-free.
+ */
+export function estimatePlannedDayUtss(input: PlannedDayUtssInput): number {
+  const estimate = estimatePlannedSession(input);
+  const durationMin = input.expectedDurationMin ?? estimate.durationMin;
+  if (durationMin == null || durationMin <= 0) return 0;
+  const rpe = input.expectedRpe ?? estimate.rpe ?? ASSUMED_PLANNED_RPE;
+  const intensityFactor = 0.6 + Math.pow(rpe / 10, 2) * 2;
+  return Math.round(durationMin * intensityFactor * 10) / 10;
+}

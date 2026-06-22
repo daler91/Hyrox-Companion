@@ -5,6 +5,9 @@ import {
   calculateNutritionTarget,
   defaultPeriodizationConfig,
   effectiveTarget,
+  effectiveTargetWindowed,
+  type PeriodizationConfig,
+  type TrainingLoadWindow,
 } from "./nutritionTargets";
 
 describe("calculateBmr (Mifflin–St Jeor)", () => {
@@ -153,6 +156,147 @@ describe("effectiveTarget (load periodisation)", () => {
     expect(r.carbG).toBe(0);
     expect(r.carbDeltaG).toBe(-100); // post-floor: 0 − 100
     expect(r.calories).toBe(1600); // 2000 + (−100 × 4)
+  });
+});
+
+describe("effectiveTargetWindowed (past + future training)", () => {
+  const base = { calories: 2000, proteinG: 150, carbG: 200, fatG: 60 };
+  const emptyWindow = (dayUtss: number): TrainingLoadWindow => ({
+    dayUtss,
+    recentLoads: [],
+    acuteEwma: null,
+    chronicEwma: null,
+    tsb: null,
+    upcoming: [],
+    phase: null,
+    daysUntilRace: null,
+  });
+  const loadCfg: PeriodizationConfig = { enabled: true, referenceUtss: 50, carbGramsPerUtss: 2 };
+
+  it("matches the single-day path when the window is empty", () => {
+    const w = effectiveTargetWindowed(base, emptyWindow(80), loadCfg);
+    const single = effectiveTarget(base, 80, loadCfg);
+    expect(w.carbG).toBe(single.carbG);
+    expect(w.carbDeltaG).toBe(single.carbDeltaG);
+    expect(w.baseLoadDeltaG).toBe(60);
+    expect(w.recoveryDeltaG).toBe(0);
+    expect(w.preloadDeltaG).toBe(0);
+  });
+
+  it("keeps carbs up for recovery on a light day after a hard block, and bumps protein", () => {
+    const window: TrainingLoadWindow = {
+      ...emptyWindow(0), // rest day today
+      recentLoads: [80, 90, 70], // hard recent days
+      acuteEwma: 80,
+      tsb: -20, // fatigued
+    };
+    const r = effectiveTargetWindowed(base, window, { ...loadCfg, recoveryEnabled: true });
+    // base load alone would floor carbs toward 100 ((0−50)×2 = −100); recovery
+    // refills, landing at 180 instead.
+    expect(r.baseLoadDeltaG).toBe(-100);
+    expect(r.recoveryDeltaG).toBe(80);
+    expect(r.carbDeltaG).toBe(-20);
+    expect(r.carbG).toBe(180);
+    expect(r.proteinDeltaG).toBe(22.5); // 0.15 × 150 × intensity(=1)
+    expect(r.proteinG).toBe(172.5);
+    expect(r.calories).toBe(2010); // 2000 + (−20×4) + (22.5×4)
+    expect(r.reasonCodes).toContain("recovery_topup");
+  });
+
+  it("does not apply recovery when the knob is off", () => {
+    const window: TrainingLoadWindow = { ...emptyWindow(0), recentLoads: [80, 90, 70], acuteEwma: 80 };
+    const r = effectiveTargetWindowed(base, window, loadCfg);
+    expect(r.recoveryDeltaG).toBe(0);
+    expect(r.proteinDeltaG).toBe(0);
+    expect(r.carbG).toBe(100); // pure single-day floor behaviour
+  });
+
+  it("pre-loads carbs the day before a big planned session", () => {
+    const window: TrainingLoadWindow = {
+      ...emptyWindow(40),
+      upcoming: [{ daysAhead: 1, plannedUtss: 120 }],
+    };
+    const r = effectiveTargetWindowed(base, window, {
+      ...loadCfg,
+      preloadCarbGramsPerUtss: 1.5,
+      preloadDaysAhead: 1,
+    });
+    expect(r.preloadDeltaG).toBe(105); // (120−50)×1.5×(1/1)
+    expect(r.baseLoadDeltaG).toBe(-20); // (40−50)×2
+    expect(r.carbDeltaG).toBe(85);
+    expect(r.carbG).toBe(285);
+    expect(r.reasonCodes).toContain("carb_preload");
+  });
+
+  it("ignores upcoming sessions beyond the pre-load horizon", () => {
+    const window: TrainingLoadWindow = {
+      ...emptyWindow(40),
+      upcoming: [{ daysAhead: 2, plannedUtss: 120 }],
+    };
+    const r = effectiveTargetWindowed(base, window, {
+      ...loadCfg,
+      preloadCarbGramsPerUtss: 1.5,
+      preloadDaysAhead: 1,
+    });
+    expect(r.preloadDeltaG).toBe(0);
+    expect(r.carbG).toBe(180); // base load only
+  });
+
+  it("carb-loads through race week and damps training carbs in the taper", () => {
+    const raceWeek = effectiveTargetWindowed(
+      base,
+      { ...emptyWindow(30), phase: "race_week" },
+      { ...loadCfg, phaseAware: true },
+    );
+    expect(raceWeek.preloadDeltaG).toBe(50); // 0.25 × 200
+    expect(raceWeek.carbDeltaG).toBe(10); // −40 base + 50 race-week
+    expect(raceWeek.reasonCodes).toContain("race_week");
+
+    const taper = effectiveTargetWindowed(
+      base,
+      { ...emptyWindow(100), phase: "taper" },
+      { ...loadCfg, phaseAware: true },
+    );
+    expect(taper.baseLoadDeltaG).toBe(85); // (100−50)×2 = 100, damped ×0.85
+    expect(taper.reasonCodes).toContain("taper");
+  });
+
+  it("caps the combined carb delta and keeps components summing to the total", () => {
+    const window: TrainingLoadWindow = {
+      ...emptyWindow(60),
+      upcoming: [{ daysAhead: 1, plannedUtss: 150 }],
+    };
+    const r = effectiveTargetWindowed(base, window, {
+      ...loadCfg,
+      preloadCarbGramsPerUtss: 2,
+      preloadDaysAhead: 1,
+      maxCarbDeltaG: 60,
+    });
+    expect(r.carbDeltaG).toBe(60);
+    expect(r.baseLoadDeltaG + r.recoveryDeltaG + r.preloadDeltaG).toBe(60);
+    expect(r.carbG).toBe(260);
+    expect(r.reasonCodes).toContain("carb_delta_capped");
+  });
+
+  it("passes through untouched when periodisation is disabled, even with a rich window", () => {
+    const window: TrainingLoadWindow = {
+      ...emptyWindow(0),
+      recentLoads: [90, 90],
+      upcoming: [{ daysAhead: 1, plannedUtss: 150 }],
+      phase: "race_week",
+    };
+    const r = effectiveTargetWindowed(base, window, {
+      enabled: false,
+      referenceUtss: 50,
+      carbGramsPerUtss: 2,
+      recoveryEnabled: true,
+      phaseAware: true,
+      preloadCarbGramsPerUtss: 2,
+    });
+    expect(r.scaled).toBe(false);
+    expect(r.carbG).toBe(200);
+    expect(r.proteinG).toBe(150);
+    expect(r.carbDeltaG).toBe(0);
   });
 });
 

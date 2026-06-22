@@ -156,8 +156,20 @@ export function calculateNutritionTarget(input: NutritionTargetInput): Nutrition
 }
 
 // ---------------------------------------------------------------------------
-// Feature B — training-day-aware effective target.
+// Feature B — training-aware effective target.
+//
+// The baseline carbs flex with training in three ways, each opt-in via config so
+// an existing flat/periodised target is byte-for-byte unchanged until enabled:
+//   • base load   — today's actual UTSS (the original single-day behaviour);
+//   • recovery    — PAST: top up carbs (+ protein) after hard recent days so a
+//                   light day inside a hard block stays fuelled for glycogen
+//                   resynthesis and repair rather than snapping to baseline;
+//   • pre-load    — FUTURE: bring carbs forward ahead of an imminent big planned
+//                   session, and carb-load through taper / race week.
+// Protein/fat stay anchored to bodyweight except for the recovery protein bump.
 // ---------------------------------------------------------------------------
+
+export type TrainingPhase = "early" | "build" | "peak" | "taper" | "race_week";
 
 export interface PeriodizationConfig {
   enabled: boolean;
@@ -165,6 +177,47 @@ export interface PeriodizationConfig {
   referenceUtss: number;
   /** Δ carb grams per +1 UTSS above the reference. */
   carbGramsPerUtss: number;
+  // --- Adaptive (window-aware) knobs. All optional; omitted ⇒ that behaviour is
+  //     off, so the single-day path stays identical to before. ---
+  /** PAST: add carbs (+ protein) for recovery after hard recent days. */
+  recoveryEnabled?: boolean;
+  /** Extra protein, as a fraction of baseline protein, on a fully depleted
+   *  recovery day (scaled by how depleted/fatigued the day actually is). */
+  recoveryProteinBumpFrac?: number;
+  /** FUTURE: Δ carb grams pre-loaded per +1 planned UTSS (above reference) for an
+   *  upcoming session, proximity-weighted by 1/daysAhead. 0 / omitted ⇒ off. */
+  preloadCarbGramsPerUtss?: number;
+  /** How many days ahead an upcoming session pulls carbs forward (default 1). */
+  preloadDaysAhead?: number;
+  /** Enable taper damping + race-week carb-loading from the plan phase. */
+  phaseAware?: boolean;
+  /** Cap on the positive carb delta (g) so adjustments can't compound absurdly. */
+  maxCarbDeltaG?: number;
+}
+
+/**
+ * A small window of training context around a day: the day's own load, recent
+ * ACTUAL load (for recovery), upcoming PLANNED load (for pre-loading), and the
+ * fitness/fatigue/phase signals the load engine already computes. Pure callers
+ * pass an empty window (see {@link effectiveTarget}) to get the single-day path.
+ */
+export interface TrainingLoadWindow {
+  /** Today's actual training load (UTSS); 0 on a rest day. */
+  dayUtss: number;
+  /** Trailing actual daily UTSS (excluding today), for the recovery signal. */
+  recentLoads: number[];
+  /** Acute fatigue (7-day EWMA of UTSS); null until the load engine is seeded. */
+  acuteEwma: number | null;
+  /** Chronic fitness (28-day EWMA of UTSS); null until seeded. */
+  chronicEwma: number | null;
+  /** Training Stress Balance / "Form" (chronic − acute); negative ⇒ fatigued. */
+  tsb: number | null;
+  /** Upcoming planned sessions within the pre-load horizon. */
+  upcoming: { daysAhead: number; plannedUtss: number }[];
+  /** Plan phase, when known, for taper / race-week behaviour. */
+  phase: TrainingPhase | null;
+  /** Days until the race, when a race date is set. */
+  daysUntilRace: number | null;
 }
 
 export interface BaselineTarget {
@@ -179,39 +232,216 @@ export interface EffectiveTargetResult {
   proteinG: number | null;
   carbG: number | null;
   fatG: number | null;
-  /** Signed carb grams applied vs the baseline (post-floor, so the UI note is honest). */
+  /** Signed carb grams applied vs the baseline (post-floor/cap, so the UI note is
+   *  honest). Equals baseLoadDeltaG + recoveryDeltaG + preloadDeltaG. */
   carbDeltaG: number;
+  /** Component of carbDeltaG attributable to today's load. */
+  baseLoadDeltaG: number;
+  /** Component of carbDeltaG attributable to recovery from recent load. */
+  recoveryDeltaG: number;
+  /** Component of carbDeltaG attributable to pre-loading for upcoming load. */
+  preloadDeltaG: number;
+  /** Signed protein grams applied vs the baseline (recovery bump; 0 otherwise). */
+  proteinDeltaG: number;
   /** True when the carb/calorie values were actually load-scaled. */
   scaled: boolean;
+  /** Transparency: machine-readable drivers of the adjustment. */
+  reasonCodes: string[];
+  /** Transparency: a one-line human explanation of the adjustment. */
+  explanation: string;
+}
+
+// --- Adaptive periodisation tuning (used only when the matching knob is on). ---
+/** Default recovery protein bump: up to +15% of baseline protein when depleted. */
+const DEFAULT_RECOVERY_PROTEIN_BUMP_FRAC = 0.15;
+/** Fraction of the "missing" load (recent demand − today) whose carbs we replace
+ *  on a recovery day — reusing the athlete's carb-per-UTSS slope so it stays
+ *  calibrated to their baseline. */
+const RECOVERY_CARB_FACTOR = 0.5;
+/** Negative TSB at which fatigue's contribution to the recovery signal saturates. */
+const TSB_FATIGUE_SCALE = 25;
+/** Race-week carb-load added on top, as a fraction of baseline carbs. */
+const RACE_WEEK_CARB_LOAD_FRAC = 0.25;
+/** During taper, positive training-load carb deltas are damped by this factor. */
+const TAPER_LOAD_DAMP = 0.85;
+
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
+}
+
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((acc, v) => acc + v, 0) / values.length;
+}
+
+function signed(n: number): string {
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
+/** An empty window: only today's load is known (recovery/pre-load/phase off). */
+export function singleDayWindow(dayUtss: number): TrainingLoadWindow {
+  return {
+    dayUtss,
+    recentLoads: [],
+    acuteEwma: null,
+    chronicEwma: null,
+    tsb: null,
+    upcoming: [],
+    phase: null,
+    daysUntilRace: null,
+  };
 }
 
 /**
- * Scale a baseline target's carbs (and therefore calories) by a day's actual
- * training load. Protein and fat are unchanged (anchored to bodyweight). Linear:
- * `carbs = baseCarbs + (dayUtss − referenceUtss) × carbGramsPerUtss`, floored at
- * 0g. Returns the baseline unchanged when periodisation is off or there is no
- * carb baseline to scale.
+ * Scale a baseline target's carbs (and therefore calories) by a single day's
+ * training load — the original, periodisation behaviour. Thin wrapper over
+ * {@link effectiveTargetWindowed} with an empty window, so the two paths share
+ * one implementation and the single-day result is unchanged.
  */
 export function effectiveTarget(
   base: BaselineTarget,
   dayUtss: number,
   config: PeriodizationConfig,
 ): EffectiveTargetResult {
+  return effectiveTargetWindowed(base, singleDayWindow(dayUtss), config);
+}
+
+/**
+ * Training-aware effective target: blend today's load (base), recovery from
+ * recent ACTUAL load (past), and pre-loading for upcoming PLANNED load + plan
+ * phase (future) into a single carb delta, plus an optional recovery protein
+ * bump. Pure and floored/capped; components always sum to the applied carb delta
+ * so the UI breakdown is honest. Returns the baseline unchanged when
+ * periodisation is off or there is no carb baseline to scale.
+ */
+export function effectiveTargetWindowed(
+  base: BaselineTarget,
+  window: TrainingLoadWindow,
+  config: PeriodizationConfig,
+): EffectiveTargetResult {
   if (!config.enabled || base.carbG == null) {
-    return { ...base, carbDeltaG: 0, scaled: false };
+    return {
+      calories: base.calories,
+      proteinG: base.proteinG,
+      carbG: base.carbG,
+      fatG: base.fatG,
+      carbDeltaG: 0,
+      baseLoadDeltaG: 0,
+      recoveryDeltaG: 0,
+      preloadDeltaG: 0,
+      proteinDeltaG: 0,
+      scaled: false,
+      reasonCodes: [],
+      explanation: "Flat baseline target (no training-load periodisation applied).",
+    };
   }
-  const rawDelta = (dayUtss - config.referenceUtss) * config.carbGramsPerUtss;
-  const newCarbG = Math.max(0, base.carbG + rawDelta);
-  const carbDeltaG = round1(newCarbG - base.carbG);
+
+  const reasonCodes: string[] = [];
+  const { referenceUtss: reference, carbGramsPerUtss: slope } = config;
+
+  // Base load — today's actual demand (the original single-day behaviour).
+  let baseLoadRaw = (window.dayUtss - reference) * slope;
+  if (config.phaseAware && window.phase === "taper" && baseLoadRaw > 0) {
+    baseLoadRaw *= TAPER_LOAD_DAMP;
+    reasonCodes.push("taper");
+  }
+
+  // Recovery (past) — replace glycogen + repair after hard recent days.
+  let recoveryRaw = 0;
+  let proteinDeltaG = 0;
+  if (config.recoveryEnabled) {
+    const recentAvg = window.recentLoads.length
+      ? mean(window.recentLoads)
+      : window.acuteEwma ?? window.dayUtss;
+    const recoveryGap = Math.max(0, recentAvg - window.dayUtss);
+    const tsbFatigue =
+      window.tsb != null && window.tsb < 0 ? clamp01(-window.tsb / TSB_FATIGUE_SCALE) : 0;
+    const recoveryIntensity = clamp01(
+      recoveryGap / Math.max(reference, recentAvg, 1) + tsbFatigue * 0.5,
+    );
+    recoveryRaw = recoveryGap * slope * RECOVERY_CARB_FACTOR;
+    if (base.proteinG != null) {
+      const bumpFrac = config.recoveryProteinBumpFrac ?? DEFAULT_RECOVERY_PROTEIN_BUMP_FRAC;
+      proteinDeltaG = round1(bumpFrac * base.proteinG * recoveryIntensity);
+    }
+    if (recoveryRaw > 0 || proteinDeltaG > 0) reasonCodes.push("recovery_topup");
+  }
+
+  // Pre-load (future) — fuel ahead of imminent big sessions and the race.
+  let preloadRaw = 0;
+  const preloadSlope = config.preloadCarbGramsPerUtss ?? 0;
+  const horizon = config.preloadDaysAhead ?? 1;
+  if (preloadSlope > 0) {
+    for (const u of window.upcoming) {
+      if (u.daysAhead < 1 || u.daysAhead > horizon) continue;
+      const proximity = 1 / u.daysAhead; // the nearer the session, the more we load
+      preloadRaw += Math.max(0, u.plannedUtss - reference) * preloadSlope * proximity;
+    }
+    if (preloadRaw > 0) reasonCodes.push("carb_preload");
+  }
+  if (config.phaseAware && window.phase === "race_week") {
+    preloadRaw += RACE_WEEK_CARB_LOAD_FRAC * base.carbG;
+    reasonCodes.push("race_week");
+  }
+
+  // Combine, floor carbs at 0, cap the positive addition, and keep the component
+  // deltas summing to the applied total so the UI breakdown stays honest.
+  const rawSum = baseLoadRaw + recoveryRaw + preloadRaw;
+  const cap = config.maxCarbDeltaG ?? Number.POSITIVE_INFINITY;
+  if (cap !== Number.POSITIVE_INFINITY && rawSum > cap) reasonCodes.push("carb_delta_capped");
+  const appliedDelta = Math.max(-base.carbG, Math.min(cap, rawSum));
+  if (appliedDelta < rawSum && rawSum < 0) reasonCodes.push("carbs_floored");
+  const scale = rawSum !== 0 ? appliedDelta / rawSum : 0;
+
+  const baseLoadDeltaG = round1(baseLoadRaw * scale);
+  const recoveryDeltaG = round1(recoveryRaw * scale);
+  const preloadDeltaG = round1(preloadRaw * scale);
+  const carbDeltaG = round1(baseLoadDeltaG + recoveryDeltaG + preloadDeltaG);
+  const newCarbG = Math.max(0, round1(base.carbG + carbDeltaG));
+
   const carbCalDelta = carbDeltaG * KCAL_PER_G_CARB;
+  const proteinCalDelta = proteinDeltaG * KCAL_PER_G_PROTEIN;
+
   return {
-    proteinG: base.proteinG,
+    calories:
+      base.calories == null ? null : roundKcal(base.calories + carbCalDelta + proteinCalDelta),
+    proteinG: base.proteinG == null ? null : round1(base.proteinG + proteinDeltaG),
+    carbG: newCarbG,
     fatG: base.fatG,
-    carbG: round1(newCarbG),
-    calories: base.calories == null ? null : roundKcal(base.calories + carbCalDelta),
     carbDeltaG,
+    baseLoadDeltaG,
+    recoveryDeltaG,
+    preloadDeltaG,
+    proteinDeltaG,
     scaled: true,
+    reasonCodes,
+    explanation: buildEffectiveTargetExplanation({
+      carbDeltaG,
+      baseLoadDeltaG,
+      recoveryDeltaG,
+      preloadDeltaG,
+      proteinDeltaG,
+      phase: window.phase,
+      dayUtss: window.dayUtss,
+    }),
   };
+}
+
+function buildEffectiveTargetExplanation(d: {
+  carbDeltaG: number;
+  baseLoadDeltaG: number;
+  recoveryDeltaG: number;
+  preloadDeltaG: number;
+  proteinDeltaG: number;
+  phase: TrainingPhase | null;
+  dayUtss: number;
+}): string {
+  const parts: string[] = [`today's load (UTSS ${round1(d.dayUtss)}) ${signed(d.baseLoadDeltaG)}g`];
+  if (d.recoveryDeltaG !== 0) parts.push(`recovery ${signed(d.recoveryDeltaG)}g`);
+  if (d.preloadDeltaG !== 0) parts.push(`fuel-ahead ${signed(d.preloadDeltaG)}g`);
+  if (d.proteinDeltaG !== 0) parts.push(`recovery protein ${signed(d.proteinDeltaG)}g`);
+  const phaseNote = d.phase ? ` (${d.phase.replace("_", " ")})` : "";
+  return `Carbs ${signed(d.carbDeltaG)}g vs baseline${phaseNote}: ${parts.join(", ")}.`;
 }
 
 /**
@@ -222,20 +452,46 @@ export function effectiveTarget(
  */
 const MIN_REFERENCE_UTSS = 25;
 
+/** The persisted shape of a recommended periodisation config (see DB columns on
+ *  nutrition_targets). The adaptive knobs default ON so enabling periodisation
+ *  gives the full past+future-aware behaviour; the UI can still toggle each off. */
+export interface DefaultPeriodizationConfig {
+  referenceUtss: number;
+  carbGramsPerUtss: number;
+  recoveryEnabled: boolean;
+  recoveryProteinBumpFrac: number;
+  preloadCarbGramsPerUtss: number;
+  preloadDaysAhead: number;
+  phaseAware: boolean;
+  maxCarbDeltaG: number;
+}
+
 /**
  * Sensible periodisation defaults derived from a baseline target + the athlete's
  * typical daily load, computed where the target is created (the pure functions
  * above stay config-driven for testability). The slope is half-proportional so a
  * rest day (UTSS 0) keeps roughly half the baseline carbs rather than zero. The
  * reference is floored at MIN_REFERENCE_UTSS so a near-zero recent average can't
- * blow up the slope.
+ * blow up the slope. The adaptive knobs (recovery / pre-load / phase) come on by
+ * default with conservative magnitudes derived from the same baseline.
  */
 export function defaultPeriodizationConfig(
   baselineCarbG: number,
   recentAvgDailyUtss: number,
-): { referenceUtss: number; carbGramsPerUtss: number } {
+): DefaultPeriodizationConfig {
   const rawReference = recentAvgDailyUtss > 0 ? recentAvgDailyUtss : 50;
   const referenceUtss = round1(Math.max(MIN_REFERENCE_UTSS, rawReference));
   const carbGramsPerUtss = round1((baselineCarbG / referenceUtss) * 0.5);
-  return { referenceUtss, carbGramsPerUtss };
+  return {
+    referenceUtss,
+    carbGramsPerUtss,
+    recoveryEnabled: true,
+    recoveryProteinBumpFrac: DEFAULT_RECOVERY_PROTEIN_BUMP_FRAC,
+    // Pre-load a touch more gently than same-day load reacts.
+    preloadCarbGramsPerUtss: round1(carbGramsPerUtss * 0.5),
+    preloadDaysAhead: 1,
+    phaseAware: true,
+    // Cap the combined positive delta so carbs can't exceed ~1.75× baseline.
+    maxCarbDeltaG: round1(baselineCarbG * 0.75),
+  };
 }

@@ -230,6 +230,27 @@ to resolve against real food data.
 - **Targets** (`GET/POST /targets`, FR-5.2) — set calorie/protein/carb/fat goals;
   versioned by `effectiveFrom` so history is preserved (delete-then-insert per
   date). The daily header shows progress bars against the current target.
+  - **Training-aware effective target** (`shared/nutritionTargets.ts` →
+    `effectiveTargetWindowed`; server `fetchTrainingLoadWindow` →
+    `buildEffectiveTargetSummary`). With periodisation on, the day's carbs/calories
+    (and protein, on recovery days) flex with a *window* of training rather than
+    just today's load, broken into transparent components on `EffectiveTargetSummary`
+    (`baseLoadDeltaG` / `recoveryDeltaG` / `preloadDeltaG` / `proteinDeltaG` +
+    `reasonCodes` + `explanation`):
+    - **base load** — today's UTSS vs the reference (the original behaviour);
+    - **recovery (PAST)** — after hard recent days (high acute load / negative TSB),
+      keep carbs up for glycogen resynthesis and bump protein for repair, so a light
+      day inside a hard block doesn't snap to baseline;
+    - **pre-load (FUTURE)** — bring carbs forward ahead of a big upcoming planned
+      session (estimated via `estimatePlannedDayUtss` over `getUpcomingPlannedDays`)
+      and carb-load through **taper** / **race week** (`computePlanPhase`).
+    Each adjustment is opt-in via versioned columns on `nutrition_targets`
+    (`recovery_enabled`, `preload_carb_grams_per_utss`, `preload_days_ahead`,
+    `phase_aware`, `recovery_protein_bump_frac`, `max_carb_delta_g`); a flat or
+    load-only target is byte-for-byte unchanged, and the analytics block/range views
+    stay pure load-correlation (single-day window). The total carb delta is capped
+    so recovery + pre-load + phase can't compound. Surfaced in `DailyTotalsHeader`
+    (carb + protein notes, full breakdown on hover) and toggled in `TargetsDialog`.
 - **Micronutrients** (`GET /micros`, FR-5.1) — the day's totals for a curated set
   of **13 micros** (sodium, potassium, calcium, iron, magnesium, zinc, vitamins C,
   A, D, E, K, B6, B12, folate) against FDA reference daily intakes, shown as
