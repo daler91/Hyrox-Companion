@@ -1,5 +1,5 @@
 import type { Food } from "@shared/schema";
-import { Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -180,6 +180,7 @@ function CustomFoodForm({
               <div key={s.id} className="flex items-center gap-2">
                 <Input
                   placeholder="e.g. 1 cup"
+                  aria-label={`Serving ${i + 1} name`}
                   value={s.label}
                   onChange={(e) => updateServing(i, { label: e.target.value })}
                 />
@@ -187,6 +188,7 @@ function CustomFoodForm({
                   type="number"
                   min={0}
                   placeholder="grams"
+                  aria-label={`Serving ${i + 1} weight in grams`}
                   className="w-24"
                   value={s.grams}
                   onChange={(e) => updateServing(i, { grams: e.target.value })}
@@ -213,9 +215,11 @@ function CustomFoodForm({
         <Button
           onClick={submit}
           disabled={!valid || isPending}
+          aria-busy={isPending}
           data-testid="button-save-custom-food"
         >
-          {isCreate ? "Save food" : "Save"}
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+          {isPending ? "Saving…" : isCreate ? "Save food" : "Save"}
         </Button>
       </DialogFooter>
     </>
