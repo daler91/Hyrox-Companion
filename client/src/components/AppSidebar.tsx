@@ -14,7 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
 import { getUserDisplayName } from "@/lib/authUtils";
@@ -90,14 +90,16 @@ export function AppSidebar() {
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()}>
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Log out</TooltipContent>
-            </Tooltip>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()}>
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Log out</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </SidebarFooter>
