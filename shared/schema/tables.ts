@@ -91,7 +91,7 @@ export const users = pgTable("users", {
   // the calc degrades gracefully and is gated client-side until complete).
   bodyweightKg: real("bodyweight_kg"),
   heightCm: real("height_cm"),
-  // Training-load physiological baselines for objective cardio load (TRIMP/TSS).
+  // Training-load physiological baselines for objective cardio load (hrTSS/TSS).
   // All nullable: when unset, the load model falls back to age-estimated max HR
   // (Tanaka) plus a default resting HR, and power TSS is skipped. bpm/bpm/watts.
   restingHr: integer("resting_hr"),

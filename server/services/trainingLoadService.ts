@@ -1,6 +1,8 @@
 import {
   EXERCISE_DEFINITIONS,
   type ExerciseLoadTag,
+  type HrZone,
+  type HrZoneBoundary,
   type InsertExerciseSet,
   type LoadGovernorAcwrZone,
   type LoadGovernorVector,
@@ -112,9 +114,11 @@ export interface DailyTrainingLoad {
   // strain (weekly UTSS × monotony). Null when SD is 0 (identical/all-rest week).
   monotony: number | null;
   strain: number | null;
-  // Display-only objective load. Banister TRIMP (HR) and power TSS, accumulated
-  // in parallel to UTSS — they never feed UTSS, so the governor stays calibrated.
-  trimp: number | null;
+  // Display-only objective load, accumulated in parallel to UTSS — never feeds
+  // UTSS, so the governor stays calibrated. hrTSS (HR, 100-pt scale) and power
+  // TSS (estimated from avg power); hrZone = the day's most intense HR session.
+  hrTss: number | null;
+  hrZone: HrZone | null;
   tss: number | null;
 }
 
@@ -334,8 +338,8 @@ function inferWorkoutText(log: Pick<WorkoutLog, "focus" | "mainWorkout" | "acces
 // from that objective signal instead of RPE/keywords. The factor stays in the
 // SAME 0.6–2.6 band the RPE branch produces (RPE uses 0.6 + (rpe/10)²·2), so
 // UTSS magnitudes — and every governor threshold calibrated to them — keep the
-// same scale. Raw Banister TRIMP / power TSS are computed separately for display
-// only (banisterTrimp / powerTss) and never feed UTSS.
+// same scale. hrTSS / power TSS are computed separately for display only
+// (hrTss / powerTss) and never feed UTSS.
 const DEFAULT_HR_REST = 60;
 const DEFAULT_HR_MAX = 190;
 const MAX_CARDIO_INTENSITY_FACTOR = 2.6;
@@ -394,21 +398,80 @@ export function powerIntensityFactor(
   return intensityFactorFromFraction(watts / threshold);
 }
 
-// Banister TRIMP — display-only objective internal load (NOT added to UTSS).
-// Gender coefficients: male b=1.92,k=0.64 / female b=1.67,k=0.86. Null without
-// usable HR + duration.
-export function banisterTrimp(
+// ── HR zones, LTHR & hrTSS (display-only objective load) ─────────────────────
+// Zones use the SAME Karvonen HRR axis as hrReserveRatio / hrIntensityFactor, so
+// the zone label, intensity factor and hrTSS stay mutually consistent. With only
+// average HR we classify a session into a SINGLE zone (NOT time-in-zone) and
+// derive an hrTSS on the 100-pt TSS scale anchored on an estimated LTHR.
+
+// Karvonen %HRR lower bounds for Z1..Z5.
+const HR_ZONE_FLOORS = [0, 0.6, 0.7, 0.8, 0.9] as const;
+const HR_ZONES: readonly HrZone[] = ["z1", "z2", "z3", "z4", "z5"];
+
+function hrZoneRank(zone: HrZone): number {
+  return HR_ZONES.indexOf(zone);
+}
+
+// Estimated lactate-threshold HR. No schema field — derived from (estimated) max
+// HR at ~88% HRmax, the common no-field-test heuristic. Floored strictly above
+// resting HR so the hrTSS denominator (LTHR − rest) is always positive.
+export function estimateLthr(athlete?: AthleteLoadContext): number {
+  const hrMax = resolveHrMax(athlete);
+  const hrRest = resolveHrRest(athlete);
+  return Math.max(Math.round(0.88 * hrMax), hrRest + 1);
+}
+
+// bpm boundaries for the five Karvonen %HRR zones from resolved rest/max HR.
+// Z1.minHr == resting HR, Z5.maxHr == max HR.
+export function hrZoneBoundaries(athlete?: AthleteLoadContext): HrZoneBoundary[] {
+  const hrRest = resolveHrRest(athlete);
+  const hrMax = resolveHrMax(athlete);
+  const reserve = hrMax - hrRest;
+  return HR_ZONES.map((zone, i) => {
+    const minHrr = HR_ZONE_FLOORS[i];
+    const maxHrr = i < HR_ZONE_FLOORS.length - 1 ? HR_ZONE_FLOORS[i + 1] : 1;
+    return {
+      zone,
+      minHrr,
+      minHr: Math.round(hrRest + minHrr * reserve),
+      maxHr: Math.round(hrRest + maxHrr * reserve),
+    };
+  });
+}
+
+// Single per-session Karvonen %HRR zone from average HR — NOT time-in-zone
+// (averages only). Null when HR is unusable (same guards as hrReserveRatio).
+export function classifyHrZone(
+  avgHr: number | null | undefined,
+  athlete?: AthleteLoadContext,
+): HrZone | null {
+  const hrr = hrReserveRatio(avgHr, athlete);
+  if (hrr == null) return null;
+  if (hrr < 0.6) return "z1";
+  if (hrr < 0.7) return "z2";
+  if (hrr < 0.8) return "z3";
+  if (hrr < 0.9) return "z4";
+  return "z5";
+}
+
+// hrTSS — display-only objective internal load on the 100-pt TSS scale, parallel
+// to powerTss (NOT added to UTSS). IF_hr is the LTHR-reserve fraction clamped to
+// [0,1]; IF_hr = 1.0 exactly when avgHr == LTHR. Average HR above threshold caps
+// at 1.0 — a deliberate averages-only choice. Null without usable HR + duration.
+export function hrTss(
   durationMin: number | null | undefined,
   avgHr: number | null | undefined,
   athlete?: AthleteLoadContext,
 ): number | null {
   const duration = Number(durationMin ?? 0);
-  const hrr = hrReserveRatio(avgHr, athlete);
-  if (duration <= 0 || hrr == null) return null;
-  const female = athlete?.gender === "female";
-  const b = female ? 1.67 : 1.92;
-  const k = female ? 0.86 : 0.64;
-  return round(duration * hrr * k * Math.exp(b * hrr), 1);
+  const hr = Number(avgHr ?? 0);
+  if (duration <= 0 || hr <= 0) return null;
+  const hrRest = resolveHrRest(athlete);
+  const lthr = estimateLthr(athlete);
+  if (lthr <= hrRest) return null;
+  const intensity = Math.max(0, Math.min(1, (hr - hrRest) / (lthr - hrRest)));
+  if (intensity <= 0) return null;
+  return round((duration / 60) * intensity * intensity * 100, 1);
 }
 
 // Simplified power TSS — display-only (NOT added to UTSS). With only average
@@ -493,7 +556,8 @@ function getOrCreateDay(map: Map<string, DailyTrainingLoad>, date: string): Dail
       tsb: null,
       monotony: null,
       strain: null,
-      trimp: null,
+      hrTss: null,
+      hrZone: null,
       tss: null,
     };
     map.set(date, day);
@@ -758,6 +822,7 @@ function buildOverview(
   allDays: Map<string, DailyTrainingLoad>,
   currentDate: string,
   rangeStart: string,
+  athlete?: AthleteLoadContext,
 ): TrainingLoadOverview {
   const currentDay = getOrCreateDay(allDays, currentDate);
   // acuteAvg/chronicAvg are today's EWMA fatigue/fitness. applyLoadDynamics is the
@@ -782,7 +847,8 @@ function buildOverview(
       tsb: day.tsb,
       monotony: day.monotony,
       strain: day.strain,
-      trimp: day.trimp,
+      hrTss: day.hrTss,
+      hrZone: day.hrZone,
       tss: day.tss,
       acuteEwma: day.acuteEwma,
       chronicEwma: day.chronicEwma,
@@ -799,8 +865,12 @@ function buildOverview(
     monotony: currentDay.monotony,
     strain: currentDay.strain,
     monotonyZone: monotonyZone(currentDay.monotony),
-    trimp: currentDay.trimp,
+    hrTss: currentDay.hrTss,
+    hrZone: currentDay.hrZone,
     tss: currentDay.tss,
+    hrZones: hrZoneBoundaries(athlete),
+    estimatedLthr: estimateLthr(athlete),
+    powerTssEstimated: true,
     flaggedVectors,
     activeRestrictions,
     downshiftRationale: activeRestrictions[0]?.rationale ?? null,
@@ -863,8 +933,13 @@ function applyCardioLoad(
   day.cardioStressScore += stress;
 
   // Display-only objective load, accumulated in parallel to UTSS (never feeds it).
-  const trimp = banisterTrimp(log.duration, log.avgHeartrate, athlete);
-  if (trimp != null) day.trimp = round((day.trimp ?? 0) + trimp, 1);
+  const sessionHrTss = hrTss(log.duration, log.avgHeartrate, athlete);
+  if (sessionHrTss != null) day.hrTss = round((day.hrTss ?? 0) + sessionHrTss, 1);
+  // Per-day zone = the most intense HR session's zone (ordinal max, z1<…<z5).
+  const sessionZone = classifyHrZone(log.avgHeartrate, athlete);
+  if (sessionZone != null && (day.hrZone == null || hrZoneRank(sessionZone) > hrZoneRank(day.hrZone))) {
+    day.hrZone = sessionZone;
+  }
   const tss = powerTss(log.duration, log.avgWatts, athlete?.ftp);
   if (tss != null) day.tss = round((day.tss ?? 0) + tss, 1);
 
@@ -941,6 +1016,6 @@ export function calculateTrainingLoad(
       if (a.date > b.date) return 1;
       return 0;
     }),
-    overview: buildOverview(allDays, currentDate, rangeStart),
+    overview: buildOverview(allDays, currentDate, rangeStart, athlete),
   };
 }

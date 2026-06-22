@@ -45,7 +45,7 @@ export const updateUserPreferencesSchema = z.object({
   // input edge before PATCHing.
   bodyweightKg: z.number().positive().max(500).nullable().optional(),
   heightCm: z.number().positive().max(300).nullable().optional(),
-  // Training-load physiological baselines for objective cardio load (TRIMP/TSS).
+  // Training-load physiological baselines for objective cardio load (hrTSS/TSS).
   // Optional; absent values fall back to age-estimated max HR + a default resting HR.
   restingHr: z.number().int().min(30).max(120).nullable().optional(),
   maxHr: z.number().int().min(120).max(230).nullable().optional(),

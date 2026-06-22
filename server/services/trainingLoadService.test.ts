@@ -3,14 +3,17 @@ import { describe, expect, it } from "vitest";
 
 import { buildLoadGovernorSuggestions } from "./trainingLoadGovernor";
 import {
-  banisterTrimp,
   calculateCardioStressScore,
   calculateStrengthStressScore,
   calculateTrainingLoad,
+  classifyHrZone,
   DEFAULT_EXERCISE_LOAD_TAGS,
   estimateHrMax,
+  estimateLthr,
   hrIntensityFactor,
   hrReserveRatio,
+  hrTss,
+  hrZoneBoundaries,
   monotonyZone,
   powerIntensityFactor,
   powerTss,
@@ -461,7 +464,7 @@ describe("trainingLoadService", () => {
     expect(withHr).not.toBeCloseTo(rpeOnly, 0);
   });
 
-  it("computes display-only TRIMP/TSS in parallel without feeding UTSS", () => {
+  it("computes display-only hrTSS/TSS in parallel without feeding UTSS", () => {
     const currentDate = "2026-05-22";
     const hrLog = log({ id: "hr", date: currentDate, duration: 60, avgHeartrate: 150 });
     const { dailyLoads, overview } = calculateTrainingLoad([hrLog], [], [], {
@@ -469,11 +472,11 @@ describe("trainingLoadService", () => {
       athlete: { age: 30, gender: "male" },
     });
     const today = dailyLoads.find((d) => d.date === currentDate);
-    expect(today?.trimp).toBeGreaterThan(0);
-    // UTSS is strength + cardio only; TRIMP rides alongside, not inside it.
+    expect(today?.hrTss).toBeGreaterThan(0);
+    // UTSS is strength + cardio only; hrTSS rides alongside, not inside it.
     expect(today?.utss).toBe(today?.cardioStressScore);
-    expect(today?.utss).not.toBe(today?.trimp);
-    expect(overview.trimp).toBe(today?.trimp ?? null);
+    expect(today?.utss).not.toBe(today?.hrTss);
+    expect(overview.hrTss).toBe(today?.hrTss ?? null);
 
     const powerLog = log({ id: "pw", date: currentDate, duration: 60, avgWatts: 200 });
     const power = calculateTrainingLoad([powerLog], [], [], {
@@ -484,14 +487,45 @@ describe("trainingLoadService", () => {
     expect(powerDay?.tss).toBeCloseTo(64, 0); // (60/60)·(200/250)²·100
   });
 
-  it("computes Banister TRIMP with gender coefficients and null guards", () => {
-    const male = banisterTrimp(60, 150, { age: 30, gender: "male" });
-    const female = banisterTrimp(60, 150, { age: 30, gender: "female" });
-    expect(male).toBeGreaterThan(0);
-    expect(female).toBeGreaterThan(0);
-    expect(male).not.toBe(female);
-    expect(banisterTrimp(60, null, { age: 30 })).toBeNull();
-    expect(banisterTrimp(0, 150, { age: 30 })).toBeNull();
+  it("estimates LTHR at ~88% of max HR, floored above resting", () => {
+    expect(estimateLthr({ maxHr: 190, restingHr: 50 })).toBe(167); // 0.88 × 190 = 167.2
+    expect(estimateLthr({ age: 30 })).toBe(165); // Tanaka(30)=187 → 0.88 × 187 = 164.6
+    expect(estimateLthr({})).toBe(167); // default max 190
+    expect(estimateLthr({ maxHr: 100, restingHr: 95 })).toBe(96); // floored to rest + 1
+  });
+
+  it("classifies a session's average HR into Karvonen %HRR zones", () => {
+    const a = { restingHr: 60, maxHr: 190 }; // reserve 130; floors at 60/70/80/90%
+    expect(classifyHrZone(60 + 0.5 * 130, a)).toBe("z1");
+    expect(classifyHrZone(60 + 0.65 * 130, a)).toBe("z2");
+    expect(classifyHrZone(60 + 0.75 * 130, a)).toBe("z3");
+    expect(classifyHrZone(60 + 0.85 * 130, a)).toBe("z4");
+    expect(classifyHrZone(190, a)).toBe("z5");
+    expect(classifyHrZone(null, a)).toBeNull();
+    expect(classifyHrZone(50, a)).toBeNull(); // below resting
+  });
+
+  it("derives HR-zone bpm boundaries spanning resting→max HR", () => {
+    const zones = hrZoneBoundaries({ restingHr: 60, maxHr: 190 });
+    expect(zones).toHaveLength(5);
+    expect(zones[0]).toMatchObject({ zone: "z1", minHr: 60 });
+    expect(zones[4]).toMatchObject({ zone: "z5", maxHr: 190 });
+    for (let i = 1; i < zones.length; i++) {
+      expect(zones[i].minHr).toBe(zones[i - 1].maxHr); // contiguous, monotonic
+    }
+    // Default axis (rest 60 / max 190) without an athlete.
+    expect(hrZoneBoundaries()[0].minHr).toBe(60);
+    expect(hrZoneBoundaries()[4].maxHr).toBe(190);
+  });
+
+  it("computes hrTSS anchored on estimated LTHR with null guards", () => {
+    const a = { maxHr: 190, restingHr: 50 }; // LTHR = 167
+    expect(hrTss(60, 167, a)).toBeCloseTo(100, 0); // avgHr == LTHR → IF 1.0
+    expect(hrTss(30, 167, a)).toBeCloseTo(50, 0); // half the duration
+    expect(hrTss(60, 200, a)).toBeCloseTo(100, 0); // above LTHR clamps IF at 1.0
+    expect(hrTss(60, null, a)).toBeNull();
+    expect(hrTss(0, 167, a)).toBeNull();
+    expect(hrTss(60, 50, a)).toBeNull(); // at/below resting
   });
 
   it("computes simplified power TSS with null guards", () => {
@@ -531,11 +565,16 @@ describe("trainingLoadService", () => {
       athlete: { age: 30, gender: "male", ftp: 250 },
     });
     const todayPoint = overview.trend.find((p) => p.date === currentDate);
-    expect(todayPoint?.trimp).toBeGreaterThan(0);
+    expect(todayPoint?.hrTss).toBeGreaterThan(0);
     expect(todayPoint?.tss).toBeGreaterThan(0);
+    expect(todayPoint?.hrZone).not.toBeNull();
     expect(todayPoint?.acuteEwma).not.toBeNull();
     expect(todayPoint?.chronicEwma).not.toBeNull();
     // The trend's current-day TSS mirrors the overview's current-day TSS.
     expect(todayPoint?.tss).toBe(overview.tss);
+    // Overview also carries the zone legend + estimated-load indicators.
+    expect(overview.hrZones).toHaveLength(5);
+    expect(overview.estimatedLthr).toBeGreaterThan(0);
+    expect(overview.powerTssEstimated).toBe(true);
   });
 });
