@@ -31,7 +31,7 @@ describe("fetchTrainingLoadWindow", () => {
     vi.clearAllMocks();
     vi.mocked(storage.users.getUser).mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" } as never);
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
-    vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined as never);
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(calculateTrainingLoad).mockReturnValue({ dailyLoads: [] } as never);
   });
 
