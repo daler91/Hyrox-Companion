@@ -2,6 +2,7 @@ import type { EffectiveTargetSummary, NutritionMacroTotals } from "@shared/schem
 
 import { Card, CardContent } from "@/components/ui/card";
 
+import { MacroProgressBar } from "./MacroProgressBar";
 import { computeTargetProgress, type TargetProgressRow } from "./utils";
 
 const MACROS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
@@ -69,12 +70,12 @@ export function DailyTotalsHeader({
               <span className="text-xs text-muted-foreground">{m.label}</span>
               {progress && (
                 <div className="mt-1.5 w-full" data-testid={`target-progress-${m.key}`}>
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full ${progress.pct > 100 ? "bg-amber-500" : "bg-primary"}`}
-                      style={{ width: `${Math.min(progress.pct, 100)}%` }}
-                    />
-                  </div>
+                  <MacroProgressBar
+                    pct={progress.pct}
+                    label={m.label}
+                    value={progress.value}
+                    target={progress.target}
+                  />
                   <span className="mt-0.5 block text-center text-[10px] tabular-nums text-muted-foreground">
                     {progress.value} / {progress.target}
                   </span>
