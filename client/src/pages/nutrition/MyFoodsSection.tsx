@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useCustomFoods,
   useDeleteCustomFood,
@@ -45,24 +46,44 @@ export function MyFoodsSection({
               <li key={r.id} className="flex items-center justify-between gap-2 px-3 py-2">
                 <span className="min-w-0 truncate text-sm">{r.name}</span>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${r.name}`}
-                    onClick={() => onEditRecipe(r.id)}
-                    data-testid={`button-edit-recipe-${r.id}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Delete ${r.name}`}
-                    disabled={isDeleting}
-                    onClick={() => setPendingDelete({ kind: "recipe", id: r.id, name: r.name })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Edit ${r.name}`}
+                          onClick={() => onEditRecipe(r.id)}
+                          data-testid={`button-edit-recipe-${r.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit {r.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete ${r.name}`}
+                          disabled={isDeleting}
+                          onClick={() =>
+                            setPendingDelete({ kind: "recipe", id: r.id, name: r.name })
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Delete {r.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </li>
             ))}
@@ -78,24 +99,42 @@ export function MyFoodsSection({
               <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2">
                 <span className="min-w-0 truncate text-sm">{f.name}</span>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${f.name}`}
-                    onClick={() => onEditFood(f)}
-                    data-testid={`button-edit-food-${f.id}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Delete ${f.name}`}
-                    disabled={isDeleting}
-                    onClick={() => setPendingDelete({ kind: "food", id: f.id, name: f.name })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Edit ${f.name}`}
+                          onClick={() => onEditFood(f)}
+                          data-testid={`button-edit-food-${f.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit {f.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete ${f.name}`}
+                          disabled={isDeleting}
+                          onClick={() => setPendingDelete({ kind: "food", id: f.id, name: f.name })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Delete {f.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </li>
             ))}
