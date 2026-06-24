@@ -1,4 +1,10 @@
-import type { FoodLogEntryWithNutrition, MealFuelTarget, MealRole, MealType, NutritionMacroTotals } from "@shared/schema";
+import type {
+  FoodLogEntryWithNutrition,
+  MealFuelTarget,
+  MealRole,
+  MealType,
+  NutritionMacroTotals,
+} from "@shared/schema";
 import { Pencil, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -47,7 +53,16 @@ function sumNutrition(entries: readonly FoodLogEntryWithNutrition[]): NutritionM
 /** One meal's fuel target + logged entries (per-meal fuelling). Shows the target
  *  even before anything is logged; hidden only when there's neither a target nor
  *  an entry. */
-export function MealSection({ label, mealType, entries, target, onEdit, onDelete, deletingId, onEditTarget }: MealSectionProps) {
+export function MealSection({
+  label,
+  mealType,
+  entries,
+  target,
+  onEdit,
+  onDelete,
+  deletingId,
+  onEditTarget,
+}: MealSectionProps) {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0 && !target) return null;
 
@@ -106,7 +121,12 @@ export function MealSection({ label, mealType, entries, target, onEdit, onDelete
                         {Math.round(r.value)}/{Math.round(r.target)}g
                       </span>
                     </div>
-                    <MacroProgressBar pct={r.pct} />
+                    <MacroProgressBar
+                      pct={r.pct}
+                      label={r.label}
+                      value={r.value}
+                      target={r.target}
+                    />
                   </div>
                 ))}
               </div>
@@ -132,8 +152,8 @@ export function MealSection({ label, mealType, entries, target, onEdit, onDelete
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {Math.round(e.quantityG)} g · {e.nutrition.calories} kcal · P{e.nutrition.protein} C
-                  {e.nutrition.carb} F{e.nutrition.fat}
+                  {Math.round(e.quantityG)} g · {e.nutrition.calories} kcal · P{e.nutrition.protein}{" "}
+                  C{e.nutrition.carb} F{e.nutrition.fat}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
