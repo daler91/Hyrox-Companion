@@ -1,7 +1,7 @@
 import type { AllowedImageMimeType, ExerciseSet, ParsedExercise } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Dumbbell, ExternalLink, Gauge, ListChecks, NotebookPen } from "lucide-react";
+import { Dumbbell, ExternalLink, Gauge, ListChecks, Loader2, NotebookPen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -505,10 +505,14 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
             className="w-full"
             size="lg"
             onClick={() => saveMutation.mutate()}
-            disabled={!canSave}
+            disabled={!canSave || saveMutation.isPending}
             data-testid="adhoc-save-workout"
           >
-            <ListChecks className="mr-2 h-4 w-4" />
+            {saveMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <ListChecks className="mr-2 h-4 w-4" />
+            )}
             {saveMutation.isPending ? "Saving…" : "Save workout"}
           </Button>
           <Button
