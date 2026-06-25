@@ -266,9 +266,11 @@ describe("formatStravaDistance", () => {
 });
 
   it("formats pace directly when calling formatStravaPace with speed <= 0", () => {
-    // We can test the internal formatStravaPace by forcing the mapped property which uses it
-    // Wait, mapStravaActivityToWorkout won't call formatStravaPace if average_speed <= 0 due to if (isDistanceActivity && activity.average_speed > 0) at line 65.
-    // So formatStravaPace branch (metersPerSecond <= 0) might be unreachable from mapStravaActivityToWorkout!
+    // mapStravaActivityToWorkout never calls formatStravaPace when average_speed <= 0
+    // (it is guarded by `isDistanceActivity && activity.average_speed > 0`), so the
+    // non-positive branch is only reachable by calling formatStravaPace directly.
+    expect(formatStravaPace(0, "km")).toBe("");
+    expect(formatStravaPace(-5, "miles")).toBe("");
   });
 
   it("handles calories truthy but falsy after mapping (e.g. 0)", () => {

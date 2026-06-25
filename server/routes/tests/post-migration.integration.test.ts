@@ -681,17 +681,18 @@ describe("Post-Migration Verification: Railway + Neon", () => {
     });
 
     it("Drizzle ORM can query schema tables without error", async () => {
-      // Use db (Drizzle instance) to query each table with limit 0
-      // This validates the ORM mapping matches the actual DB schema
-      await db.select().from(schema.users).limit(0);
-      await db.select().from(schema.trainingPlans).limit(0);
-      await db.select().from(schema.planDays).limit(0);
-      await db.select().from(schema.workoutLogs).limit(0);
-      await db.select().from(schema.exerciseSets).limit(0);
-      await db.select().from(schema.customExercises).limit(0);
-      await db.select().from(schema.stravaConnections).limit(0);
-      await db.select().from(schema.chatMessages).limit(0);
-      await db.select().from(schema.coachingMaterials).limit(0);
+      // Use db (Drizzle instance) to query each table with limit 0.
+      // This validates the ORM mapping matches the actual DB schema: each
+      // query must resolve to an empty result set rather than throwing.
+      expect(await db.select().from(schema.users).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.trainingPlans).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.planDays).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.workoutLogs).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.exerciseSets).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.customExercises).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.stravaConnections).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.chatMessages).limit(0)).toEqual([]);
+      expect(await db.select().from(schema.coachingMaterials).limit(0)).toEqual([]);
     });
   });
 

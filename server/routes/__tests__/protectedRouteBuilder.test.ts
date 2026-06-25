@@ -159,7 +159,8 @@ describe("protectedRouteBuilder", () => {
     });
 
     app.use(router);
-    await request(app).post("/probe").send({}).expect(200);
+    const response = await request(app).post("/probe").send({}).expect(200);
+    expect(response.body).toEqual({ ok: true });
   });
 
   it("rejects AI middleware when auth is disabled", () => {
