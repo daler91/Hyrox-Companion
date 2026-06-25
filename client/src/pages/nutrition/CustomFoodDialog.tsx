@@ -68,6 +68,10 @@ function CustomFoodForm({
   const isPending = createFood.isPending || updateFood.isPending;
   const valid = name.trim().length > 0;
 
+  let saveLabel = "Save";
+  if (isPending) saveLabel = "Saving…";
+  else if (isCreate) saveLabel = "Save food";
+
   const submit = () => {
     if (!valid) return;
     const fields = {
@@ -219,7 +223,7 @@ function CustomFoodForm({
           data-testid="button-save-custom-food"
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
-          {isPending ? "Saving…" : isCreate ? "Save food" : "Save"}
+          {saveLabel}
         </Button>
       </DialogFooter>
     </>

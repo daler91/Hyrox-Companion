@@ -24,10 +24,17 @@ describe("Timeline Page", () => {
     });
 
     it("opens the AI coach panel when coach FAB is clicked", () => {
-      cy.visit("/");
+      // Skip onboarding before the app bootstraps so the wizard dialog doesn't
+      // scroll-lock the body (pointer-events: none), which would otherwise make
+      // the coach FAB un-clickable without forcing the interaction.
+      cy.visit("/", {
+        onBeforeLoad: (win) => {
+          win.localStorage.setItem("fitai-onboarding-complete", "true");
+        },
+      });
       cy.wait("@authUser");
       cy.wait("@timeline");
-      cy.getBySel("button-coach-fab").click({ force: true });
+      cy.getBySel("button-coach-fab").should("be.visible").click();
       cy.getBySel("input-chat-message").should("exist");
     });
   });

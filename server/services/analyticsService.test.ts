@@ -357,7 +357,7 @@ describe("calculateTrainingOverview", () => {
       makeWorkoutLog({ id: "w4", date: "2026-05-17" }),
       makeWorkoutLog({ id: "w5", date: "2026-05-11" }),
     ];
-    const result = calculateTrainingOverview(logs, [], undefined, 6);
+    const result = calculateTrainingOverview(logs, [], undefined, { weeklyGoal: 6 });
 
     expect(result.currentStreak).toBe(4);
     expect(result.weeklyCompletedWorkouts).toBe(3);

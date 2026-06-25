@@ -35,7 +35,7 @@ describe("AI Coach Panel", () => {
     cy.wait("@authUser");
     cy.wait("@timeline");
 
-    cy.getBySel("button-coach-fab").click({ force: true });
+    cy.getBySel("button-coach-fab").should("be.visible").click();
     // The chat input is only rendered once the panel is open, so this is a
     // tighter assertion than checking for the text "AI Coach" (which also
     // appears on the FAB itself).
@@ -47,7 +47,7 @@ describe("AI Coach Panel", () => {
     cy.wait("@authUser");
     cy.wait("@timeline");
 
-    cy.getBySel("button-coach-fab").click({ force: true });
+    cy.getBySel("button-coach-fab").should("be.visible").click();
     cy.get("[aria-label='Send message']").should("be.disabled");
   });
 
@@ -56,7 +56,7 @@ describe("AI Coach Panel", () => {
     cy.wait("@authUser");
     cy.wait("@timeline");
 
-    cy.getBySel("button-coach-fab").click({ force: true });
+    cy.getBySel("button-coach-fab").should("be.visible").click();
     // At least one of the base quick actions should be present.
     cy.contains(
       "button",

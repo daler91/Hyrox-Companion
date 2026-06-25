@@ -149,7 +149,8 @@ export class NutritionStorage {
     };
     // Wrap the OR-join in parens so the visibility AND below binds to the whole
     // group, not just the last variant (SQL AND binds tighter than OR).
-    const match = sql`(${sql.join(variants.map(variantMatch), sql` or `)})`;
+    const orSeparator = sql` or `;
+    const match = sql`(${sql.join(variants.map(variantMatch), orSeparator)})`;
 
     return db
       .select({ ...getTableColumns(foods), _localSim: sim })

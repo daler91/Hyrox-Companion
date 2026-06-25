@@ -281,21 +281,23 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
       workoutLogs,
       allSets,
       previousWorkoutLogs,
-      user?.weeklyGoal ?? 5,
-      loadTags,
       {
-        workoutLogs: loadWorkoutLogs,
-        exerciseSets: loadExerciseSets,
-        currentDate: loadCurrentDate,
-      },
-      user?.userTimezone,
-      user?.weightUnit ?? "kg",
-      {
-        age: user?.age ?? null,
-        gender: user?.gender ?? null,
-        restingHr: user?.restingHr ?? null,
-        maxHr: user?.maxHr ?? null,
-        ftp: user?.ftp ?? null,
+        weeklyGoal: user?.weeklyGoal ?? 5,
+        loadTags,
+        trainingLoadInput: {
+          workoutLogs: loadWorkoutLogs,
+          exerciseSets: loadExerciseSets,
+          currentDate: loadCurrentDate,
+        },
+        userTimezone: user?.userTimezone,
+        weightUnit: user?.weightUnit ?? "kg",
+        athlete: {
+          age: user?.age ?? null,
+          gender: user?.gender ?? null,
+          restingHr: user?.restingHr ?? null,
+          maxHr: user?.maxHr ?? null,
+          ftp: user?.ftp ?? null,
+        },
       },
     ));
   }));
