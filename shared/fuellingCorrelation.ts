@@ -61,8 +61,13 @@ function compareMetric(
   insufficientCode: string,
   reasonCodes: string[],
 ): FuellingMetricComparison | null {
-  const hit = days.filter((d) => d.hit).map((d) => d.value);
-  const miss = days.filter((d) => !d.hit).map((d) => d.value);
+  // Replaced chained .filter().map() with a single for...of loop to prevent intermediate array allocations
+  const hit: number[] = [];
+  const miss: number[] = [];
+  for (const d of days) {
+    if (d.hit) hit.push(d.value);
+    else miss.push(d.value);
+  }
   if (hit.length < MIN_DAYS_PER_BUCKET || miss.length < MIN_DAYS_PER_BUCKET) {
     if (days.length > 0) reasonCodes.push(insufficientCode);
     return null;
@@ -85,25 +90,31 @@ export function analyzeFuellingCorrelation(
 
   // Only days where "hit the carb target" is even defined, and something
   // measurable happened in training.
-  const eligible = days
-    .filter((d) => d.carbTargetG != null && d.carbTargetG > 0)
-    .filter((d) => d.avgRpe != null || d.compliancePct != null)
-    .map((d) => ({ ...d, hit: d.carbG >= CARB_HIT_RATIO * (d.carbTargetG as number) }));
+  // Replaced chained .filter().filter().map() with a single for...of loop to reduce garbage collection overhead
+  const eligible: (FuellingCorrelationDay & { hit: boolean })[] = [];
+  for (const d of days) {
+    if (
+      d.carbTargetG != null &&
+      d.carbTargetG > 0 &&
+      (d.avgRpe != null || d.compliancePct != null)
+    ) {
+      eligible.push({ ...d, hit: d.carbG >= CARB_HIT_RATIO * d.carbTargetG });
+    }
+  }
 
   if (eligible.length === 0) reasonCodes.push("no_eligible_days");
 
-  const rpe = compareMetric(
-    eligible
-      .filter((d) => d.avgRpe != null)
-      .map((d) => ({ hit: d.hit, value: d.avgRpe as number })),
-    round1,
-    "insufficient_rpe_days",
-    reasonCodes,
-  );
+  // Consolidated mapped metrics into a single pass to eliminate intermediate arrays
+  const rpeDays: { hit: boolean; value: number }[] = [];
+  const complianceDays: { hit: boolean; value: number }[] = [];
+  for (const d of eligible) {
+    if (d.avgRpe != null) rpeDays.push({ hit: d.hit, value: d.avgRpe });
+    if (d.compliancePct != null) complianceDays.push({ hit: d.hit, value: d.compliancePct });
+  }
+
+  const rpe = compareMetric(rpeDays, round1, "insufficient_rpe_days", reasonCodes);
   const compliance = compareMetric(
-    eligible
-      .filter((d) => d.compliancePct != null)
-      .map((d) => ({ hit: d.hit, value: d.compliancePct as number })),
+    complianceDays,
     Math.round,
     "insufficient_compliance_days",
     reasonCodes,
