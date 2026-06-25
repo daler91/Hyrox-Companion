@@ -462,21 +462,33 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
   return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, avgCompliancePct: null };
 }
 
-export function calculateTrainingOverview(
-  workoutLogs: WorkoutLog[],
-  exerciseSets: ExerciseSetWithDate[],
-  previousWorkoutLogs?: WorkoutLog[],
-  weeklyGoal = 5,
-  loadTags: ExerciseLoadTag[] = [],
+export interface TrainingOverviewOptions {
+  weeklyGoal?: number;
+  loadTags?: ExerciseLoadTag[];
   trainingLoadInput?: {
     workoutLogs?: WorkoutLog[];
     exerciseSets?: ExerciseSetWithDate[];
     currentDate?: string;
-  },
-  userTimezone = "UTC",
-  weightUnit = "kg",
-  athlete?: AthleteLoadContext,
+  };
+  userTimezone?: string;
+  weightUnit?: string;
+  athlete?: AthleteLoadContext;
+}
+
+export function calculateTrainingOverview(
+  workoutLogs: WorkoutLog[],
+  exerciseSets: ExerciseSetWithDate[],
+  previousWorkoutLogs?: WorkoutLog[],
+  options: TrainingOverviewOptions = {},
 ): TrainingOverview {
+  const {
+    weeklyGoal = 5,
+    loadTags = [],
+    trainingLoadInput,
+    userTimezone = "UTC",
+    weightUnit = "kg",
+    athlete,
+  } = options;
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
   const stationCoverage = buildStationCoverage(exerciseSets);

@@ -81,7 +81,7 @@ function carryReplacedPrescription(
 interface PreparedSuggestion {
   readonly suggestion: WorkoutSuggestion;
   readonly structuredSetRows?: InsertExerciseSet[];
-  readonly aiSourceOverride?: AutoCoachAiSource;
+  readonly aiSourceOverride?: Exclude<AutoCoachAiSource, undefined>;
   readonly requiresStructuredWrite?: boolean;
   readonly rationaleCode?: string;
   readonly focusOverride?: string;

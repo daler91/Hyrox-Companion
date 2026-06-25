@@ -51,6 +51,19 @@ vi.mock("../../services/analyticsService", () => ({
 }));
 
 describe("Analytics Routes", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    await resetRouteTestState();
+    vi.clearAllMocks();
+    env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
+    _cacheForTesting.clear();
+    _prCacheForTesting.clear();
+    _workoutLogCacheForTesting.clear();
+    vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5 });
+    vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
+    app = createTestApp(analyticsRouter);
+  });
 
   describe("todayUtcYyyyMmDd", () => {
     beforeEach(() => {
@@ -118,20 +131,6 @@ describe("Analytics Routes", () => {
       expect(validDate("2024-01-01")).toBe("2024-01-01");
       expect(validDate("2024-12-31")).toBe("2024-12-31");
     });
-  });
-
-  let app: express.Express;
-
-  beforeEach(async () => {
-    await resetRouteTestState();
-    vi.clearAllMocks();
-    env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
-    _cacheForTesting.clear();
-    _prCacheForTesting.clear();
-    _workoutLogCacheForTesting.clear();
-    vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5 });
-    vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
-    app = createTestApp(analyticsRouter);
   });
 
   const testInvalidDates = (endpoint: string) => {
@@ -214,6 +213,14 @@ describe("Analytics Routes", () => {
   describe("getExerciseSetsCoalesced caching logic", () => {
     const makeRequest = () => request(app).get("/api/v1/exercise-analytics");
 
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it("should coalesce concurrent requests to the database", async () => {
       type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>>;
       let resolvePromise: (value: ExerciseSetWithDate) => void;
@@ -243,14 +250,6 @@ describe("Analytics Routes", () => {
       expect(res3.status).toBe(200);
 
       expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
-    });
-
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
     });
 
     it("should coalesce sequential requests within the 5-minute TTL", async () => {
@@ -379,16 +378,17 @@ describe("Analytics Routes", () => {
         expect.any(Array),
         expect.arrayContaining([expect.objectContaining({ exerciseName: "SkiErg" })]),
         undefined,
-        5,
-        [],
         expect.objectContaining({
-          workoutLogs: expect.any(Array),
-          exerciseSets: expect.any(Array),
-          currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          weeklyGoal: 5,
+          loadTags: [],
+          trainingLoadInput: expect.objectContaining({
+            workoutLogs: expect.any(Array),
+            exerciseSets: expect.any(Array),
+            currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          }),
+          weightUnit: "kg",
+          athlete: { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
         }),
-        undefined,
-        "kg",
-        { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
       );
     });
     it("should pass date params to storage", async () => {
@@ -448,16 +448,17 @@ describe("Analytics Routes", () => {
         [],
         [],
         undefined,
-        7,
-        [],
         expect.objectContaining({
-          workoutLogs: [],
-          exerciseSets: [],
-          currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          weeklyGoal: 7,
+          loadTags: [],
+          trainingLoadInput: expect.objectContaining({
+            workoutLogs: [],
+            exerciseSets: [],
+            currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          }),
+          weightUnit: "kg",
+          athlete: { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
         }),
-        undefined,
-        "kg",
-        { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
       );
     });
 
@@ -469,8 +470,8 @@ describe("Analytics Routes", () => {
 
       await request(app).get("/api/v1/training-overview");
 
-      // weightUnit is the 8th positional arg into calculateTrainingOverview.
-      expect(vi.mocked(calculateTrainingOverview).mock.calls[0][7]).toBe("lbs");
+      // weightUnit is nested in the options object (4th arg) to calculateTrainingOverview.
+      expect(vi.mocked(calculateTrainingOverview).mock.calls[0][3]?.weightUnit).toBe("lbs");
     });
 
     testInvalidDates("/api/v1/training-overview");

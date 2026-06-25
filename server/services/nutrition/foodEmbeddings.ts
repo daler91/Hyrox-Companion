@@ -27,7 +27,8 @@ const CANDIDATE_SCAN_LIMIT = 5000;
 
 /** The text embedded for a food: its name plus brand (brand disambiguates products). */
 export function foodEmbeddingText(food: { name: string; brand: string | null }): string {
-  return `${food.name}${food.brand ? ` ${food.brand}` : ""}`.trim();
+  const brandSuffix = food.brand ? ` ${food.brand}` : "";
+  return `${food.name}${brandSuffix}`.trim();
 }
 
 /** Stable hash of the embedded text, so the backfill can skip unchanged foods. */
