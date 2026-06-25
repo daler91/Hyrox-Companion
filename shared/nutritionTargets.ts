@@ -306,6 +306,78 @@ export function effectiveTarget(
   return effectiveTargetWindowed(base, singleDayWindow(dayUtss), config);
 }
 
+/** Base load — today's actual demand vs the reference (the original single-day
+ *  behaviour), damped during taper. Returns the "taper" reason when damping fires. */
+function computeBaseLoad(
+  window: TrainingLoadWindow,
+  config: PeriodizationConfig,
+  slope: number,
+  reference: number,
+): { raw: number; reason: string | null } {
+  let raw = (window.dayUtss - reference) * slope;
+  if (config.phaseAware && window.phase === "taper" && raw > 0) {
+    raw *= TAPER_LOAD_DAMP;
+    return { raw, reason: "taper" };
+  }
+  return { raw, reason: null };
+}
+
+/** Recovery (past) — replace glycogen + repair after hard recent days, plus an
+ *  optional protein bump scaled by how depleted/fatigued the day is. */
+function computeRecovery(
+  window: TrainingLoadWindow,
+  config: PeriodizationConfig,
+  baseProteinG: number | null,
+  slope: number,
+  reference: number,
+): { raw: number; proteinDeltaG: number; reason: string | null } {
+  if (!config.recoveryEnabled) return { raw: 0, proteinDeltaG: 0, reason: null };
+  const recentAvg = window.recentLoads.length
+    ? mean(window.recentLoads)
+    : window.acuteEwma ?? window.dayUtss;
+  const recoveryGap = Math.max(0, recentAvg - window.dayUtss);
+  const tsbFatigue =
+    window.tsb != null && window.tsb < 0 ? clamp01(-window.tsb / TSB_FATIGUE_SCALE) : 0;
+  const recoveryIntensity = clamp01(
+    recoveryGap / Math.max(reference, recentAvg, 1) + tsbFatigue * 0.5,
+  );
+  const raw = recoveryGap * slope * RECOVERY_CARB_FACTOR;
+  let proteinDeltaG = 0;
+  if (baseProteinG != null) {
+    const bumpFrac = config.recoveryProteinBumpFrac ?? DEFAULT_RECOVERY_PROTEIN_BUMP_FRAC;
+    proteinDeltaG = round1(bumpFrac * baseProteinG * recoveryIntensity);
+  }
+  const reason = raw > 0 || proteinDeltaG > 0 ? "recovery_topup" : null;
+  return { raw, proteinDeltaG, reason };
+}
+
+/** Pre-load (future) — fuel ahead of imminent big sessions (proximity-weighted) and
+ *  carb-load through race week. Reasons returned in emit order: carb_preload, race_week. */
+function computePreload(
+  window: TrainingLoadWindow,
+  config: PeriodizationConfig,
+  baseCarbG: number,
+  reference: number,
+): { raw: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let raw = 0;
+  const preloadSlope = config.preloadCarbGramsPerUtss ?? 0;
+  const horizon = config.preloadDaysAhead ?? 1;
+  if (preloadSlope > 0) {
+    for (const u of window.upcoming) {
+      if (u.daysAhead < 1 || u.daysAhead > horizon) continue;
+      const proximity = 1 / u.daysAhead; // the nearer the session, the more we load
+      raw += Math.max(0, u.plannedUtss - reference) * preloadSlope * proximity;
+    }
+    if (raw > 0) reasons.push("carb_preload");
+  }
+  if (config.phaseAware && window.phase === "race_week") {
+    raw += RACE_WEEK_CARB_LOAD_FRAC * baseCarbG;
+    reasons.push("race_week");
+  }
+  return { raw, reasons };
+}
+
 /**
  * Training-aware effective target: blend today's load (base), recovery from
  * recent ACTUAL load (past), and pre-loading for upcoming PLANNED load + plan
@@ -336,66 +408,33 @@ export function effectiveTargetWindowed(
     };
   }
 
-  const reasonCodes: string[] = [];
   const { referenceUtss: reference, carbGramsPerUtss: slope } = config;
 
-  // Base load — today's actual demand (the original single-day behaviour).
-  let baseLoadRaw = (window.dayUtss - reference) * slope;
-  if (config.phaseAware && window.phase === "taper" && baseLoadRaw > 0) {
-    baseLoadRaw *= TAPER_LOAD_DAMP;
-    reasonCodes.push("taper");
-  }
+  // Each window dimension contributes an un-scaled raw carb delta and its own
+  // reason code(s); recovery also yields the protein bump.
+  const baseLoad = computeBaseLoad(window, config, slope, reference);
+  const recovery = computeRecovery(window, config, base.proteinG, slope, reference);
+  const preload = computePreload(window, config, base.carbG, reference);
+  const proteinDeltaG = recovery.proteinDeltaG;
 
-  // Recovery (past) — replace glycogen + repair after hard recent days.
-  let recoveryRaw = 0;
-  let proteinDeltaG = 0;
-  if (config.recoveryEnabled) {
-    const recentAvg = window.recentLoads.length
-      ? mean(window.recentLoads)
-      : window.acuteEwma ?? window.dayUtss;
-    const recoveryGap = Math.max(0, recentAvg - window.dayUtss);
-    const tsbFatigue =
-      window.tsb != null && window.tsb < 0 ? clamp01(-window.tsb / TSB_FATIGUE_SCALE) : 0;
-    const recoveryIntensity = clamp01(
-      recoveryGap / Math.max(reference, recentAvg, 1) + tsbFatigue * 0.5,
-    );
-    recoveryRaw = recoveryGap * slope * RECOVERY_CARB_FACTOR;
-    if (base.proteinG != null) {
-      const bumpFrac = config.recoveryProteinBumpFrac ?? DEFAULT_RECOVERY_PROTEIN_BUMP_FRAC;
-      proteinDeltaG = round1(bumpFrac * base.proteinG * recoveryIntensity);
-    }
-    if (recoveryRaw > 0 || proteinDeltaG > 0) reasonCodes.push("recovery_topup");
-  }
-
-  // Pre-load (future) — fuel ahead of imminent big sessions and the race.
-  let preloadRaw = 0;
-  const preloadSlope = config.preloadCarbGramsPerUtss ?? 0;
-  const horizon = config.preloadDaysAhead ?? 1;
-  if (preloadSlope > 0) {
-    for (const u of window.upcoming) {
-      if (u.daysAhead < 1 || u.daysAhead > horizon) continue;
-      const proximity = 1 / u.daysAhead; // the nearer the session, the more we load
-      preloadRaw += Math.max(0, u.plannedUtss - reference) * preloadSlope * proximity;
-    }
-    if (preloadRaw > 0) reasonCodes.push("carb_preload");
-  }
-  if (config.phaseAware && window.phase === "race_week") {
-    preloadRaw += RACE_WEEK_CARB_LOAD_FRAC * base.carbG;
-    reasonCodes.push("race_week");
-  }
+  // Order matters: taper, recovery_topup, carb_preload, race_week, then the
+  // post-combine capped/floored codes pushed below.
+  const reasonCodes = [baseLoad.reason, recovery.reason, ...preload.reasons].filter(
+    (r): r is string => r != null,
+  );
 
   // Combine, floor carbs at 0, cap the positive addition, and keep the component
   // deltas summing to the applied total so the UI breakdown stays honest.
-  const rawSum = baseLoadRaw + recoveryRaw + preloadRaw;
+  const rawSum = baseLoad.raw + recovery.raw + preload.raw;
   const cap = config.maxCarbDeltaG ?? Number.POSITIVE_INFINITY;
   if (cap !== Number.POSITIVE_INFINITY && rawSum > cap) reasonCodes.push("carb_delta_capped");
   const appliedDelta = Math.max(-base.carbG, Math.min(cap, rawSum));
   if (appliedDelta < rawSum && rawSum < 0) reasonCodes.push("carbs_floored");
   const scale = rawSum !== 0 ? appliedDelta / rawSum : 0;
 
-  const baseLoadDeltaG = round1(baseLoadRaw * scale);
-  const recoveryDeltaG = round1(recoveryRaw * scale);
-  const preloadDeltaG = round1(preloadRaw * scale);
+  const baseLoadDeltaG = round1(baseLoad.raw * scale);
+  const recoveryDeltaG = round1(recovery.raw * scale);
+  const preloadDeltaG = round1(preload.raw * scale);
   const carbDeltaG = round1(baseLoadDeltaG + recoveryDeltaG + preloadDeltaG);
   const newCarbG = Math.max(0, round1(base.carbG + carbDeltaG));
 

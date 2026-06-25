@@ -237,6 +237,48 @@ function allocateCarbs(
   return { map, anchorExceeds };
 }
 
+/** Bodyweight-anchored protein when no daily protein target is set (each meal gets
+ *  a g/kg-derived share; the recovery meal is lifted to the post floor). */
+function allocateProteinFallback(
+  map: Map<MealType, number>,
+  recovery: MealType | null,
+  floor: number,
+  bodyweightKg: number | null,
+  eatingMeals: MealType[],
+): { map: Map<MealType, number>; floorBound: boolean } {
+  const perMeal =
+    bodyweightKg && bodyweightKg > 0
+      ? clamp(
+          Math.round(bodyweightKg * PROTEIN_G_PER_KG_PER_MEAL),
+          PROTEIN_PER_MEAL_MIN_G,
+          PROTEIN_PER_MEAL_MAX_G,
+        )
+      : PROTEIN_PER_MEAL_FALLBACK_G;
+  for (const meal of eatingMeals) map.set(meal, perMeal);
+  if (recovery) map.set(recovery, Math.max(perMeal, floor));
+  return { map, floorBound: recovery != null && floor > perMeal };
+}
+
+/** Even split of the daily protein target; when the post floor exceeds the even
+ *  share, the recovery meal takes the floor and the rest re-divides the remainder. */
+function allocateProteinFromDaily(
+  map: Map<MealType, number>,
+  recovery: MealType | null,
+  floor: number,
+  dailyProteinG: number,
+  eatingMeals: MealType[],
+): { map: Map<MealType, number>; floorBound: boolean } {
+  const even = round1(dailyProteinG / eatingMeals.length);
+  if (recovery != null && floor > even) {
+    map.set(recovery, floor);
+    const rest = round1((dailyProteinG - floor) / (eatingMeals.length - 1));
+    for (const meal of eatingMeals) if (meal !== recovery) map.set(meal, Math.max(0, rest));
+    return { map, floorBound: true };
+  }
+  for (const meal of eatingMeals) map.set(meal, even);
+  return { map, floorBound: false };
+}
+
 function allocateProtein(
   dailyProteinG: number | null,
   session: MealFuelSessionAnchor | null,
@@ -250,30 +292,9 @@ function allocateProtein(
   const recovery = plan?.recoveryMeal ?? null;
   const floor = plan != null && session != null && recovery ? Math.max(0, round1(session.postProteinG)) : 0;
 
-  if (dailyProteinG == null) {
-    const perMeal =
-      bodyweightKg && bodyweightKg > 0
-        ? clamp(
-            Math.round(bodyweightKg * PROTEIN_G_PER_KG_PER_MEAL),
-            PROTEIN_PER_MEAL_MIN_G,
-            PROTEIN_PER_MEAL_MAX_G,
-          )
-        : PROTEIN_PER_MEAL_FALLBACK_G;
-    for (const meal of eatingMeals) map.set(meal, perMeal);
-    if (recovery) map.set(recovery, Math.max(perMeal, floor));
-    return { map, floorBound: recovery != null && floor > perMeal };
-  }
-
-  const even = round1(dailyProteinG / eatingMeals.length);
-  const floorBound = recovery != null && floor > even;
-  if (floorBound) {
-    map.set(recovery, floor);
-    const rest = round1((dailyProteinG - floor) / (eatingMeals.length - 1));
-    for (const meal of eatingMeals) if (meal !== recovery) map.set(meal, Math.max(0, rest));
-  } else {
-    for (const meal of eatingMeals) map.set(meal, even);
-  }
-  return { map, floorBound };
+  return dailyProteinG == null
+    ? allocateProteinFallback(map, recovery, floor, bodyweightKg, eatingMeals)
+    : allocateProteinFromDaily(map, recovery, floor, dailyProteinG, eatingMeals);
 }
 
 function allocateFat(
@@ -316,6 +337,84 @@ function buildRationale(
   }
 }
 
+/** The session-timing-derived context for a day: which meals are the pre/recovery
+ *  meals, whether a fasted pre slot is warranted, and whether it's a workout day. */
+interface WorkoutContext {
+  plan: TimingPlan | null;
+  session: MealFuelSessionAnchor | null;
+  hasPreSlot: boolean;
+  isWorkout: boolean;
+  recovery: MealType | null;
+  preMeal: MealType | null;
+}
+
+/** A workout day needs the flag, the session anchors, and a timing with a plan;
+ *  otherwise we degrade gracefully to a rest-day split (plan == null). */
+function resolveWorkoutContext(input: MealFuelInput): WorkoutContext {
+  const plan = input.hasWorkout && input.session != null ? resolveTimingPlan(input.workoutTiming) : null;
+  const session = plan != null ? input.session : null;
+  const hasPreSlot = plan != null && plan.preSlot && session != null && session.preCarbG > 0;
+  return {
+    plan,
+    session,
+    hasPreSlot,
+    isWorkout: plan != null,
+    recovery: plan?.recoveryMeal ?? null,
+    preMeal: plan?.preMeal ?? null,
+  };
+}
+
+/** The active meal slots (render order) and their roles. Recovery wins over the
+ *  flex role when they land on the same meal (it is assigned last). */
+function buildMealRoles(
+  eatingMeals: MealType[],
+  flexMeal: MealType,
+  hasPreSlot: boolean,
+  recovery: MealType | null,
+): { activeMeals: MealType[]; roles: Map<MealType, MealRole> } {
+  const activeMeals: MealType[] = [
+    ...(hasPreSlot ? (["pre_workout"] as MealType[]) : []),
+    ...eatingMeals,
+  ];
+  const roles = new Map<MealType, MealRole>();
+  if (hasPreSlot) roles.set("pre_workout", "pre_workout_fast_carbs");
+  for (const meal of eatingMeals) roles.set(meal, "standard");
+  roles.set(flexMeal, "flex_remainder");
+  if (recovery) roles.set(recovery, "post_workout_recovery");
+  return { activeMeals, roles };
+}
+
+/** Transparency flags that drive a meal's reason codes (per-day, not per-meal). */
+interface MealReasonFlags {
+  isWorkout: boolean;
+  floorBound: boolean;
+  anchorExceeds: boolean;
+  carbClamped: boolean;
+  usedBodyweightFallback: boolean;
+}
+
+/** Machine-readable reason codes for a meal, in a stable display order. A fresh
+ *  array per call (callers later spread it, so meals must not share one instance). */
+function buildMealReasonCodes(role: MealRole, isPreMeal: boolean, flags: MealReasonFlags): string[] {
+  const isRecovery = role === "post_workout_recovery";
+  const isAnchorRole = role === "pre_workout_fast_carbs" || isRecovery;
+  const isStandardSplit = role === "standard" && !isPreMeal;
+  // [condition, code] in the exact order the codes are emitted.
+  const candidates: Array<[boolean, string]> = [
+    [role === "pre_workout_fast_carbs", "pre_workout_fuel"],
+    [isRecovery, "post_workout_recovery"],
+    [isRecovery && flags.floorBound, "post_protein_floor"],
+    [flags.anchorExceeds && isAnchorRole, "carbs_anchor_exceeds_daily"],
+    [isPreMeal, "pre_session_carbs"],
+    [isStandardSplit && flags.isWorkout, "standard_split"],
+    [isStandardSplit && !flags.isWorkout, "rest_day_even"],
+    [role === "flex_remainder", "flex_remainder"],
+    [role === "flex_remainder" && flags.carbClamped, "reconcile_clamped"],
+    [flags.usedBodyweightFallback, "no_bodyweight_defaults"],
+  ];
+  return candidates.filter(([cond]) => cond).map(([, code]) => code);
+}
+
 /**
  * Distribute the day's effective daily target across meal slots. Returns null
  * when no daily target is set (nothing to distribute), mirroring how the daily
@@ -338,25 +437,8 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
   const eatingMeals = resolveEatingMeals(input.mealSchedule ?? DEFAULT_MEAL_SCHEDULE);
   const flexMeal = resolveFlexMeal(eatingMeals);
 
-  // A workout day needs the flag, the session anchors, and a timing with a plan;
-  // otherwise we degrade gracefully to a rest-day split.
-  const plan = input.hasWorkout && input.session != null ? resolveTimingPlan(input.workoutTiming) : null;
-  const session = plan != null ? input.session : null;
-  const hasPreSlot = plan != null && plan.preSlot && session != null && session.preCarbG > 0;
-  const recovery = plan?.recoveryMeal ?? null;
-  const preMeal = plan?.preMeal ?? null;
-  const isWorkout = plan != null;
-
-  const activeMeals: MealType[] = [
-    ...(hasPreSlot ? (["pre_workout"] as MealType[]) : []),
-    ...eatingMeals,
-  ];
-
-  const roles = new Map<MealType, MealRole>();
-  if (hasPreSlot) roles.set("pre_workout", "pre_workout_fast_carbs");
-  for (const meal of eatingMeals) roles.set(meal, "standard");
-  roles.set(flexMeal, "flex_remainder");
-  if (recovery) roles.set(recovery, "post_workout_recovery");
+  const { plan, session, hasPreSlot, isWorkout, recovery, preMeal } = resolveWorkoutContext(input);
+  const { activeMeals, roles } = buildMealRoles(eatingMeals, flexMeal, hasPreSlot, recovery);
 
   const noMacros = daily.proteinG == null && daily.carbG == null && daily.fatG == null;
   if (noMacros) {
@@ -393,30 +475,19 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
     const role = roles.get(meal) ?? "standard";
     const isPreMeal = preMeal != null && meal === preMeal;
 
-    const reasonCodes: string[] = [];
-    if (role === "pre_workout_fast_carbs") reasonCodes.push("pre_workout_fuel");
-    if (role === "post_workout_recovery") {
-      reasonCodes.push("post_workout_recovery");
-      if (floorBound) reasonCodes.push("post_protein_floor");
-    }
-    if (anchorExceeds && (role === "pre_workout_fast_carbs" || role === "post_workout_recovery")) {
-      reasonCodes.push("carbs_anchor_exceeds_daily");
-    }
-    if (isPreMeal) reasonCodes.push("pre_session_carbs");
-    if (role === "standard" && !isPreMeal) reasonCodes.push(isWorkout ? "standard_split" : "rest_day_even");
-    if (role === "flex_remainder") {
-      reasonCodes.push("flex_remainder");
-      if (carbClamped) reasonCodes.push("reconcile_clamped");
-    }
-    if (usedBodyweightFallback) reasonCodes.push("no_bodyweight_defaults");
-
     out[meal] = {
       calories,
       carbG,
       proteinG,
       fatG,
       role,
-      reasonCodes,
+      reasonCodes: buildMealReasonCodes(role, isPreMeal, {
+        isWorkout,
+        floorBound,
+        anchorExceeds,
+        carbClamped,
+        usedBodyweightFallback,
+      }),
       rationale: buildRationale(role, { carbG, proteinG, calories }, isPreMeal),
     };
   }
