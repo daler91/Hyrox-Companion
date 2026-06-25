@@ -281,16 +281,60 @@ function setMinutes(
   return MINUTES_PER_SET;
 }
 
+/** The higher of an accumulating max (null until the first sample) and a candidate. */
+function higherRpe(current: number | null, candidate: number): number {
+  return current === null || candidate > current ? candidate : current;
+}
+
 /** Session RPE from the most intense planned set, or null when nothing is recognizable. */
 function setsRpe(sets: readonly PlannedSessionSet[]): number | null {
-  let maxRpe: number | null = null;
+  let max: number | null = null;
   for (const set of sets) {
     const rpe = resolveRpe(set.exerciseName);
-    if (rpe != null && (maxRpe === null || rpe > maxRpe)) {
-      maxRpe = rpe;
-    }
+    if (rpe != null) max = higherRpe(max, rpe);
   }
-  return maxRpe;
+  return max;
+}
+
+/** Estimated duration (min) + its source: structured block timing when present, else
+ *  summed per-set estimates, else none. Clamped to the sane range. */
+function estimateDuration(
+  blocks: readonly PlannedSessionBlock[],
+  sets: readonly PlannedSessionSet[],
+  distanceUnit: string | null | undefined,
+  runPaceRatio: number,
+): { durationMin: number | null; source: PlannedSessionEstimate["source"] } {
+  let blockTotal = 0;
+  for (const b of blocks) blockTotal += blockMinutes(b);
+  if (blockTotal > 0) {
+    return {
+      durationMin: clamp(Math.round(blockTotal), MIN_DURATION_MIN, MAX_DURATION_MIN),
+      source: "structure",
+    };
+  }
+  if (sets.length > 0) {
+    let setTimeMin = 0;
+    for (const s of sets) setTimeMin += setMinutes(s, distanceUnit, runPaceRatio);
+    return {
+      durationMin: clamp(Math.round(setTimeMin), MIN_DURATION_MIN, MAX_DURATION_MIN),
+      source: "sets",
+    };
+  }
+  return { durationMin: null, source: "none" };
+}
+
+/** Block-derived session RPE: the hardest "main" block format, else the hardest of
+ *  any block, or null when no block format implies intensity. */
+function blocksRpe(blocks: readonly PlannedSessionBlock[]): number | null {
+  let maxMainRpe: number | null = null;
+  let maxAnyRpe: number | null = null;
+  for (const block of blocks) {
+    const rpe = formatRpe(block.formatType);
+    if (rpe == null) continue;
+    maxAnyRpe = higherRpe(maxAnyRpe, rpe);
+    if (block.sectionType === "main") maxMainRpe = higherRpe(maxMainRpe, rpe);
+  }
+  return maxMainRpe !== null ? maxMainRpe : maxAnyRpe;
 }
 
 export function estimatePlannedSession(input: PlannedSessionEstimateInput): PlannedSessionEstimate {
@@ -299,46 +343,11 @@ export function estimatePlannedSession(input: PlannedSessionEstimateInput): Plan
   const distanceUnit = input.distanceUnit ?? "km";
   const runPaceRatio = normalizeRunPaceRatio(input.runPaceRatio);
 
-  // --- Duration: prefer structured block timing, else estimate from sets. ---
-  let blockTotal = 0;
-  for (const b of blocks) {
-    blockTotal += blockMinutes(b);
-  }
+  // Duration: prefer structured block timing, else estimate from sets.
+  const { durationMin, source } = estimateDuration(blocks, sets, distanceUnit, runPaceRatio);
 
-  let durationMin: number | null = null;
-  let source: PlannedSessionEstimate["source"] = "none";
-  if (blockTotal > 0) {
-    durationMin = clamp(Math.round(blockTotal), MIN_DURATION_MIN, MAX_DURATION_MIN);
-    source = "structure";
-  } else if (sets.length > 0) {
-    let setTimeMin = 0;
-    for (const s of sets) {
-      setTimeMin += setMinutes(s, distanceUnit, runPaceRatio);
-    }
-    durationMin = clamp(Math.round(setTimeMin), MIN_DURATION_MIN, MAX_DURATION_MIN);
-    source = "sets";
-  }
-
-  // --- Intensity: hardest "main" block format, else hardest of any block, else from sets. ---
-  let maxMainRpe: number | null = null;
-  let maxAnyRpe: number | null = null;
-
-  for (const block of blocks) {
-    const rpe = formatRpe(block.formatType);
-    if (rpe != null) {
-      if (maxAnyRpe === null || rpe > maxAnyRpe) {
-        maxAnyRpe = rpe;
-      }
-      if (block.sectionType === "main") {
-        if (maxMainRpe === null || rpe > maxMainRpe) {
-          maxMainRpe = rpe;
-        }
-      }
-    }
-  }
-
-  const blockRpe = maxMainRpe !== null ? maxMainRpe : maxAnyRpe;
-  const rpe = blockRpe ?? setsRpe(sets);
+  // Intensity: hardest "main" block format, else hardest of any block, else from sets.
+  const rpe = blocksRpe(blocks) ?? setsRpe(sets);
 
   return { durationMin, rpe, source };
 }

@@ -253,6 +253,32 @@ interface SegmentSetMetrics {
   mostRecent: string | null;
 }
 
+/** Append a value to the array bucketed under `key`, creating the bucket as needed. */
+function pushToBucket<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const bucket = map.get(key);
+  if (bucket) bucket.push(value);
+  else map.set(key, [value]);
+}
+
+/**
+ * Projected full-station split time (seconds) for one logged set, or null when the
+ * set carries no usable time, or its effort is too far from the full station to
+ * trust (the caller drops it). Bundles the time-validity guard with the projection
+ * so the accumulation loop stays flat.
+ */
+function projectedSplitSeconds(
+  set: LoggedExerciseSetWithDate,
+  target: SegmentTarget,
+  distanceUnit: string,
+  exponent: number,
+): number | null {
+  if (set.time == null || !Number.isFinite(set.time)) return null;
+  const factor = projectionFactor(set, target, distanceUnit, exponent);
+  // null → effort too far from the full station to trust; drop this split.
+  if (factor == null) return null;
+  return set.time * 60 * factor;
+}
+
 function accumulateSetMetrics(
   sets: LoggedExerciseSetWithDate[],
   target: SegmentTarget,
@@ -270,16 +296,10 @@ function accumulateSetMetrics(
   let bestSeconds: number | null = null;
 
   for (const set of sets) {
-    if (set.time != null && Number.isFinite(set.time)) {
-      const factor = projectionFactor(set, target, distanceUnit, exponent);
-      // null → effort too far from the full station to trust; drop this split.
-      if (factor != null) {
-        const seconds = set.time * 60 * factor;
-        const bucket = sessionSplits.get(set.workoutLogId);
-        if (bucket) bucket.push(seconds);
-        else sessionSplits.set(set.workoutLogId, [seconds]);
-        if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
-      }
+    const seconds = projectedSplitSeconds(set, target, distanceUnit, exponent);
+    if (seconds != null) {
+      pushToBucket(sessionSplits, set.workoutLogId, seconds);
+      if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
       loads.push(set.weight);
@@ -351,9 +371,7 @@ export function buildRacePredictionFeatures(
   for (const set of sets) {
     const canonical = normalizeExerciseName(set.exerciseName);
     if (!canonical) continue;
-    const bucket = byExercise.get(canonical);
-    if (bucket) bucket.push(set);
-    else byExercise.set(canonical, [set]);
+    pushToBucket(byExercise, canonical, set);
   }
 
   const runFeature = buildSegmentFeature(
