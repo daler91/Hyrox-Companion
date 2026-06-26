@@ -74,15 +74,19 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
           className="min-h-11 md:min-h-8"
           onClick={onApply}
           disabled={isApplying}
+          aria-busy={isApplying}
           data-testid={`button-apply-${suggestion.workoutId}`}
         >
           {isApplying ? (
-            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            <Loader2 className="h-3 w-3 animate-spin mr-1" aria-hidden="true" />
           ) : (
-            <Check className="h-3 w-3 mr-1" />
+            <Check className="h-3 w-3 mr-1" aria-hidden="true" />
           )}
-          Apply
+          {isApplying ? "Applying…" : "Apply"}
         </Button>
+        <span role="status" aria-live="polite" className="sr-only">
+          {isApplying ? "Applying coaching suggestion" : ""}
+        </span>
         <Button
           size="sm"
           variant="ghost"
