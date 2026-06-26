@@ -76,18 +76,15 @@ function RecipeBuilderForm({
   const servingsNum = Number(servings);
   const valid = name.trim().length > 0 && ingredients.length > 0 && servingsNum > 0;
 
-  const totals = ingredients.reduce<NutritionMacroTotals>(
-    (acc, ing) => {
-      const factor = ing.quantityG / 100;
-      acc.calories += ing.per100.calories * factor;
-      acc.protein += ing.per100.protein * factor;
-      acc.carb += ing.per100.carb * factor;
-      acc.fat += ing.per100.fat * factor;
-      acc.fiber += ing.per100.fiber * factor;
-      return acc;
-    },
-    { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 },
-  );
+  const totals: NutritionMacroTotals = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
+  for (const ing of ingredients) {
+    const factor = ing.quantityG / 100;
+    totals.calories += ing.per100.calories * factor;
+    totals.protein += ing.per100.protein * factor;
+    totals.carb += ing.per100.carb * factor;
+    totals.fat += ing.per100.fat * factor;
+    totals.fiber += ing.per100.fiber * factor;
+  }
   const divisor = servingsNum > 0 ? servingsNum : 1;
 
   const addFood = (food: Food) => {
