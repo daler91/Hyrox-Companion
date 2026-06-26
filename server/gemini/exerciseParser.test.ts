@@ -287,6 +287,72 @@ describe("parseExercisesFromText", () => {
     expect(result.some((r) => (r.missingFields ?? []).some((f) => f.includes("Heuristic fallback parser")))).toBe(true);
   });
 
+  it("parses a full Hyrox circuit via the heuristic fallback when the AI returns no rows", async () => {
+    // The AI contributes nothing (valid JSON, empty list). The deterministic
+    // fallback must still recover every run and station from the source text —
+    // this is the guarantee for the "couldn't parse exercises" Hyrox report.
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce({ text: JSON.stringify([]) });
+
+    const hyrox = [
+      "1000m Run",
+      "1000m SkiErg",
+      "1000m Run",
+      "50m Sled Push",
+      "1000m Run",
+      "50m Sled Pull",
+      "1000m Run",
+      "80m Burpee Broad Jump",
+      "1000m Run",
+      "1000m Row",
+      "1000m Run",
+      "200m Farmers Carry",
+      "1000m Run",
+      "100m Sandbag Lunges",
+      "1000m Run",
+      "100 Wall Balls",
+    ].join("\n");
+
+    const result = await parseExercisesFromText(hyrox);
+
+    expect(result).toHaveLength(16);
+    expect(result.filter((r) => r.exerciseName === "run_1k")).toHaveLength(8);
+    // Stations resolve to their canonical functional keys, in race order.
+    const stations = result.filter((r) => r.exerciseName !== "run_1k").map((r) => r.exerciseName);
+    expect(stations).toEqual([
+      "skierg",
+      "sled_push",
+      "sled_pull",
+      "burpee_broad_jump",
+      "rowing",
+      "farmers_carry",
+      "sandbag_lunges",
+      "wall_balls",
+    ]);
+    // Runs carry distance (1000m), wall balls carry reps (100).
+    expect(result[0].exerciseName).toBe("run_1k");
+    expect(result[0].category).toBe("running");
+    expect(result[0].sets[0].distance).toBe(1000);
+    const wallBalls = result.find((r) => r.exerciseName === "wall_balls");
+    expect(wallBalls?.category).toBe("functional");
+    expect(wallBalls?.sets[0].reps).toBe(100);
+    // Every recovered row is flagged as heuristic so the UI can prompt review.
+    expect(
+      result.every((r) => (r.missingFields ?? []).some((f) => f.includes("Heuristic fallback parser"))),
+    ).toBe(true);
+  });
+
+  it("recovers a Hyrox circuit from source text when the AI returns invalid JSON", async () => {
+    // A truncated/garbled AI response used to hard-fail with a 502; it now falls
+    // back to the heuristic parser instead of throwing when recovery is possible.
+    vi.mocked(retryWithBackoff).mockResolvedValueOnce({ text: "{ not valid json" });
+
+    const hyrox = ["1000m Run", "50m Sled Push", "100 Wall Balls"].join("\n");
+    const result = await parseExercisesFromText(hyrox);
+
+    expect(result).toHaveLength(3);
+    expect(result.map((r) => r.exerciseName)).toEqual(["run_1k", "sled_push", "wall_balls"]);
+  });
+
   it("should fall back to source text when customLabel and exerciseName are both 'custom'", async () => {
     const mockResponse = {
       text: JSON.stringify([

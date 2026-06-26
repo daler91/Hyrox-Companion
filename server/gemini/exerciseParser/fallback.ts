@@ -1,4 +1,5 @@
-import { VALID_EXERCISE_NAMES } from "../../prompts";
+import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
+
 import { sanitizeLabel } from "./mapping";
 
 const HEURISTIC_CHUNK_SPLIT_PATTERN = /[.;\n]+/;
@@ -9,7 +10,9 @@ interface HeuristicFallbackCandidate {
   name: string;
   sets: number;
   value: number;
-  valueKind: "reps" | "time";
+  valueKind: "reps" | "time" | "distance" | "weight";
+  distanceUnit?: string;
+  weightUnit?: string;
 }
 
 interface HeuristicLead {
@@ -23,20 +26,47 @@ interface HeuristicSetExpression {
   endIndex: number;
 }
 
+// Hyrox / erg movements whose common phrasing the shared exercise normalizer
+// does not alias on its own — bare "run"/"row", spaced "ski erg", and a few
+// singular/plural variants. Scoped to this fallback because these mappings are
+// only safe to assume inside a functional-fitness workout paste.
+const FALLBACK_EXERCISE_ALIASES: Record<string, string> = {
+  run: "run_1k",
+  runs: "run_1k",
+  running: "run_1k",
+  row: "rowing",
+  rows: "rowing",
+  ski: "skierg",
+  ski_erg: "skierg",
+  burpee_broad_jumps: "burpee_broad_jump",
+  wall_ball: "wall_balls",
+  sandbag_lunge: "sandbag_lunges",
+  squat: "back_squat",
+  squats: "back_squat",
+};
+
+function normalizeToken(label: string): string {
+  // Collapse every run of non-alphanumerics to a single "_", then strip a lone
+  // leading/trailing "_" with slices rather than an anchored `_+` regex — the
+  // latter is polynomial-backtracking on attacker-controlled text (CodeQL).
+  let token = label.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "_");
+  if (token.startsWith("_")) token = token.slice(1);
+  if (token.endsWith("_")) token = token.slice(0, -1);
+  return token;
+}
+
 function canonicalExerciseName(label: string): string {
-  const normalized = sanitizeLabel(label).toLowerCase().replaceAll(/\s+/g, "_");
-  const aliases: Record<string, string> = {
-    "back_squat": "back_squat",
-    "squat": "back_squat",
-    "deadlift": "deadlift",
-    "row": "rowing",
-    "rowing": "rowing",
-  };
-  const alias = aliases[normalized];
+  const known = normalizeExerciseName(label);
+  if (known) return known;
 
-  if (alias) return alias;
+  return FALLBACK_EXERCISE_ALIASES[normalizeToken(label)] ?? "custom";
+}
 
-  return VALID_EXERCISE_NAMES instanceof Set && VALID_EXERCISE_NAMES.has(normalized) ? normalized : "custom";
+function categoryForExercise(exerciseName: string, rawName: string): string {
+  const definition = (EXERCISE_DEFINITIONS as Record<string, { category: string } | undefined>)[exerciseName];
+  if (definition) return definition.category;
+
+  return CONDITIONING_NAME_PATTERN.test(rawName) ? "conditioning" : "strength";
 }
 
 function hasOnlyAsciiLettersAndSpaces(value: string): boolean {
@@ -146,28 +176,142 @@ function parseLeadOnlyHeuristicChunk(
   };
 }
 
+// A repeating-circuit / Hyrox paste lists one run or station per line (e.g.
+// "1000m Run", "100 Wall Balls", "Sled Push 50m"), which the sets x reps parsers
+// above cannot recognize. The helpers below parse that single-measurement shape.
+const SINGLE_VALUE_LIST_MARKER_PATTERN = /^\s*(?:\d+[.):]|[-*•])\s+/;
+// Linear, non-backtracking shapes (no overlapping `.`/`\s` quantifiers) so the
+// parser stays O(n) on adversarial input. Measurement-first anchors the name to
+// the first non-space after the gap; name-first locates the trailing
+// measurement and the name is taken as the slice before it.
+const MEASUREMENT_FIRST_PATTERN = /^(\d+(?:\.\d+)?)([a-zA-Z]*)\s+(\S.*)$/;
+const NAME_FIRST_TAIL_PATTERN = /\s(\d+(?:\.\d+)?)([a-zA-Z]*)$/;
+const MEASUREMENT_ONLY_PATTERN = /^(\d+(?:\.\d+)?)([a-zA-Z]*)$/;
+
+const DISTANCE_UNIT_BY_TOKEN: Record<string, string> = {
+  m: "m", meter: "m", meters: "m", metre: "m", metres: "m",
+  km: "km", k: "km", kilometer: "km", kilometers: "km", kilometre: "km", kilometres: "km",
+  mi: "mi", mile: "mi", miles: "mi",
+  ft: "ft", feet: "ft", foot: "ft",
+};
+const WEIGHT_UNIT_BY_TOKEN: Record<string, string> = {
+  kg: "kg", kgs: "kg", kilo: "kg", kilos: "kg", kilogram: "kg", kilograms: "kg",
+  lb: "lb", lbs: "lb", pound: "lb", pounds: "lb",
+};
+const TIME_UNIT_TOKENS = new Set(["min", "mins", "minute", "minutes"]);
+
+function classifyMeasurement(
+  value: number,
+  unitToken: string | undefined,
+): Pick<HeuristicFallbackCandidate, "value" | "valueKind" | "distanceUnit" | "weightUnit"> {
+  const unit = (unitToken ?? "").toLowerCase();
+
+  const distanceUnit = DISTANCE_UNIT_BY_TOKEN[unit];
+  if (distanceUnit) return { value, valueKind: "distance", distanceUnit };
+
+  const weightUnit = WEIGHT_UNIT_BY_TOKEN[unit];
+  if (weightUnit) return { value, valueKind: "weight", weightUnit };
+
+  if (TIME_UNIT_TOKENS.has(unit)) return { value, valueKind: "time" };
+
+  return { value, valueKind: "reps" };
+}
+
+function buildSingleValueCandidate(
+  rawName: string,
+  value: number,
+  unitToken: string | undefined,
+): HeuristicFallbackCandidate | null {
+  const name = rawName.trim();
+  if (!name || !Number.isFinite(value) || value <= 0) return null;
+  // The "<number> <words>" shape is loose enough to also match prose (e.g.
+  // "Rest 90 seconds"), so only emit a row when the words map to a known
+  // exercise. This keeps the single-measurement branch high-precision.
+  if (canonicalExerciseName(name) === "custom") return null;
+
+  return { name, sets: 1, ...classifyMeasurement(value, unitToken) };
+}
+
+function parseSingleMeasurementChunk(chunk: string): HeuristicFallbackCandidate | null {
+  const cleaned = chunk.replace(SINGLE_VALUE_LIST_MARKER_PATTERN, "").trim();
+  if (!cleaned) return null;
+
+  const measurementFirst = MEASUREMENT_FIRST_PATTERN.exec(cleaned);
+  if (measurementFirst) {
+    const candidate = buildSingleValueCandidate(
+      measurementFirst[3],
+      Number.parseFloat(measurementFirst[1]),
+      measurementFirst[2],
+    );
+    if (candidate) return candidate;
+  }
+
+  const nameFirst = NAME_FIRST_TAIL_PATTERN.exec(cleaned);
+  if (nameFirst) {
+    const candidate = buildSingleValueCandidate(
+      cleaned.slice(0, nameFirst.index),
+      Number.parseFloat(nameFirst[1]),
+      nameFirst[2],
+    );
+    if (candidate) return candidate;
+  }
+
+  return null;
+}
+
+// Handles "<exercise>: <measurement>" (e.g. "SkiErg: 1000m"), reusing the lead
+// name already split from the chunk.
+function parseLeadMeasurementChunk(lead: HeuristicLead | null): HeuristicFallbackCandidate | null {
+  if (!lead) return null;
+
+  const measurement = MEASUREMENT_ONLY_PATTERN.exec(lead.body.trim());
+  if (!measurement) return null;
+
+  return buildSingleValueCandidate(lead.name, Number.parseFloat(measurement[1]), measurement[2]);
+}
+
 function parseHeuristicFallbackChunk(chunk: string): HeuristicFallbackCandidate | null {
   const lead = parseHeuristicLead(chunk);
   const body = lead?.body ?? chunk;
-  const namedCandidate = parseNamedHeuristicChunk(body);
 
-  if (namedCandidate) {
-    return namedCandidate;
+  const namedCandidate = parseNamedHeuristicChunk(body);
+  if (namedCandidate) return namedCandidate;
+
+  const leadOnlyCandidate = parseLeadOnlyHeuristicChunk(lead, body);
+  if (leadOnlyCandidate) return leadOnlyCandidate;
+
+  const leadMeasurementCandidate = parseLeadMeasurementChunk(lead);
+  if (leadMeasurementCandidate) return leadMeasurementCandidate;
+
+  return parseSingleMeasurementChunk(body);
+}
+
+function buildSetValueFields(candidate: HeuristicFallbackCandidate): Record<string, number | string> {
+  if (candidate.valueKind === "distance") {
+    return candidate.distanceUnit
+      ? { distance: candidate.value, distanceUnit: candidate.distanceUnit }
+      : { distance: candidate.value };
   }
 
-  return parseLeadOnlyHeuristicChunk(lead, body);
+  if (candidate.valueKind === "weight") {
+    return candidate.weightUnit
+      ? { weight: candidate.value, weightUnit: candidate.weightUnit }
+      : { weight: candidate.value };
+  }
+
+  return { [candidate.valueKind]: candidate.value };
 }
 
 function buildHeuristicFallbackRow(candidate: HeuristicFallbackCandidate): unknown {
   const exerciseName = canonicalExerciseName(candidate.name);
   return {
     exerciseName,
-    category: CONDITIONING_NAME_PATTERN.test(candidate.name) ? "conditioning" : "strength",
+    category: categoryForExercise(exerciseName, candidate.name),
     ...(exerciseName === "custom" ? { customLabel: sanitizeLabel(candidate.name) } : {}),
     missingFields: ["Heuristic fallback parser used after malformed AI rows."],
     sets: Array.from({ length: candidate.sets }, (_value, index) => ({
       setNumber: index + 1,
-      [candidate.valueKind]: candidate.value,
+      ...buildSetValueFields(candidate),
     })),
   };
 }

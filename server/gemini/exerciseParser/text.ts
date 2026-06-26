@@ -8,7 +8,7 @@ import { callTextProviderParse } from "./provider";
 import {
   normalizeParserPayload,
   type ParsedWorkoutStructure,
-  parseRawResponse,
+  parseRawResponseSafe,
   parserWarnings,
 } from "./schema";
 import {
@@ -24,6 +24,14 @@ import type {
 } from "./types";
 import { validateRows, validateRowsDetailed } from "./validation";
 
+// Surfaced when the AI response is not valid JSON and heuristic recovery from
+// the source text also yields nothing. Mirrors the error parseRawResponse threw
+// before recovery was added, so callers and tests see the same failure.
+function throwInvalidJsonError(): never {
+  logger.error("[ai] exercise-parse JSON.parse failed.");
+  throw new AppError(ErrorCode.AI_ERROR, "AI returned invalid JSON for exercise parsing", 502);
+}
+
 export async function parseExercisesFromText(
   text: string,
   unitsInput: ParseUnitInput = "kg",
@@ -38,7 +46,8 @@ export async function parseExercisesFromText(
 
   try {
     const responseText = await callTextProviderParse(text, units, customExerciseNames, userId);
-    const raw = parseRawResponse(responseText);
+    const raw = parseRawResponseSafe(responseText);
+    const jsonFailed = raw === undefined;
     const rawArray = Array.isArray(raw) ? raw : [];
     const normalized = normalizeParserPayload(raw);
     const validated = validateRows(normalized.exercises ?? rawArray);
@@ -49,6 +58,7 @@ export async function parseExercisesFromText(
         logger.warn("[ai] exercise-parse recovered rows with heuristic fallback");
         return fallbackValidated.map((exercise) => mapValidatedExercise(exercise, text, units));
       }
+      if (jsonFailed) throwInvalidJsonError();
       logger.warn("[ai] exercise-parse no valid rows after validation");
       return [];
     }
@@ -80,12 +90,14 @@ export async function parseWorkoutStructureFromText(
 
   const units = resolveParseUnitPreferences(unitsInput);
   const responseText = await callTextProviderParse(text, units, customExerciseNames, userId);
-  const raw = parseRawResponse(responseText);
+  const raw = parseRawResponseSafe(responseText);
+  const jsonFailed = raw === undefined;
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRows(normalized.exercises ?? rawArray);
   const fallbackUsed = validated.length === 0;
   const fallbackRows = fallbackUsed ? validateRows(heuristicFallbackRowsFromText(text)) : [];
+  if (jsonFailed && fallbackRows.length === 0) throwInvalidJsonError();
   const { structureBlocks, warnings } = normalizeParserBlocks(text, normalized.structureBlocks);
   const rows = linkRowsToStructureBlocks(
     (validated.length > 0 ? validated : fallbackRows).map((exercise) => mapValidatedExercise(exercise, text, units)),
@@ -112,7 +124,8 @@ export async function parseExercisesFromTextWithDiagnostics(
 
   const units = resolveParseUnitPreferences(unitsInput);
   const responseText = await callTextProviderParse(text, units, customExerciseNames, userId);
-  const raw = parseRawResponse(responseText);
+  const raw = parseRawResponseSafe(responseText);
+  const jsonFailed = raw === undefined;
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
@@ -134,6 +147,7 @@ export async function parseExercisesFromTextWithDiagnostics(
     };
   }
 
+  if (jsonFailed) throwInvalidJsonError();
   return { acceptedRows: [], rejectedRows: validated.rejectedRows, fallbackUsed: false };
 }
 
@@ -149,7 +163,8 @@ export async function parseWorkoutStructureFromTextWithDiagnostics(
 
   const units = resolveParseUnitPreferences(unitsInput);
   const responseText = await callTextProviderParse(text, units, customExerciseNames, userId);
-  const raw = parseRawResponse(responseText);
+  const raw = parseRawResponseSafe(responseText);
+  const jsonFailed = raw === undefined;
   const rawArray = Array.isArray(raw) ? raw : [];
   const normalized = normalizeParserPayload(raw);
   const validated = validateRowsDetailed(normalized.exercises ?? rawArray);
@@ -171,6 +186,7 @@ export async function parseWorkoutStructureFromTextWithDiagnostics(
   }
 
   const fallbackValidated = validateRowsDetailed(heuristicFallbackRowsFromText(text));
+  if (jsonFailed && fallbackValidated.acceptedRows.length === 0) throwInvalidJsonError();
   return {
     acceptedRows: linkRowsToStructureBlocks(
       fallbackValidated.acceptedRows.map((exercise) => mapValidatedExercise(exercise, text, units)),
