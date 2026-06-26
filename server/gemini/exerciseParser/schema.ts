@@ -118,10 +118,22 @@ export function parserWarnings(warnings: NormalizedParserPayload["warnings"]): s
 }
 
 export function parseRawResponse(responseText: string): unknown {
+  const parsed = parseRawResponseSafe(responseText);
+  if (parsed === undefined) {
+    logger.error("[ai] exercise-parse JSON.parse failed.");
+    throw new AppError(ErrorCode.AI_ERROR, "AI returned invalid JSON for exercise parsing", 502);
+  }
+  return parsed;
+}
+
+// Like parseRawResponse but returns undefined instead of throwing when the AI
+// response is not valid JSON, so callers can attempt heuristic recovery from the
+// original source text before surfacing an error. Valid JSON never parses to
+// undefined, so undefined unambiguously signals a parse failure.
+export function parseRawResponseSafe(responseText: string): unknown {
   try {
     return JSON.parse(responseText);
   } catch {
-    logger.error("[ai] exercise-parse JSON.parse failed.");
-    throw new AppError(ErrorCode.AI_ERROR, "AI returned invalid JSON for exercise parsing", 502);
+    return undefined;
   }
 }
