@@ -46,11 +46,13 @@ const FALLBACK_EXERCISE_ALIASES: Record<string, string> = {
 };
 
 function normalizeToken(label: string): string {
-  return label
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, "_")
-    .replaceAll(/^_+|_+$/g, "");
+  // Collapse every run of non-alphanumerics to a single "_", then strip a lone
+  // leading/trailing "_" with slices rather than an anchored `_+` regex — the
+  // latter is polynomial-backtracking on attacker-controlled text (CodeQL).
+  let token = label.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, "_");
+  if (token.startsWith("_")) token = token.slice(1);
+  if (token.endsWith("_")) token = token.slice(0, -1);
+  return token;
 }
 
 function canonicalExerciseName(label: string): string {
@@ -178,9 +180,13 @@ function parseLeadOnlyHeuristicChunk(
 // "1000m Run", "100 Wall Balls", "Sled Push 50m"), which the sets x reps parsers
 // above cannot recognize. The helpers below parse that single-measurement shape.
 const SINGLE_VALUE_LIST_MARKER_PATTERN = /^\s*(?:\d+[.):]|[-*•])\s+/;
-const MEASUREMENT_FIRST_PATTERN = /^(\d+(?:\.\d+)?)([a-zA-Z]+)?\s+(.+?)\s*$/;
-const NAME_FIRST_PATTERN = /^(.+?)\s+(\d+(?:\.\d+)?)([a-zA-Z]+)?$/;
-const MEASUREMENT_ONLY_PATTERN = /^(\d+(?:\.\d+)?)([a-zA-Z]+)?$/;
+// Linear, non-backtracking shapes (no overlapping `.`/`\s` quantifiers) so the
+// parser stays O(n) on adversarial input. Measurement-first anchors the name to
+// the first non-space after the gap; name-first locates the trailing
+// measurement and the name is taken as the slice before it.
+const MEASUREMENT_FIRST_PATTERN = /^(\d+(?:\.\d+)?)([a-zA-Z]*)\s+(\S.*)$/;
+const NAME_FIRST_TAIL_PATTERN = /\s(\d+(?:\.\d+)?)([a-zA-Z]*)$/;
+const MEASUREMENT_ONLY_PATTERN = /^(\d+(?:\.\d+)?)([a-zA-Z]*)$/;
 
 const DISTANCE_UNIT_BY_TOKEN: Record<string, string> = {
   m: "m", meter: "m", meters: "m", metre: "m", metres: "m",
@@ -240,12 +246,12 @@ function parseSingleMeasurementChunk(chunk: string): HeuristicFallbackCandidate 
     if (candidate) return candidate;
   }
 
-  const nameFirst = NAME_FIRST_PATTERN.exec(cleaned);
+  const nameFirst = NAME_FIRST_TAIL_PATTERN.exec(cleaned);
   if (nameFirst) {
     const candidate = buildSingleValueCandidate(
-      nameFirst[1],
-      Number.parseFloat(nameFirst[2]),
-      nameFirst[3],
+      cleaned.slice(0, nameFirst.index),
+      Number.parseFloat(nameFirst[1]),
+      nameFirst[2],
     );
     if (candidate) return candidate;
   }
