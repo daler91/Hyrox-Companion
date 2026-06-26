@@ -17,3 +17,6 @@ Learned to replace N+1 sequential database inserts in loops with bulk array inse
 ## 2026-06-20 - Array method chain optimization
 **Learning:** Chaining array methods like `.map()`, `.filter()`, and `.reduce()` creates intermediate arrays that add to garbage collection overhead and degrade performance. Finding the maximum value in an array using `Math.max(...array)` with the spread operator can also cause stack overflow errors on large arrays.
 **Action:** Replace chained array iterations and spread operators with a single `for...of` loop that computes the result in one `O(N)` pass with `O(1)` extra memory.
+## 2026-06-25 - Avoid Math.max(...array) in loops on dynamic arrays
+**Learning:** Using `Math.max(...array)` inside a function that parses large sets of data, or on dynamically generated arrays (like those populated in `accumulateSetMetrics`), incurs unnecessary memory allocation overhead for intermediate arrays and risks 'Maximum call stack size exceeded' errors if the dataset grows too large.
+**Action:** Track extremum values iteratively within the original processing loop (e.g., using a `maxLoad` variable inside the main `for...of` loop) to maintain O(1) space complexity and eliminate the risk of call stack overflows, rather than collecting all values into an array just to compute the max later.

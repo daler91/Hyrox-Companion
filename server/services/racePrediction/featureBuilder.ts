@@ -195,7 +195,7 @@ const STATION_PROJECTION_EXPONENT: Record<HyroxStation, number> = {
  *  run leg (and any non-station) uses the endurance default. */
 function projectionExponentFor(kind: RaceSegmentKind, exerciseName: ExerciseName): number {
   return kind === "station"
-    ? STATION_PROJECTION_EXPONENT[exerciseName as HyroxStation] ?? ENDURANCE_PROJECTION_EXPONENT
+    ? (STATION_PROJECTION_EXPONENT[exerciseName as HyroxStation] ?? ENDURANCE_PROJECTION_EXPONENT)
     : ENDURANCE_PROJECTION_EXPONENT;
 }
 
@@ -234,7 +234,11 @@ function projectionFactor(
   if (target.distanceMeters != null) {
     const distance = usableMeasure(set.distance);
     if (distance == null) return 1;
-    return trustedFactor(target.distanceMeters, storedDistanceToMeters(distance, distanceUnit), exponent);
+    return trustedFactor(
+      target.distanceMeters,
+      storedDistanceToMeters(distance, distanceUnit),
+      exponent,
+    );
   }
   if (target.reps != null) {
     const reps = usableMeasure(set.reps);
@@ -249,7 +253,7 @@ interface SegmentSetMetrics {
   sessionTimesSeconds: number[];
   /** Fastest single projected split across all sessions, or null. */
   bestSeconds: number | null;
-  loads: number[];
+  maxLoad: number | null;
   mostRecent: string | null;
 }
 
@@ -291,7 +295,7 @@ function accumulateSetMetrics(
   // efforts. Each session contributes its median split; sampleSize downstream is
   // the number of independent sessions, not the raw set count.
   const sessionSplits = new Map<string, number[]>();
-  const loads: number[] = [];
+  let maxLoad: number | null = null;
   let mostRecent: string | null = null;
   let bestSeconds: number | null = null;
 
@@ -302,7 +306,9 @@ function accumulateSetMetrics(
       if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
-      loads.push(set.weight);
+      if (maxLoad == null || set.weight > maxLoad) {
+        maxLoad = set.weight;
+      }
     }
     if (set.date && (mostRecent === null || set.date > mostRecent)) {
       mostRecent = set.date;
@@ -311,7 +317,7 @@ function accumulateSetMetrics(
 
   // median() is non-null here because every bucket has at least one split.
   const sessionTimesSeconds = Array.from(sessionSplits.values(), (splits) => median(splits)!);
-  return { sessionTimesSeconds, bestSeconds, loads, mostRecent };
+  return { sessionTimesSeconds, bestSeconds, maxLoad, mostRecent };
 }
 
 function buildSegmentFeature(
@@ -323,14 +329,14 @@ function buildSegmentFeature(
   units: AthleteUnits,
   now: Date,
 ): SegmentFeature {
-  const { sessionTimesSeconds, bestSeconds, loads, mostRecent } = accumulateSetMetrics(
+  const { sessionTimesSeconds, bestSeconds, maxLoad, mostRecent } = accumulateSetMetrics(
     sets,
     target,
     units.distanceUnit,
     projectionExponentFor(kind, exerciseName),
   );
 
-  const loggedLoadUserUnit = loads.length > 0 ? Math.max(...loads) : null;
+  const loggedLoadUserUnit = maxLoad;
   const standardLoadUserUnit =
     standardLoadKg == null ? null : kgToUserWeight(standardLoadKg, units.weightUnit);
   const loadRatio =
