@@ -35,19 +35,16 @@ const ROLE_CAPTION: Record<MealRole, string> = {
   flex_remainder: "Flexible",
 };
 
-const EMPTY_TOTALS: NutritionMacroTotals = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
-
 function sumNutrition(entries: readonly FoodLogEntryWithNutrition[]): NutritionMacroTotals {
-  return entries.reduce(
-    (acc, e) => ({
-      calories: acc.calories + e.nutrition.calories,
-      protein: acc.protein + e.nutrition.protein,
-      carb: acc.carb + e.nutrition.carb,
-      fat: acc.fat + e.nutrition.fat,
-      fiber: acc.fiber + e.nutrition.fiber,
-    }),
-    EMPTY_TOTALS,
-  );
+  let calories = 0, protein = 0, carb = 0, fat = 0, fiber = 0;
+  for (const e of entries) {
+    calories += e.nutrition.calories;
+    protein += e.nutrition.protein;
+    carb += e.nutrition.carb;
+    fat += e.nutrition.fat;
+    fiber += e.nutrition.fiber;
+  }
+  return { calories, protein, carb, fat, fiber };
 }
 
 /** One meal's fuel target + logged entries (per-meal fuelling). Shows the target
