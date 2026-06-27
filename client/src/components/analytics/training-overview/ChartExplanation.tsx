@@ -8,8 +8,9 @@ interface ChartExplanationProps {
 }
 
 /**
- * Collapsible "What this means for you" shown inside an Overview chart card. It
- * renders the AI's per-chart reading as sanitized Markdown — rehype-sanitize
+ * "What this means for you" shown inside an Overview chart card — expanded by
+ * default, collapsible via the toggle. It renders the AI's per-chart reading as
+ * sanitized Markdown — rehype-sanitize
  * strips script tags, event handlers and javascript:/data: URLs so a compromised
  * provider or a prompt-injection attempt can't run JS in the user's session.
  *
@@ -18,7 +19,7 @@ interface ChartExplanationProps {
  * drop into every chart card unconditionally.
  */
 export function ChartExplanation({ explanation }: ChartExplanationProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   if (!explanation) return null;
 
   return (
