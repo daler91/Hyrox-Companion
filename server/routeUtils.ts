@@ -193,6 +193,9 @@ export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, 
     // defeating CRLF log injection) rather than interpolating user-controlled
     // input into the message; log req.path, not req.originalUrl, so query-string
     // tokens/PII never reach the logs.
+    // bearer:disable javascript_lang_logger_leak — req.path is the route path
+    // only (no query string), logged intentionally for error diagnostics and
+    // JSON-escaped by pino; not sensitive.
     log.error({ err, method: req.method, path: req.path }, "Route error");
     next(err);
   });
