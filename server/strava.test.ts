@@ -30,7 +30,7 @@ describe('strava service state signing', () => {
 
       // State format should be `userId:timestamp:nonce:signature`
       const parts = state.split(':');
-      expect(parts.length).toBe(4);
+      expect(parts).toHaveLength(4);
       expect(parts[0]).toBe('user_123');
 
       // 1700000000000 in base36 is 'lo6z9d8g'
@@ -83,7 +83,7 @@ describe('strava service state signing', () => {
       const userId = 'user_isolate_test';
       const state = createSignedState(userId);
       const parts = state.split(':');
-      expect(parts.length).toBe(4);
+      expect(parts).toHaveLength(4);
 
       const [id, timestamp, nonce, signature] = parts;
       const payload = `${id}:${timestamp}:${nonce}`;

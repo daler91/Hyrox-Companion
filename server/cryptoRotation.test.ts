@@ -59,7 +59,7 @@ describe("crypto key rotation (W6)", () => {
     // 3-part format that predates versioning.
     const before = await loadCrypto({ ENCRYPTION_KEY: KEY_V1 });
     const legacy = before.encryptToken("legacy").replace(/^v1:/, "");
-    expect(legacy.split(":").length).toBe(3);
+    expect(legacy.split(":")).toHaveLength(3);
 
     const after = await loadCrypto({ ENCRYPTION_KEY: KEY_V1, ENCRYPTION_KEY_V2: KEY_V2 });
     expect(after.decryptToken(legacy)).toBe("legacy");

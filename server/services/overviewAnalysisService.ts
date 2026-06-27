@@ -264,12 +264,16 @@ export async function generateOverviewAnalysis(
   try {
     raw = JSON.parse(response.text || "{}");
   } catch (err) {
+    // bearer:disable javascript_lang_logger_leak — err is a JSON.parse
+    // SyntaxError on the AI provider's own output, not user data.
     log.warn({ err }, "[overview-analysis] AI JSON.parse failed");
     throw new Error("Overview analysis returned malformed JSON");
   }
 
   const parsed = overviewAnalysisAiSchema.safeParse(raw);
   if (!parsed.success) {
+    // bearer:disable javascript_lang_logger_leak — zod issue paths/messages
+    // describe the AI output schema, not user data.
     log.warn({ issues: parsed.error.issues }, "[overview-analysis] AI output failed validation");
     throw new Error("Overview analysis failed schema validation");
   }
@@ -284,6 +288,8 @@ export async function generateOverviewAnalysis(
     }
   }
 
+  // bearer:disable javascript_lang_logger_leak — counts and a duration only,
+  // no user data.
   log.info(
     { durationMs: Date.now() - startedAt, charts: presentKeys.length, sections: Object.keys(sections).length },
     "[ai] Overview analysis generated",
@@ -312,6 +318,9 @@ export async function generateOverviewAnalysisIfAllowed(
   } catch (err) {
     // Budget lookup failure shouldn't hard-block the feature — log and allow,
     // matching coach-insights / the race-predictor's resolveAiBlocker behavior.
+    // bearer:disable javascript_lang_logger_leak — err is the budget-lookup
+    // failure; userId is the internal Clerk id used for correlation (same as
+    // the race-predictor / coach-insights paths).
     log.warn({ err, userId }, "[overview-analysis] AI budget check failed; allowing AI call");
   }
 

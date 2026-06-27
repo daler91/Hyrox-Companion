@@ -76,7 +76,7 @@ describe("ExerciseTable drag handle", () => {
     // Unified summary layout renders one row (and one handle) per group
     // at every viewport, so 3 groups → 3 handles.
     const handles = screen.getAllByTestId("exercise-row-drag-handle");
-    expect(handles.length).toBe(sets.length);
+    expect(handles).toHaveLength(sets.length);
     for (const h of handles) {
       expect(h.getAttribute("aria-label")).toMatch(/Reorder /);
     }

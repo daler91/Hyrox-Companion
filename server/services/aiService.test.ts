@@ -120,7 +120,7 @@ describe("buildTrainingContext", () => {
 
     const result = await buildTrainingContext("user-1");
 
-    expect(result.recentWorkouts.length).toBe(10);
+    expect(result.recentWorkouts).toHaveLength(10);
     expect(result.recentWorkouts[0].date).toBe("2026-01-15");
     expect(result.recentWorkouts[9].date).toBe("2026-01-06");
     expect(result.recentWorkouts[0].focus).toBe("Focus 14");

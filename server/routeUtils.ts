@@ -189,7 +189,12 @@ export function validateParams<T>(schema: z.ZodType<T>) {
 export const asyncHandler = <Req extends Request>(fn: (req: Req, res: Response, next: NextFunction) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction): void => {
   Promise.resolve(fn(req as Req, res, next)).catch((err) => {
     const log = req.log ?? logger;
-    log.error({ err }, `Route error in ${req.method} ${req.originalUrl}`);
+    // Pass the request fields as structured data (pino JSON-escapes the values,
+    // defeating CRLF log injection) rather than interpolating user-controlled
+    // input into the message; log req.path (route path only, no query string) so
+    // query-string tokens/PII never reach the logs.
+    // bearer:disable javascript_lang_logger_leak — intentional path-only error log, JSON-escaped by pino.
+    log.error({ err, method: req.method, path: req.path }, "Route error");
     next(err);
   });
 };

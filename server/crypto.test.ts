@@ -22,12 +22,12 @@ describe('crypto utilities', () => {
       const encrypted = encryptToken(text);
 
       const parts = encrypted.split(':');
-      expect(parts.length).toBe(4);
+      expect(parts).toHaveLength(4);
 
       const [version, iv, authTag, encryptedText] = parts;
       expect(version).toBe('v1');
-      expect(iv.length).toBe(24); // 12 bytes in hex = 24 chars
-      expect(authTag.length).toBe(32); // 16 bytes in hex = 32 chars
+      expect(iv).toHaveLength(24); // 12 bytes in hex = 24 chars
+      expect(authTag).toHaveLength(32); // 16 bytes in hex = 32 chars
       expect(encryptedText.length).toBeGreaterThan(0);
     });
   });
