@@ -5,8 +5,10 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { AcwrTrendChart } from "./training-overview/AcwrTrendChart";
 import { FormMonotonyTrendCharts } from "./training-overview/FormMonotonyTrendCharts";
 import { ObjectiveLoadTrendCharts } from "./training-overview/ObjectiveLoadTrendCharts";
+import { OverviewAnalysisHeader } from "./training-overview/OverviewAnalysisHeader";
 import { OverviewStatsGrid } from "./training-overview/OverviewStatsGrid";
 import { OverviewTrendCharts } from "./training-overview/OverviewTrendCharts";
+import { useOverviewAnalysis } from "./training-overview/useOverviewAnalysis";
 import { useTrainingOverviewData } from "./training-overview/useTrainingOverviewData";
 import { WeeklyWorkoutsChart } from "./training-overview/WeeklyWorkoutsChart";
 import { WorkoutHeatmap } from "./WorkoutHeatmap";
@@ -19,6 +21,8 @@ interface TrainingOverviewTabProps {
 export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverviewTabProps) {
   const { overview, isLoading, stats, previousStats, rpeData, durationData, annotationBands } =
     useTrainingOverviewData(dateParams);
+  const analysis = useOverviewAnalysis();
+  const sections = analysis.sections;
 
   if (isLoading) {
     return (
@@ -43,17 +47,43 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
 
   return (
     <div className="space-y-6">
+      <OverviewAnalysisHeader
+        hasAnalysis={analysis.hasAnalysis}
+        isGenerating={analysis.isGenerating}
+        generatedAt={analysis.generatedAt}
+        stale={analysis.stale}
+        error={analysis.error}
+        canGenerate={analysis.canGenerate}
+        onGenerate={analysis.regenerate}
+      />
       {stats && <OverviewStatsGrid stats={stats} previousStats={previousStats} />}
-      {overview.trainingLoad && <AcwrTrendChart trainingLoad={overview.trainingLoad} />}
-      {overview.trainingLoad && <FormMonotonyTrendCharts trainingLoad={overview.trainingLoad} />}
-      {overview.trainingLoad && <ObjectiveLoadTrendCharts trainingLoad={overview.trainingLoad} />}
+      {overview.trainingLoad && (
+        <AcwrTrendChart trainingLoad={overview.trainingLoad} explanation={sections?.trainingLoad} />
+      )}
+      {overview.trainingLoad && (
+        <FormMonotonyTrendCharts
+          trainingLoad={overview.trainingLoad}
+          explanation={sections?.formMonotony}
+        />
+      )}
+      {overview.trainingLoad && (
+        <ObjectiveLoadTrendCharts
+          trainingLoad={overview.trainingLoad}
+          explanation={sections?.objectiveLoad}
+        />
+      )}
       <WeeklyWorkoutsChart
         weeklySummaries={overview.weeklySummaries}
         weeklyGoal={weeklyGoal}
         annotationBands={annotationBands}
+        explanation={sections?.weeklyWorkouts}
       />
-      <OverviewTrendCharts rpeData={rpeData} durationData={durationData} />
-      <WorkoutHeatmap workoutDates={overview.workoutDates} />
+      <OverviewTrendCharts
+        rpeData={rpeData}
+        durationData={durationData}
+        explanation={sections?.rpeDuration}
+      />
+      <WorkoutHeatmap workoutDates={overview.workoutDates} explanation={sections?.consistency} />
     </div>
   );
 }

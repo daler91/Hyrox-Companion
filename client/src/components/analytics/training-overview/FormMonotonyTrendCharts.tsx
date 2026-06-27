@@ -1,6 +1,7 @@
 import type { TrainingLoadOverview } from "@shared/schema";
 
 import { MiniLineChart } from "../MiniLineChart";
+import { ChartExplanation } from "./ChartExplanation";
 
 /** Signed integer for TSB ("+12" / "-8"). */
 function formatTsb(value: number): string {
@@ -21,7 +22,8 @@ function formatMonotony(value: number): string {
  */
 export function FormMonotonyTrendCharts({
   trainingLoad,
-}: Readonly<{ trainingLoad: TrainingLoadOverview }>) {
+  explanation,
+}: Readonly<{ trainingLoad: TrainingLoadOverview; explanation?: string }>) {
   const tsbData = trainingLoad.trend.filter((point) => point.tsb != null);
   const monotonyData = trainingLoad.trend.filter((point) => point.monotony != null);
 
@@ -52,6 +54,7 @@ export function FormMonotonyTrendCharts({
           valueFormatter={formatMonotony}
         />
       )}
+      <ChartExplanation explanation={explanation} />
     </div>
   );
 }

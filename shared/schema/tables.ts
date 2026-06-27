@@ -154,6 +154,7 @@ export const ANALYTICS_FEATURES = [
   "coach_insights",
   "race_prediction",
   "nutrition_insights",
+  "overview_analysis",
 ] as const;
 export type AnalyticsFeature = (typeof ANALYTICS_FEATURES)[number];
 
@@ -192,7 +193,7 @@ export const analyticsResults = pgTable(
     index("idx_analytics_results_feature").on(table.feature),
     check(
       "analytics_results_feature_check",
-      sql`feature IN ('coach_insights', 'race_prediction', 'nutrition_insights')`,
+      sql`feature IN ('coach_insights', 'race_prediction', 'nutrition_insights', 'overview_analysis')`,
     ),
   ],
 );

@@ -11,9 +11,10 @@ import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 import { getRequestContext, runWithRequestContext } from "./requestContext";
-import { persistCoachInsights, regenerateAndStoreRacePrediction } from "./services/analyticsPersistence";
+import { persistCoachInsights, persistOverviewAnalysis, regenerateAndStoreRacePrediction } from "./services/analyticsPersistence";
 import { generateCoachInsightsIfAllowed } from "./services/coachInsightsService";
 import { triggerAutoCoach } from "./services/coachService";
+import { generateOverviewAnalysisIfAllowed } from "./services/overviewAnalysisService";
 import { executePlanGeneration } from "./services/planGenerationService";
 import { embedCoachingMaterial } from "./services/ragService";
 import { storage } from "./storage";
@@ -396,6 +397,18 @@ export async function startQueue() {
           if (feature === "race_prediction") {
             // Always refreshes (deterministic fallback when AI is unavailable).
             await regenerateAndStoreRacePrediction(userId, logger, localDate);
+            return;
+          }
+          if (feature === "overview_analysis") {
+            // Self-gate like coach_insights; leave the prior stored analysis
+            // intact when consent/budget block the call (the claim above stops a
+            // same-day retry).
+            const outcome = await generateOverviewAnalysisIfAllowed(userId, logger);
+            if (outcome.ok) {
+              await persistOverviewAnalysis(userId, outcome.result, localDate);
+            } else {
+              logger.info({ jobId: job.id, reason: outcome.reason }, "[pg-boss] Overview analysis recompute skipped (gated)");
+            }
             return;
           }
           // coach_insights — self-gate so we don't spend AI when consent is off

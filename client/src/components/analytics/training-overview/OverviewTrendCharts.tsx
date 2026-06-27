@@ -1,11 +1,13 @@
 import { MiniLineChart } from "../MiniLineChart";
+import { ChartExplanation } from "./ChartExplanation";
 
 interface OverviewTrendChartsProps {
   readonly rpeData: Array<{ weekStart: string; avgRpe: number | null }>;
   readonly durationData: Array<{ weekStart: string; avgDuration: number }>;
+  readonly explanation?: string;
 }
 
-export function OverviewTrendCharts({ rpeData, durationData }: OverviewTrendChartsProps) {
+export function OverviewTrendCharts({ rpeData, durationData, explanation }: OverviewTrendChartsProps) {
   return (
     <div className="space-y-6" data-testid="overview-trend-charts">
       {rpeData.length > 1 && (
@@ -26,6 +28,7 @@ export function OverviewTrendCharts({ rpeData, durationData }: OverviewTrendChar
           label="Avg Duration (min)"
         />
       )}
+      <ChartExplanation explanation={explanation} />
     </div>
   );
 }

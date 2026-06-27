@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { toISODateString } from "@/lib/dateUtils";
 
 import { CHART_CARD_CLASS } from "./chartConstants";
+import { ChartExplanation } from "./training-overview/ChartExplanation";
 
 const DAY_LABELS = [
   { key: "mon", label: "Mon" },
@@ -39,9 +40,10 @@ function getHeatmapCellColor(cell: { isFuture: boolean; hasWorkout: boolean }): 
 
 interface WorkoutHeatmapProps {
   readonly workoutDates: string[];
+  readonly explanation?: string;
 }
 
-export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
+export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProps) {
   const { grid, monthLabels } = useMemo(() => {
     const dateSet = new Set(workoutDates);
     const today = new Date();
@@ -158,6 +160,7 @@ export function WorkoutHeatmap({ workoutDates }: WorkoutHeatmapProps) {
           </div>
         </div>
       </div>
+      <ChartExplanation explanation={explanation} />
     </div>
   );
 }

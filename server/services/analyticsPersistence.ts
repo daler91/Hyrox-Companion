@@ -8,13 +8,14 @@
  * via generateCoachInsightsIfAllowed and must NOT generate a second time — can
  * store an already-generated result without re-running the model.
  */
-import type { RacePredictionResponse } from "@shared/schema";
+import type { OverviewAnalysisResult, RacePredictionResponse } from "@shared/schema";
 import type { Logger } from "pino";
 
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
 import { type CoachInsightsResult, generateCoachInsights } from "./coachInsightsService";
 import { generateNutritionInsights, type NutritionInsightsResult } from "./nutrition/nutritionInsightsService";
+import { generateOverviewAnalysis } from "./overviewAnalysisService";
 import { generateRacePrediction } from "./racePrediction/racePredictionService";
 
 // Re-exported so route handlers can import the staleness check alongside the
@@ -89,6 +90,38 @@ export async function regenerateAndStoreCoachInsights(
 ): Promise<CoachInsightsResult> {
   const result = await generateCoachInsights(userId, log);
   await persistCoachInsights(userId, result, recomputedOn);
+  return result;
+}
+
+/** Persist an already-generated Overview chart analysis. See persistCoachInsights. */
+export async function persistOverviewAnalysis(
+  userId: string,
+  result: OverviewAnalysisResult,
+  recomputedOn?: string,
+): Promise<void> {
+  await storage.analyticsResults.upsert({
+    userId,
+    feature: "overview_analysis",
+    payload: result,
+    generatedAt: new Date(result.generatedAt),
+    lastWorkoutDateAtGeneration: await getLatestWorkoutDate(userId),
+    recomputedOn,
+  });
+}
+
+/**
+ * Generate the Overview chart analysis and persist it as the user's stored
+ * result. Gating is the caller's responsibility (route middleware). The cron
+ * path instead uses generateOverviewAnalysisIfAllowed + persistOverviewAnalysis
+ * so it can skip the AI call entirely when consent/budget block it.
+ */
+export async function regenerateAndStoreOverviewAnalysis(
+  userId: string,
+  log: Logger = defaultLogger,
+  recomputedOn?: string,
+): Promise<OverviewAnalysisResult> {
+  const result = await generateOverviewAnalysis(userId, log);
+  await persistOverviewAnalysis(userId, result, recomputedOn);
   return result;
 }
 

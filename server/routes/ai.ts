@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema } from "@shared/schema";
+import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -11,7 +11,7 @@ import { aiConsentCheck } from "../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
-import { computeStale, getLatestWorkoutDate, regenerateAndStoreCoachInsights } from "../services/analyticsPersistence";
+import { computeStale, getLatestWorkoutDate, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
@@ -359,6 +359,34 @@ router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 6
 protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await regenerateAndStoreCoachInsights(userId, reqLogger(req));
+    // Freshly generated against the current latest workout, so never stale.
+    res.json({ ...result, stale: false });
+  });
+
+// Overview AI chart analysis — one AI call produces a short "what this means for
+// you" reading per Overview-tab chart, keyed so each chart card renders its own
+// explanation inline. Same stored-first shape as Coach Insights: GET paints the
+// last stored result instantly (no AI spend) with a `stale` flag; POST
+// regenerates (gated by the AI consent/budget middleware) and persists.
+router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    const row = await storage.analyticsResults.get(userId, "overview_analysis");
+    if (!row) {
+      res.json({ sections: null });
+      return;
+    }
+    const latestWorkoutDate = await getLatestWorkoutDate(userId);
+    const payload = row.payload as OverviewAnalysisResult;
+    res.json({
+      ...payload,
+      generatedAt: row.generatedAt.toISOString(),
+      stale: computeStale(row, latestWorkoutDate),
+    });
+  }));
+
+protectedPost(router, "/api/v1/overview-analysis", { limiter: rateLimiter("suggestions", 3), middleware: [aiConsentCheck, aiBudgetCheck] }, async (req: ExpressRequest, res: Response) => {
+    const userId = getUserId(req);
+    const result = await regenerateAndStoreOverviewAnalysis(userId, reqLogger(req));
     // Freshly generated against the current latest workout, so never stale.
     res.json({ ...result, stale: false });
   });
