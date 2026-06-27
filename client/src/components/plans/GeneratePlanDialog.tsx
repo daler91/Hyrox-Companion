@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useGeneratePlan } from "@/hooks/usePlanGeneration";
+import { cn } from "@/lib/utils";
 
 import { GeneratePlanDetailsStep } from "./generate-plan/GeneratePlanDetailsStep";
 import { GeneratePlanGoalStep } from "./generate-plan/GeneratePlanGoalStep";
@@ -24,7 +25,13 @@ interface GeneratePlanDialogProps {
   readonly initialStartDate?: string;
 }
 
-function getDescription(step: number, mode: GeneratePlanDialogProps["mode"], isGenerating: boolean): string {
+const STEP_LABELS = ["Goal", "Schedule", "Details"] as const;
+
+function getDescription(
+  step: number,
+  mode: GeneratePlanDialogProps["mode"],
+  isGenerating: boolean,
+): string {
   if (isGenerating) return "Generating your plan — this takes 1–2 minutes…";
   if (step === 0) return "What's your training goal?";
   if (step === 1 && mode === "onboarding") {
@@ -75,8 +82,31 @@ export function GeneratePlanDialog({
             <Sparkles className="h-5 w-5" />
             Generate AI Training Plan
           </DialogTitle>
-          <DialogDescription>{getDescription(form.step, mode, generatePlan.isPending)}</DialogDescription>
+          <DialogDescription>
+            {getDescription(form.step, mode, generatePlan.isPending)}
+          </DialogDescription>
         </DialogHeader>
+
+        <div
+          className="flex items-center justify-center gap-1.5"
+          role="group"
+          aria-label={`Step ${form.step + 1} of 3`}
+        >
+          {STEP_LABELS.map((label, i) => (
+            <div
+              key={label}
+              className={cn(
+                "h-1.5 rounded-full transition-all duration-300",
+                i === form.step ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/25",
+                i < form.step && "bg-primary/50",
+              )}
+              aria-hidden="true"
+            />
+          ))}
+          <span className="sr-only">
+            Step {form.step + 1} of 3: {STEP_LABELS[form.step]}
+          </span>
+        </div>
 
         {form.step === 0 && (
           <GeneratePlanGoalStep
