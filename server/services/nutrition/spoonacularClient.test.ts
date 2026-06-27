@@ -110,6 +110,28 @@ describe("mapSpoonacularProduct", () => {
     expect(m?.servingSizeG).toBeCloseTo(2.4 * 28.349523125, 4);
   });
 
+  it("matches a fixed-precision oz weight in the title in full (regression)", () => {
+    // "2.4000 oz" must match the whole number, not re-anchor onto a suffix
+    // ("4000 oz") that the sanity clamp would then reject and drop.
+    const m = mapSpoonacularProduct({
+      id: 13,
+      title: "CLIF Bar Energy Bars, 2.4000 oz",
+      nutrition: { nutrients: [{ name: "Calories", amount: 250, unit: "kcal" }] },
+      servings: { number: 1 },
+    });
+    expect(m?.servingSizeG).toBeCloseTo(2.4 * 28.349523125, 4);
+  });
+
+  it("parses a fixed-precision gram weight from serving text (regression)", () => {
+    const m = mapSpoonacularProduct({
+      id: 14,
+      title: "Protein Bar",
+      nutrition: { nutrients: [{ name: "Calories", amount: 200, unit: "kcal" }] },
+      servings: { number: 1, raw: "60.0000 g" },
+    });
+    expect(m?.servingSizeG).toBe(60);
+  });
+
   it("rejects an implausible container weight in the title (16 oz jar)", () => {
     expect(
       mapSpoonacularProduct({
