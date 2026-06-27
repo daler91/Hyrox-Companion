@@ -280,7 +280,7 @@ describe("Post-Migration Verification: Railway + Neon", () => {
         const result = await client.query(
           `SELECT data_type, udt_name FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
         );
-        expect(result.rows.length).toBe(1);
+        expect(result.rows).toHaveLength(1);
         // pgvector registers as USER-DEFINED type with udt_name 'vector'
         expect(result.rows[0].udt_name).toBe("vector");
       } finally {

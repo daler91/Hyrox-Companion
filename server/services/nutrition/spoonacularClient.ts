@@ -145,7 +145,10 @@ function parseGramsFromServingText(raw: string | undefined): number | null {
     const grams = num(paren[1]);
     if (grams !== null && grams > 0 && grams <= 1000) return grams;
   }
-  const match = /(\d+(?:\.\d+)?)\s*(g|oz)\b/i.exec(raw);
+  // Bounded quantifiers ({1,6}/{1,3}) keep this linear — an unbounded
+  // (\d+(?:\.\d+)?) trips Sonar's super-linear-backtracking (ReDoS) rule — while
+  // still covering any real serving weight.
+  const match = /(\d{1,6}(?:\.\d{1,3})?)\s*(g|oz)\b/i.exec(raw);
   if (match) {
     const grams = weightToGrams(match[1], match[2]);
     if (grams !== null && grams > 0 && grams <= 1000) return grams;
@@ -163,7 +166,8 @@ function parseGramsFromServingText(raw: string | undefined): number | null {
  *  The per-100g sanity clamp in sanitizeMappedFood is the final backstop. */
 function parseServingGramsFromTitle(title: string | undefined): number | null {
   if (!title) return null;
-  const match = /(\d+(?:\.\d+)?)\s*oz\b/i.exec(title);
+  // Bounded quantifiers keep this linear (ReDoS-safe); see parseGramsFromServingText.
+  const match = /(\d{1,6}(?:\.\d{1,3})?)\s*oz\b/i.exec(title);
   const grams = match ? weightToGrams(match[1], "oz") : null;
   return grams !== null && grams >= 5 && grams <= 250 ? grams : null;
 }

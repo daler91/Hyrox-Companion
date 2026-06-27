@@ -58,7 +58,7 @@ describe("calculatePersonalRecords", () => {
   it("returns empty object for empty input", () => {
     const result = calculatePersonalRecords([]);
     expect(result).toEqual({});
-    expect(Object.keys(result).length).toBe(0);
+    expect(Object.keys(result)).toHaveLength(0);
     expect(result).not.toBeNull();
     expect(result).not.toBeUndefined();
     expect(Object.keys(result)).toEqual([]);
@@ -221,7 +221,7 @@ describe("calculateExerciseAnalytics", () => {
   it("returns empty object for empty input", () => {
     const result = calculateExerciseAnalytics([]);
     expect(result).toEqual({});
-    expect(Object.keys(result).length).toBe(0);
+    expect(Object.keys(result)).toHaveLength(0);
     expect(result).not.toBeNull();
     expect(result).not.toBeUndefined();
     expect(typeof result).toBe('object');
