@@ -22,6 +22,7 @@ import {
   MUTED_CURSOR,
   MUTED_FG,
 } from "../chartConstants";
+import { ChartExplanation } from "./ChartExplanation";
 import type { AnnotationBand } from "./utils";
 import { ANNOTATION_FILL } from "./utils";
 
@@ -51,12 +52,14 @@ interface WeeklyWorkoutsChartProps {
   readonly weeklySummaries: WeeklySummary[];
   readonly weeklyGoal?: number;
   readonly annotationBands: AnnotationBand[];
+  readonly explanation?: string;
 }
 
 export function WeeklyWorkoutsChart({
   weeklySummaries,
   weeklyGoal,
   annotationBands,
+  explanation,
 }: WeeklyWorkoutsChartProps) {
   const goalSuffix = weeklyGoal ? `, against a goal of ${weeklyGoal} per week` : "";
   return (
@@ -123,6 +126,7 @@ export function WeeklyWorkoutsChart({
           </BarChart>
         </ResponsiveContainer>
       </div>
+      <ChartExplanation explanation={explanation} />
     </div>
   );
 }

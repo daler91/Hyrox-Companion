@@ -1,5 +1,6 @@
 ﻿// Analytics — Training Overview types
 import type { HeatMapMuscle, MovementPattern, MuscleHeatMapBodyRegion } from "../exercises";
+import type { RagInfo } from "./ai";
 
 export interface WeeklySummary {
   weekStart: string; // YYYY-MM-DD (Monday)
@@ -170,6 +171,32 @@ export interface TrainingOverview {
    */
   previousStats?: OverviewStats;
   trainingLoad: TrainingLoadOverview;
+}
+
+// Analytics — Overview AI chart analysis
+//
+// A single AI call produces one plain-language reading per Overview-tab chart,
+// keyed so each chart card can render its own "What this means for you" inline.
+// Stored per user as the `overview_analysis` analytics_results feature and
+// painted instantly on open, mirroring Coach Insights / Race Predictor.
+
+/** One key per explainable chart card on the Analytics → Overview tab. */
+export type OverviewChartKey =
+  | "trainingLoad"
+  | "formMonotony"
+  | "objectiveLoad"
+  | "weeklyWorkouts"
+  | "rpeDuration"
+  | "consistency";
+
+export interface OverviewAnalysisResult {
+  /**
+   * Per-chart explanation text (short Markdown). Only the charts that actually
+   * had enough data to render get a section — absent keys render nothing.
+   */
+  sections: Partial<Record<OverviewChartKey, string>>;
+  ragInfo?: RagInfo;
+  generatedAt: string;
 }
 
 // Analytics — Race Predictor (predicted HYROX finish time)

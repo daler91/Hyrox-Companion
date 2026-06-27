@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 import { afterEach,beforeEach, describe, expect, it, vi } from "vitest";
 
+import { generateJsonText } from "../../ai/providers";
 import {
   chatWithCoach,
   generateWorkoutSuggestions,
@@ -64,6 +65,7 @@ vi.mock("../../storage", () => ({
     },
     workouts: {
       getExerciseSetsByPlanDay: vi.fn(),
+      listWorkoutLogs: vi.fn().mockResolvedValue([]),
     },
     coaching: {
       listCoachingMaterials: vi.fn(),
@@ -73,7 +75,19 @@ vi.mock("../../storage", () => ({
     aiUsage: {
       getDailyTotalCents: vi.fn().mockResolvedValue(0),
     },
+    analyticsResults: {
+      get: vi.fn(),
+      upsert: vi.fn(),
+    },
   },
+}));
+
+// Mock the AI provider facade used by the Overview-analysis service so the
+// consent test can assert no provider work happens and no real AI is called.
+vi.mock("../../ai/providers", () => ({
+  generateJsonText: vi.fn(),
+  generateText: vi.fn(),
+  streamText: vi.fn(),
 }));
 
 // Mock the gemini functions
@@ -150,6 +164,12 @@ const aiConsentGuardCases = [
     blockedCall: chatWithCoach,
   },
   {
+    name: "overview analysis",
+    path: "/api/v1/overview-analysis",
+    body: {},
+    blockedCall: generateJsonText,
+  },
+  {
     name: "timeline suggestions",
     path: "/api/v1/timeline/ai-suggestions",
     body: {},
@@ -174,6 +194,51 @@ describe("AI route consent compliance", () => {
     expect(response.body.code).toBe("AI_COACH_DISABLED");
     expect(storage.aiUsage.getDailyTotalCents).not.toHaveBeenCalled();
     expect(blockedCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/v1/overview-analysis", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+  });
+
+  it("returns { sections: null } when nothing is stored (no AI spend)", async () => {
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue(undefined);
+
+    const response = await request(app).get("/api/v1/overview-analysis");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ sections: null });
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("returns the stored per-chart analysis with generatedAt and a stale flag", async () => {
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+      id: "row-1",
+      userId: "test_user_id",
+      feature: "overview_analysis",
+      payload: {
+        sections: { trainingLoad: "Your ACWR is in the sweet spot." },
+        generatedAt: "2026-06-01T00:00:00.000Z",
+      },
+      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+      lastWorkoutDateAtGeneration: "2026-06-01",
+      recomputedOn: null,
+      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    const response = await request(app).get("/api/v1/overview-analysis");
+
+    expect(response.status).toBe(200);
+    expect(response.body.sections.trainingLoad).toContain("sweet spot");
+    expect(response.body.generatedAt).toBe("2026-06-01T00:00:00.000Z");
+    // listWorkoutLogs defaults to [] → no newer workout than at generation → not stale.
+    expect(response.body.stale).toBe(false);
+    expect(generateJsonText).not.toHaveBeenCalled();
   });
 });
 

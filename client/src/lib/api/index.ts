@@ -1,4 +1,4 @@
-export type { AnalyticsExportFormat, RacePredictionView, Suggestion } from "./analytics";
+export type { AnalyticsExportFormat, OverviewAnalysisResponse, RacePredictionView, Suggestion } from "./analytics";
 export { analytics, timeline } from "./analytics";
 export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
@@ -65,6 +65,7 @@ export const QUERY_KEYS = {
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
   trainingOverview: ["/api/v1/training-overview"] as const,
+  overviewAnalysis: ["/api/v1/overview-analysis"] as const,
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,

@@ -3,6 +3,7 @@ import type { HrZone, TrainingLoadOverview } from "@shared/schema";
 import { CHART_CARD_CLASS } from "../chartConstants";
 import { MiniLineChart } from "../MiniLineChart";
 import { MultiLineChart } from "../MultiLineChart";
+import { ChartExplanation } from "./ChartExplanation";
 
 /** Whole-number training-stress label (UTSS / hrTSS / TSS / EWMA / strain). */
 function formatLoad(value: number): string {
@@ -32,7 +33,8 @@ const HR_ZONE_LABELS: Record<HrZone, string> = {
  */
 export function ObjectiveLoadTrendCharts({
   trainingLoad,
-}: Readonly<{ trainingLoad: TrainingLoadOverview }>) {
+  explanation,
+}: Readonly<{ trainingLoad: TrainingLoadOverview; explanation?: string }>) {
   const { trend } = trainingLoad;
 
   const hasHrTss = trend.filter((p) => p.hrTss != null).length >= MIN_POINTS;
@@ -141,6 +143,7 @@ export function ObjectiveLoadTrendCharts({
           valueFormatter={formatLoad}
         />
       )}
+      <ChartExplanation explanation={explanation} />
     </div>
   );
 }

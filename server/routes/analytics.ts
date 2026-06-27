@@ -11,7 +11,8 @@ import { env } from "../env";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
 import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
-import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, type ExerciseSetWithDate } from "../services/analyticsService";
+import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
+import { addCalendarDays, assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
 import { storage } from "../storage";
 import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { getUserId } from "../types";
@@ -104,18 +105,11 @@ export function validDate(val: unknown): string | undefined {
 type DateQuery = { from?: string; to?: string };
 type DateReq = ExpressRequest<Record<string, never>, unknown, unknown, DateQuery>;
 
-export function todayUtcYyyyMmDd(): string {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    .toISOString()
-    .split("T")[0];
-}
-
-export function addCalendarDays(date: string, delta: number): string {
-  const value = new Date(`${date}T00:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + delta);
-  return value.toISOString().split("T")[0];
-}
+// UTC calendar-day helpers now live in services/trainingOverviewLoader (shared
+// with the Overview AI analysis path so both compute the same windows).
+// Re-exported here so the existing analytics route tests keep importing them
+// from this module.
+export { addCalendarDays, todayUtcYyyyMmDd };
 
 function parseDateParams(req: DateReq, res: Response): { from?: string; to?: string } | null {
   const from = validDate(req.query.from);
@@ -209,97 +203,19 @@ const getWorkoutLogsCoalesced = createCoalescedCache(
   (userId, from, to) => storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
 );
 
-/**
- * Returns the pair of ISO dates that bound the period immediately BEFORE
- * [from, to], with the same length. Returns null when we can't derive a
- * meaningful previous window (e.g. the user picked "all time" so there's
- * no lower bound to anchor the comparison).
- */
-function computePreviousWindow(from?: string, to?: string): { from: string; to: string } | null {
-  if (!from) return null;
-  const fromDate = new Date(`${from}T00:00:00Z`);
-  // When `to` is absent (the common ?from=... flow), anchor the current
-  // window's upper bound at midnight UTC of today. Using `new Date()` with
-  // a wall-clock time component would make (to - from) include fractional
-  // days, and after truncating to YYYY-MM-DD the previous window would end
-  // up one day longer for most of the calendar day — skewing all delta
-  // percentages.
-  let toDate: Date;
-  if (to) {
-    toDate = new Date(`${to}T00:00:00Z`);
-  } else {
-    const now = new Date();
-    toDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  }
-  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) return null;
-  if (toDate < fromDate) return null;
-
-  const dayMs = 24 * 60 * 60 * 1000;
-  // Previous window ends the day before the current window starts and has
-  // the same inclusive length. For an inclusive range [from, to] with N
-  // days, (to - from) is (N-1) day-spans — which is exactly the offset we
-  // need to step back from previousTo to previousFrom.
-  const previousTo = new Date(fromDate.getTime() - dayMs);
-  const previousFrom = new Date(previousTo.getTime() - (toDate.getTime() - fromDate.getTime()));
-
-  return {
-    from: previousFrom.toISOString().split("T")[0],
-    to: previousTo.toISOString().split("T")[0],
-  };
-}
-
 router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
     const dates = parseDateParams(req, res);
     if (!dates) return;
 
-    const previousWindow = computePreviousWindow(dates.from, dates.to);
-    const loadCurrentDate = dates.to ?? todayUtcYyyyMmDd();
-    const loadHistoryStart = addCalendarDays(loadCurrentDate, -70);
-
-    const [
-      workoutLogs,
-      allSets,
-      previousWorkoutLogs,
-      user,
-      loadTags,
-      loadWorkoutLogs,
-      loadExerciseSets,
-    ] = await Promise.all([
-      getWorkoutLogsCoalesced(userId, dates.from, dates.to),
-      getExerciseSetsCoalesced(userId, dates.from, dates.to),
-      previousWindow
-        ? getWorkoutLogsCoalesced(userId, previousWindow.from, previousWindow.to)
-        : Promise.resolve(undefined),
-      storage.users.getUser(userId),
-      storage.analytics.getExerciseLoadTags(),
-      getWorkoutLogsCoalesced(userId, loadHistoryStart, loadCurrentDate),
-      getExerciseSetsCoalesced(userId, loadHistoryStart, loadCurrentDate),
-    ]);
-
-    res.json(calculateTrainingOverview(
-      workoutLogs,
-      allSets,
-      previousWorkoutLogs,
-      {
-        weeklyGoal: user?.weeklyGoal ?? 5,
-        loadTags,
-        trainingLoadInput: {
-          workoutLogs: loadWorkoutLogs,
-          exerciseSets: loadExerciseSets,
-          currentDate: loadCurrentDate,
-        },
-        userTimezone: user?.userTimezone,
-        weightUnit: user?.weightUnit ?? "kg",
-        athlete: {
-          age: user?.age ?? null,
-          gender: user?.gender ?? null,
-          restingHr: user?.restingHr ?? null,
-          maxHr: user?.maxHr ?? null,
-          ftp: user?.ftp ?? null,
-        },
-      },
-    ));
+    // Delegate to the shared assembly, injecting the route's request-coalescing
+    // caches so rapid tab refetches still collapse to a single storage call.
+    res.json(
+      await assembleTrainingOverview(userId, dates.from, dates.to, {
+        workoutLogs: getWorkoutLogsCoalesced,
+        exerciseSets: getExerciseSetsCoalesced,
+      }),
+    );
   }));
 
 

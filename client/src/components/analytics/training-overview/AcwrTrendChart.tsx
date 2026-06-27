@@ -20,6 +20,7 @@ import {
   GRID_DASH,
   MUTED_FG,
 } from "../chartConstants";
+import { ChartExplanation } from "./ChartExplanation";
 
 const ZONE_LABELS: Record<LoadGovernorAcwrZone, string> = {
   insufficient_data: "Insufficient data",
@@ -118,7 +119,10 @@ function AcwrTooltip({
   );
 }
 
-export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: TrainingLoadOverview }>) {
+export function AcwrTrendChart({
+  trainingLoad,
+  explanation,
+}: Readonly<{ trainingLoad: TrainingLoadOverview; explanation?: string }>) {
   const chartData = trainingLoad.trend.filter((point) => point.acwr != null);
   const hasTrend = chartData.length > 1;
   // ⚡ Bolt Performance Optimization:
@@ -234,6 +238,8 @@ export function AcwrTrendChart({ trainingLoad }: Readonly<{ trainingLoad: Traini
       {trainingLoad.downshiftRationale && (
         <p className="text-xs text-muted-foreground">{trainingLoad.downshiftRationale}</p>
       )}
+
+      <ChartExplanation explanation={explanation} />
     </div>
   );
 }
