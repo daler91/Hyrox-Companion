@@ -41,7 +41,7 @@ export function OverviewAnalysisHeader({
             <p className="text-sm font-semibold">AI Chart Analysis</p>
             <p className="text-xs text-muted-foreground">
               {hasAnalysis
-                ? "Expand “What this means for you” under each chart for a plain-language read of your numbers."
+                ? "A plain-language read of your numbers shows under each chart below."
                 : "Get a plain-language read of what each chart below is telling you."}
             </p>
           </div>
