@@ -407,6 +407,8 @@ export async function startQueue() {
             if (outcome.ok) {
               await persistOverviewAnalysis(userId, outcome.result, localDate);
             } else {
+              // bearer:disable javascript_lang_logger_leak — jobId is a UUID
+              // and reason is a fixed enum; no PII or secrets (cf. line ~375).
               logger.info({ jobId: job.id, reason: outcome.reason }, "[pg-boss] Overview analysis recompute skipped (gated)");
             }
             return;
