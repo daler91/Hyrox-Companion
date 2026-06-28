@@ -50,6 +50,7 @@ describe("buildTrainingContext", () => {
   });
 
   it("returns default zeroed context when user has no timeline or plans", async () => {
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([]);
     vi.mocked(storage.plans.getActivePlan).mockResolvedValue(undefined);
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLogs).mockResolvedValue([]);
@@ -64,6 +65,7 @@ describe("buildTrainingContext", () => {
       skippedWorkouts: 0,
       completionRate: 0,
       currentStreak: 0,
+      currentDate: "2026-01-15",
       mafHr: null,
       weeklyGoal: undefined,
       recentWorkouts: [],

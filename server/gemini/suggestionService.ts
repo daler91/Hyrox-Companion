@@ -4,6 +4,7 @@ import { z } from "zod";
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
+import { relativeDayLabel } from "../prompts/coachingContext";
 import {
   formatExerciseSetsForPrompt,
   type PromptExerciseSet,
@@ -131,7 +132,7 @@ function formatRecentWorkout(
     distanceUnit: trainingContext.distanceUnit,
   });
   const workoutDetails = exerciseSummary ? `Exercises: ${exerciseSummary}` : sanitizeUserInput(workout.mainWorkout);
-  let line = `- ${workout.date}: ${sanitizeUserInput(workout.focus)} - ${workoutDetails}`;
+  let line = `- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus)} - ${workoutDetails}`;
   const meta: string[] = [];
   if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
   if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);
@@ -203,10 +204,11 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
     distanceUnit: trainingContext.distanceUnit,
   });
   const priorAiContext = formatPriorAiContext(workout);
+  const dateLabel = `${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}`;
   if (exerciseSummary) {
-    return `ID: ${workout.id}, Date: ${workout.date}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
+    return `ID: ${workout.id}, Date: ${dateLabel}, Focus: ${sanitizeUserInput(workout.focus)}, Exercises: ${exerciseSummary}${priorAiContext}`;
   }
-  let line = `ID: ${workout.id}, Date: ${workout.date}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
+  let line = `ID: ${workout.id}, Date: ${dateLabel}, Focus: ${sanitizeUserInput(workout.focus)}, Main: ${sanitizeUserInput(workout.mainWorkout)}`;
   if (workout.accessory) line += `, Accessory: ${sanitizeUserInput(workout.accessory)}`;
   if (workout.notes) line += `, Notes: ${sanitizeUserInput(workout.notes)}`;
   line += priorAiContext;
@@ -359,6 +361,9 @@ function buildPromptDataSections(
 ): string[] {
   const header = [
     `--- ATHLETE'S TRAINING DATA ---`,
+    ...(trainingContext.currentDate
+      ? [`Today's date: ${trainingContext.currentDate} (use this as "today"; workout dates below are annotated relative to it)`]
+      : []),
     ...(planGoal ? [`Athlete's goal: ${sanitizeUserInput(planGoal)}`] : []),
     `Completion rate: ${trainingContext.completionRate}%`,
     `Current streak: ${trainingContext.currentStreak} days`,

@@ -2,6 +2,7 @@ import { exerciseNames } from "@shared/schema/exercises";
 
 import type { TrainingContext } from "./gemini/types";
 import {
+  buildCurrentDateContext,
   buildExerciseFocus,
   buildOverallStats,
   buildRecentWorkouts,
@@ -414,6 +415,7 @@ export function buildSystemPrompt(
 
   let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
 
+  contextSection += buildCurrentDateContext(trainingContext);
   contextSection += buildOverallStats(trainingContext);
   contextSection += buildExerciseFocus(trainingContext);
   contextSection += buildStructuredPerformance(trainingContext);
