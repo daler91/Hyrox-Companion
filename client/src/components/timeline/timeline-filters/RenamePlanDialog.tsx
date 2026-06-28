@@ -54,7 +54,14 @@ export function RenamePlanDialog({
             disabled={!renameName.trim() || isRenaming}
             data-testid="button-rename-submit"
           >
-            {isRenaming ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            {isRenaming ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              "Save"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
