@@ -3,6 +3,7 @@ import type { TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
+import { getLocalDateStr } from "../../timezone";
 import { calculateTrainingLoad } from "../trainingLoadService";
 import {
   computeCurrentWeek,
@@ -139,6 +140,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates, user?.userTimezone);
+  // Anchor the coach's "today" to the athlete's local calendar, not server UTC:
+  // a US athlete chatting at 7am local is already past midnight UTC, so a
+  // UTC-derived date would read a day ahead and make today's session look like
+  // "tomorrow". Mirrors the timezone handling used by calculateStreak above.
+  const currentDate = getLocalDateStr(new Date(), user?.userTimezone ?? "UTC");
   const recentWorkouts = collectRecentWorkouts(timeline);
   const structuredExerciseStats = getStructuredExerciseStats(timeline);
 
@@ -267,6 +273,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     skippedWorkouts,
     completionRate,
     currentStreak,
+    currentDate,
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),
     weeklyGoal: user?.weeklyGoal ?? undefined,

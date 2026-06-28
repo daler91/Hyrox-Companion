@@ -1,6 +1,36 @@
+import { dayDiff } from "@shared/dateUtils";
+
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
 import { formatExerciseSetsForPrompt } from "./exerciseSetFormatter";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Human "today/tomorrow/yesterday/in N days" suffix for a workout date relative
+ * to the athlete's current local date, e.g. " (today)" or " (in 2 days)". The
+ * coach reads dates straight from the data, so spelling out the offset stops it
+ * from re-deriving the date and calling today's session "tomorrow". Returns an
+ * empty string when either date is missing or not a plain YYYY-MM-DD value.
+ */
+export function relativeDayLabel(date: string, currentDate?: string): string {
+  if (!currentDate || !ISO_DATE.test(date) || !ISO_DATE.test(currentDate)) return "";
+  const diff = dayDiff(currentDate, date);
+  if (diff === 0) return " (today)";
+  if (diff === 1) return " (tomorrow)";
+  if (diff === -1) return " (yesterday)";
+  if (diff > 1) return ` (in ${diff} days)`;
+  return ` (${-diff} days ago)`;
+}
+
+/**
+ * Tells the coach the athlete's current local date so "today"/"tomorrow" are
+ * anchored to the calendar rather than inferred from the most recent workout.
+ */
+export function buildCurrentDateContext(trainingContext: TrainingContext): string {
+  if (!trainingContext.currentDate) return "";
+  return `\nToday's date: ${trainingContext.currentDate}. Treat this as "today" when discussing workout timing — the dated workouts below are annotated relative to it.`;
+}
 
 export function buildOverallStats(trainingContext: TrainingContext): string {
   let section = `\nOverall Stats:
@@ -58,7 +88,7 @@ export function buildRecentWorkouts(trainingContext: TrainingContext): string {
     const workoutDetails = exerciseSummary
       ? `Exercises: ${exerciseSummary}`
       : sanitizeUserInput(workout.mainWorkout || "No details");
-    let line = `\n- ${workout.date}: ${sanitizeUserInput(workout.focus || "General")} - ${workoutDetails} (${workout.status})`;
+    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus || "General")} - ${workoutDetails} (${workout.status})`;
     if (workout.athleteNote?.trim()) line += ` | Athlete note: ${sanitizeUserInput(workout.athleteNote.trim())}`;
     section += line;
   }
@@ -74,7 +104,7 @@ export function buildUpcomingWorkouts(trainingContext: TrainingContext): string 
       weightUnit: trainingContext.weightUnit,
       distanceUnit: trainingContext.distanceUnit,
     });
-    let line = `\n- ${workout.date}: ${sanitizeUserInput(workout.focus || "General")} - `;
+    let line = `\n- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus || "General")} - `;
     if (exerciseSummary) {
       line += `Exercises: ${exerciseSummary}`;
     } else {

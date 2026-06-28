@@ -75,6 +75,13 @@ export interface TrainingContext {
   skippedWorkouts: number;
   completionRate: number;
   currentStreak: number;
+  /**
+   * The athlete's local calendar date ("YYYY-MM-DD") at context-build time,
+   * resolved against their saved timezone. Anchors the coach's notion of
+   * "today"/"tomorrow" so it doesn't infer the date from workout data and land
+   * a day behind for far-offset users.
+   */
+  currentDate?: string;
   /** Persisted MAF aerobic heart-rate ceiling (bpm) from the user profile, when set. */
   mafHr?: number | null;
   /** MAF test history/trend summary; present only for MAF-method athletes. */
