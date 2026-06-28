@@ -1,9 +1,10 @@
-import type { CoachNoteInputs, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
+import type { CoachNoteInputs, WorkoutSuggestion } from "@shared/schema";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
+import { formatCoachingAnalysis } from "../prompts/coachingAnalysis";
 import { relativeDayLabel } from "../prompts/coachingContext";
 import {
   formatExerciseSetsForPrompt,
@@ -215,136 +216,6 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
   return line;
 }
 
-function formatRpeTrend(insights: NonNullable<TrainingContext["coachingInsights"]>): string {
-  if (insights.rpeTrend === "insufficient_data") {
-    return `RPE TREND: Insufficient data (fewer than 3 workouts with RPE logged).`;
-  }
-
-  let rpeLine = `RPE TREND: ${insights.rpeTrend.toUpperCase()}`;
-  if (insights.avgRpeLast3 != null) rpeLine += ` (avg ${insights.avgRpeLast3} last 3 workouts`;
-  if (insights.avgRpePrior3 != null) rpeLine += ` vs ${insights.avgRpePrior3} prior 3`;
-  if (insights.avgRpeLast3 != null) rpeLine += `)`;
-  if (insights.fatigueFlag)
-    rpeLine += `. FATIGUE FLAG ACTIVE - analyze the upcoming workout fit before reducing volume.`;
-  if (insights.undertrainingFlag)
-    rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
-  return rpeLine;
-}
-
-function formatStationGapEntry(
-  g: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"][0],
-  severity: "critical" | "high",
-): string {
-  if (severity === "critical") {
-    const label =
-      g.daysSinceLastTrained === null ? "NEVER TRAINED" : `${g.daysSinceLastTrained} days`;
-    return `${g.station} (${label} — CRITICAL)`;
-  }
-  return `${g.station} (${g.daysSinceLastTrained} days — needs attention)`;
-}
-
-function formatStationGaps(
-  stationGaps: NonNullable<TrainingContext["coachingInsights"]>["stationGaps"],
-): string {
-  const criticalGaps = stationGaps.filter(
-    (g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 14,
-  );
-  const highGaps = stationGaps.filter(
-    (g) =>
-      g.daysSinceLastTrained != null && g.daysSinceLastTrained >= 10 && g.daysSinceLastTrained < 14,
-  );
-  const okCount = stationGaps.filter(
-    (g) => g.daysSinceLastTrained != null && g.daysSinceLastTrained < 10,
-  ).length;
-
-  const gapParts: string[] = [];
-  for (const g of criticalGaps) gapParts.push(formatStationGapEntry(g, "critical"));
-  for (const g of highGaps) gapParts.push(formatStationGapEntry(g, "high"));
-
-  if (okCount > 0 && gapParts.length > 0) {
-    gapParts.push(`${okCount} exercises OK (<10 days)`);
-  } else if (gapParts.length === 0) {
-    gapParts.push(`All exercises trained within 10 days — good coverage.`);
-  }
-
-  return `EXERCISE GAPS: ${gapParts.join(", ")}`;
-}
-
-/**
- * Surface the load governor as a binding auto-regulation block — but only when
- * it is actionable (active restrictions, or a yellow/danger ACWR zone). Returns
- * null otherwise so sweet-spot / insufficient-history athletes get an unchanged
- * prompt. The restriction `rationale` strings already name exactly what to
- * avoid, so they are reused verbatim.
- */
-function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
-  const gatingZone = lg.zone === "yellow" || lg.zone === "danger";
-  if (lg.activeRestrictions.length === 0 && !gatingZone) return null;
-
-  const lines = ["LOAD GOVERNOR (auto-regulation — binding):"];
-  if (lg.acwr != null && lg.zone !== "insufficient_data") {
-    lines.push(`- ACWR ${lg.acwr.toFixed(2)} — ${lg.zone.replaceAll("_", " ").toUpperCase()} zone.`);
-  }
-  if (lg.flaggedVectors.length > 0) {
-    lines.push(`- Flagged tissue load: ${lg.flaggedVectors.map((v) => v.replaceAll("_", " ")).join(", ")}.`);
-  }
-  for (const restriction of lg.activeRestrictions) {
-    lines.push(`- ${restriction.label}: ${restriction.rationale}`);
-  }
-  lines.push(
-    `- Some upcoming sessions may already be auto-adjusted by the governor (downshifted to a Recovery Run, or trimmed in volume); do not re-add intensity to those.`,
-  );
-  return lines.join("\n");
-}
-
-function formatCoachingAnalysis(
-  insights: NonNullable<TrainingContext["coachingInsights"]>,
-  planGoal?: string,
-): string {
-  const lines: string[] = [
-    `--- COACHING ANALYSIS ---`,
-    formatRpeTrend(insights),
-    formatStationGaps(insights.stationGaps),
-  ];
-
-  if (insights.loadGovernor) {
-    const governorBlock = formatLoadGovernor(insights.loadGovernor);
-    if (governorBlock) lines.push(governorBlock);
-  }
-
-  if (insights.planPhase) {
-    const p = insights.planPhase;
-    const remaining =
-      p.remainingPhases.length > 0
-        ? ` Remaining phases: ${p.remainingPhases.map((phase) => phase.toUpperCase()).join(" → ")}.`
-        : "";
-    lines.push(
-      `PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.${remaining}`,
-    );
-  }
-
-  if (insights.progressionFlags.length > 0) {
-    const flagLines = insights.progressionFlags.map(
-      (f) => `${f.exercise}: ${f.flag.toUpperCase()} — ${f.detail}`,
-    );
-    lines.push(`PROGRESSION:\n${flagLines.join("\n")}`);
-  }
-
-  if (insights.weeklyVolume) {
-    const v = insights.weeklyVolume;
-    lines.push(
-      `WEEKLY VOLUME: ${v.thisWeekCompleted}/${v.goal} goal this week (last week: ${v.lastWeekCompleted}/${v.goal}). Trend: ${v.trend}.`,
-    );
-  }
-
-  if (planGoal) {
-    lines.push(`ATHLETE'S GOAL: "${sanitizeUserInput(planGoal)}"`);
-  }
-
-  lines.push(`--- END COACHING ANALYSIS ---`);
-  return lines.join("\n");
-}
-
 /**
  * Assemble the shared athlete/plan data sections used by both the
  * modification and review-note prompts. Kept separate from the
@@ -451,7 +322,7 @@ export type ReviewNote = z.infer<typeof reviewNoteSchema>;
 
 const REVIEW_NOTES_SYSTEM_PROMPT = `You are an elite functional fitness coach with deep knowledge of hyrox-style racing, running, and strength training. Write short reassurance notes to the athlete for upcoming workouts you reviewed but decided to leave as-is.
 
-Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, recent workouts, plan goal, or coaching materials). Do not prescribe a new workout — these are review notes only.
+Your job is to write one note per upcoming workout ID, explaining in 1-2 sentences why the current plan still fits them given their data. Reference at least one specific signal you were given (RPE trend, plan phase, station gaps, training state, load governor / Form / monotony, race readiness, recent personal records, plan compliance, coverage gaps, recent workouts, plan goal, or coaching materials). Do not prescribe a new workout — these are review notes only.
 
 Return a JSON array of objects: [{ "workoutId": string, "note": string }, ...]. One entry per upcoming workout ID supplied. Keep each note under 280 characters. Do not include any other fields.`;
 

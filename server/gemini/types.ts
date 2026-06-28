@@ -1,4 +1,4 @@
-import type { CoachNoteInputs, TrainingLoadOverview } from "@shared/schema";
+import type { CoachNoteInputs, RaceReadiness, TrainingLoadOverview } from "@shared/schema";
 
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
 
@@ -178,5 +178,27 @@ export interface TrainingContext {
       intensityPermitted: boolean;
       rationaleCodes: string[];
     };
+    /**
+     * Deterministic race-day form readiness (TSB taper guidance). Derived for
+     * free from `loadGovernor.tsb` via computeRaceReadiness — the always-on
+     * coach context never triggers the costly AI race prediction. Present only
+     * when status !== "insufficient_data".
+     */
+    raceReadiness?: RaceReadiness;
+    /**
+     * Top recent strength/performance bests (last ~10 weeks of logged sets),
+     * display-ready and capped to ~8 entries so the prompt stays bounded. These
+     * anchor progressive-overload decisions (e.g. e1RM) and let the coach
+     * acknowledge recent progress.
+     */
+    personalRecords?: Array<{ exercise: string; metric: string; display: string }>;
+    /** Count of recent bests set within the last 7 days (from the same window). */
+    prsThisWeek?: number;
+    /** Plan adherence: mean compliance % across logged workouts in the window. */
+    compliance?: { avgPct: number; windowDays: number };
+    /** Movement patterns not trained in 10+ days (or never), for non-station balance. */
+    neglectedPatterns?: Array<{ label: string; daysSince: number | null }>;
+    /** Muscle groups not trained in 10+ days (or never), for balance gaps. */
+    neglectedMuscles?: Array<{ label: string; daysSince: number | null }>;
   };
 }

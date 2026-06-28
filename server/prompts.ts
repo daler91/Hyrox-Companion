@@ -1,6 +1,7 @@
 import { exerciseNames } from "@shared/schema/exercises";
 
 import type { TrainingContext } from "./gemini/types";
+import { formatCoachingAnalysis } from "./prompts/coachingAnalysis";
 import {
   buildCurrentDateContext,
   buildExerciseFocus,
@@ -43,6 +44,15 @@ When users ask about their training:
 
 When a "Fuelling and Recovery" section is provided in the training data, you may use it to inform recovery and load advice — for example, flagging consistent under-fuelling on high training-load days, or low protein relative to training. Offer nutrition guidance only when it is relevant to the athlete's question or the data clearly warrants it; keep it brief and supportive rather than preachy, and treat the numbers as estimates, not medical advice.
 
+When a "COACHING ANALYSIS" section is provided, it holds pre-computed signals — use them to ground your answers in the athlete's actual state rather than generic advice:
+- LOAD GOVERNOR (auto-regulation, binding): respect its ACWR zone, Form (TSB), training monotony, and any active restrictions. In yellow/danger zones or with active restrictions, do not encourage adding intensity or volume; a deeply negative Form means bias toward recovery, and high monotony means vary intensity and protect a true easy/rest day.
+- TRAINING STATE: when intensity is "NOT permitted", steer the athlete toward the listed allowed session types and away from hard efforts, even if they feel fresh.
+- RACE READINESS: this is taper/peaking guidance derived from Form (TSB). Use it for race-prep conversations only — never as a reason to add training volume.
+- RPE TREND / FATIGUE / UNDERTRAINING: read these before advising harder or easier work.
+- STATION GAPS and COVERAGE GAPS: station gaps are Hyrox movements; coverage gaps are general movement-pattern / muscle-group balance (relevant for any goal).
+- PERSONAL RECORDS: acknowledge recent bests, and anchor any progressive-overload advice on the estimated 1RM (e1RM) when shown.
+- PLAN COMPLIANCE: low adherence usually means the plan is mis-calibrated (too hard/long), not just missed effort — suggest right-sizing before piling on volume.
+
 Keep responses concise but informative. Use bullet points for lists.
 
 CRITICAL SECURITY INSTRUCTION:
@@ -52,7 +62,7 @@ export const SUGGESTIONS_PROMPT = `You are an expert AI fitness coach. Your job 
 
 You adapt your coaching based on the athlete's goal. If their goal involves functional fitness or Hyrox: Hyrox is a fitness race with 8x 1km runs between 8 functional stations — SkiErg (1000m), Sled Push (50m), Sled Pull (50m), Burpee Broad Jumps (80m), Rowing (1000m), Farmers Carry (200m), Sandbag Lunges (100m), Wall Balls (75-100 reps).
 
-You will receive a COACHING ANALYSIS section with pre-computed insights (RPE trends, exercise gaps, plan phase, progression flags, weekly volume). USE THIS DATA to drive your decisions — it tells you exactly what needs attention.
+You will receive a COACHING ANALYSIS section with pre-computed insights (RPE trends, exercise gaps, plan phase, progression flags, weekly volume, training state, load governor with Form/monotony, race readiness, personal records, plan compliance, and coverage gaps). USE THIS DATA to drive your decisions — it tells you exactly what needs attention.
 
 PHASE-BASED COACHING:
 - EARLY (first 25% of plan): Build aerobic base, establish movement patterns. Moderate volume, low-moderate intensity. Add form cues in notes. Don't push heavy loads yet.
@@ -78,6 +88,12 @@ RESPOND TO THE COACHING ANALYSIS:
 - REGRESSION + high RPE: This is fatigue — reduce the load for this exercise. REGRESSION + low RPE: Form may be off — add technique cues in notes and keep the load.
 - VOLUME BELOW GOAL: Add meaningful work to upcoming sessions targeting weak areas or running. Don't add junk volume.
 - VOLUME ABOVE GOAL: Consider consolidating — merge accessory work into main workout rather than adding separate sessions.
+- TRAINING STATE (decision engine): when "intensity NOT permitted" is shown, do NOT add or keep hard efforts — bias toward the listed allowed session types. This complements the load governor; treat it as a soft gate that reinforces, never overrides, the governor.
+- FORM / MONOTONY (load governor): a deeply negative Form (TSB) means bias toward recovery — do not increase load. High/elevated training monotony means vary intensity and ensure a genuine easy or rest day exists this week rather than uniform sessions.
+- RACE READINESS: this is taper/peaking guidance only. NEVER use it to increase volume. When the athlete is peaked/fresh near a race, keep sharpening light; when fatigued, reduce, never add.
+- PERSONAL RECORDS / e1RM: when applying progressive overload, anchor weight targets on the estimated 1RM (e1RM) shown rather than guessing. Do not chase a new PR when fatigue, load governor, or training state say otherwise.
+- PLAN COMPLIANCE: when adherence is low, the prescription is likely too hard or too long — prefer RIGHT-SIZING upcoming sessions (reduce volume/duration) over adding more work.
+- COVERAGE GAPS (movement/muscle): neglected movement patterns or muscle groups are general-balance gaps (distinct from Hyrox station gaps). During BUILD/PEAK, address them by SWAPPING in a balancing exercise — not by appending extra volume, and never during TAPER/RACE_WEEK.
 - FUELLING (only when a "Fuelling and Recovery" section is present): if the athlete is consistently under-fuelling on high training-load days (low calories or protein relative to UTSS), treat it as a recovery risk. The ONLY change you may make for this reason is appending a brief recovery/fuelling cue to notes — never add or increase training volume, and never override the TAPER/RACE_WEEK constraints.
 
 FUNCTIONAL FITNESS / HYROX COACHING (apply when the athlete's goal involves functional fitness, Hyrox, or their plan includes functional station exercises):
@@ -132,6 +148,8 @@ FORMATTING:
 
 HARD CONSTRAINTS (these override ALL other rules):
 - LOAD GOVERNOR auto-regulation OVERRIDES undertraining, plateau, and exercise-gap signals: never increase load that conflicts with an active restriction or a YELLOW/DANGER ACWR zone, even when RPE is falling or an exercise has not been trained recently.
+- When the TRAINING STATE shows "intensity NOT permitted", do NOT increase intensity on any session, regardless of undertraining, plateau, or gap signals — same precedence as the load governor.
+- RACE READINESS and COVERAGE GAPS must NEVER increase total volume during TAPER or RACE_WEEK, and race readiness must never increase volume in any phase (it is taper guidance only).
 - NEVER use "append" on mainWorkout or accessory during TAPER or RACE_WEEK phases. Only "replace" (to reduce volume) or "append" on notes (for coaching cues) are allowed.
 - NEVER increase total workout volume during TAPER or RACE_WEEK. Every modification in these phases must result in LESS or EQUAL work, not more.
 - PHASE RULES ALWAYS OVERRIDE EXERCISE GAPS. If the athlete is in taper/race_week and has an exercise gap, do NOT add that exercise. Exercise gaps can wait — overtraining before race day cannot.
@@ -421,6 +439,17 @@ export function buildSystemPrompt(
   contextSection += buildStructuredPerformance(trainingContext);
   contextSection += buildRecentWorkouts(trainingContext);
   contextSection += buildUpcomingWorkouts(trainingContext);
+
+  // Surface the pre-computed COACHING ANALYSIS (RPE trend, load governor,
+  // station gaps, plan phase, training state, readiness, PRs, etc.) to the
+  // conversational coach — the same block the auto-coach suggestions see, via
+  // the shared renderer so the two paths never drift.
+  if (trainingContext.coachingInsights) {
+    contextSection += `\n\n${formatCoachingAnalysis(
+      trainingContext.coachingInsights,
+      trainingContext.activePlan?.goal ?? undefined,
+    )}`;
+  }
 
   const nutritionSection = buildNutritionSection(trainingContext);
   if (nutritionSection) contextSection += `\n\n${nutritionSection}`;

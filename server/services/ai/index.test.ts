@@ -536,4 +536,73 @@ describe("buildTrainingContext", () => {
     expect(computeWeeklyVolume).not.toHaveBeenCalled();
     expect(storage.mafTests.listTestResults).not.toHaveBeenCalled();
   });
+
+  it("derives recent personal records and PRs-this-week from the load-window sets", async () => {
+    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+      {
+        exerciseName: "back_squat",
+        category: "strength",
+        weight: 100,
+        reps: 5,
+        workoutLogId: "w1",
+        date: "2026-06-14", // within the last 7 days of TODAY
+      },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.personalRecords).toEqual([
+      { exercise: "back squat", metric: "e1rm", display: "e1RM 116.7kg" },
+    ]);
+    // maxWeight + estimated1RM both landed this week.
+    expect(ctx.coachingInsights?.prsThisWeek).toBe(2);
+  });
+
+  it("aggregates plan compliance from the load-window workout logs", async () => {
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+      { compliancePct: 60 },
+      { compliancePct: 80 },
+      { compliancePct: null },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.compliance).toEqual({ avgPct: 70, windowDays: 70 });
+  });
+
+  it("attaches deterministic race readiness derived from TSB without calling the AI predictor", async () => {
+    loadMock.mockReturnValue({ overview: { zone: "sweet_spot", tsb: 18 } } as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.raceReadiness?.status).toBe("peaked");
+    expect(ctx.coachingInsights?.raceReadiness?.tsb).toBe(18);
+  });
+
+  it("omits race readiness when TSB is unavailable", async () => {
+    loadMock.mockReturnValue({ overview: { zone: "sweet_spot", tsb: null } } as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.raceReadiness).toBeUndefined();
+  });
+
+  it("surfaces never-trained coverage gaps once the athlete has training history", async () => {
+    statsMock.mockReturnValue(makeStats({ totalWorkouts: 15 }));
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    // Empty sets + enough history => every pattern/muscle reads as "never", capped.
+    expect(ctx.coachingInsights?.neglectedPatterns?.length).toBeGreaterThan(0);
+    expect(ctx.coachingInsights?.neglectedPatterns?.[0].daysSince).toBeNull();
+  });
+
+  it("omits coverage gaps for athletes without enough history", async () => {
+    statsMock.mockReturnValue(makeStats({ totalWorkouts: 3 }));
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.coachingInsights?.neglectedPatterns).toBeUndefined();
+    expect(ctx.coachingInsights?.neglectedMuscles).toBeUndefined();
+  });
 });
