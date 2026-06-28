@@ -334,7 +334,7 @@ function calculateDaysSince(lastTrained: string | null, todayStr: string): numbe
   return Math.round((Date.parse(todayStr) - Date.parse(lastTrained)) / 86400000);
 }
 
-function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]): MovementPatternCoverage[] {
+export function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]): MovementPatternCoverage[] {
   const todayStr = new Date().toISOString().split("T")[0];
   const patternStats = new Map<MovementPattern, {
     workoutLogIds: Set<string>;
@@ -377,7 +377,7 @@ function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]): Move
   });
 }
 
-function buildMuscleGroupCoverage(exerciseSets: ExerciseSetWithDate[]): MuscleGroupCoverage[] {
+export function buildMuscleGroupCoverage(exerciseSets: ExerciseSetWithDate[]): MuscleGroupCoverage[] {
   const todayStr = new Date().toISOString().split("T")[0];
   const muscleStats = new Map<HeatMapMuscle, {
     workoutLogIds: Set<string>;

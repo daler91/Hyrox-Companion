@@ -1,9 +1,18 @@
+import type { TrainingLoadOverview } from "@shared/schema";
+
 import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
 import type { TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
 import { getLocalDateStr } from "../../timezone";
+import {
+  buildMovementPatternCoverage,
+  buildMuscleGroupCoverage,
+  calculatePersonalRecords,
+  countPersonalRecordsInRange,
+} from "../analyticsService";
+import { computeRaceReadiness } from "../racePrediction/racePredictionService";
 import { calculateTrainingLoad } from "../trainingLoadService";
 import {
   computeCurrentWeek,
@@ -57,6 +66,122 @@ function classifyExperienceLevel(totalWorkouts: number): "beginner" | "intermedi
   if (totalWorkouts < 20) return "beginner";
   if (totalWorkouts < 80) return "intermediate";
   return "advanced";
+}
+
+// A movement pattern / muscle group counts as "neglected" once it hasn't been
+// trained in 10+ days — mirrors the station-gap threshold so the coach treats
+// coverage gaps consistently.
+const COVERAGE_NEGLECT_DAYS = 10;
+
+/**
+ * Pick the most coaching-relevant recent bests (last ~10 weeks of logged sets)
+ * as display-ready strings. Prefers the estimated 1RM (or top weight) so the
+ * model can anchor progressive overload, then fills with distance/time bests.
+ * Capped to keep the prompt bounded.
+ */
+function buildPersonalRecordSummaries(
+  prs: ReturnType<typeof calculatePersonalRecords>,
+  weightUnit: string,
+): Array<{ exercise: string; metric: string; display: string }> {
+  const entries: Array<{ exercise: string; metric: string; display: string; sort: number }> = [];
+  for (const [key, pr] of Object.entries(prs)) {
+    const exercise = pr.customLabel?.trim() || key.replace(/^custom:/, "").replaceAll("_", " ");
+    if (pr.estimated1RM) {
+      entries.push({ exercise, metric: "e1rm", display: `e1RM ${pr.estimated1RM.value}${weightUnit}`, sort: pr.estimated1RM.value });
+    } else if (pr.maxWeight) {
+      entries.push({ exercise, metric: "weight", display: `max weight ${pr.maxWeight.value}${weightUnit}`, sort: pr.maxWeight.value });
+    } else if (pr.bestTime) {
+      entries.push({ exercise, metric: "time", display: `best time ${pr.bestTime.value}min`, sort: 0 });
+    } else if (pr.maxDistance) {
+      entries.push({ exercise, metric: "distance", display: `max distance ${pr.maxDistance.value}m`, sort: 0 });
+    }
+  }
+  // Weighted lifts first (highest load = most overload-relevant), capped to 8.
+  entries.sort((a, b) => b.sort - a.sort);
+  return entries.slice(0, 8).map(({ exercise, metric, display }) => ({ exercise, metric, display }));
+}
+
+/**
+ * Reduce a coverage list to the neglected entries (10+ days, or never trained
+ * once the athlete has enough history that "never" is signal, not noise),
+ * staleness-first and capped so the prompt stays bounded.
+ */
+function pickNeglectedCoverage(
+  coverage: Array<{ label: string; daysSince: number | null }>,
+  hasHistory: boolean,
+): Array<{ label: string; daysSince: number | null }> {
+  return coverage
+    .filter((c) => (c.daysSince === null ? hasHistory : c.daysSince >= COVERAGE_NEGLECT_DAYS))
+    .sort((a, b) => (b.daysSince ?? Number.POSITIVE_INFINITY) - (a.daysSince ?? Number.POSITIVE_INFINITY))
+    .slice(0, 6)
+    .map((c) => ({ label: c.label, daysSince: c.daysSince }));
+}
+
+type LoadExerciseSets = Awaited<
+  ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>
+>;
+type LoadWorkoutLogs = Awaited<ReturnType<typeof storage.analytics.getWorkoutLogsByDateRange>>;
+
+/**
+ * Derive the supplementary coaching signals that were added after the original
+ * coach context: recent personal records / e1RM, PRs-this-week, plan
+ * compliance, movement/muscle coverage gaps, and deterministic race readiness.
+ * All reuse data already loaded by buildTrainingContext (no extra IO) and every
+ * field self-suppresses when its signal is absent. Extracted to keep
+ * buildTrainingContext's complexity bounded.
+ */
+function buildSupplementaryInsights(params: {
+  loadExerciseSets: LoadExerciseSets;
+  loadWorkoutLogs: LoadWorkoutLogs;
+  loadGovernor: TrainingLoadOverview;
+  totalWorkouts: number;
+  weightUnit: string;
+  today: string;
+}): Partial<NonNullable<TrainingContext["coachingInsights"]>> {
+  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, today } =
+    params;
+
+  // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
+  const personalRecordMap = calculatePersonalRecords(loadExerciseSets);
+  const personalRecords = buildPersonalRecordSummaries(personalRecordMap, weightUnit);
+  const prsThisWeek = countPersonalRecordsInRange(personalRecordMap, addDays(today, -7), today);
+
+  // Plan adherence over the window.
+  let complianceSum = 0;
+  let complianceCount = 0;
+  for (const log of loadWorkoutLogs) {
+    if (typeof log.compliancePct === "number") {
+      complianceSum += log.compliancePct;
+      complianceCount++;
+    }
+  }
+  const compliance =
+    complianceCount > 0
+      ? { avgPct: Math.round(complianceSum / complianceCount), windowDays: 70 }
+      : undefined;
+
+  // Movement-pattern / muscle-group balance gaps (distinct from station gaps).
+  const hasCoverageHistory = totalWorkouts >= 10;
+  const neglectedPatterns = pickNeglectedCoverage(
+    buildMovementPatternCoverage(loadExerciseSets),
+    hasCoverageHistory,
+  );
+  const neglectedMuscles = pickNeglectedCoverage(
+    buildMuscleGroupCoverage(loadExerciseSets),
+    hasCoverageHistory,
+  );
+
+  // Deterministic race-day form readiness from TSB — free (no AI call).
+  const raceReadiness = computeRaceReadiness(loadGovernor.tsb);
+
+  return {
+    ...(personalRecords.length > 0 ? { personalRecords } : {}),
+    ...(prsThisWeek > 0 ? { prsThisWeek } : {}),
+    ...(compliance ? { compliance } : {}),
+    ...(neglectedPatterns.length > 0 ? { neglectedPatterns } : {}),
+    ...(neglectedMuscles.length > 0 ? { neglectedMuscles } : {}),
+    ...(raceReadiness.status !== "insufficient_data" ? { raceReadiness } : {}),
+  };
 }
 
 type UpcomingPlannedDay = Awaited<
@@ -167,9 +292,10 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     : undefined;
   const weeklyVolume = weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal) : undefined;
   const progressionFlags = computeProgressionFlags(timeline);
+  const weightUnit = user?.weightUnit || "kg";
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
-    weightUnit: user?.weightUnit || "kg",
+    weightUnit,
     athlete: {
       age: user?.age ?? null,
       gender: user?.gender ?? null,
@@ -202,6 +328,18 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     },
   });
 
+  // Supplementary signals (PRs/e1RM, compliance, coverage gaps, race readiness)
+  // derived from data already loaded above — no extra IO. Each self-suppresses
+  // when absent. Extracted to keep this function's complexity bounded.
+  const supplementaryInsights = buildSupplementaryInsights({
+    loadExerciseSets,
+    loadWorkoutLogs,
+    loadGovernor,
+    totalWorkouts,
+    weightUnit,
+    today,
+  });
+
   const coachingInsights: TrainingContext["coachingInsights"] = {
     ...rpeTrend,
     stationGaps,
@@ -215,6 +353,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       intensityPermitted: decisionTree.intensityPermitted,
       rationaleCodes: decisionTree.rationaleCodes,
     },
+    ...supplementaryInsights,
   };
 
   // W6: omit userId from these info-level health lines. The logger's requestId

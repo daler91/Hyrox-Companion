@@ -523,3 +523,174 @@ describe("buildSuggestionsPrompt — load governor gating", () => {
     expect(SUGGESTIONS_PROMPT).toContain("LOAD GOVERNOR auto-regulation OVERRIDES");
   });
 });
+
+describe("chat system prompt — coaching analysis inclusion", () => {
+  it("renders the full COACHING ANALYSIS block in the chat prompt (not just suggestions)", () => {
+    const ctx = createMockTrainingContext({
+      totalWorkouts: 30,
+      activePlan: { name: "Hyrox Peak", totalWeeks: 10, currentWeek: 9, goal: "FINGERPRINT_CHAT_GOAL" },
+      coachingInsights: {
+        rpeTrend: "rising",
+        avgRpeLast3: 8.7,
+        avgRpePrior3: 6.2,
+        fatigueFlag: true,
+        undertrainingFlag: false,
+        stationGaps: [{ station: "Wall Balls", daysSinceLastTrained: 22 }],
+        planPhase: {
+          currentWeek: 9,
+          totalWeeks: 10,
+          phaseLabel: "taper",
+          progressPct: 90,
+          remainingPhases: ["race_week"],
+        },
+        progressionFlags: [],
+        loadGovernor: summary([], { zone: "yellow", acwr: 1.4 }),
+      },
+    });
+
+    const prompt = buildSystemPrompt(ctx);
+
+    // The chat coach previously saw NONE of this — it must now appear.
+    expect(prompt).toContain("--- COACHING ANALYSIS ---");
+    expect(prompt).toContain("RPE TREND: RISING");
+    expect(prompt).toContain("FATIGUE FLAG ACTIVE");
+    expect(prompt).toContain("Wall Balls (22 days");
+    expect(prompt).toContain("TAPER phase");
+    expect(prompt).toContain("LOAD GOVERNOR (auto-regulation — binding):");
+    expect(prompt).toContain("YELLOW zone.");
+    // The plan goal is threaded through from activePlan.goal.
+    expect(prompt).toContain("FINGERPRINT_CHAT_GOAL");
+  });
+});
+
+describe("coaching analysis — newly wired-in signals", () => {
+  const baseInsights = {
+    rpeTrend: "stable" as const,
+    fatigueFlag: false,
+    undertrainingFlag: false,
+    stationGaps: [],
+    progressionFlags: [],
+  };
+
+  it("renders the training-state decision tree in both prompts", () => {
+    const ctx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: {
+        ...baseInsights,
+        decisionTree: {
+          currentPhase: "aerobic_base",
+          allowedWorkoutTypes: ["easy_aerobic", "mobility"],
+          intensityPermitted: false,
+          rationaleCodes: ["high_acwr"],
+        },
+      },
+    });
+
+    for (const prompt of [
+      buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal"),
+      buildSystemPrompt(ctx),
+    ]) {
+      expect(prompt).toContain("TRAINING STATE: AEROBIC BASE phase");
+      expect(prompt).toContain("intensity NOT permitted");
+      expect(prompt).toContain("Allowed session types: easy aerobic, mobility");
+      expect(prompt).toContain("Why: high acwr");
+    }
+  });
+
+  it("renders deterministic race readiness when present", () => {
+    const ctx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: {
+        ...baseInsights,
+        raceReadiness: { tsb: 18, status: "peaked", guidance: "FINGERPRINT_TAPER_GUIDANCE" },
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+    expect(prompt).toContain("RACE READINESS: PEAKED (TSB +18)");
+    expect(prompt).toContain("FINGERPRINT_TAPER_GUIDANCE");
+  });
+
+  it("renders recent personal records and PR-this-week acknowledgement", () => {
+    const ctx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: {
+        ...baseInsights,
+        personalRecords: [{ exercise: "back squat", metric: "e1rm", display: "e1RM 142.5kg" }],
+        prsThisWeek: 2,
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+    expect(prompt).toContain("PERSONAL RECORDS (recent bests): back squat e1RM 142.5kg.");
+    expect(prompt).toContain("2 new bests this week");
+    expect(prompt).toContain("Anchor progressive overload on the estimated 1RM");
+  });
+
+  it("renders compliance only when adherence is meaningfully below target", () => {
+    const lowCtx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: { ...baseInsights, compliance: { avgPct: 62, windowDays: 70 } },
+    });
+    expect(buildSuggestionsPrompt(lowCtx, [createMockUpcomingWorkout()], "goal")).toContain(
+      "PLAN COMPLIANCE: 62% adherence over the last 70 days",
+    );
+
+    const highCtx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: { ...baseInsights, compliance: { avgPct: 96, windowDays: 70 } },
+    });
+    expect(buildSuggestionsPrompt(highCtx, [createMockUpcomingWorkout()], "goal")).not.toContain(
+      "PLAN COMPLIANCE",
+    );
+  });
+
+  it("renders movement/muscle coverage gaps distinct from station gaps", () => {
+    const ctx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: {
+        ...baseInsights,
+        neglectedPatterns: [{ label: "Hinge", daysSince: 18 }],
+        neglectedMuscles: [{ label: "Hamstrings", daysSince: null }],
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+    expect(prompt).toContain("COVERAGE GAPS (general balance");
+    expect(prompt).toContain("movement patterns: Hinge (18d)");
+    expect(prompt).toContain("muscle groups: Hamstrings (never)");
+  });
+
+  it("renders Form/monotony/objective-load detail from the load governor", () => {
+    const ctx = createMockTrainingContext({
+      totalWorkouts: 30,
+      coachingInsights: {
+        ...baseInsights,
+        loadGovernor: summary([], {
+          zone: "sweet_spot",
+          acwr: 1.05,
+          tsb: -18,
+          monotony: 2.4,
+          strain: 900,
+          monotonyZone: "high_risk",
+          hrTss: 72,
+          hrZone: "z3",
+          tss: 65,
+        }),
+      },
+    });
+
+    const prompt = buildSuggestionsPrompt(ctx, [createMockUpcomingWorkout()], "goal");
+    expect(prompt).toContain("LOAD GOVERNOR (auto-regulation — binding):");
+    expect(prompt).toContain("Form (TSB) -18 — fatigued — carrying load.");
+    expect(prompt).toContain("Training monotony 2.40, strain 900 — HIGH RISK.");
+    expect(prompt).toContain("Objective load today: hrTSS 72 (Z3), power TSS 65.");
+  });
+
+  it("adds the new signals to the prompt instructions so the model can use them", () => {
+    expect(SUGGESTIONS_PROMPT).toContain("TRAINING STATE (decision engine)");
+    expect(SUGGESTIONS_PROMPT).toContain("RACE READINESS");
+    expect(SUGGESTIONS_PROMPT).toContain("PLAN COMPLIANCE");
+    expect(SUGGESTIONS_PROMPT).toContain("COVERAGE GAPS");
+  });
+});
