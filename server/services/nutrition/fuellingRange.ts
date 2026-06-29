@@ -88,9 +88,21 @@ export interface DayOutcomeWorkout {
   compliancePct: number | null;
 }
 
-function meanOrNull(values: number[], round: (n: number) => number): number | null {
-  if (values.length === 0) return null;
-  return round(values.reduce((acc, v) => acc + v, 0) / values.length);
+function meanOfProperty<T>(
+  items: T[],
+  selector: (item: T) => number | null | undefined,
+  round: (n: number) => number,
+): number | null {
+  let sum = 0;
+  let count = 0;
+  for (const item of items) {
+    const val = selector(item);
+    if (val != null) {
+      sum += val;
+      count++;
+    }
+  }
+  return count > 0 ? round(sum / count) : null;
 }
 
 /**
@@ -125,14 +137,8 @@ export function decorateBlockPointsWithOutcomes(
       carbTargetG: baseline
         ? buildEffectiveTargetSummary(baseline, singleDayWindow(utssByDate.get(point.date) ?? 0)).carbG
         : null,
-      avgRpe: meanOrNull(
-        dayLogs.map((l) => l.rpe).filter((r): r is number => r != null),
-        (n) => Math.round(n * 10) / 10,
-      ),
-      compliancePct: meanOrNull(
-        dayLogs.map((l) => l.compliancePct).filter((c): c is number => c != null),
-        Math.round,
-      ),
+      avgRpe: meanOfProperty(dayLogs, (l) => l.rpe, (n) => Math.round(n * 10) / 10),
+      compliancePct: meanOfProperty(dayLogs, (l) => l.compliancePct, Math.round),
     };
   });
 }
