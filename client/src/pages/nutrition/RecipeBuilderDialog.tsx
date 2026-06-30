@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCreateRecipe, useRecipe, useUpdateRecipe } from "@/hooks/useNutrition";
 
 import { FoodSearch } from "./FoodSearch";
@@ -165,15 +166,24 @@ function RecipeBuilderForm({
                 data-testid={`input-ingredient-qty-${i}`}
               />
               <span className="w-10 text-right text-xs text-muted-foreground">g</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Remove ${ing.name}`}
-                onClick={() => removeIngredient(i)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${ing.name}`}
+                      onClick={() => removeIngredient(i)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Remove {ing.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           ))}
           <FoodSearch onSelect={addFood} />
