@@ -96,7 +96,7 @@ export const MultiLineChart = memo(function MultiLineChart({
       <div className="flex justify-between items-center">
         <p className="text-sm font-semibold">{label}</p>
       </div>
-      <div className="h-[200px] w-full" data-testid={testId} role="img" aria-label={`${label}, line chart`}>
+      <div className="h-[160px] w-full sm:h-[200px]" data-testid={testId} role="img" aria-label={`${label}, line chart`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}

@@ -152,7 +152,7 @@ export function AcwrTrendChart({
 
       {hasTrend ? (
         <div
-          className="h-[220px] w-full"
+          className="h-[180px] w-full sm:h-[220px]"
           data-testid="chart-acwr-trend"
           role="img"
           aria-label={`Line chart of acute-to-chronic workload ratio over ${chartData.length} days; current zone ${ZONE_LABELS[trainingLoad.zone]}, ACWR ${formatAcwr(trainingLoad.acwr)}`}

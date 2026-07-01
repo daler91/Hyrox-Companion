@@ -64,7 +64,7 @@ export function MiniBarChart({
       <div className="flex justify-between items-center">
         <p className="text-sm font-semibold">{label}</p>
       </div>
-      <div className="h-[200px] w-full" data-testid={`chart-${valueKey}`} role="img" aria-label={`${label}, bar chart`}>
+      <div className="h-[160px] w-full sm:h-[200px]" data-testid={`chart-${valueKey}`} role="img" aria-label={`${label}, bar chart`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
