@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLogMealBatch } from "@/hooks/useNutrition";
 
 import { FoodSearch } from "./FoodSearch";
@@ -84,15 +85,24 @@ function ReviewRowCard({
             </p>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`Remove ${row.displayAmount}`}
-          onClick={onRemove}
-          data-testid={`meal-review-remove-${index}`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${row.displayAmount}`}
+                onClick={onRemove}
+                data-testid={`meal-review-remove-${index}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Remove {row.displayAmount}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       <div className="flex items-center gap-2">

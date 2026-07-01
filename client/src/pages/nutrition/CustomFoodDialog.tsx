@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCreateCustomFood, useUpdateCustomFood } from "@/hooks/useNutrition";
 
 import { removeAt, updateAt } from "./utils";
@@ -197,15 +198,24 @@ function CustomFoodForm({
                   value={s.grams}
                   onChange={(e) => updateServing(i, { grams: e.target.value })}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Remove serving"
-                  onClick={() => removeServing(i)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Remove serving"
+                        onClick={() => removeServing(i)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Remove serving</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             ))}
           </div>

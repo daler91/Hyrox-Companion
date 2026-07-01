@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useAddServing,
   useFoodWithServings,
@@ -425,17 +426,26 @@ function LogFoodForm({
                   <span className="min-w-0 truncate">
                     {s.label} · {Math.round(s.grams)} g
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0"
-                    aria-label={`Remove ${s.label}`}
-                    disabled={removeServing.isPending}
-                    onClick={() => handleRemovePortion(s)}
-                    data-testid="button-remove-portion"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          aria-label={`Remove ${s.label}`}
+                          disabled={removeServing.isPending}
+                          onClick={() => handleRemovePortion(s)}
+                          data-testid="button-remove-portion"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Remove {s.label}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               ))}
             </div>

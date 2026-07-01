@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -159,15 +160,24 @@ export default function Nutrition() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Nutrition</h1>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Previous day"
-              onClick={() => setDate((d) => addDays(d, -1))}
-              data-testid="button-prev-day"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Previous day"
+                    onClick={() => setDate((d) => addDays(d, -1))}
+                    data-testid="button-prev-day"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Previous day</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Button
               variant="ghost"
               className="min-w-24 text-center text-sm font-medium"
@@ -177,15 +187,24 @@ export default function Nutrition() {
             >
               {formatDateLabel(date)}
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Next day"
-              onClick={() => setDate((d) => addDays(d, 1))}
-              data-testid="button-next-day"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Next day"
+                    onClick={() => setDate((d) => addDays(d, 1))}
+                    data-testid="button-next-day"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Next day</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
