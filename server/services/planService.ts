@@ -1,7 +1,7 @@
 import type { InsertPlanDay, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { parse } from "csv-parse/sync";
-import { and,asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -169,10 +169,21 @@ export async function importPlanFromCSV(
     );
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Replaced Math.max(...weekNumbers) spread calls with an O(N) linear scan.
+  // This avoids intermediate array allocations and prevents 'Maximum call stack size exceeded'
+  // errors when parsing large dynamically generated CSV files.
+  let minWeek = Number.POSITIVE_INFINITY;
+  let maxWeek = Number.NEGATIVE_INFINITY;
+  for (const w of weekNumbers) {
+    if (w < minWeek) minWeek = w;
+    if (w > maxWeek) maxWeek = w;
+  }
+
   // Use the actual span (max - min + 1) rather than the count of unique weeks
   // so non-contiguous imports (e.g. weeks 1, 3, 5) don't under-report duration
   // and make analytics like workouts-per-week over-estimate.
-  const rawSpan = Math.max(...weekNumbers) - Math.min(...weekNumbers) + 1;
+  const rawSpan = maxWeek - minWeek + 1;
   if (rawSpan > MAX_PLAN_WEEKS) {
     throw new AppError(
       ErrorCode.VALIDATION_ERROR,
@@ -259,12 +270,9 @@ export async function updatePlanDayWithCleanup(
   // tweak the free text alongside the structured rows. Use the /reparse
   // endpoint when the athlete explicitly wants the text converted into
   // new structured rows.
-  const reschedulePending = updates.scheduledDate === undefined
-    ? null
-    : { nextDate: updates.scheduledDate ?? null };
-  const existing = reschedulePending
-    ? await storage.plans.getPlanDay(dayId, userId)
-    : null;
+  const reschedulePending =
+    updates.scheduledDate === undefined ? null : { nextDate: updates.scheduledDate ?? null };
+  const existing = reschedulePending ? await storage.plans.getPlanDay(dayId, userId) : null;
   const result = await storage.plans.updatePlanDay(dayId, updates, userId);
 
   if (result && existing && reschedulePending) {
@@ -293,27 +301,20 @@ const ALLOWED_TRANSITIONS: Record<PlanDayStatus, readonly PlanDayStatus[]> = {
 
 export async function updatePlanDayStatus(
   dayId: string,
-  {
-    status,
-    scheduledDate,
-  }: { status?: PlanDayStatus; scheduledDate?: string | null },
+  { status, scheduledDate }: { status?: PlanDayStatus; scheduledDate?: string | null },
   userId: string,
 ) {
   // Date-only update: no transition check needed.
   if (!status) {
     const updates: Record<string, string | null> = {};
-    const reschedule = scheduledDate === undefined
-      ? null
-      : { nextDate: scheduledDate ?? null };
+    const reschedule = scheduledDate === undefined ? null : { nextDate: scheduledDate ?? null };
     if (reschedule) {
       updates.scheduledDate = reschedule.nextDate;
     }
     // Snapshot the current date so we only enqueue the coach when the move
     // actually changes the scheduled date. A no-op patch (same date) leaves
     // the coach alone.
-    const existing = reschedule
-      ? await storage.plans.getPlanDay(dayId, userId)
-      : null;
+    const existing = reschedule ? await storage.plans.getPlanDay(dayId, userId) : null;
     const result = await storage.plans.updatePlanDay(dayId, updates, userId);
     if (
       result &&
@@ -416,15 +417,10 @@ export async function updatePlanDayStatus(
       }
     }
 
-    const [row] = await tx
-      .update(planDays)
-      .set(updates)
-      .where(eq(planDays.id, dayId))
-      .returning();
+    const [row] = await tx.update(planDays).set(updates).where(eq(planDays.id, dayId)).returning();
 
     const dateChanged =
-      scheduledDate !== undefined &&
-      (scheduledDate ?? null) !== (current.scheduledDate ?? null);
+      scheduledDate !== undefined && (scheduledDate ?? null) !== (current.scheduledDate ?? null);
 
     return { updatedDay: row, dateChanged };
   });
