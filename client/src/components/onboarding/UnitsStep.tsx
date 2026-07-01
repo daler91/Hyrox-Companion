@@ -32,7 +32,7 @@ export function UnitsStep({
         <RadioGroup
           value={weightUnit}
           onValueChange={(v) => onWeightUnitChange(v as "kg" | "lbs")}
-          className="flex gap-4"
+          className="flex flex-wrap gap-4"
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="kg" id="kg" />
@@ -50,7 +50,7 @@ export function UnitsStep({
         <RadioGroup
           value={distanceUnit}
           onValueChange={(v) => onDistanceUnitChange(v as "km" | "miles")}
-          className="flex gap-4"
+          className="flex flex-wrap gap-4"
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="km" id="km" />
@@ -69,7 +69,7 @@ export function UnitsStep({
         <RadioGroup
           value={division}
           onValueChange={(v) => onDivisionChange(v as Division)}
-          className="flex gap-4"
+          className="flex flex-wrap gap-4"
         >
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="open" id="division-open" />

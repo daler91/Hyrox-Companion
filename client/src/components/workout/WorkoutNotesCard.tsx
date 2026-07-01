@@ -1,3 +1,4 @@
+import { Mic } from "lucide-react";
 import React from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,15 @@ export const WorkoutNotesCard = ({
         </div>
       </CardHeader>
       <CardContent>
+        {isNotesListening && (
+          <div
+            className="flex items-center gap-2 text-sm text-primary bg-primary/10 rounded-md px-3 py-2 mb-2"
+            data-testid="voice-listening-indicator-notes"
+          >
+            <Mic className="h-4 w-4 animate-pulse" aria-hidden />
+            <span>Listening... speak your notes</span>
+          </div>
+        )}
         <Textarea
           placeholder="How did the workout feel? Any observations..."
           value={notes}

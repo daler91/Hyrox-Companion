@@ -37,6 +37,7 @@ export function BulkDeleteToolbar({
           type="button"
           variant="ghost"
           size="sm"
+          className="min-h-11 md:min-h-8"
           onClick={onSelectAll}
           disabled={isPending || visibleCount === 0 || selectedCount === visibleCount}
           data-testid="button-bulk-select-all"
@@ -48,6 +49,7 @@ export function BulkDeleteToolbar({
           type="button"
           variant="ghost"
           size="sm"
+          className="min-h-11 md:min-h-8"
           onClick={onClear}
           disabled={isPending || selectedCount === 0}
           data-testid="button-bulk-clear"
@@ -59,6 +61,7 @@ export function BulkDeleteToolbar({
           type="button"
           variant="destructive"
           size="sm"
+          className="min-h-11 md:min-h-8"
           onClick={onDelete}
           disabled={isPending || selectedCount === 0}
           data-testid="button-bulk-delete-selected"
@@ -70,6 +73,7 @@ export function BulkDeleteToolbar({
           type="button"
           variant="outline"
           size="sm"
+          className="min-h-11 md:min-h-8"
           onClick={onCancel}
           disabled={isPending}
           data-testid="button-bulk-cancel"

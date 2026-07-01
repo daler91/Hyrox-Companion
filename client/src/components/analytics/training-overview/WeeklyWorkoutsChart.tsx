@@ -66,7 +66,7 @@ export function WeeklyWorkoutsChart({
     <div className={CHART_CARD_CLASS}>
       <p className="text-sm font-semibold">Weekly Workouts</p>
       <div
-        className="h-[200px] w-full"
+        className="h-[160px] w-full sm:h-[200px]"
         data-testid="chart-weekly-workouts"
         role="img"
         aria-label={`Bar chart of weekly workout counts over ${weeklySummaries.length} weeks${goalSuffix}`}

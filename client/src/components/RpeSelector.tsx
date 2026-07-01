@@ -55,7 +55,7 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
             semantics, and aria-checked announcements out of the box.
             Empty-string value when none selected (Radix expects string). */}
         <RadioGroupPrimitive.Root
-          className="flex flex-wrap items-center gap-1.5"
+          className="grid grid-cols-5 gap-1.5 sm:flex sm:flex-wrap sm:items-center"
           value={value === null ? "" : String(value)}
           onValueChange={(next) => onChange(Number(next))}
           aria-label="RPE 1 through 10"

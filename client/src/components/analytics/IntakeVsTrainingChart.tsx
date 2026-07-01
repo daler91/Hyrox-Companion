@@ -67,7 +67,7 @@ export function IntakeVsTrainingChart({ points }: Readonly<{ points: readonly Bl
 
       {hasData ? (
         <div
-          className="h-[260px] w-full"
+          className="h-[200px] w-full sm:h-[260px]"
           data-testid="chart-intake-vs-training"
           role="img"
           aria-label={`Combined bar and line chart of daily calorie intake against training UTSS over ${points.length} days`}

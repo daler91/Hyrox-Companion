@@ -22,7 +22,7 @@ interface MultiSetTableProps {
 }
 
 export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightUnit, distanceUnit, onSetChange, onAddSet, onRemoveSet, contextChips, rowLabels }: MultiSetTableProps) {
-  const colTemplate = `2rem ${fields.map(() => "1fr").join(" ")} 2rem`;
+  const colTemplate = `2rem ${fields.map(() => "1fr").join(" ")} minmax(2.75rem,auto)`;
 
   return (
     <div className="space-y-2">
@@ -53,7 +53,7 @@ export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightU
               placeholder="--"
               value={set[field] ?? ""}
               onChange={(e) => onSetChange(idx, field, e.target.value)}
-              className="h-8 text-sm"
+              className="h-11 text-sm md:h-9"
               data-testid={`input-${field}-${exerciseName}-${idx}`}
               aria-label={`${fieldConfig[field].getLabel(weightUnit, distanceUnit)} for set ${set.setNumber}`}
             />
@@ -61,7 +61,7 @@ export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightU
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon" variant="ghost" onClick={() => onRemoveSet(idx)} disabled={sets.length <= 1} className="h-6 w-6" data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
+                <Button size="icon" variant="ghost" onClick={() => onRemoveSet(idx)} disabled={sets.length <= 1} data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
                   <Minus className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>

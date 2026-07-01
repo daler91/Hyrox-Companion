@@ -274,7 +274,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
           </CardHeader>
           <CardContent>
             <div
-              className="h-[280px] w-full"
+              className="h-[220px] w-full sm:h-[280px]"
               data-testid="chart-category-pie"
               role="img"
               aria-label={`Pie chart of training sessions by category: ${categorySummary}`}

@@ -10,7 +10,6 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { MacroProgressBar } from "./MacroProgressBar";
 import { computeTargetProgress } from "./utils";
@@ -96,7 +95,7 @@ export function MealSection({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-muted-foreground"
+                className="text-muted-foreground"
                 aria-label={`Adjust ${label} target`}
                 onClick={() => onEditTarget(mealType)}
                 data-testid={`button-edit-meal-target-${mealType}`}
@@ -154,44 +153,26 @@ export function MealSection({
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${e.name}`}
-                        onClick={() => onEdit(e)}
-                        data-testid={`button-edit-${e.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Edit {e.name}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Edit ${e.name}`}
+                  onClick={() => onEdit(e)}
+                  data-testid={`button-edit-${e.id}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
 
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${e.name}`}
-                        onClick={() => setPendingDelete({ id: e.id, name: e.name })}
-                        disabled={deletingId === e.id}
-                        data-testid={`button-delete-${e.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Delete {e.name}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete ${e.name}`}
+                  onClick={() => setPendingDelete({ id: e.id, name: e.name })}
+                  disabled={deletingId === e.id}
+                  data-testid={`button-delete-${e.id}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </li>
           ))}
