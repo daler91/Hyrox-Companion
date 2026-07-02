@@ -1,7 +1,8 @@
+import { rm, stat } from "node:fs/promises";
+
+import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
-import { rm, stat } from "node:fs/promises";
 
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 

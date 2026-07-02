@@ -1,5 +1,5 @@
-import type { TrainingContext } from "../../server/gemini/types";
 import type { UpcomingWorkout } from "../../server/gemini/suggestionService";
+import type { TrainingContext } from "../../server/gemini/types";
 
 /**
  * Ten paired scenarios. Each holds {baseline, variant} training contexts
@@ -94,6 +94,7 @@ function baseCtx(overrides: Partial<TrainingContext> = {}): TrainingContext {
         totalWeeks: 12,
         phaseLabel: "build",
         progressPct: 50,
+        remainingPhases: ["peak", "taper", "race_week"],
       },
       weeklyVolume: {
         thisWeekCompleted: 5,
@@ -214,7 +215,13 @@ export const SCENARIOS: Scenario[] = [
         activePlan: { name: "Hyrox Prep", totalWeeks: 12, currentWeek: 3, goal: "Sub-70 Hyrox" },
         coachingInsights: {
           ...baseCtx().coachingInsights!,
-          planPhase: { currentWeek: 3, totalWeeks: 12, phaseLabel: "build", progressPct: 25 },
+          planPhase: {
+            currentWeek: 3,
+            totalWeeks: 12,
+            phaseLabel: "build",
+            progressPct: 25,
+            remainingPhases: ["peak", "taper", "race_week"],
+          },
         },
       }),
     },
@@ -224,7 +231,13 @@ export const SCENARIOS: Scenario[] = [
         activePlan: { name: "Hyrox Prep", totalWeeks: 12, currentWeek: 11, goal: "Sub-70 Hyrox" },
         coachingInsights: {
           ...baseCtx().coachingInsights!,
-          planPhase: { currentWeek: 11, totalWeeks: 12, phaseLabel: "taper", progressPct: 92 },
+          planPhase: {
+            currentWeek: 11,
+            totalWeeks: 12,
+            phaseLabel: "taper",
+            progressPct: 92,
+            remainingPhases: ["race_week"],
+          },
         },
       }),
     },

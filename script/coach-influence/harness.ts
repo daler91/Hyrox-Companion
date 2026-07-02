@@ -3,21 +3,21 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { WorkoutSuggestion } from "@shared/schema";
+
+import type { TrainingContext } from "../../server/gemini/types";
 import {
   actionShift,
   influenceScore,
   keywordPresence,
   priorityShift,
   rationaleDrift,
+  type ScenarioScore,
+  type SuggestionBundle,
   suggestionCountDelta,
   targetOverlap,
   verdict,
-  type ScenarioScore,
-  type SuggestionBundle,
 } from "./metrics";
 import type { ConditionInputs,Scenario } from "./scenarios";
-
-import type { TrainingContext } from "../../server/gemini/types";
 
 // NOTE: `generateWorkoutSuggestions` and `SCENARIOS` are dynamically
 // imported inside `main()` so that importing the harness does not

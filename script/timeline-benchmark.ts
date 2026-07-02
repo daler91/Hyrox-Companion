@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 
 import type { TimelineEntry } from '@shared/schema';
+
 import { sortAndWindowTimelineEntries } from '../server/storage/timelineWindow';
 
 type Entry = Pick<TimelineEntry, 'id' | 'date' | 'type'>;

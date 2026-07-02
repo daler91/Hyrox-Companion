@@ -93,8 +93,6 @@ export default tseslint.config(
       "*.config.js",
       "*.config.ts",
       "**/*.generated.ts",
-      "script/**",
-      "scripts/**",
       "attached_assets/**",
       "vitest.setup.ts",
       "cypress/**",
@@ -117,6 +115,26 @@ export default tseslint.config(
       parserOptions: {
         project: "./tsconfig.eslint.json",
         tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+
+  // Plain-JS utility scripts (start.js, patch-cypress-deps.js) are outside the
+  // TS project, so type-aware rules can't run on them
+  {
+    files: ["script/**/*.js"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    files: ["script/**/*.js"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
       },
     },
   },
