@@ -1,12 +1,18 @@
 import type { StructureBlockInput, StructureBlockScore } from "@shared/schema";
 import { ArrowDown, ArrowUp, Link2, Plus, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useId, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatExerciseSummary, getExerciseLabel, type GroupedExercise } from "@/lib/exerciseUtils";
 import { groupMatchesBlockStep } from "@/lib/workoutStructureAssignments";
@@ -79,8 +85,7 @@ export const FORMAT_GUIDE: Record<GuidedFormat, FormatGuide> = {
   },
   rounds: {
     name: "Fixed rounds",
-    summary:
-      "Repeat the movements in order for a set number of rounds, then the block is done.",
+    summary: "Repeat the movements in order for a set number of rounds, then the block is done.",
     setupLabel: "Number of rounds",
     setupHint: "How many times you repeat the movements.",
     movementsHint: "Add the movements you repeat each round.",
@@ -103,7 +108,11 @@ export interface StepLinking {
   readonly unassignedGroups: readonly GroupedExercise[];
   readonly weightUnit: "kg" | "lb";
   readonly distanceUnit: "km" | "miles";
-  readonly onAssignGroup?: (group: GroupedExercise, block: StructureBlockInput, step: StructureStep) => void;
+  readonly onAssignGroup?: (
+    group: GroupedExercise,
+    block: StructureBlockInput,
+    step: StructureStep,
+  ) => void;
   readonly onAddLinkedRow?: (block: StructureBlockInput, step: StructureStep) => void;
 }
 
@@ -150,18 +159,28 @@ function groupOptionValue(group: GroupedExercise): string {
   return group.sets[0]?.id ?? `${group.exerciseName}:${group.customLabel ?? ""}`;
 }
 
-function mergeEmomScore(score: WorkoutStructureConfig["score"], patch: Partial<Omit<EmomScore, "type">>): EmomScore {
+function mergeEmomScore(
+  score: WorkoutStructureConfig["score"],
+  patch: Partial<Omit<EmomScore, "type">>,
+): EmomScore {
   const base: EmomScore = score?.type === "emom" ? score : { type: "emom", completed: false };
   return { ...base, ...patch, type: "emom" };
 }
 
-function mergeAmrapScore(score: WorkoutStructureConfig["score"], patch: Partial<Omit<AmrapScore, "type">>): AmrapScore {
+function mergeAmrapScore(
+  score: WorkoutStructureConfig["score"],
+  patch: Partial<Omit<AmrapScore, "type">>,
+): AmrapScore {
   const base: AmrapScore = score?.type === "amrap" ? score : { type: "amrap", rounds: 0 };
   return { ...base, ...patch, type: "amrap" };
 }
 
-function mergeRoundsScore(score: WorkoutStructureConfig["score"], patch: Partial<Omit<RoundsScore, "type">>): RoundsScore {
-  const base: RoundsScore = score?.type === "rounds" ? score : { type: "rounds", completedRounds: 0 };
+function mergeRoundsScore(
+  score: WorkoutStructureConfig["score"],
+  patch: Partial<Omit<RoundsScore, "type">>,
+): RoundsScore {
+  const base: RoundsScore =
+    score?.type === "rounds" ? score : { type: "rounds", completedRounds: 0 };
   return { ...base, ...patch, type: "rounds" };
 }
 
@@ -183,8 +202,10 @@ export function WorkoutStructureEditor({
     latest.current = { value, onChange, onScoreChange };
   });
 
-  const update = <K extends keyof WorkoutStructureConfig>(key: K, next: WorkoutStructureConfig[K]) =>
-    onChange({ ...value, [key]: next });
+  const update = <K extends keyof WorkoutStructureConfig>(
+    key: K,
+    next: WorkoutStructureConfig[K],
+  ) => onChange({ ...value, [key]: next });
 
   const parsePositiveInt = (raw: string): number | undefined => {
     if (!raw.trim()) return undefined;
@@ -251,20 +272,38 @@ export function WorkoutStructureEditor({
           {showFormatField && (
             <div>
               <Label className="text-xs">Format</Label>
-              <Select value={value.blockType} onValueChange={(v) => update("blockType", v as BlockType)}>
-                <SelectTrigger aria-label="Block format"><SelectValue /></SelectTrigger>
+              <Select
+                value={value.blockType}
+                onValueChange={(v) => update("blockType", v as BlockType)}
+              >
+                <SelectTrigger aria-label="Block format">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {blockTypeOptions.map((s) => <SelectItem key={s} value={s}>{BLOCK_TYPE_LABELS[s]}</SelectItem>)}
+                  {blockTypeOptions.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {BLOCK_TYPE_LABELS[s]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           )}
           <div>
             <Label className="text-xs">Workout section</Label>
-            <Select value={value.section} onValueChange={(v) => update("section", v as WorkoutSection)}>
-              <SelectTrigger aria-label="Workout section"><SelectValue /></SelectTrigger>
+            <Select
+              value={value.section}
+              onValueChange={(v) => update("section", v as WorkoutSection)}
+            >
+              <SelectTrigger aria-label="Workout section">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {sections.map((s) => <SelectItem key={s} value={s}>{sectionLabel(s)}</SelectItem>)}
+                {sections.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {sectionLabel(s)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -356,10 +395,14 @@ function SetupNumberField({
   placeholder: string;
   onChange: (raw: string) => void;
 }>) {
+  const id = useId();
   return (
     <div>
-      <Label className="text-xs">{label}</Label>
+      <Label htmlFor={id} className="text-xs">
+        {label}
+      </Label>
       <Input
+        id={id}
         type="number"
         min={min}
         max={max}
@@ -401,7 +444,10 @@ const MovementRow = memo(function MovementRow({
   const blockStep = linking?.block.steps[index];
 
   return (
-    <div className="space-y-2 rounded-md border border-border bg-background p-2.5" data-testid="structure-block-step">
+    <div
+      className="space-y-2 rounded-md border border-border bg-background p-2.5"
+      data-testid="structure-block-step"
+    >
       <div className="flex items-center gap-2">
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
           {positionLabel}
@@ -411,7 +457,11 @@ const MovementRow = memo(function MovementRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {stepTypes.map((t) => <SelectItem key={t} value={t}>{STEP_TYPE_LABELS[t]}</SelectItem>)}
+            {stepTypes.map((t) => (
+              <SelectItem key={t} value={t}>
+                {STEP_TYPE_LABELS[t]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <TooltipProvider>
@@ -528,7 +578,9 @@ function WorkStepBody({
 
   return (
     <div className="space-y-1.5">
-      {namedExercise ? <p className="text-xs font-medium text-foreground">{namedExercise}</p> : null}
+      {namedExercise ? (
+        <p className="text-xs font-medium text-foreground">{namedExercise}</p>
+      ) : null}
       {showPlaceholder ? <p className="text-xs text-muted-foreground">Movement</p> : null}
       {step.target ? <p className="text-xs text-muted-foreground">{step.target}</p> : null}
       {linkedGroups.map((group) => (
@@ -652,7 +704,8 @@ function AssignGroupSelect({
         </SelectItem>
         {groups.map((group) => (
           <SelectItem key={groupOptionValue(group)} value={groupOptionValue(group)}>
-            {getExerciseLabel(group.exerciseName, group.customLabel)} - {formatExerciseSummary(group, weightUnit, distanceUnit)}
+            {getExerciseLabel(group.exerciseName, group.customLabel)} -{" "}
+            {formatExerciseSummary(group, weightUnit, distanceUnit)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -666,7 +719,9 @@ function PreviewShell({ children }: { readonly children: ReactNode }) {
       className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs"
       data-testid="structure-block-preview"
     >
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">At a glance</p>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+        At a glance
+      </p>
       {children}
     </div>
   );
@@ -695,11 +750,16 @@ function BlockPreview({ config }: { readonly config: WorkoutStructureConfig }) {
   return null;
 }
 
-function StepSequencePreview({ summary, steps }: Readonly<{ summary: string; steps: readonly WorkoutStep[] }>) {
+function StepSequencePreview({
+  summary,
+  steps,
+}: Readonly<{ summary: string; steps: readonly WorkoutStep[] }>) {
   return (
     <PreviewShell>
       <p className="font-medium text-foreground">{summary}</p>
-      <p className="mt-1 truncate text-muted-foreground">{steps.map(configStepWithTarget).join(" -> ")}</p>
+      <p className="mt-1 truncate text-muted-foreground">
+        {steps.map(configStepWithTarget).join(" -> ")}
+      </p>
     </PreviewShell>
   );
 }
@@ -709,7 +769,9 @@ function EmomBlockPreview({ config }: { readonly config: WorkoutStructureConfig 
   if (preview.minutes.length === 0) {
     return (
       <PreviewShell>
-        <p className="text-muted-foreground">Set a length and add at least one movement to see the minute-by-minute plan.</p>
+        <p className="text-muted-foreground">
+          Set a length and add at least one movement to see the minute-by-minute plan.
+        </p>
       </PreviewShell>
     );
   }
@@ -718,12 +780,15 @@ function EmomBlockPreview({ config }: { readonly config: WorkoutStructureConfig 
   return (
     <PreviewShell>
       <p className="font-medium text-foreground">
-        {config.emomDurationMinutes ?? preview.minutes.length}-minute EMOM ·{" "}
-        {preview.patternLength} movement{preview.patternLength === 1 ? "" : "s"} on repeat
+        {config.emomDurationMinutes ?? preview.minutes.length}-minute EMOM · {preview.patternLength}{" "}
+        movement{preview.patternLength === 1 ? "" : "s"} on repeat
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {visibleMinutes.map(({ minute, step }) => (
-          <span key={`emom-preview-${minute}`} className="rounded-full bg-background px-2 py-0.5 text-muted-foreground">
+          <span
+            key={`emom-preview-${minute}`}
+            className="rounded-full bg-background px-2 py-0.5 text-muted-foreground"
+          >
             Min {minute}: {configStepLabel(step)}
           </span>
         ))}
@@ -762,8 +827,12 @@ function ResultControls({
       aria-label="Block result"
     >
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">How did it go?</p>
-        <p className="text-xs text-muted-foreground">Fill this in after the workout to record your result.</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+          How did it go?
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Fill this in after the workout to record your result.
+        </p>
       </div>
 
       {value.blockType === "emom" && (
@@ -775,7 +844,9 @@ function ResultControls({
               className="mt-1 w-full"
               variant={emomScore?.completed ? "default" : "outline"}
               aria-pressed={emomScore?.completed ?? false}
-              onClick={() => onUpdateScore(mergeEmomScore(value.score, { completed: !emomScore?.completed }))}
+              onClick={() =>
+                onUpdateScore(mergeEmomScore(value.score, { completed: !emomScore?.completed }))
+              }
             >
               {emomScore?.completed ? "Completed" : "Mark completed"}
             </Button>
@@ -785,7 +856,9 @@ function ResultControls({
             ariaLabel="Completed minutes"
             placeholder="e.g. 10"
             value={emomScore?.completedMinutes}
-            onChange={(num) => onUpdateScore(mergeEmomScore(value.score, { completedMinutes: num }))}
+            onChange={(num) =>
+              onUpdateScore(mergeEmomScore(value.score, { completedMinutes: num }))
+            }
           />
           <ResultNumberField
             label="Reps missed"
@@ -823,14 +896,18 @@ function ResultControls({
             ariaLabel="Completed rounds"
             placeholder="e.g. 3"
             value={roundsScore?.completedRounds}
-            onChange={(num) => onUpdateScore(mergeRoundsScore(value.score, { completedRounds: num ?? 0 }))}
+            onChange={(num) =>
+              onUpdateScore(mergeRoundsScore(value.score, { completedRounds: num ?? 0 }))
+            }
           />
           <ResultNumberField
             label="Total time (seconds)"
             ariaLabel="Elapsed time in seconds"
             placeholder="e.g. 480"
             value={roundsScore?.elapsedSeconds}
-            onChange={(num) => onUpdateScore(mergeRoundsScore(value.score, { elapsedSeconds: num }))}
+            onChange={(num) =>
+              onUpdateScore(mergeRoundsScore(value.score, { elapsedSeconds: num }))
+            }
           />
         </div>
       )}
