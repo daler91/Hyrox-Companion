@@ -198,11 +198,17 @@ export default tseslint.config(
   {
     files: [
       "client/src/pages/Timeline.tsx",
+      "client/src/pages/timeline/**/*.{ts,tsx}",
+      "client/src/pages/Settings.tsx",
+      "client/src/pages/settings/**/*.{ts,tsx}",
       "client/src/components/timeline/**/*.{ts,tsx}",
       "client/src/components/workout-detail/**/*.{ts,tsx}",
       "!client/src/components/**/__tests__/**/*.{ts,tsx}",
+      "!client/src/pages/**/__tests__/**/*.{ts,tsx}",
       "client/src/hooks/useTimeline*.ts",
       "client/src/hooks/useWorkoutDetail.ts",
+      "client/src/hooks/useWorkoutEditor.ts",
+      "client/src/hooks/workout-editor/**/*.ts",
     ],
     rules: {
       "max-lines": [

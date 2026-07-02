@@ -1,14 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
-import {
-  type Dispatch,
-  type SetStateAction,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { CsvPreviewData } from "@/components/timeline";
 import {
   AnnotationsDialog,
   CombineWorkoutsDialog,
@@ -24,67 +16,96 @@ import { SkippedSheet } from "@/components/workout-detail/SkippedSheet";
 import type { useToast } from "@/hooks/use-toast";
 import { useTimelineState } from "@/hooks/useTimelineState";
 
+import type { useEmbeddedCoachRouting } from "./useEmbeddedCoachRouting";
+import type { useTimelineDialogState } from "./useTimelineDialogState";
+import type { useTimelineSurfaceSelection } from "./useTimelineSurfaceSelection";
 import { useTimelineTitleMutation } from "./useTimelineTitleMutation";
 
 type TimelineState = ReturnType<typeof useTimelineState>;
-type PlanImportState = TimelineState["planImport"];
-type WorkoutActionsState = TimelineState["workoutActions"];
-type CombineState = TimelineState["combine"];
+type SurfaceSelectionState = ReturnType<typeof useTimelineSurfaceSelection>;
+type CoachRoutingState = ReturnType<typeof useEmbeddedCoachRouting>;
+type DialogState = ReturnType<typeof useTimelineDialogState>;
 type ToastFn = ReturnType<typeof useToast>["toast"];
 
+// Props are grouped by producer hook slice — Timeline passes each hook's
+// return object straight through (Pick keeps the contract explicit about
+// which members this component actually consumes).
 interface TimelineWorkoutSurfacesProps {
   readonly isMobile: boolean;
   readonly toast: ToastFn;
   readonly adhocOpen: boolean;
   readonly onAdhocOpenChange: (open: boolean) => void;
-  readonly schedulingPlanId: PlanImportState["schedulingPlanId"];
-  readonly setSchedulingPlanId: PlanImportState["setSchedulingPlanId"];
-  readonly startDate: PlanImportState["startDate"];
-  readonly setStartDate: PlanImportState["setStartDate"];
-  readonly schedulePlanMutation: PlanImportState["schedulePlanMutation"];
-  readonly previewEntry: TimelineEntry | null;
-  readonly setPreviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
-  readonly futureEditEntry: TimelineEntry | null;
-  readonly setFutureEditEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
-  readonly logEntry: TimelineEntry | null;
-  readonly setLogEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
-  readonly reviewEntry: TimelineEntry | null;
-  readonly setReviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
-  readonly skippedEntry: TimelineEntry | null;
-  readonly setSkippedEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
-  readonly closeWorkoutSurfaces: () => void;
-  readonly closeEmbeddedCoach: () => void;
-  readonly openEmbeddedCoach: (entry: TimelineEntry, seedText?: string) => void;
-  readonly embeddedCoachEntryId: string | null;
-  readonly embeddedCoachSeedNonce: number;
-  readonly embeddedCoachSeedText: string;
-  readonly mobileCoachPanelOpen: boolean;
-  readonly onCloseCoachChat: () => void;
-  readonly onShowCoachPanel: () => void;
-  readonly onShowWorkoutDetails: () => void;
-  readonly setSkipConfirmEntry: WorkoutActionsState["setSkipConfirmEntry"];
-  readonly skipConfirmEntry: WorkoutActionsState["skipConfirmEntry"];
-  readonly handleMarkComplete: WorkoutActionsState["handleMarkComplete"];
-  readonly handleChangeStatus: WorkoutActionsState["handleChangeStatus"];
-  readonly handleDelete: WorkoutActionsState["handleDelete"];
-  readonly confirmSkip: WorkoutActionsState["confirmSkip"];
-  readonly logWorkoutMutation: WorkoutActionsState["logWorkoutMutation"];
-  readonly csvPreview: CsvPreviewData | null;
-  readonly setCsvPreview: PlanImportState["setCsvPreview"];
-  readonly confirmImport: PlanImportState["confirmImport"];
-  readonly importMutation: PlanImportState["importMutation"];
-  readonly showCombineDialog: CombineState["showCombineDialog"];
-  readonly setShowCombineDialog: CombineState["setShowCombineDialog"];
-  readonly combiningEntry: CombineState["combiningEntry"];
-  readonly setCombiningEntry: CombineState["setCombiningEntry"];
-  readonly combineSecondEntry: CombineState["combineSecondEntry"];
-  readonly setCombineSecondEntry: CombineState["setCombineSecondEntry"];
-  readonly handleConfirmCombine: CombineState["handleConfirmCombine"];
-  readonly combineWorkoutsMutation: CombineState["combineWorkoutsMutation"];
-  readonly annotationsDialogOpen: boolean;
-  readonly setAnnotationsDialogOpen: (open: boolean) => void;
-  readonly annotationInitialDate: string | undefined;
-  readonly setAnnotationInitialDate: (date: string | undefined) => void;
+  /** Entry selection for the five workout sheets (useTimelineSurfaceSelection). */
+  readonly surfaces: Pick<
+    SurfaceSelectionState,
+    | "previewEntry"
+    | "setPreviewEntry"
+    | "futureEditEntry"
+    | "setFutureEditEntry"
+    | "logEntry"
+    | "setLogEntry"
+    | "reviewEntry"
+    | "setReviewEntry"
+    | "skippedEntry"
+    | "setSkippedEntry"
+  >;
+  /** Embedded-coach routing shared across all sheets (useEmbeddedCoachRouting). */
+  readonly coach: Pick<
+    CoachRoutingState,
+    | "embeddedCoachEntryId"
+    | "embeddedCoachSeedNonce"
+    | "embeddedCoachSeedText"
+    | "mobileCoachPanelOpen"
+    | "openEmbeddedCoach"
+    | "closeEmbeddedCoach"
+    | "closeWorkoutSurfaces"
+    | "showMobileCoachPanel"
+    | "showWorkoutDetails"
+  >;
+  /** Workout actions + skip confirm (useTimelineState().workoutActions). */
+  readonly actions: Pick<
+    TimelineState["workoutActions"],
+    | "skipConfirmEntry"
+    | "setSkipConfirmEntry"
+    | "handleMarkComplete"
+    | "handleChangeStatus"
+    | "handleDelete"
+    | "confirmSkip"
+    | "logWorkoutMutation"
+  >;
+  /** Plan scheduling + CSV import preview (useTimelineState().planImport). */
+  readonly planImport: Pick<
+    TimelineState["planImport"],
+    | "schedulingPlanId"
+    | "setSchedulingPlanId"
+    | "startDate"
+    | "setStartDate"
+    | "schedulePlanMutation"
+    | "csvPreview"
+    | "setCsvPreview"
+    | "confirmImport"
+    | "importMutation"
+  >;
+  /** Combine-workouts dialog (useTimelineState().combine). */
+  readonly combine: Pick<
+    TimelineState["combine"],
+    | "showCombineDialog"
+    | "setShowCombineDialog"
+    | "combiningEntry"
+    | "setCombiningEntry"
+    | "combineSecondEntry"
+    | "setCombineSecondEntry"
+    | "handleConfirmCombine"
+    | "combineWorkoutsMutation"
+  >;
+  /** Annotations dialog (useTimelineDialogState). */
+  readonly annotations: Pick<
+    DialogState,
+    | "annotationsDialogOpen"
+    | "setAnnotationsDialogOpen"
+    | "annotationInitialDate"
+    | "setAnnotationInitialDate"
+  >;
 }
 
 function isMobileCoachPanelActive(
@@ -101,55 +122,75 @@ export function TimelineWorkoutSurfaces({
   toast,
   adhocOpen,
   onAdhocOpenChange,
-  schedulingPlanId,
-  setSchedulingPlanId,
-  startDate,
-  setStartDate,
-  schedulePlanMutation,
-  previewEntry,
-  setPreviewEntry,
-  futureEditEntry,
-  setFutureEditEntry,
-  logEntry,
-  setLogEntry,
-  reviewEntry,
-  setReviewEntry,
-  skippedEntry,
-  setSkippedEntry,
-  closeWorkoutSurfaces,
-  closeEmbeddedCoach,
-  openEmbeddedCoach,
-  embeddedCoachEntryId,
-  embeddedCoachSeedNonce,
-  embeddedCoachSeedText,
-  mobileCoachPanelOpen,
-  onCloseCoachChat,
-  onShowCoachPanel,
-  onShowWorkoutDetails,
-  setSkipConfirmEntry,
-  skipConfirmEntry,
-  handleMarkComplete,
-  handleChangeStatus,
-  handleDelete,
-  confirmSkip,
-  logWorkoutMutation,
-  csvPreview,
-  setCsvPreview,
-  confirmImport,
-  importMutation,
-  showCombineDialog,
-  setShowCombineDialog,
-  combiningEntry,
-  setCombiningEntry,
-  combineSecondEntry,
-  setCombineSecondEntry,
-  handleConfirmCombine,
-  combineWorkoutsMutation,
-  annotationsDialogOpen,
-  setAnnotationsDialogOpen,
-  annotationInitialDate,
-  setAnnotationInitialDate,
+  surfaces,
+  coach,
+  actions,
+  planImport,
+  combine,
+  annotations,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
+  const {
+    previewEntry,
+    setPreviewEntry,
+    futureEditEntry,
+    setFutureEditEntry,
+    logEntry,
+    setLogEntry,
+    reviewEntry,
+    setReviewEntry,
+    skippedEntry,
+    setSkippedEntry,
+  } = surfaces;
+  const {
+    embeddedCoachEntryId,
+    embeddedCoachSeedNonce,
+    embeddedCoachSeedText,
+    mobileCoachPanelOpen,
+    openEmbeddedCoach,
+    closeEmbeddedCoach,
+    closeWorkoutSurfaces,
+    showMobileCoachPanel: onShowCoachPanel,
+    showWorkoutDetails: onShowWorkoutDetails,
+  } = coach;
+  // Closing the coach chat and closing the embedded coach are the same
+  // action today (Timeline passed closeEmbeddedCoach for both).
+  const onCloseCoachChat = closeEmbeddedCoach;
+  const {
+    skipConfirmEntry,
+    setSkipConfirmEntry,
+    handleMarkComplete,
+    handleChangeStatus,
+    handleDelete,
+    confirmSkip,
+    logWorkoutMutation,
+  } = actions;
+  const {
+    schedulingPlanId,
+    setSchedulingPlanId,
+    startDate,
+    setStartDate,
+    schedulePlanMutation,
+    csvPreview,
+    setCsvPreview,
+    confirmImport,
+    importMutation,
+  } = planImport;
+  const {
+    showCombineDialog,
+    setShowCombineDialog,
+    combiningEntry,
+    setCombiningEntry,
+    combineSecondEntry,
+    setCombineSecondEntry,
+    handleConfirmCombine,
+    combineWorkoutsMutation,
+  } = combine;
+  const {
+    annotationsDialogOpen,
+    setAnnotationsDialogOpen,
+    annotationInitialDate,
+    setAnnotationInitialDate,
+  } = annotations;
   const [completionSuccessEntryId, setCompletionSuccessEntryId] = useState<string | null>(null);
   const logEntryRef = useRef(logEntry);
   // Sync synchronously during commit so a mutation promise resolving between
