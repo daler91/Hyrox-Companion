@@ -34,6 +34,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { type OfflineFallbackResult, runWithOfflineFallback } from "@/lib/offlineMutationFallback";
+import { queryClient } from "@/lib/queryClient";
 
 /** Daily summary (totals + per-meal entries) for a local calendar date (FR-1.3). */
 export function useNutritionDay(date: string) {
@@ -69,16 +71,39 @@ export function useFavorites(enabled = true) {
   });
 }
 
+const NUTRITION_LOG_URL = "/api/v1/nutrition/logs";
+
 export function useLogFood(date: string) {
-  return useApiMutation<FoodLogEntry, Error, CreateFoodLogInput>({
-    mutationFn: (input) => api.nutrition.createLog(input),
-    invalidateQueries: [
-      QUERY_KEYS.nutritionDay(date),
-      QUERY_KEYS.nutritionRecent,
-      QUERY_KEYS.nutritionRangePrefix,
-    ],
-    successToast: "Food logged",
+  return useApiMutation<OfflineFallbackResult<FoodLogEntry>, Error, CreateFoodLogInput>({
+    // Queue-backed offline fallback: `loggedAt` is part of the input, so a
+    // replay hours later still lands on the day the food was actually eaten
+    // (the server derives logDate from loggedAt + timezone).
+    mutationFn: (input) =>
+      runWithOfflineFallback({
+        method: "POST",
+        url: NUTRITION_LOG_URL,
+        body: input,
+        perform: (idempotencyKey) =>
+          api.nutrition.createLog(input, idempotencyKey ? { idempotencyKey } : undefined),
+      }),
+    successToast: (result) =>
+      result.status === "queued"
+        ? {
+          title: "Food log queued",
+          description: "We'll sync it automatically when your connection is back.",
+        }
+        : { title: "Food logged" },
     errorToast: "Couldn't log that food",
+    onSuccess: async (result) => {
+      // Queued writes haven't reached the server, so there is nothing to
+      // refetch yet — the post-sync invalidation covers them after replay.
+      if (result.status !== "saved") return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDay(date) }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRecent }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRangePrefix }),
+      ]);
+    },
   });
 }
 

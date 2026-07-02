@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { useToast } from "@/hooks/use-toast";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { invalidateForSyncedRequests } from "@/lib/offlineInvalidation";
 import {
   getPendingCount,
   OFFLINE_QUEUE_CHANGE_EVENT,
@@ -10,7 +11,6 @@ import {
   type OfflineQueueChangeDetail,
   type OfflineSyncCompleteDetail,
 } from "@/lib/offlineQueue";
-import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
 
 const OFFLINE_POLL_INTERVAL_MS = 2000;
 const SYNC_SUCCESS_DISMISS_MS = 3500;
@@ -76,7 +76,9 @@ export function OfflineIndicator() {
         });
       }
       if (detail.synced <= 0) return;
-      invalidateWorkoutWriteQueries();
+      // Route invalidation by which endpoints actually replayed, so a synced
+      // nutrition log refreshes nutrition summaries and not just workouts.
+      invalidateForSyncedRequests(detail.syncedRequests);
       setRecentlySynced(detail.synced);
       setPendingCount(getPendingCount());
       if (dismissTimerId !== null) {

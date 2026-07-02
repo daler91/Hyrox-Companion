@@ -32,6 +32,7 @@ import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { featureFlags } from "@/lib/featureFlags";
+import { isPendingTimelineEntry } from "@/lib/pendingWorkouts";
 import { cn } from "@/lib/utils";
 
 import { CoachNote } from "./CoachNote";
@@ -71,6 +72,9 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     isBulkSelectMode,
   });
   const isPlanned = isPlannedTimelineEntry(entry);
+  // Queued-but-unsynced offline create: it has no server row yet, so it must
+  // not be clickable (no detail to open), draggable, or bulk-selectable.
+  const isPending = isPendingTimelineEntry(entry);
   const canToggleBulkSelect = canToggleBulkSelection({
     isBulkSelectMode,
     canBulkSelect,
@@ -98,6 +102,8 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   });
 
   const handleCardActivation = () => {
+    // Pending entries have no server row to open / combine / select.
+    if (isPending) return;
     activateTimelineCard({
       entry,
       isBulkSelectMode,
@@ -144,22 +150,24 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     <Card
       ref={setDragNodeRef}
       className={cn(
-        "cursor-pointer transition-colors hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        !isPending && "cursor-pointer hover-elevate",
         baseCardClasses,
         aiCoachClasses,
         dragClasses,
         isBulkSelectMode && canBulkSelect && "hover:border-destructive/50",
         isBulkSelectMode && !canBulkSelect && "cursor-not-allowed opacity-60",
         isBulkSelected && "border-destructive/60 bg-destructive/5 ring-2 ring-destructive/25",
+        isPending && "opacity-70",
       )}
-      onClick={handleCardClick}
-      onKeyDown={handleCardKeyDown}
-      role={isBulkSelectMode && canBulkSelect ? "checkbox" : "button"}
-      tabIndex={0}
+      onClick={isPending ? undefined : handleCardClick}
+      onKeyDown={isPending ? undefined : handleCardKeyDown}
+      role={isPending ? undefined : isBulkSelectMode && canBulkSelect ? "checkbox" : "button"}
+      tabIndex={isPending ? undefined : 0}
       // Label uses only the visible focus + status badge text (date sits in
       // the parent date-group heading) so the accessible name matches what
       // the user can read on screen — WCAG 2.5.3 Label in Name.
-      aria-label={getCardAriaLabel(entry, isBulkSelectMode, isBulkSelected)}
+      aria-label={isPending ? undefined : getCardAriaLabel(entry, isBulkSelectMode, isBulkSelected)}
       aria-checked={isBulkSelectMode && canBulkSelect ? Boolean(isBulkSelected) : undefined}
       aria-disabled={isBulkSelectMode && !canBulkSelect ? true : undefined}
       data-testid={`card-timeline-entry-${entry.id}`}
@@ -195,6 +203,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               entry={entry}
               canMove={Boolean(canMove)}
               adherenceBadge={adherenceBadge}
+              isPending={isPending}
             />
             <TimelineCardWorkoutBody
               entry={entry}
@@ -449,16 +458,28 @@ interface TimelineCardHeaderProps {
   readonly entry: TimelineWorkoutEntry;
   readonly canMove: boolean;
   readonly adherenceBadge: ReturnType<typeof getAdherenceBadge>;
+  readonly isPending?: boolean;
 }
 
 function TimelineCardHeader({
   entry,
   canMove,
   adherenceBadge,
+  isPending,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
       {getStatusBadge(entry.status, entry.focus)}
+      {isPending && (
+        <Badge
+          variant="outline"
+          className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950"
+          data-testid={`badge-pending-sync-${entry.id}`}
+        >
+          <Loader2 className="h-3 w-3 mr-1 animate-spin" aria-hidden="true" />
+          Pending sync
+        </Badge>
+      )}
       {/* The "AI Modifying" badge is rendered once, by FloatingAiCoachBadge at
           the card root (W9). A second copy here produced a duplicate DOM node
           and a duplicate data-testid="badge-ai-coach-${id}". */}

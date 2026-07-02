@@ -76,6 +76,9 @@ export const QUERY_KEYS = {
   garminStatus: ["/api/v1/garmin/status"] as const,
   mafTests: ["/api/v1/maf-tests"] as const,
   nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date] as const,
+  // Prefix for invalidating every day's summary regardless of date
+  // (TanStack matches query keys by prefix).
+  nutritionDayPrefix: ["/api/v1/nutrition/summary"] as const,
   nutritionRecent: ["/api/v1/nutrition/foods/recent"] as const,
   nutritionFavorites: ["/api/v1/nutrition/favorites"] as const,
   nutritionSearch: (q: string) => ["/api/v1/nutrition/foods/search", q] as const,

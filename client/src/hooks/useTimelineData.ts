@@ -1,8 +1,10 @@
 import type { PersonalRecord,TimelineAnnotation, TimelineEntry, TrainingPlan } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+
+import { usePendingWorkoutEntries } from "./usePendingWorkoutEntries";
 
 export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded = true) {
   const todayRef = useRef<HTMLDivElement>(null);
@@ -21,11 +23,21 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
     enabled: isAuthUserLoaded,
   });
 
-  const { data: timelineData = [], isLoading } = useQuery<TimelineEntry[]>({
+  const { data: serverTimelineData = [], isLoading } = useQuery<TimelineEntry[]>({
     queryKey: [...QUERY_KEYS.timeline, selectedPlanId],
     queryFn: () => api.timeline.get(selectedPlanId),
     enabled: isAuthUserLoaded,
   });
+
+  // Overlay queued-but-unsynced workout creates (offline path) so they show
+  // on the timeline immediately instead of vanishing until reconnect. They
+  // are plan-agnostic, so they appear regardless of the selected plan; the
+  // overlay empties itself once the queue drains and the refetch lands.
+  const pendingEntries = usePendingWorkoutEntries();
+  const timelineData = useMemo(
+    () => (pendingEntries.length === 0 ? serverTimelineData : [...serverTimelineData, ...pendingEntries]),
+    [serverTimelineData, pendingEntries],
+  );
 
   // Annotations are user-scoped (not plan-scoped), so this query has no
   // selectedPlanId in its key. Mutations in `AnnotationsDialog` and the

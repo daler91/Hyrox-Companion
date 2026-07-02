@@ -2,6 +2,7 @@ import type { ExerciseSet, TimelineEntry, User, WorkoutLog, WorkoutStatus } from
 
 import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
+import { runWithOfflineFallback } from "@/lib/offlineMutationFallback";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { queryClient } from "@/lib/queryClient";
 
@@ -90,16 +91,40 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       ),
   );
   const updateStatusMutation = useApiMutation({
+    // Queue-backed offline fallback: a queued PATCH resolves as a synthetic
+    // success, so buildOptimisticTimelineHandlers' onError rollback never
+    // fires and the optimistic status flip persists until the replay lands.
+    // (In-session only — after a reload the flip reappears once the queue
+    // syncs and the post-sync invalidation refetches.)
     mutationFn: ({ dayId, status }: UpdateStatusVariables) =>
-      api.plans.updateDayStatus(dayId, status),
-    invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.trainingOverview],
-    successToast: "Status updated",
+      runWithOfflineFallback({
+        method: "PATCH",
+        url: `/api/v1/plans/days/${dayId}/status`,
+        body: { status },
+        perform: (idempotencyKey) =>
+          api.plans.updateDayStatus(dayId, status, idempotencyKey ? { idempotencyKey } : undefined),
+      }),
+    successToast: (result) =>
+      result.status === "queued"
+        ? {
+          title: "Status change queued",
+          description: "We'll sync it automatically when your connection is back.",
+        }
+        : { title: "Status updated" },
     errorToast: "Failed to update status",
     ...updateStatusHandlers,
-    onSuccess: (_data, variables) => {
+    onSuccess: async (result, variables) => {
       if (variables.status === "completed") {
         markAutoCoachingActive();
       }
+      // Queued writes haven't reached the server — invalidating now would
+      // (at best) refetch state without the change; the post-sync
+      // invalidation covers them after replay.
+      if (result.status !== "saved") return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
+      ]);
     },
   });
 

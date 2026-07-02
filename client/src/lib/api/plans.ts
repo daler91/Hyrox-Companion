@@ -39,8 +39,12 @@ export const plans = {
   schedule: (planId: string, startDate: string) =>
     rawRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate }).then(() => undefined),
 
-  updateDayStatus: (dayId: string, status: string) =>
-    typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }),
+  updateDayStatus: (dayId: string, status: string, options?: { idempotencyKey: string }) =>
+    options?.idempotencyKey
+      ? typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }, {
+        headers: { "X-Idempotency-Key": options.idempotencyKey },
+      })
+      : typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }),
 
   generate: (input: GeneratePlanInput) =>
     typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input),
