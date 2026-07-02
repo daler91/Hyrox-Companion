@@ -1,7 +1,11 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName,type ExerciseSet } from "@shared/schema";
-import { displayDistanceToStored, getWorkoutDistanceDisplay, type WorkoutDistanceDisplayUnit } from "@shared/unitConversion";
+import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
+import {
+  displayDistanceToStored,
+  getWorkoutDistanceDisplay,
+  type WorkoutDistanceDisplayUnit,
+} from "@shared/unitConversion";
 import { MessageSquarePlus, Pencil, Plus, X } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,7 +118,12 @@ export const InlineSetEditor = memo(function InlineSetEditor({
       />
 
       <div className="space-y-1">
-        <HeaderRow fields={fields} weightUnit={weightUnit} distanceUnit={distanceUnit} colTemplate={colTemplate} />
+        <HeaderRow
+          fields={fields}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          colTemplate={colTemplate}
+        />
         {orderedSets.map((set) => (
           <SetRow
             key={set.id}
@@ -184,6 +193,7 @@ interface CustomLabelFieldProps {
 }
 
 function CustomLabelField({ initial, placeholder, onChange }: CustomLabelFieldProps) {
+  const id = useId();
   const [draft, setDraft] = useState(initial);
   const [lastExternal, setLastExternal] = useState(initial);
   if (initial !== lastExternal) {
@@ -193,10 +203,14 @@ function CustomLabelField({ initial, placeholder, onChange }: CustomLabelFieldPr
 
   return (
     <div className="space-y-1">
-      <Label className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+      <Label
+        htmlFor={id}
+        className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground"
+      >
         <Pencil className="h-3 w-3" aria-hidden /> Exercise name
       </Label>
       <Input
+        id={id}
         type="text"
         placeholder={placeholder ?? "Enter exercise name"}
         value={draft}
@@ -317,10 +331,21 @@ interface FieldInputProps {
   readonly showPlannedDiffs: boolean;
 }
 
-const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUnit, onUpdate, showPlannedDiffs }: FieldInputProps) {
-  const label = field === "distance"
-    ? "Distance"
-    : getFieldLabel(field, { weightUnit: weightUnit as "kg" | "lbs", distanceUnit: distanceUnit as "km" | "miles" });
+const FieldInput = memo(function FieldInput({
+  field,
+  set,
+  weightUnit,
+  distanceUnit,
+  onUpdate,
+  showPlannedDiffs,
+}: FieldInputProps) {
+  const label =
+    field === "distance"
+      ? "Distance"
+      : getFieldLabel(field, {
+          weightUnit: weightUnit as "kg" | "lbs",
+          distanceUnit: distanceUnit as "km" | "miles",
+        });
   const current = set[field] ?? undefined;
   const planned = getPlannedValue(set, field);
   const displayUnit = getFieldDisplayUnit(field, current, planned, distanceUnit);
@@ -328,7 +353,8 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   const plannedDisplay = getFieldDisplayValue(planned ?? undefined, field, distanceUnit);
   const hasPlannedValue = showPlannedDiffs && planned != null;
   const showPlannedDiff = hasPlannedValue && planned !== current;
-  const plannedText = planned == null ? "" : formatPlannedValue(planned, field, weightUnit, distanceUnit);
+  const plannedText =
+    planned == null ? "" : formatPlannedValue(planned, field, weightUnit, distanceUnit);
 
   const [draft, setDraft] = useState<string>(() => formatInitial(currentDisplay));
   const [lastCommitted, setLastCommitted] = useState<number | undefined>(currentDisplay);
@@ -349,12 +375,17 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
   }, [suppressTransientEmpty]);
 
   const shouldIgnoreTransientEmpty =
-    hasPending && suppressTransientEmpty && (currentDisplay == null || formatInitial(currentDisplay) === "");
+    hasPending &&
+    suppressTransientEmpty &&
+    (currentDisplay == null || formatInitial(currentDisplay) === "");
   const commitMatched = hasPending && currentDisplay === pendingCommit;
-  const externalNewerWhilePending = hasPending && currentDisplay !== pendingCommit && currentDisplay !== commitBaseValue;
+  const externalNewerWhilePending =
+    hasPending && currentDisplay !== pendingCommit && currentDisplay !== commitBaseValue;
   const externalNewerAndNotPending = !hasPending && currentDisplay !== lastCommitted;
-  const shouldUseExternal = !isDirty && !shouldIgnoreTransientEmpty
-    && (commitMatched || externalNewerWhilePending || externalNewerAndNotPending);
+  const shouldUseExternal =
+    !isDirty &&
+    !shouldIgnoreTransientEmpty &&
+    (commitMatched || externalNewerWhilePending || externalNewerAndNotPending);
   let inputValue = committedDraft;
   if (isDirty) inputValue = draft;
   if (shouldUseExternal) inputValue = formatInitial(currentDisplay);
@@ -413,10 +444,7 @@ const FieldInput = memo(function FieldInput({ field, set, weightUnit, distanceUn
       </div>
       {showPlannedDiff && (
         <span
-          className={cn(
-            "text-center text-[10px] leading-none",
-            "font-medium text-warning",
-          )}
+          className={cn("text-center text-[10px] leading-none", "font-medium text-warning")}
           data-testid={`planned-${field}-${set.id}`}
         >
           planned {plannedText}
@@ -486,9 +514,7 @@ function getFieldDisplayValue(
   distanceUnit: string,
 ): number | undefined {
   if (value == null) return undefined;
-  return field === "distance"
-    ? getWorkoutDistanceDisplay(value, distanceUnit).value
-    : value;
+  return field === "distance" ? getWorkoutDistanceDisplay(value, distanceUnit).value : value;
 }
 
 function getStoredFieldValue(
