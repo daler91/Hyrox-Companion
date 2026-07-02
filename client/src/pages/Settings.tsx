@@ -1,7 +1,6 @@
-import { calculateMafHr } from "@shared/maf";
-import { useMutation,useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Bell, Database, Dumbbell, Link2, Loader2, RotateCw, User } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 
 import { AccountDangerZone } from "@/components/settings/AccountDangerZone";
@@ -20,14 +19,7 @@ import { WorkoutReviewCard } from "@/components/settings/preferences/WorkoutRevi
 import { ProfileSection } from "@/components/settings/ProfileSection";
 import { PushNotificationSection } from "@/components/settings/PushNotificationSection";
 import { StravaSection } from "@/components/settings/StravaSection";
-import {
-  buildRecalculationSummary,
-  type MafConsistencyInput,
-  type MafHrDataAvailableInput,
-  type MafTrendInput,
-  type StyleAuditEntry,
-  TrainingStyleSection,
-} from "@/components/settings/TrainingStyleSection";
+import { TrainingStyleSection } from "@/components/settings/TrainingStyleSection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,188 +35,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToastAction } from "@/components/ui/toast";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
-import { api, type GarminStatus, QUERY_KEYS, type StravaStatus, type UserPreferences } from "@/lib/api";
+import { type GarminStatus, QUERY_KEYS, type StravaStatus } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
-import { queryClient } from "@/lib/queryClient";
 
-type Preferences = UserPreferences;
+import { usePreferencesForm } from "./settings/usePreferencesForm";
 
 // Tab ids double as the `?tab=` deep-link value. `account` is the default
 // landing tab (omitted from the URL by useUrlQueryState).
 const SETTINGS_TABS = ["account", "training", "integrations", "notifications", "data"] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
-
-// The save mutation sends weeklyGoal as a number; local form state stores
-// it as a string so the <Input type="number"> can hold a partially-typed
-// value. `PreferencesSnapshot` captures the form-state shape (weeklyGoal as
-// string) used for Undo + committed-state tracking.
-//
-// `userTimezone` is excluded everywhere here: Settings does not expose a
-// timezone editor — the value is auto-detected on the client and PATCHed
-// independently by useDetectTimezone (C10). Keeping it out of the snapshot
-// + save payload means a Settings save never overwrites the auto-detected
-// value with stale state.
-type ActivityLevelValue = "sedentary" | "light" | "moderate" | "active" | "very_active";
-type WeightGoalDirectionValue = "lose" | "maintain" | "gain";
-
-type SavePayload = Omit<UserPreferences, "weeklyGoal" | "userTimezone"> & { weeklyGoal: number };
-interface PreferencesSnapshot
-  extends Omit<
-    UserPreferences,
-    | "weeklyGoal"
-    | "userTimezone"
-    | "trainingStyleId"
-    | "age"
-    | "mafAge"
-    | "mafConsistency"
-    | "mafTrend"
-    | "mafHrDataAvailable"
-    | "bodyweightKg"
-    | "heightCm"
-    | "restingHr"
-    | "maxHr"
-    | "ftp"
-    | "activityLevel"
-    | "weightGoalDirection"
-    | "weightGoalRateKgPerWeek"
-  > {
-  weeklyGoal: string;
-  mealSchedule: 3 | 4 | 5;
-  division: string;
-  gender: string;
-  age: number | null;
-  // Body-composition inputs, stored canonical (kg/cm) for stable dirty-tracking.
-  bodyweightKg: number | null;
-  heightCm: number | null;
-  // Training-load HR/power baselines (bpm/bpm/watts).
-  restingHr: number | null;
-  maxHr: number | null;
-  ftp: number | null;
-  activityLevel: ActivityLevelValue | null;
-  weightGoalDirection: WeightGoalDirectionValue | null;
-  weightGoalRateKgPerWeek: number | null;
-  trainingStyleId: string;
-  mafAge: number | null;
-  mafConsistency: Exclude<MafConsistencyInput, ""> | null;
-  mafTrend: Exclude<MafTrendInput, ""> | null;
-  mafHrDataAvailable: boolean | null;
-}
-
-function ageInputToSnapshot(value: string): number | null {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) ? parsed : null;
-}
-
-function mafHrDataAvailableInputToSnapshot(value: MafHrDataAvailableInput): boolean | null {
-  if (!value) {
-    return null;
-  }
-  return value === "yes";
-}
-
-function mafHrDataAvailableToInput(value: boolean | null | undefined): MafHrDataAvailableInput {
-  if (value == null) {
-    return "";
-  }
-  return value ? "yes" : "no";
-}
-
-function preferencesToSnapshot(preferences: Preferences): PreferencesSnapshot {
-  return {
-    weightUnit: preferences.weightUnit || "kg",
-    distanceUnit: preferences.distanceUnit || "km",
-    division: preferences.division || "open",
-    gender: preferences.gender ?? "prefer_not_to_say",
-    age: preferences.age ?? null,
-    bodyweightKg: preferences.bodyweightKg ?? null,
-    heightCm: preferences.heightCm ?? null,
-    restingHr: preferences.restingHr ?? null,
-    maxHr: preferences.maxHr ?? null,
-    ftp: preferences.ftp ?? null,
-    activityLevel: preferences.activityLevel ?? null,
-    weightGoalDirection: preferences.weightGoalDirection ?? null,
-    weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
-    weeklyGoal: String(preferences.weeklyGoal || 5),
-    mealSchedule: (preferences.mealSchedule ?? 4),
-    emailNotifications: preferences.emailNotifications ?? false,
-    emailWeeklySummary: preferences.emailWeeklySummary ?? false,
-    emailMissedReminder: preferences.emailMissedReminder ?? false,
-    showAdherenceInsights: preferences.showAdherenceInsights ?? true,
-    aiCoachEnabled: preferences.aiCoachEnabled ?? false,
-    trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
-    mafAge: preferences.mafAge ?? null,
-    mafConsistency: preferences.mafConsistency ?? null,
-    mafTrend: preferences.mafTrend ?? null,
-    mafHrDataAvailable: preferences.mafHrDataAvailable ?? null,
-  };
-}
-
-function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
-  return {
-    weightUnit: payload.weightUnit,
-    distanceUnit: payload.distanceUnit,
-    division: payload.division ?? "open",
-    gender: payload.gender ?? "prefer_not_to_say",
-    age: payload.age ?? null,
-    bodyweightKg: payload.bodyweightKg ?? null,
-    heightCm: payload.heightCm ?? null,
-    restingHr: payload.restingHr ?? null,
-    maxHr: payload.maxHr ?? null,
-    ftp: payload.ftp ?? null,
-    activityLevel: payload.activityLevel ?? null,
-    weightGoalDirection: payload.weightGoalDirection ?? null,
-    weightGoalRateKgPerWeek: payload.weightGoalRateKgPerWeek ?? null,
-    weeklyGoal: String(payload.weeklyGoal),
-    mealSchedule: (payload.mealSchedule ?? 4),
-    emailNotifications: payload.emailNotifications,
-    emailWeeklySummary: payload.emailWeeklySummary,
-    emailMissedReminder: payload.emailMissedReminder,
-    showAdherenceInsights: payload.showAdherenceInsights,
-    aiCoachEnabled: payload.aiCoachEnabled,
-    trainingStyleId: payload.trainingStyleId ?? "balanced_default",
-    mafAge: payload.mafAge ?? null,
-    mafConsistency: payload.mafConsistency ?? null,
-    mafTrend: payload.mafTrend ?? null,
-    mafHrDataAvailable: payload.mafHrDataAvailable ?? null,
-  };
-}
-
-function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
-  return {
-    weightUnit: snapshot.weightUnit,
-    distanceUnit: snapshot.distanceUnit,
-    division: snapshot.division,
-    gender: snapshot.gender,
-    age: snapshot.age,
-    bodyweightKg: snapshot.bodyweightKg,
-    heightCm: snapshot.heightCm,
-    restingHr: snapshot.restingHr,
-    maxHr: snapshot.maxHr,
-    ftp: snapshot.ftp,
-    activityLevel: snapshot.activityLevel,
-    weightGoalDirection: snapshot.weightGoalDirection,
-    weightGoalRateKgPerWeek: snapshot.weightGoalRateKgPerWeek,
-    weeklyGoal: Number.parseInt(snapshot.weeklyGoal, 10),
-    mealSchedule: snapshot.mealSchedule,
-    emailNotifications: snapshot.emailNotifications,
-    emailWeeklySummary: snapshot.emailWeeklySummary,
-    emailMissedReminder: snapshot.emailMissedReminder,
-    showAdherenceInsights: snapshot.showAdherenceInsights,
-    aiCoachEnabled: snapshot.aiCoachEnabled,
-    trainingStyleId: snapshot.trainingStyleId,
-    mafAge: snapshot.mafAge,
-    mafConsistency: snapshot.mafConsistency,
-    mafTrend: snapshot.mafTrend,
-    mafHrDataAvailable: snapshot.mafHrDataAvailable,
-  };
-}
 
 export default function Settings() {
   useDocumentTitle("Settings");
@@ -233,80 +58,21 @@ export default function Settings() {
   const [location, setLocation] = useLocation();
   const search = useSearch();
   const [activeTab, setActiveTab] = useUrlQueryState<SettingsTab>("tab", "account", SETTINGS_TABS);
-  const [weightUnit, setWeightUnit] = useState("kg");
-  const [distanceUnit, setDistanceUnit] = useState("km");
-  const [division, setDivision] = useState("open");
-  const [gender, setGender] = useState("prefer_not_to_say");
-  const [ageInput, setAgeInput] = useState("");
-  const [bodyweightKg, setBodyweightKg] = useState<number | null>(null);
-  const [heightCm, setHeightCm] = useState<number | null>(null);
-  const [restingHrInput, setRestingHrInput] = useState("");
-  const [maxHrInput, setMaxHrInput] = useState("");
-  const [ftpInput, setFtpInput] = useState("");
-  const [activityLevel, setActivityLevel] = useState("");
-  const [weightGoalDirection, setWeightGoalDirection] = useState("");
-  const [weightGoalRateKgPerWeek, setWeightGoalRateKgPerWeek] = useState<number | null>(null);
-  const [weeklyGoal, setWeeklyGoal] = useState("5");
-  const [mealSchedule, setMealSchedule] = useState<3 | 4 | 5>(4);
-  const [emailNotifications, setEmailNotifications] = useState(false);
-  const [emailWeeklySummary, setEmailWeeklySummary] = useState(false);
-  const [emailMissedReminder, setEmailMissedReminder] = useState(false);
-  const [showAdherenceInsights, setShowAdherenceInsights] = useState(true);
-  const [aiCoachEnabled, setAiCoachEnabled] = useState(false);
-  const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
-  const [hasChanges, setHasChanges] = useState(false);
-  const [mafAgeInput, setMafAgeInput] = useState("");
-  const [mafConsistencyInput, setMafConsistencyInput] = useState<MafConsistencyInput>("");
-  const [mafTrendInput, setMafTrendInput] = useState<MafTrendInput>("");
-  const [mafHrDataAvailableInput, setMafHrDataAvailableInput] =
-    useState<MafHrDataAvailableInput>("");
-  const [styleAuditEntries, setStyleAuditEntries] = useState<StyleAuditEntry[]>(() => {
-    try {
-      const raw = localStorage.getItem("fitai-settings-style-audit");
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as StyleAuditEntry[];
-      return Array.isArray(parsed) ? parsed.slice(0, 10) : [];
-    } catch {
-      return [];
-    }
-  });
-  // Snapshot of initial local defaults. Used as a fallback baseline if
-  // remote preferences never load (e.g. query error) so edits can still
-  // surface the sticky save bar.
-  const defaultSnapshotRef = useRef<PreferencesSnapshot>({
-    weightUnit: "kg",
-    distanceUnit: "km",
-    division: "open",
-    gender: "prefer_not_to_say",
-    age: null,
-    bodyweightKg: null,
-    heightCm: null,
-    restingHr: null,
-    maxHr: null,
-    ftp: null,
-    activityLevel: null,
-    weightGoalDirection: null,
-    weightGoalRateKgPerWeek: null,
-    weeklyGoal: "5",
-    mealSchedule: 4,
-    emailNotifications: false,
-    emailWeeklySummary: false,
-    emailMissedReminder: false,
-    showAdherenceInsights: true,
-    aiCoachEnabled: false,
-    trainingStyleId: "balanced_default",
-    mafAge: null,
-    mafConsistency: null,
-    mafTrend: null,
-    mafHrDataAvailable: null,
-  });
-  // Snapshot of the last server-committed values used as the baseline for
-  // dirty-state computation.
-  const baselineSnapshotRef = useRef<PreferencesSnapshot | null>(null);
-  // Snapshot of values before the most recent save, used to offer an
-  // "Undo" action on the post-save toast.
-  const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
-  const pendingStyleAuditRef = useRef<StyleAuditEntry | null>(null);
+  const {
+    draft,
+    updateField,
+    hasChanges,
+    styleAuditEntries,
+    hasRequiredMafInputs,
+    handleSave,
+    isSaving,
+    preferences,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = usePreferencesForm();
   const settingsSearchPath = search ? `?${search}` : "";
   const currentSettingsPath = `${location}${settingsSearchPath}`;
   const unsavedChangesPrompt = useUnsavedChangesPrompt({
@@ -314,63 +80,6 @@ export default function Settings() {
     currentPath: currentSettingsPath,
     navigate: setLocation,
   });
-
-  const currentSnapshot = useCallback(
-    (): PreferencesSnapshot => ({
-      weightUnit,
-      distanceUnit,
-      division,
-      gender,
-      age: ageInputToSnapshot(ageInput),
-      bodyweightKg,
-      heightCm,
-      restingHr: ageInputToSnapshot(restingHrInput),
-      maxHr: ageInputToSnapshot(maxHrInput),
-      ftp: ageInputToSnapshot(ftpInput),
-      activityLevel: (activityLevel || null) as ActivityLevelValue | null,
-      weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
-      weightGoalRateKgPerWeek,
-      weeklyGoal,
-      mealSchedule,
-      emailNotifications,
-      emailWeeklySummary,
-      emailMissedReminder,
-      showAdherenceInsights,
-      aiCoachEnabled,
-      trainingStyleId,
-      mafAge: ageInputToSnapshot(mafAgeInput),
-      mafConsistency: mafConsistencyInput || null,
-      mafTrend: mafTrendInput || null,
-      mafHrDataAvailable: mafHrDataAvailableInputToSnapshot(mafHrDataAvailableInput),
-    }),
-    [
-      weightUnit,
-      distanceUnit,
-      division,
-      gender,
-      bodyweightKg,
-      heightCm,
-      restingHrInput,
-      maxHrInput,
-      ftpInput,
-      activityLevel,
-      weightGoalDirection,
-      weightGoalRateKgPerWeek,
-      weeklyGoal,
-      mealSchedule,
-      emailNotifications,
-      emailWeeklySummary,
-      emailMissedReminder,
-      showAdherenceInsights,
-      aiCoachEnabled,
-      trainingStyleId,
-      ageInput,
-      mafAgeInput,
-      mafConsistencyInput,
-      mafTrendInput,
-      mafHrDataAvailableInput,
-    ],
-  );
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -397,17 +106,6 @@ export default function Settings() {
     setLocation("/settings?tab=integrations", { replace: true });
   }, [search, toast, setLocation, setActiveTab]);
 
-  const {
-    data: preferences,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch,
-  } = useQuery<Preferences>({
-    queryKey: QUERY_KEYS.preferences,
-  });
-
   const { data: stravaStatus, isLoading: stravaLoading } =
     useQuery<StravaStatus>({
       queryKey: QUERY_KEYS.stravaStatus,
@@ -418,238 +116,7 @@ export default function Settings() {
       queryKey: QUERY_KEYS.garminStatus,
     });
 
-  useEffect(() => {
-    if (preferences) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setWeightUnit(preferences.weightUnit || "kg");
-      setDistanceUnit(preferences.distanceUnit || "km");
-      setDivision(preferences.division || "open");
-      setGender(preferences.gender ?? "prefer_not_to_say");
-      setAgeInput(preferences.age == null ? "" : String(preferences.age));
-      setBodyweightKg(preferences.bodyweightKg ?? null);
-      setHeightCm(preferences.heightCm ?? null);
-      setRestingHrInput(preferences.restingHr == null ? "" : String(preferences.restingHr));
-      setMaxHrInput(preferences.maxHr == null ? "" : String(preferences.maxHr));
-      setFtpInput(preferences.ftp == null ? "" : String(preferences.ftp));
-      setActivityLevel(preferences.activityLevel ?? "");
-      setWeightGoalDirection(preferences.weightGoalDirection ?? "");
-      setWeightGoalRateKgPerWeek(preferences.weightGoalRateKgPerWeek ?? null);
-      setWeeklyGoal(String(preferences.weeklyGoal || 5));
-      setMealSchedule((preferences.mealSchedule ?? 4));
-      setEmailNotifications(preferences.emailNotifications ?? false);
-      setEmailWeeklySummary(preferences.emailWeeklySummary ?? false);
-      setEmailMissedReminder(preferences.emailMissedReminder ?? false);
-      setShowAdherenceInsights(preferences.showAdherenceInsights ?? true);
-      setAiCoachEnabled(preferences.aiCoachEnabled ?? false);
-      setTrainingStyleId(preferences.trainingStyleId ?? "balanced_default");
-      setMafAgeInput(preferences.mafAge == null ? "" : String(preferences.mafAge));
-      setMafConsistencyInput(preferences.mafConsistency ?? "");
-      setMafTrendInput(preferences.mafTrend ?? "");
-      setMafHrDataAvailableInput(mafHrDataAvailableToInput(preferences.mafHrDataAvailable));
-      // Seed the baseline snapshot on first load. After saves, onSuccess
-      // keeps the baseline in sync with committed values.
-      if (!baselineSnapshotRef.current) {
-        baselineSnapshotRef.current = preferencesToSnapshot(preferences);
-      }
-    }
-  }, [preferences]);
-
-  useEffect(() => {
-    const baseline = baselineSnapshotRef.current ?? defaultSnapshotRef.current;
-    setHasChanges(JSON.stringify(currentSnapshot()) !== JSON.stringify(baseline));
-  }, [currentSnapshot]);
-
-  const saveMutation = useMutation({
-    mutationFn: (data: SavePayload) => api.preferences.update(data),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.preferences }).catch(() => {});
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.authUser }).catch(() => {});
-      // Promote the saved values to the dirty-state baseline so we don't
-      // depend on the invalidating preferences query timing.
-      baselineSnapshotRef.current = savePayloadToSnapshot(variables);
-      setHasChanges(false);
-      if (pendingStyleAuditRef.current) {
-        const nextAudit = [pendingStyleAuditRef.current, ...styleAuditEntries].slice(0, 10);
-        setStyleAuditEntries(nextAudit);
-        localStorage.setItem("fitai-settings-style-audit", JSON.stringify(nextAudit));
-        pendingStyleAuditRef.current = null;
-      }
-      const previous = undoSnapshotRef.current;
-      toast({
-        title: "Settings saved",
-        description: "Your preferences have been updated.",
-        action: previous ? (
-          <ToastAction
-            altText="Undo settings change"
-            data-testid="button-undo-settings"
-            onClick={() => {
-              // Restore the previous values in-state and persist them.
-              // Leave undoSnapshotRef in place so a second undo restores
-              // again — the mutation onSuccess will replace it after
-              // persistence completes.
-              setWeightUnit(previous.weightUnit);
-              setDistanceUnit(previous.distanceUnit);
-              setDivision(previous.division);
-              setGender(previous.gender);
-              setBodyweightKg(previous.bodyweightKg);
-              setHeightCm(previous.heightCm);
-              setRestingHrInput(previous.restingHr == null ? "" : String(previous.restingHr));
-              setMaxHrInput(previous.maxHr == null ? "" : String(previous.maxHr));
-              setFtpInput(previous.ftp == null ? "" : String(previous.ftp));
-              setActivityLevel(previous.activityLevel ?? "");
-              setWeightGoalDirection(previous.weightGoalDirection ?? "");
-              setWeightGoalRateKgPerWeek(previous.weightGoalRateKgPerWeek);
-              setWeeklyGoal(previous.weeklyGoal);
-              setMealSchedule(previous.mealSchedule);
-              setEmailNotifications(previous.emailNotifications);
-              setEmailWeeklySummary(previous.emailWeeklySummary);
-              setEmailMissedReminder(previous.emailMissedReminder);
-              setShowAdherenceInsights(previous.showAdherenceInsights);
-              setAiCoachEnabled(previous.aiCoachEnabled);
-              setTrainingStyleId(previous.trainingStyleId);
-              setMafAgeInput(previous.mafAge == null ? "" : String(previous.mafAge));
-              setMafConsistencyInput(previous.mafConsistency ?? "");
-              setMafTrendInput(previous.mafTrend ?? "");
-              setMafHrDataAvailableInput(mafHrDataAvailableToInput(previous.mafHrDataAvailable));
-              saveMutation.mutate(snapshotToSavePayload(previous));
-            }}
-          >
-            Undo
-          </ToastAction>
-        ) : undefined,
-      });
-    },
-    onError: () => {
-      pendingStyleAuditRef.current = null;
-      toast({
-        title: "Error",
-        description: "Failed to save settings. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Warn user before leaving with unsaved changes
-  useEffect(() => {
-    if (!hasChanges) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    globalThis.window.addEventListener("beforeunload", handler);
-    return () => globalThis.window.removeEventListener("beforeunload", handler);
-  }, [hasChanges]);
-
-  const handleSave = useCallback(() => {
-    const mafAge = ageInputToSnapshot(mafAgeInput);
-    const mafConsistency = mafConsistencyInput || null;
-    const mafTrend = mafTrendInput || null;
-    const mafHrDataAvailable = mafHrDataAvailableInputToSnapshot(mafHrDataAvailableInput);
-    const hasValidMafInputs =
-      mafAge != null && mafAge >= 16 && mafAge <= 99 && Boolean(mafConsistency) && Boolean(mafTrend);
-
-    if (trainingStyleId === "maf_method" && !hasValidMafInputs) {
-      toast({
-        title: "Complete MAF setup",
-        description: "Enter a valid age and select the required MAF fields before saving.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Capture the pre-save baseline so the post-save toast can offer Undo.
-    undoSnapshotRef.current = baselineSnapshotRef.current
-      ? { ...baselineSnapshotRef.current }
-      : null;
-    const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
-    const styleChanged = trainingStyleId !== committedStyleId;
-    const maf = trainingStyleId === "maf_method" && hasValidMafInputs ? calculateMafHr({
-      age: mafAge,
-      injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication),
-      consistency: mafConsistency!,
-      trend: mafTrend!,
-    }) : null;
-    pendingStyleAuditRef.current = styleChanged
-      ? {
-          changedAtIso: new Date().toISOString(),
-          fromStyleId: committedStyleId,
-          toStyleId: trainingStyleId,
-          recalculations: buildRecalculationSummary(trainingStyleId),
-        }
-      : null;
-    saveMutation.mutate({
-      weightUnit,
-      distanceUnit,
-      division,
-      gender,
-      age: ageInputToSnapshot(ageInput),
-      bodyweightKg,
-      heightCm,
-      restingHr: ageInputToSnapshot(restingHrInput),
-      maxHr: ageInputToSnapshot(maxHrInput),
-      ftp: ageInputToSnapshot(ftpInput),
-      activityLevel: (activityLevel || null) as ActivityLevelValue | null,
-      weightGoalDirection: (weightGoalDirection || null) as WeightGoalDirectionValue | null,
-      weightGoalRateKgPerWeek,
-      weeklyGoal: Number.parseInt(weeklyGoal, 10),
-      mealSchedule,
-      emailNotifications,
-      emailWeeklySummary,
-      emailMissedReminder,
-      showAdherenceInsights,
-      aiCoachEnabled,
-      trainingStyleId,
-      trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
-      trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
-      trainingStyleRecomputeNow: styleChanged,
-      mafAge,
-      mafConsistency,
-      mafTrend,
-      mafHrDataAvailable,
-      mafHr: trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
-      mafBaselineTestScheduledAt: styleChanged && trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
-    });
-  }, [
-    saveMutation,
-    weightUnit,
-    distanceUnit,
-    division,
-    gender,
-    ageInput,
-    bodyweightKg,
-    heightCm,
-    restingHrInput,
-    maxHrInput,
-    ftpInput,
-    activityLevel,
-    weightGoalDirection,
-    weightGoalRateKgPerWeek,
-    weeklyGoal,
-    mealSchedule,
-    emailNotifications,
-    emailWeeklySummary,
-    emailMissedReminder,
-    showAdherenceInsights,
-    aiCoachEnabled,
-    trainingStyleId,
-    mafAgeInput,
-    mafConsistencyInput,
-    mafTrendInput,
-    mafHrDataAvailableInput,
-    preferences?.mafInjuryIllnessMedication,
-    toast,
-  ]);
-
   const userName = getUserDisplayName(user);
-  const hasRequiredMafInputs = useCallback(() => {
-    const age = ageInputToSnapshot(mafAgeInput);
-    return (
-      age != null &&
-      age >= 16 &&
-      age <= 99 &&
-      Boolean(mafConsistencyInput) &&
-      Boolean(mafTrendInput)
-    );
-  }, [mafAgeInput, mafConsistencyInput, mafTrendInput]);
 
   if (isLoading) {
     return (
@@ -739,13 +206,13 @@ export default function Settings() {
         <TabsContent value="account" className="space-y-6">
           <ProfileSection userName={userName} />
           <UnitsPreferencesCard
-            weightUnit={weightUnit}
-            distanceUnit={distanceUnit}
+            weightUnit={draft.weightUnit}
+            distanceUnit={draft.distanceUnit}
             onWeightUnitChange={(v) => {
-              setWeightUnit(v);
+              updateField("weightUnit", v);
             }}
             onDistanceUnitChange={(v) => {
-              setDistanceUnit(v);
+              updateField("distanceUnit", v);
             }}
           />
           <Card>
@@ -777,68 +244,68 @@ export default function Settings() {
 
         <TabsContent value="training" className="space-y-6">
           <AthleteProfileCard
-            division={division}
-            gender={gender}
-            age={ageInput}
-            onDivisionChange={setDivision}
-            onGenderChange={setGender}
-            onAgeChange={setAgeInput}
+            division={draft.division}
+            gender={draft.gender}
+            age={draft.ageInput}
+            onDivisionChange={(v) => updateField("division", v)}
+            onGenderChange={(v) => updateField("gender", v)}
+            onAgeChange={(v) => updateField("ageInput", v)}
           />
           <BodyCompositionCard
-            weightUnit={weightUnit}
-            bodyweightKg={bodyweightKg}
-            heightCm={heightCm}
-            activityLevel={activityLevel}
-            weightGoalDirection={weightGoalDirection}
-            weightGoalRateKgPerWeek={weightGoalRateKgPerWeek}
-            onBodyweightKgChange={setBodyweightKg}
-            onHeightCmChange={setHeightCm}
-            onActivityLevelChange={setActivityLevel}
-            onWeightGoalDirectionChange={setWeightGoalDirection}
-            onWeightGoalRateKgPerWeekChange={setWeightGoalRateKgPerWeek}
+            weightUnit={draft.weightUnit}
+            bodyweightKg={draft.bodyweightKg}
+            heightCm={draft.heightCm}
+            activityLevel={draft.activityLevel}
+            weightGoalDirection={draft.weightGoalDirection}
+            weightGoalRateKgPerWeek={draft.weightGoalRateKgPerWeek}
+            onBodyweightKgChange={(v) => updateField("bodyweightKg", v)}
+            onHeightCmChange={(v) => updateField("heightCm", v)}
+            onActivityLevelChange={(v) => updateField("activityLevel", v)}
+            onWeightGoalDirectionChange={(v) => updateField("weightGoalDirection", v)}
+            onWeightGoalRateKgPerWeekChange={(v) => updateField("weightGoalRateKgPerWeek", v)}
           />
           <HealthMetricsCard
-            restingHr={restingHrInput}
-            maxHr={maxHrInput}
-            ftp={ftpInput}
-            onRestingHrChange={setRestingHrInput}
-            onMaxHrChange={setMaxHrInput}
-            onFtpChange={setFtpInput}
+            restingHr={draft.restingHrInput}
+            maxHr={draft.maxHrInput}
+            ftp={draft.ftpInput}
+            onRestingHrChange={(v) => updateField("restingHrInput", v)}
+            onMaxHrChange={(v) => updateField("maxHrInput", v)}
+            onFtpChange={(v) => updateField("ftpInput", v)}
           />
           <NutritionPreferencesCard
-            mealSchedule={mealSchedule}
-            onMealScheduleChange={setMealSchedule}
+            mealSchedule={draft.mealSchedule}
+            onMealScheduleChange={(v) => updateField("mealSchedule", v)}
           />
           <TrainingGoalsCard
-            weeklyGoal={weeklyGoal}
+            weeklyGoal={draft.weeklyGoal}
             onWeeklyGoalChange={(v) => {
-              setWeeklyGoal(v);
+              updateField("weeklyGoal", v);
             }}
           />
           <TrainingStyleSection
-            trainingStyleId={trainingStyleId}
-            onTrainingStyleIdChange={setTrainingStyleId}
-            hasRequiredMafInputs={hasRequiredMafInputs()}
-            mafAgeInput={mafAgeInput}
-            mafConsistencyInput={mafConsistencyInput}
-            mafTrendInput={mafTrendInput}
-            mafHrDataAvailableInput={mafHrDataAvailableInput}
-            onMafAgeInputChange={setMafAgeInput}
-            onMafConsistencyInputChange={setMafConsistencyInput}
-            onMafTrendInputChange={setMafTrendInput}
-            onMafHrDataAvailableInputChange={setMafHrDataAvailableInput}
+            trainingStyleId={draft.trainingStyleId}
+            onTrainingStyleIdChange={(v) => updateField("trainingStyleId", v)}
+            hasRequiredMafInputs={hasRequiredMafInputs}
+            mafAgeInput={draft.mafAgeInput}
+            mafConsistencyInput={draft.mafConsistencyInput}
+            mafTrendInput={draft.mafTrendInput}
+            mafHrDataAvailableInput={draft.mafHrDataAvailableInput}
+            onMafAgeInputChange={(v) => updateField("mafAgeInput", v)}
+            onMafConsistencyInputChange={(v) => updateField("mafConsistencyInput", v)}
+            onMafTrendInputChange={(v) => updateField("mafTrendInput", v)}
+            onMafHrDataAvailableInputChange={(v) => updateField("mafHrDataAvailableInput", v)}
             styleAuditEntries={styleAuditEntries}
           />
           <WorkoutReviewCard
-            showAdherenceInsights={showAdherenceInsights}
+            showAdherenceInsights={draft.showAdherenceInsights}
             onShowAdherenceInsightsChange={(v) => {
-              setShowAdherenceInsights(v);
+              updateField("showAdherenceInsights", v);
             }}
           />
           <AiCoachCard
-            aiCoachEnabled={aiCoachEnabled}
+            aiCoachEnabled={draft.aiCoachEnabled}
             onAiCoachEnabledChange={(v) => {
-              setAiCoachEnabled(v);
+              updateField("aiCoachEnabled", v);
             }}
           />
           <CoachingSection />
@@ -851,17 +318,17 @@ export default function Settings() {
 
         <TabsContent value="notifications" className="space-y-6">
           <EmailNotificationsCard
-            emailNotifications={emailNotifications}
-            emailWeeklySummary={emailWeeklySummary}
-            emailMissedReminder={emailMissedReminder}
+            emailNotifications={draft.emailNotifications}
+            emailWeeklySummary={draft.emailWeeklySummary}
+            emailMissedReminder={draft.emailMissedReminder}
             onEmailNotificationsChange={(v) => {
-              setEmailNotifications(v);
+              updateField("emailNotifications", v);
             }}
             onEmailWeeklySummaryChange={(v) => {
-              setEmailWeeklySummary(v);
+              updateField("emailWeeklySummary", v);
             }}
             onEmailMissedReminderChange={(v) => {
-              setEmailMissedReminder(v);
+              updateField("emailMissedReminder", v);
             }}
           />
           <PushNotificationSection />
@@ -878,9 +345,9 @@ export default function Settings() {
             onClick={handleSave}
             className="w-full"
             data-testid="button-save-settings"
-            disabled={saveMutation.isPending}
+            disabled={isSaving}
           >
-            {saveMutation.isPending ? (
+            {isSaving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
                 Saving...
