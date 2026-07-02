@@ -608,7 +608,7 @@ function getDistanceTextReplacement(
 ): string | null {
   const sourceUnit = standardizeParsedDistanceUnit(unitMatch.rawUnit);
   if (!sourceUnit) return null;
-  const previousChar = numberStart > 0 ? text[numberStart - 1] : "";
+  const previousChar = numberStart > 0 ? text[numberStart - 1] ?? "" : "";
   if (isPaceOrRatioUnit(previousChar)) return null;
   if (isLikelyMinuteShorthand(numberToken.value, sourceUnit, lowerText, numberStart, unitMatch.end)) {
     return null;

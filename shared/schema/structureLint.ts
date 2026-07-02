@@ -25,7 +25,8 @@ function hasTarget(step: NonNullable<StructureBlockInput["steps"]>[number], key:
     distance: "targetDistance",
     weight: "targetWeight",
   };
-  return step.targets[key] != null || step.targets[alias[key]] != null;
+  const aliasKey = alias[key];
+  return step.targets[key] != null || (aliasKey != null && step.targets[aliasKey] != null);
 }
 
 function structureIssue(

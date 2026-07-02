@@ -57,8 +57,12 @@ export const nutrition = {
       date ? `${base}/summary?date=${date}` : `${base}/summary`,
     ),
 
-  createLog: (data: CreateFoodLogInput) =>
-    typedRequest<FoodLogEntry>("POST", `${base}/logs`, data),
+  createLog: (data: CreateFoodLogInput, options?: { idempotencyKey: string }) =>
+    options?.idempotencyKey
+      ? typedRequest<FoodLogEntry>("POST", `${base}/logs`, data, {
+        headers: { "X-Idempotency-Key": options.idempotencyKey },
+      })
+      : typedRequest<FoodLogEntry>("POST", `${base}/logs`, data),
 
   updateLog: (id: string, data: UpdateFoodLogInput) =>
     typedRequest<FoodLogEntry>("PATCH", `${base}/logs/${enc(id)}`, data),

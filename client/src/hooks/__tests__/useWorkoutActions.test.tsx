@@ -234,7 +234,9 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'skipped' }, expect.any(AbortSignal));
+          // Online status changes carry an idempotency key so a queued
+          // offline replay of the same change dedupes server-side.
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'skipped' }, expect.any(AbortSignal), { 'X-Idempotency-Key': expect.any(String) });
           expect(result.current.skipConfirmEntry).toBeNull();
         });
       });
@@ -250,7 +252,7 @@ describe('useWorkoutActions', () => {
         });
 
         await waitFor(() => {
-          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'completed' }, expect.any(AbortSignal));
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith('PATCH', '/api/v1/plans/days/pd-1/status', { status: 'completed' }, expect.any(AbortSignal), { 'X-Idempotency-Key': expect.any(String) });
         });
       });
     });
@@ -365,8 +367,11 @@ describe('useWorkoutActions', () => {
     });
 
     it('triggers error toast on failed status update', async () => {
-      // Setup mutation mock to simulate failure
-      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('Network Error'));
+      // A non-connectivity (server) error must surface as an error toast
+      // rather than being queued for offline replay. Connectivity-shaped
+      // failures take the queue path instead (covered in
+      // updateStatus.offline.test.tsx).
+      vi.mocked(queryClientLib.apiRequest).mockRejectedValueOnce(new Error('500: Server Error'));
 
       const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
       const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
@@ -376,7 +381,9 @@ describe('useWorkoutActions', () => {
       });
 
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith({ title: "Failed to update status", description: "Network Error", variant: "destructive" });
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Failed to update status", variant: "destructive" }),
+        );
       });
     });
 });

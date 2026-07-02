@@ -11,6 +11,7 @@ import {
   enqueueMutation,
   flushQueue,
   getPendingCount,
+  getPendingMutations,
   OFFLINE_QUEUE_CHANGE_EVENT,
   OFFLINE_SYNC_COMPLETE_EVENT,
   onMutationDropped,
@@ -122,11 +123,48 @@ describe("offlineQueue", () => {
     );
     expect(syncComplete).toHaveBeenCalledWith(
       expect.objectContaining({
-        detail: { synced: 1, failed: 0, dropped: 0 },
+        detail: {
+          synced: 1,
+          failed: 0,
+          dropped: 0,
+          syncedRequests: [{ url: "/api/v1/workouts", method: "POST" }],
+        },
       }),
     );
 
     globalThis.removeEventListener(OFFLINE_QUEUE_CHANGE_EVENT, queueChange);
+    globalThis.removeEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
+  });
+
+  it("reports getPendingMutations for the overlay and syncedRequests per replayed url", async () => {
+    enqueueMutation("POST", "/api/v1/workouts", { title: "W" }, { id: "w1" });
+    enqueueMutation("POST", "/api/v1/nutrition/logs", { foodId: "f1" }, { id: "n1" });
+
+    const pending = getPendingMutations();
+    expect(pending.map((m) => m.url)).toEqual([
+      "/api/v1/workouts",
+      "/api/v1/nutrition/logs",
+    ]);
+
+    const syncComplete = vi.fn();
+    globalThis.addEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
+    vi.mocked(apiRequest).mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await flushQueue();
+
+    expect(syncComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          synced: 2,
+          syncedRequests: [
+            { url: "/api/v1/workouts", method: "POST" },
+            { url: "/api/v1/nutrition/logs", method: "POST" },
+          ],
+        }),
+      }),
+    );
+    expect(getPendingMutations()).toEqual([]);
+
     globalThis.removeEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
   });
 

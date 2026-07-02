@@ -155,7 +155,11 @@ function buildReferenceFromCohort(
   const stations = {} as Record<HyroxStation, StationStandard>;
   for (const station of HYROX_STATION_ORDER) {
     const benchmarkSeconds = benchmark
-      ? clampStation(station, benchmark.stationP50Seconds[station])
+      ? clampStation(
+          station,
+          benchmark.stationP50Seconds[station] ??
+            LEGACY_STATION_BENCHMARK_SECONDS[division][gender][station],
+        )
       : LEGACY_STATION_BENCHMARK_SECONDS[division][gender][station];
     stations[station] = {
       ...STATION_DIMENSIONS[station],
@@ -225,7 +229,7 @@ function buildBlendedReference(division: Division): RaceReference {
     runKmBenchmarkSeconds: Math.round((m.runKmBenchmarkSeconds + f.runKmBenchmarkSeconds) / 2),
     runKmFloorSeconds: m.runKmFloorSeconds,
     runLegBenchmarkSeconds: m.runLegBenchmarkSeconds.map((v, i) =>
-      Math.round((v + f.runLegBenchmarkSeconds[i]) / 2),
+      Math.round((v + (f.runLegBenchmarkSeconds[i] ?? v)) / 2),
     ),
     transitionTotalSeconds: Math.round((m.transitionTotalSeconds + f.transitionTotalSeconds) / 2),
     stations,

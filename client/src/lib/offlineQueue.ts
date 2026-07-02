@@ -2,13 +2,18 @@ import { z } from "zod";
 
 import { apiRequest } from "./queryClient";
 
-interface PendingMutation {
+export interface PendingMutation {
   id: string;
   method: string;
   url: string;
   body: unknown;
   timestamp: number;
   retryCount?: number;
+}
+
+export interface SyncedRequest {
+  url: string;
+  method: string;
 }
 
 export interface DroppedMutationInfo {
@@ -38,6 +43,9 @@ export interface OfflineSyncCompleteDetail {
   synced: number;
   failed: number;
   dropped: number;
+  /** The url/method of each successfully replayed mutation, so listeners can
+   * invalidate the query caches that write actually touched. */
+  syncedRequests: SyncedRequest[];
 }
 
 /**
@@ -168,6 +176,14 @@ export function getPendingCount(): number {
   return getQueue().length;
 }
 
+/**
+ * Read-only snapshot of the queued mutations. Used by the timeline's
+ * pending-entry overlay to render queued-but-unsynced writes.
+ */
+export function getPendingMutations(): readonly PendingMutation[] {
+  return getQueue();
+}
+
 export function clearOfflineQueue(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
@@ -215,6 +231,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
   let synced = 0;
   let failed = 0;
   let dropped = 0;
+  const syncedRequests: SyncedRequest[] = [];
   const remaining: PendingMutation[] = [];
 
   for (const mutation of queue) {
@@ -240,6 +257,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
         "X-Idempotency-Key": mutation.id,
       });
       synced++;
+      syncedRequests.push({ url: mutation.url, method: mutation.method });
     } catch {
       // Network/server error — increment retry count; mutation will be dropped after MAX_RETRIES
       failed++;
@@ -254,7 +272,7 @@ async function doFlushQueue(): Promise<{ synced: number; failed: number; dropped
   const enqueuedDuringFlush = getQueue().filter((m) => !processedIds.has(m.id));
   saveQueue([...remaining, ...enqueuedDuringFlush]);
   if (synced > 0 || dropped > 0) {
-    notifySyncComplete({ synced, failed, dropped });
+    notifySyncComplete({ synced, failed, dropped, syncedRequests });
   }
   return { synced, failed, dropped };
 }

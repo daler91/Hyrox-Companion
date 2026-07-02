@@ -1,15 +1,25 @@
-import { type DragEndEvent,KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove,sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName, type ParsedExercise, type StructureBlockInput } from "@shared/schema";
-import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
-import { useMutation } from "@tanstack/react-query";
-import type { MutableRefObject } from "react";
-import { useCallback,useEffect, useRef, useState } from "react";
+import { EXERCISE_DEFINITIONS, type ExerciseName, type StructureBlockInput } from "@shared/schema";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createDefaultSet,type StructuredExercise } from "@/components/ExerciseInput";
-import { useToast } from "@/hooks/use-toast";
-import { api, type ParseFromImagePayload, type ParseWorkoutStructureResponse } from "@/lib/api";
+import { createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";
 
+import { getBlockExerciseName, makeBlockId } from "./workout-editor/blockHelpers";
+import { useParseWorkoutFromImageMutation, useParseWorkoutMutation } from "./workout-editor/parseMutations";
+import { useAutoParse } from "./workout-editor/useAutoParse";
+import { useWorkoutSensors } from "./workout-editor/useWorkoutSensors";
+
+// Re-exports for the pre-split import surface: saveWorkoutPayload.ts,
+// workoutComposer.types.ts, and the tests import these from this module.
+export { exerciseToPayload, generateSummary, getBlockExerciseName, makeBlockId } from "./workout-editor/blockHelpers";
+export { mergeParsedWithEdits } from "./workout-editor/parseMerging";
+export {
+  type ParseImagePayload,
+  parseWorkoutText,
+  useParseWorkoutFromImageMutation,
+  useParseWorkoutMutation,
+} from "./workout-editor/parseMutations";
+export { type ParseDiagnostics } from "./workout-editor/useAutoParse";
+export { useWorkoutSensors } from "./workout-editor/useWorkoutSensors";
 
 interface UseWorkoutEditorOptions {
   initialBlockCounter?: number;
@@ -18,490 +28,6 @@ interface UseWorkoutEditorOptions {
   initialUseTextMode?: boolean;
   initialStructureBlocks?: StructureBlockInput[];
 }
-
-export interface ParseDiagnostics {
-  readonly lowConfidenceCount: number;
-  readonly emptyResult: boolean;
-  readonly lastErrorReason: string | null;
-  readonly lastConfidenceSummary: string | null;
-}
-
-export function makeBlockId(name: string, counterRef: MutableRefObject<number>) {
-  counterRef.current += 1;
-  return `${name}__${counterRef.current}`;
-}
-
-export function getBlockExerciseName(blockId: string): string {
-  const parts = blockId.split("__");
-  const name = parts.slice(0, -1).join("__") || parts[0];
-  if (name.startsWith("custom:")) return "custom";
-  return name;
-}
-
-export function exerciseToPayload(ex: StructuredExercise | ParsedExercise) {
-  return {
-    exerciseName: ex.exerciseName,
-    customLabel: ex.customLabel,
-    category: ex.category,
-    confidence: ex.confidence,
-    sets: (ex.sets || []).map(s => ({
-      setNumber: s.setNumber,
-      reps: s.reps,
-      weight: s.weight,
-      distance: s.distance,
-      time: s.time,
-      plannedReps: s.plannedReps,
-      plannedWeight: s.plannedWeight,
-      plannedDistance: s.plannedDistance,
-      plannedTime: s.plannedTime,
-      blockId: s.blockId,
-      stepNumber: s.stepNumber,
-      intervalMinute: s.intervalMinute,
-      cycleNumber: s.cycleNumber,
-      stepRole: s.stepRole,
-      groupId: s.groupId,
-      notes: s.notes,
-    })),
-  };
-}
-
-function areSetsUniform(sets: NonNullable<StructuredExercise["sets"]>): boolean {
-  if (sets.length <= 1) return true;
-  const firstSet = sets[0];
-  for (let i = 1; i < sets.length; i++) {
-    if (sets[i].reps !== firstSet.reps || sets[i].weight !== firstSet.weight) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, distanceUnit: string): string {
-  const def = EXERCISE_DEFINITIONS[ex.exerciseName];
-  const name = ex.exerciseName === "custom" && ex.customLabel ? ex.customLabel : def?.label || ex.exerciseName;
-  const sets = ex.sets || [];
-
-  if (sets.length === 0) {
-    return `${name}: completed`;
-  }
-
-  const firstSet = sets[0];
-  const allSame = areSetsUniform(sets);
-
-  const parts: string[] = [];
-  if (allSame && sets.length > 1 && firstSet.reps) {
-    parts.push(`${sets.length}x${firstSet.reps}`);
-  } else if (firstSet.reps) {
-    parts.push(`${sets.length > 1 ? sets.length + " sets, " : ""}${firstSet.reps} reps`);
-  } else if (sets.length > 1) {
-    parts.push(`${sets.length} sets`);
-  }
-
-  if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
-  if (firstSet.distance) parts.push(getWorkoutDistanceDisplay(firstSet.distance, distanceUnit).text);
-  if (firstSet.time) parts.push(`${firstSet.time}min`);
-
-  return `${name}: ${parts.join(", ") || "completed"}`;
-}
-
-export function generateSummary(exercises: StructuredExercise[], weightUnit: string, distanceUnit: string): string {
-  const hasStructuredHints = exercises.some((ex) => (ex.sets || []).some((set) => Boolean(set.notes)));
-  if (!hasStructuredHints) {
-    const summaries: string[] = [];
-    for (const ex of exercises) summaries.push(formatExerciseSummary(ex, weightUnit, distanceUnit));
-    return summaries.join("; ");
-  }
-
-  const blocks: string[] = [];
-  for (const ex of exercises) {
-    const headline = formatExerciseSummary(ex, weightUnit, distanceUnit);
-    const steps = (ex.sets || []).map((set, idx) => {
-      const stepLabel = `S${idx + 1}`;
-      if (!set.notes) return stepLabel;
-      return `${stepLabel}(cue: ${set.notes})`;
-    });
-    blocks.push(steps.length > 0 ? `${headline} [${steps.join(" -> ")}]` : headline);
-  }
-  return blocks.join("; ");
-}
-
-
-
-interface ParsedBlockBuild {
-  readonly exerciseName: ExerciseName;
-  readonly blockKey: string;
-  readonly data: StructuredExercise;
-}
-
-function isWorkStructureStep(step: StructureBlockInput["steps"][number]): boolean {
-  return (step.stepType ?? "work") === "work";
-}
-
-function targetNumber(
-  targets: StructureBlockInput["steps"][number]["targets"],
-  ...keys: string[]
-): number | undefined {
-  if (!targets || typeof targets !== "object") return undefined;
-  for (const key of keys) {
-    const value = (targets as Record<string, unknown>)[key];
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-  }
-  return undefined;
-}
-
-function ensureStructureBlockIds(blocks: readonly StructureBlockInput[]): StructureBlockInput[] {
-  return blocks.map((block) => (block.id ? block : { ...block, id: crypto.randomUUID() }));
-}
-
-function exerciseKeyFromName(name: string, label?: string | null): string {
-  const normalized = normalizeExerciseName(name);
-  const keyName = normalized ?? name.trim().toLowerCase();
-  return `${keyName}|${(label ?? "").trim().toLowerCase()}`;
-}
-
-function rowMatchesStep(row: ParsedExercise, step: StructureBlockInput["steps"][number]): boolean {
-  const stepName = step.exerciseName ?? step.customLabel;
-  if (!stepName) return false;
-  return exerciseKeyFromName(row.exerciseName, row.customLabel) === exerciseKeyFromName(stepName, step.customLabel);
-}
-
-function assignRowsToStructureBlocks(
-  rows: readonly ParsedExercise[],
-  blocks: readonly StructureBlockInput[],
-): ParsedExercise[] {
-  if (rows.some((row) => row.sets.some((set) => set.blockId))) return [...rows];
-  const nextRows = rows.map((row) => ({ ...row, sets: row.sets.map((set) => ({ ...set })) }));
-  const usedRows = new Set<number>();
-
-  for (const block of blocks) {
-    const blockId = block.id;
-    if (!blockId) continue;
-    for (const step of block.steps) {
-      if (!isWorkStructureStep(step)) continue;
-      let rowIndex = nextRows.findIndex((row, idx) => !usedRows.has(idx) && rowMatchesStep(row, step));
-      if (rowIndex < 0) rowIndex = nextRows.findIndex((_row, idx) => !usedRows.has(idx));
-      if (rowIndex < 0) return nextRows;
-      usedRows.add(rowIndex);
-      nextRows[rowIndex].sets = nextRows[rowIndex].sets.map((set) => ({
-        ...set,
-        blockId,
-        stepNumber: step.stepNumber,
-        intervalMinute: step.minuteIndex ?? undefined,
-        stepRole: step.stepRole ?? step.stepType ?? "work",
-        groupId: step.groupId ?? undefined,
-      }));
-    }
-  }
-  return nextRows;
-}
-
-function parsedRowsFromStructureBlocks(blocks: readonly StructureBlockInput[]): ParsedExercise[] {
-  const rows: ParsedExercise[] = [];
-  for (const block of blocks) {
-    if (!block.id) continue;
-    for (const step of block.steps) {
-      if (!isWorkStructureStep(step) || !step.exerciseName) continue;
-      const normalizedName = normalizeExerciseName(step.exerciseName);
-      const exerciseName = normalizedName ?? "custom";
-      const customLabel = normalizedName ? step.customLabel ?? undefined : step.customLabel ?? step.exerciseName;
-      rows.push({
-        exerciseName,
-        category: step.category ?? (normalizedName ? EXERCISE_DEFINITIONS[normalizedName].category : "conditioning"),
-        customLabel,
-        sets: [{
-          setNumber: 1,
-          reps: targetNumber(step.targets, "targetReps", "reps"),
-          weight: targetNumber(step.targets, "targetWeight", "weight"),
-          distance: targetNumber(step.targets, "targetDistance", "distance"),
-          time: targetNumber(step.targets, "targetTime", "time", "durationSeconds"),
-          blockId: block.id,
-          stepNumber: step.stepNumber,
-          intervalMinute: step.minuteIndex ?? undefined,
-          stepRole: step.stepRole ?? step.stepType ?? "work",
-          groupId: step.groupId ?? undefined,
-        }],
-      });
-    }
-  }
-  return rows;
-}
-
-function rowsForParsedStructure(parsed: ParseWorkoutStructureResponse): {
-  readonly exercises: ParsedExercise[];
-  readonly structureBlocks: StructureBlockInput[];
-} {
-  const structureBlocks = ensureStructureBlockIds(parsed.structureBlocks);
-  const exercises = parsed.exercises.length > 0
-    ? assignRowsToStructureBlocks(parsed.exercises, structureBlocks)
-    : parsedRowsFromStructureBlocks(structureBlocks);
-  return { exercises, structureBlocks };
-}
-
-function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
-  const normalizedName = normalizeExerciseName(ex.exerciseName);
-  const isLegacyEmom = normalizedName === "emom";
-  const isKnown = normalizedName !== null && !isLegacyEmom;
-  const exName = (isKnown ? normalizedName : "custom");
-  const customLabel = isKnown ? undefined : (ex.customLabel || ex.exerciseName);
-  const blockKey = exName === "custom" ? `custom:${customLabel ?? ""}` : exName;
-
-  return {
-    exerciseName: exName,
-    blockKey,
-    data: {
-      exerciseName: exName,
-      category: isKnown ? EXERCISE_DEFINITIONS[exName].category : ex.category,
-      customLabel,
-      confidence: ex.confidence,
-      missingFields: ex.missingFields,
-      sets: ex.sets.map((s, i) => ({
-        setNumber: s.setNumber || i + 1,
-        reps: s.reps,
-        weight: s.weight,
-        distance: s.distance,
-        time: s.time,
-        plannedReps: s.plannedReps,
-        plannedWeight: s.plannedWeight,
-        plannedDistance: s.plannedDistance,
-        plannedTime: s.plannedTime,
-        blockId: s.blockId ?? ex.blockId ?? null,
-        stepNumber: s.stepNumber ?? ex.stepNumber ?? null,
-        intervalMinute: s.intervalMinute ?? ex.intervalMinute ?? null,
-        cycleNumber: s.cycleNumber ?? ex.cycleNumber ?? null,
-        stepRole: s.stepRole ?? ex.stepRole ?? null,
-        groupId: s.groupId ?? ex.groupId ?? null,
-      })),
-    },
-  };
-}
-
-function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRefObject<number>) {
-  const newBlocks: string[] = [];
-  const newData: Record<string, StructuredExercise> = {};
-
-  for (const ex of parsed) {
-    const built = buildBlockFromParsed(ex);
-    const sourceBlockId = ex.sets.find((s) => typeof s.blockId === "string" && s.blockId.length > 0)?.blockId;
-    // Keep ids unique per parsed exercise row. A single parser source block
-    // can contain multiple exercises; reusing one UI id would overwrite rows.
-    const blockKey = sourceBlockId ? `${built.blockKey}::${sourceBlockId}` : built.blockKey;
-    const blockId = makeBlockId(blockKey, counterRef);
-    newBlocks.push(blockId);
-    newData[blockId] = built.data;
-  }
-
-  return { newBlocks, newData };
-}
-
-function mergeKey(name: string, customLabel: string | null | undefined): string {
-  const isLegacyEmom = name === "emom";
-  const normalizedName = isLegacyEmom ? "custom" : name;
-  const normalizedLabel = isLegacyEmom
-    ? (customLabel || "EMOM")
-    : customLabel;
-
-  if (normalizedName === "custom") {
-    return `custom|${(normalizedLabel ?? "").trim().toLowerCase()}`;
-  }
-
-  return `${normalizedName}|${normalizedLabel ?? ""}`;
-}
-
-/**
- * Auto-parse merge: user-edited blocks survive across re-parses, unedited
- * blocks from prior parses get replaced by the latest result. A parsed
- * block that matches an edited block (same exerciseName + customLabel)
- * is skipped — the user's version wins.
- *
- * This is the "live typing" path. Semantics:
- *   - EVERY edited block is preserved (including multiple blocks that
- *     share the same exerciseName + customLabel — the UI supports
- *     repeated "log as separate block" additions and we must not drop
- *     the duplicates on re-parse)
- *   - parsed blocks that match any preserved edit's key get skipped
- *     (the user's blocks represent that exercise already)
- *   - unedited existing blocks are dropped (the text is their source
- *     of truth, so the latest parse supersedes them)
- */
-export function mergeParsedWithEdits(
-  parsed: ParsedExercise[],
-  counterRef: MutableRefObject<number>,
-  existingBlocks: readonly string[],
-  existingData: Readonly<Record<string, StructuredExercise>>,
-) {
-  const editedKeys = new Set<string>();
-  const preservedIds: string[] = [];
-  for (const id of existingBlocks) {
-    const d = existingData[id];
-    if (!d?.hasUserEdits) continue;
-    preservedIds.push(id);
-    editedKeys.add(mergeKey(d.exerciseName, d.customLabel));
-  }
-
-  const newBlocks: string[] = [...preservedIds];
-  const newData: Record<string, StructuredExercise> = {};
-  for (const id of preservedIds) newData[id] = existingData[id]!;
-
-  for (const ex of parsed) {
-    const built = buildBlockFromParsed(ex);
-    const key = mergeKey(built.data.exerciseName, built.data.customLabel);
-    if (editedKeys.has(key)) continue;
-    const blockId = makeBlockId(built.blockKey, counterRef);
-    newBlocks.push(blockId);
-    newData[blockId] = built.data;
-  }
-
-  return { newBlocks, newData };
-}
-
-function getParseSuccessDescription(parsed: ParsedExercise[]): string {
-  // ⚡ Bolt Performance Optimization:
-  // Combine multiple O(N) array filters into a single O(N) traversal
-  // to avoid redundant object allocations.
-  let lowConfCount = 0;
-  let missingCount = 0;
-
-  for (const e of parsed) {
-    if (e.confidence != null && e.confidence < 80) lowConfCount++;
-    if (e.missingFields && e.missingFields.length > 0) missingCount++;
-  }
-
-  let description = `Found ${parsed.length} exercise${parsed.length === 1 ? "" : "s"}.`;
-  if (lowConfCount > 0) {
-    description += ` ${lowConfCount} may need review (low confidence).`;
-  }
-  if (missingCount > 0) {
-    description += ` ${missingCount} ha${missingCount === 1 ? "s" : "ve"} missing data — check the yellow warnings.`;
-  }
-  if (lowConfCount === 0 && missingCount === 0) {
-    description += " Review the details below.";
-  }
-  return description;
-}
-
-export async function parseWorkoutText(text: string): Promise<ParseWorkoutStructureResponse> {
-  return api.exercises.parseStructured(text);
-}
-
-
-interface UseParseWorkoutMutationOptions {
-  onSuccess: (newBlocks: string[], newData: Record<string, StructuredExercise>, structureBlocks: StructureBlockInput[]) => void;
-  onError: () => void;
-}
-
-interface ParseCopy {
-  readonly emptyDescription: string;
-  readonly errorDescription: string;
-}
-
-// Text- and image-parse diverge only in (a) how Gemini is called and (b)
-// the toast copy for the "no exercises detected" / "parse failed" paths.
-// Share the post-parse pipeline through a single factory so a future tweak
-// to the merge/replace logic can't drift between the two surfaces.
-function useParseMutationBase<TVariables>(
-  blockCounterRef: MutableRefObject<number>,
-  options: UseParseWorkoutMutationOptions,
-  mutationFn: (variables: TVariables) => Promise<ParseWorkoutStructureResponse>,
-  copy: ParseCopy,
-) {
-  const { toast } = useToast();
-
-  return useMutation<ParseWorkoutStructureResponse, Error, TVariables>({
-    mutationFn,
-    onSuccess: (parsed) => {
-      const normalized = rowsForParsedStructure(parsed);
-      if (normalized.exercises.length === 0 && normalized.structureBlocks.length === 0) {
-        toast({
-          title: "No exercises found",
-          description: copy.emptyDescription,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const { newBlocks, newData } = processParsedExercises(normalized.exercises, blockCounterRef);
-      options.onSuccess(newBlocks, newData, normalized.structureBlocks);
-
-      toast({
-        title: "Exercises parsed",
-        description: getParseSuccessDescription(normalized.exercises),
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Parsing failed",
-        description: copy.errorDescription,
-        variant: "destructive",
-      });
-      options.onError();
-    },
-  });
-}
-
-export function useParseWorkoutMutation(
-  blockCounterRef: MutableRefObject<number>,
-  options: UseParseWorkoutMutationOptions,
-) {
-  return useParseMutationBase<string>(blockCounterRef, options, parseWorkoutText, {
-    emptyDescription:
-      "AI couldn't identify any exercises in your text. Try being more specific, e.g. '4x8 back squat at 70kg'.",
-    errorDescription:
-      "AI couldn't parse your workout text. Please try again or enter exercises manually.",
-  });
-}
-
-export type ParseImagePayload = ParseFromImagePayload;
-
-/**
- * Parse a captured photo of a workout plan into structured blocks. Shares
- * the same post-parse pipeline (`processParsedExercises` → replace blocks)
- * and success/error toast copy family as the text-parse mutation so a
- * source switch doesn't introduce behavioural drift.
- */
-export function useParseWorkoutFromImageMutation(
-  blockCounterRef: MutableRefObject<number>,
-  options: UseParseWorkoutMutationOptions,
-) {
-  return useParseMutationBase<ParseImagePayload>(
-    blockCounterRef,
-    options,
-    (payload) => api.exercises.parseStructuredFromImage(payload),
-    {
-      emptyDescription:
-        "AI couldn't identify any exercises in that photo. Try a clearer shot with the workout in frame.",
-      errorDescription:
-        "AI couldn't parse that photo. Try a clearer shot or enter exercises manually.",
-    },
-  );
-}
-
-
-export function useWorkoutSensors(setExerciseBlocks: React.Dispatch<React.SetStateAction<string[]>>) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setExerciseBlocks((prev) => {
-        const oldIndex = prev.indexOf(active.id as string);
-        const newIndex = prev.indexOf(over.id as string);
-        return arrayMove(prev, oldIndex, newIndex);
-      });
-    }
-  }, [setExerciseBlocks]);
-
-  return { sensors, handleDragEnd };
-}
-
-const AUTO_PARSE_DEBOUNCE_MS = 1200;
-const AUTO_PARSE_MIN_CHARS = 8;
-// Cheap gate so the auto-parse pipeline doesn't burn AI provider calls on
-// free-form notes like "felt great". Needs at least one digit or an
-// `x`/`×` (set-count separator) before we even consider parsing.
-const AUTO_PARSE_SIGNAL_RE = /\d|[xX×]/;
 
 // Draft blocks restored from localStorage (or the server) pre-date the
 // `hasUserEdits` flag on StructuredExercise. Without this migration,
@@ -519,36 +45,13 @@ function markInitialDataAsEdited(
   return marked;
 }
 
-function shouldRunAutoParse(trimmed: string, lastParsedText: string): boolean {
-  return (
-    trimmed.length > 0 &&
-    trimmed !== lastParsedText &&
-    trimmed.length >= AUTO_PARSE_MIN_CHARS &&
-    AUTO_PARSE_SIGNAL_RE.test(trimmed)
-  );
-}
-
-function buildAutoParseDiagnostics(parsed: ParseWorkoutStructureResponse): ParseDiagnostics {
-  const lowConfidenceCount = parsed.exercises.filter((row) => typeof row.confidence === "number" && row.confidence < 80).length;
-  const emptyResult = parsed.exercises.length === 0 && parsed.structureBlocks.length === 0;
-  return {
-    lowConfidenceCount,
-    emptyResult,
-    lastErrorReason: null,
-    lastConfidenceSummary: emptyResult
-      ? "No exercises were detected in the parse response."
-      : `Parsed ${parsed.exercises.length} exercises and ${parsed.structureBlocks.length} blocks; ${lowConfidenceCount} below confidence 80.`,
-  };
-}
-
-function shouldIgnoreAutoParseError(err: unknown, signal: AbortSignal): boolean {
-  return signal.aborted || (err instanceof DOMException && err.name === "AbortError");
-}
-
-function parseErrorReason(err: unknown): string {
-  return err instanceof Error ? err.message : "Unknown parse error";
-}
-
+/**
+ * Facade over the workout-editor modules: owns the exercise-block state
+ * (ids, per-block data, structure blocks, text mode) and composes drag
+ * reordering (useWorkoutSensors), the manual text/image parse mutations,
+ * and the live auto-parse engine (useAutoParse). The pure block/merge
+ * helpers live in ./workout-editor/.
+ */
 export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
   const blockCounterRef = useRef(options.initialBlockCounter ?? 0);
   const [exerciseBlocks, setExerciseBlocks] = useState<string[]>(
@@ -656,130 +159,31 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     onError: () => {},
   });
 
-  // --- Auto-parse --------------------------------------------------------
-  // A single AbortController follows the most recent auto-parse request.
-  // Typing during an in-flight request aborts it and the trailing debounce
-  // fires a fresh call once the user pauses for `AUTO_PARSE_DEBOUNCE_MS`.
-  const abortRef = useRef<AbortController | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastParsedTextRef = useRef<string>("");
-  const [autoParsing, setAutoParsing] = useState(false);
-  const [autoParseError, setAutoParseError] = useState(false);
-  const [lastParsedAt, setLastParsedAt] = useState<number | null>(null);
-  const [parseDiagnostics, setParseDiagnostics] = useState<ParseDiagnostics>({
-    lowConfidenceCount: 0,
-    emptyResult: false,
-    lastErrorReason: null,
-    lastConfidenceSummary: null,
-  });
-  const applyAutoParseResult = useCallback((parsed: ParseWorkoutStructureResponse) => {
-    const normalized = rowsForParsedStructure(parsed);
-    const { newBlocks, newData } = mergeParsedWithEdits(
-      normalized.exercises,
-      blockCounterRef,
-      blocksRef.current,
-      dataRef.current,
-    );
+  const applyAutoParseResult = useCallback((
+    newBlocks: string[],
+    newData: Record<string, StructuredExercise>,
+    newStructureBlocks: StructureBlockInput[],
+  ) => {
     setExerciseBlocks(newBlocks);
     setExerciseData(newData);
-    setStructureBlocks(normalized.structureBlocks);
+    setStructureBlocks(newStructureBlocks);
   }, []);
 
-  const runAutoParse = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!shouldRunAutoParse(trimmed, lastParsedTextRef.current)) return;
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setAutoParsing(true);
-    setAutoParseError(false);
-
-    try {
-      const parsed = await api.exercises.parseStructured(trimmed, { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      lastParsedTextRef.current = trimmed;
-      setParseDiagnostics(buildAutoParseDiagnostics(parsed));
-      applyAutoParseResult(parsed);
-      setLastParsedAt(Date.now());
-    } catch (err) {
-      if (shouldIgnoreAutoParseError(err, controller.signal)) return;
-      setAutoParseError(true);
-      setParseDiagnostics((prev) => ({
-        ...prev,
-        lastErrorReason: parseErrorReason(err),
-      }));
-    } finally {
-      // Always clear the spinner. Earlier this was gated on
-      // `!controller.signal.aborted`, but that left the state stuck
-      // true when a parse was aborted AND the subsequent debounced
-      // call short-circuited (empty text, under-length, etc.) —
-      // nothing in that fast-path resets the flag. A fresh parse will
-      // immediately setAutoParsing(true) again; React batches these
-      // so there's no visible flicker.
-      setAutoParsing(false);
-    }
-  }, [applyAutoParseResult]);
-
-  // Schedule a trailing-debounced auto-parse whenever the free-text
-  // changes. Any pending parse gets cancelled on the next call so only
-  // the latest text flows through — AND any IN-FLIGHT request is
-  // aborted synchronously here so a slow response from outdated text
-  // can't land after the user has already moved on and overwrite the
-  // composer's state with stale blocks.
-  const scheduleAutoParse = useCallback(
-    (text: string) => {
-      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-      abortRef.current?.abort();
-      debounceRef.current = setTimeout(() => {
-        debounceRef.current = null;
-        runAutoParse(text).catch(() => {
-          /* errors surface via autoParseError state inside runAutoParse */
-        });
-      }, AUTO_PARSE_DEBOUNCE_MS);
-    },
-    [runAutoParse],
-  );
-
-  // Stops any in-flight auto-parse plus the scheduled trailing call.
-  // The composer invokes this when the user touches an exercise row so
-  // a fresh parse doesn't yank their edit out from under them. Next
-  // free-text change re-primes the debounce.
-  const cancelAutoParse = useCallback(() => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    abortRef.current?.abort();
-    if (autoParsing) setAutoParsing(false);
-  }, [autoParsing]);
-
-  // Fire a parse immediately, bypassing the debounce. Used by the
-  // composer's manual Parse button — the user explicitly asked to
-  // parse, so don't wait for the trailing debounce. Also resets the
-  // "last parsed text" snapshot so clicking Parse on unchanged text
-  // re-runs the parse (common after toggling blocks).
-  const parseNow = useCallback(
-    (text: string) => {
-      if (debounceRef.current !== null) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      abortRef.current?.abort();
-      lastParsedTextRef.current = "";
-      runAutoParse(text).catch(() => {
-        /* errors surface via autoParseError state inside runAutoParse */
-      });
-    },
-    [runAutoParse],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current !== null) clearTimeout(debounceRef.current);
-      abortRef.current?.abort();
-    };
-  }, []);
+  const {
+    autoParsing,
+    autoParseError,
+    parseDiagnostics,
+    lastParsedAt,
+    scheduleAutoParse,
+    cancelAutoParse,
+    parseNow,
+    resetAutoParse,
+  } = useAutoParse({
+    blockCounterRef,
+    blocksRef,
+    dataRef,
+    onApply: applyAutoParseResult,
+  });
 
   const resetEditor = useCallback((blocks: string[], data: Record<string, StructuredExercise>, textMode: boolean, nextStructureBlocks: StructureBlockInput[] = []) => {
     // Reseeded blocks came from the server or a duplicate-last flow;
@@ -796,20 +200,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     setStructureBlocks(nextStructureBlocks);
     // Clear any in-flight auto-parse state so the freshly reset content
     // isn't overwritten by a debounced call from the previous session.
-    lastParsedTextRef.current = "";
-    abortRef.current?.abort();
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    setAutoParsing(false);
-    setAutoParseError(false);
-    setParseDiagnostics({
-      lowConfidenceCount: 0,
-      emptyResult: false,
-      lastErrorReason: null,
-      lastConfidenceSummary: null,
-    });
+    resetAutoParse();
 
     // Seed the global block counter to a value higher than any suffix
     // in the hydrated block ids, so subsequent addExercise calls don't
@@ -823,7 +214,7 @@ export function useWorkoutEditor(options: UseWorkoutEditorOptions = {}) {
     if (maxSuffix > blockCounterRef.current) {
       blockCounterRef.current = maxSuffix;
     }
-  }, []);
+  }, [resetAutoParse]);
 
   return {
     exerciseBlocks,

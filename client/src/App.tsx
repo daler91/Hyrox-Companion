@@ -20,6 +20,7 @@ import { useEmailCheck } from "@/hooks/useEmailCheck";
 import { useFocusMainOnRouteChange } from "@/hooks/useFocusMainOnRouteChange";
 import { useNavigationBreadcrumb } from "@/hooks/useNavigationBreadcrumb";
 import { useOfflineDropNotifier } from "@/hooks/useOfflineDropNotifier";
+import { useOfflineQueueFlush } from "@/hooks/useOfflineQueueFlush";
 import { featureFlags } from "@/lib/featureFlags";
 import NotFound from "@/pages/not-found";
 
@@ -106,6 +107,7 @@ function AuthenticatedLayout() {
   useEmailCheck(isAuthenticated, isAppUserLoaded);
   useDetectTimezone(isAuthenticated, isAppUserLoaded, user?.userTimezone);
   useOfflineDropNotifier();
+  useOfflineQueueFlush();
   useFocusMainOnRouteChange();
 
   // Lock html/body/#root so only #main-content scrolls. `overflow: clip`

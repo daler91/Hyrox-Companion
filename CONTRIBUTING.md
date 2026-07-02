@@ -63,6 +63,20 @@ and Cypress conventions.
 - **Validation** uses Zod (`shared/schema/zod.ts`); validate request bodies at the route boundary.
 - Keep imports sorted as the existing ESLint config expects.
 
+### `noUncheckedIndexedAccess` ratchet
+
+The base `tsconfig.json` doesn't yet enable `noUncheckedIndexedAccess` (~370
+call sites need updating). `tsconfig.strict.json` turns it on for a growing
+subset — currently `shared/**` — and CI runs it as `pnpm check:strict`.
+
+To expand coverage, add the next directory to `tsconfig.strict.json`'s
+`include` (suggested order: `server/**`, then `client/src/**`, then
+`script/**`), fix the errors it surfaces, and commit. Prefer explicit guards
+(`?.`, `??`, `.at()`, length checks) over non-null assertions — the point is
+to catch genuinely-possible `undefined`s from array/record access. Once every
+directory is included, fold the flag into the base `tsconfig.json` and delete
+`tsconfig.strict.json`.
+
 ## Database changes
 
 When you change `shared/schema/tables.ts`, generate and commit a migration:
@@ -74,6 +88,18 @@ pnpm run db:check      # validates migration/schema consistency (also gated in C
 ```
 
 Commit the generated `migrations/` files together with the schema change.
+
+For hand-written migrations (data backfills, custom SQL that `db:generate` can't
+express), scaffold with:
+
+```bash
+pnpm drizzle-kit generate --custom --name=my_migration_name
+```
+
+This creates an empty `migrations/NNNN_*.sql` to fill in **plus** the meta
+snapshot, keeping the snapshot chain in `migrations/meta/` complete. Never add
+a `.sql` file by hand without its snapshot — five historical migrations did,
+and their snapshots had to be backfilled later.
 
 ## Documentation
 

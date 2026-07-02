@@ -137,86 +137,41 @@ export default function Timeline() {
     hiddenFutureCount,
   } = filters;
   const { showOnboarding, coachOpen, setCoachOpen, handleOnboardingComplete } = onboarding;
+  // Only the members Timeline itself renders with are destructured here;
+  // the full slices flow to TimelineWorkoutSurfaces as grouped props.
   const {
-    csvPreview,
-    setCsvPreview,
-    schedulingPlanId,
     setSchedulingPlanId,
-    startDate,
-    setStartDate,
     fileInputRef,
     handleFileUpload,
-    confirmImport,
     importMutation,
     samplePlanMutation,
     renamePlanMutation,
-    schedulePlanMutation,
     updatePlanGoalMutation,
     deletePlanMutation,
   } = planImport;
-  const {
-    skipConfirmEntry,
-    setSkipConfirmEntry,
-    handleMarkComplete,
-    handleChangeStatus,
-    handleDelete,
-    confirmSkip,
-    logWorkoutMutation,
-    bulkDeleteWorkoutMutation,
-  } = workoutActions;
-  const {
-    combiningEntry,
-    setCombiningEntry,
-    combineSecondEntry,
-    setCombineSecondEntry,
-    showCombineDialog,
-    setShowCombineDialog,
-    handleCombine,
-    handleConfirmCombine,
-    combineWorkoutsMutation,
-  } = combine;
+  const { handleMarkComplete, bulkDeleteWorkoutMutation } = workoutActions;
+  const { combiningEntry, handleCombine } = combine;
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialTodayScrollKeyRef = useRef<string | null>(null);
+  const surfaceSelection = useTimelineSurfaceSelection(timelineData);
   const {
     previewEntry,
-    setPreviewEntry,
     futureEditEntry,
-    setFutureEditEntry,
     logEntry,
-    setLogEntry,
     reviewEntry,
-    setReviewEntry,
     skippedEntry,
-    setSkippedEntry,
     openSurface,
     closeAllSurfacesAndClearUrl,
-  } = useTimelineSurfaceSelection(timelineData);
+  } = surfaceSelection;
   const [adhocOpen, setAdhocOpen] = useState(false);
+  const dialogState = useTimelineDialogState();
   const {
     showAIConsent,
     setShowAIConsent,
-    annotationsDialogOpen,
-    setAnnotationsDialogOpen,
-    annotationInitialDate,
-    setAnnotationInitialDate,
     handleAddAnnotation,
     handleEditAnnotation,
-  } = useTimelineDialogState();
-  const {
-    embeddedCoachEntryId,
-    embeddedCoachSeedText,
-    embeddedCoachSeedNonce,
-    mobileCoachPanelOpen,
-    handleCoachToggle,
-    openEmbeddedCoach,
-    closeEmbeddedCoach,
-    closeWorkoutSurfaces,
-    openTimelineSurface,
-    showMobileCoachPanel,
-    showWorkoutDetails,
-    clearPendingCoachIntent,
-    handleAIConsentAccept,
-  } = useEmbeddedCoachRouting({
+  } = dialogState;
+  const coachRouting = useEmbeddedCoachRouting({
     aiCoachEnabled,
     isAuthUserLoaded,
     setCoachOpen,
@@ -225,6 +180,12 @@ export default function Timeline() {
     closeAllSurfacesAndClearUrl,
     toast,
   });
+  const {
+    handleCoachToggle,
+    openTimelineSurface,
+    clearPendingCoachIntent,
+    handleAIConsentAccept,
+  } = coachRouting;
 
   const { annotationsByDate, moveEntry, isMoving, handleDeleteAnnotation, isAnnotationDeleting } =
     useTimelinePageController(selectedPlanId, annotations);
@@ -267,6 +228,29 @@ export default function Timeline() {
       onSuccess: finishBulkDelete,
     });
   }, [bulkDeleteWorkoutMutation, finishBulkDelete, selectedBulkEntries]);
+
+  // Stable handler identities for TimelineFilters (mutation `.mutate` fns are
+  // referentially stable in TanStack v5, unlike the mutation result objects).
+  const { mutate: mutateRenamePlan } = renamePlanMutation;
+  const { mutate: mutatePlanGoal } = updatePlanGoalMutation;
+  const { mutate: mutateDeletePlan } = deletePlanMutation;
+  const handleRenamePlan = useCallback(
+    (planId: string, name: string) => mutateRenamePlan({ planId, name }),
+    [mutateRenamePlan],
+  );
+  const handleGoalSave = useCallback(
+    (planId: string, goal: string | null) => mutatePlanGoal({ planId, goal }),
+    [mutatePlanGoal],
+  );
+  const handleDeletePlan = useCallback(
+    (planId: string) =>
+      mutateDeletePlan(planId, {
+        onSuccess: () => {
+          if (selectedPlanId === planId) setSelectedPlanId(null);
+        },
+      }),
+    [mutateDeletePlan, selectedPlanId, setSelectedPlanId],
+  );
 
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -376,18 +360,12 @@ export default function Timeline() {
               onFilterChange={setFilterStatus}
               onFileUpload={handleFileUpload}
               isImporting={importMutation.isPending}
-              onRenamePlan={(planId, name) => renamePlanMutation.mutate({ planId, name })}
+              onRenamePlan={handleRenamePlan}
               isRenaming={renamePlanMutation.isPending}
-              onGoalSave={(planId, goal) => updatePlanGoalMutation.mutate({ planId, goal })}
+              onGoalSave={handleGoalSave}
               isUpdatingGoal={updatePlanGoalMutation.isPending}
-              onScheduleClick={(planId) => setSchedulingPlanId(planId)}
-              onDeletePlan={(planId) =>
-                deletePlanMutation.mutate(planId, {
-                  onSuccess: () => {
-                    if (selectedPlanId === planId) setSelectedPlanId(null);
-                  },
-                })
-              }
+              onScheduleClick={setSchedulingPlanId}
+              onDeletePlan={handleDeletePlan}
               isDeletingPlan={deletePlanMutation.isPending}
               canBulkDelete={bulkDeletableEntries.length > 0}
               bulkDeleteMode={bulkDeleteMode}
@@ -479,54 +457,12 @@ export default function Timeline() {
               toast={toast}
               adhocOpen={adhocOpen}
               onAdhocOpenChange={setAdhocOpen}
-              schedulingPlanId={schedulingPlanId}
-              setSchedulingPlanId={setSchedulingPlanId}
-              startDate={startDate}
-              setStartDate={setStartDate}
-              schedulePlanMutation={schedulePlanMutation}
-              previewEntry={previewEntry}
-              setPreviewEntry={setPreviewEntry}
-              futureEditEntry={futureEditEntry}
-              setFutureEditEntry={setFutureEditEntry}
-              logEntry={logEntry}
-              setLogEntry={setLogEntry}
-              reviewEntry={reviewEntry}
-              setReviewEntry={setReviewEntry}
-              skippedEntry={skippedEntry}
-              setSkippedEntry={setSkippedEntry}
-              closeWorkoutSurfaces={closeWorkoutSurfaces}
-              closeEmbeddedCoach={closeEmbeddedCoach}
-              openEmbeddedCoach={openEmbeddedCoach}
-              embeddedCoachEntryId={embeddedCoachEntryId}
-              embeddedCoachSeedNonce={embeddedCoachSeedNonce}
-              embeddedCoachSeedText={embeddedCoachSeedText}
-              mobileCoachPanelOpen={mobileCoachPanelOpen}
-              onCloseCoachChat={closeEmbeddedCoach}
-              onShowCoachPanel={showMobileCoachPanel}
-              onShowWorkoutDetails={showWorkoutDetails}
-              setSkipConfirmEntry={setSkipConfirmEntry}
-              skipConfirmEntry={skipConfirmEntry}
-              handleMarkComplete={handleMarkComplete}
-              handleChangeStatus={handleChangeStatus}
-              handleDelete={handleDelete}
-              confirmSkip={confirmSkip}
-              logWorkoutMutation={logWorkoutMutation}
-              csvPreview={csvPreview}
-              setCsvPreview={setCsvPreview}
-              confirmImport={confirmImport}
-              importMutation={importMutation}
-              showCombineDialog={showCombineDialog}
-              setShowCombineDialog={setShowCombineDialog}
-              combiningEntry={combiningEntry}
-              setCombiningEntry={setCombiningEntry}
-              combineSecondEntry={combineSecondEntry}
-              setCombineSecondEntry={setCombineSecondEntry}
-              handleConfirmCombine={handleConfirmCombine}
-              combineWorkoutsMutation={combineWorkoutsMutation}
-              annotationsDialogOpen={annotationsDialogOpen}
-              setAnnotationsDialogOpen={setAnnotationsDialogOpen}
-              annotationInitialDate={annotationInitialDate}
-              setAnnotationInitialDate={setAnnotationInitialDate}
+              surfaces={surfaceSelection}
+              coach={coachRouting}
+              actions={workoutActions}
+              planImport={planImport}
+              combine={combine}
+              annotations={dialogState}
             />
           </PageContainer>
         </div>

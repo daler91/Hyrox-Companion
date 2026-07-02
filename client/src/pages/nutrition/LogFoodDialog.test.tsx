@@ -96,6 +96,8 @@ describe("LogFoodDialog", () => {
     await waitFor(() =>
       expect(api.nutrition.createLog).toHaveBeenCalledWith(
         expect.objectContaining({ foodId: "f1", quantityG: 236 }),
+        // Online logs carry an idempotency key for safe offline replay.
+        expect.objectContaining({ idempotencyKey: expect.any(String) }),
       ),
     );
   });
@@ -125,6 +127,7 @@ describe("LogFoodDialog", () => {
     await waitFor(() =>
       expect(api.nutrition.createLog).toHaveBeenCalledWith(
         expect.objectContaining({ foodId: "f1", quantityG: 95 }),
+        expect.objectContaining({ idempotencyKey: expect.any(String) }),
       ),
     );
   });

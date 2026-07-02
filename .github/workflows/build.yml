@@ -28,6 +28,11 @@ jobs:
         run: pnpm eslint .
       - name: TypeScript
         run: pnpm tsc --noEmit
+      - name: TypeScript (noUncheckedIndexedAccess ratchet)
+        # Locks in noUncheckedIndexedAccess for the isomorphic shared/ layer.
+        # Expand tsconfig.strict.json's include (server → client → script) as
+        # each directory is cleaned up; see CONTRIBUTING.md.
+        run: pnpm check:strict
       - name: OpenAPI snapshot is up-to-date
         run: |
           pnpm docs:openapi

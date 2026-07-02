@@ -1,6 +1,5 @@
-import { describe, expect, it } from "vitest";
-
 import type { WorkoutSuggestion } from "@shared/schema";
+import { describe, expect, it } from "vitest";
 
 import {
   actionShift,

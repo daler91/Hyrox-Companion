@@ -837,7 +837,7 @@ The `db` instance is the single Drizzle client used by all storage classes excep
 ```typescript
 export default defineConfig({
   out: "./migrations",
-  schema: "./shared/schema/tables.ts",
+  schema: "./shared/schema/index.ts",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,
@@ -845,9 +845,15 @@ export default defineConfig({
 });
 ```
 
-- **Schema source**: `shared/schema/tables.ts`
+- **Schema source**: `shared/schema/index.ts` — the barrel, so every module
+  re-exported from it (today all tables live in `tables.ts`) is visible to
+  `db:generate`; a table defined in a new schema file is picked up as soon as
+  the file is added to the barrel
 - **Migration output**: `./migrations/`
 - **Dialect**: PostgreSQL
+- Hand-written migrations must be scaffolded with
+  `pnpm drizzle-kit generate --custom --name=...` so the meta snapshot chain
+  stays complete (see `CONTRIBUTING.md`)
 
 ---
 
