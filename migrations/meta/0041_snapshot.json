@@ -1,6 +1,6 @@
 {
-  "id": "a85ad87a-11ed-4e48-86c1-cefde0528d0e",
-  "prevId": "043072d4-647b-4849-ba5a-2355b1d4246c",
+  "id": "1511d2a8-893e-457a-9089-aabea1d56cf2",
+  "prevId": "a85ad87a-11ed-4e48-86c1-cefde0528d0e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -599,6 +599,72 @@
           "primaryKey": false,
           "notNull": false
         },
+        "block_id": {
+          "name": "block_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "step_number": {
+          "name": "step_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "interval_minute": {
+          "name": "interval_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cycle_number": {
+          "name": "cycle_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "step_role": {
+          "name": "step_role",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "intensity": {
+          "name": "intensity",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "load": {
+          "name": "load",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rep_mode": {
+          "name": "rep_mode",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tempo": {
+          "name": "tempo",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "standards": {
+          "name": "standards",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -788,6 +854,26 @@
         "planned_time_non_negative_check": {
           "name": "planned_time_non_negative_check",
           "value": "planned_time IS NULL OR planned_time >= 0"
+        },
+        "step_number_positive_check": {
+          "name": "step_number_positive_check",
+          "value": "step_number IS NULL OR step_number > 0"
+        },
+        "interval_minute_non_negative_check": {
+          "name": "interval_minute_non_negative_check",
+          "value": "interval_minute IS NULL OR interval_minute >= 0"
+        },
+        "cycle_number_positive_check": {
+          "name": "cycle_number_positive_check",
+          "value": "cycle_number IS NULL OR cycle_number > 0"
+        },
+        "rep_mode_check": {
+          "name": "rep_mode_check",
+          "value": "rep_mode IS NULL OR rep_mode IN ('total', 'per_side')"
+        },
+        "exercise_set_block_step_pair_check": {
+          "name": "exercise_set_block_step_pair_check",
+          "value": "(block_id IS NULL) = (step_number IS NULL)"
         },
         "exercise_set_single_owner_check": {
           "name": "exercise_set_single_owner_check",
@@ -2982,6 +3068,332 @@
         "rpe_range_check": {
           "name": "rpe_range_check",
           "value": "\"workout_logs\".\"rpe\" IS NULL OR (\"workout_logs\".\"rpe\" >= 1 AND \"workout_logs\".\"rpe\" <= 10)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.workout_structure_blocks": {
+      "name": "workout_structure_blocks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(255)",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workout_log_id": {
+          "name": "workout_log_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plan_day_id": {
+          "name": "plan_day_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "section_type": {
+          "name": "section_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "format_type": {
+          "name": "format_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rounds": {
+          "name": "rounds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "work_seconds": {
+          "name": "work_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rest_seconds": {
+          "name": "rest_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "idx_workout_structure_blocks_workout_log_id": {
+          "name": "idx_workout_structure_blocks_workout_log_id",
+          "columns": [
+            {
+              "expression": "workout_log_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_workout_structure_blocks_plan_day_id": {
+          "name": "idx_workout_structure_blocks_plan_day_id",
+          "columns": [
+            {
+              "expression": "plan_day_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_workout_structure_blocks_workout_sort": {
+          "name": "idx_workout_structure_blocks_workout_sort",
+          "columns": [
+            {
+              "expression": "workout_log_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_workout_structure_blocks_plan_day_sort": {
+          "name": "idx_workout_structure_blocks_plan_day_sort",
+          "columns": [
+            {
+              "expression": "plan_day_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "workout_structure_blocks_workout_log_id_workout_logs_id_fk": {
+          "name": "workout_structure_blocks_workout_log_id_workout_logs_id_fk",
+          "tableFrom": "workout_structure_blocks",
+          "tableTo": "workout_logs",
+          "columnsFrom": [
+            "workout_log_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "workout_structure_blocks_plan_day_id_plan_days_id_fk": {
+          "name": "workout_structure_blocks_plan_day_id_plan_days_id_fk",
+          "tableFrom": "workout_structure_blocks",
+          "tableTo": "plan_days",
+          "columnsFrom": [
+            "plan_day_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "workout_structure_block_single_owner_check": {
+          "name": "workout_structure_block_single_owner_check",
+          "value": "(workout_log_id IS NULL) <> (plan_day_id IS NULL)"
+        },
+        "workout_structure_block_duration_non_negative_check": {
+          "name": "workout_structure_block_duration_non_negative_check",
+          "value": "duration_seconds IS NULL OR duration_seconds >= 0"
+        },
+        "workout_structure_block_rounds_positive_check": {
+          "name": "workout_structure_block_rounds_positive_check",
+          "value": "rounds IS NULL OR rounds > 0"
+        },
+        "workout_structure_block_work_non_negative_check": {
+          "name": "workout_structure_block_work_non_negative_check",
+          "value": "work_seconds IS NULL OR work_seconds >= 0"
+        },
+        "workout_structure_block_rest_non_negative_check": {
+          "name": "workout_structure_block_rest_non_negative_check",
+          "value": "rest_seconds IS NULL OR rest_seconds >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.workout_structure_steps": {
+      "name": "workout_structure_steps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(255)",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "block_id": {
+          "name": "block_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_number": {
+          "name": "step_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "exercise_name": {
+          "name": "exercise_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "custom_label": {
+          "name": "custom_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "targets": {
+          "name": "targets",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "step_role": {
+          "name": "step_role",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "group_id": {
+          "name": "group_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "group_meta": {
+          "name": "group_meta",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_workout_structure_steps_block_id": {
+          "name": "idx_workout_structure_steps_block_id",
+          "columns": [
+            {
+              "expression": "block_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_workout_structure_steps_block_step_unique": {
+          "name": "idx_workout_structure_steps_block_step_unique",
+          "columns": [
+            {
+              "expression": "block_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "step_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "workout_structure_steps_block_id_workout_structure_blocks_id_fk": {
+          "name": "workout_structure_steps_block_id_workout_structure_blocks_id_fk",
+          "tableFrom": "workout_structure_steps",
+          "tableTo": "workout_structure_blocks",
+          "columnsFrom": [
+            "block_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "workout_structure_step_number_positive_check": {
+          "name": "workout_structure_step_number_positive_check",
+          "value": "step_number > 0"
         }
       },
       "isRLSEnabled": false

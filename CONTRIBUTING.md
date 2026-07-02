@@ -75,6 +75,18 @@ pnpm run db:check      # validates migration/schema consistency (also gated in C
 
 Commit the generated `migrations/` files together with the schema change.
 
+For hand-written migrations (data backfills, custom SQL that `db:generate` can't
+express), scaffold with:
+
+```bash
+pnpm drizzle-kit generate --custom --name=my_migration_name
+```
+
+This creates an empty `migrations/NNNN_*.sql` to fill in **plus** the meta
+snapshot, keeping the snapshot chain in `migrations/meta/` complete. Never add
+a `.sql` file by hand without its snapshot — five historical migrations did,
+and their snapshots had to be backfilled later.
+
 ## Documentation
 
 Update the relevant docs when your change affects public behavior or setup:

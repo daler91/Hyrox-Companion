@@ -1,6 +1,6 @@
 {
-  "id": "8e10e181-1008-4a12-b366-ee21e7befa92",
-  "prevId": "aa2095bf-65bf-4ceb-b48a-d9e30c2f4035",
+  "id": "aa2095bf-65bf-4ceb-b48a-d9e30c2f4035",
+  "prevId": "bc659ec6-d715-4dab-bcd2-0fd94fd153d5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -585,106 +585,6 @@
           "value": "set_number > 0"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.idempotency_keys": {
-      "name": "idempotency_keys",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "method": {
-          "name": "method",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status_code": {
-          "name": "status_code",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "response_body": {
-          "name": "response_body",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "idx_idempotency_keys_expires_at": {
-          "name": "idx_idempotency_keys_expires_at",
-          "columns": [
-            {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "idempotency_keys_user_id_users_id_fk": {
-          "name": "idempotency_keys_user_id_users_id_fk",
-          "tableFrom": "idempotency_keys",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "idempotency_keys_user_id_key_pk": {
-          "name": "idempotency_keys_user_id_key_pk",
-          "columns": [
-            "user_id",
-            "key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.plan_days": {
