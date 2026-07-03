@@ -10,3 +10,6 @@
 ## 2026-06-30 - Wrap remaining icon-only buttons in tooltips
 **Learning:** Even when `TooltipProvider` is globally defined, standalone or conditionally rendered icon-only buttons (like `ThemeToggle` or sidebar items) should explicitly wrap their tooltips in `TooltipProvider` to ensure the component remains robust and accessible if extracted or used in different contexts.
 **Action:** When creating or modifying standalone components with tooltips, verify they include their own `TooltipProvider` rather than relying entirely on global context.
+## 2026-07-03 - Add tooltip to SidebarTrigger
+**Learning:** Standalone icon-only buttons like SidebarTrigger that previously relied on screen-reader-only spans (`<span className="sr-only">`) should be updated to use standard `aria-label` attributes and explicit `<Tooltip>` wrappers (including `<TooltipProvider>`) for better universal accessibility (improving both screen readers and visual hover states).
+**Action:** When auditing icon buttons, replace `sr-only` text spans inside the button with `aria-label` on the button itself, and ensure they are wrapped in a robust `TooltipProvider` hierarchy.
