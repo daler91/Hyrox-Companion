@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -41,7 +42,12 @@ export function DescribeMealButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="button-describe-meal">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        data-testid="button-describe-meal"
+      >
         <Sparkles className="mr-2 h-4 w-4" /> Describe a meal
       </Button>
 
@@ -55,16 +61,17 @@ export function DescribeMealButton({
           <DialogHeader>
             <DialogTitle>Describe a meal</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Type what you ate in plain English — we&apos;ll identify the foods and estimate
-            portions for you to review before logging.
-          </p>
+          <DialogDescription>
+            Type what you ate in plain English — we&apos;ll identify the foods and estimate portions
+            for you to review before logging.
+          </DialogDescription>
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="e.g. 2 scrambled eggs, a slice of toast with butter, and a black coffee"
             rows={4}
             maxLength={2000}
+            aria-label="Describe your meal"
             data-testid="input-describe-meal"
           />
           <DialogFooter>

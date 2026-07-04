@@ -1,5 +1,5 @@
-import { Loader2,Send, Square } from "lucide-react";
-import { useCallback,useEffect, useState } from "react";
+import { Loader2, Send, Square } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +33,13 @@ function getSendTooltip(args: { isLoading: boolean; canStop: boolean; hasText: b
   return "Type a message to send";
 }
 
-export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about your training...", seed }: Readonly<ChatInputProps>) {
+export function ChatInput({
+  onSend,
+  onStop,
+  isLoading,
+  placeholder = "Ask about your training...",
+  seed,
+}: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
 
@@ -46,20 +52,24 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about 
   }, [seed?.nonce, seed?.text]);
 
   const handleVoiceResult = useCallback((transcript: string) => {
-    setMessage(prev => {
+    setMessage((prev) => {
       const separator = prev && !prev.endsWith(" ") ? " " : "";
       return prev + separator + transcript;
     });
   }, []);
 
-  const handleVoiceError = useCallback((msg: string) => {
-    toast({ title: "Voice Input", description: msg, variant: "destructive" });
-  }, [toast]);
+  const handleVoiceError = useCallback(
+    (msg: string) => {
+      toast({ title: "Voice Input", description: msg, variant: "destructive" });
+    },
+    [toast],
+  );
 
-  const { isListening, isSupported, interimTranscript, stopListening, toggleListening } = useVoiceInput({
-    onResult: handleVoiceResult,
-    onError: handleVoiceError,
-  });
+  const { isListening, isSupported, interimTranscript, stopListening, toggleListening } =
+    useVoiceInput({
+      onResult: handleVoiceResult,
+      onError: handleVoiceError,
+    });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +101,10 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about 
           data-testid="input-chat-message"
         />
         {isListening && interimTranscript && (
-          <div className="px-3 py-1 text-xs text-muted-foreground italic truncate" data-testid="voice-interim-text">
+          <div
+            className="px-3 py-1 text-xs text-muted-foreground italic truncate"
+            data-testid="voice-interim-text"
+          >
             {interimTranscript}
           </div>
         )}
@@ -127,7 +140,7 @@ export function ChatInput({ onSend, onStop, isLoading, placeholder = "Ask about 
                   {isLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Send className="h-4 w-4" />
+                    <Send className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               )}
