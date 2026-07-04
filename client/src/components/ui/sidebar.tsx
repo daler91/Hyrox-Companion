@@ -295,24 +295,31 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
   const { toggleSidebar } = useSidebar();
 
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon"
-      // 44x44 on touch (WCAG 2.5.5 / Apple HIG); the trigger sits in the
-      // mobile sticky header where mis-taps are common. Compact on >=md only
-      // because the desktop sidebar is persistent and the trigger is hidden.
-      className={cn("h-11 w-11 md:h-7 md:w-7", className)}
-      onClick={(event) => {
-        onClick?.(event);
-        toggleSidebar();
-      }}
-      {...props}
-    >
-      <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon"
+            // 44x44 on touch (WCAG 2.5.5 / Apple HIG); the trigger sits in the
+            // mobile sticky header where mis-taps are common. Compact on >=md only
+            // because the desktop sidebar is persistent and the trigger is hidden.
+            className={cn("h-11 w-11 md:h-7 md:w-7", className)}
+            onClick={(event) => {
+              onClick?.(event);
+              toggleSidebar();
+            }}
+            {...props}
+          >
+            <PanelLeftIcon />
+            <span className="sr-only">Toggle Sidebar</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Toggle Sidebar</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
