@@ -241,8 +241,16 @@ export class PlanStorage {
     weekOneMonday.setDate(start.getDate() + mondayOffset);
 
     if (plan.days.length === 0) return true;
-    const weekNumbers = plan.days.map((d) => d.weekNumber || 1);
-    const minWeek = Math.min(...weekNumbers);
+
+    // ⚡ Perf: Replaced mapped array and Math.min spread with a single O(N) linear scan
+    // to avoid intermediate array allocation and prevent "Maximum call stack size exceeded" errors.
+    let minWeek = Infinity;
+    for (const day of plan.days) {
+      const week = day.weekNumber || 1;
+      if (week < minWeek) {
+        minWeek = week;
+      }
+    }
 
     const today = toDateStr();
 
