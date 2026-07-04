@@ -377,6 +377,7 @@ function LogFoodForm({
                   placeholder="e.g. 1 slice"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
+                  aria-label="Portion label"
                   data-testid="input-portion-label"
                 />
                 <Input
@@ -388,6 +389,7 @@ function LogFoodForm({
                   className="w-24"
                   value={newGrams}
                   onChange={(e) => setNewGrams(e.target.value)}
+                  aria-label="Portion size in grams"
                   data-testid="input-portion-grams"
                 />
               </div>
