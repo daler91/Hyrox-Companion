@@ -4,6 +4,7 @@ import { GarminIcon } from "@/components/icons/GarminIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface GarminStatusRowProps {
   readonly isConnected: boolean;
@@ -64,21 +65,28 @@ export function GarminStatusRow({
             )}
             <span className="ml-1.5">{isSyncing ? "Syncing…" : "Sync"}</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDisconnect}
-            disabled={isDisconnecting}
-            aria-label={isDisconnecting ? "Disconnecting Garmin…" : "Disconnect Garmin"}
-            aria-busy={isDisconnecting}
-            data-testid="button-disconnect-garmin"
-          >
-            {isDisconnecting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Unlink className="h-4 w-4" />
-            )}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDisconnect}
+                  disabled={isDisconnecting}
+                  aria-label={isDisconnecting ? "Disconnecting Garmin…" : "Disconnect Garmin"}
+                  aria-busy={isDisconnecting}
+                  data-testid="button-disconnect-garmin"
+                >
+                  {isDisconnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Unlink className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Disconnect Garmin</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
     </div>
