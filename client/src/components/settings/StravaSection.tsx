@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStravaMutations } from "@/hooks/useStravaMutations";
 import type { StravaStatus } from "@/lib/api";
 
@@ -85,20 +86,27 @@ export function StravaSection({
                   )}
                   <span className="ml-1.5">Sync</span>
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => disconnectStravaMutation.mutate()}
-                  disabled={disconnectStravaMutation.isPending}
-                  aria-label="Disconnect Strava"
-                  data-testid="button-disconnect-strava"
-                >
-                  {disconnectStravaMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Unlink className="h-4 w-4" />
-                  )}
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => disconnectStravaMutation.mutate()}
+                        disabled={disconnectStravaMutation.isPending}
+                        aria-label="Disconnect Strava"
+                        data-testid="button-disconnect-strava"
+                      >
+                        {disconnectStravaMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Unlink className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Disconnect Strava</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </>
             ) : (
               <Button

@@ -5,6 +5,7 @@ import { useCallback, useMemo } from "react";
 import { ChatInput, type ChatInputSeed } from "@/components/ChatInput";
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useChatSession } from "@/hooks/useChatSession";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
@@ -82,18 +83,25 @@ export function EmbeddedWorkoutCoachChat({
       data-testid="embedded-workout-coach-chat"
     >
       <header className="flex min-w-0 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size={backButtonText ? "sm" : "icon"}
-          className={cn("shrink-0 text-muted-foreground", backButtonText ? "h-8 px-2" : "size-7")}
-          onClick={onBack}
-          aria-label="Back to workout details"
-          data-testid="embedded-workout-coach-chat-back"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          {backButtonText ? <span>{backButtonText}</span> : null}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size={backButtonText ? "sm" : "icon"}
+                className={cn("shrink-0 text-muted-foreground", backButtonText ? "h-8 px-2" : "size-7")}
+                onClick={onBack}
+                aria-label="Back to workout details"
+                data-testid="embedded-workout-coach-chat-back"
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                {backButtonText ? <span>{backButtonText}</span> : null}
+              </Button>
+            </TooltipTrigger>
+            {!backButtonText && <TooltipContent>Back to workout details</TooltipContent>}
+          </Tooltip>
+        </TooltipProvider>
         <Sparkles className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs font-medium uppercase text-muted-foreground">
           <span className="sr-only">Asking about </span>
