@@ -142,6 +142,7 @@ describe("AnnotationsDialog", () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByTestId("button-delete-annotation-a1"));
+    await user.click(screen.getByTestId("confirm-delete-annotation"));
 
     await waitFor(() => {
       expect(mockApi.delete).toHaveBeenCalledWith("a1");

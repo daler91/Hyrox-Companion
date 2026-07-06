@@ -76,7 +76,7 @@ describe("TimelineAnnotationCard", () => {
     expect(onEdit).toHaveBeenCalledWith(annotation);
   });
 
-  it("invokes onDelete with the annotation id when the trash button is clicked", async () => {
+  it("invokes onDelete with the annotation id after confirming", async () => {
     const onDelete = vi.fn();
     render(
       <TimelineAnnotationCard
@@ -88,6 +88,7 @@ describe("TimelineAnnotationCard", () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByTestId("button-delete-annotation-a1"));
+    await user.click(screen.getByTestId("confirm-delete-annotation"));
     expect(onDelete).toHaveBeenCalledWith("a1");
   });
 
