@@ -1,8 +1,10 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
 import { Loader2, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { TYPE_COLORS, TYPE_LABELS } from "@/components/timeline/annotation-style";
 import { AnnotationTypeIcon } from "@/components/timeline/AnnotationTypeIcon";
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -20,6 +22,10 @@ export function AnnotationList({
   isDeleting,
   onDelete,
 }: AnnotationListProps) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingAnnotation = pendingDeleteId
+    ? annotations?.find((a) => a.id === pendingDeleteId)
+    : null;
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-6" data-testid="annotations-loading">
@@ -64,7 +70,7 @@ export function AnnotationList({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => onDelete(annotation.id)}
+                    onClick={() => setPendingDeleteId(annotation.id)}
                     disabled={isDeleting}
                     data-testid={`button-delete-annotation-${annotation.id}`}
                     aria-label={`Delete ${TYPE_LABELS[annotationType]} annotation`}
@@ -78,6 +84,27 @@ export function AnnotationList({
           );
         })}
       </ul>
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Delete annotation?"
+        description={
+          pendingAnnotation
+            ? `The ${TYPE_LABELS[pendingAnnotation.type as TimelineAnnotationType]} annotation will be permanently removed.`
+            : "This annotation will be permanently removed."
+        }
+        confirmText="Delete"
+        isDestructive
+        isPending={isDeleting}
+        onConfirm={() => {
+          if (!pendingDeleteId) return;
+          onDelete(pendingDeleteId);
+          setPendingDeleteId(null);
+        }}
+        confirmTestId="confirm-delete-annotation"
+      />
     </TooltipProvider>
   );
 }

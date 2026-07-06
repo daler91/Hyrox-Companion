@@ -1,6 +1,7 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
 import { differenceInDays, parseISO } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 import { TYPE_BORDER_COLORS, TYPE_COLORS, TYPE_LABELS } from "./annotation-style";
 import { AnnotationTypeIcon } from "./AnnotationTypeIcon";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface TimelineAnnotationCardProps {
   readonly annotation: TimelineAnnotation;
@@ -28,6 +30,7 @@ export function TimelineAnnotationCard({
   onDelete,
   isDeleting = false,
 }: Readonly<TimelineAnnotationCardProps>) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const type = annotation.type as TimelineAnnotationType;
   const label = TYPE_LABELS[type];
 
@@ -81,7 +84,7 @@ export function TimelineAnnotationCard({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => onDelete(annotation.id)}
+                onClick={() => setConfirmOpen(true)}
                 disabled={isDeleting}
                 aria-label={`Delete ${label} annotation`}
                 data-testid={`button-delete-annotation-${annotation.id}`}
@@ -93,6 +96,20 @@ export function TimelineAnnotationCard({
           </Tooltip>
         </div>
       </TooltipProvider>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete annotation?"
+        description={`The ${label} annotation will be permanently removed.`}
+        confirmText="Delete"
+        isDestructive
+        isPending={isDeleting}
+        onConfirm={() => {
+          onDelete(annotation.id);
+          setConfirmOpen(false);
+        }}
+        confirmTestId="confirm-delete-annotation"
+      />
     </article>
   );
 }
