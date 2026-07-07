@@ -27,7 +27,7 @@ export function ChartExplanation({ explanation }: ChartExplanationProps) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center gap-2 text-sm font-medium text-primary"
+        className="flex w-full items-center gap-2 text-sm font-medium text-primary rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         aria-expanded={open}
         data-testid="chart-explanation-toggle"
       >

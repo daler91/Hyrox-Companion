@@ -1,4 +1,5 @@
 import type { Food } from "@shared/schema";
+import { Loader2 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -175,7 +176,10 @@ export function BarcodeScanner({
                 disabled={lookup.isPending || !BARCODE_RE.test(manualCode.trim())}
                 data-testid="button-barcode-lookup"
               >
-                Look up
+                {lookup.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+                )}
+                {lookup.isPending ? "Looking up…" : "Look up"}
               </Button>
             </div>
           </form>
