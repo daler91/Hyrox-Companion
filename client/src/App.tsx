@@ -178,7 +178,7 @@ function AuthenticatedLayout() {
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
-  };
+  } as React.CSSProperties;
 
   return (
     <div className="flex h-svh min-h-0 flex-col overflow-hidden">

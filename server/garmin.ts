@@ -367,7 +367,7 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
     const friendly = translateGarminError(err);
     await storage.users.setGarminError(userId, friendly);
     reqLog.error({ err, userId, context: LOG_CTX }, "Garmin login failed");
-    throw new Error(friendly);
+    throw new Error(friendly, { cause: err });
   }
 
   // Persist the freshly-minted tokens so subsequent /sync calls can skip

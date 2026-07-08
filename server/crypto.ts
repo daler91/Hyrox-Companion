@@ -147,7 +147,7 @@ export function decryptToken(encryptedData: string): string {
     return decrypted;
   } catch (error) {
     logger.error({ err: error }, "Failed to decrypt token");
-    throw new Error("Failed to decrypt token");
+    throw new Error("Failed to decrypt token", { cause: error });
   }
 }
 
