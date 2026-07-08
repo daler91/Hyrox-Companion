@@ -101,6 +101,39 @@ describe("TimelineDateGroup", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("renders a header-only rest-day row for an empty today group", () => {
+    // useTimelineFilters injects an empty group for today (the anchor for
+    // the initial scroll and the "Jump to today" pill), so today is exempt
+    // from the empty-group null guard.
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    renderGroup({
+      date: todayStr,
+      entries: [],
+      annotations: [],
+      onAddAnnotation: vi.fn(),
+    });
+
+    expect(screen.getByTestId(`timeline-date-group-${todayStr}`)).toBeInTheDocument();
+    expect(screen.getByText("Today")).toBeInTheDocument();
+    expect(screen.getByTestId("text-rest-day-today")).toBeInTheDocument();
+    expect(screen.queryByTestId(/^card-timeline-entry/)).not.toBeInTheDocument();
+  });
+
+  it("hides the rest-day hint when the empty today group has annotations", () => {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    renderGroup({
+      date: todayStr,
+      entries: [],
+      annotations: [makeAnnotation({ id: "a1", startDate: todayStr, endDate: todayStr })],
+      onAddAnnotation: vi.fn(),
+      onEditAnnotation: vi.fn(),
+      onDeleteAnnotation: vi.fn(),
+    });
+
+    expect(screen.queryByTestId("text-rest-day-today")).not.toBeInTheDocument();
+    expect(screen.getByTestId("annotation-card-a1")).toBeInTheDocument();
+  });
+
   it("shows the + Note chip with hover-reveal classes on non-today rows", () => {
     const onAddAnnotation = vi.fn();
     renderGroup({

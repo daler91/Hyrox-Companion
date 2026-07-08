@@ -10,7 +10,6 @@ import {
 } from "@dnd-kit/core";
 import type { FuellingDayPoint, TimelineEntry } from "@shared/schema";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { format } from "date-fns";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -32,7 +31,9 @@ import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching, useIsOnboa
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFuellingRange } from "@/hooks/useNutrition";
 import { useTimelineState } from "@/hooks/useTimelineState";
+import { getTodayString } from "@/lib/dateUtils";
 import { featureFlags } from "@/lib/featureFlags";
+import { startScrollTodayConvergence } from "@/pages/timeline/scrollTodayConvergence";
 import { TimelineCoachPanels } from "@/pages/timeline/TimelineCoachPanels";
 import { TimelineContent } from "@/pages/timeline/TimelineContent";
 import { TimelineWorkoutSurfaces } from "@/pages/timeline/TimelineWorkoutSurfaces";
@@ -269,8 +270,11 @@ export default function Timeline() {
     [moveEntry],
   );
 
+  // useTimelineFilters injects a today group whenever any group exists, so
+  // this is equivalent to "the timeline has any rows" — kept as an explicit
+  // check in case that injection ever regresses.
   const todayPresent = useMemo(() => {
-    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const todayStr = getTodayString();
     return allVisibleGroups.some(([dateGroupStr]) => dateGroupStr === todayStr);
   }, [allVisibleGroups]);
 
@@ -283,7 +287,7 @@ export default function Timeline() {
   });
 
   const handleScrollToToday = useCallback(() => {
-    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const todayStr = getTodayString();
     const todayIndex = allVisibleGroups.findIndex(([dateGroupStr]) => dateGroupStr === todayStr);
 
     if (todayIndex < 0) {
@@ -302,25 +306,42 @@ export default function Timeline() {
     const scrollKey = selectedPlanId ?? "all-plans";
     if (initialTodayScrollKeyRef.current === scrollKey) return undefined;
 
-    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const todayStr = getTodayString();
     const todayIndex = allVisibleGroups.findIndex(([dateGroupStr]) => dateGroupStr === todayStr);
 
-    if (todayIndex < 0) {
-      initialTodayScrollKeyRef.current = scrollKey;
-      return undefined;
-    }
+    // With the today-group injection this only happens for a truly empty
+    // timeline (new user, pre-import). Deliberately do NOT mark the key
+    // done: when data lands, allVisibleGroups changes and this effect
+    // re-runs for a free retry.
+    if (todayIndex < 0) return undefined;
 
-    let rafId: number | undefined;
+    let cancelConvergence: (() => void) | undefined;
     const timerId = setTimeout(() => {
-      // Phase 1: mount the today row (instant); phase 2: land precisely on the real node.
+      const scrollEl = scrollRef.current;
+      if (!scrollEl) return;
+      // Phase 1: mount the today row (instant); phase 2: converge on the
+      // real node across frames, absorbing row measurement and late header
+      // content instead of racing them.
       rowVirtualizer.scrollToIndex(todayIndex, { align: "center" });
-      rafId = scrollTodayIntoViewWhenReady(todayRef);
-      initialTodayScrollKeyRef.current = scrollKey;
+      cancelConvergence = startScrollTodayConvergence({
+        scrollEl,
+        getTargetEl: () => todayRef.current,
+        remountTarget: () => rowVirtualizer.scrollToIndex(todayIndex, { align: "center" }),
+        onSettle: (reason, didScroll) => {
+          // "settled" and "user-scroll" are terminal (never fight the user).
+          // A "timeout" without a single scroll means the row never mounted —
+          // leave the key unset so the next data/groups change retries.
+          if (reason !== "timeout" || didScroll) {
+            initialTodayScrollKeyRef.current = scrollKey;
+          }
+        },
+      });
     }, SCROLL_TO_TODAY_DELAY_MS);
 
     return () => {
       clearTimeout(timerId);
-      if (rafId !== undefined) cancelAnimationFrame(rafId);
+      // Silent: a re-render mid-flight restarts the loop, not abandons it.
+      cancelConvergence?.();
     };
   }, [allVisibleGroups, rowVirtualizer, selectedPlanId, timelineLoading, todayRef]);
 

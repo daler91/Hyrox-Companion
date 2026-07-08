@@ -1,9 +1,9 @@
 import type { TimelineAnnotation,TimelineEntry } from "@shared/schema";
-import { format } from "date-fns";
 import { useMemo,useState } from "react";
 
 import type { FilterStatus } from "@/components/timeline";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
+import { getTodayString } from "@/lib/dateUtils";
 
 const FILTER_STATUSES: readonly FilterStatus[] = [
   "all",
@@ -55,14 +55,25 @@ export function useTimelineFilters(
       }
     });
 
+    const today = getTodayString();
+
+    // Always give "today" a row — rest days included — so the initial
+    // scroll-to-today, the "Jump to today" pill, and the today marker have a
+    // render target every day. Skipped when there are no groups at all so
+    // TimelineEmptyState (welcome/onboarding and filter-no-match states)
+    // still renders. Like annotations above, the injected row deliberately
+    // ignores the status filter: it is a calendar marker, not a
+    // status-bearing entry.
+    if (Object.keys(groups).length > 0 && !groups[today]) {
+      groups[today] = [];
+    }
+
     // Fast string comparison for YYYY-MM-DD dates instead of localeCompare
     const allGroups = Object.entries(groups).sort(([a], [b]) => {
       if (b < a) return -1;
       if (b > a) return 1;
       return 0;
     });
-
-    const today = format(new Date(), "yyyy-MM-dd");
 
     // ⚡ Bolt Performance Optimization:
     // Instead of using `.filter()` twice on the entire `allGroups` array (O(N) * 2),
