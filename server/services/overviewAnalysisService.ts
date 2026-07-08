@@ -267,7 +267,7 @@ export async function generateOverviewAnalysis(
     // bearer:disable javascript_lang_logger_leak — err is a JSON.parse
     // SyntaxError on the AI provider's own output, not user data.
     log.warn({ err }, "[overview-analysis] AI JSON.parse failed");
-    throw new Error("Overview analysis returned malformed JSON");
+    throw new Error("Overview analysis returned malformed JSON", { cause: err });
   }
 
   const parsed = overviewAnalysisAiSchema.safeParse(raw);

@@ -240,7 +240,7 @@ export default function TimelineEmptyState({
   setFilterStatus,
   onLogNote,
 }: Readonly<TimelineEmptyStateProps>) {
-  let emptyStateContent = null;
+  let emptyStateContent;
   const planIdForScheduling =
     selectedPlanId ?? plans.find((plan) => !plan.startDate)?.id ?? plans[0]?.id ?? null;
 
