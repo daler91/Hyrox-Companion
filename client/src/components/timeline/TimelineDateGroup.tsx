@@ -100,10 +100,11 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
     const isDropTarget = isOver && activeEntryDate && activeEntryDate !== date;
 
     // Defensive: an empty date group with no annotations should not render a
-    // visible row. Step 1 of the annotation wiring (useTimelineFilters) only
-    // creates empty groups for annotation start dates, so this is a guard
-    // against future regressions.
-    if (entries.length === 0 && !hasAnnotations) {
+    // visible row — except for today. useTimelineFilters only creates empty
+    // groups for annotation start dates and for today (the rest-day marker
+    // the initial scroll and the "Jump to today" pill anchor to), so this is
+    // a guard against future regressions.
+    if (entries.length === 0 && !hasAnnotations && !isTodayDate) {
       return null;
     }
 
@@ -169,6 +170,11 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
         </div>
 
         <div className="space-y-2 ml-6">
+          {isTodayDate && entries.length === 0 && !hasAnnotations ? (
+            <p className="text-sm text-muted-foreground" data-testid="text-rest-day-today">
+              Rest day — nothing scheduled.
+            </p>
+          ) : null}
           {hasAnnotations && onEditAnnotation && onDeleteAnnotation
             ? annotations?.map((annotation) => (
                 <TimelineAnnotationCard

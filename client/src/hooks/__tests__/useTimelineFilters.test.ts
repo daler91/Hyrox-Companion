@@ -207,4 +207,102 @@ describe("useTimelineFilters", () => {
     expect(sharedGroup?.[1]).toHaveLength(1);
     expect(sharedGroup?.[1][0].id).toBe("w1");
   });
+
+  describe("today group injection", () => {
+    const todayStr = "2023-10-15";
+
+    it("injects an empty today group on a rest day so the initial scroll has a target", () => {
+      const mockData = [
+        createMockEntry({ id: "w1", date: "2023-10-14" }),
+        createMockEntry({ id: "w2", date: "2023-10-16" }),
+      ];
+
+      const { result } = renderHook(() => useTimelineFilters(mockData));
+
+      expect(result.current.futureGroups[0]).toEqual([todayStr, []]);
+      expect(result.current.futureGroups[1]?.[0]).toBe("2023-10-16");
+    });
+
+    it("does not duplicate today when an entry already exists on today's date", () => {
+      const mockData = [createMockEntry({ id: "w1", date: todayStr })];
+
+      const { result } = renderHook(() => useTimelineFilters(mockData));
+
+      const todayGroups = result.current.futureGroups.filter(([date]) => date === todayStr);
+      expect(todayGroups).toHaveLength(1);
+      expect(todayGroups[0][1]).toHaveLength(1);
+      expect(todayGroups[0][1][0].id).toBe("w1");
+    });
+
+    it("injects today even when all data is in the past", () => {
+      const mockData = [createMockEntry({ id: "w1", date: "2023-10-10" })];
+
+      const { result } = renderHook(() => useTimelineFilters(mockData));
+
+      expect(result.current.futureGroups).toEqual([[todayStr, []]]);
+    });
+
+    it("keeps today at the head of the visible future window and counts it in hidden math", () => {
+      // 10 future days starting tomorrow, nothing today.
+      const mockData: TimelineEntry[] = [];
+      for (let i = 1; i <= 10; i++) {
+        const date = format(addDays(new Date("2023-10-15"), i), "yyyy-MM-dd");
+        mockData.push(createMockEntry({ id: `future-${i}`, date }));
+      }
+
+      const { result } = renderHook(() => useTimelineFilters(mockData));
+
+      expect(result.current.futureGroups).toHaveLength(11);
+      expect(result.current.visibleFutureGroups).toHaveLength(7);
+      expect(result.current.visibleFutureGroups[0][0]).toBe(todayStr);
+      expect(result.current.hiddenFutureCount).toBe(4);
+    });
+
+    it("injects today under a status filter as long as some group survives the filter", () => {
+      const mockData = [
+        createMockEntry({ id: "w1", date: "2023-10-14", status: "completed" }),
+        createMockEntry({ id: "w2", date: "2023-10-16", status: "planned" }),
+      ];
+
+      const { result } = renderHook(() => useTimelineFilters(mockData));
+
+      act(() => {
+        result.current.setFilterStatus("completed");
+      });
+
+      expect(result.current.futureGroups).toEqual([[todayStr, []]]);
+      expect(result.current.pastGroups.map(([date]) => date)).toEqual(["2023-10-14"]);
+    });
+
+    it("does not inject today for a truly empty timeline, preserving the empty state", () => {
+      const { result } = renderHook(() => useTimelineFilters([]));
+
+      expect(result.current.futureGroups).toEqual([]);
+      expect(result.current.pastGroups).toEqual([]);
+    });
+
+    it("does not inject today when the status filter matches nothing", () => {
+      const mockData = [createMockEntry({ id: "w1", date: "2023-10-14", status: "planned" })];
+
+      const { result } = renderHook(() => useTimelineFilters(mockData));
+
+      act(() => {
+        result.current.setFilterStatus("completed");
+      });
+
+      expect(result.current.futureGroups).toEqual([]);
+      expect(result.current.pastGroups).toEqual([]);
+    });
+
+    it("injects today for an annotation-only timeline", () => {
+      const annotations = [
+        createMockAnnotation({ id: "a1", startDate: "2023-10-12", endDate: "2023-10-12" }),
+      ];
+
+      const { result } = renderHook(() => useTimelineFilters([], annotations));
+
+      expect(result.current.futureGroups).toEqual([[todayStr, []]]);
+      expect(result.current.pastGroups.map(([date]) => date)).toContain("2023-10-12");
+    });
+  });
 });

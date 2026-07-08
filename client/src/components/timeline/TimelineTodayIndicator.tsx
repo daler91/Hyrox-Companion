@@ -15,10 +15,11 @@ interface TimelineTodayIndicatorProps {
   readonly onScrollToToday: () => void;
   /**
    * Whether today appears anywhere in the currently-rendered timeline
-   * groups. When false (e.g. the user filtered to a status that excludes
-   * today), the pill stays hidden — otherwise it can leak over from a
-   * previous "virtualizer unmounted the today row" state and present a
-   * dead jump action.
+   * groups. useTimelineFilters injects a today group whenever any group
+   * renders, so this is only false when the timeline is truly empty (new
+   * user, or a filter matching nothing) — then the pill stays hidden,
+   * otherwise it can leak over from a previous "virtualizer unmounted the
+   * today row" state and present a dead jump action.
    */
   readonly todayPresent: boolean;
 }
