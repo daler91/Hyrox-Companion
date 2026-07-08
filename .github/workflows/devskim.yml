@@ -46,11 +46,15 @@ jobs:
         run: dotnet tool install --global Microsoft.CST.DevSkim.CLI --version 1.0.70 --configfile "$RUNNER_TEMP/nuget.trusted.config"
 
       - name: Run DevSkim scanner
+        # pnpm-lock.yaml is excluded: its base64 integrity hashes randomly
+        # contain substrings like "Md2" that trip DevSkim's banned-hash-
+        # algorithm rule (DS126858). Supply-chain checks on the lockfile are
+        # covered by dependency-review, Socket, and Debricked instead.
         run: |
           "$HOME/.dotnet/tools/devskim" analyze \
             --source-code "$GITHUB_WORKSPACE" \
             --output-file "$GITHUB_WORKSPACE/devskim-results.sarif" \
-            --ignore-globs "**/.git/**,**/bin/**"
+            --ignore-globs "**/.git/**,**/bin/**,**/pnpm-lock.yaml"
 
       - name: Upload DevSkim scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
