@@ -29,14 +29,21 @@ function computeTrend(
 ): "up" | "down" | "flat" {
   if (data.length < 2) return "flat";
   const mid = Math.floor(data.length / 2);
-  const firstHalf = data.slice(0, mid);
-  const secondHalf = data.slice(mid);
 
-  const avg = (arr: ExerciseAnalyticDay[]) =>
-    arr.reduce((s, d) => s + Number(d[key] ?? 0), 0) / arr.length;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced .slice() and .reduce() with direct index loops to prevent
+  // intermediate array allocations and O(N) memory overhead.
+  let firstSum = 0;
+  for (let i = 0; i < mid; i++) {
+    firstSum += Number(data[i][key] ?? 0);
+  }
+  const firstAvg = firstSum / mid;
 
-  const firstAvg = avg(firstHalf);
-  const secondAvg = avg(secondHalf);
+  let secondSum = 0;
+  for (let i = mid; i < data.length; i++) {
+    secondSum += Number(data[i][key] ?? 0);
+  }
+  const secondAvg = secondSum / (data.length - mid);
 
   if (firstAvg === 0 && secondAvg === 0) return "flat";
   let change: number;
