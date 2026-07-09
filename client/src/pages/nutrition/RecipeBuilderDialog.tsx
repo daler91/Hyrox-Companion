@@ -1,5 +1,5 @@
 import type { Food, NutritionMacroTotals, RecipeWithIngredients } from "@shared/schema";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -219,8 +219,14 @@ function RecipeBuilderForm({
         <Button variant="ghost" onClick={onClose} disabled={isPending}>
           Cancel
         </Button>
-        <Button onClick={submit} disabled={!valid || isPending} data-testid="button-save-recipe">
-          {initial ? "Save" : "Create recipe"}
+        <Button
+          onClick={submit}
+          disabled={!valid || isPending}
+          aria-busy={isPending}
+          data-testid="button-save-recipe"
+        >
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+          {isPending ? "Saving…" : initial ? "Save" : "Create recipe"}
         </Button>
       </DialogFooter>
     </>
