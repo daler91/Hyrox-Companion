@@ -206,6 +206,14 @@ export default function Nutrition() {
               </Tooltip>
             </TooltipProvider>
           </div>
+          <span
+            role="status"
+            aria-live="polite"
+            className="sr-only"
+            data-testid="date-announcement"
+          >
+            Viewing {formatDateLabel(date)}
+          </span>
         </div>
 
         <DailyTotalsHeader
