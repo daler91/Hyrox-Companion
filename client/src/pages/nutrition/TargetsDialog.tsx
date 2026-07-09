@@ -5,7 +5,7 @@ import {
 } from "@shared/nutritionTargets";
 import type { NutritionTarget } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { Calculator } from "lucide-react";
+import { Calculator, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -176,8 +176,8 @@ function TargetsForm({
               Adapt to recent &amp; upcoming training
             </Label>
             <p className="text-xs text-muted-foreground">
-              Keep carbs (and a little extra protein) up while you recover from hard days, and
-              load carbs ahead of big sessions, your taper and race week.
+              Keep carbs (and a little extra protein) up while you recover from hard days, and load
+              carbs ahead of big sessions, your taper and race week.
             </p>
           </div>
           <Switch
@@ -194,8 +194,14 @@ function TargetsForm({
         <Button variant="ghost" onClick={onClose} disabled={setTarget.isPending}>
           Cancel
         </Button>
-        <Button onClick={submit} disabled={!valid || setTarget.isPending} data-testid="button-save-targets">
-          Save targets
+        <Button
+          onClick={submit}
+          disabled={!valid || setTarget.isPending}
+          aria-busy={setTarget.isPending}
+          data-testid="button-save-targets"
+        >
+          {setTarget.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+          {setTarget.isPending ? "Saving…" : "Save targets"}
         </Button>
       </DialogFooter>
     </>
@@ -213,7 +219,12 @@ export function TargetsDialog({
   readonly onClose: () => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent data-testid="dialog-targets">
         {open && <TargetsForm key={current?.id ?? "new"} current={current} onClose={onClose} />}
       </DialogContent>
