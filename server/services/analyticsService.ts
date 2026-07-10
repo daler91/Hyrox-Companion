@@ -438,9 +438,17 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
       avgCompliancePct: null,
     };
   }
-  const totalWorkouts = weeklySummaries.reduce((s, w) => s + w.workoutCount, 0);
+  // ⚡ Bolt Performance Optimization:
+  // Consolidated two separate loops over weeklySummaries into a single pass
+  // to compute totalWorkouts and totalDuration simultaneously, reducing
+  // time complexity from O(2N) to O(N).
+  let totalWorkouts = 0;
+  let totalDuration = 0;
+  for (const w of weeklySummaries) {
+    totalWorkouts += w.workoutCount;
+    totalDuration += w.totalDuration;
+  }
   const avgPerWeek = Math.round((totalWorkouts / weeklySummaries.length) * 10) / 10;
-  const totalDuration = weeklySummaries.reduce((s, w) => s + w.totalDuration, 0);
   const avgDuration = totalWorkouts > 0 ? Math.round(totalDuration / totalWorkouts) : 0;
 
   // Only average the weeks that actually recorded an RPE, matching the
