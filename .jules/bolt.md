@@ -23,3 +23,6 @@ Learned to replace N+1 sequential database inserts in loops with bulk array inse
 ## 2026-06-26 - Reduce memory overhead from Array.prototype.reduce() in tight loops
 **Learning:** Using `Array.prototype.reduce()` to sum or calculate objects (e.g. nutrition macro totals) where the callback instantiates and returns a new object on every single iteration creates significant garbage collection overhead, particularly if called frequently during component re-renders.
 **Action:** Replace `reduce()` with an O(N) single-pass `for...of` loop using scoped local variables or a single mutable accumulator object. This drops intermediate object allocations from O(N) to O(1) and eliminates the functional callback overhead per iteration, producing identical results with much less memory pressure.
+## 2026-07-09 - Avoid slice and reduce in data processing functions
+**Learning:** Using `Array.prototype.slice()` and `.reduce()` to compute aggregates (like averages over array halves) allocates intermediate arrays and incurs unnecessary memory overhead. This is especially impactful in data-heavy components like `ExerciseProgressionCharts`.
+**Action:** Replace `slice` and `reduce` with standard `for` loops utilizing start and end index bounds to compute aggregates in a single pass with O(1) space complexity.
