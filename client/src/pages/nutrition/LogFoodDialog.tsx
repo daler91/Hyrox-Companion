@@ -259,13 +259,9 @@ function LogFoodForm({
       : scaleEntryPreview(state.entry, quantityG);
   const isPending = logFood.isPending || updateLog.isPending;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
-  const submitLabel = isPending
-    ? isCreate
-      ? "Logging…"
-      : "Saving…"
-    : isCreate
-      ? "Log it"
-      : "Save";
+  const idleLabel = isCreate ? "Log it" : "Save";
+  const busyLabel = isCreate ? "Logging…" : "Saving…";
+  const submitLabel = isPending ? busyLabel : idleLabel;
 
   // Rich preview derived from the live serving (display only).
   const macroShares = macroEnergyShares(preview);
