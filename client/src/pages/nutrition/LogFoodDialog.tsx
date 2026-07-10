@@ -259,6 +259,13 @@ function LogFoodForm({
       : scaleEntryPreview(state.entry, quantityG);
   const isPending = logFood.isPending || updateLog.isPending;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
+  const submitLabel = isPending
+    ? isCreate
+      ? "Logging…"
+      : "Saving…"
+    : isCreate
+      ? "Log it"
+      : "Save";
 
   // Rich preview derived from the live serving (display only).
   const macroShares = macroEnergyShares(preview);
@@ -521,7 +528,7 @@ function LogFoodForm({
           data-testid="button-submit-log"
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
-          {isPending ? (isCreate ? "Logging…" : "Saving…") : isCreate ? "Log it" : "Save"}
+          {submitLabel}
         </Button>
       </div>
     </div>
