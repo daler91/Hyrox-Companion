@@ -22,7 +22,8 @@ const updateCoachingMaterialSchema = z.object({
 type CreateMaterialBody = Omit<InsertCoachingMaterial, "userId">;
 type UpdateMaterialBody = z.infer<typeof updateCoachingMaterialSchema>;
 
-router.get("/api/v1/coaching-materials", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+// 🛡️ Sentinel: Added rate limit to GET /api/v1/coaching-materials to prevent enumeration/abuse
+router.get("/api/v1/coaching-materials", isAuthenticated, rateLimiter("coaching", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const materials = await storage.coaching.listCoachingMaterials(userId);
     res.json(materials);
@@ -56,7 +57,8 @@ protectedPatch(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter(
     res.json(material);
   });
 
-router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+// 🛡️ Sentinel: Added rate limit to GET /api/v1/coaching-materials/rag-status to prevent enumeration/abuse
+router.get("/api/v1/coaching-materials/rag-status", isAuthenticated, rateLimiter("coaching", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const result = await getRagStatus(userId);
     res.json(result);

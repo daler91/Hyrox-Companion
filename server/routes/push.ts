@@ -23,7 +23,8 @@ const subscribeSchema = z.object({
   }),
 });
 
-router.get("/api/v1/push/vapid-key", isAuthenticated, (_req: ExpressRequest, res: Response) => {
+// 🛡️ Sentinel: Added rate limit to GET /api/v1/push/vapid-key to prevent enumeration/abuse
+router.get("/api/v1/push/vapid-key", isAuthenticated, rateLimiter("push", 60), (_req: ExpressRequest, res: Response) => {
   if (!isPushEnabled()) {
     res.status(404).json({ error: "Push notifications not configured", code: "PUSH_NOT_CONFIGURED" });
     return;
