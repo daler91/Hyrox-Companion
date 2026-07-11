@@ -27,7 +27,9 @@ export function BulkDeleteToolbar({
       data-testid="bulk-delete-toolbar"
     >
       <div className="min-w-0">
-        <p className="text-sm font-medium">{selectedCount} selected</p>
+        <p className="text-sm font-medium" role="status" aria-live="polite">
+          {selectedCount} selected
+        </p>
         <p className="text-xs text-muted-foreground">
           {visibleCount} visible workout{visibleCount === 1 ? "" : "s"} can be removed
         </p>
