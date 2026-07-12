@@ -26,3 +26,6 @@ Learned to replace N+1 sequential database inserts in loops with bulk array inse
 ## 2026-07-09 - Avoid slice and reduce in data processing functions
 **Learning:** Using `Array.prototype.slice()` and `.reduce()` to compute aggregates (like averages over array halves) allocates intermediate arrays and incurs unnecessary memory overhead. This is especially impactful in data-heavy components like `ExerciseProgressionCharts`.
 **Action:** Replace `slice` and `reduce` with standard `for` loops utilizing start and end index bounds to compute aggregates in a single pass with O(1) space complexity.
+## 2026-07-12 - Consolidate Multiple Iterations into Single O(N) Passes
+**Learning:** Chaining array methods like `.map().filter().reduce()` or iterating over the same array multiple times consecutively to compute different aggregates (e.g., total volume, total duration) creates unnecessary intermediate arrays and multiple O(N) traversals, leading to memory overhead and slower execution, especially with large datasets in analytics pipelines.
+**Action:** When calculating multiple derived metrics from the same source array, combine the logic into a single `for...of` loop or standard `for` loop to compute everything in one O(N) pass, completely bypassing intermediate array allocations.

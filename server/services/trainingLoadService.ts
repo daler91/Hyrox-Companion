@@ -608,13 +608,25 @@ function computeMonotonyStrain(
   days: Map<string, DailyTrainingLoad>,
   endDate: string,
 ): { monotony: number | null; strain: number | null } {
-  const values: number[] = [];
+  // ⚡ Bolt Performance Optimization:
+  // Combined the loop that generates values and computes the total sum into a single pass.
+  // Then used a second simple loop to calculate variance instead of chained .reduce() calls.
+  const values = new Array<number>(7);
+  let total = 0;
   for (let offset = 0; offset < 7; offset++) {
-    values.push(days.get(addDays(endDate, -offset))?.utss ?? 0);
+    const val = days.get(addDays(endDate, -offset))?.utss ?? 0;
+    values[offset] = val;
+    total += val;
   }
-  const total = values.reduce((sum, v) => sum + v, 0);
-  const mean = total / values.length;
-  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+
+  const mean = total / 7;
+
+  let varianceSum = 0;
+  for (let i = 0; i < 7; i++) {
+    varianceSum += (values[i] - mean) ** 2;
+  }
+  const variance = varianceSum / 7;
+
   const sd = Math.sqrt(variance);
   if (sd === 0) return { monotony: null, strain: null };
   const monotony = round(mean / sd, 2);

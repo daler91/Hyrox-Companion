@@ -438,25 +438,30 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
       avgCompliancePct: null,
     };
   }
-  const totalWorkouts = weeklySummaries.reduce((s, w) => s + w.workoutCount, 0);
-  const avgPerWeek = Math.round((totalWorkouts / weeklySummaries.length) * 10) / 10;
-  const totalDuration = weeklySummaries.reduce((s, w) => s + w.totalDuration, 0);
-  const avgDuration = totalWorkouts > 0 ? Math.round(totalDuration / totalWorkouts) : 0;
-
-  // Only average the weeks that actually recorded an RPE, matching the
-  // client's existing display logic (otherwise a week of zero-RPE logs
-  // would drag the average down).
   // ⚡ Bolt Performance Optimization:
-  // Replaced chained .filter().reduce() with a single for...of loop
-  // to avoid intermediate array allocations and O(2N) passes.
+  // Consolidated redundant loops over `weeklySummaries` (which previously calculated
+  // totalWorkouts, totalDuration, and average RPE in separate passes) into a single
+  // O(N) pass to avoid intermediate iterations and multiple .reduce() calls.
+  let totalWorkouts = 0;
+  let totalDuration = 0;
   let rpeSum = 0;
   let rpeCount = 0;
+
   for (const w of weeklySummaries) {
+    totalWorkouts += w.workoutCount;
+    totalDuration += w.totalDuration;
+
+    // Only average the weeks that actually recorded an RPE, matching the
+    // client's existing display logic (otherwise a week of zero-RPE logs
+    // would drag the average down).
     if (w.avgRpe !== null) {
       rpeSum += w.avgRpe;
       rpeCount++;
     }
   }
+
+  const avgPerWeek = Math.round((totalWorkouts / weeklySummaries.length) * 10) / 10;
+  const avgDuration = totalWorkouts > 0 ? Math.round(totalDuration / totalWorkouts) : 0;
   const avgRpe = rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : null;
 
   return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, avgCompliancePct: null };
