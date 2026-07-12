@@ -5,6 +5,7 @@ import { X } from "lucide-react"
 import * as React from "react"
 
 import { BlockingModalLayerRegistration } from "@/components/ui/modal-layer"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 const Dialog = DialogPrimitive.Root
@@ -46,10 +47,16 @@ const DialogContent = React.forwardRef<
     >
       <BlockingModalLayerRegistration />
       {children}
-      <DialogPrimitive.Close type="button" className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-        <X className="h-4 w-4" aria-hidden="true" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogPrimitive.Close type="button" aria-label="Close" className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </DialogPrimitive.Close>
+          </TooltipTrigger>
+          <TooltipContent>Close</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </DialogPrimitive.Content>
   </DialogPortal>
 ))
