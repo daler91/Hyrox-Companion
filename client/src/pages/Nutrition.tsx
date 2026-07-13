@@ -30,6 +30,7 @@ import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
+import { ScanLabelButton } from "./nutrition/ScanLabelButton";
 import { SnapMealButton } from "./nutrition/SnapMealButton";
 import { TargetsDialog } from "./nutrition/TargetsDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
@@ -228,6 +229,7 @@ export default function Nutrition() {
         <div className="flex flex-wrap gap-2">
           <DescribeMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })} />
           <SnapMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })} />
+          <ScanLabelButton onExtracted={(r) => setCustomFood({ mode: "create", prefill: r })} />
           <Button
             variant="outline"
             size="sm"
@@ -286,7 +288,13 @@ export default function Nutrition() {
         onClose={() => setBarcodeOpen(false)}
         onResolved={(food) => setDialog({ mode: "create", food, entryMethod: "barcode" })}
       />
-      <CustomFoodDialog state={customFood} onClose={() => setCustomFood(null)} />
+      <CustomFoodDialog
+        state={customFood}
+        onClose={() => setCustomFood(null)}
+        // "Save & log" (label-scan flow): chain into LogFoodDialog with the
+        // just-created food, exactly like a resolved barcode.
+        onCreated={(food) => setDialog({ mode: "create", food })}
+      />
       <RecipeBuilderDialog
         open={recipe.open}
         recipeId={recipe.id}

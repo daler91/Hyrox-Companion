@@ -19,6 +19,7 @@ import type {
   NutritionInsightsResponse,
   NutritionTarget,
   NutritionTargetsResponse,
+  ParseLabelResponse,
   ParseMealResponse,
   PlannedSessionEstimateResponse,
   RecipeListItem,
@@ -152,6 +153,9 @@ export const nutrition = {
 
   parseMealPhoto: (imageBase64: string, mimeType: string) =>
     typedRequest<ParseMealResponse>("POST", `${base}/parse/photo`, { imageBase64, mimeType }),
+
+  parseLabel: (imageBase64: string, mimeType: string) =>
+    typedRequest<ParseLabelResponse>("POST", `${base}/parse/label`, { imageBase64, mimeType }),
 
   createLogBatch: (data: CreateFoodLogBatchInput) =>
     typedRequest<BatchLogResponse>("POST", `${base}/logs/batch`, data),

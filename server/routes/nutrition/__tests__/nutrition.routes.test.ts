@@ -8,6 +8,7 @@ import { regenerateAndStoreNutritionInsights } from "../../../services/analytics
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
+import { parseNutritionLabel } from "../../../services/nutrition/labelParser";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../../services/nutrition/mealParser";
 import { storage } from "../../../storage";
 import { createTestApp } from "../../__tests__/testUtils";
@@ -31,6 +32,7 @@ vi.mock("../../../services/nutrition/mealParser", () => ({
   parseMealFromPhoto: vi.fn(),
   resolveAndPreview: vi.fn(),
 }));
+vi.mock("../../../services/nutrition/labelParser", () => ({ parseNutritionLabel: vi.fn() }));
 // AI consent/budget gates are exercised in ai.test.ts; here they pass through so
 // the Phase 4 parse route's own logic is what's under test.
 vi.mock("../../../middleware/aiConsent", () => ({
@@ -885,6 +887,9 @@ describe("nutrition routes", () => {
       expect(
         (await request(gatedApp).post("/api/v1/nutrition/parse/photo").send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" })).status,
       ).toBe(404);
+      expect(
+        (await request(gatedApp).post("/api/v1/nutrition/parse/label").send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" })).status,
+      ).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/targets")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/targets").send({ calories: 2000 })).status).toBe(404);
@@ -948,5 +953,76 @@ describe("nutrition photo meal parsing (FR-4.1)", () => {
     const res = await request(app).post("/api/v1/nutrition/parse/photo").send({ mimeType: "image/jpeg" });
     expect(res.status).toBe(400);
     expect(parseMealFromPhoto).not.toHaveBeenCalled();
+  });
+});
+
+// Separate top-level suite for the same max-lines-per-function reason as above.
+describe("nutrition label parsing (label scan)", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = buildApp();
+  });
+
+  it("transcribes a label photo into a review payload", async () => {
+    vi.mocked(parseNutritionLabel).mockResolvedValue({
+      label: {
+        productName: "Oat Bar",
+        brand: null,
+        servingSizeText: "1 bar (45g)",
+        servingSizeG: 45,
+        servingsPerContainer: null,
+        per100g: { calories: 400, protein: 10, carb: 60, fat: 12, fiber: 6 },
+        perServing: null,
+        basis: "per100g",
+        confidence: 90,
+      },
+      suggestion: {
+        name: "Oat Bar",
+        brand: null,
+        caloriesPer100g: 400,
+        proteinPer100g: 10,
+        carbPer100g: 60,
+        fatPer100g: 12,
+        fiberPer100g: 6,
+        servingSizeG: 45,
+        servings: [],
+      },
+      warnings: [],
+    });
+
+    const res = await request(app)
+      .post("/api/v1/nutrition/parse/label")
+      .send({ imageBase64: "ZmFrZS1pbWFnZQ==", mimeType: "image/jpeg" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.label.productName).toBe("Oat Bar");
+    expect(res.body.suggestion.caloriesPer100g).toBe(400);
+    expect(parseNutritionLabel).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg", "test_user");
+  });
+
+  it("passes through the no-readable-label outcome as 200", async () => {
+    vi.mocked(parseNutritionLabel).mockResolvedValue({ label: null, suggestion: null, warnings: [] });
+    const res = await request(app)
+      .post("/api/v1/nutrition/parse/label")
+      .send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ label: null, suggestion: null, warnings: [] });
+  });
+
+  it("400s a label parse with an unsupported mimeType", async () => {
+    const res = await request(app)
+      .post("/api/v1/nutrition/parse/label")
+      .send({ imageBase64: "ZmFrZQ==", mimeType: "image/gif" });
+    expect(res.status).toBe(400);
+    expect(parseNutritionLabel).not.toHaveBeenCalled();
+  });
+
+  it("400s a label parse with a missing image", async () => {
+    const res = await request(app).post("/api/v1/nutrition/parse/label").send({ mimeType: "image/jpeg" });
+    expect(res.status).toBe(400);
+    expect(parseNutritionLabel).not.toHaveBeenCalled();
   });
 });

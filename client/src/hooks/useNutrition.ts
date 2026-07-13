@@ -18,6 +18,7 @@ import type {
   NutritionInsightsResponse,
   NutritionTarget,
   NutritionTargetsResponse,
+  ParseLabelResponse,
   ParseMealResponse,
   RecipeListItem,
   RecipeWithIngredients,
@@ -320,6 +321,14 @@ export function useParseMealPhoto() {
   return useApiMutation<ParseMealResponse, Error, { imageBase64: string; mimeType: string }>({
     mutationFn: ({ imageBase64, mimeType }) => api.nutrition.parseMealPhoto(imageBase64, mimeType),
     errorToast: "Couldn't read that photo",
+  });
+}
+
+/** Transcribe a nutrition-label photo into per-100g macros (label-scan flow). */
+export function useParseNutritionLabel() {
+  return useApiMutation<ParseLabelResponse, Error, { imageBase64: string; mimeType: string }>({
+    mutationFn: ({ imageBase64, mimeType }) => api.nutrition.parseLabel(imageBase64, mimeType),
+    errorToast: "Couldn't read that label",
   });
 }
 
