@@ -10,3 +10,6 @@
 ## 2026-06-30 - Wrap remaining icon-only buttons in tooltips
 **Learning:** Even when `TooltipProvider` is globally defined, standalone or conditionally rendered icon-only buttons (like `ThemeToggle` or sidebar items) should explicitly wrap their tooltips in `TooltipProvider` to ensure the component remains robust and accessible if extracted or used in different contexts.
 **Action:** When creating or modifying standalone components with tooltips, verify they include their own `TooltipProvider` rather than relying entirely on global context.
+## 2025-02-19 - Accessible Close Buttons for Dialog & Sheet
+**Learning:** Found that `Dialog` and `Sheet` close buttons had visually hidden `<span>` tags for screen readers (`sr-only`), but lacked a native `aria-label`. Replacing the `sr-only` span with an `aria-label` attribute on the button component is cleaner and a more standard accessibility pattern for icon-only components.
+**Action:** Always favor `aria-label` directly on interactive components for screen-reader text over injecting hidden `<span>` elements, simplifying the DOM tree while maintaining the exact same accessibility mapping.
