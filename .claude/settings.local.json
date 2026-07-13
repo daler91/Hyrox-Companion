@@ -31,7 +31,8 @@
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(Sort-Object -Unique)",
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
-      "mcp__Claude_Code_Remote__send_later"
+      "mcp__Claude_Code_Remote__send_later",
+      "mcp__Claude_Code_Remote__delete_trigger"
     ]
   }
 }
