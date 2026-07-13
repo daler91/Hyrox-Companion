@@ -7,7 +7,7 @@ import {
   type MealType,
   type NutritionMacroTotals,
 } from "@shared/schema";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -259,6 +259,9 @@ function LogFoodForm({
       : scaleEntryPreview(state.entry, quantityG);
   const isPending = logFood.isPending || updateLog.isPending;
   const validQuantity = Number.isFinite(quantityG) && quantityG > 0;
+  const idleLabel = isCreate ? "Log it" : "Save";
+  const busyLabel = isCreate ? "Logging…" : "Saving…";
+  const submitLabel = isPending ? busyLabel : idleLabel;
 
   // Rich preview derived from the live serving (display only).
   const macroShares = macroEnergyShares(preview);
@@ -517,9 +520,11 @@ function LogFoodForm({
         <Button
           onClick={handleSubmit}
           disabled={!validQuantity || isPending}
+          aria-busy={isPending}
           data-testid="button-submit-log"
         >
-          {isCreate ? "Log it" : "Save"}
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+          {submitLabel}
         </Button>
       </div>
     </div>
