@@ -26,3 +26,6 @@ Learned to replace N+1 sequential database inserts in loops with bulk array inse
 ## 2026-07-09 - Avoid slice and reduce in data processing functions
 **Learning:** Using `Array.prototype.slice()` and `.reduce()` to compute aggregates (like averages over array halves) allocates intermediate arrays and incurs unnecessary memory overhead. This is especially impactful in data-heavy components like `ExerciseProgressionCharts`.
 **Action:** Replace `slice` and `reduce` with standard `for` loops utilizing start and end index bounds to compute aggregates in a single pass with O(1) space complexity.
+## 2026-07-10 - Consolidate redundant array loops
+**Learning:** Replacing a single `.map()` or `.reduce()` with a `for` loop is often rejected during code review as an unreadable micro-optimization with no measurable impact. The real performance win comes from identifying multiple iterations over the same data.
+**Action:** Always prioritize consolidating multiple redundant iterations over the same array (e.g., two `.reduce()` calls computing different aggregates, like `totalWorkouts` and `totalDuration` in `analyticsService.ts`) into a single `for...of` loop. This tangibly reduces time complexity from O(2N) to O(N).
