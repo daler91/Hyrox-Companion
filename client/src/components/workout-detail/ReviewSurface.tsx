@@ -148,6 +148,11 @@ export function ReviewSurface({
   const detail = useWorkoutDetail(workoutLogId);
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  useEffect(() => {
+    if (!confirmingDelete) return;
+    const id = setTimeout(() => setConfirmingDelete(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmingDelete]);
 
   const { reviewFlag, resolveReview } = useMigrationReview(workoutLogId);
 
@@ -739,15 +744,20 @@ function ReviewActionButtons({
         </Button>
       ) : null}
       {onDelete ? (
-        <Button
-          type="button"
-          variant={deleteButtonVariant}
-          onClick={onDeleteClick}
-          data-testid={`review-delete-${entry.id}`}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          {deleteButtonLabel}
-        </Button>
+        <>
+          <Button
+            type="button"
+            variant={deleteButtonVariant}
+            onClick={onDeleteClick}
+            data-testid={`review-delete-${entry.id}`}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {deleteButtonLabel}
+          </Button>
+          <span role="status" aria-live="assertive" className="sr-only">
+            {confirmingDelete ? "Tap delete again to confirm removal" : ""}
+          </span>
+        </>
       ) : null}
     </div>
   );
