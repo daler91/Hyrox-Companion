@@ -46,6 +46,7 @@ const rawLabelSchema = z.object({
   brand: z.string().trim().min(1).max(200).nullable().catch(null),
   servingSizeText: z.string().trim().min(1).max(120).nullable().catch(null),
   servingSizeG: z.number().positive().max(SERVING_SIZE_G_MAX).nullable().catch(null),
+  servingsPerContainer: z.number().positive().max(10_000).nullable().catch(null),
   energyUnit: z.enum(["kcal", "kJ"]).catch("kcal"),
   per100g: rawMacroSetSchema,
   perServing: rawMacroSetSchema,
@@ -67,6 +68,24 @@ function hasAnyValue(set: RawMacroSet): set is NonNullable<RawMacroSet> {
 /** kJ → kcal for one printed column (labels outside the US often print kJ only). */
 function toKcal(set: NonNullable<RawMacroSet>): LabelMacroSet {
   return { ...set, calories: set.calories == null ? null : round1(set.calories / KJ_PER_KCAL) };
+}
+
+// Matches servingInputSchema's grams cap so the seeded serving can always save.
+const SERVING_GRAMS_MAX = 100_000;
+
+/**
+ * Seed a "Whole package" named serving when the label prints a servings-per-
+ * container count alongside a gram serving size (e.g. a rice bag holding two
+ * servings), so the full package becomes a selectable unit when logging.
+ */
+function packageServings(
+  servingSizeG: number | null,
+  servingsPerContainer: number | null,
+): LabelFoodSuggestion["servings"] {
+  if (servingSizeG == null || servingsPerContainer == null || servingsPerContainer <= 1) return [];
+  const grams = round1(servingSizeG * servingsPerContainer);
+  if (grams > SERVING_GRAMS_MAX) return [];
+  return [{ label: `Whole package (${round1(servingsPerContainer)} servings)`, grams }];
 }
 
 /**
@@ -133,6 +152,7 @@ export function normalizeLabel(raw: RawLabel): ParseLabelResponse {
     fatPer100g: clamp(suggested?.fat ?? null, MACRO_PER_100G_MAX),
     fiberPer100g: clamp(suggested?.fiber ?? null, MACRO_PER_100G_MAX),
     servingSizeG: raw.servingSizeG,
+    servings: packageServings(raw.servingSizeG, raw.servingsPerContainer),
   };
   if (clampedAny) {
     warnings.push("Some values looked implausible for 100 g and were left blank.");
@@ -144,6 +164,7 @@ export function normalizeLabel(raw: RawLabel): ParseLabelResponse {
       brand: raw.brand,
       servingSizeText: raw.servingSizeText,
       servingSizeG: raw.servingSizeG,
+      servingsPerContainer: raw.servingsPerContainer,
       per100g,
       perServing,
       basis,

@@ -58,6 +58,7 @@ describe("parseNutritionLabel", () => {
       fatPer100g: 51,
       fiberPer100g: 6,
       servingSizeG: 15,
+      servings: [],
     });
     expect(result.warnings).toEqual([]);
 
@@ -146,6 +147,27 @@ describe("parseNutritionLabel", () => {
     });
     expect(result.label?.perServing).toMatchObject({ calories: 200, protein: 10 });
     expect(result.warnings.some((w) => w.includes("entered manually"))).toBe(true);
+  });
+
+  it("seeds a whole-package serving when the label prints servings per container", async () => {
+    aiJson({ ...PER_100G_LABEL, servingsPerContainer: 2 });
+
+    const result = await parseNutritionLabel("ZmFrZQ==", "image/jpeg", "u1");
+    expect(result.label?.servingsPerContainer).toBe(2);
+    // 15 g per serving × 2 servings in the bag → the whole package is loggable.
+    expect(result.suggestion?.servings).toEqual([
+      { label: "Whole package (2 servings)", grams: 30 },
+    ]);
+  });
+
+  it("seeds no package serving for a single-serving container or an unknown serving weight", async () => {
+    aiJson({ ...PER_100G_LABEL, servingsPerContainer: 1 });
+    const single = await parseNutritionLabel("ZmFrZQ==", "image/jpeg", "u1");
+    expect(single.suggestion?.servings).toEqual([]);
+
+    aiJson({ ...PER_100G_LABEL, servingSizeG: null, servingsPerContainer: 2 });
+    const noGrams = await parseNutritionLabel("ZmFrZQ==", "image/jpeg", "u1");
+    expect(noGrams.suggestion?.servings).toEqual([]);
   });
 
   it("nulls implausible per-100g values instead of failing the save later", async () => {

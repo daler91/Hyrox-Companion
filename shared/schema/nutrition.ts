@@ -454,6 +454,8 @@ export interface ExtractedNutritionLabel {
   // The serving as printed ("2 biscuits (30g)") and its gram weight if stated.
   servingSizeText: string | null;
   servingSizeG: number | null;
+  // "Servings per container" as printed ("about 2" → 2), for whole-package sizing.
+  servingsPerContainer: number | null;
   per100g: LabelMacroSet | null;
   perServing: LabelMacroSet | null;
   basis: "per100g" | "perServing" | "both";
@@ -474,6 +476,10 @@ export interface LabelFoodSuggestion {
   fatPer100g: number | null;
   fiberPer100g: number | null;
   servingSizeG: number | null;
+  // Named servings derived from the label's package sizing (e.g. "Whole
+  // package" when it prints servings-per-container), seeded into the
+  // custom-food form so they become selectable units when logging.
+  servings: ServingInput[];
 }
 
 export interface ParseLabelResponse {

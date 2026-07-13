@@ -26,6 +26,7 @@ const PREFILL: ParseLabelResponse = {
     brand: "Acme",
     servingSizeText: "1 bar (45g)",
     servingSizeG: 45,
+    servingsPerContainer: 2,
     per100g: { calories: 400, protein: 10, carb: 60, fat: 12, fiber: 6 },
     perServing: null,
     basis: "per100g",
@@ -40,6 +41,7 @@ const PREFILL: ParseLabelResponse = {
     fatPer100g: 12,
     fiberPer100g: 6,
     servingSizeG: 45,
+    servings: [{ label: "Whole package (2 servings)", grams: 90 }],
   },
   warnings: ["Energy was printed in kJ and converted to kcal."],
 };
@@ -68,6 +70,9 @@ describe("CustomFoodDialog label prefill", () => {
     expect(screen.getByTestId("label-prefill-banner")).toHaveTextContent(
       "Energy was printed in kJ and converted to kcal.",
     );
+    // The package-derived named serving is seeded as an editable row.
+    expect(screen.getByLabelText("Serving 1 name")).toHaveValue("Whole package (2 servings)");
+    expect(screen.getByLabelText("Serving 1 weight in grams")).toHaveValue(90);
   });
 
   it("saves and chains into logging via onCreated on 'Save & log'", async () => {
@@ -80,7 +85,12 @@ describe("CustomFoodDialog label prefill", () => {
 
     await waitFor(() =>
       expect(api.nutrition.createCustomFood).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "Oat Bar", caloriesPer100g: 400, servingSizeG: 45 }),
+        expect.objectContaining({
+          name: "Oat Bar",
+          caloriesPer100g: 400,
+          servingSizeG: 45,
+          servings: [{ label: "Whole package (2 servings)", grams: 90 }],
+        }),
       ),
     );
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
@@ -104,6 +114,7 @@ describe("CustomFoodDialog label prefill", () => {
         ...PREFILL.label!,
         servingSizeText: "1 bar",
         servingSizeG: null,
+        servingsPerContainer: null,
         per100g: null,
         perServing: { calories: 200, protein: 10, carb: 5, fat: 15, fiber: null },
         basis: "perServing",
@@ -117,6 +128,7 @@ describe("CustomFoodDialog label prefill", () => {
         fatPer100g: null,
         fiberPer100g: null,
         servingSizeG: null,
+        servings: [],
       },
       warnings: [],
     });

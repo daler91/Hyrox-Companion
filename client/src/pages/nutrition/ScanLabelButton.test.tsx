@@ -25,6 +25,7 @@ const EXTRACTED: ParseLabelResponse = {
     brand: null,
     servingSizeText: "1 bar (45g)",
     servingSizeG: 45,
+    servingsPerContainer: null,
     per100g: { calories: 400, protein: 10, carb: 60, fat: 12, fiber: 6 },
     perServing: null,
     basis: "per100g",
@@ -39,6 +40,7 @@ const EXTRACTED: ParseLabelResponse = {
     fatPer100g: 12,
     fiberPer100g: 6,
     servingSizeG: 45,
+    servings: [],
   },
   warnings: [],
 };

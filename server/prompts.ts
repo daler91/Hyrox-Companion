@@ -321,6 +321,7 @@ Return ONLY valid JSON (no markdown) using this contract:
   "brand": "Pip & Nut" | null,
   "servingSizeText": "2 biscuits (30g)" | null,
   "servingSizeG": 30 | null,
+  "servingsPerContainer": 2 | null,
   "energyUnit": "kcal" | "kJ",
   "per100g": { "calories": 520, "protein": 28, "carb": 12, "fat": 40, "fiber": 6 } | null,
   "perServing": { "calories": 156, "protein": 8.4, "carb": 3.6, "fat": 12, "fiber": 1.8 } | null,
@@ -331,6 +332,7 @@ Return ONLY valid JSON (no markdown) using this contract:
 Field rules:
 - "productName"/"brand": only if visible on the packaging in the photo; otherwise null.
 - "servingSizeText": the serving exactly as printed (e.g. "1 bar (45g)", "2/3 cup (55g)"). "servingSizeG": the serving's weight in grams IF the label states it (convert ml only if the label itself equates them); otherwise null.
+- "servingsPerContainer": the printed servings-per-container/package count as a number ("about 2 servings per container" -> 2, "2.5 servings" -> 2.5); null when not printed.
 - "energyUnit": the unit the energy values you transcribed are in. When the label prints both kJ and kcal, transcribe the kcal numbers and return "kcal". Return kJ numbers with "kJ" ONLY when kcal is not printed.
 - "per100g"/"perServing": fill whichever column(s) the label prints; null for a column that is absent. Inside a column, null any row the label omits (fiber is often missing). "carb" = total carbohydrate; "protein"/"fat" = the total rows, not sub-rows like saturates.
 - "confidence": 0-100 that the transcription is accurate (blur, glare, partial crop lower it).

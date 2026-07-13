@@ -74,7 +74,15 @@ function CustomFoodForm({
   const [servingSizeG, setServingSizeG] = useState(
     numToStr(food?.servingSizeG ?? suggestion?.servingSizeG),
   );
-  const [servings, setServings] = useState<ServingDraft[]>([]);
+  // Label scans can seed package-derived servings ("Whole package"); the rows
+  // stay editable/removable like any hand-added serving.
+  const [servings, setServings] = useState<ServingDraft[]>(() =>
+    (suggestion?.servings ?? []).map((s) => ({
+      id: crypto.randomUUID(),
+      label: s.label,
+      grams: String(s.grams),
+    })),
+  );
 
   const isPending = createFood.isPending || updateFood.isPending;
   const valid = name.trim().length > 0;
