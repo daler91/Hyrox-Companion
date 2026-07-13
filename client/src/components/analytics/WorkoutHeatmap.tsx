@@ -151,12 +151,15 @@ export function WorkoutHeatmap({ workoutDates, explanation }: WorkoutHeatmapProp
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-3 text-[10px] text-muted-foreground">
-            <span>Less</span>
-            <div className="h-[10px] w-[10px] rounded-sm bg-muted/60" />
-            <div className="h-[10px] w-[10px] rounded-sm bg-primary/40" />
-            <div className="h-[10px] w-[10px] rounded-sm bg-primary" />
-            <span>More</span>
+          <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-[10px] w-[10px] rounded-sm bg-muted/60" aria-hidden="true" />
+              Rest day
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-[10px] w-[10px] rounded-sm bg-primary" aria-hidden="true" />
+              Workout logged
+            </span>
           </div>
         </div>
       </div>
