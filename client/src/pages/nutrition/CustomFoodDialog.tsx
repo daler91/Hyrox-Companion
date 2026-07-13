@@ -1,4 +1,4 @@
-import type { Food } from "@shared/schema";
+import type { Food, ParseLabelResponse } from "@shared/schema";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -17,7 +17,11 @@ import { useCreateCustomFood, useUpdateCustomFood } from "@/hooks/useNutrition";
 
 import { removeAt, updateAt } from "./utils";
 
-export type CustomFoodDialogState = { mode: "create" } | { mode: "edit"; food: Food };
+export type CustomFoodDialogState =
+  // `prefill` carries a scanned nutrition label (label-scan flow): the form is
+  // seeded from its per-100g suggestion for review before saving.
+  | { mode: "create"; prefill?: ParseLabelResponse }
+  | { mode: "edit"; food: Food };
 
 type ServingDraft = { id: string; label: string; grams: string };
 
@@ -45,35 +49,55 @@ function numToStr(n: number | null | undefined): string {
 function CustomFoodForm({
   state,
   onClose,
+  onCreated,
 }: {
   readonly state: CustomFoodDialogState;
   readonly onClose: () => void;
+  readonly onCreated?: (food: Food) => void;
 }) {
   const isCreate = state.mode === "create";
   const food = isCreate ? null : state.food;
+  const prefill = isCreate ? (state.prefill ?? null) : null;
+  const suggestion = prefill?.suggestion ?? null;
   const createFood = useCreateCustomFood();
   const updateFood = useUpdateCustomFood();
 
-  const [name, setName] = useState(food?.name ?? "");
-  const [brand, setBrand] = useState(food?.brand ?? "");
+  const [name, setName] = useState(food?.name ?? suggestion?.name ?? "");
+  const [brand, setBrand] = useState(food?.brand ?? suggestion?.brand ?? "");
   const [macros, setMacros] = useState<Record<MacroKey, string>>(() => ({
-    caloriesPer100g: numToStr(food?.caloriesPer100g),
-    proteinPer100g: numToStr(food?.proteinPer100g),
-    carbPer100g: numToStr(food?.carbPer100g),
-    fatPer100g: numToStr(food?.fatPer100g),
-    fiberPer100g: numToStr(food?.fiberPer100g),
+    caloriesPer100g: numToStr(food?.caloriesPer100g ?? suggestion?.caloriesPer100g),
+    proteinPer100g: numToStr(food?.proteinPer100g ?? suggestion?.proteinPer100g),
+    carbPer100g: numToStr(food?.carbPer100g ?? suggestion?.carbPer100g),
+    fatPer100g: numToStr(food?.fatPer100g ?? suggestion?.fatPer100g),
+    fiberPer100g: numToStr(food?.fiberPer100g ?? suggestion?.fiberPer100g),
   }));
-  const [servingSizeG, setServingSizeG] = useState(numToStr(food?.servingSizeG));
+  const [servingSizeG, setServingSizeG] = useState(
+    numToStr(food?.servingSizeG ?? suggestion?.servingSizeG),
+  );
   const [servings, setServings] = useState<ServingDraft[]>([]);
 
   const isPending = createFood.isPending || updateFood.isPending;
   const valid = name.trim().length > 0;
 
+  // A per-serving-only label with no gram weight can't be normalized to
+  // per-100g, so the suggestion arrives empty — show the printed per-serving
+  // values read-only for the user to convert by hand.
+  const perServing =
+    suggestion &&
+    MACRO_FIELDS.every((m) => suggestion[m.field] == null) &&
+    prefill?.label?.perServing != null
+      ? prefill.label.perServing
+      : null;
+
+  let title = "Edit custom food";
+  if (prefill) title = "Review label";
+  else if (isCreate) title = "New custom food";
+
   let saveLabel = "Save";
   if (isPending) saveLabel = "Saving…";
   else if (isCreate) saveLabel = "Save food";
 
-  const submit = () => {
+  const submit = (logAfter = false) => {
     if (!valid) return;
     const fields = {
       name: name.trim(),
@@ -94,7 +118,12 @@ function CustomFoodForm({
         );
       createFood.mutate(
         { ...fields, servings: cleanServings.length > 0 ? cleanServings : undefined },
-        { onSuccess: onClose },
+        {
+          onSuccess: (created) => {
+            onClose();
+            if (logAfter) onCreated?.(created);
+          },
+        },
       );
     } else if (food) {
       updateFood.mutate({ id: food.id, data: fields }, { onSuccess: onClose });
@@ -110,10 +139,43 @@ function CustomFoodForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{isCreate ? "New custom food" : "Edit custom food"}</DialogTitle>
+        <DialogTitle>{title}</DialogTitle>
       </DialogHeader>
 
       <div className="space-y-4">
+        {prefill && (
+          <div
+            className="space-y-1 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground"
+            data-testid="label-prefill-banner"
+          >
+            <p>Read from the label photo — check the values against the package before saving.</p>
+            {prefill.warnings.map((w) => (
+              <p key={w}>{w}</p>
+            ))}
+          </div>
+        )}
+        {perServing && (
+          <div
+            className="rounded-md border p-3 text-xs"
+            data-testid="label-per-serving-values"
+          >
+            <p className="mb-1 font-medium">
+              Printed per serving
+              {prefill?.label?.servingSizeText ? ` (${prefill.label.servingSizeText})` : ""}
+            </p>
+            <p className="text-muted-foreground">
+              {[
+                perServing.calories != null && `${perServing.calories} kcal`,
+                perServing.protein != null && `${perServing.protein} g protein`,
+                perServing.carb != null && `${perServing.carb} g carbs`,
+                perServing.fat != null && `${perServing.fat} g fat`,
+                perServing.fiber != null && `${perServing.fiber} g fiber`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="cf-name">Name</Label>
           <Input
@@ -227,14 +289,26 @@ function CustomFoodForm({
           Cancel
         </Button>
         <Button
-          onClick={submit}
+          onClick={() => submit()}
           disabled={!valid || isPending}
           aria-busy={isPending}
           data-testid="button-save-custom-food"
+          variant={prefill ? "outline" : "default"}
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
           {saveLabel}
         </Button>
+        {prefill && (
+          <Button
+            onClick={() => submit(true)}
+            disabled={!valid || isPending}
+            aria-busy={isPending}
+            data-testid="button-save-and-log-custom-food"
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+            Save &amp; log
+          </Button>
+        )}
       </DialogFooter>
     </>
   );
@@ -243,9 +317,12 @@ function CustomFoodForm({
 export function CustomFoodDialog({
   state,
   onClose,
+  onCreated,
 }: {
   readonly state: CustomFoodDialogState | null;
   readonly onClose: () => void;
+  /** Called after "Save & log" (label-scan flow) with the newly created food. */
+  readonly onCreated?: (food: Food) => void;
 }) {
   const key = state?.mode === "edit" ? `edit:${state.food.id}` : "create";
   return (
@@ -256,7 +333,7 @@ export function CustomFoodDialog({
       }}
     >
       <DialogContent data-testid="dialog-custom-food">
-        {state && <CustomFoodForm key={key} state={state} onClose={onClose} />}
+        {state && <CustomFoodForm key={key} state={state} onClose={onClose} onCreated={onCreated} />}
       </DialogContent>
     </Dialog>
   );

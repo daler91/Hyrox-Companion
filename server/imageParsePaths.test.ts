@@ -13,8 +13,9 @@ describe("isImageParsePath", () => {
     expect(isImageParsePath("/api/v1/plans/days/day-1/reparse-from-image")).toBe(true);
   });
 
-  it("allows the nutrition meal-photo parse route", () => {
+  it("allows the nutrition meal-photo and label parse routes", () => {
     expect(isImageParsePath("/api/v1/nutrition/parse/photo")).toBe(true);
+    expect(isImageParsePath("/api/v1/nutrition/parse/label")).toBe(true);
   });
 
   it("leaves non-image routes on the default parser", () => {

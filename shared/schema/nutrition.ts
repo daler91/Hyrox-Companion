@@ -430,6 +430,62 @@ export interface BatchLogResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 4b (Label scan) — photograph a nutrition facts label → AI transcribes
+// the exact printed values → review in the custom-food form → save (+ log).
+// ---------------------------------------------------------------------------
+
+/** One printed column of a nutrition facts panel. null = not printed. */
+export interface LabelMacroSet {
+  calories: number | null;
+  protein: number | null;
+  carb: number | null;
+  fat: number | null;
+  fiber: number | null;
+}
+
+/**
+ * What the vision model transcribed off the label — values exactly as printed
+ * (calories already in kcal; the server converts kJ before building this).
+ * `basis` records which column(s) the label actually shows.
+ */
+export interface ExtractedNutritionLabel {
+  productName: string | null;
+  brand: string | null;
+  // The serving as printed ("2 biscuits (30g)") and its gram weight if stated.
+  servingSizeText: string | null;
+  servingSizeG: number | null;
+  per100g: LabelMacroSet | null;
+  perServing: LabelMacroSet | null;
+  basis: "per100g" | "perServing" | "both";
+  confidence: number;
+}
+
+/**
+ * Per-100g prefill for the custom-food form (CreateCustomFoodInput-shaped).
+ * Macros are null when they can't be derived — e.g. a per-serving-only label
+ * with no gram weight, where assuming 100 g would silently corrupt the food.
+ */
+export interface LabelFoodSuggestion {
+  name: string | null;
+  brand: string | null;
+  caloriesPer100g: number | null;
+  proteinPer100g: number | null;
+  carbPer100g: number | null;
+  fatPer100g: number | null;
+  fiberPer100g: number | null;
+  servingSizeG: number | null;
+}
+
+export interface ParseLabelResponse {
+  // null = the image contained no readable nutrition label.
+  label: ExtractedNutritionLabel | null;
+  suggestion: LabelFoodSuggestion | null;
+  // Normalization caveats to surface in the review UI ("converted from kJ",
+  // "derived from per-serving values", ...).
+  warnings: string[];
+}
+
+// ---------------------------------------------------------------------------
 // Phase 5 (Insights & Coaching) — targets, micronutrients, AI insights.
 // ---------------------------------------------------------------------------
 

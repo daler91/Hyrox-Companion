@@ -63,6 +63,7 @@ import { resolveDayEnergy } from "../../services/nutrition/energy";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
 import { searchFoods } from "../../services/nutrition/foodSearch";
 import { buildEffectiveTargetSummary, buildFuellingRange, decorateBlockPointsWithOutcomes } from "../../services/nutrition/fuellingRange";
+import { parseNutritionLabel } from "../../services/nutrition/labelParser";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../services/nutrition/mealParser";
 import { buildMicroSummary } from "../../services/nutrition/micros";
 import { buildDailySummary } from "../../services/nutrition/rollup";
@@ -732,6 +733,28 @@ export function registerNutritionRoutes(router: Router): void {
       const raw = await parseMealFromPhoto(imageBase64, mimeType, userId);
       const { items, warnings } = await resolveAndPreview(raw, userId);
       const response: ParseMealResponse = { items, warnings, rawInput: "[photo]" };
+      res.json(response);
+    },
+  );
+
+  // Label scan — transcribe a nutrition-label *photo* into exact per-100g
+  // macros to prefill the custom-food form. Same gating and 10MB body-parser
+  // mounting (server/imageParsePaths.ts) as /parse/photo, but the model
+  // transcribes the printed panel instead of estimating a meal. Returns 200
+  // with `label: null` when the image holds no readable label; nothing is
+  // persisted until the user saves the reviewed food.
+  protectedPost(
+    router,
+    "/api/v1/nutrition/parse/label",
+    {
+      limiter: rateLimiter("parse", 5),
+      aiConsent: true,
+      aiBudget: true,
+      validation: [validateBody(parseExercisesFromImageRequestSchema)],
+    },
+    async (req: Request, res: Response) => {
+      const { imageBase64, mimeType } = req.body as ParseExercisesFromImageRequest;
+      const response = await parseNutritionLabel(imageBase64, mimeType, getUserId(req));
       res.json(response);
     },
   );
