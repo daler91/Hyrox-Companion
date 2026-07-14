@@ -619,6 +619,9 @@
           "aiCoachEnabled": {
             "type": "boolean"
           },
+          "coachAutoApplyPlanChanges": {
+            "type": "boolean"
+          },
           "trainingStyleId": {
             "type": "string",
             "nullable": true,

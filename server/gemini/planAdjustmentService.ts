@@ -117,6 +117,9 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
   try {
     raw = JSON.parse(text);
   } catch (parseErr) {
+    // bearer:disable javascript_lang_logger_leak — err is a JSON.parse
+    // SyntaxError on the AI provider's own output plus a length count,
+    // not user data.
     logger.error(
       { err: parseErr, responseLength: text.length },
       "[gemini] plan-adjustment JSON.parse failed.",
@@ -126,6 +129,8 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
 
   const envelope = looseEnvelopeSchema.safeParse(raw);
   if (!envelope.success) {
+    // bearer:disable javascript_lang_logger_leak — zod issue paths/messages
+    // describe the AI output schema, not user data.
     logger.error(
       { issues: envelope.error.issues },
       "[gemini] plan-adjustment envelope validation failed.",
@@ -139,8 +144,11 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
     if (result.success) {
       changes.push(normalizeChangeText(result.data));
     } else {
+      // bearer:disable javascript_lang_logger_leak — zod issue paths/messages
+      // on the AI output schema only; the change payload itself is
+      // deliberately NOT logged.
       logger.warn(
-        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        { issues: result.error.issues },
         "[gemini] Dropping invalid plan-adjustment change:",
       );
     }
