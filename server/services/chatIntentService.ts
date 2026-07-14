@@ -80,8 +80,9 @@ export async function classifyPlanEditIntent(
 
     const parsed = chatIntentResultSchema.safeParse(JSON.parse(response.text || "{}"));
     if (!parsed.success) {
-      // bearer:disable javascript_lang_logger_leak — zod issue paths/messages
-      // on the classifier's output schema plus a length count, not user data.
+      // zod issue paths/messages on the classifier's output schema plus a
+      // length count, not user data.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         { issues: parsed.error.issues, responseLength: response.text?.length ?? 0 },
         "[chat-intent] Invalid classifier output; falling back to normal chat",
@@ -90,8 +91,8 @@ export async function classifyPlanEditIntent(
     }
     return parsed.data;
   } catch (error) {
-    // bearer:disable javascript_lang_logger_leak — err is a provider/JSON.parse
-    // error from the AI call, not user data.
+    // err is a provider/JSON.parse error from the AI call, not user data.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err: error }, "[chat-intent] Classifier failed; falling back to normal chat");
     return NORMAL_CHAT;
   }

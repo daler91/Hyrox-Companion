@@ -207,8 +207,9 @@ export async function createPlanAdjustmentProposal(
       userId,
     });
   } catch (error) {
-    // bearer:disable javascript_lang_logger_leak — err is an AI provider
-    // error and userId is an internal identifier; no message content.
+    // err is an AI provider error and userId is an internal identifier; no
+    // message content.
+    // bearer:disable javascript_lang_logger_leak
     log.error({ err: error, userId }, "[plan-adjustment] Generation failed");
     return { kind: "generation_failed" };
   }
@@ -222,8 +223,9 @@ export async function createPlanAdjustmentProposal(
   const clampedChanges: PlanAdjustmentChange[] = [];
   for (const change of llmOutput.changes) {
     if (!offeredDayIds.has(change.planDayId)) {
-      // bearer:disable javascript_lang_logger_leak — internal identifiers
-      // only (user id, plan-day id), no message or workout content.
+      // internal identifiers only (user id, plan-day id), no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
       log.warn(
         { userId, planDayId: change.planDayId },
         "[plan-adjustment] Dropping change for day outside the offered set",
@@ -234,8 +236,9 @@ export async function createPlanAdjustmentProposal(
     if (structureBlockDayIds.has(change.planDayId)) {
       fields = stripForbiddenStructureBlockFields(fields);
       if (!hasAnyField(fields)) {
-        // bearer:disable javascript_lang_logger_leak — internal identifiers
-        // only (user id, plan-day id), no message or workout content.
+        // internal identifiers only (user id, plan-day id), no message or
+        // workout content.
+        // bearer:disable javascript_lang_logger_leak
         log.warn(
           { userId, planDayId: change.planDayId },
           "[plan-adjustment] Dropping structure-block change with only forbidden fields",
@@ -264,8 +267,9 @@ export async function createPlanAdjustmentProposal(
       storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
     ]);
     if (!day || sets === null || day.status !== "planned") {
-      // bearer:disable javascript_lang_logger_leak — internal identifiers
-      // only (user id, plan-day id), no message or workout content.
+      // internal identifiers only (user id, plan-day id), no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
       log.warn(
         { userId, planDayId: change.planDayId },
         "[plan-adjustment] Dropping change whose day vanished or is no longer planned",
@@ -296,8 +300,8 @@ export async function createPlanAdjustmentProposal(
     aiSource: normalizeProposalAiSource(aiContext.ragInfo.source),
   });
 
-  // bearer:disable javascript_lang_logger_leak — internal identifiers and a
-  // count only, no message or workout content.
+  // internal identifiers and a count only, no message or workout content.
+  // bearer:disable javascript_lang_logger_leak
   log.info(
     { userId, proposalId: proposal.id, changeCount: enriched.length },
     "[plan-adjustment] Proposal created",
@@ -474,8 +478,8 @@ export async function applyPlanAdjustmentProposal(
 
   if (staleChanges.length > 0) {
     await storage.planProposals.resolve(proposalId, userId, "invalidated");
-    // bearer:disable javascript_lang_logger_leak — internal identifiers and a
-    // count only, no message or workout content.
+    // internal identifiers and a count only, no message or workout content.
+    // bearer:disable javascript_lang_logger_leak
     log.info(
       { userId, proposalId, staleCount: staleChanges.length },
       "[plan-adjustment] Proposal invalidated by stale days at apply time",
@@ -511,8 +515,8 @@ export async function applyPlanAdjustmentProposal(
         userId,
       );
       if (rows.length === 0) {
-        // bearer:disable javascript_lang_logger_leak — internal identifiers
-        // only, no message or workout content.
+        // internal identifiers only, no message or workout content.
+        // bearer:disable javascript_lang_logger_leak
         log.warn(
           { userId, proposalId, planDayId: change.planDayId },
           "[plan-adjustment] Structured re-parse produced no rows",
@@ -521,8 +525,9 @@ export async function applyPlanAdjustmentProposal(
       }
       structuredRowsByDayId.set(change.planDayId, rows);
     } catch (err) {
-      // bearer:disable javascript_lang_logger_leak — err is an AI parse error
-      // plus internal identifiers, no message or workout content.
+      // err is an AI parse error plus internal identifiers, no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
       log.warn(
         { err, userId, proposalId, planDayId: change.planDayId },
         "[plan-adjustment] Structured re-parse failed; proposal left pending",
@@ -566,8 +571,9 @@ export async function applyPlanAdjustmentProposal(
       if (!resolved) throw new Error("proposal no longer pending");
     });
   } catch (err) {
-    // bearer:disable javascript_lang_logger_leak — err is a DB/consistency
-    // error plus internal identifiers, no message or workout content.
+    // err is a DB/consistency error plus internal identifiers, no message or
+    // workout content.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ err, userId, proposalId }, "[plan-adjustment] Apply transaction rolled back");
     return applyFailure("not_pending");
   }
@@ -575,8 +581,8 @@ export async function applyPlanAdjustmentProposal(
   // Deliberately NOT enqueuing auto-coach for rescheduled days here (unlike
   // updatePlanDayWithCleanup): the proposal itself already performed the
   // rebalancing that the auto-coach pass would otherwise redo.
-  // bearer:disable javascript_lang_logger_leak — internal identifiers and a
-  // count only, no message or workout content.
+  // internal identifiers and a count only, no message or workout content.
+  // bearer:disable javascript_lang_logger_leak
   log.info(
     { userId, proposalId, changeCount: changes.length },
     "[plan-adjustment] Proposal applied",
