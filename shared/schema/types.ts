@@ -3,6 +3,7 @@ export * from "./types/analytics";
 export * from "./types/annotations";
 export * from "./types/coaching";
 export * from "./types/connections";
+export * from "./types/planProposals";
 export * from "./types/plans";
 export * from "./types/requests";
 export * from "./types/users";

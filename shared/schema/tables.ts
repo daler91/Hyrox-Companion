@@ -16,7 +16,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import type { CoachNoteInputs } from "./types";
+import type { CoachNoteInputs, PlanAdjustmentProposalPayload } from "./types";
 
 // pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
 const vector = customType<{
@@ -67,6 +67,9 @@ export const users = pgTable("users", {
   // AI coach requires explicit consent before first use because workout
   // data is sent to Google Gemini for processing.
   aiCoachEnabled: boolean("ai_coach_enabled").default(false),
+  // When true, conversational plan-adjustment proposals from the coach chat
+  // are applied immediately instead of waiting for an explicit Apply tap.
+  coachAutoApplyPlanChanges: boolean("coach_auto_apply_plan_changes").default(false),
   trainingStyleId: text("training_style_id").default("balanced_default"),
   trainingStylePreviousId: text("training_style_previous_id"),
   trainingStyleChangedAt: timestamp("training_style_changed_at", { withTimezone: true }),
@@ -844,6 +847,43 @@ export const chatMessages = pgTable(
   ],
 );
 
+// Conversational plan-adjustment proposals — the AI coach's proposed multi-day
+// plan edits, generated from a chat message and applied/dismissed as one unit.
+// `payload` snapshots each change with its baseline so the apply step can
+// detect staleness; `plan_id` cascade cleans proposals up with their plan.
+// A proposal may reference days from more than one plan (rare — plan
+// boundary weeks); `plan_id` is the plan of the first change and exists for
+// cascade cleanup, not as an integrity constraint on every change.
+export const planAdjustmentProposals = pgTable(
+  "plan_adjustment_proposals",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    planId: varchar("plan_id", { length: 255 })
+      .notNull()
+      .references(() => trainingPlans.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    summaryMessage: text("summary_message").notNull(),
+    // The triggering chat message, kept for auditability of AI plan writes.
+    userRequest: text("user_request").notNull(),
+    payload: jsonb("payload").$type<PlanAdjustmentProposalPayload>().notNull(),
+    aiSource: text("ai_source"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => [
+    check(
+      "plan_adjustment_proposals_status_check",
+      sql`status IN ('pending','applied','dismissed','superseded','invalidated')`,
+    ),
+    index("idx_plan_proposals_user_status").on(table.userId, table.status),
+  ],
+);
+
 // Coaching reference materials for AI coach knowledge pipeline
 export const coachingMaterials = pgTable(
   "coaching_materials",
@@ -1502,6 +1542,17 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   user: one(users, {
     fields: [chatMessages.userId],
     references: [users.id],
+  }),
+}));
+
+export const planAdjustmentProposalsRelations = relations(planAdjustmentProposals, ({ one }) => ({
+  user: one(users, {
+    fields: [planAdjustmentProposals.userId],
+    references: [users.id],
+  }),
+  plan: one(trainingPlans, {
+    fields: [planAdjustmentProposals.planId],
+    references: [trainingPlans.id],
   }),
 }));
 
