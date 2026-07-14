@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -59,7 +59,8 @@ export function BulkDeleteControls({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete selected workouts?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove {selectedCount} selected workout{selectedCount === 1 ? "" : "s"} from your timeline.
+              This will remove {selectedCount} selected workout{selectedCount === 1 ? "" : "s"} from
+              your timeline.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -70,8 +71,12 @@ export function BulkDeleteControls({
               disabled={isPending || selectedCount === 0}
               data-testid="button-confirm-bulk-delete"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+              {isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              {isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
