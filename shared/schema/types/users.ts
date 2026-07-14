@@ -30,6 +30,9 @@ export const updateUserPreferencesSchema = z.object({
   emailMissedReminder: z.boolean().optional(),
   showAdherenceInsights: z.boolean().optional(),
   aiCoachEnabled: z.boolean().optional(),
+  // Conversational plan editing: apply the coach's chat proposals immediately
+  // instead of waiting for an explicit Apply tap.
+  coachAutoApplyPlanChanges: z.boolean().optional(),
   trainingStyleId: z.string().max(100).nullable().optional(),
   trainingStylePreviousId: z.string().max(100).nullable().optional(),
   trainingStyleChangedAt: z.coerce.date().nullable().optional(),

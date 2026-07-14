@@ -209,6 +209,7 @@ export function usePreferencesForm() {
       emailMissedReminder: draft.emailMissedReminder,
       showAdherenceInsights: draft.showAdherenceInsights,
       aiCoachEnabled: draft.aiCoachEnabled,
+      coachAutoApplyPlanChanges: draft.coachAutoApplyPlanChanges,
       trainingStyleId: draft.trainingStyleId,
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,

@@ -9,6 +9,7 @@ import { useSuggestions } from "@/components/coach/SuggestionsTab";
 import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message, useChatSession } from "@/hooks/useChatSession";
+import { usePlanProposal } from "@/hooks/usePlanProposal";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import { calculateStats } from "@/lib/statsUtils";
 
@@ -62,6 +63,7 @@ export function CoachPanel({
     messages: hookMessages,
     isLoading,
     isStreaming,
+    isReviewingPlan,
     streamError,
     scrollRef,
     updateAutoScrollMode,
@@ -115,6 +117,11 @@ export function CoachPanel({
     handleDismissSuggestion,
     clearSuggestions,
   } = useSuggestions({ timeline, addLocalMessage, saveMessage });
+
+  const { proposal, isApplyingProposal, applyProposal, dismissProposal } = usePlanProposal({
+    addLocalMessage,
+    saveMessage,
+  });
 
   useEffect(() => {
     if (isOpen) setTimeout(() => scrollToBottom(), 50);
@@ -182,10 +189,15 @@ export function CoachPanel({
         applyingId={applyingId}
         suggestionsRagInfo={suggestionsRagInfo}
         isProcessing={isProcessing}
+        processingLabel={isReviewingPlan ? "Reviewing your plan..." : undefined}
         streamError={streamError}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={handleApplySuggestion}
         onDismissSuggestion={handleDismissSuggestion}
+        planProposal={proposal}
+        isApplyingProposal={isApplyingProposal}
+        onApplyProposal={applyProposal}
+        onDismissProposal={dismissProposal}
       />
       <CoachPanelFooter
         quickActions={selectQuickActions(timeline.some((entry) => entry.status === "completed"))}

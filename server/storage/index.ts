@@ -7,6 +7,7 @@ import { IdempotencyStorage } from "./idempotency";
 import type { IStorage } from "./IStorage";
 import { MafTestStorage } from "./mafTests";
 import { NutritionStorage } from "./nutrition";
+import { PlanProposalStorage } from "./planProposals";
 import { PlanStorage } from "./plans";
 import { PushStorage } from "./push";
 import { TimelineStorage } from "./timeline";
@@ -22,6 +23,7 @@ export const storage: IStorage = {
   users: new UserStorage(),
   workouts,
   plans: new PlanStorage(),
+  planProposals: new PlanProposalStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
   analytics: new AnalyticsStorage(),

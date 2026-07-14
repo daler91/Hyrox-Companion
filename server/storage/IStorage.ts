@@ -6,6 +6,7 @@ import type { ConsentStorage } from "./consent";
 import type { IdempotencyStorage } from "./idempotency";
 import type { MafTestStorage } from "./mafTests";
 import type { NutritionStorage } from "./nutrition";
+import type { PlanProposalStorage } from "./planProposals";
 import type { PlanStorage } from "./plans";
 import type { PushStorage } from "./push";
 import type { TimelineStorage } from "./timeline";
@@ -29,6 +30,7 @@ export interface IStorage {
   users: UserStorage;
   workouts: WorkoutStorage;
   plans: PlanStorage;
+  planProposals: PlanProposalStorage;
   timeline: TimelineStorage;
   timelineAnnotations: TimelineAnnotationsStorage;
   analytics: AnalyticsStorage;

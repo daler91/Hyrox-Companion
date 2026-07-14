@@ -24,6 +24,7 @@ export function mockEnabledUser(storage: StorageMock) {
     emailMissedReminder: null,
     showAdherenceInsights: null,
     aiCoachEnabled: true,
+    coachAutoApplyPlanChanges: false,
     trainingStyleId: null,
     trainingStylePreviousId: null,
     trainingStyleChangedAt: null,

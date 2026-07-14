@@ -12,13 +12,16 @@ import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } 
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
 import { computeStale, getLatestWorkoutDate, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
+import { classifyPlanEditIntent, hasPlanEditKeywords, isPlanEditIntent } from "../services/chatIntentService";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
+import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../services/planAdjustmentService";
 import { sanitizeRagInfo } from "../services/ragRetrieval";
 import { registerSseStream } from "../sseRegistry";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { getChatHistoryUseCase } from "../usecases/ai/chatHistory.usecase";
 import { protectedDelete, protectedPost } from "./_helpers/protectedRouteBuilder";
+import { serializePlanProposal } from "./planProposals";
 
 const router = Router();
 
@@ -254,6 +257,57 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
 
     try {
       await safeWrite(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
+
+      // Conversational plan editing: when the message looks like a plan-change
+      // request (cheap keyword gate, then a fast-model classifier), generate a
+      // structured multi-day proposal instead of a prose reply. Any failure in
+      // this branch falls through to the normal streaming chat — the feature
+      // must never break plain conversation.
+      if (req.body.planEditing !== false && hasPlanEditKeywords(input.message)) {
+        try {
+          const intent = await classifyPlanEditIntent(input.message, input.history, userId);
+          if (isPlanEditIntent(intent) && !controller.signal.aborted) {
+            // Lets the client swap "Thinking..." for a plan-review status.
+            await safeWrite(`data: ${JSON.stringify({ planProposalPending: true })}\n\n`);
+            const result = await createPlanAdjustmentProposal(
+              { userId, message: input.message, history: input.history, aiContext, focusPlanDayId: req.body.focusPlanDayId },
+              reqLogger(req),
+            );
+            if (result.kind === "proposal" || result.kind === "chat_fallback") {
+              let proposal = result.kind === "proposal" ? result.proposal : null;
+              if (proposal) {
+                const user = await storage.users.getUser(userId);
+                if (user?.coachAutoApplyPlanChanges) {
+                  const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, reqLogger(req));
+                  if (applyResult?.applied) {
+                    proposal = { ...proposal, status: "applied" };
+                  }
+                  // On auto-apply failure the proposal stays pending (or was
+                  // invalidated); the card renders with its live status and
+                  // the athlete can retry or dismiss manually.
+                }
+              }
+              const summaryText = result.kind === "proposal" ? result.proposal.summaryMessage : result.text;
+              if (!controller.signal.aborted) {
+                await safeWrite(`data: ${JSON.stringify({ text: summaryText })}\n\n`);
+                if (proposal) {
+                  await safeWrite(`data: ${JSON.stringify({ planProposal: serializePlanProposal(proposal) })}\n\n`);
+                }
+                res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+              }
+              res.end();
+              return;
+            }
+            // generation_failed → fall through to the normal chat stream.
+          }
+        } catch (planEditError) {
+          if (controller.signal.aborted) {
+            res.end();
+            return;
+          }
+          reqLogger(req).warn({ err: planEditError }, "[plan-adjustment] Chat branch failed; falling back to normal chat");
+        }
+      }
 
       const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
 

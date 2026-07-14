@@ -35,6 +35,8 @@ export interface UserPreferences {
   /** Whether adherence indicators are shown in timeline/detail UI surfaces. */
   showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;
+  /** Apply the coach's conversational plan-change proposals immediately (no Apply tap). */
+  coachAutoApplyPlanChanges: boolean;
   trainingStyleId?: string | null;
   trainingStylePreviousId?: string | null;
   trainingStyleChangedAt?: string | null;

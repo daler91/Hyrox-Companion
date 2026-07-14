@@ -47,6 +47,7 @@ function serializePreferences(user: {
   emailMissedReminder: boolean | null;
   showAdherenceInsights: boolean | null;
   aiCoachEnabled: boolean | null;
+  coachAutoApplyPlanChanges: boolean | null;
   trainingStyleId: string | null;
   trainingStylePreviousId: string | null;
   trainingStyleChangedAt: Date | null;
@@ -85,6 +86,7 @@ function serializePreferences(user: {
     // consent/notification flags above intentionally default false (opt-in).
     showAdherenceInsights: user.showAdherenceInsights ?? true,
     aiCoachEnabled: user.aiCoachEnabled ?? false,
+    coachAutoApplyPlanChanges: user.coachAutoApplyPlanChanges ?? false,
     trainingStyleId: user.trainingStyleId ?? "balanced_default",
     trainingStylePreviousId: user.trainingStylePreviousId ?? null,
     trainingStyleChangedAt: user.trainingStyleChangedAt ?? null,

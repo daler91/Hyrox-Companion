@@ -224,7 +224,7 @@ function formatUpcomingWorkout(workout: UpcomingWorkout, trainingContext: Traini
  * (review-note prompt kept getting zero-suggestion hints before
  * this was split out).
  */
-function buildPromptDataSections(
+export function buildPromptDataSections(
   trainingContext: TrainingContext,
   upcomingWorkouts: UpcomingWorkout[],
   planGoal?: string,

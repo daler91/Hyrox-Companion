@@ -73,7 +73,7 @@ describe("consumeSSEStream — happy path", () => {
 
     const result = await consumeSSEStream(reader, { onFlush });
 
-    expect(result).toEqual<SSEStreamResult>({ content: "Hello world", meta: undefined });
+    expect(result).toEqual<SSEStreamResult>({ content: "Hello world", meta: undefined, extras: {} });
     expect(onFlush).toHaveBeenCalledWith(expect.objectContaining({ content: "Hello world" }));
   });
 
@@ -197,13 +197,45 @@ describe("consumeSSEStream — metadata", () => {
     expect(result.meta).toEqual({ sources: 3 });
   });
 
-  it("cannot capture a metaKey when the payload lacks text/error/meta (shape guard)", async () => {
+  it("captures a metaKey even when the payload lacks text/error/meta", async () => {
+    // Meta-only frames (like the server's leading ragInfo event) must be
+    // processed — the old shape guard requiring text/error/meta was dropped
+    // so standalone frames (ragInfo, planProposal) aren't skipped.
     const { reader } = makeReader([enc(dataEvent({ ragInfo: { sources: 3 } }))]);
 
     const result = await consumeSSEStream(reader, { onFlush: vi.fn(), metaKey: "ragInfo" });
 
-    expect(result.meta).toBeUndefined();
+    expect(result.meta).toEqual({ sources: 3 });
     expect(result.content).toBe("");
+  });
+
+  it("collects extraKeys values into extras across frames (last one wins)", async () => {
+    const { reader } = makeReader([
+      enc(
+        dataEvent({ planProposalPending: true }) +
+          dataEvent({ text: "Summary text" }) +
+          dataEvent({ planProposal: { id: "prop-1", status: "pending" } }),
+      ),
+    ]);
+
+    const result = await consumeSSEStream(reader, {
+      onFlush: vi.fn(),
+      extraKeys: ["planProposal", "planProposalPending"],
+    });
+
+    expect(result.content).toBe("Summary text");
+    expect(result.extras).toEqual({
+      planProposalPending: true,
+      planProposal: { id: "prop-1", status: "pending" },
+    });
+  });
+
+  it("leaves extras empty for keys not requested", async () => {
+    const { reader } = makeReader([enc(dataEvent({ planProposal: { id: "x" }, text: "hi" }))]);
+
+    const result = await consumeSSEStream(reader, { onFlush: vi.fn() });
+
+    expect(result.extras).toEqual({});
   });
 
   it("prefers the metaKey value over data.meta when both are present", async () => {
@@ -382,7 +414,7 @@ describe("consumeSSEStream — empty stream", () => {
 
     const result = await consumeSSEStream(reader, { onFlush });
 
-    expect(result).toEqual<SSEStreamResult>({ content: "", meta: undefined });
+    expect(result).toEqual<SSEStreamResult>({ content: "", meta: undefined, extras: {} });
     expect(read).toHaveBeenCalledTimes(1);
     expect(onFlush).toHaveBeenCalledTimes(1);
     expect(onFlush).toHaveBeenCalledWith(expect.objectContaining({ content: "" }));

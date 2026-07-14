@@ -7,6 +7,7 @@ import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useChatSession } from "@/hooks/useChatSession";
+import { usePlanProposal } from "@/hooks/usePlanProposal";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
 import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ export function EmbeddedWorkoutCoachChat({
     messages,
     isLoading,
     isStreaming,
+    isReviewingPlan,
     streamError,
     scrollRef,
     updateAutoScrollMode,
@@ -63,7 +65,14 @@ export function EmbeddedWorkoutCoachChat({
     cancelStream,
   } = useChatSession({
     useStreaming: true,
+    // Lets "make this day easier" resolve to the workout being viewed.
+    focusPlanDayId: entry.planDayId ?? undefined,
   });
+
+  // Plan-adjustment proposals work here too; confirmation messages are
+  // skipped (no local-message plumbing) — the card and timeline refresh
+  // carry the outcome.
+  const { proposal, isApplyingProposal, applyProposal, dismissProposal } = usePlanProposal();
 
   const handleSend = useCallback(
     (message: string) => {
@@ -115,11 +124,16 @@ export function EmbeddedWorkoutCoachChat({
         pendingSuggestions={[]}
         applyingId={null}
         isProcessing={isLoading}
+        processingLabel={isReviewingPlan ? "Reviewing your plan..." : undefined}
         streamError={streamError}
         className={cn("min-h-0 max-h-none flex-1", chatAreaClassName)}
         onViewportScroll={updateAutoScrollMode}
         onApplySuggestion={noopSuggestion}
         onDismissSuggestion={noopId}
+        planProposal={proposal}
+        isApplyingProposal={isApplyingProposal}
+        onApplyProposal={applyProposal}
+        onDismissProposal={dismissProposal}
       />
 
       <div className="shrink-0 border-t border-border p-2">

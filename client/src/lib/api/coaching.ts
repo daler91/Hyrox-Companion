@@ -46,7 +46,14 @@ export interface CoachInsightsResponse {
 
 export const chat = {
   sendStream: (
-    data: { message: string; history?: Array<{ role: string; content: string }> },
+    data: {
+      message: string;
+      history?: Array<{ role: string; content: string }>;
+      /** Opt-out for surfaces without proposal-card UI (server defaults true). */
+      planEditing?: boolean;
+      /** Plan day in view when chatting from the workout-detail dialog. */
+      focusPlanDayId?: string;
+    },
     options?: { signal?: AbortSignal },
   ) =>
     rawRequest("POST", "/api/v1/chat/stream", data, {

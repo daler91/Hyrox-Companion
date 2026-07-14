@@ -9,6 +9,8 @@ export { exercises } from "./exercises";
 export type { MafTagResponse, MafTestMetricsInput, MafTestMutationPayload, MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "./mafTests";
 export { mafTests } from "./mafTests";
 export { nutrition } from "./nutrition";
+export type { ApplyPlanProposalResponse, PlanProposalView } from "./planProposals";
+export { planProposals } from "./planProposals";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
@@ -25,6 +27,7 @@ import { chat, coaching } from "./coaching";
 import { exercises } from "./exercises";
 import { mafTests } from "./mafTests";
 import { nutrition } from "./nutrition";
+import { planProposals } from "./planProposals";
 import { plans } from "./plans";
 import { timelineAnnotations } from "./timelineAnnotations";
 import { auth, email, garmin, preferences, strava } from "./user";
@@ -46,6 +49,7 @@ export const api = {
   email,
   mafTests,
   nutrition,
+  planProposals,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,7 @@ export const QUERY_KEYS = {
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,
   chatHistory: ["/api/v1/chat/history"] as const,
+  planProposalPending: ["/api/v1/plan-proposals/pending"] as const,
   coachingMaterials: ["/api/v1/coaching-materials"] as const,
   ragStatus: ["/api/v1/coaching-materials/rag-status"] as const,
   customExercises: ["/api/v1/custom-exercises"] as const,
