@@ -30,8 +30,8 @@ import {
   mapExerciseSetToPromptDetail,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
-import { getStructuredApplyBlocker } from "./aiSuggestionService";
 import { analyzeSafetySignals, buildSafetyReviewNote } from "./aiSafety";
+import { getStructuredApplyBlocker } from "./aiSuggestionService";
 import {
   applyStructuredPlanDaySuggestionRows,
   parseStructuredPlanDaySuggestionRows,

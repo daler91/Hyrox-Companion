@@ -13,6 +13,7 @@ import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
 import nutritionRoutes from "./routes/nutrition/index";
+import planProposalRoutes from "./routes/planProposals";
 import planRoutes from "./routes/plans";
 import preferencesRoutes from "./routes/preferences";
 import pushRoutes from "./routes/push";
@@ -46,6 +47,7 @@ export async function registerRoutes(
   app.use(analyticsRoutes);
   app.use(workoutRoutes);
   app.use(planRoutes);
+  app.use(planProposalRoutes);
   app.use(coachingRoutes);
   app.use(consentRoutes);
   app.use(pushRoutes);

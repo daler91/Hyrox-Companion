@@ -33,6 +33,11 @@ export const chatRequestSchema = z.object({
     .optional()
     .default([])
     .transform((h) => h.slice(-20)),
+  // Conversational plan editing: opt-out flag for chat surfaces that don't
+  // render proposal cards, plus the plan day the athlete is viewing when
+  // chatting from the workout-detail dialog ("make this day easier").
+  planEditing: z.boolean().optional().default(true),
+  focusPlanDayId: z.string().max(255).optional(),
 });
 
 export const parseExercisesRequestSchema = z.object({
