@@ -41,6 +41,15 @@ vi.mock("@/components/coach/SuggestionsTab", () => ({
   }),
 }));
 
+vi.mock("@/hooks/usePlanProposal", () => ({
+  usePlanProposal: () => ({
+    proposal: null,
+    isApplyingProposal: false,
+    applyProposal: vi.fn(),
+    dismissProposal: vi.fn(),
+  }),
+}));
+
 describe("CoachPanel", () => {
   it("welcomes new users with AI plan and Coaching Knowledge guidance", async () => {
     render(<CoachPanel isOpen={true} onClose={vi.fn()} timeline={[]} isNewUser={true} />);

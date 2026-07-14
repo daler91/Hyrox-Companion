@@ -19,10 +19,20 @@ vi.mock("@/hooks/useChatSession", () => ({
     messages: [],
     isLoading: false,
     isStreaming: false,
+    isReviewingPlan: false,
     scrollRef: { current: null },
     updateAutoScrollMode: chatMocks.updateAutoScrollMode,
     sendMessage: chatMocks.sendMessage,
     cancelStream: chatMocks.cancelStream,
+  }),
+}));
+
+vi.mock("@/hooks/usePlanProposal", () => ({
+  usePlanProposal: () => ({
+    proposal: null,
+    isApplyingProposal: false,
+    applyProposal: vi.fn(),
+    dismissProposal: vi.fn(),
   }),
 }));
 
