@@ -88,6 +88,7 @@ export interface PreferencesDraft {
   emailMissedReminder: boolean;
   showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;
+  coachAutoApplyPlanChanges: boolean;
   trainingStyleId: string;
   mafAgeInput: string;
   mafConsistencyInput: MafConsistencyInput;
@@ -138,6 +139,7 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   emailMissedReminder: false,
   showAdherenceInsights: true,
   aiCoachEnabled: false,
+  coachAutoApplyPlanChanges: false,
   trainingStyleId: "balanced_default",
   mafAgeInput: "",
   mafConsistencyInput: "",
@@ -167,6 +169,7 @@ export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
     emailMissedReminder: draft.emailMissedReminder,
     showAdherenceInsights: draft.showAdherenceInsights,
     aiCoachEnabled: draft.aiCoachEnabled,
+    coachAutoApplyPlanChanges: draft.coachAutoApplyPlanChanges,
     trainingStyleId: draft.trainingStyleId,
     mafAge: ageInputToSnapshot(draft.mafAgeInput),
     mafConsistency: draft.mafConsistencyInput || null,
@@ -200,6 +203,7 @@ export function preferencesToDraft(preferences: UserPreferences): PreferencesDra
     emailMissedReminder: preferences.emailMissedReminder ?? false,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
+    coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
     trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
     mafAgeInput: preferences.mafAge == null ? "" : String(preferences.mafAge),
     mafConsistencyInput: preferences.mafConsistency ?? "",
@@ -230,6 +234,7 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
     emailMissedReminder: snapshot.emailMissedReminder,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
+    coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
     trainingStyleId: snapshot.trainingStyleId,
     mafAgeInput: snapshot.mafAge == null ? "" : String(snapshot.mafAge),
     mafConsistencyInput: snapshot.mafConsistency ?? "",
@@ -260,6 +265,7 @@ export function preferencesToSnapshot(preferences: UserPreferences): Preferences
     emailMissedReminder: preferences.emailMissedReminder ?? false,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
+    coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
     trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
     mafAge: preferences.mafAge ?? null,
     mafConsistency: preferences.mafConsistency ?? null,
@@ -290,6 +296,7 @@ export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot
     emailMissedReminder: payload.emailMissedReminder,
     showAdherenceInsights: payload.showAdherenceInsights,
     aiCoachEnabled: payload.aiCoachEnabled,
+    coachAutoApplyPlanChanges: payload.coachAutoApplyPlanChanges,
     trainingStyleId: payload.trainingStyleId ?? "balanced_default",
     mafAge: payload.mafAge ?? null,
     mafConsistency: payload.mafConsistency ?? null,
@@ -320,6 +327,7 @@ export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayloa
     emailMissedReminder: snapshot.emailMissedReminder,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
+    coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
     trainingStyleId: snapshot.trainingStyleId,
     mafAge: snapshot.mafAge,
     mafConsistency: snapshot.mafConsistency,

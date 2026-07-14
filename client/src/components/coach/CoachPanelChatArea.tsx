@@ -1,10 +1,11 @@
 import { forwardRef, type UIEventHandler } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
+import { PlanProposalCard } from "@/components/coach/PlanProposalCard";
 import { SuggestionsList } from "@/components/coach/SuggestionsTab";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Message } from "@/hooks/useChatSession";
-import type { RagInfo, Suggestion } from "@/lib/api";
+import type { PlanProposalView, RagInfo, Suggestion } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface CoachPanelChatAreaProps {
@@ -13,11 +14,18 @@ interface CoachPanelChatAreaProps {
   readonly applyingId: string | null;
   readonly suggestionsRagInfo?: RagInfo;
   readonly isProcessing: boolean;
+  /** Swap the generic "Thinking..." status for a plan-review message. */
+  readonly processingLabel?: string;
   readonly streamError?: string | null;
   readonly className?: string;
   readonly onViewportScroll?: UIEventHandler<HTMLDivElement>;
   readonly onApplySuggestion: (suggestion: Suggestion) => void;
   readonly onDismissSuggestion: (id: string) => void;
+  /** Pending conversational plan-adjustment proposal, when one exists. */
+  readonly planProposal?: PlanProposalView | null;
+  readonly isApplyingProposal?: boolean;
+  readonly onApplyProposal?: (proposal: PlanProposalView) => void;
+  readonly onDismissProposal?: (id: string) => void;
 }
 
 export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaProps>(
@@ -28,11 +36,16 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       applyingId,
       suggestionsRagInfo,
       isProcessing,
+      processingLabel,
       streamError,
       className,
       onViewportScroll,
       onApplySuggestion,
       onDismissSuggestion,
+      planProposal,
+      isApplyingProposal = false,
+      onApplyProposal,
+      onDismissProposal,
     },
     ref
   ) => {
@@ -66,6 +79,14 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
             onApply={onApplySuggestion}
             onDismiss={onDismissSuggestion}
           />
+          {planProposal && onApplyProposal && onDismissProposal && (
+            <PlanProposalCard
+              proposal={planProposal}
+              isApplying={isApplyingProposal}
+              onApply={onApplyProposal}
+              onDismiss={onDismissProposal}
+            />
+          )}
           {isProcessing && (
             <div className="flex items-center gap-2 text-muted-foreground" aria-live="polite">
               <div className="flex gap-1" aria-hidden="true">
@@ -82,7 +103,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
                   style={{ animationDelay: "300ms" }}
                 />
               </div>
-              <span className="text-xs">Thinking...</span>
+              <span className="text-xs">{processingLabel ?? "Thinking..."}</span>
             </div>
           )}
         </div>

@@ -2,8 +2,9 @@ import type { ChatMessage as DBChatMessage } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo,useRef, useState } from "react";
 
-import { api, QUERY_KEYS, type RagInfo } from "@/lib/api";
+import { api, type PlanProposalView, QUERY_KEYS, type RagInfo } from "@/lib/api";
 import { formatTime,getCurrentTimeString } from "@/lib/dateUtils";
+import { queryClient } from "@/lib/queryClient";
 import { consumeSSEStream } from "@/lib/sseStream";
 
 import { useClearHistoryMutation,useSaveMessageMutation } from "./useChatMutations";
@@ -120,6 +121,21 @@ export interface Message {
 interface UseChatSessionOptions {
   welcomeMessage?: string;
   useStreaming?: boolean;
+  /** Plan day in view when chatting from the workout-detail dialog, so
+   * "make this day easier" resolves to the right day server-side. */
+  focusPlanDayId?: string;
+}
+
+/** Refresh proposal/plan queries when a stream carried a planProposal frame. */
+function handleStreamPlanProposal(extras: Record<string, unknown>): void {
+  const proposal = extras.planProposal as PlanProposalView | undefined;
+  if (!proposal) return;
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.planProposalPending }).catch(() => {});
+  if (proposal.status === "applied") {
+    // Auto-apply mode already mutated the plan during the stream.
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+  }
 }
 
 const DEFAULT_WELCOME = "hey. i'm your ai training coach. ask me about pacing, sessions, or anything you're training for — running, functional fitness, hyrox, the lot.";
@@ -156,6 +172,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const {
     welcomeMessage = DEFAULT_WELCOME,
     useStreaming = true,
+    focusPlanDayId,
   } = options;
 
   const welcomeMessageObj: Message = useMemo(() => ({
@@ -170,6 +187,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [messages, setMessages] = useState<Message[]>([welcomeMessageObj]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  // True while the server is generating a plan-adjustment proposal for the
+  // in-flight message ("Reviewing your plan…" instead of "Thinking…").
+  const [isReviewingPlan, setIsReviewingPlan] = useState(false);
   // Short, screen-reader-facing announcement for a stream interruption.
   // Surfaced via an assertive live region so abort/network failures are read
   // immediately rather than being buried in the polite conversation log (W8).
@@ -308,7 +328,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setIsStreaming(true);
 
         const response = await api.chat.sendStream(
-          { message: content, history },
+          { message: content, history, ...(focusPlanDayId ? { focusPlanDayId } : {}) },
           { signal: controller.signal },
         );
 
@@ -325,16 +345,19 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         const updateMessage = createMessageUpdater(assistantMessageId, setMessages);
         const result = await consumeSSEStream<RagInfo>(reader, {
           metaKey: "ragInfo",
+          extraKeys: ["planProposal", "planProposalPending"],
           signal: controller.signal,
           onFlush: (snapshot) => {
             // Drop flushes from a superseded stream so a stale rAF flush after
             // a reconnect can't clobber the current stream's state (W14).
             if (streamGenerationRef.current !== generationId) return;
+            if (snapshot.extras.planProposalPending) setIsReviewingPlan(true);
             fullResponse = snapshot.content;
             updateMessage(snapshot);
           },
         });
         fullResponse = result.content;
+        handleStreamPlanProposal(result.extras);
 
         if (fullResponse) {
           saveMessageMutation.mutate({ role: "assistant", content: fullResponse, idempotencyKey: assistantMessageId });
@@ -370,9 +393,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       streamControllerRef.current = null;
       setIsStreaming(false);
       setIsLoading(false);
+      setIsReviewingPlan(false);
       isSubmittingRef.current = false;
     }
-  }, [useStreaming, saveMessageMutation]);
+  }, [useStreaming, saveMessageMutation, focusPlanDayId]);
 
   const cancelStream = useCallback(() => {
     streamControllerRef.current?.abort();
@@ -386,6 +410,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     messages,
     isLoading,
     isStreaming,
+    isReviewingPlan,
     streamError,
     historyLoading,
     scrollRef,

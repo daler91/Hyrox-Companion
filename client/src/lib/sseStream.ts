@@ -14,35 +14,43 @@ export interface SSEData<TMeta = unknown> {
 }
 
 /** Type guard for raw parsed JSON. */
-function isSSEData(v: unknown): v is SSEData {
-  return typeof v === "object" && v !== null && !Array.isArray(v) && ("text" in v || "error" in v || "meta" in v);
+function isSSERecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** Parse SSE `data:` lines and accumulate into `acc`. Throws on server errors. */
 function processSSELines<TMeta>(
   lines: string[],
-  acc: { content: string; meta?: TMeta },
+  acc: { content: string; meta?: TMeta; extras: Record<string, unknown> },
   metaKey?: string,
+  extraKeys?: string[],
 ): void {
   for (const line of lines) {
     if (!line.startsWith("data: ")) continue;
-    let data: SSEData;
+    let data: Record<string, unknown>;
     try {
       const parsed: unknown = JSON.parse(line.slice(6));
-      if (!isSSEData(parsed)) continue;
+      if (!isSSERecord(parsed)) continue;
       data = parsed;
     } catch {
       continue;
     }
-    if (metaKey && metaKey in (data as Record<string, unknown>)) {
-      acc.meta = (data as Record<string, unknown>)[metaKey] as TMeta;
+    if (metaKey && metaKey in data) {
+      acc.meta = data[metaKey] as TMeta;
     } else if (data.meta) {
       acc.meta = data.meta as TMeta;
     }
-    if (data.text) {
+    if (extraKeys) {
+      for (const key of extraKeys) {
+        if (key in data) {
+          acc.extras[key] = data[key];
+        }
+      }
+    }
+    if (typeof data.text === "string" && data.text) {
       acc.content += data.text;
     }
-    if (data.error) {
+    if (typeof data.error === "string" && data.error) {
       throw new Error(data.error);
     }
   }
@@ -51,6 +59,8 @@ function processSSELines<TMeta>(
 export interface SSEStreamResult<TMeta = unknown> {
   content: string;
   meta?: TMeta;
+  /** Values captured for `extraKeys`, keyed by payload key (last one wins). */
+  extras: Record<string, unknown>;
 }
 
 export interface SSEStreamOptions<TMeta = unknown> {
@@ -58,6 +68,11 @@ export interface SSEStreamOptions<TMeta = unknown> {
   onFlush: (snapshot: SSEStreamResult<TMeta>) => void;
   /** Optional key name in the SSE payload to extract as metadata (e.g. "ragInfo"). */
   metaKey?: string;
+  /**
+   * Additional payload keys to capture into `extras` (e.g. "planProposal").
+   * Unlike `metaKey`, several keys can be collected in one stream.
+   */
+  extraKeys?: string[];
   /**
    * Optional abort signal — when aborted, stops reading, cancels the pending
    * rAF, and suppresses the trailing flush so stale callbacks can't overwrite
@@ -94,7 +109,11 @@ export async function consumeSSEStream<TMeta = unknown>(
   options: SSEStreamOptions<TMeta>,
 ): Promise<SSEStreamResult<TMeta>> {
   const decoder = new TextDecoder();
-  const acc = { content: "", meta: undefined as TMeta | undefined };
+  const acc = {
+    content: "",
+    meta: undefined as TMeta | undefined,
+    extras: {} as Record<string, unknown>,
+  };
   let buffer = "";
   let rafId = 0;
   let dirty = false;
@@ -108,7 +127,7 @@ export async function consumeSSEStream<TMeta = unknown>(
   const flush = () => {
     if (!dirty || aborted) return;
     dirty = false;
-    options.onFlush({ content: acc.content, meta: acc.meta });
+    options.onFlush({ content: acc.content, meta: acc.meta, extras: acc.extras });
   };
 
   const scheduleFlush = () => {
@@ -129,13 +148,13 @@ export async function consumeSSEStream<TMeta = unknown>(
       buffer = events.pop() || "";
 
       for (const event of events) {
-        processSSELines(event.split("\n"), acc, options.metaKey);
+        processSSELines(event.split("\n"), acc, options.metaKey, options.extraKeys);
       }
       scheduleFlush();
     }
 
     if (!aborted && buffer.trim()) {
-      processSSELines(buffer.split("\n"), acc, options.metaKey);
+      processSSELines(buffer.split("\n"), acc, options.metaKey, options.extraKeys);
     }
   } finally {
     cancelAnimationFrame(rafId);
@@ -150,5 +169,5 @@ export async function consumeSSEStream<TMeta = unknown>(
     throw new DOMException("Stream aborted", "AbortError");
   }
 
-  return { content: acc.content, meta: acc.meta };
+  return { content: acc.content, meta: acc.meta, extras: acc.extras };
 }

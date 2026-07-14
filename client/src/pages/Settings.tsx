@@ -307,6 +307,10 @@ export default function Settings() {
             onAiCoachEnabledChange={(v) => {
               updateField("aiCoachEnabled", v);
             }}
+            coachAutoApplyPlanChanges={draft.coachAutoApplyPlanChanges}
+            onCoachAutoApplyPlanChangesChange={(v) => {
+              updateField("coachAutoApplyPlanChanges", v);
+            }}
           />
           <CoachingSection />
         </TabsContent>
