@@ -233,7 +233,7 @@ function buildUnappliedStructuredResult(
   };
 }
 
-async function getStructuredApplyBlocker(
+export async function getStructuredApplyBlocker(
   userId: string,
   log: TimelineSuggestionLogger,
 ): Promise<UnappliedTimelineSuggestionResult | null> {
