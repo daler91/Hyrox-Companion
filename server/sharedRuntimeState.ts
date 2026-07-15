@@ -34,6 +34,29 @@ export async function setRuntimeCache(key: string, value: unknown, ttlMs: number
   );
 }
 
+/**
+ * Atomically claims `key` for single-use semantics (e.g. consuming an OAuth
+ * state nonce). Returns true when this caller made the claim, false when a
+ * live claim already exists. Unlike get-then-set, the unique key makes
+ * concurrent claims race-safe: exactly one caller wins. An EXPIRED row with
+ * the same key can be re-claimed (relevant because the cleanup cron only
+ * sweeps periodically).
+ */
+export async function claimRuntimeCacheKey(key: string, ttlMs: number): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + ttlMs);
+  const result = await pool.query(
+    `insert into server_runtime_cache (key, value, expires_at, updated_at)
+     values ($1, 'true'::jsonb, $2, now())
+     on conflict (key) do update
+       set value = excluded.value,
+           expires_at = excluded.expires_at,
+           updated_at = now()
+       where server_runtime_cache.expires_at <= now()`,
+    [key, expiresAt],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function deleteRuntimeCache(key: string): Promise<void> {
   await pool.query("delete from server_runtime_cache where key = $1", [key]);
 }

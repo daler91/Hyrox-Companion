@@ -15,6 +15,7 @@ import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
+import { claimRuntimeCacheKey, runtimeCacheKey } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getUserId } from "./types";
 import { parseRetryAfter,RetryableHttpError, retryWithJitter } from "./utils/httpRetry";
@@ -302,6 +303,20 @@ async function handleStravaCallback(req: Request, res: Response) {
   const verified = verifySignedState(state);
   if (!verified) {
     reqLogger(req).error("Strava OAuth state invalid or expired - possible CSRF attack");
+    return res.redirect("/settings?strava=error");
+  }
+
+  // Single-use state: the HMAC makes the state unforgeable but not
+  // unreplayable — atomically claim it (cross-instance, via the shared
+  // runtime cache) so a captured callback URL is dead after first use.
+  // TTL matches the state's own max age; after that verifySignedState
+  // rejects it anyway.
+  const stateClaimed = await claimRuntimeCacheKey(
+    runtimeCacheKey("strava-oauth-state", state),
+    STATE_MAX_AGE_MS,
+  );
+  if (!stateClaimed) {
+    reqLogger(req).error("Strava OAuth state replayed - possible CSRF attack");
     return res.redirect("/settings?strava=error");
   }
 
