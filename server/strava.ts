@@ -185,8 +185,10 @@ type StravaAccessResult =
  * advisory lock (cross-instance safe) with a re-read inside the lock so the
  * loser of the race reuses the winner's freshly-stored token instead of
  * refreshing again.
+ *
+ * Exported for tests only.
  */
-async function getValidAccessToken(userId: string): Promise<StravaAccessResult> {
+export async function getValidAccessToken(userId: string): Promise<StravaAccessResult> {
   const connection = await storage.users.getStravaConnection(userId);
   if (!connection) return { ok: false, reason: "not_connected" };
   if (connection.requiresReauth) return { ok: false, reason: "reauth_required" };
@@ -447,7 +449,9 @@ export function computeSyncAfterEpoch(lastSyncedAt: Date | null, now: Date = new
 //
 // NOTE: with `after` set, Strava returns activities in ASCENDING start_date
 // order — callers rely on "last element = newest fetched" for the cursor.
-async function fetchStravaActivities(
+//
+// Exported for tests only.
+export async function fetchStravaActivities(
   accessToken: string,
   log: Pick<typeof logger, "error">,
   afterEpochSeconds: number,

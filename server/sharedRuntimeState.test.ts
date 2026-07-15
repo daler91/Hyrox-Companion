@@ -7,6 +7,7 @@ vi.mock("./db", () => ({
 }));
 
 import {
+  claimRuntimeCacheKey,
   cleanupExpiredSharedRuntimeState,
   deleteRuntimeCache,
   deleteRuntimeCachePrefix,
@@ -67,6 +68,28 @@ describe("shared runtime state", () => {
 
     expect(queryMock).toHaveBeenNthCalledWith(1, "delete from server_runtime_cache where key = $1", ["exact"]);
     expect(queryMock).toHaveBeenNthCalledWith(2, "delete from server_runtime_cache where key like $1", ["rag:abc:%"]);
+  });
+
+  it("claims an unclaimed key (single-use semantics)", async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1 });
+
+    await expect(claimRuntimeCacheKey("nonce-1", 600_000)).resolves.toBe(true);
+    // Atomic claim: one INSERT ... ON CONFLICT statement, no get-then-set.
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.stringContaining("on conflict"),
+      ["nonce-1", new Date("2026-05-17T12:10:00Z")],
+    );
+    // A live existing claim must block re-claiming; only expired rows are
+    // eligible for takeover.
+    expect(queryMock.mock.calls[0][0]).toContain("expires_at <= now()");
+  });
+
+  it("refuses to claim a key that is already live", async () => {
+    // rowCount 0: conflict hit and the conditional update did not apply.
+    queryMock.mockResolvedValueOnce({ rowCount: 0 });
+
+    await expect(claimRuntimeCacheKey("nonce-1", 600_000)).resolves.toBe(false);
   });
 
   it("cleans up expired shared state rows", async () => {

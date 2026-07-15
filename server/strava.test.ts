@@ -2,7 +2,19 @@ import crypto from 'node:crypto';
 
 import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createSignedState, verifySignedState } from './strava';
+// Delay-free manual mock (server/utils/__mocks__/httpRetry.ts): keeps the real
+// RetryableHttpError class and retry semantics, drops the backoff sleeps.
+vi.mock('./utils/httpRetry');
+
+import { AppError } from './errors';
+import {
+  computeSyncAfterEpoch,
+  createSignedState,
+  deauthorizeStravaBestEffort,
+  fetchStravaActivities,
+  verifySignedState,
+} from './strava';
+import { RetryableHttpError } from './utils/httpRetry';
 
 describe('strava service state signing', () => {
   beforeEach(() => {
@@ -154,5 +166,330 @@ describe('strava service state signing', () => {
 
       expect(verifySignedState(state)).toStrictEqual({ userId: 'user_123' });
     });
+  });
+});
+
+const MS_PER_DAY = 86_400_000;
+
+describe('computeSyncAfterEpoch', () => {
+  const NOW = new Date(1700000000000);
+
+  it('backfills 90 days on first sync (no cursor)', () => {
+    expect(computeSyncAfterEpoch(null, NOW)).toBe(
+      Math.floor((NOW.getTime() - 90 * MS_PER_DAY) / 1000),
+    );
+  });
+
+  it('resumes 7 days before the stored cursor for incremental syncs', () => {
+    const lastSyncedAt = new Date(NOW.getTime() - 3 * MS_PER_DAY);
+    expect(computeSyncAfterEpoch(lastSyncedAt, NOW)).toBe(
+      Math.floor((lastSyncedAt.getTime() - 7 * MS_PER_DAY) / 1000),
+    );
+  });
+
+  it('returns whole epoch seconds, clamped at zero', () => {
+    // A cursor near the epoch would otherwise go negative after the overlap.
+    expect(computeSyncAfterEpoch(new Date(0), NOW)).toBe(0);
+    expect(Number.isInteger(computeSyncAfterEpoch(null, NOW))).toBe(true);
+  });
+});
+
+/** Minimal fetch Response stand-in for the fields the Strava client reads. */
+function stravaResponse(body: unknown, status = 200, retryAfter: string | null = null) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+    headers: { get: () => retryAfter },
+  };
+}
+
+describe('fetchStravaActivities', () => {
+  const log = { error: vi.fn() };
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('requests with after/per_page/page and stops on a short page', async () => {
+    fetchMock.mockResolvedValueOnce(stravaResponse([{ id: 1 }, { id: 2 }]));
+
+    const result = await fetchStravaActivities('token-abc', log, 1234567);
+
+    expect(result.activities.map((a) => a.id)).toEqual([1, 2]);
+    expect(result.hasMore).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.pathname).toBe('/api/v3/athlete/activities');
+    expect(url.searchParams.get('after')).toBe('1234567');
+    expect(url.searchParams.get('per_page')).toBe('200');
+    expect(url.searchParams.get('page')).toBe('1');
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer token-abc');
+  });
+
+  it('aggregates across pages, incrementing the page param', async () => {
+    const fullPage = Array.from({ length: 200 }, (_, i) => ({ id: i }));
+    fetchMock
+      .mockResolvedValueOnce(stravaResponse(fullPage))
+      .mockResolvedValueOnce(stravaResponse([{ id: 9999 }]));
+
+    const result = await fetchStravaActivities('token', log, 0);
+
+    expect(result.activities).toHaveLength(201);
+    expect(result.hasMore).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(new URL(String(fetchMock.mock.calls[1][0])).searchParams.get('page')).toBe('2');
+  });
+
+  it('caps at 5 pages and reports hasMore', async () => {
+    const fullPage = Array.from({ length: 200 }, (_, i) => ({ id: i }));
+    fetchMock.mockResolvedValue(stravaResponse(fullPage));
+
+    const result = await fetchStravaActivities('token', log, 0);
+
+    expect(result.activities).toHaveLength(1000);
+    expect(result.hasMore).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('throws a non-retryable 401 AppError when authorization was revoked', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 401));
+
+    const err = await fetchStravaActivities('token', log, 0).catch((e) => e);
+
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.status).toBe(401);
+    // Revocation must not be retried.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries 429s then surfaces RetryableHttpError with the Retry-After hint', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 429, '120'));
+
+    const err = await fetchStravaActivities('token', log, 0).catch((e) => e);
+
+    expect(err).toBeInstanceOf(RetryableHttpError);
+    expect(err.status).toBe(429);
+    expect(err.retryAfterMs).toBe(120_000);
+    // Initial attempt + 3 retries.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('deauthorizeStravaBestEffort', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs the deauthorize endpoint with the access token', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const log = { warn: vi.fn() };
+
+    await deauthorizeStravaBestEffort('token-123', log);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://www.strava.com/oauth/deauthorize',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(String(fetchMock.mock.calls[0][1].body)).toContain('access_token=token-123');
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it('swallows upstream failures with a warning (must never block disconnect)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    const log = { warn: vi.fn() };
+
+    await expect(deauthorizeStravaBestEffort('token-123', log)).resolves.toBeUndefined();
+    expect(log.warn).toHaveBeenCalled();
+  });
+});
+
+describe('getValidAccessToken', () => {
+  const FIXED_NOW = 1700000000000;
+
+  const freshConnection = {
+    id: 'conn-1',
+    userId: 'user-1',
+    stravaAthleteId: 'athlete-1',
+    accessToken: 'stored-access',
+    refreshToken: 'stored-refresh',
+    expiresAt: new Date(FIXED_NOW + 3_600_000),
+    scope: 'activity:read_all',
+    lastSyncedAt: null,
+    requiresReauth: false,
+    createdAt: new Date(FIXED_NOW - MS_PER_DAY),
+  };
+  // Inside the 60s refresh safety window → treated as stale.
+  const staleConnection = { ...freshConnection, expiresAt: new Date(FIXED_NOW + 1_000) };
+
+  let getStravaConnection: ReturnType<typeof vi.fn>;
+  let updateStravaTokens: ReturnType<typeof vi.fn>;
+  let setStravaReauthRequired: ReturnType<typeof vi.fn>;
+  let withPgAdvisoryLock: ReturnType<typeof vi.fn>;
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let getValidAccessToken: typeof import('./strava')['getValidAccessToken'];
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(FIXED_NOW));
+    vi.resetModules();
+
+    getStravaConnection = vi.fn();
+    updateStravaTokens = vi.fn().mockResolvedValue(undefined);
+    setStravaReauthRequired = vi.fn().mockResolvedValue(undefined);
+    // Default: lock acquired, protected work runs inline.
+    withPgAdvisoryLock = vi.fn(async (_pool, _opts, run) => ({ acquired: true, value: await run() }));
+
+    // The refresh path reads STRAVA_CLIENT_ID/SECRET at module scope, so the
+    // module must be re-imported with a mocked env (same pattern as the
+    // "state secret isolation" test above).
+    vi.doMock('./env', () => ({
+      env: {
+        STRAVA_CLIENT_ID: 'client-id',
+        STRAVA_CLIENT_SECRET: 'client-secret',
+        STRAVA_STATE_SECRET: 'dedicated-strava-secret-12345678',
+        DATABASE_URL: 'postgres://dummy',
+        APP_URL: 'http://localhost',
+      },
+    }));
+    vi.doMock('./storage', () => ({
+      storage: {
+        users: { getStravaConnection, updateStravaTokens, setStravaReauthRequired },
+      },
+    }));
+    vi.doMock('./advisoryLock', () => ({ withPgAdvisoryLock }));
+
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    ({ getValidAccessToken } = await import('./strava'));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.doUnmock('./env');
+    vi.doUnmock('./storage');
+    vi.doUnmock('./advisoryLock');
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('reports not_connected when no connection exists', async () => {
+    getStravaConnection.mockResolvedValue(undefined);
+
+    await expect(getValidAccessToken('user-1')).resolves.toEqual({
+      ok: false,
+      reason: 'not_connected',
+    });
+  });
+
+  it('fails fast with reauth_required on a tombstoned connection', async () => {
+    getStravaConnection.mockResolvedValue({ ...freshConnection, requiresReauth: true });
+
+    await expect(getValidAccessToken('user-1')).resolves.toEqual({
+      ok: false,
+      reason: 'reauth_required',
+    });
+    expect(withPgAdvisoryLock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits with the stored token while it is fresh', async () => {
+    getStravaConnection.mockResolvedValue(freshConnection);
+
+    const result = await getValidAccessToken('user-1');
+
+    expect(result).toMatchObject({ ok: true, accessToken: 'stored-access' });
+    expect(withPgAdvisoryLock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('re-reads under the lock and skips the refresh when a concurrent request already won', async () => {
+    getStravaConnection
+      .mockResolvedValueOnce(staleConnection)
+      .mockResolvedValueOnce({ ...freshConnection, accessToken: 'winner-access' });
+
+    const result = await getValidAccessToken('user-1');
+
+    expect(result).toMatchObject({ ok: true, accessToken: 'winner-access' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updateStravaTokens).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a stale token and persists the rotated pair', async () => {
+    getStravaConnection.mockResolvedValue(staleConnection);
+    const expiresAtEpoch = Math.floor((FIXED_NOW + 6 * 3_600_000) / 1000);
+    fetchMock.mockResolvedValue(stravaResponse({
+      token_type: 'Bearer',
+      access_token: 'new-access',
+      refresh_token: 'new-refresh',
+      expires_at: expiresAtEpoch,
+      expires_in: 21_600,
+    }));
+
+    const result = await getValidAccessToken('user-1');
+
+    expect(result).toMatchObject({ ok: true, accessToken: 'new-access' });
+    expect(updateStravaTokens).toHaveBeenCalledWith('user-1', {
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+      expiresAt: new Date(expiresAtEpoch * 1000),
+    });
+  });
+
+  it('tombstones the connection when the refresh is permanently rejected', async () => {
+    getStravaConnection.mockResolvedValue(staleConnection);
+    // invalid_grant: the user revoked the app on strava.com.
+    fetchMock.mockResolvedValue(stravaResponse({ error: 'invalid_grant' }, 400));
+
+    await expect(getValidAccessToken('user-1')).resolves.toEqual({
+      ok: false,
+      reason: 'reauth_required',
+    });
+    expect(setStravaReauthRequired).toHaveBeenCalledWith('user-1');
+  });
+
+  it('reports transient (no tombstone) when the refresh fails on a network error', async () => {
+    getStravaConnection.mockResolvedValue(staleConnection);
+    fetchMock.mockRejectedValue(new Error('socket hang up'));
+
+    await expect(getValidAccessToken('user-1')).resolves.toEqual({
+      ok: false,
+      reason: 'transient',
+    });
+    expect(setStravaReauthRequired).not.toHaveBeenCalled();
+  });
+
+  it('polls for the winner’s token when the try-lock is already held', async () => {
+    withPgAdvisoryLock.mockResolvedValue({ acquired: false, value: undefined });
+    getStravaConnection
+      .mockResolvedValueOnce(staleConnection)
+      .mockResolvedValueOnce({ ...freshConnection, accessToken: 'other-instance-access' });
+
+    const promise = getValidAccessToken('user-1');
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await promise;
+
+    expect(result).toMatchObject({ ok: true, accessToken: 'other-instance-access' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('gives up as transient when the lock holder never lands a fresh token', async () => {
+    withPgAdvisoryLock.mockResolvedValue({ acquired: false, value: undefined });
+    getStravaConnection.mockResolvedValue(staleConnection);
+
+    const promise = getValidAccessToken('user-1');
+    await vi.advanceTimersByTimeAsync(3 * 500);
+
+    await expect(promise).resolves.toEqual({ ok: false, reason: 'transient' });
   });
 });
