@@ -1,4 +1,5 @@
 import { api, QUERY_KEYS } from "@/lib/api";
+import { humanizeApiError, queryClient } from "@/lib/queryClient";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -33,9 +34,27 @@ export function useStravaMutations() {
     ],
     successToast: (data) => ({
       title: "Sync Complete",
-      description: `Imported ${data.imported} new activities. ${data.skipped} already existed.`,
+      description:
+        `Imported ${data.imported} new activities. ${data.skipped} already existed.` +
+        (data.hasMore ? " More activities are available — run Sync again." : ""),
     }),
-    errorToast: "Failed to sync activities from Strava.",
+    errorToast: (error) =>
+      // The API client throws Error("<status>: <body>"), so the server's
+      // error code is present in the message.
+      error.message.includes("STRAVA_REAUTH_REQUIRED")
+        ? {
+            title: "Strava reconnection needed",
+            description: "Strava access was revoked. Please reconnect your account.",
+          }
+        : {
+            title: "Failed to sync activities from Strava.",
+            description: humanizeApiError(error),
+          },
+    onError: () => {
+      // A revocation discovered mid-sync flips /status to requiresReauth —
+      // refetch so the section immediately shows the Reconnect state.
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stravaStatus });
+    },
   });
 
   return {

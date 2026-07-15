@@ -6,12 +6,16 @@ export interface StravaSyncResponse {
   imported: number;
   skipped: number;
   total: number;
+  /** True when a capped sync left older activities unfetched — run Sync again to continue. */
+  hasMore?: boolean;
 }
 
 export interface StravaStatus {
   connected: boolean;
   athleteId?: string;
   lastSyncedAt?: string | null;
+  /** Strava rejected our stored credentials (user revoked the app) — the user must reconnect. */
+  requiresReauth?: boolean;
 }
 
 export const auth = {
