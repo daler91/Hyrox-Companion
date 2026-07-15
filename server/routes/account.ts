@@ -2,12 +2,12 @@ import { clerkClient } from "@clerk/express";
 import { type Request as ExpressRequest, type Response, Router } from "express";
 
 import { evictUserFromSeenCache } from "../clerkAuth";
-import { EXTERNAL_API_TIMEOUT_MS } from "../constants";
 import { env } from "../env";
 import { logger } from "../logger";
 import { purgeUserJobs } from "../queue";
 import { rateLimiter, sendNotFound } from "../routeUtils";
 import { storage } from "../storage";
+import { deauthorizeStravaBestEffort } from "../strava";
 import { getUserId } from "../types";
 import { protectedDelete } from "./_helpers/protectedRouteBuilder";
 
@@ -72,19 +72,15 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
     }
 
     // Step 3: Best-effort Strava deauthorization before deleting the DB
-    // record (which cascades and removes the stored token).
+    // record (which cascades and removes the stored token). Non-fatal — the
+    // user's data will still be deleted. The try/catch also covers a
+    // connection read that fails to decrypt (e.g. after a key rotation).
     try {
       const stravaConn = await storage.users.getStravaConnection(userId);
       if (stravaConn) {
-        await fetch("https://www.strava.com/oauth/deauthorize", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ access_token: stravaConn.accessToken }).toString(),
-          signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-        });
+        await deauthorizeStravaBestEffort(stravaConn.accessToken, logger);
       }
     } catch (err) {
-      // Non-fatal — the user's data will still be deleted.
       logger.warn({ err, userId }, "Strava deauthorization failed during account deletion");
     }
 

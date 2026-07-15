@@ -22,6 +22,14 @@ const STRAVA_REDIRECT_URI = env.APP_URL
   ? `${env.APP_URL}/api/v1/strava/callback`
   : "http://localhost:5000/api/v1/strava/callback";
 
+const STRAVA_OAUTH_AUTHORIZE_URL = "https://www.strava.com/oauth/authorize";
+const STRAVA_OAUTH_TOKEN_URL = "https://www.strava.com/oauth/token";
+const STRAVA_OAUTH_DEAUTHORIZE_URL = "https://www.strava.com/oauth/deauthorize";
+const STRAVA_API_BASE = "https://www.strava.com/api/v3";
+// Requested at /auth AND persisted on the connection at /callback — keep the
+// two in lockstep via this single constant so they cannot drift.
+const STRAVA_SCOPE = "activity:read_all";
+
 const STATE_SECRET = env.STRAVA_STATE_SECRET ?? crypto.randomBytes(32).toString("hex");
 if (!env.STRAVA_STATE_SECRET) {
   logger.warn({ context: "strava" }, "STRAVA_STATE_SECRET not configured — using random secret. Strava OAuth state will not be verifiable across multiple server instances.");
@@ -74,7 +82,9 @@ interface StravaTokenResponse {
   expires_in: number;
   refresh_token: string;
   access_token: string;
-  athlete: {
+  // Present on the authorization-code exchange, absent on refresh_token
+  // grants — Strava only echoes the athlete when a user just authorized.
+  athlete?: {
     id: number;
     username: string;
     firstname: string;
@@ -91,7 +101,7 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
   try {
     return await retryWithJitter(
       async () => {
-        const response = await fetch("https://www.strava.com/oauth/token", {
+        const response = await fetch(STRAVA_OAUTH_TOKEN_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -158,23 +168,19 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 }
 
 async function handleStravaStatus(req: Request, res: Response) {
-  try {
-    const userId = getUserId(req);
-    const connection = await storage.users.getStravaConnection(userId);
+  // Errors propagate to asyncHandler → central error middleware.
+  const userId = getUserId(req);
+  const connection = await storage.users.getStravaConnection(userId);
 
-    if (!connection) {
-      return res.json({ connected: false });
-    }
-
-    res.json({
-      connected: true,
-      athleteId: connection.stravaAthleteId,
-      lastSyncedAt: connection.lastSyncedAt,
-    });
-  } catch (error) {
-    reqLogger(req).error({ err: error }, "Strava status error:");
-    res.status(500).json({ error: "Failed to get Strava status", code: "INTERNAL_SERVER_ERROR" });
+  if (!connection) {
+    return res.json({ connected: false });
   }
+
+  res.json({
+    connected: true,
+    athleteId: connection.stravaAthleteId,
+    lastSyncedAt: connection.lastSyncedAt,
+  });
 }
 
 async function handleStravaAuth(req: Request, res: Response) {
@@ -183,15 +189,14 @@ async function handleStravaAuth(req: Request, res: Response) {
   }
 
   const userId = getUserId(req);
-  const scope = "activity:read_all";
 
   const state = createSignedState(userId);
 
-  const authUrl = new URL("https://www.strava.com/oauth/authorize");
+  const authUrl = new URL(STRAVA_OAUTH_AUTHORIZE_URL);
   authUrl.searchParams.set("client_id", STRAVA_CLIENT_ID);
   authUrl.searchParams.set("redirect_uri", STRAVA_REDIRECT_URI);
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("scope", scope);
+  authUrl.searchParams.set("scope", STRAVA_SCOPE);
   authUrl.searchParams.set("state", state);
 
   res.json({ authUrl: authUrl.toString() });
@@ -224,7 +229,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 
   try {
     const tokenResponse = await retryWithJitter(async () => {
-      const r = await fetch("https://www.strava.com/oauth/token", {
+      const r = await fetch(STRAVA_OAUTH_TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -251,13 +256,18 @@ async function handleStravaCallback(req: Request, res: Response) {
 
     const tokenData = (await tokenResponse.json()) as StravaTokenResponse;
 
+    if (!tokenData.athlete) {
+      reqLogger(req).error("Strava token exchange response missing athlete data");
+      return res.redirect("/settings?strava=error");
+    }
+
     await storage.users.upsertStravaConnection({
       userId,
       stravaAthleteId: String(tokenData.athlete.id),
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       expiresAt: new Date(tokenData.expires_at * 1000),
-      scope: "activity:read_all",
+      scope: STRAVA_SCOPE,
       lastSyncedAt: null,
     });
 
@@ -268,15 +278,41 @@ async function handleStravaCallback(req: Request, res: Response) {
   }
 }
 
-async function handleStravaDisconnect(req: Request, res: Response) {
+/**
+ * Best-effort upstream revocation. Deleting our local row alone leaves the
+ * app authorized on strava.com until the user manually removes it there, so
+ * disconnect and account deletion both ask Strava to revoke the grant.
+ * Failures are swallowed: local deletion must never be blocked by a Strava
+ * outage or an already-expired access token.
+ */
+export async function deauthorizeStravaBestEffort(
+  accessToken: string,
+  log: Pick<typeof logger, "warn">,
+): Promise<void> {
   try {
-    const userId = getUserId(req);
-    await storage.users.deleteStravaConnection(userId);
-    res.json({ success: true });
-  } catch (error) {
-    reqLogger(req).error({ err: error }, "Strava disconnect error:");
-    res.status(500).json({ error: "Failed to disconnect Strava", code: "INTERNAL_SERVER_ERROR" });
+    await fetch(STRAVA_OAUTH_DEAUTHORIZE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ access_token: accessToken }).toString(),
+      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+    });
+  } catch (err) {
+    log.warn({ err }, "Strava deauthorization failed (non-fatal)");
   }
+}
+
+async function handleStravaDisconnect(req: Request, res: Response) {
+  // Errors propagate to asyncHandler → central error middleware.
+  const userId = getUserId(req);
+  const connection = await storage.users.getStravaConnection(userId);
+  if (connection) {
+    // Revoke upstream first — after deleteStravaConnection the token is gone.
+    // No refresh attempt: if the access token already expired the revoke is
+    // best-effort anyway, and a refresh here would burn a rotation for nothing.
+    await deauthorizeStravaBestEffort(connection.accessToken, reqLogger(req));
+  }
+  await storage.users.deleteStravaConnection(userId);
+  res.json({ success: true });
 }
 
 // Split out of handleStravaSync so the main handler stays under
@@ -313,9 +349,12 @@ async function fetchStravaActivities(
         );
       }
       if (!response.ok) {
+        // Do NOT log the raw response body (same rationale as the token
+        // endpoint above) — hand-built `err` strings bypass pino's path-based
+        // redaction. Status is enough to triage.
         log.error(
-          { err: await response.text(), status: response.status },
-          "Failed to fetch Strava activities:",
+          { status: response.status },
+          "Failed to fetch Strava activities",
         );
         throw new AppError(
           ErrorCode.EXTERNAL_API_ERROR,
