@@ -1,17 +1,21 @@
 import crypto from "node:crypto";
 
+import { type StravaConnection } from "@shared/schema";
 import { type DistanceUnit } from "@shared/unitConversion";
 import type { Request, Response, Router } from "express";
 import rateLimit from "express-rate-limit";
 
+import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
-import { EXTERNAL_API_TIMEOUT_MS,RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
+import { EXTERNAL_API_TIMEOUT_MS,MS_PER_DAY, RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
+import { pool } from "./db";
 import { env } from "./env";
 import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
+import { claimRuntimeCacheKey, runtimeCacheKey } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getUserId } from "./types";
 import { parseRetryAfter,RetryableHttpError, retryWithJitter } from "./utils/httpRetry";
@@ -21,6 +25,14 @@ const STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
 const STRAVA_REDIRECT_URI = env.APP_URL
   ? `${env.APP_URL}/api/v1/strava/callback`
   : "http://localhost:5000/api/v1/strava/callback";
+
+const STRAVA_OAUTH_AUTHORIZE_URL = "https://www.strava.com/oauth/authorize";
+const STRAVA_OAUTH_TOKEN_URL = "https://www.strava.com/oauth/token";
+const STRAVA_OAUTH_DEAUTHORIZE_URL = "https://www.strava.com/oauth/deauthorize";
+const STRAVA_API_BASE = "https://www.strava.com/api/v3";
+// Requested at /auth AND persisted on the connection at /callback — keep the
+// two in lockstep via this single constant so they cannot drift.
+const STRAVA_SCOPE = "activity:read_all";
 
 const STATE_SECRET = env.STRAVA_STATE_SECRET ?? crypto.randomBytes(32).toString("hex");
 if (!env.STRAVA_STATE_SECRET) {
@@ -74,7 +86,9 @@ interface StravaTokenResponse {
   expires_in: number;
   refresh_token: string;
   access_token: string;
-  athlete: {
+  // Present on the authorization-code exchange, absent on refresh_token
+  // grants — Strava only echoes the athlete when a user just authorized.
+  athlete?: {
     id: number;
     username: string;
     firstname: string;
@@ -82,16 +96,24 @@ interface StravaTokenResponse {
   };
 }
 
-async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResponse | null> {
+type StravaRefreshResult =
+  | { ok: true; data: StravaTokenResponse }
+  // permanent: Strava rejected the refresh token itself (400 invalid_grant /
+  // 401 / 403 — the user revoked the app). Retrying can never succeed; the
+  // user must re-authorize. Non-permanent failures (network, 429/5xx after
+  // retry exhaustion) are transient and worth retrying later.
+  | { ok: false; permanent: boolean };
+
+async function refreshStravaToken(refreshToken: string): Promise<StravaRefreshResult> {
   if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
     logger.error("Strava credentials not configured");
-    return null;
+    return { ok: false, permanent: false };
   }
 
   try {
-    return await retryWithJitter(
+    return await retryWithJitter<StravaRefreshResult>(
       async () => {
-        const response = await fetch("https://www.strava.com/oauth/token", {
+        const response = await fetch(STRAVA_OAUTH_TOKEN_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -112,19 +134,20 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
         if (!response.ok) {
           // Do NOT log the raw response body — Strava OAuth token-endpoint
           // bodies can echo token/secret material and a hand-built `err` string
-          // bypasses pino's path-based redaction. Status is enough to triage.
-          // bearer:disable javascript_lang_logger_leak — only the HTTP status
-          // code is logged; the raw body was deliberately dropped above (W1).
+          // bypasses pino's path-based redaction. Status is enough to triage
+          // (W1); only the HTTP status code is logged.
+          // bearer:disable javascript_lang_logger_leak
           logger.error({ status: response.status }, "Failed to refresh Strava token");
-          return null;
+          // Remaining 4xx here means Strava rejected the grant itself.
+          return { ok: false, permanent: true };
         }
-        return (await response.json()) as StravaTokenResponse;
+        return { ok: true, data: (await response.json()) as StravaTokenResponse };
       },
       { label: "strava.refreshToken", retries: 3 },
     );
   } catch (error) {
     logger.error({ err: error }, "Error refreshing Strava token:");
-    return null;
+    return { ok: false, permanent: false };
   }
 }
 
@@ -132,49 +155,119 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaTokenResp
 // never uses a token that flips to expired between our check and Strava's.
 const STRAVA_REFRESH_SAFETY_WINDOW_MS = 60_000;
 
-async function getValidAccessToken(userId: string): Promise<string | null> {
-  const connection = await storage.users.getStravaConnection(userId);
-  if (!connection) return null;
+// When the refresh advisory lock is held by a concurrent request, poll the
+// connection briefly for its result instead of failing: a refresh round-trip
+// completes well within 3 × 500ms.
+const STRAVA_REFRESH_LOCK_POLL_MS = 500;
+const STRAVA_REFRESH_LOCK_POLL_ATTEMPTS = 3;
 
-  const refreshAt = new Date(Date.now() + STRAVA_REFRESH_SAFETY_WINDOW_MS);
-  if (connection.expiresAt > refreshAt) {
-    return connection.accessToken;
+function hasFreshToken(connection: StravaConnection): boolean {
+  return connection.expiresAt.getTime() > Date.now() + STRAVA_REFRESH_SAFETY_WINDOW_MS;
+}
+
+// Per-user 64-bit advisory-lock key in a Strava-refresh namespace, derived
+// from the userId so concurrent refreshes for different users never contend.
+function stravaRefreshLockKey(userId: string): bigint {
+  const digest = crypto.createHash("sha256").update(`strava-refresh:${userId}`).digest();
+  return BigInt.asIntN(64, digest.readBigUInt64BE(0));
+}
+
+type StravaAccessResult =
+  | { ok: true; accessToken: string; connection: StravaConnection }
+  | { ok: false; reason: "not_connected" | "reauth_required" | "transient" };
+
+/**
+ * Returns a currently-valid access token, refreshing it if needed.
+ *
+ * Strava ROTATES the refresh token on every refresh and invalidates the old
+ * one, so two concurrent refreshes with the same stored token brick the
+ * connection. The refresh is therefore serialized under a per-user Postgres
+ * advisory lock (cross-instance safe) with a re-read inside the lock so the
+ * loser of the race reuses the winner's freshly-stored token instead of
+ * refreshing again.
+ *
+ * Exported for tests only.
+ */
+export async function getValidAccessToken(userId: string): Promise<StravaAccessResult> {
+  const connection = await storage.users.getStravaConnection(userId);
+  if (!connection) return { ok: false, reason: "not_connected" };
+  if (connection.requiresReauth) return { ok: false, reason: "reauth_required" };
+  if (hasFreshToken(connection)) {
+    return { ok: true, accessToken: connection.accessToken, connection };
   }
 
-  const refreshed = await refreshStravaToken(connection.refreshToken);
-  if (!refreshed) return null;
+  const lockResult = await withPgAdvisoryLock<StravaAccessResult>(
+    pool,
+    { key: stravaRefreshLockKey(userId), name: "strava-refresh" },
+    async () => {
+      // Double-check under the lock: a concurrent request may have refreshed
+      // between our staleness check and acquiring the lock.
+      const current = await storage.users.getStravaConnection(userId);
+      if (!current) return { ok: false, reason: "not_connected" };
+      if (current.requiresReauth) return { ok: false, reason: "reauth_required" };
+      if (hasFreshToken(current)) {
+        return { ok: true, accessToken: current.accessToken, connection: current };
+      }
 
-  await storage.users.upsertStravaConnection({
-    userId,
-    stravaAthleteId: connection.stravaAthleteId,
-    accessToken: refreshed.access_token,
-    refreshToken: refreshed.refresh_token,
-    expiresAt: new Date(refreshed.expires_at * 1000),
-    scope: connection.scope,
-    lastSyncedAt: connection.lastSyncedAt,
-  });
+      const refreshed = await refreshStravaToken(current.refreshToken);
+      if (!refreshed.ok) {
+        if (refreshed.permanent) {
+          // Tombstone the connection so /status flips to "reconnect needed"
+          // instead of every future sync dying with a generic 401.
+          await storage.users.setStravaReauthRequired(userId);
+          return { ok: false, reason: "reauth_required" };
+        }
+        return { ok: false, reason: "transient" };
+      }
 
-  return refreshed.access_token;
+      await storage.users.updateStravaTokens(userId, {
+        accessToken: refreshed.data.access_token,
+        refreshToken: refreshed.data.refresh_token,
+        expiresAt: new Date(refreshed.data.expires_at * 1000),
+      });
+
+      return {
+        ok: true,
+        accessToken: refreshed.data.access_token,
+        connection: { ...current, accessToken: refreshed.data.access_token },
+      };
+    },
+  );
+
+  if (lockResult.acquired) {
+    return lockResult.value;
+  }
+
+  // withPgAdvisoryLock is a non-blocking try-lock: not acquired means another
+  // request/instance is refreshing this user's token right now. Poll for its
+  // result rather than failing outright.
+  for (let attempt = 0; attempt < STRAVA_REFRESH_LOCK_POLL_ATTEMPTS; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, STRAVA_REFRESH_LOCK_POLL_MS));
+    const current = await storage.users.getStravaConnection(userId);
+    if (!current) return { ok: false, reason: "not_connected" };
+    if (current.requiresReauth) return { ok: false, reason: "reauth_required" };
+    if (hasFreshToken(current)) {
+      return { ok: true, accessToken: current.accessToken, connection: current };
+    }
+  }
+  return { ok: false, reason: "transient" };
 }
 
 async function handleStravaStatus(req: Request, res: Response) {
-  try {
-    const userId = getUserId(req);
-    const connection = await storage.users.getStravaConnection(userId);
+  // Errors propagate to asyncHandler → central error middleware.
+  const userId = getUserId(req);
+  const connection = await storage.users.getStravaConnection(userId);
 
-    if (!connection) {
-      return res.json({ connected: false });
-    }
-
-    res.json({
-      connected: true,
-      athleteId: connection.stravaAthleteId,
-      lastSyncedAt: connection.lastSyncedAt,
-    });
-  } catch (error) {
-    reqLogger(req).error({ err: error }, "Strava status error:");
-    res.status(500).json({ error: "Failed to get Strava status", code: "INTERNAL_SERVER_ERROR" });
+  if (!connection) {
+    return res.json({ connected: false });
   }
+
+  res.json({
+    connected: true,
+    athleteId: connection.stravaAthleteId,
+    lastSyncedAt: connection.lastSyncedAt,
+    requiresReauth: connection.requiresReauth,
+  });
 }
 
 async function handleStravaAuth(req: Request, res: Response) {
@@ -183,15 +276,14 @@ async function handleStravaAuth(req: Request, res: Response) {
   }
 
   const userId = getUserId(req);
-  const scope = "activity:read_all";
 
   const state = createSignedState(userId);
 
-  const authUrl = new URL("https://www.strava.com/oauth/authorize");
+  const authUrl = new URL(STRAVA_OAUTH_AUTHORIZE_URL);
   authUrl.searchParams.set("client_id", STRAVA_CLIENT_ID);
   authUrl.searchParams.set("redirect_uri", STRAVA_REDIRECT_URI);
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("scope", scope);
+  authUrl.searchParams.set("scope", STRAVA_SCOPE);
   authUrl.searchParams.set("state", state);
 
   res.json({ authUrl: authUrl.toString() });
@@ -216,6 +308,20 @@ async function handleStravaCallback(req: Request, res: Response) {
     return res.redirect("/settings?strava=error");
   }
 
+  // Single-use state: the HMAC makes the state unforgeable but not
+  // unreplayable — atomically claim it (cross-instance, via the shared
+  // runtime cache) so a captured callback URL is dead after first use.
+  // TTL matches the state's own max age; after that verifySignedState
+  // rejects it anyway.
+  const stateClaimed = await claimRuntimeCacheKey(
+    runtimeCacheKey("strava-oauth-state", state),
+    STATE_MAX_AGE_MS,
+  );
+  if (!stateClaimed) {
+    reqLogger(req).error("Strava OAuth state replayed - possible CSRF attack");
+    return res.redirect("/settings?strava=error");
+  }
+
   const userId = verified.userId;
 
   if (!userId || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
@@ -224,7 +330,7 @@ async function handleStravaCallback(req: Request, res: Response) {
 
   try {
     const tokenResponse = await retryWithJitter(async () => {
-      const r = await fetch("https://www.strava.com/oauth/token", {
+      const r = await fetch(STRAVA_OAUTH_TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -251,13 +357,18 @@ async function handleStravaCallback(req: Request, res: Response) {
 
     const tokenData = (await tokenResponse.json()) as StravaTokenResponse;
 
+    if (!tokenData.athlete) {
+      reqLogger(req).error("Strava token exchange response missing athlete data");
+      return res.redirect("/settings?strava=error");
+    }
+
     await storage.users.upsertStravaConnection({
       userId,
       stravaAthleteId: String(tokenData.athlete.id),
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       expiresAt: new Date(tokenData.expires_at * 1000),
-      scope: "activity:read_all",
+      scope: STRAVA_SCOPE,
       lastSyncedAt: null,
     });
 
@@ -268,65 +379,230 @@ async function handleStravaCallback(req: Request, res: Response) {
   }
 }
 
-async function handleStravaDisconnect(req: Request, res: Response) {
+/**
+ * Best-effort upstream revocation. Deleting our local row alone leaves the
+ * app authorized on strava.com until the user manually removes it there, so
+ * disconnect and account deletion both ask Strava to revoke the grant.
+ * Failures are swallowed: local deletion must never be blocked by a Strava
+ * outage or an already-expired access token.
+ */
+export async function deauthorizeStravaBestEffort(
+  accessToken: string,
+  log: Pick<typeof logger, "warn">,
+): Promise<void> {
   try {
-    const userId = getUserId(req);
-    await storage.users.deleteStravaConnection(userId);
-    res.json({ success: true });
-  } catch (error) {
-    reqLogger(req).error({ err: error }, "Strava disconnect error:");
-    res.status(500).json({ error: "Failed to disconnect Strava", code: "INTERNAL_SERVER_ERROR" });
+    await fetch(STRAVA_OAUTH_DEAUTHORIZE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ access_token: accessToken }).toString(),
+      signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // `err` is a network/timeout error from fetch; the access token travels
+    // in the request body, which fetch never echoes into its error objects.
+    // No secret material is logged.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn({ err }, "Strava deauthorization failed (non-fatal)");
   }
+}
+
+async function handleStravaDisconnect(req: Request, res: Response) {
+  // Errors propagate to asyncHandler → central error middleware.
+  const userId = getUserId(req);
+  const connection = await storage.users.getStravaConnection(userId);
+  if (connection) {
+    // Revoke upstream first — after deleteStravaConnection the token is gone.
+    // No refresh attempt: if the access token already expired the revoke is
+    // best-effort anyway, and a refresh here would burn a rotation for nothing.
+    await deauthorizeStravaBestEffort(connection.accessToken, reqLogger(req));
+  }
+  await storage.users.deleteStravaConnection(userId);
+  res.json({ success: true });
+}
+
+// Strava's documented per_page maximum — fewest read requests per sync.
+const STRAVA_ACTIVITIES_PER_PAGE = 200;
+// Cap a single sync at 5 pages (≤1000 activities, ≤5 read requests) to stay
+// well inside Strava's 100-reads/15-min app budget. A capped sync reports
+// hasMore and advances the cursor only through what it fetched, so the next
+// sync resumes seamlessly.
+const STRAVA_MAX_SYNC_PAGES = 5;
+// First sync (no cursor yet) backfills this window — matches the app's
+// analytics horizon and keeps the initial import to ~1 page for most users.
+const STRAVA_FIRST_SYNC_BACKFILL_DAYS = 90;
+// Strava indexes `after` by activity start_date, but devices can upload days
+// late (watch synced after a week offline). Re-scanning a 7-day overlap makes
+// those unlosable; the DB dedup absorbs the handful of re-fetched rows.
+const STRAVA_SYNC_OVERLAP_MS = 7 * MS_PER_DAY;
+
+/**
+ * Computes the `after` query param (epoch SECONDS, per the Strava API
+ * contract) for an incremental sync.
+ */
+export function computeSyncAfterEpoch(lastSyncedAt: Date | null, now: Date = new Date()): number {
+  const afterMs = lastSyncedAt
+    ? lastSyncedAt.getTime() - STRAVA_SYNC_OVERLAP_MS
+    : now.getTime() - STRAVA_FIRST_SYNC_BACKFILL_DAYS * MS_PER_DAY;
+  return Math.max(0, Math.floor(afterMs / 1000));
 }
 
 // Split out of handleStravaSync so the main handler stays under
 // SonarCloud's cognitive-complexity ceiling. Classifies upstream
 // responses so retryWithJitter can distinguish retryable (429, 5xx)
 // from non-retryable auth-revocation failures.
-async function fetchStravaActivities(
+//
+// NOTE: with `after` set, Strava returns activities in ASCENDING start_date
+// order — callers rely on "last element = newest fetched" for the cursor.
+//
+// Exported for tests only.
+export async function fetchStravaActivities(
   accessToken: string,
   log: Pick<typeof logger, "error">,
-): Promise<StravaActivity[]> {
-  return retryWithJitter(
-    async () => {
-      const response = await fetch(
-        "https://www.strava.com/api/v3/athlete/activities?per_page=30",
-        {
+  afterEpochSeconds: number,
+): Promise<{ activities: StravaActivity[]; hasMore: boolean }> {
+  const activities: StravaActivity[] = [];
+
+  for (let page = 1; page <= STRAVA_MAX_SYNC_PAGES; page++) {
+    const url = new URL(`${STRAVA_API_BASE}/athlete/activities`);
+    url.searchParams.set("after", String(afterEpochSeconds));
+    url.searchParams.set("per_page", String(STRAVA_ACTIVITIES_PER_PAGE));
+    url.searchParams.set("page", String(page));
+
+    const pageActivities = await retryWithJitter(
+      async () => {
+        const response = await fetch(url, {
           headers: { Authorization: `Bearer ${accessToken}` },
           signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-        },
-      );
+        });
 
-      if (response.status === 429 || response.status >= 500) {
-        throw new RetryableHttpError(
-          response.status,
-          parseRetryAfter(response.headers.get("retry-after")),
-        );
+        if (response.status === 429 || response.status >= 500) {
+          throw new RetryableHttpError(
+            response.status,
+            parseRetryAfter(response.headers.get("retry-after")),
+          );
+        }
+        if (response.status === 401 || response.status === 403) {
+          // Token was revoked on Strava's side (user removed our app) — a
+          // refresh won't help, we need the user to reconnect. Non-retryable.
+          throw new AppError(
+            ErrorCode.UNAUTHORIZED,
+            "Strava authorization was revoked — please reconnect your account",
+            401,
+          );
+        }
+        if (!response.ok) {
+          // Do NOT log the raw response body (same rationale as the token
+          // endpoint above) — hand-built `err` strings bypass pino's
+          // path-based redaction. Only the HTTP status code is logged.
+          // bearer:disable javascript_lang_logger_leak
+          log.error(
+            { status: response.status },
+            "Failed to fetch Strava activities",
+          );
+          throw new AppError(
+            ErrorCode.EXTERNAL_API_ERROR,
+            `Strava activities request failed: ${response.status}`,
+            502,
+          );
+        }
+        return (await response.json()) as StravaActivity[];
+      },
+      { label: "strava.listActivities", retries: 3 },
+    );
+
+    activities.push(...pageActivities);
+
+    // A short page means we've drained everything in the window.
+    if (pageActivities.length < STRAVA_ACTIVITIES_PER_PAGE) {
+      return { activities, hasMore: false };
+    }
+  }
+
+  // Every allowed page came back full — assume more remain past the cap.
+  return { activities, hasMore: true };
+}
+
+// The list endpoint NEVER returns `calories` (only the per-activity detail
+// endpoint does) and the kilojoules fallback only exists for power-meter
+// rides — so without enrichment nearly every imported activity shows an
+// empty calories chip. Cap detail fetches per sync to protect Strava's
+// 100-reads/15-min app budget: steady-state syncs import a handful of
+// activities and get fully enriched; a large backfill enriches only the
+// newest 25 (the ones users actually look at).
+const STRAVA_CALORIE_DETAIL_LIMIT = 25;
+
+interface StravaDetailedActivity {
+  id: number;
+  calories?: number;
+}
+
+/**
+ * Best-effort, budget-capped calorie enrichment for newly-imported workouts
+ * (mutated in place). Never throws — a failed detail fetch just leaves the
+ * list-derived row as-is.
+ */
+async function enrichCaloriesFromDetail(
+  accessToken: string,
+  workouts: ReturnType<typeof mapStravaActivityToWorkout>[],
+  log: Pick<typeof logger, "warn">,
+): Promise<void> {
+  // Activities arrive in ascending start_date order — slice from the end to
+  // enrich the newest ones.
+  const candidates = workouts
+    .filter((w) => w.calories === null)
+    .slice(-STRAVA_CALORIE_DETAIL_LIMIT);
+
+  let failures = 0;
+  for (const workout of candidates) {
+    try {
+      const detail = await retryWithJitter(
+        async () => {
+          const response = await fetch(
+            `${STRAVA_API_BASE}/activities/${workout.stravaActivityId}`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+            },
+          );
+          if (response.status === 429 || response.status >= 500) {
+            throw new RetryableHttpError(
+              response.status,
+              parseRetryAfter(response.headers.get("retry-after")),
+            );
+          }
+          // Any other failure: keep the list-derived row, no calories.
+          if (!response.ok) return null;
+          return (await response.json()) as StravaDetailedActivity;
+        },
+        // Enrichment is optional garnish — retry once, not the full 3 times.
+        { label: "strava.activityDetail", retries: 1 },
+      );
+      if (detail?.calories) {
+        workout.calories = Math.round(detail.calories);
       }
-      if (response.status === 401 || response.status === 403) {
-        // Token was revoked on Strava's side (user removed our app) — a
-        // refresh won't help, we need the user to reconnect. Non-retryable.
-        throw new AppError(
-          ErrorCode.UNAUTHORIZED,
-          "Strava authorization was revoked — please reconnect your account",
-          401,
+    } catch (err) {
+      if (err instanceof RetryableHttpError && err.status === 429) {
+        // Rate-limited: stop hammering — the remaining rows simply keep
+        // calories null. The sync itself still succeeds. Only a count is
+        // logged; no activity data or token material.
+        // bearer:disable javascript_lang_logger_leak
+        log.warn(
+          { attempted: candidates.length },
+          "Strava calorie enrichment stopped early: rate-limited (non-fatal)",
         );
+        return;
       }
-      if (!response.ok) {
-        log.error(
-          { err: await response.text(), status: response.status },
-          "Failed to fetch Strava activities:",
-        );
-        throw new AppError(
-          ErrorCode.EXTERNAL_API_ERROR,
-          `Strava activities request failed: ${response.status}`,
-          502,
-        );
-      }
-      return (await response.json()) as StravaActivity[];
-    },
-    { label: "strava.listActivities", retries: 3 },
-  );
+      failures++;
+    }
+  }
+  if (failures > 0) {
+    // Only counts are logged; no activity data or token material.
+    // bearer:disable javascript_lang_logger_leak
+    log.warn(
+      { failures, attempted: candidates.length },
+      "Strava calorie enrichment partially failed (non-fatal)",
+    );
+  }
 }
 
 // Translate upstream errors into actionable client responses instead
@@ -359,20 +635,45 @@ function sendStravaFetchError(res: Response, err: unknown): Response {
 async function handleStravaSync(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
-    const accessToken = await getValidAccessToken(userId);
+    const tokenResult = await getValidAccessToken(userId);
 
-    if (!accessToken) {
-      return res.status(401).json({ error: "Strava not connected or token expired", code: "UNAUTHORIZED" });
+    if (!tokenResult.ok) {
+      if (tokenResult.reason === "reauth_required") {
+        return res.status(401).json({
+          error: "Strava authorization was revoked — please reconnect your account",
+          code: "STRAVA_REAUTH_REQUIRED",
+        });
+      }
+      if (tokenResult.reason === "not_connected") {
+        return res.status(401).json({ error: "Strava not connected", code: "UNAUTHORIZED" });
+      }
+      // transient: refresh failed on a retryable error or a concurrent
+      // refresh didn't land in time — the client can simply retry.
+      return res.status(502).json({
+        error: "Strava is temporarily unavailable. Please try again shortly.",
+        code: "EXTERNAL_API_ERROR",
+      });
     }
+    const { accessToken, connection } = tokenResult;
 
     const user = await storage.users.getUser(userId);
     const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
     let activities: StravaActivity[];
+    let hasMore: boolean;
     try {
-      activities = await fetchStravaActivities(accessToken, reqLogger(req));
+      ({ activities, hasMore } = await fetchStravaActivities(
+        accessToken,
+        reqLogger(req),
+        computeSyncAfterEpoch(connection.lastSyncedAt),
+      ));
     } catch (err) {
       reqLogger(req).error({ err }, "Failed to fetch Strava activities after retries:");
+      if (err instanceof AppError && err.status === 401) {
+        // Authorization revoked upstream mid-flight — tombstone the
+        // connection so /status flips to "reconnect needed" too.
+        await storage.users.setStravaReauthRequired(userId);
+      }
       return sendStravaFetchError(res, err);
     }
 
@@ -392,6 +693,10 @@ async function handleStravaSync(req: Request, res: Response) {
       workoutsToImport.push(mapStravaActivityToWorkout(activity, userId, distanceUnit));
     }
 
+    if (workoutsToImport.length > 0) {
+      await enrichCaloriesFromDetail(accessToken, workoutsToImport, reqLogger(req));
+    }
+
     const createdLogs = workoutsToImport.length > 0
       ? await storage.workouts.createWorkoutLogs(workoutsToImport)
       : [];
@@ -403,10 +708,21 @@ async function handleStravaSync(req: Request, res: Response) {
     const imported = createdLogs.length;
     const raceSkipped = workoutsToImport.length - createdLogs.length;
 
-    await storage.users.updateStravaLastSync(userId);
+    if (hasMore && activities.length > 0) {
+      // Capped sync: advance the cursor only through the fetched window
+      // (ascending order ⇒ last element is the newest we saw) so the next
+      // sync resumes exactly where this one stopped instead of skipping the
+      // unfetched activities.
+      await storage.users.updateStravaLastSync(
+        userId,
+        new Date(activities[activities.length - 1].start_date),
+      );
+    } else {
+      await storage.users.updateStravaLastSync(userId);
+    }
 
     reqLogger(req).info(
-      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length },
+      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length, hasMore },
       "strava.sync.ok",
     );
 
@@ -415,6 +731,7 @@ async function handleStravaSync(req: Request, res: Response) {
       imported,
       skipped: skipped + raceSkipped,
       total: activities.length,
+      hasMore,
     });
   } catch (error) {
     reqLogger(req).error({ err: error }, "Strava sync error:");

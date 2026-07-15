@@ -404,6 +404,12 @@ export const stravaConnections = pgTable("strava_connections", {
   expiresAt: timestamp("expires_at").notNull(),
   scope: text("scope"),
   lastSyncedAt: timestamp("last_synced_at"),
+  // Set when Strava permanently rejects our credentials (invalid_grant on
+  // refresh, or 401/403 on an API call — the user revoked the app on
+  // strava.com). The row is kept as a tombstone so /status can distinguish
+  // "reconnect needed" from "never connected". Cleared on successful
+  // reconnect (upsert) and on any successful token refresh.
+  requiresReauth: boolean("requires_reauth").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

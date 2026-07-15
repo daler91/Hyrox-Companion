@@ -82,7 +82,7 @@ sequenceDiagram
 
 1. **Authorization URL generation** (`GET /api/v1/strava/auth`): The authenticated user requests an authorization URL. The server creates a signed state token containing the user ID, a timestamp (base-36 encoded), and a random nonce. The state is HMAC-SHA256 signed with `STRAVA_STATE_SECRET`. The Strava authorization URL is returned with scope `activity:read_all`.
 
-2. **Callback handling** (`GET /api/v1/strava/callback`): Strava redirects the user back with a `code` and `state` parameter. The server verifies the signed state using timing-safe comparison (via double-hashing with `crypto.timingSafeEqual`) and checks that the state is not older than 10 minutes (`STRAVA_STATE_MAX_AGE_MS`).
+2. **Callback handling** (`GET /api/v1/strava/callback`): Strava redirects the user back with a `code` and `state` parameter. The server verifies the signed state using timing-safe comparison (via double-hashing with `crypto.timingSafeEqual`) and checks that the state is not older than 10 minutes (`STRAVA_STATE_MAX_AGE_MS`). The state is then **atomically claimed** in the shared runtime cache (`claimRuntimeCacheKey`, cross-instance) so a captured callback URL cannot be replayed within the validity window — a second callback with the same state redirects to `/settings?strava=error`.
 
 3. **Token exchange**: The authorization code is exchanged for an access token, refresh token, and athlete information via a POST to `https://www.strava.com/oauth/token` with `grant_type: authorization_code`.
 
@@ -97,6 +97,8 @@ The OAuth state parameter serves as a CSRF token. It is structured as `userId:ti
 - `signature` is a full 256-bit HMAC-SHA256 over the payload
 
 Verification uses timing-safe comparison by hashing both the received and expected signatures with SHA-256, then comparing with `crypto.timingSafeEqual`. This prevents timing attacks and safely handles inputs of different lengths.
+
+States are additionally **single-use**: on a successful callback the state is claimed in the `server_runtime_cache` table (TTL = the state max age, swept by the shared-runtime cleanup cron), so replaying a valid state fails even inside the 10-minute window.
 
 ### Encrypted Token Storage
 
@@ -114,68 +116,43 @@ The encryption key is lazy-loaded so the server can boot in CI environments with
 When `getValidAccessToken()` is called and the current token's `expiresAt` is within a 60-second safety window (`STRAVA_REFRESH_SAFETY_WINDOW_MS`), the server automatically refreshes the token so an in-flight request never races a just-expired token:
 
 1. POST to `https://www.strava.com/oauth/token` with `grant_type: refresh_token`
-2. The new token set (access token, refresh token, expiration) is persisted back to the database
+2. The new token set (access token, refresh token, expiration) is persisted back to the database via `updateStravaTokens()` (a narrow UPDATE that cannot clobber `strava_athlete_id`, `scope`, or the `last_synced_at` cursor)
 3. The fresh access token is returned for use
 
 Refresh requests retry on `429` and `5xx` responses.
 
+**Concurrency**: Strava *rotates* the refresh token on every refresh and invalidates the old one, so two concurrent refreshes with the same stored token would brick the connection. The refresh is therefore serialized under a **per-user Postgres advisory lock** (`withPgAdvisoryLock`, key = SHA-256 of `strava-refresh:<userId>` truncated to int64 — cross-instance safe) with a re-read inside the lock: the loser of the race finds the winner's freshly-stored token and skips its own refresh. A request that fails the try-lock polls the connection briefly (3 × 500ms) for the winner's result before giving up with a transient error.
+
+**Permanent failure / reauth tombstone**: if the token endpoint answers with a non-retryable `4xx` (e.g. `invalid_grant` after the user revoked the app on strava.com), the connection's `requires_reauth` flag is set instead of leaving a zombie row. From then on `/status` reports `requiresReauth: true`, `/sync` fails fast with the `STRAVA_REAUTH_REQUIRED` code, and the client shows a **Reconnect** button. The flag is cleared by a successful reconnect (upsert) or any successful refresh. A `401`/`403` from the activities API mid-sync sets the same flag. This mirrors the Garmin `lastError` fail-fast pattern.
+
 All external Strava API calls use `AbortSignal.timeout(15000)` (the `EXTERNAL_API_TIMEOUT_MS` constant).
-
-### Token Refresh Flow
-
-```typescript
-// From server/strava.ts — getValidAccessToken()
-async function getValidAccessToken(userId: string): Promise<string | null> {
-  const connection = await storage.getStravaConnection(userId);
-  if (!connection) return null;
-
-  // Token still valid (with a 60s safety window) — return decrypted token
-  const refreshAt = new Date(Date.now() + STRAVA_REFRESH_SAFETY_WINDOW_MS);
-  if (connection.expiresAt > refreshAt) {
-    return connection.accessToken; // auto-decrypted by storage layer
-  }
-
-  // Token expired — refresh via Strava API
-  const refreshed = await refreshStravaToken(connection.refreshToken);
-  if (!refreshed) return null;
-
-  // Store new encrypted tokens
-  await storage.upsertStravaConnection({
-    userId,
-    stravaAthleteId: connection.stravaAthleteId,
-    accessToken: refreshed.access_token,   // encrypted on write
-    refreshToken: refreshed.refresh_token,  // encrypted on write
-    expiresAt: new Date(refreshed.expires_at * 1000),
-    scope: connection.scope,
-    lastSyncedAt: connection.lastSyncedAt,
-  });
-
-  return refreshed.access_token;
-}
-```
 
 ### Activity Sync
 
-Triggered by `POST /api/v1/strava/sync` (rate-limited to 5 requests per 15 minutes):
+Triggered by `POST /api/v1/strava/sync` (rate-limited to 5 requests per 15 minutes). The sync is **incremental**:
 
-1. Fetches the 30 most recent activities from `GET https://www.strava.com/api/v3/athlete/activities?per_page=30`
-2. Checks which activity IDs already exist in the database via `storage.getExistingStravaActivityIds()` to avoid duplicates
-3. New activities are mapped through `mapStravaActivityToWorkout()` which extracts:
+1. Computes an `after` cursor (`computeSyncAfterEpoch()`, epoch seconds):
+   - First sync (`last_synced_at` is null): `now − 90 days` (`STRAVA_FIRST_SYNC_BACKFILL_DAYS`)
+   - Subsequent syncs: `last_synced_at − 7 days` (`STRAVA_SYNC_OVERLAP_MS`) — the overlap catches activities uploaded late by a device (e.g. a watch synced days after the workout); the DB dedup absorbs the re-fetched rows
+2. Fetches `GET https://www.strava.com/api/v3/athlete/activities?after=…&per_page=200&page=N`, paginating up to 5 pages per sync (`STRAVA_MAX_SYNC_PAGES`, ≤1000 activities / ≤5 read requests — well inside Strava's 100-reads-per-15-min app budget). With `after`, Strava returns activities in **ascending** `start_date` order. A short page ends pagination; 5 full pages sets `hasMore: true` in the response.
+3. Checks which activity IDs already exist in the database via `storage.getExistingStravaActivityIds()` to avoid duplicates
+4. New activities are mapped through `mapStravaActivityToWorkout()` which extracts:
    - Date (from `start_date_local`)
    - Focus (from `sport_type` or `type`)
    - Main workout description (distance + duration, or duration-only for non-distance activities)
    - Accessory data (elevation gain, pace)
    - Notes (activity name, heart rate data)
    - Metrics: calories, distance (meters), elevation gain, avg/max heart rate, avg/max speed, cadence, watts, suffer score
-4. Distance and pace are formatted according to the user's preferred `distanceUnit` (km or miles)
-5. All new workouts are batch-inserted via `storage.createWorkoutLogs()`
-6. The `lastSyncedAt` timestamp on the Strava connection is updated
+5. **Calorie enrichment**: the list endpoint never returns `calories` (and `kilojoules` only exists for power-meter rides), so the newest ≤25 imported activities (`STRAVA_CALORIE_DETAIL_LIMIT`) get a best-effort `GET /api/v3/activities/{id}` detail fetch to fill in calories. Failures are non-fatal; a `429` stops the enrichment loop without failing the sync.
+6. Distance and pace are formatted according to the user's preferred `distanceUnit` (km or miles)
+7. All new workouts are batch-inserted via `storage.createWorkoutLogs()`
+8. The `lastSyncedAt` cursor is updated: to *now* after a complete sync, or — when the page cap was hit — to the newest fetched activity's `start_date`, so the next sync resumes exactly where this one stopped and nothing is ever silently skipped
 
-The response includes counts of imported, skipped, and total activities.
+The response includes counts of imported, skipped, and total activities, plus `hasMore` (true when a capped sync left older activities to fetch — the client hints to run Sync again).
 
 ### Disconnect Flow
 
-`DELETE /api/v1/strava/disconnect` removes the Strava connection record from the database via `storage.deleteStravaConnection()`. Previously imported workout logs are not deleted.
+`DELETE /api/v1/strava/disconnect` first performs a **best-effort upstream revocation** (`POST https://www.strava.com/oauth/deauthorize` via `deauthorizeStravaBestEffort()` — failures are logged and ignored so a Strava outage can never block disconnect), then removes the Strava connection record via `storage.deleteStravaConnection()`. Previously imported workout logs are not deleted. Account deletion reuses the same helper.
 
 ### Rate Limiting
 
@@ -205,8 +182,14 @@ The `strava_connections` table (`shared/schema/tables.ts`):
 | `refresh_token` | text | Encrypted with AES-256-GCM |
 | `expires_at` | timestamp | Token expiration time |
 | `scope` | text | OAuth scope granted |
-| `last_synced_at` | timestamp | Nullable; updated after each successful sync |
+| `last_synced_at` | timestamp | Nullable; incremental-sync cursor, updated after each successful sync (to the newest fetched activity when the page cap was hit) |
+| `requires_reauth` | boolean | Default false. Set when Strava permanently rejects our credentials (user revoked the app); cleared on reconnect or successful refresh. Kept as a tombstone so the UI can offer "Reconnect" |
 | `created_at` | timestamp | Auto-set on creation |
+
+### Known Limitations / Future Work
+
+- **No webhook auto-import**: syncing is user-triggered. Strava's webhook Push API could import new activities automatically, but requires a webhook subscription on the Strava API application (callback URL + verify token) and a publicly reachable endpoint — a deliberate follow-up.
+- **Garmin parity**: the incremental-cursor and pagination semantics added to Strava sync have no Garmin equivalent yet.
 
 ---
 

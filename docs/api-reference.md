@@ -1220,7 +1220,7 @@ Dispatch a test notification to every registered subscription for the authentica
 Check if the current user has a Strava connection.
 
 - **Auth:** Required
-- **Response:** `{ connected: boolean, lastSyncedAt?: string }`
+- **Response:** `{ connected: boolean, athleteId?: string, lastSyncedAt?: string, requiresReauth?: boolean }` — `requiresReauth: true` means Strava rejected our stored credentials (the user revoked the app on strava.com); the client should offer a Reconnect flow.
 
 ### GET /api/v1/strava/auth
 
@@ -1229,7 +1229,7 @@ Generate a Strava OAuth authorization URL with CSRF-protected signed state.
 - **Auth:** Required
 - **Rate limit:** IP-based, 20 per 15 minutes
 - **Response:** `{ url: string }` — Redirect URL for Strava OAuth
-- **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced
+- **State parameter:** HMAC-SHA256 signed with `userId:timestamp:nonce:signature`, max age enforced, single-use (atomically claimed on callback)
 
 ### GET /api/v1/strava/callback
 
@@ -1237,22 +1237,23 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 
 - **Auth:** Not required (redirect from Strava)
 - **Rate limit:** IP-based, 20 per 15 minutes
-- **Query:** `code`, `state` (CSRF-verified), `scope`
-- **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens
+- **Query:** `code`, `state` (CSRF-verified, single-use — replays redirect to `/settings?strava=error`), `scope`
+- **Side effects:** Creates `stravaConnections` record with AES-256-GCM encrypted tokens; clears any `requires_reauth` tombstone on reconnect
 - **Response:** Redirect to `/settings`
 
 ### POST /api/v1/strava/sync
 
-Sync recent Strava activities into workout logs.
+Incrementally sync Strava activities into workout logs (since `lastSyncedAt` with a 7-day overlap; 90-day backfill on first sync; up to 5 × 200-activity pages per call).
 
 - **Auth:** Required
 - **Rate limit:** IP-based, 5 per 15 minutes
-- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens.
-- **Response:** `{ imported: number }` or `{ message: string }`
+- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, advances the `lastSyncedAt` cursor.
+- **Response:** `{ success: true, imported: number, skipped: number, total: number, hasMore: boolean }` — `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
+- **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure).
 
 ### DELETE /api/v1/strava/disconnect
 
-Disconnect the Strava integration.
+Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/deauthorize` (non-fatal on failure) before deleting the local connection.
 
 - **Auth:** Required
 - **Response:** `{ success: true }`

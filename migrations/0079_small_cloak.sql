@@ -1,0 +1,1 @@
+ALTER TABLE "strava_connections" ADD COLUMN "requires_reauth" boolean DEFAULT false NOT NULL;

@@ -152,6 +152,93 @@ describe('UserStorage', () => {
         expect(result.accessToken).toBe('raw-access');
         expect(result.refreshToken).toBe('raw-refresh');
       });
+
+      it('clears the requires_reauth tombstone on the conflict-update path (reconnect)', async () => {
+        const inputData: InsertStravaConnection = {
+          userId: 'user-1',
+          stravaAthleteId: 'athlete-1',
+          accessToken: 'raw-access',
+          refreshToken: 'raw-refresh',
+          expiresAt: new Date(),
+          scope: 'activity:read_all',
+        };
+
+        const returningMock = vi.fn().mockResolvedValue([{
+          ...inputData,
+          accessToken: 'encrypted-raw-access',
+          refreshToken: 'encrypted-raw-refresh',
+        }]);
+        const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
+        const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+        vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
+
+        await userStorage.upsertStravaConnection(inputData);
+
+        expect(onConflictDoUpdateMock).toHaveBeenCalledWith(expect.objectContaining({
+          set: expect.objectContaining({ requiresReauth: false }),
+        }));
+      });
+    });
+
+    describe('updateStravaTokens', () => {
+      it('encrypts the rotated tokens, clears requiresReauth, and never touches lastSyncedAt', async () => {
+        const setMock = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+        vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+        const expiresAt = new Date('2026-07-15T12:00:00Z');
+        await userStorage.updateStravaTokens('user-1', {
+          accessToken: 'new-access',
+          refreshToken: 'new-refresh',
+          expiresAt,
+        });
+
+        expect(crypto.encryptToken).toHaveBeenCalledWith('new-access');
+        expect(crypto.encryptToken).toHaveBeenCalledWith('new-refresh');
+        expect(setMock).toHaveBeenCalledWith({
+          accessToken: 'encrypted-new-access',
+          refreshToken: 'encrypted-new-refresh',
+          expiresAt,
+          requiresReauth: false,
+        });
+        // The refresh path must not clobber the incremental-sync cursor.
+        expect(setMock.mock.calls[0][0]).not.toHaveProperty('lastSyncedAt');
+      });
+    });
+
+    describe('setStravaReauthRequired', () => {
+      it('flags the connection as needing re-authorization', async () => {
+        const setMock = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+        vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+        await userStorage.setStravaReauthRequired('user-1');
+
+        expect(setMock).toHaveBeenCalledWith({ requiresReauth: true });
+      });
+    });
+
+    describe('updateStravaLastSync', () => {
+      it('advances the cursor to the provided syncedThrough date (capped sync)', async () => {
+        const setMock = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+        vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+        const syncedThrough = new Date('2026-07-10T08:30:00Z');
+        await userStorage.updateStravaLastSync('user-1', syncedThrough);
+
+        expect(setMock).toHaveBeenCalledWith({ lastSyncedAt: syncedThrough });
+      });
+
+      it('defaults the cursor to now for a complete sync', async () => {
+        const setMock = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+        vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+        const before = Date.now();
+        await userStorage.updateStravaLastSync('user-1');
+        const after = Date.now();
+
+        const setArg = setMock.mock.calls[0][0] as { lastSyncedAt: Date };
+        expect(setArg.lastSyncedAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(setArg.lastSyncedAt.getTime()).toBeLessThanOrEqual(after);
+      });
     });
   });
 
