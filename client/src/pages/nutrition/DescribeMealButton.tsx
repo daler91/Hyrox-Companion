@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CharacterCount } from "@/components/ui/character-count";
 import {
   Dialog,
   DialogContent,
@@ -72,8 +73,10 @@ export function DescribeMealButton({
             rows={4}
             maxLength={2000}
             aria-label="Describe your meal"
+            aria-describedby="describe-meal-count"
             data-testid="input-describe-meal"
           />
+          <CharacterCount id="describe-meal-count" value={text} max={2000} />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={parse.isPending}>
               Cancel
