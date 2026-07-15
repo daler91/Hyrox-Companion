@@ -134,9 +134,9 @@ async function refreshStravaToken(refreshToken: string): Promise<StravaRefreshRe
         if (!response.ok) {
           // Do NOT log the raw response body — Strava OAuth token-endpoint
           // bodies can echo token/secret material and a hand-built `err` string
-          // bypasses pino's path-based redaction. Status is enough to triage.
-          // bearer:disable javascript_lang_logger_leak — only the HTTP status
-          // code is logged; the raw body was deliberately dropped above (W1).
+          // bypasses pino's path-based redaction. Status is enough to triage
+          // (W1); only the HTTP status code is logged.
+          // bearer:disable javascript_lang_logger_leak
           logger.error({ status: response.status }, "Failed to refresh Strava token");
           // Remaining 4xx here means Strava rejected the grant itself.
           return { ok: false, permanent: true };
@@ -398,9 +398,10 @@ export async function deauthorizeStravaBestEffort(
       signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
     });
   } catch (err) {
-    // bearer:disable javascript_lang_logger_leak — `err` is a network/timeout
-    // error from fetch; the access token travels in the request body, which
-    // fetch never echoes into its error objects. No secret material is logged.
+    // `err` is a network/timeout error from fetch; the access token travels
+    // in the request body, which fetch never echoes into its error objects.
+    // No secret material is logged.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ err }, "Strava deauthorization failed (non-fatal)");
   }
 }
@@ -492,9 +493,8 @@ export async function fetchStravaActivities(
         if (!response.ok) {
           // Do NOT log the raw response body (same rationale as the token
           // endpoint above) — hand-built `err` strings bypass pino's
-          // path-based redaction. Status is enough to triage.
-          // bearer:disable javascript_lang_logger_leak — only the HTTP status
-          // code is logged; the raw body was deliberately dropped above.
+          // path-based redaction. Only the HTTP status code is logged.
+          // bearer:disable javascript_lang_logger_leak
           log.error(
             { status: response.status },
             "Failed to fetch Strava activities",
@@ -583,9 +583,9 @@ async function enrichCaloriesFromDetail(
     } catch (err) {
       if (err instanceof RetryableHttpError && err.status === 429) {
         // Rate-limited: stop hammering — the remaining rows simply keep
-        // calories null. The sync itself still succeeds.
-        // bearer:disable javascript_lang_logger_leak — only a count is
+        // calories null. The sync itself still succeeds. Only a count is
         // logged; no activity data or token material.
+        // bearer:disable javascript_lang_logger_leak
         log.warn(
           { attempted: candidates.length },
           "Strava calorie enrichment stopped early: rate-limited (non-fatal)",
@@ -596,8 +596,8 @@ async function enrichCaloriesFromDetail(
     }
   }
   if (failures > 0) {
-    // bearer:disable javascript_lang_logger_leak — only counts are logged;
-    // no activity data or token material.
+    // Only counts are logged; no activity data or token material.
+    // bearer:disable javascript_lang_logger_leak
     log.warn(
       { failures, attempted: candidates.length },
       "Strava calorie enrichment partially failed (non-fatal)",
