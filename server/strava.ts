@@ -498,6 +498,85 @@ async function fetchStravaActivities(
   return { activities, hasMore: true };
 }
 
+// The list endpoint NEVER returns `calories` (only the per-activity detail
+// endpoint does) and the kilojoules fallback only exists for power-meter
+// rides — so without enrichment nearly every imported activity shows an
+// empty calories chip. Cap detail fetches per sync to protect Strava's
+// 100-reads/15-min app budget: steady-state syncs import a handful of
+// activities and get fully enriched; a large backfill enriches only the
+// newest 25 (the ones users actually look at).
+const STRAVA_CALORIE_DETAIL_LIMIT = 25;
+
+interface StravaDetailedActivity {
+  id: number;
+  calories?: number;
+}
+
+/**
+ * Best-effort, budget-capped calorie enrichment for newly-imported workouts
+ * (mutated in place). Never throws — a failed detail fetch just leaves the
+ * list-derived row as-is.
+ */
+async function enrichCaloriesFromDetail(
+  accessToken: string,
+  workouts: ReturnType<typeof mapStravaActivityToWorkout>[],
+  log: Pick<typeof logger, "warn">,
+): Promise<void> {
+  // Activities arrive in ascending start_date order — slice from the end to
+  // enrich the newest ones.
+  const candidates = workouts
+    .filter((w) => w.calories === null)
+    .slice(-STRAVA_CALORIE_DETAIL_LIMIT);
+
+  let failures = 0;
+  for (const workout of candidates) {
+    try {
+      const detail = await retryWithJitter(
+        async () => {
+          const response = await fetch(
+            `${STRAVA_API_BASE}/activities/${workout.stravaActivityId}`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
+            },
+          );
+          if (response.status === 429 || response.status >= 500) {
+            throw new RetryableHttpError(
+              response.status,
+              parseRetryAfter(response.headers.get("retry-after")),
+            );
+          }
+          // Any other failure: keep the list-derived row, no calories.
+          if (!response.ok) return null;
+          return (await response.json()) as StravaDetailedActivity;
+        },
+        // Enrichment is optional garnish — retry once, not the full 3 times.
+        { label: "strava.activityDetail", retries: 1 },
+      );
+      if (detail?.calories) {
+        workout.calories = Math.round(detail.calories);
+      }
+    } catch (err) {
+      if (err instanceof RetryableHttpError && err.status === 429) {
+        // Rate-limited: stop hammering — the remaining rows simply keep
+        // calories null. The sync itself still succeeds.
+        log.warn(
+          { attempted: candidates.length },
+          "Strava calorie enrichment stopped early: rate-limited (non-fatal)",
+        );
+        return;
+      }
+      failures++;
+    }
+  }
+  if (failures > 0) {
+    log.warn(
+      { failures, attempted: candidates.length },
+      "Strava calorie enrichment partially failed (non-fatal)",
+    );
+  }
+}
+
 // Translate upstream errors into actionable client responses instead
 // of a blanket 500 (Warning-13):
 //  - 429 after retry exhaustion → surface Retry-After so the UI can
@@ -584,6 +663,10 @@ async function handleStravaSync(req: Request, res: Response) {
       }
 
       workoutsToImport.push(mapStravaActivityToWorkout(activity, userId, distanceUnit));
+    }
+
+    if (workoutsToImport.length > 0) {
+      await enrichCaloriesFromDetail(accessToken, workoutsToImport, reqLogger(req));
     }
 
     const createdLogs = workoutsToImport.length > 0
