@@ -7,7 +7,7 @@ import rateLimit from "express-rate-limit";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
-import { EXTERNAL_API_TIMEOUT_MS,RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
+import { EXTERNAL_API_TIMEOUT_MS,MS_PER_DAY, RATE_LIMIT_WINDOW_15M_MS, STRAVA_STATE_MAX_AGE_MS } from "./constants";
 import { pool } from "./db";
 import { env } from "./env";
 import { AppError, ErrorCode } from "./errors";
@@ -399,57 +399,103 @@ async function handleStravaDisconnect(req: Request, res: Response) {
   res.json({ success: true });
 }
 
+// Strava's documented per_page maximum — fewest read requests per sync.
+const STRAVA_ACTIVITIES_PER_PAGE = 200;
+// Cap a single sync at 5 pages (≤1000 activities, ≤5 read requests) to stay
+// well inside Strava's 100-reads/15-min app budget. A capped sync reports
+// hasMore and advances the cursor only through what it fetched, so the next
+// sync resumes seamlessly.
+const STRAVA_MAX_SYNC_PAGES = 5;
+// First sync (no cursor yet) backfills this window — matches the app's
+// analytics horizon and keeps the initial import to ~1 page for most users.
+const STRAVA_FIRST_SYNC_BACKFILL_DAYS = 90;
+// Strava indexes `after` by activity start_date, but devices can upload days
+// late (watch synced after a week offline). Re-scanning a 7-day overlap makes
+// those unlosable; the DB dedup absorbs the handful of re-fetched rows.
+const STRAVA_SYNC_OVERLAP_MS = 7 * MS_PER_DAY;
+
+/**
+ * Computes the `after` query param (epoch SECONDS, per the Strava API
+ * contract) for an incremental sync.
+ */
+export function computeSyncAfterEpoch(lastSyncedAt: Date | null, now: Date = new Date()): number {
+  const afterMs = lastSyncedAt
+    ? lastSyncedAt.getTime() - STRAVA_SYNC_OVERLAP_MS
+    : now.getTime() - STRAVA_FIRST_SYNC_BACKFILL_DAYS * MS_PER_DAY;
+  return Math.max(0, Math.floor(afterMs / 1000));
+}
+
 // Split out of handleStravaSync so the main handler stays under
 // SonarCloud's cognitive-complexity ceiling. Classifies upstream
 // responses so retryWithJitter can distinguish retryable (429, 5xx)
 // from non-retryable auth-revocation failures.
+//
+// NOTE: with `after` set, Strava returns activities in ASCENDING start_date
+// order — callers rely on "last element = newest fetched" for the cursor.
 async function fetchStravaActivities(
   accessToken: string,
   log: Pick<typeof logger, "error">,
-): Promise<StravaActivity[]> {
-  return retryWithJitter(
-    async () => {
-      const response = await fetch(
-        "https://www.strava.com/api/v3/athlete/activities?per_page=30",
-        {
+  afterEpochSeconds: number,
+): Promise<{ activities: StravaActivity[]; hasMore: boolean }> {
+  const activities: StravaActivity[] = [];
+
+  for (let page = 1; page <= STRAVA_MAX_SYNC_PAGES; page++) {
+    const url = new URL(`${STRAVA_API_BASE}/athlete/activities`);
+    url.searchParams.set("after", String(afterEpochSeconds));
+    url.searchParams.set("per_page", String(STRAVA_ACTIVITIES_PER_PAGE));
+    url.searchParams.set("page", String(page));
+
+    const pageActivities = await retryWithJitter(
+      async () => {
+        const response = await fetch(url, {
           headers: { Authorization: `Bearer ${accessToken}` },
           signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
-        },
-      );
+        });
 
-      if (response.status === 429 || response.status >= 500) {
-        throw new RetryableHttpError(
-          response.status,
-          parseRetryAfter(response.headers.get("retry-after")),
-        );
-      }
-      if (response.status === 401 || response.status === 403) {
-        // Token was revoked on Strava's side (user removed our app) — a
-        // refresh won't help, we need the user to reconnect. Non-retryable.
-        throw new AppError(
-          ErrorCode.UNAUTHORIZED,
-          "Strava authorization was revoked — please reconnect your account",
-          401,
-        );
-      }
-      if (!response.ok) {
-        // Do NOT log the raw response body (same rationale as the token
-        // endpoint above) — hand-built `err` strings bypass pino's path-based
-        // redaction. Status is enough to triage.
-        log.error(
-          { status: response.status },
-          "Failed to fetch Strava activities",
-        );
-        throw new AppError(
-          ErrorCode.EXTERNAL_API_ERROR,
-          `Strava activities request failed: ${response.status}`,
-          502,
-        );
-      }
-      return (await response.json()) as StravaActivity[];
-    },
-    { label: "strava.listActivities", retries: 3 },
-  );
+        if (response.status === 429 || response.status >= 500) {
+          throw new RetryableHttpError(
+            response.status,
+            parseRetryAfter(response.headers.get("retry-after")),
+          );
+        }
+        if (response.status === 401 || response.status === 403) {
+          // Token was revoked on Strava's side (user removed our app) — a
+          // refresh won't help, we need the user to reconnect. Non-retryable.
+          throw new AppError(
+            ErrorCode.UNAUTHORIZED,
+            "Strava authorization was revoked — please reconnect your account",
+            401,
+          );
+        }
+        if (!response.ok) {
+          // Do NOT log the raw response body (same rationale as the token
+          // endpoint above) — hand-built `err` strings bypass pino's
+          // path-based redaction. Status is enough to triage.
+          log.error(
+            { status: response.status },
+            "Failed to fetch Strava activities",
+          );
+          throw new AppError(
+            ErrorCode.EXTERNAL_API_ERROR,
+            `Strava activities request failed: ${response.status}`,
+            502,
+          );
+        }
+        return (await response.json()) as StravaActivity[];
+      },
+      { label: "strava.listActivities", retries: 3 },
+    );
+
+    activities.push(...pageActivities);
+
+    // A short page means we've drained everything in the window.
+    if (pageActivities.length < STRAVA_ACTIVITIES_PER_PAGE) {
+      return { activities, hasMore: false };
+    }
+  }
+
+  // Every allowed page came back full — assume more remain past the cap.
+  return { activities, hasMore: true };
 }
 
 // Translate upstream errors into actionable client responses instead
@@ -501,14 +547,19 @@ async function handleStravaSync(req: Request, res: Response) {
         code: "EXTERNAL_API_ERROR",
       });
     }
-    const { accessToken } = tokenResult;
+    const { accessToken, connection } = tokenResult;
 
     const user = await storage.users.getUser(userId);
     const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
 
     let activities: StravaActivity[];
+    let hasMore: boolean;
     try {
-      activities = await fetchStravaActivities(accessToken, reqLogger(req));
+      ({ activities, hasMore } = await fetchStravaActivities(
+        accessToken,
+        reqLogger(req),
+        computeSyncAfterEpoch(connection.lastSyncedAt),
+      ));
     } catch (err) {
       reqLogger(req).error({ err }, "Failed to fetch Strava activities after retries:");
       if (err instanceof AppError && err.status === 401) {
@@ -546,10 +597,21 @@ async function handleStravaSync(req: Request, res: Response) {
     const imported = createdLogs.length;
     const raceSkipped = workoutsToImport.length - createdLogs.length;
 
-    await storage.users.updateStravaLastSync(userId);
+    if (hasMore && activities.length > 0) {
+      // Capped sync: advance the cursor only through the fetched window
+      // (ascending order ⇒ last element is the newest we saw) so the next
+      // sync resumes exactly where this one stopped instead of skipping the
+      // unfetched activities.
+      await storage.users.updateStravaLastSync(
+        userId,
+        new Date(activities[activities.length - 1].start_date),
+      );
+    } else {
+      await storage.users.updateStravaLastSync(userId);
+    }
 
     reqLogger(req).info(
-      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length },
+      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length, hasMore },
       "strava.sync.ok",
     );
 
@@ -558,6 +620,7 @@ async function handleStravaSync(req: Request, res: Response) {
       imported,
       skipped: skipped + raceSkipped,
       total: activities.length,
+      hasMore,
     });
   } catch (error) {
     reqLogger(req).error({ err: error }, "Strava sync error:");
