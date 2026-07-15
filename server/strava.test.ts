@@ -356,9 +356,9 @@ describe('getValidAccessToken', () => {
       env: {
         STRAVA_CLIENT_ID: 'client-id',
         STRAVA_CLIENT_SECRET: 'client-secret',
-        STRAVA_STATE_SECRET: 'dedicated-strava-secret-12345678',
+        STRAVA_STATE_SECRET: 'dedicated-strava-secret-12345678', // gitleaks:allow — fake test-only value, not a credential
         DATABASE_URL: 'postgres://dummy',
-        APP_URL: 'http://localhost',
+        APP_URL: 'https://app.example.com',
       },
     }));
     vi.doMock('./storage', () => ({

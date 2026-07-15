@@ -398,6 +398,9 @@ export async function deauthorizeStravaBestEffort(
       signal: AbortSignal.timeout(EXTERNAL_API_TIMEOUT_MS),
     });
   } catch (err) {
+    // bearer:disable javascript_lang_logger_leak — `err` is a network/timeout
+    // error from fetch; the access token travels in the request body, which
+    // fetch never echoes into its error objects. No secret material is logged.
     log.warn({ err }, "Strava deauthorization failed (non-fatal)");
   }
 }
@@ -490,6 +493,8 @@ export async function fetchStravaActivities(
           // Do NOT log the raw response body (same rationale as the token
           // endpoint above) — hand-built `err` strings bypass pino's
           // path-based redaction. Status is enough to triage.
+          // bearer:disable javascript_lang_logger_leak — only the HTTP status
+          // code is logged; the raw body was deliberately dropped above.
           log.error(
             { status: response.status },
             "Failed to fetch Strava activities",
@@ -579,6 +584,8 @@ async function enrichCaloriesFromDetail(
       if (err instanceof RetryableHttpError && err.status === 429) {
         // Rate-limited: stop hammering — the remaining rows simply keep
         // calories null. The sync itself still succeeds.
+        // bearer:disable javascript_lang_logger_leak — only a count is
+        // logged; no activity data or token material.
         log.warn(
           { attempted: candidates.length },
           "Strava calorie enrichment stopped early: rate-limited (non-fatal)",
@@ -589,6 +596,8 @@ async function enrichCaloriesFromDetail(
     }
   }
   if (failures > 0) {
+    // bearer:disable javascript_lang_logger_leak — only counts are logged;
+    // no activity data or token material.
     log.warn(
       { failures, attempted: candidates.length },
       "Strava calorie enrichment partially failed (non-fatal)",

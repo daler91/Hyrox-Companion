@@ -1,0 +1,8 @@
+# Gitleaks false-positive fingerprints (commit:file:rule:line).
+# gitleaks scans each PR commit's diff, so a finding in an already-pushed
+# commit must be ignored by fingerprint even after the line itself is fixed.
+
+# Fake test-only STRAVA_STATE_SECRET mock in a vi.doMock('./env') block —
+# never a real credential. The line now also carries an inline
+# `gitleaks:allow` so future edits don't re-flag at a new fingerprint.
+10fc8f3dd74a082afb0ea7dad833bafd60b92e3e:server/strava.test.ts:generic-api-key:359
