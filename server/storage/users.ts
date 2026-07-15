@@ -320,6 +320,8 @@ export class UserStorage {
           refreshToken: encryptedData.refreshToken,
           expiresAt: encryptedData.expiresAt,
           scope: encryptedData.scope,
+          // A successful (re)connect always yields working credentials.
+          requiresReauth: false,
         },
       })
       .returning();
@@ -338,10 +340,48 @@ export class UserStorage {
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  async updateStravaLastSync(userId: string): Promise<void> {
+  /**
+   * Token-refresh path: updates ONLY the rotated token triple and clears the
+   * reauth tombstone. Deliberately narrower than upsertStravaConnection so a
+   * refresh can never clobber stravaAthleteId/scope/lastSyncedAt.
+   */
+  async updateStravaTokens(
+    userId: string,
+    tokens: { accessToken: string; refreshToken: string; expiresAt: Date },
+  ): Promise<void> {
     await db
       .update(stravaConnections)
-      .set({ lastSyncedAt: new Date() })
+      .set({
+        accessToken: encryptToken(tokens.accessToken),
+        refreshToken: encryptToken(tokens.refreshToken),
+        expiresAt: tokens.expiresAt,
+        requiresReauth: false,
+      })
+      .where(eq(stravaConnections.userId, userId));
+  }
+
+  /**
+   * Marks the connection as needing user re-authorization (Strava rejected
+   * our refresh token or API credentials permanently). The row is kept so
+   * the UI can offer "Reconnect" instead of showing "never connected".
+   */
+  async setStravaReauthRequired(userId: string): Promise<void> {
+    await db
+      .update(stravaConnections)
+      .set({ requiresReauth: true })
+      .where(eq(stravaConnections.userId, userId));
+  }
+
+  /**
+   * @param syncedThrough Incremental-sync cursor: when a capped sync could
+   * not fetch everything, this is the start_date of the newest activity that
+   * WAS fetched, so the next sync resumes from there instead of skipping the
+   * unfetched window. Defaults to "now" for a complete sync.
+   */
+  async updateStravaLastSync(userId: string, syncedThrough?: Date): Promise<void> {
+    await db
+      .update(stravaConnections)
+      .set({ lastSyncedAt: syncedThrough ?? new Date() })
       .where(eq(stravaConnections.userId, userId));
   }
 
