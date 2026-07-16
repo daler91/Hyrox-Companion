@@ -41,8 +41,14 @@ export interface ExerciseLoadTagInput {
 }
 
 type ExerciseLoadTagValues = readonly [
-  posteriorChain: number, anteriorChain: number, unilateralStability: number, elasticTendon: number,
-  axialLoadModifier: number, tendonLoadModifier: number, eccentricRiskModifier: number, highIntensityRunningRisk: number,
+  posteriorChain: number,
+  anteriorChain: number,
+  unilateralStability: number,
+  elasticTendon: number,
+  axialLoadModifier: number,
+  tendonLoadModifier: number,
+  eccentricRiskModifier: number,
+  highIntensityRunningRisk: number,
 ];
 
 export type TrainingLoadSet = {
@@ -237,7 +243,9 @@ function emptyVectorLoads(): Record<LoadVector, number> {
   };
 }
 
-function normalizeTags(tags: readonly ExerciseLoadTagInput[] | readonly ExerciseLoadTag[]): Map<string, ExerciseLoadTagInput> {
+function normalizeTags(
+  tags: readonly ExerciseLoadTagInput[] | readonly ExerciseLoadTag[],
+): Map<string, ExerciseLoadTagInput> {
   const map = new Map<string, ExerciseLoadTagInput>();
   for (const tag of DEFAULT_EXERCISE_LOAD_TAGS) map.set(tag.exerciseName, tag);
   for (const tag of tags) {
@@ -288,13 +296,19 @@ function getTag(
 function isStrengthSet(set: TrainingLoadSet): boolean {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
   const weight = Number(set.weight ?? set.plannedWeight ?? 0);
-  return set.category === "strength" ||
+  return (
+    set.category === "strength" ||
     (reps > 0 && weight > 0) ||
-    (reps > 0 && (set.category === "conditioning" || set.category === "functional"));
+    (reps > 0 && (set.category === "conditioning" || set.category === "functional"))
+  );
 }
 
 function isCardioSet(set: TrainingLoadSet): boolean {
-  return set.category === "running" || set.category === "conditioning" || Number(set.distance ?? set.plannedDistance ?? 0) > 0;
+  return (
+    set.category === "running" ||
+    set.category === "conditioning" ||
+    Number(set.distance ?? set.plannedDistance ?? 0) > 0
+  );
 }
 
 function rpeFactor(rpe: number | null | undefined): number {
@@ -303,7 +317,10 @@ function rpeFactor(rpe: number | null | undefined): number {
 }
 
 export function calculateStrengthStressScore(
-  set: Pick<TrainingLoadSet, "reps" | "weight" | "plannedReps" | "plannedWeight" | "distance" | "plannedDistance">,
+  set: Pick<
+    TrainingLoadSet,
+    "reps" | "weight" | "plannedReps" | "plannedWeight" | "distance" | "plannedDistance"
+  >,
   tag: ExerciseLoadTagInput,
   rpe?: number | null,
   weightUnit: string = "kg",
@@ -329,7 +346,9 @@ export function calculateStrengthStressScore(
   return round((weightedTonnage / 100) * rpeFactor(rpe) * modifier, 2);
 }
 
-function inferWorkoutText(log: Pick<WorkoutLog, "focus" | "mainWorkout" | "accessory" | "notes">): string {
+function inferWorkoutText(
+  log: Pick<WorkoutLog, "focus" | "mainWorkout" | "accessory" | "notes">,
+): string {
   return [log.focus, log.mainWorkout, log.accessory ?? "", log.notes ?? ""].join(" ").toLowerCase();
 }
 
@@ -496,7 +515,10 @@ export function powerTss(
 // path (unchanged). The keyword fallback stays a coarse heuristic with known
 // blind spots (no negation handling — "not easy" still matches "easy").
 function inferCardioIntensityFactor(
-  log: Pick<WorkoutLog, "rpe" | "avgHeartrate" | "avgWatts" | "focus" | "mainWorkout" | "accessory" | "notes">,
+  log: Pick<
+    WorkoutLog,
+    "rpe" | "avgHeartrate" | "avgWatts" | "focus" | "mainWorkout" | "accessory" | "notes"
+  >,
   sets: TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
   athlete?: AthleteLoadContext,
@@ -508,7 +530,9 @@ function inferCardioIntensityFactor(
   if (log.rpe) {
     return round(0.6 + Math.pow(log.rpe / 10, 2) * 2, 2);
   }
-  const highRisk = sets.some((set) => getTag(tags, set.exerciseName, set.category).highIntensityRunningRisk >= 0.75);
+  const highRisk = sets.some(
+    (set) => getTag(tags, set.exerciseName, set.category).highIntensityRunningRisk >= 0.75,
+  );
   if (highRisk) return 2.3;
   const text = inferWorkoutText(log);
   if (/\b(sprint|interval|track|hill|threshold|tempo|zone\s*[45]|z[45])\b/.test(text)) return 2.1;
@@ -518,7 +542,17 @@ function inferCardioIntensityFactor(
 }
 
 export function calculateCardioStressScore(
-  log: Pick<WorkoutLog, "duration" | "rpe" | "avgHeartrate" | "avgWatts" | "focus" | "mainWorkout" | "accessory" | "notes">,
+  log: Pick<
+    WorkoutLog,
+    | "duration"
+    | "rpe"
+    | "avgHeartrate"
+    | "avgWatts"
+    | "focus"
+    | "mainWorkout"
+    | "accessory"
+    | "notes"
+  >,
   sets: TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput> = normalizeTags([]),
   athlete?: AthleteLoadContext,
@@ -537,7 +571,8 @@ function updateVectorLoads(
   vectorLoads.posterior_chain += stress * tag.posteriorChain * cardioScale;
   vectorLoads.anterior_chain += stress * tag.anteriorChain * cardioScale;
   vectorLoads.unilateral_stability += stress * tag.unilateralStability * cardioScale;
-  vectorLoads.elastic_tendon += stress * tag.elasticTendon * Math.max(1, tag.tendonLoadModifier) * cardioScale;
+  vectorLoads.elastic_tendon +=
+    stress * tag.elasticTendon * Math.max(1, tag.tendonLoadModifier) * cardioScale;
 }
 
 function getOrCreateDay(map: Map<string, DailyTrainingLoad>, date: string): DailyTrainingLoad {
@@ -608,14 +643,23 @@ function computeMonotonyStrain(
   days: Map<string, DailyTrainingLoad>,
   endDate: string,
 ): { monotony: number | null; strain: number | null } {
-  const values: number[] = [];
-  for (let offset = 0; offset < 7; offset++) {
-    values.push(days.get(addDays(endDate, -offset))?.utss ?? 0);
+  // ⚡ Bolt Performance Optimization:
+  // Consolidated intermediate array allocation and multiple `reduce()` calls into a
+  // single `for` loop to compute the `sum` and values simultaneously without
+  // allocating a `values` array. This eliminates intermediate array creation,
+  // avoids multiple O(N) iterations, and reduces memory allocation overhead.
+  let total = 0;
+  let sumSq = 0;
+  const count = 7;
+  for (let offset = 0; offset < count; offset++) {
+    const v = days.get(addDays(endDate, -offset))?.utss ?? 0;
+    total += v;
+    sumSq += v * v;
   }
-  const total = values.reduce((sum, v) => sum + v, 0);
-  const mean = total / values.length;
-  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
-  const sd = Math.sqrt(variance);
+  const mean = total / count;
+  const variance = sumSq / count - mean * mean;
+  // Due to floating point precision, variance could be very slightly negative
+  const sd = Math.sqrt(Math.max(0, variance));
   if (sd === 0) return { monotony: null, strain: null };
   const monotony = round(mean / sd, 2);
   return { monotony, strain: round(total * monotony, 1) };
@@ -711,8 +755,10 @@ function isHighVectorDay(
 ): boolean {
   const value = day.vectorLoads[vector];
   const priorMax = maxPriorVectorLoad(allDays, currentDate, vector);
-  return value >= ABSOLUTE_VECTOR_LOAD_THRESHOLD ||
-    (priorMax >= ABSOLUTE_VECTOR_LOAD_THRESHOLD && value >= priorMax * 0.9);
+  return (
+    value >= ABSOLUTE_VECTOR_LOAD_THRESHOLD ||
+    (priorMax >= ABSOLUTE_VECTOR_LOAD_THRESHOLD && value >= priorMax * 0.9)
+  );
 }
 
 function findRecentHighVector(
@@ -728,7 +774,11 @@ function findRecentHighVector(
   return null;
 }
 
-function sevenDayVectorTotal(allDays: Map<string, DailyTrainingLoad>, currentDate: string, vector: LoadVector): number {
+function sevenDayVectorTotal(
+  allDays: Map<string, DailyTrainingLoad>,
+  currentDate: string,
+  vector: LoadVector,
+): number {
   let total = 0;
   for (let offset = 0; offset < 7; offset++) {
     total += allDays.get(addDays(currentDate, -offset))?.vectorLoads[vector] ?? 0;
@@ -755,64 +805,76 @@ function buildRestrictions(
   const restrictions: TrainingLoadRestriction[] = [];
   const posterior = findRecentHighVector(allDays, currentDate, "posterior_chain", 1);
   if (posterior) {
-    restrictions.push(restriction(
-      "posterior_chain_velocity_lock",
-      "Posterior chain velocity lock",
-      "danger",
-      addDays(posterior.date, 2),
-      "Recent hamstring/glute/back load conflicts with hills, sprints, and high-velocity running.",
-      "posterior_chain",
-    ));
+    restrictions.push(
+      restriction(
+        "posterior_chain_velocity_lock",
+        "Posterior chain velocity lock",
+        "danger",
+        addDays(posterior.date, 2),
+        "Recent hamstring/glute/back load conflicts with hills, sprints, and high-velocity running.",
+        "posterior_chain",
+      ),
+    );
   }
 
   const anterior = findRecentHighVector(allDays, currentDate, "anterior_chain", 2);
   if (anterior) {
-    restrictions.push(restriction(
-      "anterior_chain_braking_guard",
-      "Anterior chain braking guard",
-      "caution",
-      addDays(anterior.date, 3),
-      "Recent quad/patellar load conflicts with downhill, long-road, and braking-heavy runs.",
-      "anterior_chain",
-    ));
+    restrictions.push(
+      restriction(
+        "anterior_chain_braking_guard",
+        "Anterior chain braking guard",
+        "caution",
+        addDays(anterior.date, 3),
+        "Recent quad/patellar load conflicts with downhill, long-road, and braking-heavy runs.",
+        "anterior_chain",
+      ),
+    );
   }
 
   const elasticTotal = sevenDayVectorTotal(allDays, currentDate, "elastic_tendon");
   if (elasticTotal >= ELASTIC_SEVEN_DAY_THRESHOLD) {
-    restrictions.push(restriction(
-      "elastic_tendon_speed_guard",
-      "Elastic tendon speed guard",
-      "danger",
-      addDays(currentDate, 3),
-      "Seven-day calf/Achilles/plantar load is high, so speed and plyometric sessions should downshift.",
-      "elastic_tendon",
-    ));
+    restrictions.push(
+      restriction(
+        "elastic_tendon_speed_guard",
+        "Elastic tendon speed guard",
+        "danger",
+        addDays(currentDate, 3),
+        "Seven-day calf/Achilles/plantar load is high, so speed and plyometric sessions should downshift.",
+        "elastic_tendon",
+      ),
+    );
   }
 
   if (currentZone === "danger") {
-    restrictions.push(restriction(
-      "acwr_danger_lock",
-      "ACWR danger lock",
-      "danger",
-      addDays(currentDate, 4),
-      "Acute UTSS is more than 1.5x the chronic baseline, so high-intensity programming is locked down.",
-    ));
+    restrictions.push(
+      restriction(
+        "acwr_danger_lock",
+        "ACWR danger lock",
+        "danger",
+        addDays(currentDate, 4),
+        "Acute UTSS is more than 1.5x the chronic baseline, so high-intensity programming is locked down.",
+      ),
+    );
   } else if (currentZone === "yellow") {
-    restrictions.push(restriction(
-      "acwr_yellow_guard",
-      "ACWR yellow guard",
-      "caution",
-      addDays(currentDate, 2),
-      "Acute UTSS is above the preferred chronic baseline range, so upcoming intensity should be monitored.",
-    ));
+    restrictions.push(
+      restriction(
+        "acwr_yellow_guard",
+        "ACWR yellow guard",
+        "caution",
+        addDays(currentDate, 2),
+        "Acute UTSS is above the preferred chronic baseline range, so upcoming intensity should be monitored.",
+      ),
+    );
   } else if (currentZone === "undertraining") {
-    restrictions.push(restriction(
-      "acwr_onramp",
-      "ACWR on-ramp",
-      "info",
-      addDays(currentDate, 3),
-      "Recent training load is below the 28-day baseline, so re-entry should ramp before peak loads return.",
-    ));
+    restrictions.push(
+      restriction(
+        "acwr_onramp",
+        "ACWR on-ramp",
+        "info",
+        addDays(currentDate, 3),
+        "Recent training load is below the 28-day baseline, so re-entry should ramp before peak loads return.",
+      ),
+    );
   }
 
   return restrictions;
@@ -833,10 +895,13 @@ function buildOverview(
   const acwr = currentDay.acwr;
   const zone = currentDay.zone;
   const activeRestrictions = buildRestrictions(allDays, currentDate, zone);
-  const flaggedVectors = [...new Set(activeRestrictions.flatMap((r) => r.vector ? [r.vector] : []))];
-  const trendStart = rangeStart > addDays(currentDate, -(TREND_DAYS - 1))
-    ? rangeStart
-    : addDays(currentDate, -(TREND_DAYS - 1));
+  const flaggedVectors = [
+    ...new Set(activeRestrictions.flatMap((r) => (r.vector ? [r.vector] : []))),
+  ];
+  const trendStart =
+    rangeStart > addDays(currentDate, -(TREND_DAYS - 1))
+      ? rangeStart
+      : addDays(currentDate, -(TREND_DAYS - 1));
   const trend = dateRange(trendStart, currentDate).map((date) => {
     const day = getOrCreateDay(allDays, date);
     return {
@@ -885,7 +950,10 @@ function earliestLogDate(workoutLogs: readonly Pick<WorkoutLog, "date">[]): stri
   }, null);
 }
 
-function computeRangeStart(workoutLogs: readonly Pick<WorkoutLog, "date">[], currentDate: string): string {
+function computeRangeStart(
+  workoutLogs: readonly Pick<WorkoutLog, "date">[],
+  currentDate: string,
+): string {
   const earliestLog = earliestLogDate(workoutLogs);
   const minNeeded = addDays(currentDate, -(TREND_DAYS + 28));
   if (!earliestLog || earliestLog > minNeeded) return minNeeded;
@@ -898,9 +966,9 @@ function shouldApplyCardioStress(
 ): boolean {
   return Boolean(
     log.duration &&
-      (sets.length === 0 ||
-        sets.some(isCardioSet) ||
-        /run|bike|row|ski|walk|hike/i.test(inferWorkoutText(log))),
+    (sets.length === 0 ||
+      sets.some(isCardioSet) ||
+      /run|bike|row|ski|walk|hike/i.test(inferWorkoutText(log))),
   );
 }
 
@@ -922,7 +990,17 @@ function applyStrengthLoad(
 
 function applyCardioLoad(
   day: DailyTrainingLoad,
-  log: Pick<WorkoutLog, "duration" | "rpe" | "avgHeartrate" | "avgWatts" | "focus" | "mainWorkout" | "accessory" | "notes">,
+  log: Pick<
+    WorkoutLog,
+    | "duration"
+    | "rpe"
+    | "avgHeartrate"
+    | "avgWatts"
+    | "focus"
+    | "mainWorkout"
+    | "accessory"
+    | "notes"
+  >,
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
   athlete?: AthleteLoadContext,
@@ -937,7 +1015,10 @@ function applyCardioLoad(
   if (sessionHrTss != null) day.hrTss = round((day.hrTss ?? 0) + sessionHrTss, 1);
   // Per-day zone = the most intense HR session's zone (ordinal max, z1<…<z5).
   const sessionZone = classifyHrZone(log.avgHeartrate, athlete);
-  if (sessionZone != null && (day.hrZone == null || hrZoneRank(sessionZone) > hrZoneRank(day.hrZone))) {
+  if (
+    sessionZone != null &&
+    (day.hrZone == null || hrZoneRank(sessionZone) > hrZoneRank(day.hrZone))
+  ) {
     day.hrZone = sessionZone;
   }
   const tss = powerTss(log.duration, log.avgWatts, athlete?.ftp);
@@ -953,7 +1034,12 @@ function applyCardioLoad(
   // don't "deduplicate" without recalibrating thresholds downstream.
   const stressPerSet = stress / cardioSets.length;
   for (const set of cardioSets) {
-    updateVectorLoads(day.vectorLoads, stressPerSet, getTag(tags, set.exerciseName, set.category), 0.25);
+    updateVectorLoads(
+      day.vectorLoads,
+      stressPerSet,
+      getTag(tags, set.exerciseName, set.category),
+      0.25,
+    );
   }
 }
 
