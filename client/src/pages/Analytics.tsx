@@ -1,6 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
-import { BarChart3, Download, FileJson, FileSpreadsheet, HeartPulse, Loader2, PieChart, Sparkles, Target, Timer, Trophy, UtensilsCrossed } from "lucide-react";
+import {
+  BarChart3,
+  Download,
+  FileJson,
+  FileSpreadsheet,
+  HeartPulse,
+  Loader2,
+  PieChart,
+  Sparkles,
+  Target,
+  Timer,
+  Trophy,
+  UtensilsCrossed,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
@@ -19,7 +32,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PageContainer } from "@/components/ui/PageContainer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,11 +74,7 @@ export default function Analytics() {
   // 5 base tabs + each optional tab. On mobile the tabs flow in a 2-col grid, so
   // the last tab is alone (and looks unbalanced) when the total is odd.
   const tabCount = 5 + (isMaf ? 1 : 0) + (showFuelling ? 1 : 0);
-  const [dateRange, setDateRange] = useUrlQueryState<DateRange>(
-    "range",
-    "90",
-    DATE_RANGES,
-  );
+  const [dateRange, setDateRange] = useUrlQueryState<DateRange>("range", "90", DATE_RANGES);
   const [exportingFormat, setExportingFormat] = useState<AnalyticsExportFormat | null>(null);
   const isExporting = exportingFormat !== null;
 
@@ -101,14 +116,14 @@ export default function Analytics() {
     <PageContainer size="default" className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">Analytics</h1>
-          <p className="text-muted-foreground">Training overview, progression, and personal records</p>
+          <h1 className="text-2xl font-bold" data-testid="text-analytics-title">
+            Analytics
+          </h1>
+          <p className="text-muted-foreground">
+            Training overview, progression, and personal records
+          </p>
           {preferences?.weeklyGoal ? (
-            <Badge
-              variant="outline"
-              className="mt-2 gap-1.5"
-              data-testid="badge-weekly-goal"
-            >
+            <Badge variant="outline" className="mt-2 gap-1.5" data-testid="badge-weekly-goal">
               <Target className="h-3 w-3" aria-hidden="true" />
               Weekly goal: {preferences.weeklyGoal} workout{preferences.weeklyGoal === 1 ? "" : "s"}
             </Badge>
@@ -117,7 +132,11 @@ export default function Analytics() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
-            <SelectTrigger className="w-36" data-testid="select-date-range" aria-label="Analytics date range">
+            <SelectTrigger
+              className="w-36"
+              data-testid="select-date-range"
+              aria-label="Analytics date range"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -167,21 +186,23 @@ export default function Analytics() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className={`mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:gap-0 ${SM_GRID_COLS[tabCount]}`}>
+        <TabsList
+          className={`mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:gap-0 ${SM_GRID_COLS[tabCount]}`}
+        >
           <TabsTrigger value="overview" data-testid="tab-overview">
-            <BarChart3 className="h-4 w-4 mr-2" />
+            <BarChart3 className="h-4 w-4 mr-2" aria-hidden="true" />
             Overview
           </TabsTrigger>
           <TabsTrigger value="breakdown" data-testid="tab-breakdown">
-            <PieChart className="h-4 w-4 mr-2" />
+            <PieChart className="h-4 w-4 mr-2" aria-hidden="true" />
             Breakdown
           </TabsTrigger>
           <TabsTrigger value="progress" data-testid="tab-progress">
-            <Trophy className="h-4 w-4 mr-2" />
+            <Trophy className="h-4 w-4 mr-2" aria-hidden="true" />
             PRs &amp; Trends
           </TabsTrigger>
           <TabsTrigger value="insights" data-testid="tab-coach-insights">
-            <Sparkles className="h-4 w-4 mr-2" />
+            <Sparkles className="h-4 w-4 mr-2" aria-hidden="true" />
             Coach Insights
           </TabsTrigger>
           <TabsTrigger
@@ -189,12 +210,12 @@ export default function Analytics() {
             className={`${!isMaf && !showFuelling ? "col-span-2" : ""} sm:col-span-1`}
             data-testid="tab-race-predictor"
           >
-            <Timer className="h-4 w-4 mr-2" />
+            <Timer className="h-4 w-4 mr-2" aria-hidden="true" />
             Race Predictor
           </TabsTrigger>
           {isMaf ? (
             <TabsTrigger value="maf" data-testid="tab-maf-trend">
-              <HeartPulse className="h-4 w-4 mr-2" />
+              <HeartPulse className="h-4 w-4 mr-2" aria-hidden="true" />
               MAF Trend
             </TabsTrigger>
           ) : null}
@@ -204,7 +225,7 @@ export default function Analytics() {
               className={`${tabCount % 2 === 1 ? "col-span-2" : ""} sm:col-span-1`}
               data-testid="tab-fuelling"
             >
-              <UtensilsCrossed className="h-4 w-4 mr-2" />
+              <UtensilsCrossed className="h-4 w-4 mr-2" aria-hidden="true" />
               Fuelling
             </TabsTrigger>
           ) : null}
