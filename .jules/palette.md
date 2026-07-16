@@ -13,3 +13,7 @@
 ## 2025-02-19 - Accessible Close Buttons for Dialog & Sheet
 **Learning:** Found that `Dialog` and `Sheet` close buttons had visually hidden `<span>` tags for screen readers (`sr-only`), but lacked a native `aria-label`. Replacing the `sr-only` span with an `aria-label` attribute on the button component is cleaner and a more standard accessibility pattern for icon-only components.
 **Action:** Always favor `aria-label` directly on interactive components for screen-reader text over injecting hidden `<span>` elements, simplifying the DOM tree while maintaining the exact same accessibility mapping.
+
+## 2026-07-15 - Snappier Tooltips
+**Learning:** The default Radix UI tooltip delay (700ms) is too slow for web applications that heavily rely on icon-only buttons. This delay causes a sluggish feel when users hover over icons expecting immediate feedback.
+**Action:** When configuring tooltip providers for icon-dense UIs, explicitly set `delayDuration={200}` to make the interface feel much more responsive and intuitive.
