@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -148,6 +149,9 @@ function CustomFoodForm({
     <>
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Enter nutrition facts per 100 grams
+        </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-4">

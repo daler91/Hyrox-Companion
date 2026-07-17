@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -45,6 +46,9 @@ function MealTargetForm({
     <>
       <DialogHeader>
         <DialogTitle>Adjust {MEAL_LABELS[state.mealType] ?? "meal"} target</DialogTitle>
+        <DialogDescription className="sr-only">
+          Override macro targets for this meal
+        </DialogDescription>
       </DialogHeader>
       <p className="text-sm text-muted-foreground">
         Pin this meal's goals. Leave a field blank to keep the suggested value; changes apply from

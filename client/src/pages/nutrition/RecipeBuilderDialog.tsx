@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -122,6 +123,9 @@ function RecipeBuilderForm({
     <>
       <DialogHeader>
         <DialogTitle>{initial ? "Edit recipe" : "New recipe"}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {initial ? "Edit recipe ingredients and servings" : "Create a recipe from individual foods"}
+        </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-4">

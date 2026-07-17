@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -117,6 +118,9 @@ function TargetsForm({
     <>
       <DialogHeader>
         <DialogTitle>Set nutrition targets</DialogTitle>
+        <DialogDescription className="sr-only">
+          Set your daily calorie and macro goals
+        </DialogDescription>
       </DialogHeader>
       <p className="text-sm text-muted-foreground">
         Your daily goals. Leave a field blank to skip that goal; changes apply from today.

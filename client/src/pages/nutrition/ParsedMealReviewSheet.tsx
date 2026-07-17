@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -205,6 +206,9 @@ function ReviewForm({
     <>
       <DialogHeader>
         <DialogTitle>Review parsed foods</DialogTitle>
+        <DialogDescription className="sr-only">
+          Confirm the foods detected from your description before logging
+        </DialogDescription>
       </DialogHeader>
 
       {result.warnings.length > 0 && (
