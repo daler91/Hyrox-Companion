@@ -365,21 +365,30 @@ const GroupRow = memo(function GroupRow({
             options={blockAssignmentOptions}
             onAssign={handleAssignBlock}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8 text-muted-foreground"
-            aria-label={isExpanded ? `Collapse ${label}` : `Expand ${label}`}
-            aria-expanded={isExpanded}
-            onClick={handleToggle}
-            data-testid="exercise-row-toggle"
-          >
-            <ChevronDown
-              className={cn("size-4 transition-transform", isExpanded && "rotate-180")}
-              aria-hidden
-            />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground"
+                  aria-label={isExpanded ? `Collapse ${label}` : `Expand ${label}`}
+                  aria-expanded={isExpanded}
+                  onClick={handleToggle}
+                  data-testid="exercise-row-toggle"
+                >
+                  <ChevronDown
+                    className={cn("size-4 transition-transform", isExpanded && "rotate-180")}
+                    aria-hidden
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isExpanded ? "Collapse row" : "Expand row"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <TooltipProvider>
               <Tooltip>
