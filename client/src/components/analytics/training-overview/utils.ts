@@ -20,10 +20,13 @@ export function annotationToWeekBounds(
 ): { x1: string; x2: string } | null {
   if (weekStarts.length === 0) return null;
   const dayMs = 24 * 60 * 60 * 1000;
-  const annStart = new Date(`${annotation.startDate}T00:00:00Z`).getTime();
-  const annEnd = new Date(`${annotation.endDate}T00:00:00Z`).getTime();
+  // ⚡ Bolt Performance Optimization:
+  // Replaced `new Date().getTime()` with `Date.parse()` to prevent intermediate object
+  // allocations when converting dates to numeric timestamps.
+  const annStart = Date.parse(`${annotation.startDate}T00:00:00Z`);
+  const annEnd = Date.parse(`${annotation.endDate}T00:00:00Z`);
   const overlapping = weekStarts.filter((weekStart) => {
-    const weekStartMs = new Date(`${weekStart}T00:00:00Z`).getTime();
+    const weekStartMs = Date.parse(`${weekStart}T00:00:00Z`);
     const weekEndMs = weekStartMs + 6 * dayMs;
     return weekStartMs <= annEnd && weekEndMs >= annStart;
   });
