@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBarcodeLookup } from "@/hooks/useNutrition";
@@ -138,6 +138,9 @@ export function BarcodeScanner({
       <DialogContent data-testid="dialog-barcode">
         <DialogHeader>
           <DialogTitle>Scan a barcode</DialogTitle>
+          <DialogDescription className="sr-only">
+            Use your camera or enter a barcode number to look up a food
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
