@@ -32,12 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { FilterStatus } from "../types";
@@ -131,7 +126,11 @@ export default function TimelineFilters({
               />
 
               <Select value={filterStatus} onValueChange={(v) => onFilterChange(v as FilterStatus)}>
-                <SelectTrigger aria-label="Filter workouts by status" className="w-full" data-testid="select-filter">
+                <SelectTrigger
+                  aria-label="Filter workouts by status"
+                  className="w-full"
+                  data-testid="select-filter"
+                >
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
@@ -161,9 +160,7 @@ export default function TimelineFilters({
                 <DropdownMenuContent align="end" className="w-56">
                   {selectedPlan ? (
                     <>
-                      <DropdownMenuLabel className="text-xs">
-                        {selectedPlan.name}
-                      </DropdownMenuLabel>
+                      <DropdownMenuLabel className="text-xs">{selectedPlan.name}</DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={openRenameDialog}
                         data-testid="menuitem-rename-plan"
@@ -171,10 +168,7 @@ export default function TimelineFilters({
                         <Pencil className="h-4 w-4 mr-2" />
                         Rename plan
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={openGoalDialog}
-                        data-testid="menuitem-set-goal"
-                      >
+                      <DropdownMenuItem onClick={openGoalDialog} data-testid="menuitem-set-goal">
                         <Target className="h-4 w-4 mr-2" />
                         {selectedPlan.goal ? "Edit goal" : "Set goal"}
                       </DropdownMenuItem>
@@ -203,9 +197,7 @@ export default function TimelineFilters({
                       <DropdownMenuSeparator />
                     </>
                   ) : null}
-                  <DropdownMenuLabel className="text-xs">
-                    Plan setup
-                  </DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">Plan setup</DropdownMenuLabel>
                   <DropdownMenuItem
                     onClick={() => setGenerateDialogOpen(true)}
                     data-testid="button-generate-ai-plan"
@@ -265,6 +257,7 @@ export default function TimelineFilters({
                 accept=".csv"
                 className="hidden"
                 onChange={onFileUpload}
+                aria-label="Import CSV training plan"
                 data-testid="input-csv-upload"
               />
             </div>
@@ -279,7 +272,11 @@ export default function TimelineFilters({
                   data-testid="button-plan-goal"
                   aria-label="Edit plan goal"
                 >
-                  {selectedPlan.goal ? selectedPlan.goal : <span className="italic">No plan goal set</span>}
+                  {selectedPlan.goal ? (
+                    selectedPlan.goal
+                  ) : (
+                    <span className="italic">No plan goal set</span>
+                  )}
                 </button>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -320,10 +317,7 @@ export default function TimelineFilters({
         isUpdatingGoal={isUpdatingGoal}
       />
 
-      <GeneratePlanDialog
-        open={generateDialogOpen}
-        onOpenChange={setGenerateDialogOpen}
-      />
+      <GeneratePlanDialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen} />
 
       <ConfirmDialog
         open={deleteConfirmOpen}

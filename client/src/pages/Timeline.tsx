@@ -27,7 +27,12 @@ import { PageContainer } from "@/components/ui/PageContainer";
 import { SCROLL_TO_TODAY_DELAY_MS } from "@/hooks/constants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useIsAiCoachEnabled, useIsAuthUserLoaded, useIsAutoCoaching, useIsOnboardingCompleted } from "@/hooks/useAuth";
+import {
+  useIsAiCoachEnabled,
+  useIsAuthUserLoaded,
+  useIsAutoCoaching,
+  useIsOnboardingCompleted,
+} from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFuellingRange } from "@/hooks/useNutrition";
 import { useTimelineState } from "@/hooks/useTimelineState";
@@ -166,12 +171,8 @@ export default function Timeline() {
   } = surfaceSelection;
   const [adhocOpen, setAdhocOpen] = useState(false);
   const dialogState = useTimelineDialogState();
-  const {
-    showAIConsent,
-    setShowAIConsent,
-    handleAddAnnotation,
-    handleEditAnnotation,
-  } = dialogState;
+  const { showAIConsent, setShowAIConsent, handleAddAnnotation, handleEditAnnotation } =
+    dialogState;
   const coachRouting = useEmbeddedCoachRouting({
     aiCoachEnabled,
     isAuthUserLoaded,
@@ -181,12 +182,8 @@ export default function Timeline() {
     closeAllSurfacesAndClearUrl,
     toast,
   });
-  const {
-    handleCoachToggle,
-    openTimelineSurface,
-    clearPendingCoachIntent,
-    handleAIConsentAccept,
-  } = coachRouting;
+  const { handleCoachToggle, openTimelineSurface, clearPendingCoachIntent, handleAIConsentAccept } =
+    coachRouting;
 
   const { annotationsByDate, moveEntry, isMoving, handleDeleteAnnotation, isAnnotationDeleting } =
     useTimelinePageController(selectedPlanId, annotations);
@@ -346,12 +343,7 @@ export default function Timeline() {
   }, [allVisibleGroups, rowVirtualizer, selectedPlanId, timelineLoading, todayRef]);
 
   const isWorkoutSurfaceOpen = Boolean(
-    previewEntry ||
-      futureEditEntry ||
-      logEntry ||
-      reviewEntry ||
-      skippedEntry ||
-      adhocOpen,
+    previewEntry || futureEditEntry || logEntry || reviewEntry || skippedEntry || adhocOpen,
   );
 
   return (
@@ -363,6 +355,7 @@ export default function Timeline() {
         accept=".csv"
         className="hidden"
         onChange={handleFileUpload}
+        aria-label="Import CSV training plan"
         data-testid="input-csv-upload-onboarding"
       />
       <div className="flex h-full">

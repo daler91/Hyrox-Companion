@@ -2,7 +2,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 
-import type { FieldSelectorProps,FieldSource } from "./types";
+import type { FieldSelectorProps, FieldSource } from "./types";
 
 export function FieldSelector({
   label,
@@ -59,6 +59,7 @@ export function FieldSelector({
           value={customValue}
           onChange={(e) => onCustomChange(e.target.value)}
           placeholder={`Enter custom ${label.toLowerCase()}...`}
+          aria-label={`Custom ${label.toLowerCase()}`}
           rows={isTextArea ? 3 : 2}
           className="mt-2"
           data-testid={`input-custom-${labelId}`}
