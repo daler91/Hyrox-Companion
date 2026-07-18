@@ -163,6 +163,7 @@ function RecipeBuilderForm({
                 className="w-24"
                 value={ing.quantityG}
                 onChange={(e) => updateIngredient(i, { quantityG: Number(e.target.value) })}
+                aria-label={`Quantity in grams for ${ing.name}`}
                 data-testid={`input-ingredient-qty-${i}`}
               />
               <span className="w-10 text-right text-xs text-muted-foreground">g</span>
