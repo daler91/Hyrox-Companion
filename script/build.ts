@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { rm, stat } from "node:fs/promises";
 
 import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
@@ -68,13 +67,19 @@ try {
   console.log("build artifacts verified");
 
   // Structural bundle invariants (charts off the critical path, no drizzle in
-  // the browser). Non-fatal here — a chunking regression shouldn't block a
-  // deploy — but loud; `pnpm check:bundle` runs the same checks as a hard fail.
-  const bundleCheck = spawnSync("npx", ["tsx", "script/bundle-check.ts"], { stdio: "inherit" });
-  if (bundleCheck.status !== 0) {
+  // the browser). Run in-process (no PATH-resolved subprocess) and non-fatally
+  // — a chunking regression shouldn't block a deploy — but loud;
+  // `pnpm check:bundle` runs the same checks as a hard fail.
+  const { collectBundleCheckFailures } = await import("./bundle-check");
+  const bundleFailures = await collectBundleCheckFailures().catch((err: unknown) => [
+    `bundle-check crashed: ${String(err)}`,
+  ]);
+  if (bundleFailures.length > 0) {
     console.warn(
-      "WARNING (non-fatal): bundle-check failed — client chunking regressed; run `pnpm check:bundle` for details",
+      `WARNING (non-fatal): bundle-check failed — client chunking regressed; run \`pnpm check:bundle\` for details:\n  - ${bundleFailures.join("\n  - ")}`,
     );
+  } else {
+    console.log("bundle-check passed");
   }
 } catch (err) {
   console.error(err);

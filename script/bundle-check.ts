@@ -20,39 +20,50 @@ import path from "node:path";
  */
 
 const DIST = "dist/public";
-const failures: string[] = [];
 
-const html = await readFile(path.join(DIST, "index.html"), "utf8");
-if (/vendor-charts-[^"']+\.js/.test(html)) {
-  failures.push(
-    "index.html references vendor-charts — recharts is back on the eager critical path " +
-      "(a shared dep was likely captured into the vendor-charts group; check vite.config.ts codeSplitting)",
-  );
-}
+/** Run both invariant checks against dist/. Returns [] when the bundle is clean. */
+export async function collectBundleCheckFailures(): Promise<string[]> {
+  const failures: string[] = [];
 
-const assets = path.join(DIST, "assets");
-for (const file of await readdir(assets)) {
-  if (!file.endsWith(".js")) continue;
-  const mapPath = path.join(assets, `${file}.map`);
-  // Prefer sourcemap sources (exact). When the Sentry plugin deleted the maps
-  // (SENTRY_AUTH_TOKEN set), fall back to drizzle's Symbol.for("drizzle:*")
-  // registry keys, which survive minification.
-  const bad = await readFile(mapPath, "utf8").then(
-    (m) =>
-      ((JSON.parse(m) as { sources?: string[] }).sources ?? []).some((s) =>
-        /drizzle-orm|drizzle-zod|zod-to-openapi/.test(s),
-      ),
-    async () => (await readFile(path.join(assets, file), "utf8")).includes("drizzle:"),
-  );
-  if (bad) {
+  const html = await readFile(path.join(DIST, "index.html"), "utf8");
+  if (/vendor-charts-[^"']+\.js/.test(html)) {
     failures.push(
-      `${file} contains drizzle-orm/drizzle-zod runtime code — a client file value-imports the @shared/schema barrel`,
+      "index.html references vendor-charts — recharts is back on the eager critical path " +
+        "(a shared dep was likely captured into the vendor-charts group; check vite.config.ts codeSplitting)",
     );
   }
+
+  const assets = path.join(DIST, "assets");
+  for (const file of await readdir(assets)) {
+    if (!file.endsWith(".js")) continue;
+    const mapPath = path.join(assets, `${file}.map`);
+    // Prefer sourcemap sources (exact). When the Sentry plugin deleted the maps
+    // (SENTRY_AUTH_TOKEN set), fall back to drizzle's Symbol.for("drizzle:*")
+    // registry keys, which survive minification.
+    const bad = await readFile(mapPath, "utf8").then(
+      (m) =>
+        ((JSON.parse(m) as { sources?: string[] }).sources ?? []).some((s) =>
+          /drizzle-orm|drizzle-zod|zod-to-openapi/.test(s),
+        ),
+      async () => (await readFile(path.join(assets, file), "utf8")).includes("drizzle:"),
+    );
+    if (bad) {
+      failures.push(
+        `${file} contains drizzle-orm/drizzle-zod runtime code — a client file value-imports the @shared/schema barrel`,
+      );
+    }
+  }
+
+  return failures;
 }
 
-if (failures.length > 0) {
-  console.error(`bundle-check FAILED:\n  - ${failures.join("\n  - ")}`);
-  process.exit(1);
+// CLI entry (`pnpm check:bundle`): hard fail. Guarded so importing this module
+// (script/build.ts runs the checks in-process, non-fatally) runs nothing.
+if (process.argv[1]?.endsWith("bundle-check.ts")) {
+  const failures = await collectBundleCheckFailures();
+  if (failures.length > 0) {
+    console.error(`bundle-check FAILED:\n  - ${failures.join("\n  - ")}`);
+    process.exit(1);
+  }
+  console.log("bundle-check passed");
 }
-console.log("bundle-check passed");
