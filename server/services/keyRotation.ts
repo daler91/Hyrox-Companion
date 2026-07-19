@@ -7,7 +7,8 @@ import { db, pool } from "../db";
 import { env } from "../env";
 import { logger } from "../logger";
 
-// Distinct from the cron keys in server/cron.ts (42_010_001..008) so the
+// Distinct from CRON_LOCK_KEYS in server/cron.ts and MIGRATION_ADVISORY_LOCK_KEY
+// in server/maintenance.ts (registry documented above CRON_LOCK_KEYS) so the
 // startup re-encrypt sweep never collides with a concurrently-running job.
 const KEY_ROTATION_LOCK_KEY = 42_010_009n;
 
