@@ -6,6 +6,7 @@ import { storage } from "../storage";
 // ---------------------------------------------------------------------------
 const MODEL_PRICING: Record<string, { inputPerM: number; outputPerM: number }> = {
   "gemini-2.5-flash-lite": { inputPerM: 0.075, outputPerM: 0.3 },
+  "gemini-2.5-flash": { inputPerM: 0.3, outputPerM: 2.5 },
   "gemini-3.1-pro-preview": { inputPerM: 1.25, outputPerM: 10 },
   "gemini-embedding-001":   { inputPerM: 0.01, outputPerM: 0 },
   "grok-4.3": { inputPerM: 1.25, outputPerM: 2.5 },
@@ -16,6 +17,11 @@ const MODEL_PRICING: Record<string, { inputPerM: number; outputPerM: number }> =
 
 // Fallback for unknown models — use the most expensive rate to be safe
 const DEFAULT_PRICING = { inputPerM: 5, outputPerM: 25 };
+
+// Unknown models fall back to the most expensive rate, which is safe for the
+// budget cap but drains users' daily allowance ~10-17x too fast. Warn once per
+// model so a missing MODEL_PRICING entry is visible in logs instead of silent.
+const warnedUnknownModels = new Set<string>();
 
 /** Daily AI spend hard cap in cents. */
 export const DAILY_LIMIT_CENTS = 200; // $2.00
@@ -31,9 +37,14 @@ export function estimateCostCents(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const pricing = MODEL_PRICING[model] ?? DEFAULT_PRICING;
-  const inputCost = (inputTokens / 1_000_000) * pricing.inputPerM;
-  const outputCost = (outputTokens / 1_000_000) * pricing.outputPerM;
+  const pricing = MODEL_PRICING[model];
+  if (!pricing && !warnedUnknownModels.has(model)) {
+    warnedUnknownModels.add(model);
+    logger.warn({ model }, "AI usage: no MODEL_PRICING entry; applying conservative DEFAULT_PRICING");
+  }
+  const effective = pricing ?? DEFAULT_PRICING;
+  const inputCost = (inputTokens / 1_000_000) * effective.inputPerM;
+  const outputCost = (outputTokens / 1_000_000) * effective.outputPerM;
   // Convert dollars to cents
   return (inputCost + outputCost) * 100;
 }
