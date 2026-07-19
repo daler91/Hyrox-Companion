@@ -27,7 +27,8 @@ async function ensurePgvectorExtension() {
   }
 }
 
-// Distinct from CRON_LOCK_KEYS (…001–008) and KEY_ROTATION_LOCK_KEY (…009).
+// Distinct from CRON_LOCK_KEYS and KEY_ROTATION_LOCK_KEY (…009) — the full
+// 42_010_0xx registry is documented above CRON_LOCK_KEYS in server/cron.ts.
 const MIGRATION_ADVISORY_LOCK_KEY = 42_010_010n;
 
 async function runDrizzleMigrations() {

@@ -13,7 +13,7 @@
  *
  * Run: pnpm tsx script/race-benchmarks/backtest.ts   (no API key needed)
  */
-import { createReadStream, mkdirSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -80,6 +80,14 @@ function fmt(stats: ErrorStats): string {
 
 async function main(): Promise<void> {
   const csvPath = resolve(repoRoot, "hyrox_results.csv");
+  if (!existsSync(csvPath)) {
+    console.error(
+      `[race-benchmarks] CSV not found: ${csvPath}\n` +
+        "hyrox_results.csv is deliberately not tracked in git. Place it at the repo root " +
+        "— see script/race-benchmarks/README.md for how to obtain it.",
+    );
+    process.exit(1);
+  }
   log(`Reading ${csvPath}`);
 
   const train: ParsedRace[] = [];

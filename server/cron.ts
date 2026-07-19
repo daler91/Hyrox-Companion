@@ -28,6 +28,13 @@ let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
 const STALE_AUTO_COACHING_THRESHOLD_MS = 15 * 60 * 1000;
 const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 
+// Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
+// MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
+// 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
+// key: 42_010_013. A collision is SILENT — pg_try_advisory_lock makes the
+// second caller skip its protected work entirely (analyticsRecompute and
+// nutritionEmbeddingBackfill once collided with those reserved slots, letting
+// a running backfill silently skip boot migrations).
 export const CRON_LOCK_KEYS = {
   dailyEmail: 42_010_001n,
   idempotencyCleanup: 42_010_002n,
@@ -37,8 +44,8 @@ export const CRON_LOCK_KEYS = {
   structuredExerciseRollup: 42_010_006n,
   startupEmailCatchUp: 42_010_007n,
   sharedRuntimeCleanup: 42_010_008n,
-  analyticsRecompute: 42_010_009n,
-  nutritionEmbeddingBackfill: 42_010_010n,
+  analyticsRecompute: 42_010_011n,
+  nutritionEmbeddingBackfill: 42_010_012n,
 } as const;
 
 export async function runCronJobWithLock<T>(

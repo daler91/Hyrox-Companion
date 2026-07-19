@@ -7,13 +7,22 @@ import { db, pool } from "../db";
 import { env } from "../env";
 import { logger } from "../logger";
 
-// Distinct from the cron keys in server/cron.ts (42_010_001..008) so the
+// Distinct from CRON_LOCK_KEYS in server/cron.ts and MIGRATION_ADVISORY_LOCK_KEY
+// in server/maintenance.ts (registry documented above CRON_LOCK_KEYS) so the
 // startup re-encrypt sweep never collides with a concurrently-running job.
 const KEY_ROTATION_LOCK_KEY = 42_010_009n;
 
 export interface ReencryptSummary {
   stravaUpdated: number;
   garminUpdated: number;
+  /** Rows that could not be re-encrypted (undecryptable ciphertext or a failed
+   * UPDATE); logged per row and skipped so the sweep stays resumable. */
+  failed: number;
+}
+
+interface TableSweepResult {
+  updated: number;
+  failed: number;
 }
 
 // Re-encrypt a single nullable column value under the active key. Returns the
@@ -25,7 +34,7 @@ function remap(value: string | null): { value: string | null; changed: boolean }
   return { value: next, changed: next !== value };
 }
 
-async function reencryptStrava(): Promise<number> {
+async function reencryptStrava(): Promise<TableSweepResult> {
   const rows = await db
     .select({
       id: stravaConnections.id,
@@ -35,23 +44,37 @@ async function reencryptStrava(): Promise<number> {
     .from(stravaConnections);
 
   let updated = 0;
+  let failed = 0;
   for (const row of rows) {
-    const access = remap(row.accessToken);
-    const refresh = remap(row.refreshToken);
-    if (!access.changed && !refresh.changed) continue;
-    await db
-      .update(stravaConnections)
-      .set({
-        accessToken: access.value ?? row.accessToken,
-        refreshToken: refresh.value ?? row.refreshToken,
-      })
-      .where(eq(stravaConnections.id, row.id));
-    updated += 1;
+    try {
+      const access = remap(row.accessToken);
+      const refresh = remap(row.refreshToken);
+      if (!access.changed && !refresh.changed) continue;
+      await db
+        .update(stravaConnections)
+        .set({
+          accessToken: access.value ?? row.accessToken,
+          refreshToken: refresh.value ?? row.refreshToken,
+        })
+        .where(eq(stravaConnections.id, row.id));
+      updated += 1;
+    } catch (error) {
+      // Per-row isolation: one versioned-but-undecryptable value must not abort
+      // the rest of the sweep (it used to — everything after the poison row,
+      // including the whole garmin table, was silently skipped every run).
+      failed += 1;
+      // bearer:disable javascript_lang_logger_leak — only the table name, row
+      // id and the operational error are logged; no token material.
+      logger.warn(
+        { context: "crypto", table: "strava_connections", id: row.id, err: error },
+        "Skipping credential row that failed re-encryption",
+      );
+    }
   }
-  return updated;
+  return { updated, failed };
 }
 
-async function reencryptGarmin(): Promise<number> {
+async function reencryptGarmin(): Promise<TableSweepResult> {
   const rows = await db
     .select({
       id: garminConnections.id,
@@ -63,24 +86,35 @@ async function reencryptGarmin(): Promise<number> {
     .from(garminConnections);
 
   let updated = 0;
+  let failed = 0;
   for (const row of rows) {
-    const email = remap(row.encryptedEmail);
-    const password = remap(row.encryptedPassword);
-    const oauth1 = remap(row.encryptedOauth1Token);
-    const oauth2 = remap(row.encryptedOauth2Token);
-    if (!email.changed && !password.changed && !oauth1.changed && !oauth2.changed) continue;
-    await db
-      .update(garminConnections)
-      .set({
-        encryptedEmail: email.value,
-        encryptedPassword: password.value,
-        encryptedOauth1Token: oauth1.value,
-        encryptedOauth2Token: oauth2.value,
-      })
-      .where(eq(garminConnections.id, row.id));
-    updated += 1;
+    try {
+      const email = remap(row.encryptedEmail);
+      const password = remap(row.encryptedPassword);
+      const oauth1 = remap(row.encryptedOauth1Token);
+      const oauth2 = remap(row.encryptedOauth2Token);
+      if (!email.changed && !password.changed && !oauth1.changed && !oauth2.changed) continue;
+      await db
+        .update(garminConnections)
+        .set({
+          encryptedEmail: email.value,
+          encryptedPassword: password.value,
+          encryptedOauth1Token: oauth1.value,
+          encryptedOauth2Token: oauth2.value,
+        })
+        .where(eq(garminConnections.id, row.id));
+      updated += 1;
+    } catch (error) {
+      failed += 1;
+      // bearer:disable javascript_lang_logger_leak — only the table name, row
+      // id and the operational error are logged; no token material.
+      logger.warn(
+        { context: "crypto", table: "garmin_connections", id: row.id, err: error },
+        "Skipping credential row that failed re-encryption",
+      );
+    }
   }
-  return updated;
+  return { updated, failed };
 }
 
 /**
@@ -98,9 +132,13 @@ export async function reencryptStoredCredentials(): Promise<ReencryptSummary | n
     pool,
     { key: KEY_ROTATION_LOCK_KEY, name: "keyRotationReencrypt" },
     async () => {
-      const stravaUpdated = await reencryptStrava();
-      const garminUpdated = await reencryptGarmin();
-      return { stravaUpdated, garminUpdated };
+      const strava = await reencryptStrava();
+      const garmin = await reencryptGarmin();
+      return {
+        stravaUpdated: strava.updated,
+        garminUpdated: garmin.updated,
+        failed: strava.failed + garmin.failed,
+      };
     },
   );
 
@@ -121,10 +159,13 @@ export async function maybeReencryptOnBoot(): Promise<void> {
   try {
     const summary = await reencryptStoredCredentials();
     if (summary) {
+      // Escalate to warn when rows were skipped so a poisoned credential row
+      // is visible in logs instead of hiding inside an info line.
+      const log = summary.failed > 0 ? logger.warn.bind(logger) : logger.info.bind(logger);
       // bearer:disable javascript_lang_logger_leak — only the key version and
-      // row counts (stravaUpdated/garminUpdated) are logged; no token plaintext
-      // ever reaches the logger (reencryptToken keeps it in local scope).
-      logger.info(
+      // row counts (stravaUpdated/garminUpdated/failed) are logged; no token
+      // plaintext ever reaches the logger (reencryptToken keeps it in scope).
+      log(
         { context: "crypto", version: currentKeyVersion(), ...summary },
         "Re-encrypted stored credentials to current key version",
       );
