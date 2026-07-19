@@ -1,5 +1,5 @@
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
-import { MICRO_DISPLAY_DEFS } from "@shared/schema";
+import { MICRO_DISPLAY_DEFS } from "@shared/schema/micros";
 
 const YMD = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",

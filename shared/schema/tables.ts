@@ -1134,18 +1134,10 @@ export const FOOD_SOURCES = [
 ] as const;
 export type FoodSource = (typeof FOOD_SOURCES)[number];
 
-// Meal slot a log entry is filed under. pre_workout / post_workout exist so the
-// Phase 3 training-integration views can bucket fuelling around sessions.
-export const MEAL_TYPES = [
-  "breakfast",
-  "lunch",
-  "dinner",
-  "snack",
-  "snack_pm",
-  "pre_workout",
-  "post_workout",
-] as const;
-export type MealType = (typeof MEAL_TYPES)[number];
+// MEAL_TYPES/MealType moved to ./enums (a zero-import module) so the client can
+// use them without evaluating this module's pgTable graph; re-exported here for
+// back-compat with existing "./tables" importers.
+export { MEAL_TYPES, type MealType } from "./enums";
 
 // How an entry was created. Phase 1 only ever writes "manual"; the others are
 // dormant columns reserved for Phase 2 (barcode) and Phase 4 (AI nl/photo).

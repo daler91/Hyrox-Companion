@@ -1,4 +1,4 @@
-import { TrainingPlan } from "@shared/schema";
+import type { TrainingPlan } from "@shared/schema";
 import {
   Calendar,
   Dumbbell,

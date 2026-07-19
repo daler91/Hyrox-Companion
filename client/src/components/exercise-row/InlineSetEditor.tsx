@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet } from "@shared/schema";
+import type { ExerciseSet } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import {
   displayDistanceToStored,
   getWorkoutDistanceDisplay,

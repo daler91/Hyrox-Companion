@@ -1,4 +1,4 @@
-import { type TimelineEntry, type WorkoutStatus } from "@shared/schema";
+import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { useCallback, useState } from "react";
 
 import { isTimelineEntryBulkDeletable } from "./workout-actions/bulkDelete";

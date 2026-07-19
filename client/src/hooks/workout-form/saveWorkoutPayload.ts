@@ -1,4 +1,5 @@
-import { lintWorkoutStructure, type ParsedExercise, type StructureBlockInput, type StructureLintIssue } from "@shared/schema";
+import type { ParsedExercise, StructureBlockInput } from "@shared/schema";
+import { lintWorkoutStructure, type StructureLintIssue } from "@shared/schema/structureLint";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { configToStructureBlock } from "@/components/workout-structure";

@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName, type ParsedExercise } from "@shared/schema";
+import type { ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName } from "@shared/schema/exercises";
 import type { MutableRefObject } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";

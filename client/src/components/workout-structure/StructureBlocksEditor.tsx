@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, type ExerciseSet, normalizeExerciseName, type StructureBlockInput, type StructureBlockScore } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput, StructureBlockScore } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
 import { Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 

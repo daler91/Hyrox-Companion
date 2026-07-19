@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, type ParsedExercise } from "@shared/schema";
+import type { ParsedExercise } from "@shared/schema";
+import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
 import type { MutableRefObject } from "react";
 

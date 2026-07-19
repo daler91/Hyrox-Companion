@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { ChevronDown, GripVertical, MoreVertical, Repeat, Trash2 } from "lucide-react";
 import { type CSSProperties, memo, useCallback, useMemo, useState } from "react";
 

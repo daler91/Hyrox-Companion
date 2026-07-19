@@ -1,4 +1,4 @@
-import { type ExerciseSet } from "@shared/schema";
+import type { ExerciseSet } from "@shared/schema";
 import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
 
 import { type FieldKey, getFields } from "@/components/exercise-row/fieldMeta";

@@ -11,7 +11,8 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { EXERCISE_DEFINITIONS, type ExerciseName, type ExerciseSet, type StructureBlockInput } from "@shared/schema";
+import type { ExerciseSet, StructureBlockInput } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 

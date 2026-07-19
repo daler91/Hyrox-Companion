@@ -1,4 +1,5 @@
-import { type Food, MEAL_TYPES, type MealType, type ParsedFoodItem, type ParseMealResponse } from "@shared/schema";
+import type { Food, ParsedFoodItem, ParseMealResponse } from "@shared/schema";
+import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
