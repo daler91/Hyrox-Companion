@@ -11,16 +11,25 @@
 import type { Logger } from "pino";
 
 import { generateText } from "../../ai/providers";
+import { env } from "../../env";
 import { AppError, ErrorCode } from "../../errors";
 import { logger as defaultLogger } from "../../logger";
 import { NUTRITION_INSIGHTS_PROMPT } from "../../prompts";
+import { storage } from "../../storage";
 import { validateAiOutput } from "../../utils/sanitize";
+import { checkAiBudget } from "../aiUsageService";
 import { buildNutritionSummary, type NutritionSummary } from "./nutritionSummary";
 
 export interface NutritionInsightsResult {
   insights: string;
   generatedAt: string;
 }
+
+export type NutritionInsightsBlockedReason = "ai_disabled" | "ai_consent_off" | "ai_budget_exceeded";
+
+export type NutritionInsightsGenerationOutcome =
+  | { ok: true; result: NutritionInsightsResult }
+  | { ok: false; reason: NutritionInsightsBlockedReason };
 
 /** Render the shared summary into the compact, model-ready string for the prompt. */
 function formatNutritionContext(s: NutritionSummary): string {
@@ -103,4 +112,30 @@ export async function generateNutritionInsights(
   // data as potential information leakage; matches the repo's fix pattern).
   log.info("[ai] Nutrition insights generated");
   return { insights: validateAiOutput(response.text), generatedAt: new Date().toISOString() };
+}
+
+/**
+ * Self-gating variant for the midnight recompute cron. Returns the reason the
+ * analysis was skipped (so the caller can preserve the previously stored
+ * result) rather than throwing. Mirrors generateCoachInsightsIfAllowed.
+ */
+export async function generateNutritionInsightsIfAllowed(
+  userId: string,
+  log: Logger = defaultLogger,
+): Promise<NutritionInsightsGenerationOutcome> {
+  if (env.AI_FEATURES_ENABLED === "false") return { ok: false, reason: "ai_disabled" };
+
+  const user = await storage.users.getUser(userId);
+  if (user?.aiCoachEnabled !== true) return { ok: false, reason: "ai_consent_off" };
+
+  try {
+    const budget = await checkAiBudget(userId);
+    if (!budget.allowed) return { ok: false, reason: "ai_budget_exceeded" };
+  } catch (err) {
+    // Budget lookup failure shouldn't hard-block the feature — log and allow,
+    // matching generateCoachInsightsIfAllowed.
+    log.warn({ err, userId }, "[nutrition-insights] AI budget check failed; allowing AI call");
+  }
+
+  return { ok: true, result: await generateNutritionInsights(userId, log) };
 }
