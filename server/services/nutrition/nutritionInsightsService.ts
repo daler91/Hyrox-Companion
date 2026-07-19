@@ -134,6 +134,7 @@ export async function generateNutritionInsightsIfAllowed(
   } catch (err) {
     // Budget lookup failure shouldn't hard-block the feature — log and allow,
     // matching generateCoachInsightsIfAllowed.
+    // bearer:disable javascript_lang_logger_leak — userId is the app-wide correlation id and err is a DB error; no secrets
     log.warn({ err, userId }, "[nutrition-insights] AI budget check failed; allowing AI call");
   }
 

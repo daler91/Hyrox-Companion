@@ -153,6 +153,7 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
     try {
       await deleteFoodEmbeddingsByFoodIds(deletedFoodIds);
     } catch (err) {
+      // bearer:disable javascript_lang_logger_leak — userId is the handler-wide correlation id and err is a DB error; no secrets, matches the handler's existing pattern
       logger.warn({ err, userId }, "Post-deletion food-embedding purge failed (sweep will catch up)");
     }
 

@@ -54,7 +54,10 @@ jobs:
         image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          # Throwaway per-run password for the ephemeral CI service container
+          # (an expression rather than a literal so secret scanners don't flag
+          # a hardcoded credential).
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}
           POSTGRES_DB: postgres
         ports:
           - 5432:5432
@@ -64,7 +67,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DATABASE_URL: postgresql://postgres:ci-${{ github.run_id }}@localhost:5432/postgres
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

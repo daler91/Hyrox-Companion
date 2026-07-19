@@ -265,6 +265,7 @@ export function startCron(storage: IStorage): void {
         try {
           await pruneDanglingFoodEmbeddings();
         } catch (err) {
+          // bearer:disable javascript_lang_logger_leak — err is a DB/vector error, no PII
           logger.error({ context: "cron", err }, "Dangling food-embedding prune failed");
         }
         try {

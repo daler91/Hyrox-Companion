@@ -118,6 +118,7 @@ export async function pruneDanglingFoodEmbeddings(): Promise<{ pruned: number }>
   const dangling = ids.filter((id) => !live.has(id));
   if (dangling.length > 0) {
     await deleteFoodEmbeddingsByFoodIds(dangling);
+    // bearer:disable javascript_lang_logger_leak — count and static context only, no PII
     logger.info(
       { context: "nutrition", pruned: dangling.length },
       "Pruned dangling food embeddings",

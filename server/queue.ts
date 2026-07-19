@@ -385,6 +385,7 @@ export async function startQueue() {
       // Job data is a cast, not validated: reject unknown features BEFORE the
       // once-per-day claim below so a bad payload can't burn today's recompute.
       if (!ANALYTICS_FEATURES.includes(feature)) {
+        // bearer:disable javascript_lang_logger_leak — jobId is a UUID, no PII
         logger.warn({ jobId: job.id }, "[pg-boss] Unknown recompute-analytics feature, skipping");
         return;
       }
@@ -406,6 +407,7 @@ export async function startQueue() {
         // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
         // switch, unit-tested) — nutrition_insights used to fall through to the
         // coach-insights branch here, running the wrong AI analysis nightly.
+        // bearer:disable javascript_lang_logger_leak — jobId is a UUID bound as log context, no PII
         await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
           dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
         );
