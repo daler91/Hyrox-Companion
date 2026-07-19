@@ -18,14 +18,31 @@ export const CRITICAL_TABLES = [
  * drizzle-kit push already manages (the CI/production source of truth):
  * the first CREATE/ALTER hits an "already exists" and the batch aborts,
  * which is a healthy no-op boot, not a failure.
+ *
+ * The WHOLE cause chain is inspected: drizzle-orm wraps the postgres error in
+ * a DrizzleQueryError whose own message is only "Failed query: <sql>" — the
+ * "relation ... already exists" detail lives in error.cause. Matching the
+ * top-level message alone silently classified every push-managed boot as a
+ * real failure (harmless while failures were swallowed; fatal once they
+ * abort startup).
  */
 export function isBenignIdempotencyError(error: unknown): boolean {
-  const errStr = String((error as { message?: string })?.message ?? error).toLowerCase();
-  return (
-    errStr.includes("already exists") ||
-    errStr.includes("duplicate key") ||
-    errStr.includes("duplicate object")
-  );
+  let current: unknown = error;
+  for (let depth = 0; current != null && depth < 5; depth++) {
+    const message = (current as { message?: unknown }).message;
+    const errStr = (
+      typeof message === "string" ? message : typeof current === "string" ? current : ""
+    ).toLowerCase();
+    if (
+      errStr.includes("already exists") ||
+      errStr.includes("duplicate key") ||
+      errStr.includes("duplicate object")
+    ) {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /**

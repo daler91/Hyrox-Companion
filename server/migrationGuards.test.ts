@@ -27,6 +27,29 @@ describe("isBenignIdempotencyError", () => {
     expect(isBenignIdempotencyError(undefined)).toBe(false);
     expect(isBenignIdempotencyError({ message: 42 })).toBe(false);
   });
+
+  it("finds the benign message in the error CAUSE chain (DrizzleQueryError wrapping)", () => {
+    // drizzle-orm wraps the pg error: the outer message carries only the SQL,
+    // the "already exists" detail lives in .cause — the exact shape a
+    // push-managed CI/production boot produces.
+    const wrapped = new Error('Failed query: CREATE TABLE "chat_messages" (...);\nparams: ');
+    (wrapped as Error & { cause: unknown }).cause = new Error(
+      'relation "chat_messages" already exists',
+    );
+    expect(isBenignIdempotencyError(wrapped)).toBe(true);
+
+    const wrappedReal = new Error("Failed query: INSERT INTO ...;\nparams: ");
+    (wrappedReal as Error & { cause: unknown }).cause = new Error(
+      'column reference "id" is ambiguous',
+    );
+    expect(isBenignIdempotencyError(wrappedReal)).toBe(false);
+  });
+
+  it("terminates on self-referential cause chains", () => {
+    const cyclic = new Error("Failed query: ...");
+    (cyclic as Error & { cause: unknown }).cause = cyclic;
+    expect(isBenignIdempotencyError(cyclic)).toBe(false);
+  });
 });
 
 describe("assertCriticalTablesExist", () => {
