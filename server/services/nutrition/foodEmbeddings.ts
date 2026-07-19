@@ -77,6 +77,19 @@ export async function searchFoodIdsByEmbedding(
 }
 
 /**
+ * GDPR purge: remove the embeddings of specific foods (a deleted user's private
+ * custom foods) from the vector DB. `food_embeddings` has no user column and no
+ * cross-DB FK, so the caller must supply the food-id list — captured from the
+ * main DB BEFORE the user-delete cascade nulls the ownership column. Idempotent
+ * (deleting an absent id is a no-op), so callers may safely run it twice
+ * (pre-deletion fail-loud pass + post-deletion catch-up pass).
+ */
+export async function deleteFoodEmbeddingsByFoodIds(foodIds: readonly string[]): Promise<void> {
+  if (foodIds.length === 0) return;
+  await vectorPool.query(`DELETE FROM food_embeddings WHERE food_id = ANY($1)`, [foodIds]);
+}
+
+/**
  * Embed a bounded batch of cached foods that lack a current embedding, upserting
  * them into `food_embeddings`. Returns how many were embedded. Best-effort — assumes
  * the caller gated on the flag + AI; throws only on an unexpected DB/AI failure (the

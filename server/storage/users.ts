@@ -4,6 +4,7 @@ import {
   chatMessages,
   type CustomExercise,
   customExercises,
+  foods,
   type GarminConnection,
   garminConnections,
   type InsertChatMessage,
@@ -41,10 +42,53 @@ export class UserStorage {
     return user;
   }
 
-  /** Delete a user and all associated data (FK cascades handle child rows). */
-  async deleteUser(id: string): Promise<boolean> {
-    const result = await db.delete(users).where(eq(users.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+  /**
+   * Delete a user (FK cascades handle child rows) AND hard-delete their
+   * PRIVATE custom foods in the same transaction (GDPR Art. 17).
+   *
+   * foods.created_by_user_id is `set null` on user delete — a deliberate FK
+   * choice, since RESTRICT FKs from food_log_entries/recipes into foods would
+   * otherwise block the user delete. But set-null alone strands the user's
+   * private custom foods as ownerless rows, so this method erases them
+   * explicitly. Ordering inside the transaction matters:
+   *   1. Capture the private-custom food ids while created_by_user_id is
+   *      still set (the cascade destroys the only ownership signal).
+   *   2. Delete the user row — cascades remove every row referencing those
+   *      foods (log entries, recipes, favorites, servings), all of which
+   *      belong to this user: visibleTo() has always gated resolution, so no
+   *      other user can ever have referenced a private custom food.
+   *   3. Delete the now-unreferenced foods. The RESTRICT FKs act as a
+   *      tripwire: if the invariant in (2) ever breaks, the transaction
+   *      aborts instead of silently breaking another user's history.
+   *
+   * PUBLIC custom foods (is_public = true) intentionally survive with owner
+   * set-null — sharing was an explicit opt-in, disclosed in the share UI, and
+   * visibility rests on is_public rather than the owner column.
+   *
+   * Returns the deleted food ids so the caller can purge their embeddings
+   * from the separate vector DB (food_embeddings has no user column).
+   */
+  async deleteUserAndPrivateCustomFoods(
+    id: string,
+  ): Promise<{ deleted: boolean; deletedFoodIds: string[] }> {
+    return await db.transaction(async (tx) => {
+      const privateFoods = await tx
+        .select({ id: foods.id })
+        .from(foods)
+        .where(
+          and(eq(foods.createdByUserId, id), eq(foods.source, "custom"), eq(foods.isPublic, false)),
+        );
+      const foodIds = privateFoods.map((row) => row.id);
+
+      const result = await tx.delete(users).where(eq(users.id, id));
+      const deleted = result.rowCount !== null && result.rowCount > 0;
+      if (!deleted) return { deleted: false, deletedFoodIds: [] };
+
+      if (foodIds.length > 0) {
+        await tx.delete(foods).where(inArray(foods.id, foodIds));
+      }
+      return { deleted: true, deletedFoodIds: foodIds };
+    });
   }
 
   /**

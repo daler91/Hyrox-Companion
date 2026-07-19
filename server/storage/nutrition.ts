@@ -372,6 +372,23 @@ export class NutritionStorage {
     return true;
   }
 
+  /**
+   * Ids of the user's PRIVATE custom foods — including recipe-backing foods —
+   * i.e. the set that must be erased with the account (public shares survive by
+   * explicit opt-in). Used by account deletion to purge the foods' embeddings
+   * from the separate vector DB, so it must be called BEFORE the user-delete
+   * cascade set-nulls created_by_user_id (the only ownership signal).
+   */
+  async listPrivateCustomFoodIds(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ id: foods.id })
+      .from(foods)
+      .where(
+        and(eq(foods.createdByUserId, userId), eq(foods.source, "custom"), eq(foods.isPublic, false)),
+      );
+    return rows.map((r) => r.id);
+  }
+
   /** A user's custom foods, EXCLUDING recipe-backing foods (those surface via /recipes). */
   async listCustomFoods(userId: string): Promise<Food[]> {
     const rows = await db

@@ -8,6 +8,7 @@ import {
   customExercises,
   documentChunks,
   exerciseSets,
+  foods,
   garminConnections,
   idempotencyKeys,
   mafProfile,
@@ -98,6 +99,27 @@ describe("user-owned tables cascade on DELETE", () => {
       }
     });
   }
+
+  // foods is deliberately NOT in either list above: its owner FK must stay
+  // `set null` (NOT cascade) because RESTRICT FKs from food_log_entries /
+  // recipes into foods would abort the user delete if the food row vanished
+  // first. Erasure of a deleted user's PRIVATE custom foods happens instead
+  // via the two-phase purge in storage.users.deleteUserAndPrivateCustomFoods
+  // (capture ids → user cascade removes referencing rows → delete foods),
+  // with the vector-DB embeddings purged in server/routes/account.ts. PUBLIC
+  // custom foods survive by explicit opt-in (foods.is_public). This test pins
+  // that intent so a well-meaning "add the cascade" change trips here first.
+  it("foods.createdByUserId intentionally uses set null (erasure handled by the account-deletion purge)", () => {
+    const config = getTableConfig(foods);
+    const fksToUsers = config.foreignKeys.filter((fk) => fk.reference().foreignTable === users);
+    expect(fksToUsers.length).toBeGreaterThan(0);
+    for (const fk of fksToUsers) {
+      expect(
+        fk.onDelete,
+        "foods → users.id must stay onDelete: 'set null'; if you change this, rework deleteUserAndPrivateCustomFoods and the RESTRICT FKs into foods together",
+      ).toBe("set null");
+    }
+  });
 
   for (const { label, table, parent } of transitivelyOwnedTables) {
     it(`${label} cascades transitively through its parent`, () => {

@@ -1,13 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Stub the I/O-heavy imports so the module loads without real DB / AI / vector infra;
-// only the pure helpers are exercised here.
+// `query` is referenced inside the hoisted vi.mock factory below, so it must be
+// created via vi.hoisted to exist before the module graph is evaluated.
+const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+
+// Stub the I/O-heavy imports so the module loads without real DB / AI / vector infra.
 vi.mock("../../db", () => ({ db: {} }));
-vi.mock("../../vectorDb", () => ({ vectorPool: {} }));
+vi.mock("../../vectorDb", () => ({ vectorPool: { query } }));
 vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbeddings: vi.fn() }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-import { foodEmbeddingText, selectFoodsToEmbed, textHash } from "./foodEmbeddings";
+import {
+  deleteFoodEmbeddingsByFoodIds,
+  foodEmbeddingText,
+  selectFoodsToEmbed,
+  textHash,
+} from "./foodEmbeddings";
 
 describe("foodEmbeddingText", () => {
   it("joins name and brand, trimming", () => {
@@ -48,5 +56,26 @@ describe("selectFoodsToEmbed", () => {
 
   it("respects the batch limit", () => {
     expect(selectFoodsToEmbed(foods, new Map(), 1).map((p) => p.id)).toEqual(["a"]);
+  });
+});
+
+describe("deleteFoodEmbeddingsByFoodIds", () => {
+  beforeEach(() => query.mockClear());
+
+  it("purges the given food ids from the vector DB (account erasure, GDPR Art. 17)", async () => {
+    query.mockResolvedValue({ rows: [], rowCount: 2 });
+
+    await deleteFoodEmbeddingsByFoodIds(["food-a", "food-b"]);
+
+    // Must run against vectorPool — the main-DB cascade cannot reach the
+    // separate vector database, and food_embeddings has no user column.
+    expect(query).toHaveBeenCalledWith(`DELETE FROM food_embeddings WHERE food_id = ANY($1)`, [
+      ["food-a", "food-b"],
+    ]);
+  });
+
+  it("is a no-op for an empty id list", async () => {
+    await deleteFoodEmbeddingsByFoodIds([]);
+    expect(query).not.toHaveBeenCalled();
   });
 });
