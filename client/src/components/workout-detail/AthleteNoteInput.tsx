@@ -99,6 +99,7 @@ function AthleteNoteInputView({
           className="min-h-[52px] rounded-md border border-border bg-muted/20 px-3 py-2 text-left text-sm text-muted-foreground hover:border-ring/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setIsEditing(true)}
           disabled={disabled}
+          aria-label={draft.trim().length > 0 ? "Edit athlete note" : "Add athlete note"}
           data-testid="athlete-note-review"
         >
           {preview}
