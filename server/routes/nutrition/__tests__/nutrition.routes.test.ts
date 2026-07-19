@@ -475,6 +475,17 @@ describe("nutrition routes", () => {
       expect((await request(app).patch("/api/v1/nutrition/foods/x").send({ name: "Renamed" })).status).toBe(404);
     });
 
+    it("toggles public sharing through the update path", async () => {
+      vi.mocked(storage.nutrition.updateCustomFood).mockResolvedValue({ id: "c1", isPublic: true });
+      const res = await request(app).patch("/api/v1/nutrition/foods/c1").send({ isPublic: true });
+      expect(res.status).toBe(200);
+      expect(storage.nutrition.updateCustomFood).toHaveBeenCalledWith(
+        expect.any(String),
+        "c1",
+        expect.objectContaining({ isPublic: true }),
+      );
+    });
+
     it("deletes a custom food, 404 missing, 409 when referenced", async () => {
       vi.mocked(storage.nutrition.deleteCustomFood).mockResolvedValue(true);
       expect((await request(app).delete("/api/v1/nutrition/foods/c1")).status).toBe(200);

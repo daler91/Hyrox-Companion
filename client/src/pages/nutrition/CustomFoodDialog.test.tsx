@@ -140,3 +140,70 @@ describe("CustomFoodDialog label prefill", () => {
     expect(screen.getByTestId("input-custom-caloriesPer100g")).toHaveValue(null);
   });
 });
+
+describe("CustomFoodDialog public sharing", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const EDIT_FOOD = {
+    id: "food-1",
+    name: "My Bar",
+    brand: null,
+    caloriesPer100g: 400,
+    proteinPer100g: 10,
+    carbPer100g: 60,
+    fatPer100g: 12,
+    fiberPer100g: 6,
+    servingSizeG: 45,
+    isPublic: false,
+  } as unknown as Food;
+
+  function renderEditDialog(food: Food = EDIT_FOOD) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CustomFoodDialog state={{ mode: "edit", food }} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+    return { onClose };
+  }
+
+  it("does not offer the share toggle when creating a new food (private by default)", () => {
+    renderDialog(PREFILL);
+    expect(screen.queryByTestId("switch-share-publicly")).not.toBeInTheDocument();
+  });
+
+  it("sends isPublic: true when the owner opts in to public sharing", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.nutrition.updateCustomFood).mockResolvedValue(EDIT_FOOD);
+    renderEditDialog();
+
+    const toggle = screen.getByTestId("switch-share-publicly");
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    await user.click(screen.getByTestId("button-save-custom-food"));
+
+    await waitFor(() =>
+      expect(api.nutrition.updateCustomFood).toHaveBeenCalledWith(
+        "food-1",
+        expect.objectContaining({ isPublic: true }),
+      ),
+    );
+  });
+
+  it("keeps an already-shared food public unless toggled off", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.nutrition.updateCustomFood).mockResolvedValue(EDIT_FOOD);
+    renderEditDialog({ ...EDIT_FOOD, isPublic: true });
+
+    expect(screen.getByTestId("switch-share-publicly")).toBeChecked();
+    await user.click(screen.getByTestId("button-save-custom-food"));
+
+    await waitFor(() =>
+      expect(api.nutrition.updateCustomFood).toHaveBeenCalledWith(
+        "food-1",
+        expect.objectContaining({ isPublic: true }),
+      ),
+    );
+  });
+});

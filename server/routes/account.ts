@@ -6,6 +6,7 @@ import { env } from "../env";
 import { logger } from "../logger";
 import { purgeUserJobs } from "../queue";
 import { rateLimiter, sendNotFound } from "../routeUtils";
+import { deleteFoodEmbeddingsByFoodIds } from "../services/nutrition/foodEmbeddings";
 import { storage } from "../storage";
 import { deauthorizeStravaBestEffort } from "../strava";
 import { getUserId } from "../types";
@@ -23,37 +24,58 @@ const router = Router();
  * custom_exercises, push_subscriptions, ai_usage_logs, idempotency_keys,
  * and timeline_annotations.
  *
- * `document_chunks` is the exception: it lives on the SEPARATE vector
- * database (`vectorPool`), which the main-DB FK cascade cannot reach, so the
- * user's RAG chunks are purged explicitly in step 1 below (GDPR Art. 17).
+ * Two stores need explicit handling beyond the cascade:
+ * - `document_chunks` and `food_embeddings` live on the SEPARATE vector
+ *   database (`vectorPool`), which the main-DB FK cascade cannot reach.
+ * - The user's PRIVATE custom foods: `foods.created_by_user_id` is set-null
+ *   on user delete (RESTRICT FKs from log entries/recipes would otherwise
+ *   block the delete), so without an explicit purge those rows would linger
+ *   ownerless. PUBLIC custom foods (is_public) survive by design — sharing
+ *   was an explicit, disclosed opt-in.
  *
  * Order of operations:
- * 1. Purge RAG chunks from the separate vector DB FIRST — fail-loud and
- *    before anything irreversible, so a vector-DB outage makes the whole
- *    request retriable rather than orphaning PII or stranding erasure.
+ * 0. Capture the user's private custom-food ids — MUST happen before the
+ *    step-5 cascade nulls the ownership column (the only signal linking
+ *    foods and their embeddings to this user).
+ * 1. Purge RAG chunks AND the private foods' embeddings from the separate
+ *    vector DB FIRST — fail-loud and before anything irreversible, so a
+ *    vector-DB outage makes the whole request retriable rather than
+ *    orphaning PII or stranding erasure. (Embeddings are a derived cache:
+ *    if a later step fails, the backfill cron re-embeds still-existing
+ *    foods, so deleting early is safe.)
  * 2. Delete Clerk identity (hard fail if this fails, since ensureUserExists
  *    would re-provision the DB row on next request).
  * 3. Best-effort Strava deauthorization.
  * 4. Note: Garmin upstream revocation is intentionally NOT attempted —
  *    see the comment block at the deletion step for the rationale.
- * 5. Delete DB user row (cascades all child rows, including the encrypted
- *    Garmin credentials and OAuth tokens in garmin_connections).
+ * 5. Delete DB user row + private custom foods in ONE transaction (cascades
+ *    all child rows, including the encrypted Garmin credentials and OAuth
+ *    tokens in garmin_connections). Then a best-effort second embeddings
+ *    purge for foods created/privatized between steps 0 and 5.
  * 6. Best-effort purge of the user's pending pg-boss jobs (non-fatal).
  * 7. Evict user from auth seen-cache to prevent stale session use.
  */
 protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete", 3) }, async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
 
-    // Step 1: Purge the user's RAG chunks from the SEPARATE vector DB FIRST,
-    // before any irreversible action. `document_chunks` lives on `vectorPool`
-    // (a separate Postgres instance in production), so the main-DB FK cascade
-    // in step 5 cannot reach it — without this the user's uploaded
-    // coaching-material text and embeddings are orphaned (GDPR Art. 17).
-    // Ordering it first is deliberate: it is fail-loud, so if the vector DB is
-    // unreachable the request fails with nothing yet deleted and the user can
-    // retry. This guarantees a vector outage can never strand the main-DB
-    // erasure behind an already-deleted Clerk identity.
+    // Step 0: Capture the user's private custom-food ids while the ownership
+    // column still exists (step 5's cascade set-nulls created_by_user_id, and
+    // food_embeddings has no user column — this list is the only bridge).
+    const privateFoodIds = await storage.nutrition.listPrivateCustomFoodIds(userId);
+
+    // Step 1: Purge the user's RAG chunks AND their private foods' embeddings
+    // from the SEPARATE vector DB FIRST, before any irreversible action. Both
+    // live on `vectorPool` (a separate Postgres instance in production), so
+    // the main-DB FK cascade in step 5 cannot reach them — without this the
+    // user's uploaded coaching-material text and custom-food-name embeddings
+    // are orphaned (GDPR Art. 17). Ordering them first is deliberate: both are
+    // fail-loud, so if the vector DB is unreachable the request fails with
+    // nothing yet deleted and the user can retry. This guarantees a vector
+    // outage can never strand the main-DB erasure behind an already-deleted
+    // Clerk identity. Embeddings are a derived cache — if a later step fails,
+    // the backfill cron simply re-embeds the still-existing foods.
     await storage.coaching.deleteChunksByUserId(userId);
+    await deleteFoodEmbeddingsByFoodIds(privateFoodIds);
 
     // Step 2: Delete the Clerk identity. If this fails the DB row must
     // stay intact — otherwise ensureUserExists re-creates it on the next
@@ -115,11 +137,24 @@ protectedDelete(router, "/api/v1/account", { limiter: rateLimiter("accountDelete
       );
     }
 
-    // Step 5: Delete the user row — all child rows cascade, including
-    // strava_connections and garmin_connections.
-    const deleted = await storage.users.deleteUser(userId);
+    // Step 5: Delete the user row and their private custom foods in one
+    // transaction — all child rows cascade, including strava_connections and
+    // garmin_connections; the foods delete runs after the cascade has removed
+    // every referencing row (see deleteUserAndPrivateCustomFoods for the
+    // ordering invariants). Public custom foods survive by explicit opt-in.
+    const { deleted, deletedFoodIds } = await storage.users.deleteUserAndPrivateCustomFoods(userId);
     if (!deleted) {
       return sendNotFound(res, "User not found");
+    }
+
+    // Step 5b: Best-effort second embeddings purge, covering foods created or
+    // re-privatized between steps 0 and 5. Idempotent; any miss is mopped up
+    // by the dangling-embedding sweep in the backfill cron.
+    try {
+      await deleteFoodEmbeddingsByFoodIds(deletedFoodIds);
+    } catch (err) {
+      // bearer:disable javascript_lang_logger_leak — userId is the handler-wide correlation id and err is a DB error; no secrets, matches the handler's existing pattern
+      logger.warn({ err, userId }, "Post-deletion food-embedding purge failed (sweep will catch up)");
     }
 
     // Step 6: Best-effort purge of the user's rate-limit buckets (S6). Their

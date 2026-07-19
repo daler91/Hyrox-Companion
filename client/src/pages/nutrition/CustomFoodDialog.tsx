@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCreateCustomFood, useUpdateCustomFood } from "@/hooks/useNutrition";
 
@@ -75,6 +76,8 @@ function CustomFoodForm({
   const [servingSizeG, setServingSizeG] = useState(
     numToStr(food?.servingSizeG ?? suggestion?.servingSizeG),
   );
+  // Public sharing is an edit-only, explicit opt-in (new customs are private).
+  const [isPublic, setIsPublic] = useState(food?.isPublic ?? false);
   // Label scans can seed package-derived servings ("Whole package"); the rows
   // stay editable/removable like any hand-added serving.
   const [servings, setServings] = useState<ServingDraft[]>(() =>
@@ -135,7 +138,7 @@ function CustomFoodForm({
         },
       );
     } else if (food) {
-      updateFood.mutate({ id: food.id, data: fields }, { onSuccess: onClose });
+      updateFood.mutate({ id: food.id, data: { ...fields, isPublic } }, { onSuccess: onClose });
     }
   };
 
@@ -240,6 +243,24 @@ function CustomFoodForm({
             />
           </div>
         </div>
+
+        {!isCreate && (
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="cf-share-publicly">Share publicly</Label>
+              <p className="text-xs text-muted-foreground">
+                Anyone can find and log this food. It stays available to others even if you delete
+                your account.
+              </p>
+            </div>
+            <Switch
+              id="cf-share-publicly"
+              checked={isPublic}
+              onCheckedChange={setIsPublic}
+              data-testid="switch-share-publicly"
+            />
+          </div>
+        )}
 
         {isCreate && (
           <div className="space-y-2">

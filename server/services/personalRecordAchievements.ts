@@ -6,20 +6,23 @@ import type {
   WorkoutLog,
 } from "@shared/schema";
 
-import { calculatePersonalRecords, type ExerciseSetWithDate } from "./analyticsService";
+import { calculatePersonalRecords, type ExerciseSetWithDate, isTimePrImprovement } from "./analyticsService";
 
 type CreatedWorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 
 interface MetricConfig {
   readonly metric: PersonalRecordMetric;
   readonly label: string;
-  readonly isImprovement: (current: number, previous: number) => boolean;
+  readonly isImprovement: (current: number, previous: number, exerciseName: string) => boolean;
 }
 
 const METRICS: readonly MetricConfig[] = [
   { metric: "maxWeight", label: "Max weight", isImprovement: (current, previous) => current > previous },
   { metric: "maxDistance", label: "Max distance", isImprovement: (current, previous) => current > previous },
-  { metric: "bestTime", label: "Best time", isImprovement: (current, previous) => current < previous },
+  // Time direction depends on the exercise: longer is better for isometric
+  // holds (plank etc.), faster is better everywhere else — same rule
+  // calculatePersonalRecords used to produce the records being compared.
+  { metric: "bestTime", label: "Best time", isImprovement: (current, previous, exerciseName) => isTimePrImprovement(exerciseName, current, previous) },
   { metric: "estimated1RM", label: "Estimated 1RM", isImprovement: (current, previous) => current > previous },
 ];
 
@@ -63,7 +66,7 @@ export function findPersonalRecordAchievements(
     for (const { metric, label, isImprovement } of METRICS) {
       const current = getMetricValue(createdRecord, metric);
       const previous = getMetricValue(priorRecord, metric);
-      if (!current || !previous || !isImprovement(current.value, previous.value)) continue;
+      if (!current || !previous || !isImprovement(current.value, previous.value, representativeSet.exerciseName)) continue;
 
       achievements.push({
         exerciseKey,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { AnalyticsFeature, GeneratePlanInput } from "@shared/schema";
+import { ANALYTICS_FEATURES, type AnalyticsFeature, type GeneratePlanInput } from "@shared/schema";
 import pLimit from "p-limit";
 import { type Job,PgBoss } from "pg-boss";
 
@@ -11,12 +11,10 @@ import { env } from "./env";
 import { logger } from "./logger";
 import { getEmbedJobIdentifiers, getUserIdFromJob } from "./queue.utils";
 import { getRequestContext, runWithRequestContext } from "./requestContext";
-import { persistCoachInsights, persistOverviewAnalysis, regenerateAndStoreRacePrediction } from "./services/analyticsPersistence";
-import { generateCoachInsightsIfAllowed } from "./services/coachInsightsService";
 import { triggerAutoCoach } from "./services/coachService";
-import { generateOverviewAnalysisIfAllowed } from "./services/overviewAnalysisService";
 import { executePlanGeneration } from "./services/planGenerationService";
 import { embedCoachingMaterial } from "./services/ragService";
+import { dispatchRecomputeAnalytics } from "./services/recomputeAnalyticsDispatch";
 import { storage } from "./storage";
 
 if (!env.DATABASE_URL) {
@@ -110,6 +108,12 @@ export function sendJobNoRetry(name: string, data: Record<string, unknown>) {
  * `userId` is stored at the job-data top level for every queue (getUserIdFromJob).
  * Every handler already no-ops for a deleted user, so callers may treat a
  * failure here as non-fatal (W17).
+ *
+ * Note: pg-boss v12 keeps completed/failed jobs in per-queue partitions of
+ * `pgboss.job` until its retention maintenance deletes them — there is no
+ * separate `pgboss.archive` table in this schema version. Deleting from the
+ * partitioned parent propagates to all partitions, so this purge reaches
+ * completed jobs too.
  */
 export async function purgeUserJobs(userId: string): Promise<void> {
   await pool.query(`DELETE FROM pgboss.job WHERE data->>'userId' = $1`, [userId]);
@@ -378,6 +382,13 @@ export async function startQueue() {
         logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing recompute-analytics fields, skipping");
         return;
       }
+      // Job data is a cast, not validated: reject unknown features BEFORE the
+      // once-per-day claim below so a bad payload can't burn today's recompute.
+      if (!ANALYTICS_FEATURES.includes(feature)) {
+        // bearer:disable javascript_lang_logger_leak — jobId is a UUID, no PII
+        logger.warn({ jobId: job.id }, "[pg-boss] Unknown recompute-analytics feature, skipping");
+        return;
+      }
       const user = await storage.users.getUser(userId);
       if (!user) {
         logger.warn({ jobId: job.id, userId }, "[pg-boss] User not found, skipping recompute-analytics job");
@@ -393,36 +404,13 @@ export async function startQueue() {
       }
       logger.info({ jobId: job.id, feature }, "[pg-boss] Processing recompute-analytics job");
       try {
-        await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, async () => {
-          if (feature === "race_prediction") {
-            // Always refreshes (deterministic fallback when AI is unavailable).
-            await regenerateAndStoreRacePrediction(userId, logger, localDate);
-            return;
-          }
-          if (feature === "overview_analysis") {
-            // Self-gate like coach_insights; leave the prior stored analysis
-            // intact when consent/budget block the call (the claim above stops a
-            // same-day retry).
-            const outcome = await generateOverviewAnalysisIfAllowed(userId, logger);
-            if (outcome.ok) {
-              await persistOverviewAnalysis(userId, outcome.result, localDate);
-            } else {
-              // bearer:disable javascript_lang_logger_leak — jobId is a UUID
-              // and reason is a fixed enum; no PII or secrets (cf. line ~375).
-              logger.info({ jobId: job.id, reason: outcome.reason }, "[pg-boss] Overview analysis recompute skipped (gated)");
-            }
-            return;
-          }
-          // coach_insights — self-gate so we don't spend AI when consent is off
-          // or the user is over budget; the previously stored insight is left
-          // intact in that case (the claim above stops a same-day retry).
-          const outcome = await generateCoachInsightsIfAllowed(userId, logger);
-          if (outcome.ok) {
-            await persistCoachInsights(userId, outcome.result, localDate);
-          } else {
-            logger.info({ jobId: job.id, reason: outcome.reason }, "[pg-boss] Coach insights recompute skipped (gated)");
-          }
-        });
+        // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
+        // switch, unit-tested) — nutrition_insights used to fall through to the
+        // coach-insights branch here, running the wrong AI analysis nightly.
+        // bearer:disable javascript_lang_logger_leak — jobId is a UUID bound as log context, no PII
+        await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
+          dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
+        );
         logger.info({ jobId: job.id, feature }, "[pg-boss] Completed recompute-analytics job");
       } catch (error) {
         logger.error({ err: error, jobId: job.id }, "[pg-boss] Failed recompute-analytics job");

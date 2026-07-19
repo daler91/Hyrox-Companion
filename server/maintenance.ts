@@ -9,6 +9,7 @@ import { pool } from "./db";
 import { loadPersistedBreakerState } from "./gemini/circuitBreaker";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
+import { assertCriticalTablesExist, isBenignIdempotencyError } from "./migrationGuards";
 import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { vectorPool } from "./vectorDb";
@@ -60,26 +61,23 @@ async function runDrizzleMigrations() {
     // this in-process migrate(). So when migrate() runs against an already-pushed
     // schema it is EXPECTED to hit idempotency errors (a table/column/constraint,
     // or a backfilled row, "already exists"/"duplicate") — those are benign and
-    // logged at info. Anything else is a genuine migration failure. We do NOT
-    // hard-crash on it (that would false-alarm a healthy push-managed boot), but
-    // we escalate to error + Sentry so it is loud and alertable instead of
-    // silently swallowed at warn (W5) — the operator can reconcile before the
-    // inconsistent schema surfaces as runtime errors.
-    const errStr = String((error as { message?: string })?.message ?? error).toLowerCase();
-    const isBenignIdempotencyError =
-      errStr.includes("already exists") ||
-      errStr.includes("duplicate key") ||
-      errStr.includes("duplicate object");
-    if (isBenignIdempotencyError) {
+    // logged at info. Anything else is a genuine migration failure and aborts
+    // startup: the error reaches the catch in server/index.ts, which sets
+    // startupState.startupError so liveness and readiness go 503 and the
+    // platform stops routing / retries the deploy. Serving traffic against a
+    // schema whose migration just failed (worst case: an empty database) is
+    // strictly worse than a blocked deploy.
+    if (isBenignIdempotencyError(error)) {
       logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
     } else {
       // bearer:disable javascript_lang_logger_leak — `err` is a DB/migration
       // error describing schema state, not user data; no PII or secrets logged.
       logger.error(
         { context: "db", err: error },
-        "Drizzle migration failed — schema may be inconsistent; startup is continuing but this needs operator attention",
+        "Drizzle migration failed — schema may be inconsistent; aborting startup",
       );
       Sentry.captureException(error);
+      throw error;
     }
   }
 }
@@ -243,6 +241,14 @@ export async function runStartupMaintenance(storage: IStorage): Promise<void> {
   logger.info({ context: "db" }, "Starting startup maintenance...");
   await testDatabaseConnection();
   await runDrizzleMigrations();
+  // Backstop for the empty/partial-schema catastrophe: migrate() failures on a
+  // FRESH database roll back the whole batch (single transaction) and, before
+  // this check existed, the app would boot green with zero tables. Rolling
+  // deploys: an instance that skipped migrations on the advisory lock could
+  // assert here while another instance is mid-first-migration on a fresh DB —
+  // it crashes, the orchestrator restarts it, and by then the tables exist.
+  // On any established database the tables exist regardless of lock outcome.
+  await assertCriticalTablesExist(pool);
   await ensurePgvectorExtension();
   await ensureVectorSchema();
   try {

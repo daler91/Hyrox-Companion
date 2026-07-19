@@ -1189,6 +1189,13 @@ export const foods = pgTable(
     createdByUserId: varchar("created_by_user_id", { length: 255 }).references(() => users.id, {
       onDelete: "set null",
     }),
+    // Explicit opt-in sharing for CUSTOM foods (provider-sourced rows are
+    // visible to everyone regardless). Private by default. On account deletion
+    // a user's private custom foods are hard-purged (see routes/account.ts);
+    // publicly shared ones survive with owner set-null — visibility then rests
+    // on this flag, never on "NULL owner" (which is how deleted users' private
+    // foods used to leak into everyone's search).
+    isPublic: boolean("is_public").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

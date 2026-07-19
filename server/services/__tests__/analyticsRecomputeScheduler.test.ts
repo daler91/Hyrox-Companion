@@ -14,18 +14,22 @@ vi.mock("../../queue", () => ({
 
 type StoredRow = { recomputedOn: string | null; lastWorkoutDateAtGeneration: string | null };
 
+type Feature = "coach_insights" | "race_prediction" | "nutrition_insights" | "overview_analysis";
+
 interface FakeData {
   engagedUserIds: string[];
   users: Record<string, { userTimezone: string } | undefined>;
   latestWorkoutDate: Record<string, string | null>;
-  rows: Record<string, Partial<Record<"coach_insights" | "race_prediction", StoredRow>>>;
+  /** Latest food-log date — the staleness anchor for nutrition_insights. */
+  latestNutritionLogDate?: Record<string, string | null>;
+  rows: Record<string, Partial<Record<Feature, StoredRow>>>;
 }
 
 function makeStorage(data: FakeData): IStorage {
   return {
     analyticsResults: {
       listEngagedUserIds: vi.fn(async () => data.engagedUserIds),
-      get: vi.fn(async (userId: string, feature: "coach_insights" | "race_prediction") => data.rows[userId]?.[feature]),
+      get: vi.fn(async (userId: string, feature: Feature) => data.rows[userId]?.[feature]),
       upsert: vi.fn(),
       markRecomputedOn: vi.fn(),
     },
@@ -41,6 +45,9 @@ function makeStorage(data: FakeData): IStorage {
         const date = data.latestWorkoutDate[userId];
         return date == null ? [] : [{ date }];
       }),
+    },
+    nutrition: {
+      getLatestLogDate: vi.fn(async (userId: string) => data.latestNutritionLogDate?.[userId] ?? null),
     },
   } as unknown as IStorage;
 }
@@ -122,7 +129,7 @@ describe("runAnalyticsRecomputeScan", () => {
     expect(sendMock.mock.calls[0][1]).toEqual({ userId: "u1", feature: "race_prediction", localDate: "2026-06-05" });
   });
 
-  it("skips users with no logged workouts", async () => {
+  it("enqueues no workout-anchored jobs for users with no logged workouts", async () => {
     const storage = makeStorage({
       engagedUserIds: ["u1"],
       users: { u1: { userTimezone: "UTC" } },
@@ -134,5 +141,46 @@ describe("runAnalyticsRecomputeScan", () => {
 
     expect(result.enqueued).toBe(0);
     expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("anchors nutrition_insights staleness on the food-log date, not the workout date", async () => {
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      // A workout logged after generation would WRONGLY mark nutrition stale
+      // under the old single-anchor logic; the food-log anchor says fresh.
+      latestWorkoutDate: { u1: "2026-06-05" },
+      latestNutritionLogDate: { u1: "2026-06-01" },
+      rows: {
+        u1: { nutrition_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } },
+      },
+    });
+
+    const result = await runAnalyticsRecomputeScan(storage, NOW);
+
+    expect(result.enqueued).toBe(0);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("recomputes nutrition_insights for a meal-logging user with zero workouts", async () => {
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: null }, // the old early return starved these users
+      latestNutritionLogDate: { u1: "2026-06-04" },
+      rows: {
+        u1: { nutrition_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } },
+      },
+    });
+
+    const result = await runAnalyticsRecomputeScan(storage, NOW);
+
+    expect(result.enqueued).toBe(1);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0][1]).toEqual({
+      userId: "u1",
+      feature: "nutrition_insights",
+      localDate: "2026-06-05",
+    });
   });
 });

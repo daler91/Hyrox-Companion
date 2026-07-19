@@ -56,7 +56,7 @@ CREATE INDEX "idx_maf_workout_analysis_user_created" ON "maf_workout_analysis" U
 CREATE INDEX "idx_maf_workout_analysis_workout_log_id" ON "maf_workout_analysis" USING btree ("workout_log_id");--> statement-breakpoint
 ALTER TABLE "user_training_style" ADD CONSTRAINT "user_training_style_source_check" CHECK (source IN ('onboarding', 'settings', 'migration_default'));--> statement-breakpoint
 INSERT INTO "user_training_style" ("user_id", "style", "effective_date", "source")
-SELECT "id", COALESCE("training_style_id", 'balanced_default'), CURRENT_DATE, 'migration_default'
+SELECT "users"."id", COALESCE("users"."training_style_id", 'balanced_default'), CURRENT_DATE, 'migration_default'
 FROM "users"
 LEFT JOIN "user_training_style" uts ON uts."user_id" = "users"."id"
 WHERE uts."user_id" IS NULL;

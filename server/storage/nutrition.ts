@@ -67,12 +67,20 @@ function escapeLike(value: string): string {
 
 /**
  * Visibility predicate for the mixed shared + per-user `foods` table: a row is
- * visible if it's shared (created_by_user_id IS NULL — USDA/OFF) or owned by the
- * requesting user (a custom food / recipe-backing food). Applied to EVERY
- * food-by-id resolution and listing so custom foods never leak cross-user.
+ * visible if it's owned by the requesting user, comes from the shared provider
+ * cache (any non-custom source — USDA/OFF/etc.), or is a custom food its owner
+ * explicitly shared publicly. Applied to EVERY food-by-id resolution and
+ * listing so custom foods never leak cross-user.
+ *
+ * Deliberately NOT "createdByUserId IS NULL means shared": the owner FK is
+ * set-null on account deletion, so under that rule a deleted user's private
+ * custom foods became visible to everyone. Custom-source rows are only ever
+ * visible beyond their owner via the explicit is_public opt-in.
+ *
+ * Exported ONLY for the SQL-shape regression test (nutrition.visibility.test.ts).
  */
-function visibleTo(userId: string) {
-  return sql`(${foods.createdByUserId} IS NULL OR ${foods.createdByUserId} = ${userId})`;
+export function visibleTo(userId: string) {
+  return sql`(${foods.createdByUserId} = ${userId} OR ${foods.source} <> 'custom' OR ${foods.isPublic} = true)`;
 }
 
 interface CreateLogEntryData {
@@ -322,6 +330,9 @@ export class NutritionStorage {
         ...(patch.fatPer100g !== undefined && { fatPer100g: patch.fatPer100g ?? null }),
         ...(patch.fiberPer100g !== undefined && { fiberPer100g: patch.fiberPer100g ?? null }),
         ...(patch.servingSizeG !== undefined && { servingSizeG: patch.servingSizeG ?? null }),
+        // Public sharing opt-in/out. The WHERE below already pins ownership and
+        // source='custom', so only the owner can toggle and only custom foods.
+        ...(patch.isPublic !== undefined && { isPublic: patch.isPublic }),
         updatedAt: new Date(),
       })
       .where(and(eq(foods.id, id), eq(foods.createdByUserId, userId), eq(foods.source, "custom")))
@@ -359,6 +370,23 @@ export class NutritionStorage {
 
     await db.delete(foods).where(eq(foods.id, id));
     return true;
+  }
+
+  /**
+   * Ids of the user's PRIVATE custom foods — including recipe-backing foods —
+   * i.e. the set that must be erased with the account (public shares survive by
+   * explicit opt-in). Used by account deletion to purge the foods' embeddings
+   * from the separate vector DB, so it must be called BEFORE the user-delete
+   * cascade set-nulls created_by_user_id (the only ownership signal).
+   */
+  async listPrivateCustomFoodIds(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ id: foods.id })
+      .from(foods)
+      .where(
+        and(eq(foods.createdByUserId, userId), eq(foods.source, "custom"), eq(foods.isPublic, false)),
+      );
+    return rows.map((r) => r.id);
   }
 
   /** A user's custom foods, EXCLUDING recipe-backing foods (those surface via /recipes). */

@@ -4,6 +4,8 @@ import {
   chatMessages,
   type CustomExercise,
   customExercises,
+  foodLogEntries,
+  foods,
   type GarminConnection,
   garminConnections,
   type InsertChatMessage,
@@ -12,6 +14,8 @@ import {
   type InsertStravaConnection,
   mafProfile,
   rateLimitBuckets,
+  recipeIngredients,
+  recipes,
   type StravaConnection,
   stravaConnections,
   type UpdateUserPreferences,
@@ -19,7 +23,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, inArray, isNotNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, lte, notExists, or, sql } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -41,10 +45,84 @@ export class UserStorage {
     return user;
   }
 
-  /** Delete a user and all associated data (FK cascades handle child rows). */
-  async deleteUser(id: string): Promise<boolean> {
-    const result = await db.delete(users).where(eq(users.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+  /**
+   * Delete a user (FK cascades handle child rows) AND hard-delete their
+   * PRIVATE custom foods in the same transaction (GDPR Art. 17).
+   *
+   * foods.created_by_user_id is `set null` on user delete — a deliberate FK
+   * choice, since RESTRICT FKs from food_log_entries/recipes into foods would
+   * otherwise block the user delete. But set-null alone strands the user's
+   * private custom foods as ownerless rows, so this method erases them
+   * explicitly. Ordering inside the transaction matters:
+   *   1. Capture the private-custom food ids while created_by_user_id is
+   *      still set (the cascade destroys the only ownership signal).
+   *   2. Delete the user row — cascades remove the user's OWN rows
+   *      referencing those foods (log entries, recipes, favorites, servings).
+   *   3. Delete the captured foods that are now unreferenced. The delete is
+   *      reference-guarded (notExists on every RESTRICT FK) because OTHER
+   *      users may legitimately reference a food that was public when they
+   *      logged it and was later re-privatized by its owner — an unguarded
+   *      delete would hit the RESTRICT FK and abort the whole deletion AFTER
+   *      the Clerk identity is gone, stranding erasure. Such foods survive as
+   *      ownerless private rows: hidden from all search/resolution (visibleTo
+   *      requires owner / non-custom source / is_public), while the
+   *      referencing users' existing history keeps rendering (entry display
+   *      joins foods directly — owning an entry is the right to see it).
+   *      That retention matches the sharing disclosure: the food was
+   *      published, someone relied on it.
+   *
+   * PUBLIC custom foods (is_public = true) intentionally survive with owner
+   * set-null — sharing was an explicit opt-in, disclosed in the share UI, and
+   * visibility rests on is_public rather than the owner column.
+   *
+   * Returns the ACTUALLY deleted food ids so the caller can purge their
+   * embeddings from the separate vector DB (food_embeddings has no user
+   * column). Surviving referenced foods keep working; their embeddings are
+   * cache and get re-created by the backfill cron.
+   */
+  async deleteUserAndPrivateCustomFoods(
+    id: string,
+  ): Promise<{ deleted: boolean; deletedFoodIds: string[] }> {
+    return await db.transaction(async (tx) => {
+      const privateFoods = await tx
+        .select({ id: foods.id })
+        .from(foods)
+        .where(
+          and(eq(foods.createdByUserId, id), eq(foods.source, "custom"), eq(foods.isPublic, false)),
+        );
+      const foodIds = privateFoods.map((row) => row.id);
+
+      const result = await tx.delete(users).where(eq(users.id, id));
+      const deleted = result.rowCount !== null && result.rowCount > 0;
+      if (!deleted) return { deleted: false, deletedFoodIds: [] };
+
+      if (foodIds.length === 0) return { deleted: true, deletedFoodIds: [] };
+
+      const deletedRows = await tx
+        .delete(foods)
+        .where(
+          and(
+            inArray(foods.id, foodIds),
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(foodLogEntries)
+                .where(eq(foodLogEntries.foodId, foods.id)),
+            ),
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(recipeIngredients)
+                .where(eq(recipeIngredients.foodId, foods.id)),
+            ),
+            notExists(
+              tx.select({ one: sql`1` }).from(recipes).where(eq(recipes.foodId, foods.id)),
+            ),
+          ),
+        )
+        .returning({ id: foods.id });
+      return { deleted: true, deletedFoodIds: deletedRows.map((row) => row.id) };
+    });
   }
 
   /**
