@@ -119,11 +119,22 @@ export default defineConfig({
     sourcemap: "hidden",
     rollupOptions: {
       output: {
-        // Vite 8 (Rolldown) deprecated the object form of `manualChunks` in
-        // favour of `advancedChunks.groups`. Each group keeps the original
-        // chunk name and matches the package by its node_modules path.
-        advancedChunks: {
+        // Rolldown 1.1+ deprecates `advancedChunks` in favour of `codeSplitting`
+        // (identical group shape; advancedChunks is silently IGNORED when both
+        // are set, so this must be a rename, never a duplicate). Each group
+        // keeps the original chunk name and matches by node_modules path.
+        codeSplitting: {
           groups: [
+            // MUST claim clsx/tailwind-merge before vendor-charts (priority
+            // beats the default 0): groups capture their matched package's
+            // dependencies recursively, and clsx is both a recharts dep and a
+            // direct app dep (cn() in client/src/lib/utils.ts, imported by the
+            // eager UI shell). Without this group, clsx lands inside
+            // vendor-charts and the entry statically imports the ~390KB charts
+            // chunk on every first paint — including the signed-out Landing
+            // page, which renders no charts (all recharts sites are lazy
+            // routes). Guarded by script/bundle-check.ts.
+            { name: "vendor-clsx", test: /[\\/]node_modules[\\/](?:clsx|tailwind-merge)[\\/]/, priority: 10 },
             { name: "vendor-react", test: /[\\/]node_modules[\\/](?:react-dom|react|wouter)[\\/]/ },
             { name: "vendor-ui", test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
             { name: "vendor-query", test: /[\\/]node_modules[\\/]@tanstack[\\/]react-query[\\/]/ },
