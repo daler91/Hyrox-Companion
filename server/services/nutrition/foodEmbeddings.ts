@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { foods } from "@shared/schema";
+import { inArray } from "drizzle-orm";
 
 import { db } from "../../db";
 import { EMBEDDING_DIMENSIONS, generateEmbeddings } from "../../gemini/client";
@@ -87,6 +88,42 @@ export async function searchFoodIdsByEmbedding(
 export async function deleteFoodEmbeddingsByFoodIds(foodIds: readonly string[]): Promise<void> {
   if (foodIds.length === 0) return;
   await vectorPool.query(`DELETE FROM food_embeddings WHERE food_id = ANY($1)`, [foodIds]);
+}
+
+// Batch size for the dangling-embedding existence check against the main DB.
+const PRUNE_CHECK_BATCH = 500;
+
+/**
+ * Self-healing sweep: delete embeddings whose `foods` row no longer exists —
+ * deleted accounts' purged private customs (including any the account-deletion
+ * route's best-effort second purge missed), the migration-0081 orphan cleanup,
+ * and any future food-deletion path. Runs from the embedding backfill cron.
+ * Cross-DB (embeddings on vectorPool, foods on the main DB), so existence is
+ * checked in bounded batches rather than a join.
+ */
+export async function pruneDanglingFoodEmbeddings(): Promise<{ pruned: number }> {
+  const existing = await vectorPool.query<{ food_id: string }>(
+    `SELECT food_id FROM food_embeddings`,
+  );
+  const ids = existing.rows.map((row) => row.food_id);
+  if (ids.length === 0) return { pruned: 0 };
+
+  const live = new Set<string>();
+  for (let i = 0; i < ids.length; i += PRUNE_CHECK_BATCH) {
+    const batch = ids.slice(i, i + PRUNE_CHECK_BATCH);
+    const rows = await db.select({ id: foods.id }).from(foods).where(inArray(foods.id, batch));
+    for (const row of rows) live.add(row.id);
+  }
+
+  const dangling = ids.filter((id) => !live.has(id));
+  if (dangling.length > 0) {
+    await deleteFoodEmbeddingsByFoodIds(dangling);
+    logger.info(
+      { context: "nutrition", pruned: dangling.length },
+      "Pruned dangling food embeddings",
+    );
+  }
+  return { pruned: dangling.length };
 }
 
 /**

@@ -7,7 +7,7 @@ import { env } from "./env";
 import { logger } from "./logger";
 import { queue } from "./queue";
 import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
-import { embedMissingFoods } from "./services/nutrition/foodEmbeddings";
+import { embedMissingFoods, pruneDanglingFoodEmbeddings } from "./services/nutrition/foodEmbeddings";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
@@ -257,6 +257,16 @@ export function startCron(storage: IStorage): void {
       if (env.NUTRITION_SEMANTIC_ENABLED !== "true") return;
       if (env.AI_FEATURES_ENABLED === "false" || !env.GEMINI_API_KEY) return;
       await runCronJobWithLock("nutritionEmbeddingBackfill", async () => {
+        // Self-healing GDPR sweep before the backfill: drop embeddings whose
+        // foods row is gone (account-deletion purges, migration-0081 orphan
+        // cleanup). Needs no AI, and running it first keeps the backfill's
+        // existing-hash scan from carrying dead rows. Errors are swallowed
+        // separately so a prune failure never blocks embedding.
+        try {
+          await pruneDanglingFoodEmbeddings();
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Dangling food-embedding prune failed");
+        }
         try {
           const { embedded } = await embedMissingFoods();
           if (embedded > 0) {

@@ -188,8 +188,12 @@ export default function Privacy() {
             <li>
               <strong>Delete</strong> your account and all associated data via Settings. Deletion is
               permanent and cascades to all workout logs, plans, chat messages, and connected
-              service credentials. It also clears unsynced local workout saves and drafts on the
-              current device.
+              service credentials, and erases your private custom foods (including their search
+              index entries). It also clears unsynced local workout saves and drafts on the current
+              device. One exception: custom foods you have explicitly shared publicly (via the
+              &ldquo;Share publicly&rdquo; toggle) remain available to other users after deletion,
+              with no link back to you &mdash; unshare them before deleting your account if you
+              don&rsquo;t want that.
             </li>
             <li>
               <strong>Opt out</strong> of email notifications, AI coaching, and error-diagnostics
