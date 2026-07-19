@@ -11,7 +11,7 @@
  * Nothing here runs at build or request time — re-run manually after the CSV
  * changes: `pnpm data:race-benchmarks`.
  */
-import { createReadStream, mkdirSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -138,6 +138,14 @@ function physiologyWarnings(benchmarks: Record<string, CohortBenchmark>): string
 
 async function main(): Promise<void> {
   const csvPath = resolveCsvPath();
+  if (!existsSync(csvPath)) {
+    console.error(
+      `[race-benchmarks] CSV not found: ${csvPath}\n` +
+        "hyrox_results.csv is deliberately not tracked in git. Place it at the repo root " +
+        "(or pass --csv=PATH) — see script/race-benchmarks/README.md for how to obtain it.",
+    );
+    process.exit(1);
+  }
   log(`Reading ${csvPath}`);
 
   const races: ParsedRace[] = [];

@@ -57,14 +57,10 @@ tmp_*.txt
 attached_assets/
 pr_description.md
 node_modules/
+.pnpm-store
 
 # Regenerable race-benchmark reports (the *.generated.ts artifacts ARE committed; these are not)
 script/race-benchmarks/output/
-node_modules/
-node_modules/
-node_modules/
-node_modules/
-node_modules/
-.pnpm-store
-node_modules/
-.pnpm-store
+
+# Race-results source CSV: 25 MB, deliberately untracked — see script/race-benchmarks/README.md
+hyrox_results.csv

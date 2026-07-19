@@ -1,7 +1,8 @@
 # Race benchmarks tool
 
-Offline tooling that turns the committed `hyrox_results.csv` (real HYROX singles
-results) into the benchmark + ranking artifacts the Race Predictor consumes.
+Offline tooling that turns a local `hyrox_results.csv` (real HYROX singles
+results; not tracked in git — see "Getting the CSV" below) into the benchmark +
+ranking artifacts the Race Predictor consumes.
 
 ## What it produces
 
@@ -49,3 +50,11 @@ The accuracy backtest (80/20 split, cohort-only prediction vs actual finish):
 time entirely) is cut by most of its magnitude. The live predictor improves
 further with the athlete's own logged splits and the AI layer — excluded here to
 isolate the reference layer.
+
+## Getting the CSV
+
+`hyrox_results.csv` (~25 MB of scraped HYROX singles results) is **not tracked
+in git** — it dominated the packfile and bloated every clone. Obtain it from the
+maintainer (ask @daler91) and place it at the repo root, or pass `--csv=PATH` to
+the generator. The derived `*.generated.ts` artifacts ARE committed, so
+day-to-day development never needs the CSV.
