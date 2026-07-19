@@ -250,3 +250,44 @@ describe("TimelineStorage standalone workout plan association", () => {
     expect(spy).toHaveBeenLastCalledWith("user-1", undefined, undefined);
   });
 });
+
+describe("TimelineStorage windowed hydration", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    linkedRows = [];
+    standaloneRows = [];
+    storage = new TimelineStorage(workoutStorage as never);
+    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+  });
+
+  it("hydrates exercise sets/structures ONLY for the windowed page", async () => {
+    // Five standalone workouts, newest first once sorted; a limit-2 window must
+    // hydrate exactly the two returned entries, not the whole merged set (the
+    // regression: attachExerciseSets ran on the full 3x-over-fetched merge).
+    standaloneRows = ["2026-06-05", "2026-06-04", "2026-06-03", "2026-06-02", "2026-06-01"].map(
+      (date, i) => standaloneLog(`w${i}`, { date }),
+    );
+
+    const entries = await storage.getTimeline("user-1", undefined, 2, 0);
+
+    expect(entries.map((e) => e.id)).toEqual(["log-w0", "log-w1"]);
+    expect(workoutStorage.getExerciseSetsByWorkoutLogs).toHaveBeenCalledTimes(1);
+    expect(workoutStorage.getExerciseSetsByWorkoutLogs).toHaveBeenCalledWith(["w0", "w1"]);
+    expect(workoutStorage.getWorkoutStructuresByWorkoutLogs).toHaveBeenCalledWith(["w0", "w1"]);
+  });
+
+  it("hydrates everything when no window is requested (export/email path)", async () => {
+    standaloneRows = ["2026-06-05", "2026-06-04", "2026-06-03"].map((date, i) =>
+      standaloneLog(`w${i}`, { date }),
+    );
+
+    const entries = await storage.getTimeline("user-1");
+
+    expect(entries).toHaveLength(3);
+    expect(workoutStorage.getExerciseSetsByWorkoutLogs).toHaveBeenCalledWith(["w0", "w1", "w2"]);
+  });
+});
