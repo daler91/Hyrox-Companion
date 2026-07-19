@@ -25,6 +25,12 @@ const EXPECTED_TABLES = [
   "strava_connections",
   "chat_messages",
   "coaching_materials",
+  // 0035_maf_artifacts — the migration whose ambiguous-column backfill broke
+  // fresh-database bootstrap undetected; assert its tables from now on.
+  "user_training_style",
+  "maf_profile",
+  "maf_test_results",
+  "maf_workout_analysis",
 ];
 
 const EXPECTED_INDEXES = [
