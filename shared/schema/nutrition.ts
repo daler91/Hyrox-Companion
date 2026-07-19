@@ -129,7 +129,13 @@ export const createCustomFoodSchema = z.object({
 export type CreateCustomFoodInput = z.infer<typeof createCustomFoodSchema>;
 
 export const updateCustomFoodSchema = z
-  .object(customFoodFields)
+  .object({
+    ...customFoodFields,
+    // Explicit opt-in public sharing (edit-only: new custom foods are always
+    // private; sharing is a deliberate second action). A publicly shared food
+    // stays available to everyone even after its owner deletes their account.
+    isPublic: z.boolean(),
+  })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateCustomFoodInput = z.infer<typeof updateCustomFoodSchema>;

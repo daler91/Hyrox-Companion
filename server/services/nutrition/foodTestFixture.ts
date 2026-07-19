@@ -21,6 +21,7 @@ export function makeFood(over: Partial<Food> = {}): Food {
     micros: null,
     lastFetchedAt: null,
     createdByUserId: null,
+    isPublic: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,

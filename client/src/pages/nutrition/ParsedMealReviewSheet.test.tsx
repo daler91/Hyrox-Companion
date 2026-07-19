@@ -25,6 +25,7 @@ const FOOD: Food = {
   brand: null,
   lastFetchedAt: null,
   createdByUserId: null,
+  isPublic: false,
   servingSizeG: null,
   caloriesPer100g: 150,
   proteinPer100g: 10,

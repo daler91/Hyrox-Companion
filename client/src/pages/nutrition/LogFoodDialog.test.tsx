@@ -45,6 +45,7 @@ const FOOD: Food = {
   micros: null,
   lastFetchedAt: null,
   createdByUserId: null,
+  isPublic: false,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
