@@ -72,6 +72,17 @@ const TIME_LONGER_IS_BETTER = new Set<string>([
 ]);
 const TIME_NOT_A_PR_METRIC = new Set<string>(["amrap", "emom"]);
 
+/**
+ * Direction-aware "is this time a better PR" comparison, for callers that
+ * compare two already-computed bestTime records (e.g. new-PR achievement
+ * detection). Mirrors updateBestTime exactly: longer is better for isometric
+ * holds, AMRAP/EMOM never count as a time PR, otherwise faster is better.
+ */
+export function isTimePrImprovement(exerciseName: string, current: number, previous: number): boolean {
+  if (TIME_NOT_A_PR_METRIC.has(exerciseName)) return false;
+  return TIME_LONGER_IS_BETTER.has(exerciseName) ? current > previous : current < previous;
+}
+
 function updateBestTime(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   if (!set.time || set.time <= 0) return;
   if (TIME_NOT_A_PR_METRIC.has(set.exerciseName)) return;

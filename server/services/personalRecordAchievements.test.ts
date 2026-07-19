@@ -154,4 +154,53 @@ describe("findPersonalRecordAchievements", () => {
       }),
     ]);
   });
+
+  it("treats a LONGER hold as the improvement for isometric exercises", () => {
+    const priorSets = [
+      makeSet({
+        exerciseName: "plank",
+        category: "strength",
+        time: 60,
+        workoutLogId: "prior-1",
+      }),
+    ];
+    const createdSet = makeSet({
+      id: "set-new",
+      workoutLogId: "created-1",
+      exerciseName: "plank",
+      category: "strength",
+      time: 90,
+      date: "2026-05-20",
+    }) as ExerciseSet;
+
+    expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([
+      expect.objectContaining({
+        exerciseKey: "plank",
+        metric: "bestTime",
+        value: 90,
+        previousValue: 60,
+      }),
+    ]);
+  });
+
+  it("does not celebrate a shorter hold as a PR for isometric exercises", () => {
+    const priorSets = [
+      makeSet({
+        exerciseName: "plank",
+        category: "strength",
+        time: 90,
+        workoutLogId: "prior-1",
+      }),
+    ];
+    const createdSet = makeSet({
+      id: "set-new",
+      workoutLogId: "created-1",
+      exerciseName: "plank",
+      category: "strength",
+      time: 60,
+      date: "2026-05-20",
+    }) as ExerciseSet;
+
+    expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([]);
+  });
 });
