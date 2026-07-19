@@ -50,10 +50,13 @@ import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
 
 const DEFAULT_SEARCH_LIMIT = 25;
-// Minimum pg_trgm similarity for a fuzzy (typo) match. Set explicitly in the
-// predicate rather than via the `pg_trgm.similarity_threshold` session GUC so it's
-// deterministic across pooled connections.
-const TRGM_SIMILARITY_THRESHOLD = 0.3;
+// The pg_trgm.similarity_threshold GUC default. The fuzzy WHERE uses the `%`
+// operator (index-servable), which reads that GUC — this constant is no longer
+// interpolated into the SQL. It exists to DOCUMENT and TEST the coupling: if a
+// different threshold is ever needed, the GUC must be SET per pooled connection
+// AND this constant updated to match.
+// Exported ONLY for the SQL-shape regression test (nutrition.searchShape.test.ts).
+export const TRGM_SIMILARITY_THRESHOLD = 0.3;
 
 /** A local search hit carrying the pg_trgm similarity (0 when fuzzy is off) so the
  *  orchestrator's ranker can promote good typo matches. Extends `Food`; the extra
@@ -81,6 +84,29 @@ function escapeLike(value: string): string {
  */
 export function visibleTo(userId: string) {
   return sql`(${foods.createdByUserId} = ${userId} OR ${foods.source} <> 'custom' OR ${foods.isPublic} = true)`;
+}
+
+/**
+ * One search variant's WHERE fragment: name/brand substring match plus, when
+ * fuzzy is on, a trigram match. Uses the `%` OPERATOR (not `similarity(...) >= x`)
+ * deliberately: gin_trgm_ops can serve `%` and infix LIKE via a BitmapOr over
+ * idx_foods_name_trgm / idx_foods_brand_trgm (migration 0074), whereas a
+ * similarity() function predicate is structurally unservable and forces a
+ * sequential scan of the whole shared foods table. `%` reads the
+ * pg_trgm.similarity_threshold GUC (PostgreSQL default 0.3, never overridden in
+ * this repo == TRGM_SIMILARITY_THRESHOLD). Do not regress to similarity() in
+ * the WHERE; it stays only in the SELECT/ORDER BY, where it runs on matched
+ * rows. The brand arms keep an explicit `is not null` so qualification for the
+ * partial brand index never depends on the planner's strict-operator proof.
+ *
+ * Exported ONLY for the SQL-shape regression test (nutrition.searchShape.test.ts).
+ */
+export function buildVariantMatch(v: string, fuzzy: boolean) {
+  const contains = `%${escapeLike(v)}%`;
+  const base = sql`(lower(${foods.name}) like ${contains} or (${foods.brand} is not null and lower(${foods.brand}) like ${contains}))`;
+  return fuzzy
+    ? sql`(${base} or lower(${foods.name}) % ${v} or (${foods.brand} is not null and lower(${foods.brand}) % ${v}))`
+    : base;
 }
 
 interface CreateLogEntryData {
@@ -146,19 +172,16 @@ export class NutritionStorage {
       : sql<number>`0`;
 
     // Retrieve a row if ANY variant (the query or a synonym form) matches name/brand
-    // by substring, or — when fuzzy — by trigram similarity. The synonym variants are
-    // what let "courgette" pull a local "Zucchini" row for the synonym-aware ranker.
-    const variantMatch = (v: string) => {
-      const contains = `%${escapeLike(v)}%`;
-      const base = sql`(lower(${foods.name}) like ${contains} or (${foods.brand} is not null and lower(${foods.brand}) like ${contains}))`;
-      return fuzzy
-        ? sql`(${base} or similarity(lower(${foods.name}), ${v}) >= ${TRGM_SIMILARITY_THRESHOLD} or coalesce(similarity(lower(${foods.brand}), ${v}), 0) >= ${TRGM_SIMILARITY_THRESHOLD})`
-        : base;
-    };
+    // by substring, or — when fuzzy — by trigram similarity (see buildVariantMatch
+    // for why the `%` operator, not similarity(), is load-bearing). The synonym
+    // variants are what let "courgette" pull a local "Zucchini" row for the ranker.
     // Wrap the OR-join in parens so the visibility AND below binds to the whole
     // group, not just the last variant (SQL AND binds tighter than OR).
     const orSeparator = sql` or `;
-    const match = sql`(${sql.join(variants.map(variantMatch), orSeparator)})`;
+    const match = sql`(${sql.join(
+      variants.map((v) => buildVariantMatch(v, fuzzy)),
+      orSeparator,
+    )})`;
 
     return db
       .select({ ...getTableColumns(foods), _localSim: sim })
