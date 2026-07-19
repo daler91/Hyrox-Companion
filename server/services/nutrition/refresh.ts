@@ -28,7 +28,10 @@ const MAX_REFRESH_PER_REQUEST = 3;
 export function isStaleFood(food: Food): boolean {
   if (food.source === "custom" || !food.sourceId) return false;
   if (!food.lastFetchedAt) return true;
-  return Date.now() - new Date(food.lastFetchedAt).getTime() > STALE_AFTER_MS;
+  // ⚡ Bolt Performance Optimization:
+  // Avoid redundant new Date() allocation since Drizzle already provides a Date object
+  // for timestamp fields. This eliminates unnecessary garbage collection overhead.
+  return Date.now() - food.lastFetchedAt.getTime() > STALE_AFTER_MS;
 }
 
 /** Re-fetch a cached food from its upstream source by its source id. */

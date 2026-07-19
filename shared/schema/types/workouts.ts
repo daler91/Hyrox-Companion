@@ -9,7 +9,10 @@ import type { CoachNoteInputs } from "./plans";
 // (which otherwise skew Week-over-Week deltas and completion stats).
 const workoutDateNotFuture = z.string().refine(
   (d) => {
-    const target = new Date(`${d}T00:00:00Z`).getTime();
+    // ⚡ Bolt Performance Optimization:
+    // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
+    // when calculating dates.
+    const target = Date.parse(`${d}T00:00:00Z`);
     if (Number.isNaN(target)) return false;
     return target <= Date.now() + 24 * 60 * 60 * 1000;
   },

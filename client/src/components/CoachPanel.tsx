@@ -90,7 +90,10 @@ export function CoachPanel({
     allMessages.sort((a, b) => {
       if (a.id === "welcome") return -1;
       if (b.id === "welcome") return 1;
-      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      // ⚡ Bolt Performance Optimization:
+      // Uses raw createdAtMs epoch time instead of parsing the localized '10:30 AM' timestamp string
+      // with new Date(), avoiding "Invalid Date" NaN results and memory allocation overhead.
+      return (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0);
     });
     return allMessages;
   }, [hookMessages, localMessages]);
@@ -137,6 +140,7 @@ export function CoachPanel({
           role: "assistant",
           content: WELCOME_TEXT,
           timestamp: getCurrentTimeString(),
+          createdAtMs: Date.now(),
         },
       ]);
     }
@@ -154,6 +158,7 @@ export function CoachPanel({
         role: "user",
         content: action.label,
         timestamp: getCurrentTimeString(),
+        createdAtMs: Date.now(),
       });
       saveMessage({ role: "user", content: action.label });
       suggestionsMutation.mutate();

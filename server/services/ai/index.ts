@@ -42,7 +42,9 @@ function todayUtcDate(): string {
 }
 
 function addDays(date: string, delta: number): string {
-  const timestamp = new Date(`${date}T00:00:00Z`).getTime() + delta * DAY_MS;
+  // ⚡ Bolt Performance Optimization:
+  // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
+  const timestamp = Date.parse(`${date}T00:00:00Z`) + delta * DAY_MS;
   return new Date(timestamp).toISOString().split("T")[0];
 }
 
@@ -305,7 +307,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     },
   }).overview;
   const completedLast7d = recentWorkouts.filter((w) => {
-    const days = Math.floor((Date.now() - new Date(w.date).getTime()) / (1000 * 60 * 60 * 24));
+    // ⚡ Bolt Performance Optimization:
+    // Avoid intermediate Date object allocation by using Date.parse() for YYYY-MM-DD date strings
+    const days = Math.floor((Date.now() - Date.parse(w.date)) / (1000 * 60 * 60 * 24));
     return days >= 0 && days <= 7;
   }).length;
   const experienceLevel = classifyExperienceLevel(totalWorkouts);

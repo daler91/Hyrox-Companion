@@ -769,7 +769,10 @@ export async function regenerateCoachNoteForPlanDay(
   // timestamp — auto-coach writes it on its own apply path, so a manual
   // refresh can't immediately follow an auto-coach regeneration either.
   if (day.aiNoteUpdatedAt) {
-    const elapsed = Date.now() - new Date(day.aiNoteUpdatedAt).getTime();
+    // ⚡ Bolt Performance Optimization:
+    // Avoid redundant new Date() allocation since Drizzle already provides a Date object
+    // for timestamp fields. This eliminates unnecessary garbage collection overhead.
+    const elapsed = Date.now() - day.aiNoteUpdatedAt.getTime();
     if (elapsed < REGENERATE_COOLDOWN_MS) {
       return { retryAfterMs: REGENERATE_COOLDOWN_MS - elapsed };
     }
