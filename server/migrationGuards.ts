@@ -26,13 +26,16 @@ export const CRITICAL_TABLES = [
  * real failure (harmless while failures were swallowed; fatal once they
  * abort startup).
  */
+function errorText(value: unknown): string {
+  if (typeof value === "string") return value;
+  const message = (value as { message?: unknown }).message;
+  return typeof message === "string" ? message : "";
+}
+
 export function isBenignIdempotencyError(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; current != null && depth < 5; depth++) {
-    const message = (current as { message?: unknown }).message;
-    const errStr = (
-      typeof message === "string" ? message : typeof current === "string" ? current : ""
-    ).toLowerCase();
+    const errStr = errorText(current).toLowerCase();
     if (
       errStr.includes("already exists") ||
       errStr.includes("duplicate key") ||

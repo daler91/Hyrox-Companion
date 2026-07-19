@@ -20,7 +20,7 @@
 DELETE FROM "foods" f
 WHERE f."source" = 'custom'
   AND f."created_by_user_id" IS NULL
-  AND f."is_public" = false
+  AND NOT f."is_public"
   AND NOT EXISTS (SELECT 1 FROM "food_log_entries" e WHERE e."food_id" = f."id")
   AND NOT EXISTS (SELECT 1 FROM "recipe_ingredients" ri WHERE ri."food_id" = f."id")
   AND NOT EXISTS (SELECT 1 FROM "recipes" r WHERE r."food_id" = f."id");
