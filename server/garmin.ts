@@ -20,7 +20,10 @@ const requireFromHere = createRequire(import.meta.url);
 const garminConnectModule = requireFromHere("@flow-js/garmin-connect") as {
   GarminConnect: typeof GarminConnectType;
 };
-const { GarminConnect } = garminConnectModule;
+// Test seam: the constructor is swappable via __testing.setGarminConnectCtor so
+// orchestration tests can inject a fake without fighting the createRequire load
+// above (vi.mock cannot intercept it). Production always uses the real class.
+let GarminConnectCtor: typeof GarminConnectType = garminConnectModule.GarminConnect;
 type GarminConnect = GarminConnectType;
 
 import { isAuthenticated } from "./clerkAuth";
@@ -336,7 +339,7 @@ async function getGarminClient(userId: string, reqLog: typeof logger): Promise<G
     throw new Error("Garmin credentials are no longer stored — disconnect and reconnect.");
   }
 
-  const client = new GarminConnect({ username: email, password });
+  const client = new GarminConnectCtor({ username: email, password });
 
   // Fast path: load cached tokens. If they fail at the next API call we
   // surface the error and require manual reconnect — we do NOT auto-relogin.
@@ -437,7 +440,7 @@ async function handleGarminConnect(req: Request<Record<string, never>, unknown, 
     await withUserLock(userId, async () => {
       // Try to log in BEFORE persisting credentials so we don't store anything
       // for a failed connection attempt.
-      const client = new GarminConnect({ username: email, password });
+      const client = new GarminConnectCtor({ username: email, password });
 
       reqLog.info({ userId, context: LOG_CTX }, "Garmin /connect: starting fresh login");
       try {
@@ -694,6 +697,16 @@ export const __testing = {
   inFlightUsers,
   withCircuitBreaker,
   withTimeout,
+  getGarminClient,
+  fetchAndImportGarminActivities,
+  translateGarminError,
+  rejectSyncPreflight,
+  setGarminConnectCtor(ctor: typeof GarminConnectType): void {
+    GarminConnectCtor = ctor;
+  },
+  resetGarminConnectCtor(): void {
+    GarminConnectCtor = garminConnectModule.GarminConnect;
+  },
   GLOBAL_429_COOLDOWN_MS,
   GARMIN_CALL_TIMEOUT_MS,
   MIN_SYNC_INTERVAL_MS,
