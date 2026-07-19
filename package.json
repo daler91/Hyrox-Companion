@@ -33,6 +33,7 @@
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "check:strict": "tsc -p tsconfig.strict.json",
+    "check:bundle": "tsx script/bundle-check.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",

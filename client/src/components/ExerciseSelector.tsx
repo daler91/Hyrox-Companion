@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, EXERCISE_NAME_ALIASES, type ExerciseCategory,type ExerciseName } from "@shared/schema";
+import type { ExerciseCategory } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, EXERCISE_NAME_ALIASES, type ExerciseName } from "@shared/schema/exercises";
 import { Plus, Search } from "lucide-react";
 import React from "react";
 

@@ -295,3 +295,55 @@ describe("searchFoods", () => {
     expect(result.results.map((f) => f.id)).toEqual(["usda1"]);
   });
 });
+
+describe("searchFoods provider fan-out gate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (env as { USDA_API_KEY?: string }).USDA_API_KEY = "test-key";
+    vi.mocked(searchEdamamFoods).mockResolvedValue({ foods: [], reached: true });
+    vi.mocked(searchUsdaFoods).mockResolvedValue([]);
+    vi.mocked(searchOffFoods).mockResolvedValue({ foods: [], reached: true });
+    vi.mocked(maybeSemanticSearch).mockResolvedValue([]);
+  });
+
+  // Distinct unbranded names: labelKey dedupe never collapses brandless foods,
+  // so all 10 local hits survive to the result list.
+  const richLocal = Array.from({ length: 10 }, (_, i) =>
+    food({ id: `l${i}`, source: "custom", sourceId: null, name: `Banana ${i}` }),
+  );
+
+  it("skips the provider fan-out and caching entirely when the local cache is rich", async () => {
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue(richLocal);
+
+    const result = await searchFoods("banana", "u1");
+
+    expect(searchEdamamFoods).not.toHaveBeenCalled();
+    expect(searchUsdaFoods).not.toHaveBeenCalled();
+    expect(searchOffFoods).not.toHaveBeenCalled();
+    expect(storage.nutrition.upsertFoods).not.toHaveBeenCalled();
+    // A deliberately skipped fan-out is a healthy fast path, never "degraded".
+    expect(result.apiDegraded).toBe(false);
+    expect(result.results).toHaveLength(10);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ providersSkipped: true }),
+      expect.any(String),
+    );
+  });
+
+  it("still fans out at one below the floor", async () => {
+    vi.mocked(storage.nutrition.searchLocalFoods).mockResolvedValue(richLocal.slice(0, 9));
+    vi.mocked(searchUsdaFoods).mockResolvedValue([mappedUsda]);
+    vi.mocked(storage.nutrition.upsertFoods).mockResolvedValue([
+      food({ id: "usda1", source: "usda", sourceId: "1" }),
+    ]);
+
+    const result = await searchFoods("banana", "u1");
+
+    expect(searchEdamamFoods).toHaveBeenCalledWith("banana");
+    expect(searchUsdaFoods).toHaveBeenCalledWith("banana");
+    expect(searchOffFoods).toHaveBeenCalledWith("banana");
+    expect(storage.nutrition.upsertFoods).toHaveBeenCalledWith([mappedUsda]);
+    expect(result.apiDegraded).toBe(false);
+    expect(result.results.map((f) => f.id)).toContain("usda1");
+  });
+});

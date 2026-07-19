@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, normalizeExerciseName, type ParsedExercise, type StructureBlockInput } from "@shared/schema";
+import type { ParsedExercise, StructureBlockInput } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, normalizeExerciseName } from "@shared/schema/exercises";
 
 import type { ParseWorkoutStructureResponse } from "@/lib/api";
 

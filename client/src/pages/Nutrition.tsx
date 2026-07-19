@@ -1,4 +1,5 @@
-import { MEAL_TYPES, type ParseMealResponse } from "@shared/schema";
+import type { ParseMealResponse } from "@shared/schema";
+import { MEAL_TYPES } from "@shared/schema/enums";
 import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine, Target } from "lucide-react";
 import { type ReactNode, useState } from "react";
 

@@ -1,4 +1,4 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { ChevronDown, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import React, { useId } from "react";
 

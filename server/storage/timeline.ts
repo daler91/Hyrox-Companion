@@ -363,7 +363,10 @@ export class TimelineStorage {
 
   private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
     // Keep pagination pressure in SQL first; in-memory slicing only finalizes
-    // the merged multi-source ordering.
+    // the merged multi-source ordering. The 3x is correctness headroom for the
+    // multi-source merge — deliberately NOT reduced in the hydration-reorder
+    // change (hydration now happens after windowing, so over-fetch cost is
+    // limited to the slim base rows).
     if (limit === undefined) return undefined;
     return (offset || 0) + limit * 3;
   }
@@ -486,10 +489,17 @@ export class TimelineStorage {
       today,
       planNameById,
     );
-    await this.attachExerciseSets(entries, suppressedPlanDayIds);
-
-    // Unavoidable in-memory step: merge two SQL streams and apply final window.
-    return this.sortAndWindowEntries(entries, limit, offset);
+    // Window BEFORE hydrating: attachExerciseSets fans out four batch reads keyed
+    // by entry ids, so hydrating the full over-fetched merge (offset + 3x limit
+    // PER SOURCE — ~3000 entries for the production limit=500 call) did
+    // O(over-fetch) hydration for O(limit) returned rows. The reorder is safe:
+    // sortAndWindowTimelineEntries sorts by date only (never a hydrated field),
+    // and suppressedPlanDayIds is a superset of the window's suppressed ids. The
+    // limit === undefined callers (export, email digest) window nothing and keep
+    // full hydration.
+    const windowed = this.sortAndWindowEntries(entries, limit, offset);
+    await this.attachExerciseSets(windowed, suppressedPlanDayIds);
+    return windowed;
   }
 
   /**

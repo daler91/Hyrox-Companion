@@ -1,4 +1,4 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 
 export type FieldKey = "reps" | "weight" | "distance" | "time";
 

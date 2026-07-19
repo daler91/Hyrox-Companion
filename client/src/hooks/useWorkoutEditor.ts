@@ -1,4 +1,5 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName, type StructureBlockInput } from "@shared/schema";
+import type { StructureBlockInput } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createDefaultSet, type StructuredExercise } from "@/components/ExerciseInput";

@@ -1,4 +1,4 @@
-import { type ExerciseName } from "@shared/schema";
+import type { ExerciseName } from "@shared/schema";
 import { Plus, Sparkles } from "lucide-react";
 
 import { ExerciseSelector } from "@/components/ExerciseSelector";

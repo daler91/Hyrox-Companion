@@ -32,6 +32,13 @@ import { searchUsdaFoods } from "./usdaClient";
 // they aren't truncated before the relevance ranker runs (final cap is MAX_RESULTS).
 const LOCAL_LIMIT = 50;
 const MAX_RESULTS = 30;
+// When the local cache already yields this many hits, skip the live-provider
+// fan-out entirely: no Edamam/USDA/OFF calls and no per-search upsertFoods churn
+// growing the shared foods table. Set above SEMANTIC_RESULT_FLOOR (5) so the
+// skip can never be what triggers the semantic fallback; a rich local set means
+// earlier searches already cached the rows, and staleness is handled by
+// refreshStaleFoodsInBackground below.
+const PROVIDER_FANOUT_FLOOR = 10;
 
 /** Normalized brand+name identity for cross-source near-duplicate suppression.
  *  null (never suppressed) when there's no brand — generic foods sharing a name
@@ -109,9 +116,26 @@ async function resolveProvider(
   return { foods: await cacheResults(settled.value.foods, provider), live: settled.value.live };
 }
 
-export async function searchFoods(query: string, userId: string): Promise<FoodSearchResponse> {
-  const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
+interface ProviderResults {
+  edamam: Food[];
+  usda: Food[];
+  off: Food[];
+  edamamLive: boolean;
+  usdaLive: boolean;
+  offLive: boolean;
+}
 
+const NO_PROVIDERS: ProviderResults = {
+  edamam: [],
+  usda: [],
+  off: [],
+  edamamLive: false,
+  usdaLive: false,
+  offLive: false,
+};
+
+/** Query all three live providers concurrently and cache their hits. */
+async function queryLiveProviders(query: string): Promise<ProviderResults> {
   // Query the live providers concurrently; one failing must not sink the others.
   const [edamamSettled, usdaSettled, offSettled] = await Promise.allSettled([
     searchEdamamFoods(query),
@@ -143,9 +167,22 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
     "[nutrition] Open Food Facts search failed; continuing",
   );
 
+  return { edamam, usda, off, edamamLive, usdaLive, offLive };
+}
+
+export async function searchFoods(query: string, userId: string): Promise<FoodSearchResponse> {
+  const local = await storage.nutrition.searchLocalFoods(query, userId, LOCAL_LIMIT);
+
+  const providersSkipped = local.length >= PROVIDER_FANOUT_FLOOR;
+  const { edamam, usda, off, edamamLive, usdaLive, offLive } = providersSkipped
+    ? NO_PROVIDERS
+    : await queryLiveProviders(query);
+
   // Cache-only ⇒ degraded: no live provider reached its API. OFF (keyless) counts,
   // so a working OFF call keeps search live even with no USDA/Edamam credentials.
-  const apiDegraded = !edamamLive && !usdaLive && !offLive;
+  // A deliberately skipped fan-out (rich local cache) is a healthy fast path, NOT
+  // degradation — the !providersSkipped guard keeps the client's degraded UX off.
+  const apiDegraded = !providersSkipped && !edamamLive && !usdaLive && !offLive;
 
   // Gate the live providers to hits that actually match the query (their full-text
   // search is noisy); local is left ungated — it's already name-matched by SQL and
@@ -168,6 +205,7 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   logger.info(
     {
       query,
+      providersSkipped,
       edamamLive,
       usdaLive,
       offLive,

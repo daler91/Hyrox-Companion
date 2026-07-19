@@ -19,3 +19,18 @@ export type WorkoutStatus = (typeof workoutStatusEnum)[number];
 
 export const exerciseCategoryEnum = ["functional", "running", "strength", "conditioning"] as const;
 export type ExerciseCategory = (typeof exerciseCategoryEnum)[number];
+
+// Meal slot a log entry is filed under. pre_workout / post_workout exist so the
+// Phase 3 training-integration views can bucket fuelling around sessions.
+// Lives here (a zero-import module) rather than tables.ts so the client can use
+// it without evaluating the drizzle pgTable graph in the browser.
+export const MEAL_TYPES = [
+  "breakfast",
+  "lunch",
+  "dinner",
+  "snack",
+  "snack_pm",
+  "pre_workout",
+  "post_workout",
+] as const;
+export type MealType = (typeof MEAL_TYPES)[number];

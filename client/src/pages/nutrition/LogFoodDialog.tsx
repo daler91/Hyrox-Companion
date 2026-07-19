@@ -1,12 +1,11 @@
-import {
-  type EffectiveTargetSummary,
-  type Food,
-  type FoodLogEntryWithNutrition,
-  type FoodServing,
-  MEAL_TYPES,
-  type MealType,
-  type NutritionMacroTotals,
+import type {
+  EffectiveTargetSummary,
+  Food,
+  FoodLogEntryWithNutrition,
+  FoodServing,
+  NutritionMacroTotals,
 } from "@shared/schema";
+import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
 import { Loader2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 

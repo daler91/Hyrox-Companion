@@ -1,4 +1,4 @@
-import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
+import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { Hash, Pencil, Ruler, Timer, Weight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
