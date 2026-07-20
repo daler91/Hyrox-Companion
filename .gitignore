@@ -64,3 +64,5 @@ script/race-benchmarks/output/
 
 # Race-results source CSV: 25 MB, deliberately untracked — see script/race-benchmarks/README.md
 hyrox_results.csv
+node_modules/
+.pnpm-store/

@@ -6,6 +6,7 @@ import { Logo } from "@/components/brand/Logo";
 import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { Eyebrow } from "./SectionHeading";
 
@@ -101,19 +102,26 @@ export function LandingHeader() {
           <SignInButton mode="modal">
             <Button data-testid="button-login-header" size="sm">Log In</Button>
           </SignInButton>
-          <Button
-            ref={toggleRef}
-            variant="ghost"
-            size="icon"
-            className="sm:hidden"
-            onClick={() => setMobileNavOpen((prev) => !prev)}
-            aria-expanded={mobileNavOpen}
-            aria-controls="landing-mobile-nav"
-            aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
-            data-testid="button-mobile-nav-toggle"
-          >
-            {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  ref={toggleRef}
+                  variant="ghost"
+                  size="icon"
+                  className="sm:hidden"
+                  onClick={() => setMobileNavOpen((prev) => !prev)}
+                  aria-expanded={mobileNavOpen}
+                  aria-controls="landing-mobile-nav"
+                  aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
+                  data-testid="button-mobile-nav-toggle"
+                >
+                  {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Toggle menu</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
       {mobileNavOpen ? (

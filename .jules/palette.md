@@ -28,3 +28,7 @@
 ## 2026-06-17 - Select/Badge/Toast components use focus: instead of focus-visible:
 **Learning:** Similar to the Dialog close buttons, the Select, Badge, and Toast components from shadcn were shipped with `focus:ring-*` classes rather than `focus-visible:ring-*`. This causes an inconsistent, distracting flash of the focus ring when interacting with these elements via mouse.
 **Action:** When styling focus states on interactive elements and shared UI primitives, always use `focus-visible:ring-*` (combined with `focus:outline-none`) instead of `focus:ring-*`. This ensures keyboard accessibility while preventing jarring focus ring flashes on mouse clicks.
+
+## 2026-07-20 - Adding Tooltips to header/navigation mobile toggle buttons
+**Learning:** Top-level navigation toggle buttons, like the mobile hamburger menu icon, often rely solely on `aria-label`. While screen-reader accessible, these icon-only buttons can be ambiguous to sighted users who use a mouse on smaller devices (or resized windows).
+**Action:** Consistently ensure that even primary layout and header navigation icon buttons use a complete Tooltip wrap, utilizing a snappy `delayDuration={200}` and `asChild` on Radix buttons, maintaining visual clarity for all users without breaking underlying refs.
