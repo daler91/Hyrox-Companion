@@ -5,8 +5,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 
 import { __testing, registerGarminRoutes } from "./garmin";
 import { logger } from "./logger";
-import { clearRateLimitBuckets } from "./routeUtils";
 import { createTestApp } from "./routes/__tests__/testUtils";
+import { clearRateLimitBuckets } from "./routeUtils";
 import { storage } from "./storage";
 
 /**

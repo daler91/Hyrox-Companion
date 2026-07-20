@@ -103,6 +103,7 @@ function handleStreamError({
     role: "assistant",
     content: STREAM_ERROR_BODY[kind],
     timestamp: getCurrentTimeString(),
+    createdAtMs: Date.now(),
   };
   setMessages((prev) => {
     const withoutPlaceholder = prev.filter((m) => m.id !== assistantMessageId);
@@ -116,6 +117,9 @@ export interface Message {
   content: string;
   timestamp: string;
   ragInfo?: RagInfo;
+  // ⚡ Bolt Performance Optimization:
+  // Adds raw epoch time to avoid parsing localized '10:30 AM' time strings via new Date() during array sorts
+  createdAtMs?: number;
 }
 
 interface UseChatSessionOptions {
@@ -180,6 +184,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     role: "assistant",
     content: welcomeMessage,
     timestamp: getCurrentTimeString(),
+    // Use an arbitrary constant (e.g. 0) for the welcome message to preserve purity
+    // and guarantee it always sorts first, regardless of when it renders
+    createdAtMs: 0,
   }), [welcomeMessage]);
 
 
@@ -289,6 +296,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       role: "user",
       content,
       timestamp: getCurrentTimeString(),
+      createdAtMs: Date.now(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -320,6 +328,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           role: "assistant",
           content: "",
           timestamp: getCurrentTimeString(),
+          createdAtMs: Date.now(),
         };
         setMessages((prev) => [...prev, placeholderMessage]);
 
@@ -374,6 +383,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           content: data.response,
           timestamp: getCurrentTimeString(),
           ragInfo: data.ragInfo,
+          createdAtMs: Date.now(),
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
