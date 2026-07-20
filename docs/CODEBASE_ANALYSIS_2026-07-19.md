@@ -6,6 +6,32 @@
 
 ---
 
+## Remediation status (updated 2026-07-19)
+
+Priority items **1–9 are fixed and merged** across three remediation PRs, all landed the same day as the analysis. The body of this document below is the unmodified historical register — statuses here supersede it.
+
+**PR #1663 — P0 fixes (priority items 1–3).**
+- Fresh-DB bootstrap repaired: 0035's ambiguous `id` qualified; boot is now **strict** (non-benign migration errors fail readiness, plus a critical-table assertion against the zero-tables failure mode); a new `fresh-db-migrate` CI job applies the real migration chain to a fresh pgvector container on every PR, closing the defect class structurally.
+- GDPR foods leak closed as an explicit **opt-in sharing feature**: `foods.is_public` (migration 0080, default private), visibility never infers "shared" from a NULL owner, account deletion runs a two-phase purge (fail-loud vector-embedding purge *before* the irreversible Clerk delete, reference-guarded foods erasure), migration 0081 erases pre-existing orphans, and a recurring sweep prunes dangling `food_embeddings` — the previously nonexistent deletion path. First-ever tests for the account-deletion route.
+- Both analytics bugs fixed with regression tests: direction-aware PR detection (plank et al. now celebrate longer holds, not shorter), and the `nutrition_insights` job dispatches through an exhaustive switch with a food-log-anchored staleness check (meal-only users recompute; no more double coach spend or false stamps).
+
+**PR #1665 — performance + AI billing (priority items 4, 6, 7, 8).**
+- Bundle: drizzle-orm/drizzle-zod/zod no longer ship to the browser (client value-imports repointed to pure schema submodules), `clsx` extracted from vendor-charts, `advancedChunks` → `codeSplitting`. **Eager first-paint JS 956 KB → 566 KB (−41%)**; a `check:bundle` guard fails if either invariant regresses.
+- Food search: fuzzy predicates rewritten to the `%` operator — EXPLAIN-verified BitmapOr over both trigram GIN indexes at 220k rows (the old `similarity() >=` shape is structurally unservable) — and the live-provider fan-out (with its per-search upserts) now skips when the local cache already yields ≥10 hits.
+- Timeline: hydrate-after-window reorder (up to ~6× less hydration for the 500-row page and the AI-context path). Client pagination deliberately deferred (full-array coach stats + deep-link scans need their own design round).
+- AI billing: `gemini-2.5-flash` priced (photo/label parses were billed ~10–17× against the $2/day cap), with a warn-once fallback log and the first `estimateCostCents` tests.
+
+**PR #1666 — test hardening + repo hygiene (priority items 5, 9) + two bugs found en route.**
+- **New bugs fixed:** the advisory-lock key registry had a *double* collision (`analyticsRecompute` shared 42_010_009 with the key-rotation sweep; `nutritionEmbeddingBackfill` shared 42_010_010 with the boot-migration lock — `pg_try_advisory_lock` makes collisions silently skip protected work, so a running backfill could skip boot migrations); and the credential re-encrypt sweep aborted unresumably on the first undecryptable row (now per-row isolated, logged, and counted).
+- Tests: first Garmin sync-orchestration suite (16 tests via an injectable SDK seam: dedup invariant, token strategies, circuit-breaker cascade, preflight matrix, per-user lock) and first key-rotation sweep suite (real-crypto v1→v2 migration proofs). Coverage is now **measured and enforced in CI** (`vitest --coverage` with thresholds ratcheted to measured reality, lcov emitted for a future Sonar CI-scanner switch — the old untouched 80% config was never evaluated).
+- Hygiene: `hyrox_results.csv` (25 MB, ~63% of the packfile) untracked with friendly script guards + README provenance; `.Jules/`/`.jules/` case collision merged; stray files and the unwired, destructive `scripts/post-merge.sh` removed.
+
+**Watch-phase fixes** (found by CI/scanners during the PR cycles, all merged): the boot migration-error classifier now unwraps `DrizzleQueryError` causes; a re-privatized shared food could be erased while still referenced by other users' logs (reference-guarded); tag-pinned `pnpm/action-setup` SHA-pinned (Sonar supply-chain gate); the bundle guard runs in-process instead of via a PATH-resolved spawn (Sonar).
+
+**Still open:** priority item 10 (ops/DR: off-platform backups, restore drill, vector schema into versioned migrations — needs infrastructure decisions), the P2/lower findings below not covered by items 1–9 (analytics cache invalidation, email double-send risk, day-boundary regimes, timeline client pagination, god-components), the optional CSV history rewrite, and the pre-existing Dependabot high on main.
+
+---
+
 ## Executive summary
 
 fitai.coach is an unusually disciplined codebase for its size — top-decile in security engineering, documentation, and test hygiene. Every quality gate the repo defines passes on a cold clone: `tsc` 0 errors (strict), `check:strict` 0 errors, ESLint 0 errors / 8 size warnings, 3,412/3,412 tests passing, production build green with self-verifying artifact floors. There is **zero `any` in production code, zero TODO/FIXME comments, zero skipped tests, 0.47% code duplication**. The security lens found no injection, no IDOR, no auth bypass — CSRF, CSP nonces, AES-256-GCM versioned-keyring encryption, fail-closed AI budget enforcement, and per-user scoping are all real and correctly implemented.
@@ -184,17 +210,19 @@ No SQL injection surface reached user input. No IDOR (the few unscoped storage h
 
 ## Priority plan
 
-1. **Fix `migrations/0035`** (qualify the ambiguous `id`), then add a CI job that runs `pnpm db:migrate` against a fresh postgres:16+pgvector service container — this closes the whole defect class. Make boot-time migration failure block readiness (or at minimum page loudly).
-2. **Close the GDPR foods leak**: on account deletion, delete custom foods (or anonymize names) instead of orphaning them shared; add a `food_embeddings` purge path keyed by food id; purge `pgboss.archive`; stop cascade-deleting `user_consents` (tombstone instead).
-3. **Fix the two user-visible analytics bugs** (inverted longer-is-better PRs; `nutrition_insights` job routing/stamping) and add tests for both.
-4. **Bundle fix**: move `clsx` out of the `vendor-charts` group (and migrate `advancedChunks` → `codeSplitting` before the next Vite major); stop importing the `@shared/schema` barrel from client runtime code (extract the ~5 pure exports it actually needs).
-5. **Add tests where the blast radius is largest**: account deletion (route + integration), AI cost estimation, Garmin sync orchestration, key-rotation sweep. Turn on `--coverage` in test.yml so the existing 80% thresholds mean something.
-6. **Food search**: replace `similarity() >= t` with `%` / `<->` operator forms the GIN indexes can serve, and stop upserting provider hits on every search.
-7. **Timeline**: hydrate after windowing, not before; paginate the client.
-8. **AI billing**: add `gemini-2.5-flash` to `MODEL_PRICING` plus an unknown-model warning metric; consider mid-stream budget re-checks.
-9. **Repo hygiene PR** (the one the 2026-07-01 analysis already specified): move `hyrox_results.csv` to LFS/external, delete `.Jules/`, remove stray files, merge `script(s)/`, fix `post-merge.sh`.
-10. **Make the DR runbook true**: scheduled off-platform pg_dump workflow, key-escrow location, migrate the vector schema into versioned migrations, run and record one restore drill.
+*(Statuses added 2026-07-19 — see the Remediation status section at the top for detail.)*
+
+1. ✅ **Fix `migrations/0035`** (qualify the ambiguous `id`), then add a CI job that runs `pnpm db:migrate` against a fresh postgres:16+pgvector service container — this closes the whole defect class. Make boot-time migration failure block readiness (or at minimum page loudly). *(PR #1663)*
+2. ✅ **Close the GDPR foods leak**: on account deletion, delete custom foods (or anonymize names) instead of orphaning them shared; add a `food_embeddings` purge path keyed by food id; purge `pgboss.archive`; stop cascade-deleting `user_consents` (tombstone instead). *(PR #1663 — built as opt-in `is_public` sharing; the `pgboss.archive` sub-item was moot: pg-boss v12 has no archive table, and the existing job purge reaches all partitions. `user_consents` tombstoning intentionally not changed.)*
+3. ✅ **Fix the two user-visible analytics bugs** (inverted longer-is-better PRs; `nutrition_insights` job routing/stamping) and add tests for both. *(PR #1663)*
+4. ✅ **Bundle fix**: move `clsx` out of the `vendor-charts` group (and migrate `advancedChunks` → `codeSplitting` before the next Vite major); stop importing the `@shared/schema` barrel from client runtime code (extract the ~5 pure exports it actually needs). *(PR #1665 — eager first-paint JS −41%; guarded by `pnpm check:bundle`)*
+5. ✅ **Add tests where the blast radius is largest**: account deletion (route + integration), AI cost estimation, Garmin sync orchestration, key-rotation sweep. Turn on `--coverage` in test.yml so the existing 80% thresholds mean something. *(Account deletion + AI cost in #1663/#1665; Garmin + key rotation + coverage-in-CI in PR #1666 — thresholds ratcheted to measured reality rather than the aspirational 80%.)*
+6. ✅ **Food search**: replace `similarity() >= t` with `%` / `<->` operator forms the GIN indexes can serve, and stop upserting provider hits on every search. *(PR #1665 — EXPLAIN-verified BitmapOr; fan-out gated on rich local results)*
+7. ✅ **Timeline**: hydrate after windowing, not before; paginate the client. *(PR #1665 — server reorder landed; client pagination deliberately deferred: coach-panel stats and deep-link selection scan the full array and need their own design round.)*
+8. ✅ **AI billing**: add `gemini-2.5-flash` to `MODEL_PRICING` plus an unknown-model warning metric; consider mid-stream budget re-checks. *(PR #1665 — pricing + warn-once landed; mid-stream re-checks deferred.)*
+9. ✅ **Repo hygiene PR** (the one the 2026-07-01 analysis already specified): move `hyrox_results.csv` to LFS/external, delete `.Jules/`, remove stray files, merge `script(s)/`, fix `post-merge.sh`. *(PR #1666 — CSV untracked rather than LFS'd; `post-merge.sh` deleted rather than fixed: it was unwired, npm-based, and destructively force-pushed schema. History rewrite to reclaim the CSV blobs remains optional.)*
+10. ⏳ **Make the DR runbook true**: scheduled off-platform pg_dump workflow, key-escrow location, migrate the vector schema into versioned migrations, run and record one restore drill. *(Open — blocked on infrastructure decisions: where backups live and which credentials CI gets.)*
 
 ---
 
-*Full per-analyst reports (18 documents, ~455 KB) were produced during this analysis; this document is the synthesized register. Previous register: `docs/CODEBASE_ANALYSIS_2026-07-01.md`.*
+*Full per-analyst reports (18 documents, ~455 KB) were produced during this analysis; this document is the synthesized register. Previous register: `docs/CODEBASE_ANALYSIS_2026-07-01.md`. Remediation: PRs #1663, #1665, #1666 (all merged 2026-07-19); statuses in the Remediation section above supersede finding-level text below where they conflict.*
