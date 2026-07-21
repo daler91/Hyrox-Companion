@@ -257,11 +257,7 @@ export function TimelineWorkoutSurfaces({
             });
           });
         }}
-        onSkip={(entry) => {
-          closeEmbeddedCoach();
-          setLogEntry(null);
-          setSkipConfirmEntry(entry);
-        }}
+        onSkip={setSkipConfirmEntry}
         onAskCoach={openEmbeddedCoach}
         coachChatOpen={embeddedCoachEntryId === logEntry?.id}
         coachChatNonce={embeddedCoachSeedNonce}
@@ -278,11 +274,7 @@ export function TimelineWorkoutSurfaces({
         mode="edit"
         entry={futureEditEntry}
         onClose={closeWorkoutSurfaces}
-        onSkip={(entry) => {
-          closeEmbeddedCoach();
-          setFutureEditEntry(null);
-          setSkipConfirmEntry(entry);
-        }}
+        onSkip={setSkipConfirmEntry}
         onAskCoach={openEmbeddedCoach}
         coachChatOpen={embeddedCoachEntryId === futureEditEntry?.id}
         coachChatNonce={embeddedCoachSeedNonce}
@@ -310,13 +302,11 @@ export function TimelineWorkoutSurfaces({
         onRenameTitle={handleRenameTitle}
         isRenamingTitle={titleMutation.isRenamingEntry(skippedEntry)}
         onUndoSkip={(entry) => {
-          closeEmbeddedCoach();
-          setSkippedEntry(null);
+          closeWorkoutSurfaces();
           handleChangeStatus(entry, "planned");
         }}
         onDelete={(entry) => {
-          closeEmbeddedCoach();
-          setSkippedEntry(null);
+          closeWorkoutSurfaces();
           handleDelete(entry);
         }}
       />
@@ -340,14 +330,12 @@ export function TimelineWorkoutSurfaces({
         isRenamingTitle={titleMutation.isRenamingEntry(reviewEntry)}
         showCompletionSuccess={reviewEntry?.id === completionSuccessEntryId}
         onMarkPlanned={(entry) => {
-          closeEmbeddedCoach();
-          setReviewEntry(null);
+          closeWorkoutSurfaces();
           setCompletionSuccessEntryId(null);
           handleChangeStatus(entry, "planned");
         }}
         onDelete={(entry) => {
-          closeEmbeddedCoach();
-          setReviewEntry(null);
+          closeWorkoutSurfaces();
           setCompletionSuccessEntryId(null);
           handleDelete(entry);
         }}
@@ -367,18 +355,13 @@ export function TimelineWorkoutSurfaces({
         onRenameTitle={handleRenameTitle}
         isRenamingTitle={titleMutation.isRenamingEntry(previewEntry)}
         onMove={() => {
-          closeEmbeddedCoach();
-          setPreviewEntry(null);
+          closeWorkoutSurfaces();
           toast({
             title: "Use the move icon on the card",
             description: "Drag, or use the calendar menu in the card's top corner.",
           });
         }}
-        onSkip={(entry) => {
-          closeEmbeddedCoach();
-          setPreviewEntry(null);
-          setSkipConfirmEntry(entry);
-        }}
+        onSkip={setSkipConfirmEntry}
         onEditWorkout={(entry) => {
           closeEmbeddedCoach();
           setPreviewEntry(null);
@@ -389,7 +372,10 @@ export function TimelineWorkoutSurfaces({
       <SkipConfirmDialog
         entry={skipConfirmEntry}
         onOpenChange={() => setSkipConfirmEntry(null)}
-        onConfirm={confirmSkip}
+        onConfirm={() => {
+          closeWorkoutSurfaces();
+          confirmSkip();
+        }}
       />
 
       <ImportPreviewDialog

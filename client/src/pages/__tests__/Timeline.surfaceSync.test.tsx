@@ -10,7 +10,12 @@ import Timeline from "../Timeline";
 
 const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
 const timelineMocks = vi.hoisted(() => ({ setCoachOpen: vi.fn() }));
-const workoutActionMocks = vi.hoisted(() => ({ handleMarkComplete: vi.fn() }));
+const workoutActionMocks = vi.hoisted(() => ({
+  handleMarkComplete: vi.fn(),
+  setSkipConfirmEntry: vi.fn(),
+  confirmSkip: vi.fn(),
+  handleChangeStatus: vi.fn(),
+}));
 const apiMocks = vi.hoisted(() => ({ updatePreferences: vi.fn() }));
 const viewportState = vi.hoisted(() => ({ isMobile: false }));
 const dataMocks = vi.hoisted(() => ({
@@ -33,6 +38,7 @@ vi.mock("@/pages/timeline/scrollTodayConvergence", () => ({
 
 const setOpenWorkoutId = vi.fn();
 let openWorkoutId: string | null = null;
+let skipConfirmEntry: TimelineEntry | null = null;
 let timelineData: TimelineEntry[] = [];
 let visiblePastGroups: Array<[string, TimelineEntry[]]> = [];
 let visibleFutureGroups: Array<[string, TimelineEntry[]]> = [];
@@ -132,12 +138,12 @@ vi.mock("@/hooks/useTimelineState", () => ({
       deletePlanMutation: { isPending: false, mutate: vi.fn() },
     },
     workoutActions: {
-      skipConfirmEntry: null,
-      setSkipConfirmEntry: vi.fn(),
+      skipConfirmEntry,
+      setSkipConfirmEntry: workoutActionMocks.setSkipConfirmEntry,
       handleMarkComplete: workoutActionMocks.handleMarkComplete,
-      handleChangeStatus: vi.fn(),
+      handleChangeStatus: workoutActionMocks.handleChangeStatus,
       handleDelete: vi.fn(),
-      confirmSkip: vi.fn(),
+      confirmSkip: workoutActionMocks.confirmSkip,
       logWorkoutMutation: { isPending: false },
       bulkDeleteWorkoutMutation: { isPending: false, mutate: vi.fn() },
     },
@@ -177,7 +183,25 @@ vi.mock("@/components/timeline", () => ({
   FloatingActionButton: () => <div />,
   ImportPreviewDialog: () => <div />,
   SchedulePlanDialog: () => <div />,
-  SkipConfirmDialog: () => <div />,
+  SkipConfirmDialog: ({
+    entry,
+    onOpenChange,
+    onConfirm,
+  }: {
+    entry: TimelineEntry | null;
+    onOpenChange: (open: boolean) => void;
+    onConfirm: () => void;
+  }) =>
+    entry ? (
+      <div data-testid="skip-confirm-dialog">
+        <button type="button" data-testid="mock-skip-confirm" onClick={onConfirm}>
+          Skip Workout
+        </button>
+        <button type="button" data-testid="mock-skip-cancel" onClick={() => onOpenChange(false)}>
+          Cancel
+        </button>
+      </div>
+    ) : null,
   BulkDeleteControls: () => <div />,
 }));
 
@@ -187,6 +211,7 @@ vi.mock("@/components/workout-detail/LogSheet", () => ({
     mode,
     onLogAsPlanned,
     onClose,
+    onSkip,
   }: {
     entry: TimelineEntry | null;
     mode?: "log" | "edit";
@@ -196,6 +221,7 @@ vi.mock("@/components/workout-detail/LogSheet", () => ({
       note: string | null,
     ) => Promise<void> | void;
     onClose?: () => void;
+    onSkip?: (entry: TimelineEntry) => void;
   }) => {
     if (!entry) return null;
     if (mode === "edit") return <div data-testid="edit-sheet">{`${entry.id}:${entry.date}`}</div>;
@@ -214,6 +240,9 @@ vi.mock("@/components/workout-detail/LogSheet", () => ({
         </button>
         <button type="button" data-testid="mock-log-close" onClick={() => onClose?.()}>
           Close
+        </button>
+        <button type="button" data-testid="mock-log-skip" onClick={() => onSkip?.(entry)}>
+          Skip
         </button>
       </div>
     );
@@ -296,7 +325,22 @@ vi.mock("@/components/workout-detail/ReviewSurface", () => ({
       </div>
     ) : null,
 }));
-vi.mock("@/components/workout-detail/SkippedSheet", () => ({ SkippedSheet: () => <div /> }));
+vi.mock("@/components/workout-detail/SkippedSheet", () => ({
+  SkippedSheet: ({
+    entry,
+    onUndoSkip,
+  }: {
+    entry: TimelineEntry | null;
+    onUndoSkip?: (entry: TimelineEntry) => void;
+  }) =>
+    entry ? (
+      <div data-testid="skipped-sheet">
+        <button type="button" data-testid="mock-undo-skip" onClick={() => onUndoSkip?.(entry)}>
+          Undo skip
+        </button>
+      </div>
+    ) : null,
+}));
 vi.mock("@/components/coach/AIConsentDialog", () => ({
   AIConsentDialog: ({
     open,
@@ -354,6 +398,17 @@ function renderTimeline(queryClient = new QueryClient()) {
   });
   queryClient.setQueryData(["/api/v1/preferences"], { weightUnit: "kg", distanceUnit: "km" });
   return render(
+    <QueryClientProvider client={queryClient}>
+      <Timeline />
+    </QueryClientProvider>,
+  );
+}
+
+function rerenderTimeline(
+  rerender: ReturnType<typeof renderTimeline>["rerender"],
+  queryClient: QueryClient,
+) {
+  rerender(
     <QueryClientProvider client={queryClient}>
       <Timeline />
     </QueryClientProvider>,
@@ -419,6 +474,10 @@ describe("Timeline surface sync", () => {
     viewportState.isMobile = false;
     timelineMocks.setCoachOpen.mockReset();
     workoutActionMocks.handleMarkComplete.mockReset();
+    workoutActionMocks.setSkipConfirmEntry.mockReset();
+    workoutActionMocks.confirmSkip.mockReset();
+    workoutActionMocks.handleChangeStatus.mockReset();
+    skipConfirmEntry = null;
     apiMocks.updatePreferences.mockReset();
     apiMocks.updatePreferences.mockResolvedValue({});
     dataMocks.scrollToToday.mockReset();
@@ -441,11 +500,7 @@ describe("Timeline surface sync", () => {
     const { rerender } = renderTimeline(qc);
     // simulate refetch changing object reference + adding workoutLogId (planned->completed lifecycle)
     timelineData = [makeEntry({ id: "e2", workoutLogId: "wl1", status: "completed" })];
-    rerender(
-      <QueryClientProvider client={qc}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
+    rerenderTimeline(rerender, qc);
 
     expect(screen.getByTestId("log-sheet")).toHaveTextContent("e1");
     expect(logSheetMounts).toBeGreaterThan(0);
@@ -506,11 +561,7 @@ describe("Timeline surface sync", () => {
     await user.click(screen.getByTestId("mock-log-close"));
 
     openWorkoutId = null;
-    rerender(
-      <QueryClientProvider client={qc}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
+    rerenderTimeline(rerender, qc);
 
     await waitFor(() => {
       expect(screen.queryByTestId("log-sheet")).not.toBeInTheDocument();
@@ -555,22 +606,14 @@ describe("Timeline surface sync", () => {
     timelineData = [completedEntry];
     setVisibleTimelineGroups({ past: [["2026-01-01", timelineData]] });
     openWorkoutId = null;
-    rerender(
-      <QueryClientProvider client={qc}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
+    rerenderTimeline(rerender, qc);
 
     await waitFor(() => {
       expect(screen.queryByTestId("review-surface")).not.toBeInTheDocument();
     });
 
     openWorkoutId = "pd1";
-    rerender(
-      <QueryClientProvider client={qc}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
+    rerenderTimeline(rerender, qc);
 
     await waitFor(() => {
       expect(screen.getByTestId("review-surface")).toHaveTextContent("log-wl1");
@@ -731,11 +774,7 @@ describe("Timeline surface sync", () => {
       past: [["2026-05-14", [pastEntry]]],
       future: [["2026-05-15", [todayEntry]]],
     });
-    rerender(
-      <QueryClientProvider client={qc}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
+    rerenderTimeline(rerender, qc);
     act(() => {
       vi.advanceTimersByTime(SCROLL_TO_TODAY_DELAY_MS);
     });
@@ -785,11 +824,7 @@ describe("Timeline surface sync", () => {
     const todayEntry = makeEntry({ id: "today", date: "2026-05-15", planDayId: "today-day" });
     timelineData = [todayEntry];
     setVisibleTimelineGroups({ future: [["2026-05-15", [todayEntry]]] });
-    rerender(
-      <QueryClientProvider client={qc}>
-        <Timeline />
-      </QueryClientProvider>,
-    );
+    rerenderTimeline(rerender, qc);
 
     act(() => {
       vi.advanceTimersByTime(SCROLL_TO_TODAY_DELAY_MS);
@@ -797,5 +832,96 @@ describe("Timeline surface sync", () => {
 
     expect(virtualizerMocks.scrollToIndex).toHaveBeenCalledWith(0, { align: "center" });
     expect(convergenceMocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the workout sheet open under the confirm dialog when skip is requested", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient();
+    const { rerender } = renderTimeline(qc);
+
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("e1:2026-01-01");
+
+    await user.click(screen.getByTestId("mock-log-skip"));
+
+    expect(workoutActionMocks.setSkipConfirmEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "e1" }),
+    );
+    // Requesting a skip must not close the sheet or touch the ?workout= URL —
+    // that URL churn is what used to reopen the sheet over the dialog.
+    expect(screen.getByTestId("log-sheet")).toBeInTheDocument();
+    expect(setOpenWorkoutId).not.toHaveBeenCalled();
+
+    skipConfirmEntry = timelineData[0];
+    rerenderTimeline(rerender, qc);
+
+    expect(screen.getByTestId("skip-confirm-dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("log-sheet")).toBeInTheDocument();
+    expect(setOpenWorkoutId).not.toHaveBeenCalled();
+  });
+
+  it("returns to the workout sheet when the skip confirm is cancelled", async () => {
+    const user = userEvent.setup();
+    skipConfirmEntry = timelineData[0];
+    renderTimeline();
+
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("e1:2026-01-01");
+    expect(screen.getByTestId("skip-confirm-dialog")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("mock-skip-cancel"));
+
+    expect(workoutActionMocks.setSkipConfirmEntry).toHaveBeenCalledWith(null);
+    expect(workoutActionMocks.confirmSkip).not.toHaveBeenCalled();
+    expect(screen.getByTestId("log-sheet")).toBeInTheDocument();
+    expect(setOpenWorkoutId).not.toHaveBeenCalled();
+  });
+
+  it("closes the sheet and clears the workout URL param when skip is confirmed", async () => {
+    const user = userEvent.setup();
+    skipConfirmEntry = timelineData[0];
+    const qc = new QueryClient();
+    const { rerender } = renderTimeline(qc);
+
+    expect(await screen.findByTestId("log-sheet")).toHaveTextContent("e1:2026-01-01");
+
+    await user.click(screen.getByTestId("mock-skip-confirm"));
+
+    expect(workoutActionMocks.confirmSkip).toHaveBeenCalledTimes(1);
+    expect(setOpenWorkoutId).toHaveBeenCalledWith(null);
+
+    // Reflect the cleared URL param in the mocked hook, as the real wouter
+    // hook would after closeWorkoutSurfaces.
+    openWorkoutId = null;
+    skipConfirmEntry = null;
+    rerenderTimeline(rerender, qc);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("log-sheet")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("skip-confirm-dialog")).not.toBeInTheDocument();
+  });
+
+  it("closes the skipped sheet and clears the URL when a skip is undone", async () => {
+    const user = userEvent.setup();
+    timelineData = [makeEntry({ status: "skipped" })];
+    setVisibleTimelineGroups({ past: [["2026-01-01", timelineData]] });
+    const qc = new QueryClient();
+    const { rerender } = renderTimeline(qc);
+
+    expect(await screen.findByTestId("skipped-sheet")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("mock-undo-skip"));
+
+    expect(workoutActionMocks.handleChangeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "e1" }),
+      "planned",
+    );
+    expect(setOpenWorkoutId).toHaveBeenCalledWith(null);
+
+    openWorkoutId = null;
+    rerenderTimeline(rerender, qc);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("skipped-sheet")).not.toBeInTheDocument();
+    });
   });
 });
