@@ -1,5 +1,5 @@
 import type { MealFuelTarget, MealType } from "@shared/schema";
-import { RotateCcw } from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -65,8 +65,12 @@ function MealTargetForm({
             disabled={pending}
             data-testid="button-reset-meal-target"
           >
-            <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
-            Reset to suggested
+            {clearOverride.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+            ) : (
+              <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
+            )}
+            {clearOverride.isPending ? "Resetting…" : "Reset to suggested"}
           </Button>
         ) : (
           <span />
@@ -75,8 +79,15 @@ function MealTargetForm({
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!valid || pending} data-testid="button-save-meal-target">
-            Save
+          <Button
+            onClick={submit}
+            disabled={!valid || pending}
+            data-testid="button-save-meal-target"
+          >
+            {setOverride.isPending && (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+            )}
+            {setOverride.isPending ? "Saving…" : "Save"}
           </Button>
         </div>
       </DialogFooter>
@@ -102,7 +113,9 @@ export function MealTargetDialog({
       }}
     >
       <DialogContent data-testid="dialog-meal-target">
-        {state && <MealTargetForm key={state.mealType} date={date} state={state} onClose={onClose} />}
+        {state && (
+          <MealTargetForm key={state.mealType} date={date} state={state} onClose={onClose} />
+        )}
       </DialogContent>
     </Dialog>
   );
