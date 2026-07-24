@@ -10,6 +10,7 @@ import {
 } from "@/components/exercise-row/formatPrescription";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -276,6 +277,7 @@ const GroupRow = memo(function GroupRow({
   const color = categoryColor(group.category);
   const lowConfidence = typeof group.confidence === "number" && group.confidence < 60;
   const [changeExerciseOpen, setChangeExerciseOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const uniformity = useMemo(() => computeUniformity(group.sets), [group.sets]);
   const setCount = group.sets.length;
 
@@ -291,6 +293,7 @@ const GroupRow = memo(function GroupRow({
 
   const handleDeleteRow = () => {
     for (const s of group.sets) onDeleteSet(s.id);
+    setConfirmDeleteOpen(false);
   };
 
   const handlePickExercise = (name: ExerciseName) => {
@@ -335,7 +338,7 @@ const GroupRow = memo(function GroupRow({
     </DropdownMenuItem>
   );
   const deleteItem = (
-    <DropdownMenuItem onSelect={handleDeleteRow} className="text-destructive">
+    <DropdownMenuItem onSelect={() => setConfirmDeleteOpen(true)} className="text-destructive">
       <Trash2 className="mr-2 size-4" aria-hidden /> Delete
     </DropdownMenuItem>
   );
@@ -473,6 +476,17 @@ const GroupRow = memo(function GroupRow({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete exercise?"
+        description={`${label} and ${setCount === 1 ? "its set" : `all ${setCount} sets`} will be permanently removed from this workout.`}
+        confirmText="Delete"
+        onConfirm={handleDeleteRow}
+        isDestructive
+        confirmTestId="exercise-row-delete-confirm"
+      />
     </div>
   );
 });
