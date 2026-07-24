@@ -81,12 +81,18 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
     const searchTerm = normalizeSearchText(searchQuery);
     const compactSearchTerm = searchTerm.replace(/\s/g, "");
 
-    return exercisesByCategory
-      .map(group => ({
-        ...group,
-        exercises: group.exercises.filter(([name]) => exerciseMatchesSearch(name, searchTerm, compactSearchTerm)),
-      }))
-      .filter(group => group.exercises.length > 0);
+    // ⚡ Bolt Performance Optimization:
+    // Replaced chained `.map(...).filter(...)` with a single for...of loop.
+    // This avoids an intermediate array allocation and a double O(N) traversal
+    // during fast-typing searches in the Exercise Selector.
+    const result = [];
+    for (const group of exercisesByCategory) {
+      const filtered = group.exercises.filter(([name]) => exerciseMatchesSearch(name, searchTerm, compactSearchTerm));
+      if (filtered.length > 0) {
+        result.push({ ...group, exercises: filtered });
+      }
+    }
+    return result;
   }, [searchQuery]);
 
   const countOf = (name: ExerciseName) => selectedCounts[name] || 0;
