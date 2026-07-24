@@ -1,7 +1,9 @@
 import { formatDistanceToNow } from "date-fns";
 import { Link2, Loader2, RefreshCw, Unlink } from "lucide-react";
+import { useState } from "react";
 
 import { StravaIcon } from "@/components/icons/StravaIcon";
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +32,7 @@ export function StravaSection({
     disconnectStravaMutation,
     syncStravaMutation,
   } = useStravaMutations();
+  const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
   const requiresReauth = Boolean(stravaStatus?.connected && stravaStatus.requiresReauth);
 
@@ -121,7 +124,7 @@ export function StravaSection({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => disconnectStravaMutation.mutate()}
+                        onClick={() => setDisconnectConfirmOpen(true)}
                         disabled={disconnectStravaMutation.isPending}
                         aria-label="Disconnect Strava"
                         data-testid="button-disconnect-strava"
@@ -156,6 +159,20 @@ export function StravaSection({
           </div>
         </div>
       </CardContent>
+      <ConfirmDialog
+        open={disconnectConfirmOpen}
+        onOpenChange={setDisconnectConfirmOpen}
+        title="Disconnect Strava?"
+        description="Your synced activities will remain, but new workouts will no longer be imported from Strava."
+        confirmText="Disconnect"
+        onConfirm={() => {
+          disconnectStravaMutation.mutate();
+          setDisconnectConfirmOpen(false);
+        }}
+        isPending={disconnectStravaMutation.isPending}
+        isDestructive
+        confirmTestId="button-confirm-disconnect-strava"
+      />
     </Card>
   );
 }

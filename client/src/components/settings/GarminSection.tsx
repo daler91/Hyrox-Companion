@@ -1,4 +1,7 @@
+import { useState } from "react";
+
 import { GarminIcon } from "@/components/icons/GarminIcon";
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GarminStatus } from "@/lib/api";
 
@@ -14,6 +17,7 @@ interface GarminSectionProps {
 
 export function GarminSection({ garminStatus, garminLoading }: Readonly<GarminSectionProps>) {
   const controller = useGarminConnectionController(garminStatus);
+  const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
   return (
     <Card>
@@ -32,7 +36,7 @@ export function GarminSection({ garminStatus, garminLoading }: Readonly<GarminSe
           isSyncing={controller.syncGarminMutation.isPending}
           isDisconnecting={controller.disconnectGarminMutation.isPending}
           onSync={() => controller.syncGarminMutation.mutate()}
-          onDisconnect={() => controller.disconnectGarminMutation.mutate()}
+          onDisconnect={() => setDisconnectConfirmOpen(true)}
         />
 
         {controller.hasError && <GarminErrorBanner error={garminStatus?.lastError} />}
@@ -49,6 +53,20 @@ export function GarminSection({ garminStatus, garminLoading }: Readonly<GarminSe
           />
         )}
       </CardContent>
+      <ConfirmDialog
+        open={disconnectConfirmOpen}
+        onOpenChange={setDisconnectConfirmOpen}
+        title="Disconnect Garmin?"
+        description="Your synced activities will remain, but new workouts will no longer be imported from Garmin Connect."
+        confirmText="Disconnect"
+        onConfirm={() => {
+          controller.disconnectGarminMutation.mutate();
+          setDisconnectConfirmOpen(false);
+        }}
+        isPending={controller.disconnectGarminMutation.isPending}
+        isDestructive
+        confirmTestId="button-confirm-disconnect-garmin"
+      />
     </Card>
   );
 }
