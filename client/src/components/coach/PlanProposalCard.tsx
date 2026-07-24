@@ -120,7 +120,7 @@ function ChangeRow({ change }: { readonly change: EnrichedPlanAdjustmentChange }
       </div>
       <button
         type="button"
-        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+        className="flex items-center gap-1 rounded-sm text-[11px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         onClick={() => setShowRationale((v) => !v)}
         aria-expanded={showRationale}
       >
@@ -130,9 +130,7 @@ function ChangeRow({ change }: { readonly change: EnrichedPlanAdjustmentChange }
         />
         Why?
       </button>
-      {showRationale && (
-        <p className="text-xs text-muted-foreground italic">{change.rationale}</p>
-      )}
+      {showRationale && <p className="text-xs text-muted-foreground italic">{change.rationale}</p>}
     </div>
   );
 }
@@ -162,7 +160,10 @@ export function PlanProposalCard({
             ? `Applied — ${count} day${count === 1 ? "" : "s"} updated`
             : `Proposed plan changes (${count} day${count === 1 ? "" : "s"})`}
         </span>
-        <CalendarClock className="h-3 w-3 text-muted-foreground ml-auto shrink-0" aria-hidden="true" />
+        <CalendarClock
+          className="h-3 w-3 text-muted-foreground ml-auto shrink-0"
+          aria-hidden="true"
+        />
       </div>
 
       <div className="space-y-2">
