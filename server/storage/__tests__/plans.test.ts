@@ -1,4 +1,5 @@
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
 import { PlanStorage } from "../plans";
@@ -9,6 +10,7 @@ vi.mock("../../db", () => ({
     update: vi.fn(),
     delete: vi.fn(),
     select: vi.fn(),
+    selectDistinct: vi.fn(),
     transaction: vi.fn(),
     query: {
       planDays: { findFirst: vi.fn() },
@@ -221,5 +223,77 @@ describe("PlanStorage", () => {
       mockUpdateChain([]);
       expect(await storage.failStalePlanGenerations(60 * 60 * 1000)).toBe(0);
     });
+  });
+});
+
+describe("PlanStorage.markMissedPlanDays", () => {
+  let storage: PlanStorage;
+  let whereClauses: unknown[];
+  let whereMock: ReturnType<typeof vi.fn>;
+
+  // Mock the three chains the sweep drives: the distinct-zone read, the
+  // per-zone plan-id subquery (never executed — it is passed to inArray), and
+  // the UPDATE whose WHERE we capture to prove which date each zone compared.
+  function primeSweep(zones: { tz: string }[], updatedPerZone = 1) {
+    vi.mocked(db.selectDistinct).mockReturnValue({
+      from: vi.fn().mockResolvedValue(zones),
+    } as never);
+    vi.mocked(db.select).mockReturnValue({
+      from: () => ({ innerJoin: () => ({ where: () => ({}) }) }),
+    } as never);
+    const returningMock = vi
+      .fn()
+      .mockResolvedValue(Array.from({ length: updatedPerZone }, (_, i) => ({ id: `pd-${i}` })));
+    whereMock = vi.fn((clause: unknown) => {
+      whereClauses.push(clause);
+      return { returning: returningMock };
+    });
+    vi.mocked(db.update).mockReturnValue({ set: () => ({ where: whereMock }) } as never);
+  }
+
+  function comparedDates(): string[] {
+    const dialect = new PgDialect();
+    return whereClauses.map((clause) => {
+      const params = dialect.sqlToQuery(clause as never).params;
+      return params.find(
+        (p) => typeof p === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p),
+      ) as string;
+    });
+  }
+
+  beforeEach(() => {
+    storage = new PlanStorage();
+    vi.clearAllMocks();
+    whereClauses = [];
+    // 2026-07-21T01:00Z = 2026-07-20 18:00 in Los Angeles.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T01:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("compares each timezone cohort against its own local date", async () => {
+    primeSweep([{ tz: "UTC" }, { tz: "America/Los_Angeles" }]);
+
+    const marked = await storage.markMissedPlanDays();
+
+    expect(marked).toBe(2); // one row per zone from the stubbed RETURNING
+    expect(whereMock).toHaveBeenCalledTimes(2);
+    // The whole point: the LA cohort is judged against 07-20, so a day
+    // scheduled 07-20 is NOT swept while that athlete's day is still running.
+    expect(comparedDates()).toEqual(["2026-07-21", "2026-07-20"]);
+  });
+
+  it("keeps sweeping other cohorts when one stored timezone is unusable", async () => {
+    primeSweep([{ tz: "Mars/Olympus_Mons" }, { tz: "America/Los_Angeles" }]);
+
+    const marked = await storage.markMissedPlanDays();
+
+    // The bad zone degrades to UTC instead of aborting the statement for
+    // everyone, which `AT TIME ZONE u.user_timezone` in SQL would have done.
+    expect(marked).toBe(2);
+    expect(comparedDates()).toEqual(["2026-07-21", "2026-07-20"]);
   });
 });

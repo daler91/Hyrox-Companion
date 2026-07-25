@@ -7,11 +7,13 @@ import {
   trainingPlans,
   type TrainingPlanWithDays,
   type UpdatePlanDay,
+  users,
 } from "@shared/schema";
 import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
+import { getLocalDateStrSafe } from "../timezone";
 import { toDateStr } from "../types";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 
@@ -385,14 +387,45 @@ export class PlanStorage {
     return plan;
   }
 
+  /**
+   * Flip past planned days to `missed`. Judged against each athlete's OWN
+   * calendar date: a single UTC comparison persisted `missed` onto the day a
+   * California athlete was still training, and unlike the timeline's render-time
+   * status this is a WRITE — it only unwinds if the athlete later logs against
+   * that plan day with an explicit planDayId.
+   *
+   * Grouped by stored timezone, so the sweep costs one statement per distinct
+   * zone (tens at most, and only ever run at boot or once daily). The local date
+   * is computed in JS rather than with `AT TIME ZONE u.user_timezone`: that form
+   * raises `invalid value for parameter TimeZone` on a single unrecognised name
+   * and would abort the sweep for every other athlete with it.
+   */
   async markMissedPlanDays(): Promise<number> {
-    const today = toDateStr();
-    const result = await db
-      .update(planDays)
-      .set({ status: "missed" })
-      .where(and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} < ${today}`))
-      .returning({ id: planDays.id });
-    return result.length;
+    const zones = await db.selectDistinct({ tz: users.userTimezone }).from(users);
+
+    let total = 0;
+    for (const { tz } of zones) {
+      const today = getLocalDateStrSafe(new Date(), tz);
+      const zonePlanIds = db
+        .select({ id: trainingPlans.id })
+        .from(trainingPlans)
+        .innerJoin(users, eq(users.id, trainingPlans.userId))
+        .where(eq(users.userTimezone, tz));
+
+      const result = await db
+        .update(planDays)
+        .set({ status: "missed" })
+        .where(
+          and(
+            eq(planDays.status, "planned"),
+            lt(planDays.scheduledDate, today),
+            inArray(planDays.planId, zonePlanIds),
+          ),
+        )
+        .returning({ id: planDays.id });
+      total += result.length;
+    }
+    return total;
   }
 
   /**
