@@ -13,6 +13,13 @@ to a fresh database in CI.
 box and record the date and who ran it in the same PR. An unticked box is a
 live task, not history.
 
+**Verifying.** `pnpm ops:restore-drill` checks every step listed here against
+whatever database you point it at, so the monthly restore drill
+([backup-restore.md §6](./backup-restore.md#6-restore-drill-cadence--verification))
+re-verifies them for free. Note the reverse hazard too: a restored database is
+as old as its backup, so a step ticked *after* that backup was taken has been
+rolled back and must be run again.
+
 ---
 
 ## [ ] 0081 — purge orphaned private custom foods
