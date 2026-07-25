@@ -247,6 +247,9 @@ export async function ensureVectorSchema() {
     // /api/v1/health and the exception reaches the alerting path that every
     // other boot-time schema failure already uses.
     vectorSchemaStatus = "failed";
+    // bearer:disable javascript_lang_logger_leak — `err` is a DDL/connection
+    // error describing vector-schema state, not user data; same shape as the
+    // migration failure logged in runDrizzleMigrations above.
     logger.error({ context: "db", err: error }, "Vector schema setup failed — RAG and semantic food search will not work until this is fixed");
     Sentry.captureException(error);
   } finally {

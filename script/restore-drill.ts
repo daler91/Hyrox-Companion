@@ -394,8 +394,13 @@ async function main(): Promise<void> {
   try {
     const results = await runRestoreDrill(client);
     if (argv.includes("--json")) {
+      // bearer:disable javascript_lang_logger_leak — check results only: table
+      // names, foreign-key names, row counts, a server version string. No row
+      // contents are ever read into a result, and the credential check reports
+      // success/failure without touching the plaintext.
       console.log(JSON.stringify({ results, elapsedMs: Date.now() - startedAt }, null, 2));
     } else {
+      // bearer:disable javascript_lang_logger_leak — same results, formatted.
       console.log(formatReport(results, Date.now() - startedAt));
     }
     if (hasFailure(results)) process.exitCode = 1;

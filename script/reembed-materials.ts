@@ -104,7 +104,10 @@ async function verifyCoverage(userId: string): Promise<string[]> {
       const entry = byId.get(m.id);
       return !entry || entry.chunkCount === 0 || !entry.hasEmbeddings;
     })
-    .map((m) => `${m.id} (${m.title})`);
+    // Id only, deliberately. The title is athlete-authored free text from an
+    // uploaded document, and it is the one thing here that is genuinely user
+    // content; the id is what an operator needs to act on anyway.
+    .map((m) => m.id);
 }
 
 async function processUser(userId: string, flags: Flags): Promise<UserOutcome> {
@@ -133,6 +136,9 @@ async function main(): Promise<void> {
   try {
     flags = parseFlags(process.argv.slice(2));
   } catch (err) {
+    // bearer:disable javascript_lang_logger_leak — parseFlags only ever throws
+    // one of its own two literal messages; nothing from the database has been
+    // read at this point.
     console.error(err instanceof Error ? err.message : String(err));
     process.exit(2);
   }
@@ -161,10 +167,14 @@ async function main(): Promise<void> {
         process.exitCode = 1;
         return;
       }
+      // bearer:disable javascript_lang_logger_leak — `status` is one of four
+      // literal strings from getVectorSchemaStatus().
       console.log(`Vector schema: ${status}${status === "degraded" ? " (no HNSW index — search will be a sequential scan; needs pgvector >= 0.7.0)" : ""}`);
     }
 
     const userIds = await targetUserIds(flags);
+    // bearer:disable javascript_lang_logger_leak — a count and a literal mode
+    // string.
     console.log(`${userIds.length} athlete(s) with coaching materials — ${mode}\n`);
 
     for (const userId of userIds) {
@@ -177,12 +187,30 @@ async function main(): Promise<void> {
         if (!flags.dryRun && !flags.verifyOnly) parts.push(`${outcome.embedded} embedded`);
         if (outcome.errors.length > 0) parts.push(`${outcome.errors.length} error(s)`);
         if (outcome.unembedded.length > 0) parts.push(`${outcome.unembedded.length} still without chunks`);
+        // bearer:disable javascript_lang_logger_leak — the athlete id and
+        // counts, printed to the terminal of an operator who is already running
+        // this against production. The id is load-bearing: it is what a rerun
+        // with `--user <id>` needs, so redacting it would make the failure
+        // report unactionable. No athlete-authored content is printed.
         console.log(`  ${userId}: ${parts.join(", ")}`);
-        for (const error of outcome.errors) console.log(`      error: ${error}`);
-        for (const missing of outcome.unembedded) console.log(`      no chunks: ${missing}`);
+        for (const error of outcome.errors) {
+          // bearer:disable javascript_lang_logger_leak — "<materialId>: <provider
+          // error>" from reembedAllMaterials; an id and an API failure message,
+          // never document text.
+          console.log(`      error: ${error}`);
+        }
+        for (const missing of outcome.unembedded) {
+          // bearer:disable javascript_lang_logger_leak — material ids only; the
+          // titles are stripped in verifyCoverage precisely because they are
+          // user-authored.
+          console.log(`      no chunks: ${missing}`);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         outcomes.push({ userId, materials: 0, embedded: 0, errors: [message], unembedded: [] });
+        // bearer:disable javascript_lang_logger_leak — athlete id plus a
+        // DB/provider error message, for the same operator-actionability reason
+        // as above.
         console.log(`  ${userId}: FAILED — ${message}`);
       }
     }
@@ -198,6 +226,8 @@ async function main(): Promise<void> {
   const errors = outcomes.reduce((sum, o) => sum + o.errors.length, 0);
   const missing = outcomes.reduce((sum, o) => sum + o.unembedded.length, 0);
 
+  // bearer:disable javascript_lang_logger_leak — aggregate counts and a
+  // duration only.
   console.log(
     `\n${mode}: ${outcomes.length} athlete(s), ${materials} material(s)` +
     (flags.dryRun ? "" : `, ${embedded} embedded`) +
