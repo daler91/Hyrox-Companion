@@ -14,7 +14,7 @@ import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { vectorPool } from "./vectorDb";
 
-async function ensurePgvectorExtension() {
+export async function ensurePgvectorExtension() {
   let client;
   try {
     client = await vectorPool.connect();
