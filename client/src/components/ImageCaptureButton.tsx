@@ -97,6 +97,7 @@ export function ImageCaptureButton({
         capture="environment"
         className="sr-only"
         onChange={handleChange}
+        aria-label="Capture workout image"
         data-testid={`${dataTestId ?? "button-image-capture"}-input`}
       />
       <TooltipProvider>

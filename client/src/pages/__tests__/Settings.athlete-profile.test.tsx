@@ -30,7 +30,7 @@ describe("Settings race profile persistence", () => {
     renderSettings(qc);
     await goToSettingsTab("training");
 
-    await chooseSelectOption("Select gender", "Men");
+    await chooseSelectOption("Gender", "Men");
 
     fireEvent.click(await screen.findByTestId("button-save-settings"));
 
@@ -48,7 +48,7 @@ describe("Settings race profile persistence", () => {
     renderSettings(qc);
     await goToSettingsTab("training");
 
-    await chooseSelectOption("Select division", "Pro");
+    await chooseSelectOption("Division", "Pro");
 
     fireEvent.click(await screen.findByTestId("button-save-settings"));
 

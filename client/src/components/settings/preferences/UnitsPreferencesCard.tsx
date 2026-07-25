@@ -32,7 +32,6 @@ export function UnitsPreferencesCard({
             { value: "lbs", label: "lbs" },
           ]}
           testId="select-weight-unit"
-          ariaLabel="Select weight unit"
         />
         <PreferenceSelectRow
           label="Distance Unit"
@@ -44,7 +43,6 @@ export function UnitsPreferencesCard({
             { value: "miles", label: "miles" },
           ]}
           testId="select-distance-unit"
-          ariaLabel="Select distance unit"
         />
       </CardContent>
     </Card>

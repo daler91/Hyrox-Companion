@@ -31,7 +31,6 @@ export function NutritionPreferencesCard({
             { value: "5", label: "5 meals" },
           ]}
           testId="select-meal-schedule"
-          ariaLabel="Select meals per day"
           triggerClassName="w-28"
         />
       </CardContent>

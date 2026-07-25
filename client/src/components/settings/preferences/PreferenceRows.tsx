@@ -23,7 +23,6 @@ interface PreferenceSelectRowProps {
   readonly onValueChange: (value: string) => void;
   readonly options: readonly SelectOption[];
   readonly testId: string;
-  readonly ariaLabel: string;
   /** Override the default narrow (w-24) trigger width for longer option labels. */
   readonly triggerClassName?: string;
 }
@@ -35,17 +34,16 @@ export function PreferenceSelectRow({
   onValueChange,
   options,
   testId,
-  ariaLabel,
   triggerClassName,
 }: PreferenceSelectRowProps) {
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="space-y-1">
-        <Label>{label}</Label>
+        <Label htmlFor={testId} className="cursor-pointer">{label}</Label>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className={cn("w-24", triggerClassName)} data-testid={testId} aria-label={ariaLabel}>
+        <SelectTrigger id={testId} className={cn("w-24", triggerClassName)} data-testid={testId}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

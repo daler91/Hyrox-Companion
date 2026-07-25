@@ -42,7 +42,6 @@ export function AthleteProfileCard({
             { value: "pro", label: "Pro" },
           ]}
           testId="select-division"
-          ariaLabel="Select division"
         />
         <PreferenceSelectRow
           label="Gender"
@@ -55,7 +54,6 @@ export function AthleteProfileCard({
             { value: "prefer_not_to_say", label: "Prefer not to say" },
           ]}
           testId="select-gender"
-          ariaLabel="Select gender"
           triggerClassName="w-44"
         />
         {onAgeChange ? (
