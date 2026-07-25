@@ -703,3 +703,38 @@ describe("computeOverviewStats", () => {
     expect(computeOverviewStats(weeks).avgDuration).toBe(0);
   });
 });
+
+describe("calculateTrainingOverview — athlete-local coverage dates", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("counts days-since from the athlete's calendar, not the server's", () => {
+    // 2026-07-21T01:00Z is still 2026-07-20 in Los Angeles.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T01:00:00Z"));
+    const sets = [makeSet({ exerciseName: "skierg", category: "functional", date: "2026-07-20" })];
+
+    const la = calculateTrainingOverview([], sets, undefined, {
+      userTimezone: "America/Los_Angeles",
+    });
+    const utc = calculateTrainingOverview([], sets, undefined, { userTimezone: "UTC" });
+
+    // Trained "today" for the LA athlete, "yesterday" for a UTC one — the
+    // builders used to mint their own UTC date and report 1 for both.
+    expect(la.stationCoverage.find((s) => s.station === "skierg")?.daysSince).toBe(0);
+    expect(utc.stationCoverage.find((s) => s.station === "skierg")?.daysSince).toBe(1);
+  });
+
+  it("degrades to UTC for an unusable stored timezone instead of throwing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T01:00:00Z"));
+    const sets = [makeSet({ exerciseName: "skierg", category: "functional", date: "2026-07-20" })];
+
+    const result = calculateTrainingOverview([], sets, undefined, {
+      userTimezone: "Mars/Olympus_Mons",
+    });
+
+    expect(result.stationCoverage.find((s) => s.station === "skierg")?.daysSince).toBe(1);
+  });
+});
