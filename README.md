@@ -262,21 +262,22 @@ Hyrox-Companion/
 
 Detailed documentation lives in [`docs/`](docs/):
 
-| Document                                       | Description                                                                                |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [Architecture Overview](docs/architecture.md)  | End-to-end flows, provider layer, service dependencies, RAG decision tree, schema pipeline |
-| [Environment Variables](docs/env-reference.md) | Required and optional env vars, defaults, feature gates, safety invariants                 |
-| [Client](docs/client.md)                       | React SPA, routing, components, styling, PWA, client Sentry                                |
-| [Server](docs/server.md)                       | Express bootstrap, middleware stack, routes, logging, graceful shutdown                    |
-| [Database](docs/database.md)                   | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer                        |
-| [AI and RAG](docs/ai-and-rag.md)               | Text provider layer, Gemini embeddings/vision, coaching context, RAG pipeline              |
-| [Nutrition & Fuelling](docs/nutrition.md)      | Food logging, food search (fuzzy/synonym/semantic), per-meal fuel targets, AI parsing      |
-| [State Management](docs/state-management.md)   | TanStack Query, custom hooks, offline queue, utility functions                             |
-| [API Reference](docs/api-reference.md)         | Endpoint catalog, request/response shapes, rate limits                                     |
-| [Authentication](docs/authentication.md)       | Clerk setup, user sync, dev auth bypass, protected routes                                  |
-| [Integrations](docs/integrations.md)           | Strava, Garmin, Resend, pg-boss, cron, Sentry                                              |
-| [Testing](docs/testing.md)                     | Vitest, integration tests, Cypress, accessibility checks, CI workflows                     |
-| [Native Mobile](docs/native-mobile.md)         | Capacitor vs. React Native comparison and packaging phases                                 |
+| Document                                               | Description                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| [Architecture Overview](docs/architecture.md)          | End-to-end flows, provider layer, service dependencies, RAG decision tree, schema pipeline |
+| [Environment Variables](docs/env-reference.md)         | Required and optional env vars, defaults, feature gates, safety invariants                 |
+| [Client](docs/client.md)                               | React SPA, routing, components, styling, PWA, client Sentry                                |
+| [Server](docs/server.md)                               | Express bootstrap, middleware stack, routes, logging, graceful shutdown                    |
+| [Database](docs/database.md)                           | PostgreSQL schema, Drizzle ORM, pgvector, migrations, storage layer                        |
+| [AI and RAG](docs/ai-and-rag.md)                       | Text provider layer, Gemini embeddings/vision, coaching context, RAG pipeline              |
+| [Nutrition & Fuelling](docs/nutrition.md)              | Food logging, food search (fuzzy/synonym/semantic), per-meal fuel targets, AI parsing      |
+| [State Management](docs/state-management.md)           | TanStack Query, custom hooks, offline queue, utility functions                             |
+| [API Reference](docs/api-reference.md)                 | Endpoint catalog, request/response shapes, rate limits                                     |
+| [Authentication](docs/authentication.md)               | Clerk setup, user sync, dev auth bypass, protected routes                                  |
+| [Integrations](docs/integrations.md)                   | Strava, Garmin, Resend, pg-boss, cron, Sentry                                              |
+| [Testing](docs/testing.md)                             | Vitest, integration tests, Cypress, accessibility checks, CI workflows                     |
+| [Native Mobile](docs/native-mobile.md)                 | Capacitor vs. React Native comparison and packaging phases                                 |
+| [Product Opportunities](docs/PRODUCT_OPPORTUNITIES.md) | Prioritised register of new features and improvements, with code-level evidence            |
 
 ---
 
