@@ -9,6 +9,16 @@ import { calculatePersonalRecords, countPersonalRecordsInRange } from "./service
 import type { IStorage } from "./storage";
 import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek } from "./timezone";
 
+// Claim windows for the send ledgers. Both are shorter than their nominal
+// cadence on purpose: the stamp now lands when the claim is taken rather than
+// after the send, so a full-cadence window would put each tick a few seconds
+// inside the previous one's and skip it — the mechanism that turned the weekly
+// summary fortnightly. The upstream gates (athlete-local Monday for the
+// summary, one scan per day for the reminder) are what set the real cadence;
+// these only have to stop a second send on the same local day.
+const WEEKLY_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
+const MISSED_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
+
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
   // Re-fetch the user so an opt-out that happened between enqueue and this
   // worker run is respected (W4 — race between cron scan and job execution).
@@ -24,9 +34,16 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const tz = user.userTimezone;
   if (getLocalDayOfWeek(now, tz) !== 1) return false;
 
-  const lastSent = user.lastWeeklySummaryAt;
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  if (lastSent && lastSent >= sevenDaysAgo) return false;
+  // Claim BEFORE sending, atomically. The day-of-week gate above is what makes
+  // this weekly; the claim only has to stop a second send within the same local
+  // day, so its window is deliberately shorter than the cadence (see
+  // claimWeeklySummary).
+  const claimed = await storage.users.claimWeeklySummary(
+    user.id,
+    new Date(now.getTime() - WEEKLY_CLAIM_WINDOW_MS),
+    now,
+  );
+  if (!claimed) return false;
 
   // "Last week" = the seven calendar days ending yesterday in the user's
   // local tz, i.e. last Monday through yesterday (Sunday) inclusive.
@@ -67,10 +84,10 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     weekEndDate: weekEndStr,
   };
 
-  const success = await sendWeeklySummary(user, summaryData);
-  if (success) {
-    await storage.users.updateLastWeeklySummaryAt(user.id);
-  }
+  // The claim is already recorded; a failed send costs this athlete the week
+  // rather than risking a duplicate. The email queues are no-retry anyway
+  // (queue.ts), so a failure was never going to be retried.
+  const sent = await sendWeeklySummary(user, summaryData);
 
   // Also send push notification (fire-and-forget)
   void sendPushToUser(user.id, {
@@ -79,7 +96,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     url: "/analytics",
   });
 
-  return success;
+  return sent;
 }
 
 export async function processMissedWorkoutReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
@@ -88,9 +105,6 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   if (!fresh?.email || !wantsEmail(fresh, "missedReminder")) return false;
   user = fresh;
 
-  const lastMissedSent = user.lastMissedReminderAt;
-  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  if (lastMissedSent && lastMissedSent >= oneDayAgo) return false;
 
   // "Yesterday" is the calendar date one day before today *in the user's
   // local tz* (C10). A Pacific user checked at 02:00 UTC is still on the
@@ -100,16 +114,22 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   const missed = await storage.analytics.getMissedWorkoutsForDate(user.id, yesterdayStr);
   if (missed.length === 0) return false;
 
+  // Claimed only once there is something to send, so a quiet day does not burn
+  // the day's slot (the old guard had the same property by never stamping).
+  const claimed = await storage.users.claimMissedReminder(
+    user.id,
+    new Date(now.getTime() - MISSED_CLAIM_WINDOW_MS),
+    now,
+  );
+  if (!claimed) return false;
+
   const missedData: MissedWorkoutData[] = missed.map(m => ({
     date: m.date,
     focus: m.focus,
     mainWorkout: m.mainWorkout,
     planName: m.planName,
   }));
-  const success = await sendMissedWorkoutReminder(user, missedData);
-  if (success) {
-    await storage.users.updateLastMissedReminderAt(user.id);
-  }
+  const sent = await sendMissedWorkoutReminder(user, missedData);
 
   // Also send push notification (fire-and-forget)
   const missedNames = missedData.map(m => m.focus).join(", ");
@@ -119,7 +139,7 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
     url: "/",
   });
 
-  return success;
+  return sent;
 }
 
 export async function processMafTestReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {

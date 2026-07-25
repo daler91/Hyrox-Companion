@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { processMafTestReminder, runEmailCronJob } from './emailScheduler';
+import {
+  processMafTestReminder,
+  processMissedWorkoutReminder,
+  processWeeklySummary,
+  runEmailCronJob,
+} from './emailScheduler';
 import type { IStorage } from './storage';
 
 vi.mock('./queue', () => ({
@@ -297,5 +302,91 @@ describe('processMafTestReminder', () => {
     expect(storage.users.claimMafBaselineTest).toHaveBeenCalledWith('u1', now);
     expect(sendMafTestReminder).not.toHaveBeenCalled();
     expect(sent).toBe(false);
+  });
+});
+
+describe('claim-before-send ledger', () => {
+  // A Monday, so the weekly summary's day-of-week gate is open.
+  const monday = new Date('2026-07-20T09:00:00Z');
+
+  function emailStorage(user: Record<string, unknown>, claims: boolean[]) {
+    const queue = [...claims];
+    const claim = vi.fn().mockImplementation(() => Promise.resolve(queue.shift() ?? false));
+    return {
+      storage: {
+        users: {
+          getUser: vi.fn().mockResolvedValue(user),
+          claimWeeklySummary: claim,
+          claimMissedReminder: claim,
+        },
+        analytics: {
+          getWeeklyStats: vi.fn().mockResolvedValue({}),
+          getAllExerciseSetsWithDates: vi.fn().mockResolvedValue([]),
+          getMissedWorkoutsForDate: vi
+            .fn()
+            .mockResolvedValue([{ date: '2026-07-19', focus: 'Easy Run', mainWorkout: '5k', planName: 'Plan' }]),
+        },
+        timeline: { getTimeline: vi.fn().mockResolvedValue([]) },
+      } as unknown as IStorage,
+      claim,
+    };
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('sends the weekly summary exactly once when two producers race', async () => {
+    const { sendWeeklySummary } = await import('./email');
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    // Two overlapping runs; only the first conditional UPDATE affects a row.
+    const { storage, claim } = emailStorage(user, [true, false]);
+
+    const [first, second] = await Promise.all([
+      processWeeklySummary(storage, user as never, monday),
+      processWeeklySummary(storage, user as never, monday),
+    ]);
+
+    expect(claim).toHaveBeenCalledTimes(2);
+    expect([first, second].filter(Boolean)).toHaveLength(1);
+    expect(sendWeeklySummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('claims before handing anything to the mailer', async () => {
+    const { sendWeeklySummary } = await import('./email');
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage, claim } = emailStorage(user, [true]);
+
+    await processWeeklySummary(storage, user as never, monday);
+
+    // The whole point: the ledger is written first, so a crash or a slow
+    // Resend call cannot leave the decision un-recorded.
+    expect(claim.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(sendWeeklySummary).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('claims against a window shorter than the weekly cadence, so consecutive Mondays both send', async () => {
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage, claim } = emailStorage(user, [true]);
+
+    await processWeeklySummary(storage, user as never, monday);
+
+    const notBefore = claim.mock.calls[0][1] as Date;
+    const windowMs = monday.getTime() - notBefore.getTime();
+    // A full 7 days would put next Monday's tick just inside this week's
+    // window and skip it — the drift that made the summary fortnightly.
+    expect(windowMs).toBeLessThan(7 * 24 * 60 * 60 * 1000);
+    // Still long enough that a second run the same day cannot re-claim.
+    expect(windowMs).toBeGreaterThan(24 * 60 * 60 * 1000);
+  });
+
+  it('does not burn the missed-reminder slot on a day with nothing missed', async () => {
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage, claim } = emailStorage(user, [true]);
+    vi.mocked(storage.analytics.getMissedWorkoutsForDate).mockResolvedValue([]);
+
+    const sent = await processMissedWorkoutReminder(storage, user as never, monday);
+
+    expect(sent).toBe(false);
+    expect(claim).not.toHaveBeenCalled();
   });
 });
