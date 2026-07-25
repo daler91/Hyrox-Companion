@@ -194,7 +194,6 @@ export function BodyCompositionCard({
           onValueChange={onActivityLevelChange}
           options={ACTIVITY_OPTIONS}
           testId="select-activity-level"
-          ariaLabel="Select activity level"
           triggerClassName="w-36"
         />
 
@@ -205,7 +204,6 @@ export function BodyCompositionCard({
           onValueChange={onWeightGoalDirectionChange}
           options={GOAL_OPTIONS}
           testId="select-weight-goal"
-          ariaLabel="Select weight goal"
           triggerClassName="w-32"
         />
 

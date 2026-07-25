@@ -25,7 +25,6 @@ export function TrainingGoalsCard({ weeklyGoal, onWeeklyGoalChange }: TrainingGo
             label: value,
           }))}
           testId="select-weekly-goal"
-          ariaLabel="Select weekly workout goal"
         />
       </CardContent>
     </Card>
