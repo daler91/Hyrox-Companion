@@ -2,7 +2,7 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 
-import { registerHealthEndpoint } from "./health";
+import { __resetHealthCacheForTests, registerHealthEndpoint } from "./health";
 import { registerShutdownHandlers } from "./lifecycle";
 import { registerProcessErrorHandlers } from "./observability";
 
@@ -14,6 +14,36 @@ describe("bootstrap startup parity", () => {
     const res = await request(app).get("/api/v1/health");
     expect(res.status).toBe(503);
     expect(res.body.status).toBe("degraded");
+  });
+
+  it("reports vector-schema state without gating traffic on it", async () => {
+    // The DR hole this closes: probeVectorDatabase only runs `SELECT 1`, which
+    // a reachable-but-empty vector DB answers happily. Before the readiness
+    // payload carried vectorSchema, a restore that never built document_chunks
+    // / food_embeddings reported a flat `status: "ok"` and the drill in
+    // docs/operations/backup-restore.md §6 had nothing to check.
+    __resetHealthCacheForTests();
+    const app = express();
+    const state = { isReady: true, startupError: null, startupPhase: "ready", startupBeganAt: Date.now() - 1000 };
+    registerHealthEndpoint(app, {
+      state,
+      probeDatabase: async () => true,
+      probeVectorDatabase: async () => true,
+      vectorSchemaStatus: () => "failed",
+    });
+    const res = await request(app).get("/api/v1/health");
+    // Still 200: the vector DB is derived data, so losing it must not stop the
+    // app serving workouts while an operator re-embeds.
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("ok");
+    expect(res.body.vectorSchema).toBe("failed");
+
+    // Unwired (the dep is optional) reads as "unknown", never a false "ok".
+    __resetHealthCacheForTests();
+    const bare = express();
+    registerHealthEndpoint(bare, { state, probeDatabase: async () => true, probeVectorDatabase: async () => true });
+    const bareRes = await request(bare).get("/api/v1/health");
+    expect(bareRes.body.vectorSchema).toBe("unknown");
   });
 
   it("liveness probe stays 200 on a runtime DB blip but 503 on startup failure (W7)", async () => {

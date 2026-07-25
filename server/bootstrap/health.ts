@@ -85,7 +85,20 @@ export function __resetHealthCacheForTests(): void {
   inFlightProbe = null;
 }
 
-export function registerHealthEndpoint(app: Express, deps: { state: StartupHealthState; probeDatabase: () => Promise<boolean>; probeVectorDatabase: () => Promise<boolean>; }): void {
+export function registerHealthEndpoint(app: Express, deps: {
+  state: StartupHealthState;
+  probeDatabase: () => Promise<boolean>;
+  probeVectorDatabase: () => Promise<boolean>;
+  /**
+   * Outcome of boot-time vector-schema setup (`getVectorSchemaStatus` in
+   * `server/maintenance.ts`). Reported but NOT gated on: the vector DB holds
+   * derived data, so a restore that lost it should still serve traffic while
+   * an operator re-embeds. The point is that the restore drill can see it —
+   * `probeVectorDatabase` only proves the pool answers `SELECT 1`, which it
+   * does happily when the tables were never created.
+   */
+  vectorSchemaStatus?: () => string;
+}): void {
   // Liveness probe (W7): dependency-free. Returns 200 whenever the process is up
   // and the event loop can serve HTTP — it deliberately does NOT probe the DB,
   // so a transient runtime DB blip cannot make a healthy instance look dead and
@@ -114,12 +127,13 @@ export function registerHealthEndpoint(app: Express, deps: { state: StartupHealt
       res.status(503).json({ status: "starting", phase: deps.state.startupPhase, uptimeMs, timestamp: Date.now() });
       return;
     }
+    const vectorSchema = deps.vectorSchemaStatus?.() ?? "unknown";
     getCachedProbeResult(deps).then(({ dbOk, vectorDbOk }) => {
       if (!dbOk || !vectorDbOk) {
-        res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, uptimeMs, timestamp: Date.now() });
+        res.status(503).json({ status: "degraded", db: dbOk, vectorDb: vectorDbOk, vectorSchema, uptimeMs, timestamp: Date.now() });
         return;
       }
-      res.json({ status: "ok", uptimeMs, timestamp: Date.now() });
+      res.json({ status: "ok", vectorSchema, uptimeMs, timestamp: Date.now() });
     }).catch((err) => {
       logger.error({ err }, "Health check probe failed unexpectedly");
       res.status(503).json({ status: "error", uptimeMs, timestamp: Date.now() });
