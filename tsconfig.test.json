@@ -1,4 +1,15 @@
 {
+  // Typechecks the test suite, which the main tsconfig deliberately excludes
+  // (tsconfig.json's `exclude` drops **/*.test.ts so product builds stay fast).
+  // Run via `pnpm check:test`; enforced in CI alongside check/check:strict.
+  //
+  // The `exclude` list below is TECHNICAL DEBT, not design. These 66 files
+  // predate this config being wired to anything and carry ~500 type errors
+  // between them — almost entirely mock objects that omit required fields of
+  // the type they stand in for. They are excluded so the other 295 test files
+  // gate NOW and every newly added test file is typechecked from birth.
+  // Shrink this list; never grow it. Deleting an entry and fixing its file is
+  // always a valid standalone PR.
   "extends": "./tsconfig.json",
   "include": [
     "client/src/**/*.ts",
@@ -13,7 +24,73 @@
   "exclude": [
     "node_modules",
     "build",
-    "dist"
+    "dist",
+    "client/src/hooks/__tests__/useBlockCounts.test.ts",
+    "client/src/hooks/__tests__/useLogWorkoutDraft.test.ts",
+    "client/src/hooks/__tests__/useUrlQueryState.test.ts",
+    "client/src/hooks/__tests__/useVoiceInput.test.ts",
+    "client/src/hooks/__tests__/useWorkoutEditor.test.ts",
+    "client/src/hooks/workout-actions/useWorkoutActionMutations.test.ts",
+    "client/src/hooks/workout-form/saveWorkoutPayload.test.ts",
+    "client/src/lib/api/plans.test.ts",
+    "client/src/lib/api/workouts.test.ts",
+    "client/src/lib/exerciseUtils.test.ts",
+    "client/src/main.tsx",
+    "client/src/pages/nutrition/utils.test.ts",
+    "server/bootstrap/observability.test.ts",
+    "server/bootstrap/startup.test.ts",
+    "server/clerkAuth.test.ts",
+    "server/email.test.ts",
+    "server/emailTemplates.test.ts",
+    "server/routeUtils.test.ts",
+    "server/routes.test.ts",
+    "server/routes/__tests__/account.test.ts",
+    "server/routes/__tests__/ai.test.ts",
+    "server/routes/__tests__/analytics.test.ts",
+    "server/routes/__tests__/auth.test.ts",
+    "server/routes/__tests__/coaching.test.ts",
+    "server/routes/__tests__/plans.test.ts",
+    "server/routes/__tests__/preferences.test.ts",
+    "server/routes/__tests__/protectedRouteBuilder.test.ts",
+    "server/routes/__tests__/protectedRouteGuardMatrix.test.ts",
+    "server/routes/__tests__/structuredWriteGuard.test.ts",
+    "server/routes/__tests__/workouts.test.ts",
+    "server/routes/__tests__/workoutsTimeline.routes.test.ts",
+    "server/routes/__tests__/workoutsTimeline.test.ts",
+    "server/routes/nutrition/__tests__/nutrition.routes.test.ts",
+    "server/routes/tests/api.integration.test.ts",
+    "server/services/ai/coachingInsights.test.ts",
+    "server/services/aiEval.test.ts",
+    "server/services/aiService.test.ts",
+    "server/services/aiSuggestionService.test.ts",
+    "server/services/analyticsService.test.ts",
+    "server/services/coachService.autoCoach.fatigueReviews.test.ts",
+    "server/services/coachService.autoCoach.guards.test.ts",
+    "server/services/coachService.autoCoach.structured.test.ts",
+    "server/services/coachService.autoCoach.suggestions.test.ts",
+    "server/services/coachService.regenerateNote.test.ts",
+    "server/services/nutrition/blockView.test.ts",
+    "server/services/nutrition/mealParser.test.ts",
+    "server/services/nutrition/micros.test.ts",
+    "server/services/nutrition/rollup.test.ts",
+    "server/services/nutrition/sessionFuelling.test.ts",
+    "server/services/parseWorkoutUseCases.test.ts",
+    "server/services/personalRecordAchievements.test.ts",
+    "server/services/planGenerationService.test.ts",
+    "server/services/planService.test.ts",
+    "server/services/racePrediction/racePredictionService.test.ts",
+    "server/services/trainingLoadService.test.ts",
+    "server/services/training_styles/registry.test.ts",
+    "server/services/workoutService.test.ts",
+    "server/services/workoutService/assignWorkoutPlanDay.test.ts",
+    "server/storage/__tests__/mafTests.test.ts",
+    "server/storage/__tests__/plans.test.ts",
+    "server/storage/__tests__/timeline.test.ts",
+    "server/storage/__tests__/workouts.test.ts",
+    "server/storage/users.test.ts",
+    "server/usecases/workouts/mutateExerciseSet.usecase.test.ts",
+    "server/usecases/workouts/mutateWorkoutSet.usecase.test.ts",
+    "shared/schema/types.structure.test.ts"
   ],
   "compilerOptions": {
     "strict": true,

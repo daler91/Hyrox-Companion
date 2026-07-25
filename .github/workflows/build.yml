@@ -33,6 +33,12 @@ jobs:
         # Expand tsconfig.strict.json's include (server → client → script) as
         # each directory is cleaned up; see CONTRIBUTING.md.
         run: pnpm check:strict
+      - name: TypeScript (test suite)
+        # The main tsconfig excludes **/*.test.ts, so until now no job
+        # typechecked the ~360 test files at all. tsconfig.test.json carries a
+        # shrinking exclude list of pre-existing offenders; everything else —
+        # including every newly added test — is checked here.
+        run: pnpm check:test
       - name: OpenAPI snapshot is up-to-date
         run: |
           pnpm docs:openapi
