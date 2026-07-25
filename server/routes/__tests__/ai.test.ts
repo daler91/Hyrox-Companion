@@ -231,14 +231,41 @@ describe("GET /api/v1/overview-analysis", () => {
       updatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });
 
+    // The athlete's latest workout still matches the anchor the analysis was
+    // generated from, so nothing has changed under it. (Leaving this as the
+    // default empty list would model "every workout deleted", which is stale.)
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
+      { date: "2026-06-01" },
+    ] as never);
+
     const response = await request(app).get("/api/v1/overview-analysis");
 
     expect(response.status).toBe(200);
     expect(response.body.sections.trainingLoad).toContain("sweet spot");
     expect(response.body.generatedAt).toBe("2026-06-01T00:00:00.000Z");
-    // listWorkoutLogs defaults to [] → no newer workout than at generation → not stale.
     expect(response.body.stale).toBe(false);
     expect(generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("flags the stored analysis stale once its anchoring workouts are gone", async () => {
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+      id: "row-1",
+      userId: "test_user_id",
+      feature: "overview_analysis",
+      payload: { sections: {}, generatedAt: "2026-06-01T00:00:00.000Z" },
+      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+      lastWorkoutDateAtGeneration: "2026-06-01",
+      recomputedOn: null,
+      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+    // No workouts remain: the analysis describes a history that no longer
+    // exists, which the forward-only compare reported as fresh forever.
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([] as never);
+
+    const response = await request(app).get("/api/v1/overview-analysis");
+
+    expect(response.status).toBe(200);
+    expect(response.body.stale).toBe(true);
   });
 });
 
