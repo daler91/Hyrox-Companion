@@ -1,4 +1,5 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineEntry, TrainingOverview } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CoachPanelChatArea } from "@/components/coach/CoachPanelChatArea";
@@ -10,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSaveMessageMutation } from "@/hooks/useChatMutations";
 import { type Message, useChatSession } from "@/hooks/useChatSession";
 import { usePlanProposal } from "@/hooks/usePlanProposal";
+import { api, QUERY_KEYS } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
 import { calculateStats } from "@/lib/statsUtils";
 
@@ -57,7 +59,19 @@ export function CoachPanel({
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
 
-  const stats = useMemo(() => calculateStats(timeline), [timeline]);
+  const timelineStats = useMemo(() => calculateStats(timeline), [timeline]);
+  // The streak is the server's to compute: it is the only side that knows the
+  // athlete's stored timezone. Computing it here from timeline dates against
+  // the browser's clock produced a second, sometimes different number in the
+  // same session. Same query key TimelineSummaryCard already reads.
+  const { data: overview } = useQuery<TrainingOverview>({
+    queryKey: QUERY_KEYS.trainingOverview,
+    queryFn: () => api.analytics.getTrainingOverview(),
+  });
+  const stats = useMemo(
+    () => ({ ...timelineStats, currentStreak: overview?.currentStreak ?? 0 }),
+    [timelineStats, overview?.currentStreak],
+  );
 
   const {
     messages: hookMessages,

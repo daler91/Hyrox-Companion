@@ -12,8 +12,6 @@ function calculateStatsFor(timeline: Partial<TimelineEntry>[]) {
   return calculateStats(timeline as TimelineEntry[]);
 }
 
-type StreakCase = [string, Partial<TimelineEntry>[], number];
-
 describe("calculateStats", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -31,7 +29,6 @@ describe("calculateStats", () => {
       completedThisWeek: 0,
       plannedUpcoming: 0,
       completionRate: 0,
-      currentStreak: 0,
     });
   });
 
@@ -101,52 +98,6 @@ describe("calculateStats", () => {
       const stats = calculateStatsFor(timeline);
 
       expect(stats.completionRate).toBe(0);
-    });
-  });
-
-  describe("current streak (currentStreak)", () => {
-    const streakCases: StreakCase[] = [
-      [
-        "consecutive days backwards from today",
-        [
-          { date: "2024-05-15", status: "completed" },
-          { date: "2024-05-14", status: "completed" },
-          { date: "2024-05-13", status: "completed" },
-        ],
-        3,
-      ],
-      [
-        "yesterday when today is not completed",
-        [
-          { date: "2024-05-14", status: "completed" },
-          { date: "2024-05-13", status: "completed" },
-          { date: "2024-05-12", status: "completed" },
-        ],
-        3,
-      ],
-      [
-        "only up to a missed day",
-        [
-          { date: "2024-05-15", status: "completed" },
-          { date: "2024-05-14", status: "completed" },
-          { date: "2024-05-12", status: "completed" },
-        ],
-        2,
-      ],
-      [
-        "multiple completed entries on the same day as one day",
-        [
-          { date: "2024-05-15", status: "completed" },
-          { date: "2024-05-15", status: "completed" },
-          { date: "2024-05-14", status: "completed" },
-        ],
-        2,
-      ],
-      ["zero when neither today nor yesterday has a completed entry", [{ date: "2024-05-13", status: "completed" }], 0],
-    ];
-
-    it.each(streakCases)("should count %s", (_caseName, timeline, expectedStreak) => {
-      expect(calculateStatsFor(timeline).currentStreak).toBe(expectedStreak);
     });
   });
 
