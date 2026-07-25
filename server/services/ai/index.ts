@@ -5,7 +5,7 @@ import type { TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
-import { getLocalDateStr } from "../../timezone";
+import { getLocalDateStrSafe } from "../../timezone";
 import {
   buildMovementPatternCoverage,
   buildMuscleGroupCoverage,
@@ -33,13 +33,6 @@ import {
 } from "./trainingStats";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function todayUtcDate(): string {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    .toISOString()
-    .split("T")[0];
-}
 
 function addDays(date: string, delta: number): string {
   // ⚡ Bolt Performance Optimization:
@@ -165,11 +158,11 @@ function buildSupplementaryInsights(params: {
   // Movement-pattern / muscle-group balance gaps (distinct from station gaps).
   const hasCoverageHistory = totalWorkouts >= 10;
   const neglectedPatterns = pickNeglectedCoverage(
-    buildMovementPatternCoverage(loadExerciseSets),
+    buildMovementPatternCoverage(loadExerciseSets, today),
     hasCoverageHistory,
   );
   const neglectedMuscles = pickNeglectedCoverage(
-    buildMuscleGroupCoverage(loadExerciseSets),
+    buildMuscleGroupCoverage(loadExerciseSets, today),
     hasCoverageHistory,
   );
 
@@ -229,7 +222,15 @@ function mapUpcomingWorkout(
 }
 
 export async function buildTrainingContext(userId: string): Promise<TrainingContext> {
-  const today = todayUtcDate();
+  // Resolve the athlete before anything that needs a date. "Today" is theirs,
+  // not the server's, and it must be ONE value: the coach's narrative date was
+  // already athlete-local while the load governor's currentDate and the
+  // "PRs this week" window were still UTC, so an athlete west of UTC could be
+  // told about today while the numbers underneath reasoned about tomorrow.
+  // Costs one indexed read ahead of the concurrent batch, which is noise next
+  // to the model call this context feeds.
+  const user = await storage.users.getUser(userId);
+  const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
   const loadHistoryStart = addDays(today, -70);
   // Build the (optional) fuelling slice concurrently with the training reads; it
   // short-circuits to undefined when nutrition is off or the athlete has no data.
@@ -237,7 +238,6 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const [
     timeline,
     activePlanRecord,
-    user,
     upcomingDays,
     loadWorkoutLogs,
     loadExerciseSets,
@@ -249,7 +249,6 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     // AI_CONTEXT_TIMELINE_LIMIT.
     storage.timeline.getTimeline(userId, undefined, AI_CONTEXT_TIMELINE_LIMIT),
     storage.plans.getActivePlan(userId),
-    storage.users.getUser(userId),
     storage.timeline.getUpcomingPlannedDays(userId, 7),
     storage.analytics.getWorkoutLogsByDateRange(userId, loadHistoryStart, today),
     storage.analytics.getAllExerciseSetsWithDates(userId, loadHistoryStart, today),
@@ -267,11 +266,6 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
   const currentStreak = calculateStreak(completedDates, user?.userTimezone);
-  // Anchor the coach's "today" to the athlete's local calendar, not server UTC:
-  // a US athlete chatting at 7am local is already past midnight UTC, so a
-  // UTC-derived date would read a day ahead and make today's session look like
-  // "tomorrow". Mirrors the timezone handling used by calculateStreak above.
-  const currentDate = getLocalDateStr(new Date(), user?.userTimezone ?? "UTC");
   const recentWorkouts = collectRecentWorkouts(timeline);
   const structuredExerciseStats = getStructuredExerciseStats(timeline);
 
@@ -416,7 +410,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     skippedWorkouts,
     completionRate,
     currentStreak,
-    currentDate,
+    currentDate: today,
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),
     weeklyGoal: user?.weeklyGoal ?? undefined,

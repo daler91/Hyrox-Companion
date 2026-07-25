@@ -31,7 +31,32 @@
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(Sort-Object -Unique)",
       "Bash(grep -E \"\\\\.\\(tsx|ts|jsx|js\\)$\")",
-      "mcp__Claude_Code_Remote__send_later"
+      "mcp__Claude_Code_Remote__send_later",
+      "Bash(node -e \"console.log\\(require\\('/home/user/Hyrox-Companion/node_modules/pg-boss/package.json'\\).version\\)\")",
+      "Bash(awk 'NR>=297 && NR<=370' tables.ts)",
+      "Bash(awk 'NR>=470 && NR<=530' tables.ts)",
+      "Bash(TZ=America/New_York node -e ' *)",
+      "Bash(TZ=UTC node -e ' *)",
+      "Bash(node -e ' *)",
+      "Bash(node /tmp/claude-0/-home-user-Hyrox-Companion/bafd8dd3-4e5d-549c-9ae8-ef2d2ef0ef1c/scratchpad/payload2.mjs)",
+      "Bash(grep -n \"const today = toDateStr\\(\\)\\\\|async markMissedPlanDays\\\\|scheduledDate} < \\\\${today}\" server/storage/plans.ts)",
+      "Bash(timeout 900 npx eslint .)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import json,sys; c=json.load\\(sys.stdin\\); print\\('max-lines:', c['rules'].get\\('max-lines'\\)\\); print\\('complexity:', c['rules'].get\\('complexity'\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; c=json.load\\(sys.stdin\\); print\\('max-lines:', c['rules'].get\\('max-lines'\\)\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(python3 -)",
+      "Bash(grep -n \"^SF:client/src/lib/exerciseUtils.ts$\" -A 3 coverage/lcov.info)",
+      "Bash(grep -n \"^SF:client/src/components/ui/textarea.tsx$\" -A 3 coverage/lcov.info)",
+      "Bash(awk '/^export const [a-zA-Z]+ = pgTable/ {name=$3; line=NR} /references\\\\\\(\\\\\\(\\\\\\) => users\\\\.id/ {print line\": \"name\" -> users.id at \"NR}' shared/schema/tables.ts)",
+      "Bash(timeout 400 npx eslint .)",
+      "Bash(timeout 400 npx tsc -p tsconfig.test.json --noEmit)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(cd /home/user/Hyrox-Companion; echo \"=== format:check in CI ===\"; grep -rn \"format:check\\\\|prettier\" .github/workflows/ || echo \"NOT IN CI\"; echo \"=== overrides blocks ===\"; grep -n \"\\\\\"overrides\\\\\"\\\\|\\\\\"pnpm\\\\\"\" package.json; echo \"=== users column count ===\"; sed -n '/^export const users = pgTable/,/^\\);/p' shared/schema/tables.ts | grep -c \":\"; echo \"=== dateStringSchema ===\"; sed -n '10,20p' shared/schema/types/requests.ts)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{try{const c=JSON.parse\\(s\\);console.log\\('max-lines',JSON.stringify\\(c.rules['max-lines']\\)\\);console.log\\('complexity',JSON.stringify\\(c.rules['complexity']\\)\\);console.log\\('max-lines-per-function',JSON.stringify\\(c.rules['max-lines-per-function']\\)\\)}catch\\(e\\){console.log\\(s.slice\\(0,600\\)\\)}}\\)\")",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{try{const c=JSON.parse\\(s\\);console.log\\('max-lines',JSON.stringify\\(c.rules['max-lines']\\)\\)}catch\\(e\\){console.log\\(s.slice\\(0,600\\)\\)}}\\)\")",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{try{const c=JSON.parse\\(s\\);console.log\\('test max-lines',JSON.stringify\\(c.rules['max-lines']\\)\\)}catch\\(e\\){console.log\\(s.slice\\(0,300\\)\\)}}\\)\")",
+      "Bash(timeout 600 npx eslint .)"
     ]
   }
 }

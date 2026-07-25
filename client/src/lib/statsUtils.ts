@@ -5,7 +5,6 @@ import {
   getStartOfWeekString,
   getTodayString,
   isDateInRange,
-  toISODateString,
 } from "./dateUtils";
 
 export interface TrainingStats {
@@ -13,7 +12,6 @@ export interface TrainingStats {
   completedThisWeek: number;
   plannedUpcoming: number;
   completionRate: number;
-  currentStreak: number;
 }
 
 export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
@@ -33,11 +31,8 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   let plannedUpcoming = 0;
   let totalPastAndToday = 0;
   let completedPastAndTodayCount = 0;
-  
-  const completedDatesSet = new Set<string>();
 
   for (const entry of timeline) {
-
     // Check if in current week
     if (isDateInRange(entry.date, startOfWeekStr, endOfWeekStr)) {
       totalThisWeek++;
@@ -55,55 +50,19 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     if (entry.date <= todayStr) {
       totalPastAndToday++;
       if (entry.status === "completed") {
-        completedDatesSet.add(entry.date);
         completedPastAndTodayCount++;
       }
     }
   }
-
-  const streak = calculateStreak(completedDatesSet);
 
   return {
     workoutsThisWeek: totalThisWeek,
     completedThisWeek,
     plannedUpcoming,
     completionRate: totalPastAndToday > 0 ? Math.round((completedPastAndTodayCount / totalPastAndToday) * 100) : 0,
-    currentStreak: streak,
   };
 }
 
-export function calculateStreak(completedDates: Set<string>): number {
-  if (completedDates.size === 0) return 0;
-
-  // Compare against local-TZ date strings to match how `completedDates`
-  // is populated (entry.date is stored in the user's local TZ).
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = toISODateString(today);
-
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = toISODateString(yesterday);
-
-  if (!completedDates.has(todayStr) && !completedDates.has(yesterdayStr)) return 0;
-
-  let streak = 0;
-  const checkDate = completedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
-
-  while (true) {
-    const dateStr = toISODateString(checkDate);
-    if (completedDates.has(dateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
-
-/** Format a duration in seconds as "H:MM:SS" (e.g. 5732 → "1:35:32"). */
 export function formatSecondsToClock(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds)) return "0:00:00";
   const safe = Math.max(0, Math.round(totalSeconds));

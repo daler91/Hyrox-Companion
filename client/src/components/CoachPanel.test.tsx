@@ -1,7 +1,19 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { CoachPanel } from "@/components/CoachPanel";
+
+// The streak comes from the training-overview query now, so the panel needs a
+// client. Left unresolved here: the welcome copy under test does not depend on
+// it, and `currentStreak` falls back to 0 while the query is in flight.
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...actual,
+    api: { ...actual.api, analytics: { ...actual.api.analytics, getTrainingOverview: vi.fn() } },
+  };
+});
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { trainingStyleId: "balanced_default" } }),
@@ -52,7 +64,12 @@ vi.mock("@/hooks/usePlanProposal", () => ({
 
 describe("CoachPanel", () => {
   it("welcomes new users with AI plan and Coaching Knowledge guidance", async () => {
-    render(<CoachPanel isOpen={true} onClose={vi.fn()} timeline={[]} isNewUser={true} />);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CoachPanel isOpen={true} onClose={vi.fn()} timeline={[]} isNewUser={true} />
+      </QueryClientProvider>,
+    );
 
     expect(await screen.findByText(/Generate an AI training plan/i)).toBeInTheDocument();
     expect(screen.getByText(/Coaching Knowledge in Settings/i)).toBeInTheDocument();

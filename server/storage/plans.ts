@@ -1,3 +1,4 @@
+import { addDaysToISODate } from "@shared/dateUtils";
 import {
   type InsertPlanDay,
   type InsertTrainingPlan,
@@ -7,12 +8,13 @@ import {
   trainingPlans,
   type TrainingPlanWithDays,
   type UpdatePlanDay,
+  users,
 } from "@shared/schema";
 import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
-import { toDateStr } from "../types";
+import { getLocalDateStrSafe } from "../timezone";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 
 // Re-export for callers that already reach for it via PlanStorage's neighbours.
@@ -234,11 +236,13 @@ export class PlanStorage {
     const normalizeDayName = (raw: string | null | undefined): string =>
       (raw ?? "").trim().toLowerCase();
 
-    const start = new Date(startDate);
-    const startDayOfWeek = start.getDay();
+    // Pure calendar math: the previous form parsed the ISO date as UTC midnight
+    // and then walked it with local-time accessors (getDay/setDate), so the
+    // whole schedule shifted by a day whenever the server process ran in a
+    // non-UTC zone. addDaysToISODate never leaves date-only space.
+    const startDayOfWeek = new Date(`${startDate}T00:00:00Z`).getUTCDay();
     const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek;
-    const weekOneMonday = new Date(start);
-    weekOneMonday.setDate(start.getDate() + mondayOffset);
+    const weekOneMonday = addDaysToISODate(startDate, mondayOffset);
 
     if (plan.days.length === 0) return true;
 
@@ -252,7 +256,9 @@ export class PlanStorage {
       }
     }
 
-    const today = toDateStr();
+    // Whether a rescheduled day lands in the future is judged on the athlete's
+    // calendar, like every other "today" in this class.
+    const today = await this.resolveUserToday(userId);
 
     const dateUpdates: { id: string; scheduledDate: string; resetStatus: boolean }[] = [];
     for (const day of plan.days) {
@@ -266,9 +272,7 @@ export class PlanStorage {
           "Unrecognized plan-day dayName; scheduling as Monday",
         );
       }
-      const scheduledDate = new Date(weekOneMonday);
-      scheduledDate.setDate(weekOneMonday.getDate() + weekOffset + dayOffset);
-      const dateStr = toDateStr(scheduledDate);
+      const dateStr = addDaysToISODate(weekOneMonday, weekOffset + dayOffset);
       // Only reset status when the day actually moves to a new date. Without
       // this guard, calling schedulePlan with the same startDate (or any
       // reschedule that happens to leave a specific day on its existing
@@ -355,7 +359,19 @@ export class PlanStorage {
   }
 
   async getActivePlan(userId: string): Promise<TrainingPlan | undefined> {
-    return this.getPlanForDate(userId, toDateStr());
+    // Which plan is active "today" is a question about the athlete's calendar:
+    // a UTC date makes a plan starting tomorrow go live during tonight, and
+    // drops a plan that ends today an evening early.
+    return this.getPlanForDate(userId, await this.resolveUserToday(userId));
+  }
+
+  /** The athlete's own calendar date, degrading to UTC for an unusable zone. */
+  private async resolveUserToday(userId: string): Promise<string> {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { userTimezone: true },
+    });
+    return getLocalDateStrSafe(new Date(), user?.userTimezone);
   }
 
   async getPlanForDate(userId: string, date: string): Promise<TrainingPlan | undefined> {
@@ -385,14 +401,45 @@ export class PlanStorage {
     return plan;
   }
 
+  /**
+   * Flip past planned days to `missed`. Judged against each athlete's OWN
+   * calendar date: a single UTC comparison persisted `missed` onto the day a
+   * California athlete was still training, and unlike the timeline's render-time
+   * status this is a WRITE — it only unwinds if the athlete later logs against
+   * that plan day with an explicit planDayId.
+   *
+   * Grouped by stored timezone, so the sweep costs one statement per distinct
+   * zone (tens at most, and only ever run at boot or once daily). The local date
+   * is computed in JS rather than with `AT TIME ZONE u.user_timezone`: that form
+   * raises `invalid value for parameter TimeZone` on a single unrecognised name
+   * and would abort the sweep for every other athlete with it.
+   */
   async markMissedPlanDays(): Promise<number> {
-    const today = toDateStr();
-    const result = await db
-      .update(planDays)
-      .set({ status: "missed" })
-      .where(and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} < ${today}`))
-      .returning({ id: planDays.id });
-    return result.length;
+    const zones = await db.selectDistinct({ tz: users.userTimezone }).from(users);
+
+    let total = 0;
+    for (const { tz } of zones) {
+      const today = getLocalDateStrSafe(new Date(), tz);
+      const zonePlanIds = db
+        .select({ id: trainingPlans.id })
+        .from(trainingPlans)
+        .innerJoin(users, eq(users.id, trainingPlans.userId))
+        .where(eq(users.userTimezone, tz));
+
+      const result = await db
+        .update(planDays)
+        .set({ status: "missed" })
+        .where(
+          and(
+            eq(planDays.status, "planned"),
+            lt(planDays.scheduledDate, today),
+            inArray(planDays.planId, zonePlanIds),
+          ),
+        )
+        .returning({ id: planDays.id });
+      total += result.length;
+    }
+    return total;
   }
 
   /**

@@ -20,6 +20,7 @@ import {
 import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storage/shared";
+import { getLocalDateStrSafe } from "../timezone";
 import { type AthleteLoadContext, calculateTrainingLoad } from "./trainingLoadService";
 import { getMondayWeekBoundaries } from "./weeklyProgress";
 
@@ -224,10 +225,13 @@ function getMonday(dateStr: string): string {
   let res = mondayCache.get(dateStr);
   if (res) return res;
 
+  // Parsed as UTC above, so read and write in UTC too: getDay()/setDate() are
+  // local-time accessors and would shift the week boundary under any server TZ
+  // that is not UTC.
   const d = new Date(dateStr + "T00:00:00Z");
-  const day = d.getDay();
+  const day = d.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  d.setUTCDate(d.getUTCDate() + diff);
   res = d.toISOString().split("T")[0];
   mondayCache.set(dateStr, res);
   if (mondayCache.size > MONDAY_CACHE_MAX_SIZE) {
@@ -302,8 +306,8 @@ function buildCategoryTotals(
 
 function buildStationCoverage(
   exerciseSets: ExerciseSetWithDate[],
+  todayStr: string,
 ): Array<{ station: string; lastTrained: string | null; daysSince: number | null }> {
-  const todayStr = new Date().toISOString().split("T")[0];
   const stationLastTrained = new Map<string, string>();
 
   // Cache to avoid O(n^2) regex matching and string inclusions inside the loop
@@ -345,8 +349,10 @@ function calculateDaysSince(lastTrained: string | null, todayStr: string): numbe
   return Math.round((Date.parse(todayStr) - Date.parse(lastTrained)) / 86400000);
 }
 
-export function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]): MovementPatternCoverage[] {
-  const todayStr = new Date().toISOString().split("T")[0];
+export function buildMovementPatternCoverage(
+  exerciseSets: ExerciseSetWithDate[],
+  todayStr: string,
+): MovementPatternCoverage[] {
   const patternStats = new Map<MovementPattern, {
     workoutLogIds: Set<string>;
     totalSets: number;
@@ -388,8 +394,10 @@ export function buildMovementPatternCoverage(exerciseSets: ExerciseSetWithDate[]
   });
 }
 
-export function buildMuscleGroupCoverage(exerciseSets: ExerciseSetWithDate[]): MuscleGroupCoverage[] {
-  const todayStr = new Date().toISOString().split("T")[0];
+export function buildMuscleGroupCoverage(
+  exerciseSets: ExerciseSetWithDate[],
+  todayStr: string,
+): MuscleGroupCoverage[] {
   const muscleStats = new Map<HeatMapMuscle, {
     workoutLogIds: Set<string>;
     totalSets: number;
@@ -510,9 +518,14 @@ export function calculateTrainingOverview(
   } = options;
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
   const categoryTotals = buildCategoryTotals(exerciseSets);
-  const stationCoverage = buildStationCoverage(exerciseSets);
-  const movementPatternCoverage = buildMovementPatternCoverage(exerciseSets);
-  const muscleGroupCoverage = buildMuscleGroupCoverage(exerciseSets);
+  // "Days since last trained" is counted from the ATHLETE's today; the option
+  // was already accepted here and used for the streak, while these three
+  // builders each minted their own UTC date and so could report a coverage gap
+  // a day early for anyone west of UTC.
+  const todayStr = getLocalDateStrSafe(new Date(), userTimezone);
+  const stationCoverage = buildStationCoverage(exerciseSets, todayStr);
+  const movementPatternCoverage = buildMovementPatternCoverage(exerciseSets, todayStr);
+  const muscleGroupCoverage = buildMuscleGroupCoverage(exerciseSets, todayStr);
   const trainingLoad = calculateTrainingLoad(
     trainingLoadInput?.workoutLogs ?? workoutLogs,
     trainingLoadInput?.exerciseSets ?? exerciseSets,

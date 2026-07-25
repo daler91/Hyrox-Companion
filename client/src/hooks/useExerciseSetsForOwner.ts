@@ -21,6 +21,15 @@ type Params<TSnapshot> = {
   deleteSetRequest: (ownerId: string, setId: string) => Promise<unknown>;
   addInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
   deleteInvalidateQueries?: (ownerId: string) => QueryKey[] | undefined;
+  /**
+   * Invoked after ANY successful set write — update, add or delete. Logged
+   * workouts pass `invalidateWorkoutWriteQueries`: editing a set moves personal
+   * records, exercise analytics and the training overview exactly as much as
+   * logging the workout did, yet only the workout's own cache entry was ever
+   * invalidated, so those screens kept serving pre-edit numbers. Planned days
+   * leave it unset — planned sets don't feed any of those derived views.
+   */
+  onWriteSuccess?: () => void;
   cellSaveDebounceMs?: number;
 };
 
@@ -36,6 +45,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
   deleteSetRequest,
   addInvalidateQueries,
   deleteInvalidateQueries,
+  onWriteSuccess,
   cellSaveDebounceMs = 350,
 }: Params<TSnapshot>) {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
@@ -77,6 +87,9 @@ export function useExerciseSetsForOwner<TSnapshot>({
         patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
       }
       markSaved();
+      // The write landed even if a newer PATCH superseded its response, so the
+      // derived views are out of date either way.
+      onWriteSuccess?.();
     },
     onError: (_err, _vars, ctx) => {
       markError();
@@ -102,6 +115,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     onSuccess: (serverSet) => {
       patchCachedSets((sets) => [...sets, serverSet]);
       markSaved();
+      onWriteSuccess?.();
     },
     onError: () => markError(),
     errorToast: "Couldn't add that exercise",
@@ -118,7 +132,10 @@ export function useExerciseSetsForOwner<TSnapshot>({
       patchCachedSets((sets) => sets.filter((s) => s.id !== setId));
       return { prev };
     },
-    onSuccess: () => markSaved(),
+    onSuccess: () => {
+      markSaved();
+      onWriteSuccess?.();
+    },
     onError: (_err, _vars, ctx) => {
       markError();
       const prev = (ctx as { prev?: TSnapshot } | undefined)?.prev;

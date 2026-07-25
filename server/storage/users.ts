@@ -23,7 +23,7 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, inArray, isNotNull, lt, lte, notExists, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from "drizzle-orm";
 
 import { decryptToken,encryptToken } from "../crypto";
 import { db } from "../db";
@@ -624,18 +624,50 @@ export class UserStorage {
     return result;
   }
 
-  async updateLastWeeklySummaryAt(userId: string): Promise<void> {
-    await db
+  /**
+   * Atomically claim the right to send this athlete their weekly summary.
+   *
+   * Stamps the ledger and reports whether THIS call won, in one statement, so
+   * the decision and the record cannot come apart. The previous shape read the
+   * timestamp, sent the email, and stamped afterwards — a check-then-act with
+   * a multi-second window (analytics queries plus a Resend round trip) in the
+   * middle, during which any other producer would also decide to send.
+   *
+   * `notBefore` is deliberately looser than the nominal cadence: because the
+   * stamp now lands at claim time rather than after the send, comparing
+   * against a full 7 days would make each week's tick fall a few seconds
+   * inside the previous one's window and skip, which is exactly how a weekly
+   * summary ended up arriving fortnightly. The caller's day-of-week gate is
+   * what enforces "once a week"; this only has to stop a second send within
+   * the same local day.
+   */
+  async claimWeeklySummary(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
       .update(users)
-      .set({ lastWeeklySummaryAt: new Date() })
-      .where(eq(users.id, userId));
+      .set({ lastWeeklySummaryAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastWeeklySummaryAt), lt(users.lastWeeklySummaryAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
   }
 
-  async updateLastMissedReminderAt(userId: string): Promise<void> {
-    await db
+  /** Missed-workout counterpart of {@link claimWeeklySummary}. */
+  async claimMissedReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
       .update(users)
-      .set({ lastMissedReminderAt: new Date() })
-      .where(eq(users.id, userId));
+      .set({ lastMissedReminderAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastMissedReminderAt), lt(users.lastMissedReminderAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
   }
 
   async getUsersWithEmailNotifications(): Promise<User[]> {
