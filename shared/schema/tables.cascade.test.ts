@@ -1,6 +1,8 @@
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { is } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
+import * as allTables from "./tables";
 import {
   aiUsageLogs,
   chatMessages,
@@ -119,6 +121,53 @@ describe("user-owned tables cascade on DELETE", () => {
         "foods → users.id must stay onDelete: 'set null'; if you change this, rework deleteUserAndPrivateCustomFoods and the RESTRICT FKs into foods together",
       ).toBe("set null");
     }
+  });
+
+  // The lists above name the tables we care about by hand, which is good for
+  // failure messages but cannot notice a table nobody remembered to add. This
+  // sweep closes that gap: EVERY exported table with a direct users.id FK must
+  // cascade unless it appears in the exceptions below with a reason.
+  //
+  // It exists because the hand-written list had drifted to cover 16 of 27 such
+  // FKs, and one of the uncovered eleven — structured_exercise_backfill_reviews
+  // — was still `set null` while its reader matched
+  // `user_id = $me OR user_id IS NULL`, so a deleted athlete's rows became
+  // visible to everyone. Exactly the foods leak, in a second table.
+  const DOCUMENTED_NON_CASCADE: Record<string, { onDelete: string; why: string }> = {
+    foods: {
+      onDelete: "set null",
+      why: "RESTRICT FKs from food_log_entries/recipes would abort the user delete; erasure runs via deleteUserAndPrivateCustomFoods, and public foods survive by explicit opt-in (see the dedicated test above)",
+    },
+  };
+
+  it("every table with a direct users.id FK cascades, or is a documented exception", () => {
+    const violations: string[] = [];
+    let checked = 0;
+
+    for (const [name, exported] of Object.entries(allTables)) {
+      if (!is(exported, PgTable)) continue;
+      const fksToUsers = getTableConfig(exported).foreignKeys.filter(
+        (fk) => fk.reference().foreignTable === users,
+      );
+      if (fksToUsers.length === 0) continue;
+
+      const expected = DOCUMENTED_NON_CASCADE[name]?.onDelete ?? "cascade";
+      for (const fk of fksToUsers) {
+        checked += 1;
+        if (fk.onDelete !== expected) {
+          violations.push(
+            `${name}.users_id FK is onDelete: ${String(fk.onDelete)}, expected ${expected}. ` +
+              `A user-owned table must cascade so DELETE /api/v1/account erases it; if it genuinely must not, ` +
+              `add it to DOCUMENTED_NON_CASCADE with the erasure path that covers it instead.`,
+          );
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+    // Guards the guard: if the schema is refactored such that this sweep stops
+    // seeing tables, it must fail rather than vacuously pass.
+    expect(checked).toBeGreaterThanOrEqual(27);
   });
 
   for (const { label, table, parent } of transitivelyOwnedTables) {
