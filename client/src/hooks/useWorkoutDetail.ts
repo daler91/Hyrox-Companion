@@ -12,6 +12,7 @@ import {
   type WorkoutReferenceTextPayload,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
 
 type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] };
 
@@ -138,6 +139,9 @@ export function useWorkoutDetail(workoutId: string | null) {
     deleteSetRequest: (id, setId) => api.workouts.deleteSet(id, setId),
     addInvalidateQueries: (id) => [QUERY_KEYS.workoutHistory(id)],
     deleteInvalidateQueries: (id) => [QUERY_KEYS.workout(id), QUERY_KEYS.workoutHistory(id)],
+    // Set edits move PRs, exercise analytics and the training overview just as
+    // much as logging the workout does — same funnel the workout writes use.
+    onWriteSuccess: invalidateWorkoutWriteQueries,
     cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
   });
 

@@ -5,12 +5,12 @@ import { sql } from "drizzle-orm";
 import { type NextFunction, type Request as ExpressRequest, type Response,Router } from "express";
 
 import { isAuthenticated } from "../clerkAuth";
-import { ANALYTICS_CACHE_TTL_MS } from "../constants";
 import { db } from "../db";
 import { env } from "../env";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
 import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
+import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { addCalendarDays, assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
 import { storage } from "../storage";
@@ -19,65 +19,6 @@ import { getUserId } from "../types";
 
 const router = Router();
 
-const CACHE_TTL_MS = ANALYTICS_CACHE_TTL_MS;
-const MAX_CACHE_SIZE = 500;
-
-function evictStale<T extends { timestamp: number }>(map: Map<string, T>, ttl: number, maxSize: number): void {
-  const now = Date.now();
-  // First pass: remove expired entries
-  for (const [key, entry] of map) {
-    if (now - entry.timestamp >= ttl) map.delete(key);
-  }
-  // Second pass: if still over limit, drop oldest
-  while (map.size > maxSize) {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-    for (const [key, entry] of map) {
-      if (entry.timestamp < oldestTime) {
-        oldestTime = entry.timestamp;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey) map.delete(oldestKey);
-    else break;
-  }
-}
-
-interface CacheEntry<T> {
-  promise: Promise<T>;
-  timestamp: number;
-}
-
-/**
- * In-memory request coalescing + TTL cache used for the analytics routes.
- * Collapses concurrent requests for the same (userId, from, to) into a
- * single storage call and caches the result for up to `CACHE_TTL_MS` to
- * absorb rapid refetches from the Analytics tabs. On fetch failure the
- * entry is evicted so the next request retries immediately.
- */
-function createCoalescedCache<T>(
-  cache: Map<string, CacheEntry<T>>,
-  keyPrefix: string,
-  fetcher: (userId: string, from?: string, to?: string) => Promise<T>,
-): (userId: string, from?: string, to?: string) => Promise<T> {
-  return (userId, from, to) => {
-    const cacheKey = `${keyPrefix}${userId}-${from ?? 'none'}-${to ?? 'none'}`;
-    const now = Date.now();
-
-    const entry = cache.get(cacheKey);
-    if (entry && now - entry.timestamp < CACHE_TTL_MS) {
-      return entry.promise;
-    }
-
-    const promise = fetcher(userId, from, to).catch((error: unknown) => {
-      cache.delete(cacheKey);
-      throw error;
-    });
-    cache.set(cacheKey, { promise, timestamp: now });
-    evictStale(cache, CACHE_TTL_MS, MAX_CACHE_SIZE);
-    return promise;
-  };
-}
 
 // Exercise-sets cache. Exported for testing only so tests can clear it.
 export const _cacheForTesting = new Map<string, CacheEntry<ExerciseSetWithDate[]>>();
