@@ -40,14 +40,18 @@ Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current total test-file co
 
 ### Coverage thresholds
 
-All four coverage metrics are configured at **80%** via `@vitest/coverage-v8`
-for explicit coverage runs. Normal CI currently runs `pnpm test` without
-coverage collection.
+Coverage is collected by `@vitest/coverage-v8` and is **merge-gating**: CI runs
+`pnpm test:coverage`, and the run fails if any metric drops below its threshold.
 
-- Lines: 80%
-- Functions: 80%
-- Branches: 80%
-- Statements: 80%
+Thresholds are ratcheted to measured reality rather than set aspirationally —
+they exist to catch regressions, and are raised as coverage grows. The
+aspirational 80% they replaced was never evaluated by any job, so it enforced
+nothing. Current values live in `vitest.config.ts`; as of 2026-07-25:
+
+- Lines: 68%
+- Functions: 62%
+- Branches: 60%
+- Statements: 67%
 
 ---
 
@@ -510,7 +514,9 @@ To generate a coverage report, run:
 pnpm exec vitest run --coverage
 ```
 
-This uses `@vitest/coverage-v8` and enforces the 80% thresholds defined in `vitest.config.ts` for that coverage run. If any metric falls below 80%, the coverage command will fail.
+This is what CI runs (`pnpm test:coverage`). It enforces the thresholds defined
+in `vitest.config.ts` and fails if any metric drops below them. It also writes
+`coverage/lcov.info`.
 
 ### Running integration tests locally
 
@@ -571,9 +577,9 @@ coverage: {
 }
 ```
 
-Run coverage locally: `pnpm exec vitest run --coverage`
+Run coverage locally: `pnpm test:coverage`
 
-CI does not run coverage by default. Add an explicit coverage workflow or step before treating these thresholds as merge-gating.
+CI runs this on every PR and the thresholds are merge-gating.
 
 ---
 
