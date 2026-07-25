@@ -155,9 +155,12 @@ async function checkSchemaCompleteness(client: Queryable): Promise<CheckResult> 
   );
   const present = new Set(rows.map((r) => r.table_name));
   // document_chunks / food_embeddings live on the vector DB in split-DB mode,
-  // so their absence here is not evidence of a bad primary restore.
+  // so their absence here is not evidence of a bad primary restore. (Only
+  // document_chunks is a Drizzle table; food_embeddings exists solely in
+  // ensureVectorSchema's raw SQL and so never appears in `expected` anyway.)
   const vectorOnly = new Set(["document_chunks", "food_embeddings"]);
-  const missing = expected.filter((t) => !present.has(t) && !vectorOnly.has(t));
+  const wanted = expected.filter((t) => !vectorOnly.has(t));
+  const missing = wanted.filter((t) => !present.has(t));
   if (missing.length > 0) {
     return {
       name: "Every table in the deployed schema exists",
@@ -168,7 +171,7 @@ async function checkSchemaCompleteness(client: Queryable): Promise<CheckResult> 
   return {
     name: "Every table in the deployed schema exists",
     status: "pass",
-    detail: `${expected.length - vectorOnly.size} primary-DB tables present`,
+    detail: `${wanted.length} primary-DB table(s) present`,
   };
 }
 
