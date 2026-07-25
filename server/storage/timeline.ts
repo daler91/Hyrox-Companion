@@ -5,6 +5,7 @@ import {
   planDays,
   type TimelineEntry,
   trainingPlans,
+  users,
   type WorkoutLog,
   workoutLogs,
   type WorkoutStatus,
@@ -12,7 +13,7 @@ import {
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 
 import { db } from "../db";
-import { toDateStr } from "../types";
+import { getLocalDateStrSafe } from "../timezone";
 import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
 import { sortAndWindowTimelineEntries } from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
@@ -361,6 +362,22 @@ export class TimelineStorage {
     return { scheduledDays, planNameById };
   }
 
+  /**
+   * The athlete's own calendar date — NOT the server's. "Today" decides whether
+   * a scheduled plan day reads as `planned` or `missed`
+   * (`calculatePlanDayStatus`), so deriving it in UTC told every athlete west
+   * of UTC that today's session was already missed as soon as UTC rolled over:
+   * from 17:00 for California, 14:00 for Hawaii, every single day. Mirrors the
+   * regime the streak (`routeUtils.ts`) and nutrition logging already use.
+   */
+  private async resolveUserToday(userId: string): Promise<string> {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { userTimezone: true },
+    });
+    return getLocalDateStrSafe(new Date(), user?.userTimezone);
+  }
+
   private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
     // Keep pagination pressure in SQL first; in-memory slicing only finalizes
     // the merged multi-source ordering. The 3x is correctness headroom for the
@@ -464,7 +481,7 @@ export class TimelineStorage {
     limit?: number,
     offset?: number,
   ): Promise<TimelineEntry[]> {
-    const today = toDateStr();
+    const today = await this.resolveUserToday(userId);
     const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
 
     const { scheduledDays, planNameById } = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
@@ -507,7 +524,7 @@ export class TimelineStorage {
    * Avoids loading the full timeline for AI suggestions.
    */
   async getUpcomingPlannedDays(userId: string, limit: number): Promise<UpcomingPlannedDay[]> {
-    const today = toDateStr();
+    const today = await this.resolveUserToday(userId);
     // Relational query: resolve user's plans first, then pull matching days
     // filtered by plan IDs. Same pattern as fetchScheduledDays.
     const userPlans = await db.query.trainingPlans.findMany({

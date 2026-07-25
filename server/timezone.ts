@@ -141,3 +141,21 @@ export function isValidTimezone(tz: unknown): tz is string {
     return false;
   }
 }
+
+/**
+ * Like `getLocalDateStr`, but never throws. A stored timezone can become
+ * unrecognisable after it was written — a name dropped from the platform's
+ * tzdata, or a row that predates route-layer validation — and `Intl` answers
+ * that with a RangeError. Reads that merely need "what day is it for this
+ * athlete" must not 500 over it, so an unusable (or absent) zone degrades to
+ * UTC, which is exactly the behaviour those call sites had before they became
+ * timezone-aware.
+ */
+export function getLocalDateStrSafe(instant: Date, tz: string | null | undefined): string {
+  if (!tz) return getLocalDateStr(instant, "UTC");
+  try {
+    return getLocalDateStr(instant, tz);
+  } catch {
+    return getLocalDateStr(instant, "UTC");
+  }
+}

@@ -1,5 +1,5 @@
 import { workoutLogs } from "@shared/schema";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
 import { TimelineStorage } from "../timeline";
@@ -9,6 +9,10 @@ vi.mock("../../db", () => ({
     query: {
       trainingPlans: { findMany: vi.fn() },
       planDays: { findMany: vi.fn() },
+      // Timeline reads resolve the athlete's own "today" from their stored
+      // timezone; default to UTC so the pre-existing suites keep the exact
+      // behaviour they were written against.
+      users: { findFirst: vi.fn() },
     },
     select: vi.fn(),
   },
@@ -104,6 +108,7 @@ describe("TimelineStorage race-day derivation", () => {
       { id: "plan-1", name: "Plan", raceDate: RACE },
     ] as never);
     vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
   });
 
   it("derives Race Day / Shakeout / Recovery for planned days and leaves normal days alone", async () => {
@@ -212,6 +217,7 @@ describe("TimelineStorage standalone workout plan association", () => {
     ] as never);
     vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
     vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
   });
 
   it("tags a standalone workout that carries its own planId with the plan name", async () => {
@@ -262,6 +268,7 @@ describe("TimelineStorage windowed hydration", () => {
     vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([] as never);
     vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
     vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
   });
 
   it("hydrates exercise sets/structures ONLY for the windowed page", async () => {
@@ -289,5 +296,69 @@ describe("TimelineStorage windowed hydration", () => {
 
     expect(entries).toHaveLength(3);
     expect(workoutStorage.getExerciseSetsByWorkoutLogs).toHaveBeenCalledWith(["w0", "w1", "w2"]);
+  });
+});
+
+describe("TimelineStorage athlete-local today", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    linkedRows = [];
+    standaloneRows = [];
+    storage = new TimelineStorage(workoutStorage as never);
+    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
+      { id: "plan-1", name: "Plan", raceDate: null },
+    ] as never);
+    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+    // 2026-07-21T01:00Z is still 2026-07-20 18:00 in Los Angeles: the athlete's
+    // evening, before their session's day is over.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T01:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does NOT mark today's plan day missed for an athlete west of UTC", async () => {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({
+      userTimezone: "America/Los_Angeles",
+    } as never);
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-today", "2026-07-20"),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+
+    // Under the old UTC-derived today ("2026-07-21") this asserted "missed".
+    expect(entries.find((e) => e.date === "2026-07-20")!.status).toBe("planned");
+  });
+
+  it("still marks a genuinely past plan day missed", async () => {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({
+      userTimezone: "America/Los_Angeles",
+    } as never);
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-past", "2026-07-19"),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+
+    expect(entries.find((e) => e.date === "2026-07-19")!.status).toBe("missed");
+  });
+
+  it("falls back to UTC when the stored timezone is unusable", async () => {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({
+      userTimezone: "Mars/Olympus_Mons",
+    } as never);
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-today", "2026-07-20"),
+    ] as never);
+
+    // UTC today is 2026-07-21, so the day reads missed — the pre-fix behaviour,
+    // which is the correct degradation. The read must not throw.
+    const entries = await storage.getTimeline("user-1");
+    expect(entries.find((e) => e.date === "2026-07-20")!.status).toBe("missed");
   });
 });
