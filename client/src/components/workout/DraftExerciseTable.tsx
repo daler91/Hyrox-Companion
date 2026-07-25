@@ -238,9 +238,15 @@ export function DraftExerciseTable({
         removeBlock(blockId);
         continue;
       }
-      const keptSets = baseSets
-        .filter((_, i) => !indices.has(i))
-        .map((s, i) => ({ ...s, setNumber: i + 1 }));
+      // ⚡ Bolt Performance Optimization:
+      // Combine .filter() and .map() into a single for loop pass to eliminate intermediate
+      // array allocations and reduce time complexity from O(2N) to O(N).
+      const keptSets = [];
+      for (let i = 0, j = 1; i < baseSets.length; i++) {
+        if (!indices.has(i)) {
+          keptSets.push({ ...baseSets[i], setNumber: j++ });
+        }
+      }
       updateBlock(blockId, { ...data, sets: keptSets });
     }
   }, [removeBlock, updateBlock]);

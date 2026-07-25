@@ -238,7 +238,15 @@ function ExerciseBlockEditor({
 
   const removeSet = (idx: number) => {
     if (sets.length <= 1) return;
-    const next = sets.filter((_, i) => i !== idx).map((s, i) => ({ ...s, setNumber: i + 1 }));
+    // ⚡ Bolt Performance Optimization:
+    // Combine .filter() and .map() into a single for loop pass to eliminate intermediate
+    // array allocations and reduce time complexity from O(2N) to O(N).
+    const next = [];
+    for (let i = 0, j = 1; i < sets.length; i++) {
+      if (i !== idx) {
+        next.push({ ...sets[i], setNumber: j++ });
+      }
+    }
     onUpdate({ ...exercise, sets: next });
   };
 
