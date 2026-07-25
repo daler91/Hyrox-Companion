@@ -6,9 +6,9 @@
 
 ---
 
-## Remediation status (updated 2026-07-19)
+## Remediation status (updated 2026-07-25)
 
-Priority items **1–9 are fixed and merged** across three remediation PRs, all landed the same day as the analysis. The body of this document below is the unmodified historical register — statuses here supersede it.
+All ten priority items have now been worked, across six remediation rounds. The body of this document below is the unmodified historical register — statuses here supersede it.
 
 **PR #1663 — P0 fixes (priority items 1–3).**
 - Fresh-DB bootstrap repaired: 0035's ambiguous `id` qualified; boot is now **strict** (non-benign migration errors fail readiness, plus a critical-table assertion against the zero-tables failure mode); a new `fresh-db-migrate` CI job applies the real migration chain to a fresh pgvector container on every PR, closing the defect class structurally.
@@ -26,9 +26,34 @@ Priority items **1–9 are fixed and merged** across three remediation PRs, all 
 - Tests: first Garmin sync-orchestration suite (16 tests via an injectable SDK seam: dedup invariant, token strategies, circuit-breaker cascade, preflight matrix, per-user lock) and first key-rotation sweep suite (real-crypto v1→v2 migration proofs). Coverage is now **measured and enforced in CI** (`vitest --coverage` with thresholds ratcheted to measured reality, lcov emitted for a future Sonar CI-scanner switch — the old untouched 80% config was never evaluated).
 - Hygiene: `hyrox_results.csv` (25 MB, ~63% of the packfile) untracked with friendly script guards + README provenance; `.Jules/`/`.jules/` case collision merged; stray files and the unwired, destructive `scripts/post-merge.sh` removed.
 
+**PR #1682 — P2 correctness: athlete-local day boundaries + stale analytics.**
+- Every user west of UTC saw *today's* session marked **Missed** during their own evening — and `markMissedPlanDays()` **persisted** that verdict, unscoped, on every boot and from the email cron. Both now derive "today" in the athlete's stored timezone. The sweep iterates distinct timezones rather than joining `AT TIME ZONE u.user_timezone`, because one unrecognized zone name would otherwise abort the entire global sweep.
+- Analytics staleness was forward-only (`latest > anchor`), so **deleting** a workout or **back-dating** a Strava import never marked Race Predictor / Coach Insights stale — they stayed wrong with no refresh badge. Now a difference test, with the anchor stamped even when generation is budget/consent-gated so gated users converge instead of latching.
+- Editing a set invalidated only the workout itself; personal records, exercise analytics and the training overview kept serving pre-edit numbers. Client mutations now route through the shared invalidation bundle, and the server's three coalesced route caches were extracted into a module with a per-user invalidator.
+- The "weekly" summary email was a check-then-act ledger written *after* the Resend call, which combined with the fixed 09:00 UTC tick biased it toward skipping alternate weeks — i.e. it was landing biweekly. Replaced with an atomic date-keyed claim taken **before** sending, plus the first tests for the weekly/missed-reminder processors.
+- One streak authority (the server's), replacing a browser-timezone client calculation that could render a different number in the same session.
+
+**PR #1683 — prompt-injection fix, type/CI gates, and the second NULL-owner leak.**
+- `materialsBuilder.ts` interpolated coaching-material text into a prompt without `sanitizeUserInput` while the adjacent line did — an injection vector that fires immediately after upload.
+- A **second GDPR NULL-owner leak, identical in shape to the round-1 `foods` one**: `structured_exercise_backfill_reviews` was `set null` on account deletion while `listBackfillReviews` matched `user_id = $me OR user_id IS NULL`, so orphaned rows were returned to every athlete. It had been filed in an archived 2026-06-03 review and never actioned. The FK now cascades (migration 0082), and the dedicated cascade meta-test — which claimed a closed list while covering 16 of 27 FKs — was replaced with a generic sweep over every `users.id` FK.
+- `tsconfig.test.json` is now wired into CI: ~360 test files had never been typechecked at all. 295 gate today; 66 carry ~500 pre-existing errors and sit in a shrink-only exclude list.
+- `check:bundle` can now actually fail the build (it previously only warned into a scrolling log).
+
+**PR (this round) — ops/DR (priority item 10), the in-repo half.**
+- The runbook's central claim was false: it said boot "self-heals structural state" so a restore "only needs to recover **data**, not schema scaffolding". Boot is strict since round 1 (it refuses to serve, it does not heal), and production's schema is `drizzle-kit push`-managed, so boot-time `migrate()` skips the whole chain as benign — which is also why data-payload migrations never reach production. Documented, with the consequences spelled out at each restore step.
+- §6's monthly drill was a hand-ticked checklist that had never been run. `pnpm ops:restore-drill` now automates seven of its items against a throwaway restore — schema completeness, a generic FK orphan sweep read from the catalog, row-count spot checks, the known ownerless-row shapes, and a real credential decrypt proving key and ciphertext survived together.
+- §5.3's "rebuild via the re-embed path" had no path: `reembedAllMaterials` was per-athlete and behind an authenticated route. `pnpm ops:reembed` walks the fleet, provisions the vector schema itself, and verifies by reading chunk coverage back.
+- `ensureVectorSchema()` failures were invisible — swallowed by design, and readiness only probes the vector pool with `SELECT 1`, which a reachable-but-empty database answers. Its outcome is now reported as `vectorSchema` on `/api/v1/health` (reported, not gated) and captured to Sentry.
+
 **Watch-phase fixes** (found by CI/scanners during the PR cycles, all merged): the boot migration-error classifier now unwraps `DrizzleQueryError` causes; a re-privatized shared food could be erased while still referenced by other users' logs (reference-guarded); tag-pinned `pnpm/action-setup` SHA-pinned (Sonar supply-chain gate); the bundle guard runs in-process instead of via a PATH-resolved spawn (Sonar).
 
-**Still open:** priority item 10 (ops/DR: off-platform backups, restore drill, vector schema into versioned migrations — needs infrastructure decisions), the P2/lower findings below not covered by items 1–9 (analytics cache invalidation, email double-send risk, day-boundary regimes, timeline client pagination, god-components), the optional CSV history rewrite, and the pre-existing Dependabot high on main.
+**Still open.**
+- **Item 10, the half that needs credentials or infrastructure decisions:** the scheduled off-platform `pg_dump` still does not exist; the Railway/Neon snapshot schedule and retention are unconfirmed; the RPO/RTO numbers in the runbook remain unvalidated targets; no escrow location is recorded for `ENCRYPTION_KEY`; and moving the vector schema into versioned migrations is still an open design question (in single-DB fallback a `vector_migrations` ledger would live in the very database `drizzle-kit push` manages).
+- **Two outstanding manual production steps** — the 0081 and 0082 `DELETE`s, tracked in [`docs/operations/pending-manual-steps.md`](operations/pending-manual-steps.md). Push-managed production never applies them; `pnpm ops:restore-drill` verifies them.
+- **Timeline client pagination**, re-scoped by its verifier: offset paging over a date-DESC window is not viable as described below; it needs a date-window redesign, and it is a cost/perf item with no correctness defect.
+- **God-component decomposition**, whose scoping surfaced a live drag-and-drop bug (`TimelineDateGroup.tsx` registers every date group as droppable with no future gate).
+- **~500 test-suite type errors** in the 66 files excluded from `tsconfig.test.json` — new tracked debt from PR #1683, shrink-only.
+- The optional CSV history rewrite, and the pre-existing Dependabot high on main.
 
 ---
 

@@ -14,7 +14,7 @@ import { maybeReencryptOnBoot } from "./services/keyRotation";
 import type { IStorage } from "./storage";
 import { vectorPool } from "./vectorDb";
 
-async function ensurePgvectorExtension() {
+export async function ensurePgvectorExtension() {
   let client;
   try {
     client = await vectorPool.connect();
@@ -84,14 +84,52 @@ async function runDrizzleMigrations() {
 }
 
 /**
- * Ensure the vector DB has the `document_chunks` table with the native
- * `vector(N)` column type. This runs on the SEPARATE vector database (see
- * `vectorDb.ts`), which Drizzle migrations do NOT manage — the main
- * `migrate()` call operates on `pool` only. Keeping this code-driven setup
- * is intentional.
+ * Outcome of the most recent `ensureVectorSchema()` run.
+ *
+ * - `pending`  — boot maintenance has not reached the vector step yet.
+ * - `ok`       — tables and both HNSW indexes are in place.
+ * - `degraded` — tables exist but an HNSW index could not be created, so
+ *                vector search falls back to a sequential scan (usually
+ *                pgvector < 0.7.0, i.e. no halfvec support).
+ * - `failed`   — the setup threw; RAG and semantic food search may be dead.
+ *
+ * This exists because the failure was previously invisible. `ensureVectorSchema`
+ * swallows its own errors by design (the vector DB holds derived data, so a
+ * DDL failure must not block a deploy), and the readiness probe only runs
+ * `SELECT 1` against the vector pool — which still succeeds when the DDL
+ * failed. A restore into a vector DB where the app lacks CREATE rights would
+ * therefore report `status: "ok"` with RAG silently gone. The status is
+ * reported on `/api/v1/health` but deliberately does NOT gate readiness; see
+ * `server/bootstrap/health.ts`.
  */
-async function ensureVectorSchema() {
+export type VectorSchemaStatus = "pending" | "ok" | "degraded" | "failed";
+
+let vectorSchemaStatus: VectorSchemaStatus = "pending";
+
+export function getVectorSchemaStatus(): VectorSchemaStatus {
+  return vectorSchemaStatus;
+}
+
+/** Test seam — the status above is module-level process state. */
+export function __resetVectorSchemaStatusForTests(): void {
+  vectorSchemaStatus = "pending";
+}
+
+/**
+ * Ensure the vector DB has the `document_chunks` and `food_embeddings` tables
+ * with native `vector(N)` columns plus their halfvec HNSW indexes. This runs on
+ * the SEPARATE vector database (see `vectorDb.ts`), which Drizzle migrations do
+ * NOT manage — the main `migrate()` call operates on `pool` only. Keeping this
+ * code-driven setup is intentional, and it is the whole of the vector DB's
+ * schema: a disaster-recovery restore of the vector DB needs no SQL beyond
+ * `CREATE EXTENSION vector`.
+ */
+export async function ensureVectorSchema() {
   let client;
+  // Set by the two HNSW catch blocks below: the tables are usable but search
+  // degrades to a sequential scan, which is worth reporting distinctly from
+  // both "fine" and "broken".
+  let indexDegraded = false;
   try {
     client = await vectorPool.connect();
     const chunksTable = await client.query(
@@ -155,6 +193,7 @@ async function ensureVectorSchema() {
       } catch (indexError) {
         // Non-fatal: vector search still works via sequential scan. The most
         // likely cause is pgvector < 0.7.0 (no halfvec support).
+        indexDegraded = true;
         logger.warn(
           { context: "db", err: indexError, dimensions: EMBEDDING_DIMENSIONS },
           "Could not create HNSW index on document_chunks.embedding — vector search will fall back to sequential scan. Upgrade pgvector to >= 0.7.0 for halfvec HNSW support.",
@@ -194,14 +233,22 @@ async function ensureVectorSchema() {
         `);
         logger.info({ context: "db" }, "Created HNSW index on food_embeddings.embedding");
       } catch (indexError) {
+        indexDegraded = true;
         logger.warn(
           { context: "db", err: indexError, dimensions: EMBEDDING_DIMENSIONS },
           "Could not create HNSW index on food_embeddings.embedding — semantic food search falls back to sequential scan (pgvector >= 0.7.0 needed).",
         );
       }
     }
+    vectorSchemaStatus = indexDegraded ? "degraded" : "ok";
   } catch (error) {
-    logger.error({ context: "db", err: error }, "Vector schema setup failed");
+    // Still non-fatal — the vector DB is derived data and a deploy should not
+    // be blocked by it — but no longer silent: the status below reaches
+    // /api/v1/health and the exception reaches the alerting path that every
+    // other boot-time schema failure already uses.
+    vectorSchemaStatus = "failed";
+    logger.error({ context: "db", err: error }, "Vector schema setup failed — RAG and semantic food search will not work until this is fixed");
+    Sentry.captureException(error);
   } finally {
     if (client) client.release();
   }

@@ -53,7 +53,9 @@
     "bench:timeline": "tsx script/timeline-benchmark.ts",
     "bench:timeline:check": "tsx script/timeline-benchmark-check.ts",
     "data:race-benchmarks": "tsx script/race-benchmarks/generate.ts",
-    "data:race-benchmarks:backtest": "tsx script/race-benchmarks/backtest.ts"
+    "data:race-benchmarks:backtest": "tsx script/race-benchmarks/backtest.ts",
+    "ops:restore-drill": "tsx script/restore-drill.ts",
+    "ops:reembed": "tsx script/reembed-materials.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",

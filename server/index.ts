@@ -21,7 +21,7 @@ import { env } from "./env";
 import { AppError } from "./errors";
 import { isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
-import { runStartupMaintenance } from "./maintenance";
+import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
 import { buildCspDirectives } from "./middleware/csp";
 import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
@@ -132,6 +132,8 @@ registerHealthEndpoint(app, {
   state: startupState,
   probeDatabase,
   probeVectorDatabase,
+  // Reported, not gated on — see the dep's doc comment in bootstrap/health.ts.
+  vectorSchemaStatus: getVectorSchemaStatus,
 });
 
 // CORS — restrict cross-origin API access to known origins

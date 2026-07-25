@@ -948,6 +948,8 @@ The same `ensureVectorSchema()` pass also provisions **`food_embeddings`** for s
 
 Because this runs against the vector pool, the `document_chunks` and `food_embeddings` tables can live on a separate connection (`VECTOR_DATABASE_URL`) independent of the main migration history.
 
+The whole pass is best-effort — it swallows its own errors so a vector-DB problem cannot block a deploy — so its outcome is reported instead of thrown. `getVectorSchemaStatus()` returns `pending` / `ok` / `degraded` (tables exist, an HNSW index could not be built) / `failed` (setup threw), the readiness probe surfaces it as `vectorSchema` on `/api/v1/health` **without** gating traffic on it, and the `failed` path also captures to Sentry. Check that field after a vector-DB restore: the readiness probe's vector check is a bare `SELECT 1`, which a reachable-but-empty database answers happily. `pnpm ops:reembed` runs the same setup outside the app, so an operator can provision and rebuild the vector DB without a deploy — see [Backup, Restore & DR](operations/backup-restore.md#5-restore--vector-db).
+
 ---
 
 ## Storage Layer
