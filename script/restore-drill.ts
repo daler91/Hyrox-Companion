@@ -99,11 +99,17 @@ async function checkConnectivity(client: Queryable): Promise<CheckResult> {
 /**
  * §6: "Drizzle journal is at the expected version".
  *
- * A push-managed database has no `__drizzle_migrations` ledger at all, and
- * production IS push-managed — so a missing ledger is the expected shape of a
- * production restore, not a failure. Report it distinctly instead.
+ * Production is drizzle-kit push-managed, so its ledger is EMPTY rather than
+ * absent: drizzle's migrator runs `CREATE SCHEMA/TABLE IF NOT EXISTS` for
+ * `drizzle.__drizzle_migrations` outside the migration transaction, then aborts
+ * the batch itself on the first "already exists" — which rolls back the row
+ * inserts but not the table. An empty ledger is therefore the expected shape of
+ * a production restore, and reporting it as a failure would train operators to
+ * ignore the drill. It is a `warn`, and schema completeness (below) is the
+ * check that actually gates a push-managed restore.
  */
 async function checkMigrationLedger(client: Queryable): Promise<CheckResult> {
+  const name = "Migration ledger matches the journal";
   const expected = journalEntryCount();
   for (const table of ["drizzle.__drizzle_migrations", "public.__drizzle_migrations"]) {
     let applied: number;
@@ -114,18 +120,25 @@ async function checkMigrationLedger(client: Queryable): Promise<CheckResult> {
       continue; // table absent — try the other location
     }
     if (applied === expected) {
-      return { name: "Migration ledger matches the journal", status: "pass", detail: `${applied}/${expected} applied (${table})` };
+      return { name, status: "pass", detail: `${applied}/${expected} applied (${table})` };
+    }
+    if (applied === 0) {
+      return {
+        name,
+        status: "warn",
+        detail: `${table} exists but is empty (0/${expected}) — the signature of a push-managed database, where boot-time migrate() skips the whole chain. Schema completeness below is what gates this restore.`,
+      };
     }
     return {
-      name: "Migration ledger matches the journal",
+      name,
       status: "fail",
       detail: `${applied} applied but the journal has ${expected} entries (${table}) — the restore predates the deployed code`,
     };
   }
   return {
-    name: "Migration ledger matches the journal",
+    name,
     status: "warn",
-    detail: `no __drizzle_migrations table — expected for a drizzle-kit push-managed database (production). Rely on the schema-completeness check below.`,
+    detail: `no __drizzle_migrations table — the app has never booted against this database. Rely on the schema-completeness check below.`,
   };
 }
 

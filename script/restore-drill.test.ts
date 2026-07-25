@@ -115,11 +115,25 @@ describe("runRestoreDrill", () => {
     expect(find(results, "deployed schema exists").status).toBe("pass");
   });
 
-  it("treats a missing drizzle ledger as expected, not broken", async () => {
-    // Production is drizzle-kit push-managed and has no __drizzle_migrations
-    // table at all. If that read as a failure the drill would cry wolf on every
-    // production restore — the check that carries the weight is schema
+  it("treats an EMPTY drizzle ledger as expected, not broken", async () => {
+    // The shape production actually has. drizzle's migrator creates
+    // drizzle.__drizzle_migrations outside the migration transaction, then
+    // aborts the batch on the first "already exists" — so the table exists with
+    // zero rows. If that read as a failure the drill would cry wolf on every
+    // production restore; the check that carries the weight is schema
     // completeness, which works regardless of how the schema got there.
+    const results = await runRestoreDrill(fakeDb({
+      ledgerCount: 0,
+      tables: await allSchemaTables(),
+      counts: { users: 1 },
+      foreignKeys: [],
+    }));
+    expect(find(results, "Migration ledger").status).toBe("warn");
+    expect(find(results, "Migration ledger").detail).toContain("push-managed");
+    expect(hasFailure(results.filter((r) => r.name.includes("Migration ledger")))).toBe(false);
+  });
+
+  it("treats a missing ledger table as never-booted, also not a failure", async () => {
     const results = await runRestoreDrill(fakeDb({
       ledgerCount: "absent",
       tables: await allSchemaTables(),
@@ -127,7 +141,19 @@ describe("runRestoreDrill", () => {
       foreignKeys: [],
     }));
     expect(find(results, "Migration ledger").status).toBe("warn");
-    expect(find(results, "Migration ledger").detail).toContain("push-managed");
+    expect(find(results, "Migration ledger").detail).toContain("never booted");
+  });
+
+  it("fails on a partially-applied ledger — a restore older than the code", async () => {
+    const results = await runRestoreDrill(fakeDb({
+      ledgerCount: 12,
+      tables: await allSchemaTables(),
+      counts: { users: 1 },
+      foreignKeys: [],
+    }));
+    const check = find(results, "Migration ledger");
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("predates the deployed code");
   });
 
   it("fails when the restored schema is missing tables the code expects", async () => {
