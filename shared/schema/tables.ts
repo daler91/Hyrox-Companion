@@ -719,8 +719,16 @@ export const structuredExerciseBackfillReviews = pgTable(
       .default(sql`gen_random_uuid()`),
     ownerType: text("owner_type").notNull(),
     ownerId: varchar("owner_id", { length: 255 }).notNull(),
+    // Cascade, NOT set null. listBackfillReviews (assistedMigrationService)
+    // matches `userId = me OR userId IS NULL`, so orphaning a deleted user's
+    // rows published them to every other athlete — the same "NULL owner means
+    // shared" leak that foods.created_by_user_id had. A review flag describes
+    // the owning athlete's own workout or plan day and is meaningless once
+    // they are gone, so it goes with them. (Flagged as S6 in the archived
+    // 2026-06-03 review; its sibling rate_limit_buckets was purged at the
+    // time, this one was not.)
     userId: varchar("user_id", { length: 255 }).references(() => users.id, {
-      onDelete: "set null",
+      onDelete: "cascade",
     }),
     status: text("status").notNull(),
     reason: text("reason"),

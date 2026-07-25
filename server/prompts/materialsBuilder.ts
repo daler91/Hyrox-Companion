@@ -27,7 +27,13 @@ export function buildCoachingMaterialsSection(materials: CoachingMaterialInput[]
       ? material.content.slice(0, remaining) + "... [truncated]"
       : material.content;
 
-    section += `### ${material.title} (${material.type})\n${content}\n\n`;
+    // 🛡️ Sanitize exactly as buildRetrievedChunksSection does below. Both
+    // builders interpolate the same user-uploaded material into the same
+    // prompt; this one is the fallback taken when a document has no embedded
+    // chunks yet, i.e. immediately after upload — so leaving it raw meant the
+    // injection window was open precisely when fresh, unreviewed content was
+    // most likely to be read. The title is user-supplied too.
+    section += `### ${sanitizeUserInput(material.title)} (${material.type})\n${sanitizeUserInput(content)}\n\n`;
     totalChars += content.length;
   }
 

@@ -575,6 +575,13 @@
       "when": 1784462896409,
       "tag": "0081_purge_orphaned_private_custom_foods",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1784992897367,
+      "tag": "0082_hesitant_exiles",
+      "breakpoints": true
     }
   ]
 }

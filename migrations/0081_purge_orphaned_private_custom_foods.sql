@@ -17,6 +17,9 @@
 -- NOTE for push-managed production: `drizzle-kit push` syncs schema only and
 -- boot-time migrate() no-ops against a pushed schema, so run this statement
 -- once manually (psql or the post-migration workflow) against production.
+-- Tracked with a run-once checkbox in docs/operations/pending-manual-steps.md
+-- — tick it there when you run it, so the outstanding step is visible from
+-- somewhere other than this file.
 DELETE FROM "foods" f
 WHERE f."source" = 'custom'
   AND f."created_by_user_id" IS NULL

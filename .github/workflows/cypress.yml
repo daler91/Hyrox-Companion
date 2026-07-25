@@ -72,6 +72,14 @@ jobs:
       - name: Build application
         run: pnpm run build
 
+      - name: Verify client bundle invariants
+        # script/build.ts runs these same checks but only WARNS, so a regression
+        # would scroll past in the build log. This step is the one that can
+        # actually fail the run: recharts must stay off the eager critical path
+        # (~390KB on every first paint if it returns) and the drizzle graph must
+        # not reach the browser.
+        run: pnpm check:bundle
+
       - name: Enable pgvector extension
         run: psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
