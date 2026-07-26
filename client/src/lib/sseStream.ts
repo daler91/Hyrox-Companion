@@ -18,41 +18,59 @@ function isSSERecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/** Running totals for one stream, mutated in place as events arrive. */
+interface SSEAccumulator<TMeta> {
+  content: string;
+  meta?: TMeta;
+  extras: Record<string, unknown>;
+}
+
+/** One `data: <json>` line as a record, or null when the line carries no payload. */
+function parseSSELine(line: string): Record<string, unknown> | null {
+  if (!line.startsWith("data: ")) return null;
+  try {
+    const parsed: unknown = JSON.parse(line.slice(6));
+    return isSSERecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fold one parsed payload into `acc`. Throws on server errors. */
+function applySSEPayload<TMeta>(
+  data: Record<string, unknown>,
+  acc: SSEAccumulator<TMeta>,
+  metaKey?: string,
+  extraKeys?: string[],
+): void {
+  if (metaKey && metaKey in data) {
+    acc.meta = data[metaKey] as TMeta;
+  } else if (data.meta) {
+    acc.meta = data.meta as TMeta;
+  }
+  for (const key of extraKeys ?? []) {
+    if (key in data) {
+      acc.extras[key] = data[key];
+    }
+  }
+  if (typeof data.text === "string" && data.text) {
+    acc.content += data.text;
+  }
+  if (typeof data.error === "string" && data.error) {
+    throw new Error(data.error);
+  }
+}
+
 /** Parse SSE `data:` lines and accumulate into `acc`. Throws on server errors. */
 function processSSELines<TMeta>(
   lines: string[],
-  acc: { content: string; meta?: TMeta; extras: Record<string, unknown> },
+  acc: SSEAccumulator<TMeta>,
   metaKey?: string,
   extraKeys?: string[],
 ): void {
   for (const line of lines) {
-    if (!line.startsWith("data: ")) continue;
-    let data: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(line.slice(6));
-      if (!isSSERecord(parsed)) continue;
-      data = parsed;
-    } catch {
-      continue;
-    }
-    if (metaKey && metaKey in data) {
-      acc.meta = data[metaKey] as TMeta;
-    } else if (data.meta) {
-      acc.meta = data.meta as TMeta;
-    }
-    if (extraKeys) {
-      for (const key of extraKeys) {
-        if (key in data) {
-          acc.extras[key] = data[key];
-        }
-      }
-    }
-    if (typeof data.text === "string" && data.text) {
-      acc.content += data.text;
-    }
-    if (typeof data.error === "string" && data.error) {
-      throw new Error(data.error);
-    }
+    const data = parseSSELine(line);
+    if (data) applySSEPayload(data, acc, metaKey, extraKeys);
   }
 }
 

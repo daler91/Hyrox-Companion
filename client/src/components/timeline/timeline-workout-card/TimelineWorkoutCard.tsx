@@ -158,6 +158,16 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     handleMoveSelectActivation(newDate, entry, onMove);
   };
 
+  const interactionProps = getTimelineCardInteractionProps({
+    entry,
+    isPending,
+    isBulkSelectMode,
+    canBulkSelect,
+    isBulkSelected,
+    onClick: handleCardClick,
+    onKeyDown: handleCardKeyDown,
+  });
+
   return (
     <Card
       ref={setDragNodeRef}
@@ -167,21 +177,10 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
         baseCardClasses,
         aiCoachClasses,
         dragClasses,
-        isBulkSelectMode && canBulkSelect && "hover:border-destructive/50",
-        isBulkSelectMode && !canBulkSelect && "cursor-not-allowed opacity-60",
-        isBulkSelected && "border-destructive/60 bg-destructive/5 ring-2 ring-destructive/25",
+        getBulkSelectCardClasses({ isBulkSelectMode, canBulkSelect, isBulkSelected }),
         isPending && "opacity-70",
       )}
-      onClick={isPending ? undefined : handleCardClick}
-      onKeyDown={isPending ? undefined : handleCardKeyDown}
-      role={isPending ? undefined : isBulkSelectMode && canBulkSelect ? "checkbox" : "button"}
-      tabIndex={isPending ? undefined : 0}
-      // Label uses only the visible focus + status badge text (date sits in
-      // the parent date-group heading) so the accessible name matches what
-      // the user can read on screen — WCAG 2.5.3 Label in Name.
-      aria-label={isPending ? undefined : getCardAriaLabel(entry, isBulkSelectMode, isBulkSelected)}
-      aria-checked={isBulkSelectMode && canBulkSelect ? Boolean(isBulkSelected) : undefined}
-      aria-disabled={isBulkSelectMode && !canBulkSelect ? true : undefined}
+      {...interactionProps}
       data-testid={`card-timeline-entry-${entry.id}`}
     >
       <FloatingAiCoachBadge entryId={entry.id} isTargetedByCoach={isTargetedByCoach} />
@@ -305,6 +304,64 @@ function getAiCoachCardClasses(isTargetedByCoach: boolean): string {
 
 function getDragCardClasses(isDragging: boolean, isMoving: boolean | undefined): string {
   return cn(isDragging && "opacity-50 ring-2 ring-primary/60", isMoving && "opacity-70");
+}
+
+function getBulkSelectCardClasses({
+  isBulkSelectMode,
+  canBulkSelect,
+  isBulkSelected,
+}: Pick<
+  TimelineWorkoutCardProps,
+  "isBulkSelectMode" | "canBulkSelect" | "isBulkSelected"
+>): string {
+  return cn(
+    isBulkSelectMode && canBulkSelect && "hover:border-destructive/50",
+    isBulkSelectMode && !canBulkSelect && "cursor-not-allowed opacity-60",
+    isBulkSelected && "border-destructive/60 bg-destructive/5 ring-2 ring-destructive/25",
+  );
+}
+
+interface TimelineCardInteractionOptions {
+  readonly entry: TimelineWorkoutEntry;
+  readonly isPending: boolean;
+  readonly isBulkSelectMode: boolean | undefined;
+  readonly canBulkSelect: boolean | undefined;
+  readonly isBulkSelected: boolean | undefined;
+  readonly onClick: (e: React.MouseEvent) => void;
+  readonly onKeyDown: (e: React.KeyboardEvent) => void;
+}
+
+/**
+ * Activation handlers plus the checkbox-vs-button a11y contract. A pending
+ * (offline-queued) entry has no server row to open, so it gets neither — only
+ * the bulk-select ARIA state, which describes the row rather than acting on it.
+ */
+function getTimelineCardInteractionProps({
+  entry,
+  isPending,
+  isBulkSelectMode,
+  canBulkSelect,
+  isBulkSelected,
+  onClick,
+  onKeyDown,
+}: TimelineCardInteractionOptions): React.HTMLAttributes<HTMLDivElement> {
+  const isBulkCheckbox = Boolean(isBulkSelectMode && canBulkSelect);
+  const bulkAria: React.HTMLAttributes<HTMLDivElement> = {
+    "aria-checked": isBulkCheckbox ? Boolean(isBulkSelected) : undefined,
+    "aria-disabled": isBulkSelectMode && !canBulkSelect ? true : undefined,
+  };
+  if (isPending) return bulkAria;
+  return {
+    ...bulkAria,
+    onClick,
+    onKeyDown,
+    role: isBulkCheckbox ? "checkbox" : "button",
+    tabIndex: 0,
+    // Label uses only the visible focus + status badge text (date sits in
+    // the parent date-group heading) so the accessible name matches what
+    // the user can read on screen — WCAG 2.5.3 Label in Name.
+    "aria-label": getCardAriaLabel(entry, isBulkSelectMode, isBulkSelected),
+  };
 }
 
 function handleCardKeyActivation(e: React.KeyboardEvent, onActivate: () => void) {

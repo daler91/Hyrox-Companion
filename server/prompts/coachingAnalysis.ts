@@ -89,7 +89,41 @@ function tsbLabel(tsb: number): string {
  * restriction `rationale` strings already name exactly what to avoid, so they
  * are reused verbatim.
  */
-function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
+/** Append a block when it has something to say; a null block self-suppressed. */
+function pushBlock(lines: string[], block: string | null): void {
+  if (block) lines.push(block);
+}
+
+function formatAcwrLine(lg: TrainingLoadOverview): string | null {
+  if (lg.acwr == null || lg.zone === "insufficient_data") return null;
+  return `- ACWR ${lg.acwr.toFixed(2)} — ${lg.zone.replaceAll("_", " ").toUpperCase()} zone.`;
+}
+
+function formatFormLine(lg: TrainingLoadOverview, worthReporting: boolean): string | null {
+  if (lg.tsb == null || !worthReporting) return null;
+  return `- Form (TSB) ${lg.tsb >= 0 ? "+" : ""}${Math.round(lg.tsb)} — ${tsbLabel(lg.tsb)}.`;
+}
+
+function formatMonotonyLine(lg: TrainingLoadOverview): string {
+  const monotonyStr = lg.monotony != null ? lg.monotony.toFixed(2) : "elevated";
+  const strainStr = lg.strain != null ? `, strain ${Math.round(lg.strain)}` : "";
+  const zoneLabel = lg.monotonyZone === "high_risk" ? "HIGH RISK" : "elevated";
+  return `- Training monotony ${monotonyStr}${strainStr} — ${zoneLabel}. Vary intensity and protect a true easy/rest day.`;
+}
+
+/** Lowest-value display metrics — one terse optional line, only when present. */
+function formatObjectiveLoadLine(lg: TrainingLoadOverview): string | null {
+  const objective: string[] = [];
+  if (lg.hrTss != null) {
+    objective.push(`hrTSS ${Math.round(lg.hrTss)}${lg.hrZone ? ` (${lg.hrZone.toUpperCase()})` : ""}`);
+  }
+  if (lg.tss != null) objective.push(`power TSS ${Math.round(lg.tss)}`);
+  if (objective.length === 0) return null;
+  return `- Objective load today: ${objective.join(", ")}.`;
+}
+
+function formatLoadGovernor(lg: TrainingLoadOverview | undefined): string | null {
+  if (!lg) return null;
   const gatingZone = lg.zone === "yellow" || lg.zone === "danger";
   // Form is "notable" outside the balanced band [-10, 5] computeRaceReadiness uses.
   const notableForm = lg.tsb != null && (lg.tsb < -10 || lg.tsb >= 5);
@@ -107,35 +141,16 @@ function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
   }
 
   const lines = ["LOAD GOVERNOR (auto-regulation — binding):"];
-  if (lg.acwr != null && lg.zone !== "insufficient_data") {
-    lines.push(`- ACWR ${lg.acwr.toFixed(2)} — ${lg.zone.replaceAll("_", " ").toUpperCase()} zone.`);
-  }
-  if (lg.tsb != null && (notableForm || gatingZone)) {
-    lines.push(`- Form (TSB) ${lg.tsb >= 0 ? "+" : ""}${Math.round(lg.tsb)} — ${tsbLabel(lg.tsb)}.`);
-  }
-  if (elevatedMonotony) {
-    const monotonyStr = lg.monotony != null ? lg.monotony.toFixed(2) : "elevated";
-    const strainStr = lg.strain != null ? `, strain ${Math.round(lg.strain)}` : "";
-    const zoneLabel = lg.monotonyZone === "high_risk" ? "HIGH RISK" : "elevated";
-    lines.push(
-      `- Training monotony ${monotonyStr}${strainStr} — ${zoneLabel}. Vary intensity and protect a true easy/rest day.`,
-    );
-  }
+  pushBlock(lines, formatAcwrLine(lg));
+  pushBlock(lines, formatFormLine(lg, notableForm || gatingZone));
+  if (elevatedMonotony) lines.push(formatMonotonyLine(lg));
   if (lg.flaggedVectors.length > 0) {
     lines.push(`- Flagged tissue load: ${lg.flaggedVectors.map((v) => v.replaceAll("_", " ")).join(", ")}.`);
   }
   for (const restriction of lg.activeRestrictions) {
     lines.push(`- ${restriction.label}: ${restriction.rationale}`);
   }
-  // Lowest-value display metrics — one terse optional line, only when present.
-  if (hasObjectiveLoad) {
-    const objective: string[] = [];
-    if (lg.hrTss != null) {
-      objective.push(`hrTSS ${Math.round(lg.hrTss)}${lg.hrZone ? ` (${lg.hrZone.toUpperCase()})` : ""}`);
-    }
-    if (lg.tss != null) objective.push(`power TSS ${Math.round(lg.tss)}`);
-    lines.push(`- Objective load today: ${objective.join(", ")}.`);
-  }
+  pushBlock(lines, formatObjectiveLoadLine(lg));
   lines.push(
     `- Some upcoming sessions may already be auto-adjusted by the governor (downshifted to a Recovery Run, or trimmed in volume); do not re-add intensity to those.`,
   );
@@ -147,7 +162,8 @@ function formatLoadGovernor(lg: TrainingLoadOverview): string | null {
  * governor: when intensity is not permitted, bias toward the allowed workout
  * types regardless of other signals.
  */
-function formatDecisionTree(decisionTree: NonNullable<CoachingInsights["decisionTree"]>): string {
+function formatDecisionTree(decisionTree: CoachingInsights["decisionTree"]): string | null {
+  if (!decisionTree) return null;
   const phase = decisionTree.currentPhase.replaceAll("_", " ");
   const intensity = decisionTree.intensityPermitted
     ? "intensity permitted"
@@ -165,8 +181,8 @@ function formatDecisionTree(decisionTree: NonNullable<CoachingInsights["decision
 }
 
 /** Deterministic race-day readiness (taper guidance only — never inflate volume). */
-function formatRaceReadiness(readiness: NonNullable<CoachingInsights["raceReadiness"]>): string | null {
-  if (readiness.status === "insufficient_data") return null;
+function formatRaceReadiness(readiness: CoachingInsights["raceReadiness"]): string | null {
+  if (!readiness || readiness.status === "insufficient_data") return null;
   const tsbStr = readiness.tsb != null ? ` (TSB ${readiness.tsb >= 0 ? "+" : ""}${readiness.tsb})` : "";
   return `RACE READINESS: ${readiness.status.replaceAll("_", " ").toUpperCase()}${tsbStr} — ${readiness.guidance}`;
 }
@@ -182,10 +198,10 @@ function formatPersonalRecords(insights: CoachingInsights): string | null {
   return line;
 }
 
-function formatCompliance(compliance: NonNullable<CoachingInsights["compliance"]>): string | null {
+function formatCompliance(compliance: CoachingInsights["compliance"]): string | null {
   // Only worth surfacing when adherence is meaningfully off-target; near-100%
   // compliance needs no coaching note.
-  if (compliance.avgPct >= 85) return null;
+  if (!compliance || compliance.avgPct >= 85) return null;
   return `PLAN COMPLIANCE: ${compliance.avgPct}% adherence over the last ${compliance.windowDays} days — the prescription may be mis-calibrated (too hard/long). Prefer right-sizing sessions over adding volume.`;
 }
 
@@ -207,6 +223,33 @@ function formatCoverageGaps(insights: CoachingInsights): string | null {
   return `COVERAGE GAPS (general balance — ${parts.join("; ")}). Distinct from station gaps; address for balanced development, especially for non-Hyrox goals.`;
 }
 
+function formatPlanPhase(planPhase: CoachingInsights["planPhase"]): string | null {
+  if (!planPhase) return null;
+  const p = planPhase;
+  const remaining =
+    p.remainingPhases.length > 0
+      ? ` Remaining phases: ${p.remainingPhases.map((phase) => phase.toUpperCase()).join(" → ")}.`
+      : "";
+  return `PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.${remaining}`;
+}
+
+function formatProgressionFlags(flags: CoachingInsights["progressionFlags"]): string | null {
+  if (flags.length === 0) return null;
+  const flagLines = flags.map((f) => `${f.exercise}: ${f.flag.toUpperCase()} — ${f.detail}`);
+  return `PROGRESSION:\n${flagLines.join("\n")}`;
+}
+
+function formatWeeklyVolume(weeklyVolume: CoachingInsights["weeklyVolume"]): string | null {
+  if (!weeklyVolume) return null;
+  const v = weeklyVolume;
+  return `WEEKLY VOLUME: ${v.thisWeekCompleted}/${v.goal} goal this week (last week: ${v.lastWeekCompleted}/${v.goal}). Trend: ${v.trend}.`;
+}
+
+function formatAthleteGoal(planGoal: string | undefined): string | null {
+  if (!planGoal) return null;
+  return `ATHLETE'S GOAL: "${sanitizeUserInput(planGoal)}"`;
+}
+
 /**
  * Assemble the full COACHING ANALYSIS block from the pre-computed insights.
  * Every sub-block self-suppresses when its signal is unremarkable.
@@ -218,59 +261,16 @@ export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: st
     formatStationGaps(insights.stationGaps),
   ];
 
-  if (insights.loadGovernor) {
-    const governorBlock = formatLoadGovernor(insights.loadGovernor);
-    if (governorBlock) lines.push(governorBlock);
-  }
-
-  if (insights.decisionTree) {
-    lines.push(formatDecisionTree(insights.decisionTree));
-  }
-
-  if (insights.raceReadiness) {
-    const readinessBlock = formatRaceReadiness(insights.raceReadiness);
-    if (readinessBlock) lines.push(readinessBlock);
-  }
-
-  if (insights.planPhase) {
-    const p = insights.planPhase;
-    const remaining =
-      p.remainingPhases.length > 0
-        ? ` Remaining phases: ${p.remainingPhases.map((phase) => phase.toUpperCase()).join(" → ")}.`
-        : "";
-    lines.push(
-      `PLAN PHASE: Week ${p.currentWeek} of ${p.totalWeeks} (${p.phaseLabel.toUpperCase()} phase, ${p.progressPct}% complete). Coach according to ${p.phaseLabel} phase guidelines.${remaining}`,
-    );
-  }
-
-  if (insights.progressionFlags.length > 0) {
-    const flagLines = insights.progressionFlags.map(
-      (f) => `${f.exercise}: ${f.flag.toUpperCase()} — ${f.detail}`,
-    );
-    lines.push(`PROGRESSION:\n${flagLines.join("\n")}`);
-  }
-
-  const prBlock = formatPersonalRecords(insights);
-  if (prBlock) lines.push(prBlock);
-
-  if (insights.weeklyVolume) {
-    const v = insights.weeklyVolume;
-    lines.push(
-      `WEEKLY VOLUME: ${v.thisWeekCompleted}/${v.goal} goal this week (last week: ${v.lastWeekCompleted}/${v.goal}). Trend: ${v.trend}.`,
-    );
-  }
-
-  if (insights.compliance) {
-    const complianceBlock = formatCompliance(insights.compliance);
-    if (complianceBlock) lines.push(complianceBlock);
-  }
-
-  const coverageBlock = formatCoverageGaps(insights);
-  if (coverageBlock) lines.push(coverageBlock);
-
-  if (planGoal) {
-    lines.push(`ATHLETE'S GOAL: "${sanitizeUserInput(planGoal)}"`);
-  }
+  pushBlock(lines, formatLoadGovernor(insights.loadGovernor));
+  pushBlock(lines, formatDecisionTree(insights.decisionTree));
+  pushBlock(lines, formatRaceReadiness(insights.raceReadiness));
+  pushBlock(lines, formatPlanPhase(insights.planPhase));
+  pushBlock(lines, formatProgressionFlags(insights.progressionFlags));
+  pushBlock(lines, formatPersonalRecords(insights));
+  pushBlock(lines, formatWeeklyVolume(insights.weeklyVolume));
+  pushBlock(lines, formatCompliance(insights.compliance));
+  pushBlock(lines, formatCoverageGaps(insights));
+  pushBlock(lines, formatAthleteGoal(planGoal));
 
   lines.push(`--- END COACHING ANALYSIS ---`);
   return lines.join("\n");

@@ -16,7 +16,7 @@ import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitCon
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
 
-import { db } from "../db";
+import { db, type Tx } from "../db";
 import { generatePlanAdjustment } from "../gemini/planAdjustmentService";
 import type { UpcomingWorkout } from "../gemini/suggestionService";
 import { logger as defaultLogger } from "../logger";
@@ -165,6 +165,89 @@ export interface CreatePlanAdjustmentProposalInput {
   focusPlanDayId?: string;
 }
 
+/**
+ * Server-side clamps — the LLM's output is untrusted: hallucinated/stale day
+ * IDs are dropped, and structure-block days lose any prescription rewrite
+ * (schedule/notes/expected* survive).
+ */
+function clampProposedChanges(
+  changes: PlanAdjustmentChange[],
+  offeredDayIds: Set<string>,
+  structureBlockDayIds: Set<string>,
+  userId: string,
+  log: PlanAdjustmentLogger,
+): PlanAdjustmentChange[] {
+  const clampedChanges: PlanAdjustmentChange[] = [];
+  for (const change of changes) {
+    if (!offeredDayIds.has(change.planDayId)) {
+      // internal identifiers only (user id, plan-day id), no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn(
+        { userId, planDayId: change.planDayId },
+        "[plan-adjustment] Dropping change for day outside the offered set",
+      );
+      continue;
+    }
+    let fields = change.updatedFields;
+    if (structureBlockDayIds.has(change.planDayId)) {
+      fields = stripForbiddenStructureBlockFields(fields);
+      if (!hasAnyField(fields)) {
+        // internal identifiers only (user id, plan-day id), no message or
+        // workout content.
+        // bearer:disable javascript_lang_logger_leak
+        log.warn(
+          { userId, planDayId: change.planDayId },
+          "[plan-adjustment] Dropping structure-block change with only forbidden fields",
+        );
+        continue;
+      }
+    }
+    clampedChanges.push({ ...change, updatedFields: fields });
+  }
+  return clampedChanges;
+}
+
+/**
+ * Enrich against the RAW plan-day rows (not the race-day-overridden timeline
+ * view) so baselines and fingerprints match what the apply step will re-read.
+ */
+async function enrichProposedChanges(
+  changes: PlanAdjustmentChange[],
+  structureBlockDayIds: Set<string>,
+  userId: string,
+  log: PlanAdjustmentLogger,
+): Promise<{ enriched: EnrichedPlanAdjustmentChange[]; planId: string | null }> {
+  const enriched: EnrichedPlanAdjustmentChange[] = [];
+  let planId: string | null = null;
+  for (const change of changes) {
+    const [day, sets] = await Promise.all([
+      storage.plans.getPlanDay(change.planDayId, userId),
+      storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
+    ]);
+    if (!day || sets === null || day.status !== "planned") {
+      // internal identifiers only (user id, plan-day id), no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn(
+        { userId, planDayId: change.planDayId },
+        "[plan-adjustment] Dropping change whose day vanished or is no longer planned",
+      );
+      continue;
+    }
+    planId ??= day.planId;
+    enriched.push({
+      ...change,
+      kind: derivePlanAdjustmentChangeKind(change.updatedFields),
+      dayLabel: formatDayLabel(day.scheduledDate, day.focus),
+      baseline: buildBaseline(day, sets),
+      structured: sets.length > 0,
+      hasStructureBlocks: structureBlockDayIds.has(change.planDayId),
+    });
+  }
+  return { enriched, planId };
+}
+
 export async function createPlanAdjustmentProposal(
   input: CreatePlanAdjustmentProposalInput,
   log: PlanAdjustmentLogger = defaultLogger,
@@ -217,37 +300,13 @@ export async function createPlanAdjustmentProposal(
     return { kind: "generation_failed" };
   }
 
-  // Server-side clamps — the LLM's output is untrusted:
-  // hallucinated/stale day IDs are dropped, and structure-block days lose
-  // any prescription rewrite (schedule/notes/expected* survive).
-  const clampedChanges: PlanAdjustmentChange[] = [];
-  for (const change of llmOutput.changes) {
-    if (!offeredDayIds.has(change.planDayId)) {
-      // internal identifiers only (user id, plan-day id), no message or
-      // workout content.
-      // bearer:disable javascript_lang_logger_leak
-      log.warn(
-        { userId, planDayId: change.planDayId },
-        "[plan-adjustment] Dropping change for day outside the offered set",
-      );
-      continue;
-    }
-    let fields = change.updatedFields;
-    if (structureBlockDayIds.has(change.planDayId)) {
-      fields = stripForbiddenStructureBlockFields(fields);
-      if (!hasAnyField(fields)) {
-        // internal identifiers only (user id, plan-day id), no message or
-        // workout content.
-        // bearer:disable javascript_lang_logger_leak
-        log.warn(
-          { userId, planDayId: change.planDayId },
-          "[plan-adjustment] Dropping structure-block change with only forbidden fields",
-        );
-        continue;
-      }
-    }
-    clampedChanges.push({ ...change, updatedFields: fields });
-  }
+  const clampedChanges = clampProposedChanges(
+    llmOutput.changes,
+    offeredDayIds,
+    structureBlockDayIds,
+    userId,
+    log,
+  );
 
   if (clampedChanges.length === 0) {
     // Either the coach declined / asked a clarifying question (legitimate
@@ -256,36 +315,12 @@ export async function createPlanAdjustmentProposal(
     return { kind: "chat_fallback", text: llmOutput.summaryMessage };
   }
 
-  // Enrich against the RAW plan-day rows (not the race-day-overridden
-  // timeline view) so baselines and fingerprints match what the apply step
-  // will re-read.
-  const enriched: EnrichedPlanAdjustmentChange[] = [];
-  let planId: string | null = null;
-  for (const change of clampedChanges) {
-    const [day, sets] = await Promise.all([
-      storage.plans.getPlanDay(change.planDayId, userId),
-      storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
-    ]);
-    if (!day || sets === null || day.status !== "planned") {
-      // internal identifiers only (user id, plan-day id), no message or
-      // workout content.
-      // bearer:disable javascript_lang_logger_leak
-      log.warn(
-        { userId, planDayId: change.planDayId },
-        "[plan-adjustment] Dropping change whose day vanished or is no longer planned",
-      );
-      continue;
-    }
-    planId ??= day.planId;
-    enriched.push({
-      ...change,
-      kind: derivePlanAdjustmentChangeKind(change.updatedFields),
-      dayLabel: formatDayLabel(day.scheduledDate, day.focus),
-      baseline: buildBaseline(day, sets),
-      structured: sets.length > 0,
-      hasStructureBlocks: structureBlockDayIds.has(change.planDayId),
-    });
-  }
+  const { enriched, planId } = await enrichProposedChanges(
+    clampedChanges,
+    structureBlockDayIds,
+    userId,
+    log,
+  );
 
   if (enriched.length === 0 || planId === null) {
     return { kind: "chat_fallback", text: llmOutput.summaryMessage };
@@ -358,6 +393,88 @@ function buildStructuredParseText(
   return [mainWorkout, accessory].filter(Boolean).join("\n");
 }
 
+function normalizeAccessoryText(
+  accessory: string | null,
+  unitPreferences: UnitPreferences,
+): string | null {
+  if (accessory === null) return null;
+  return normalizeWorkoutTextUnits(accessory, unitPreferences) ?? accessory;
+}
+
+/** Free-text days: the text fields ARE the prescription. */
+function applyFreeTextUpdates(
+  updates: UpdatePlanDay,
+  fields: PlanAdjustmentUpdatedFields,
+  unitPreferences: UnitPreferences,
+): void {
+  if (fields.mainWorkout !== undefined) {
+    updates.mainWorkout =
+      normalizeWorkoutTextUnits(fields.mainWorkout, unitPreferences) ?? fields.mainWorkout;
+  }
+  if (fields.accessory !== undefined) {
+    updates.accessory = normalizeAccessoryText(fields.accessory, unitPreferences);
+  }
+}
+
+/**
+ * Rest conversion clears the table (in the apply transaction) and rewrites the
+ * text fields so the day reads as rest everywhere.
+ */
+function applyRestConversionText(
+  updates: UpdatePlanDay,
+  fields: PlanAdjustmentUpdatedFields,
+): void {
+  if (fields.mainWorkout !== undefined) updates.mainWorkout = fields.mainWorkout;
+  if (fields.accessory !== undefined) updates.accessory = fields.accessory;
+}
+
+function applyPrescriptionTextUpdates(
+  updates: UpdatePlanDay,
+  change: EnrichedPlanAdjustmentChange,
+  unitPreferences: UnitPreferences,
+): void {
+  if (!change.structured) {
+    applyFreeTextUpdates(updates, change.updatedFields, unitPreferences);
+  } else if (change.kind === "rest_conversion") {
+    applyRestConversionText(updates, change.updatedFields);
+  }
+  // Structured (table-backed) prescription rewrites deliberately do NOT
+  // touch mainWorkout/accessory text — the exercise table is the source of
+  // truth there, matching applyTimelineAiSuggestion's behavior.
+}
+
+/** Scalar fields carry straight through on every kind of change. */
+function applyScalarFieldUpdates(
+  updates: UpdatePlanDay,
+  fields: PlanAdjustmentUpdatedFields,
+): void {
+  if (fields.focus !== undefined) updates.focus = fields.focus;
+  if (fields.notes !== undefined) updates.notes = fields.notes;
+  if (fields.scheduledDate !== undefined) updates.scheduledDate = fields.scheduledDate;
+  if (fields.expectedDurationMin !== undefined) {
+    updates.expectedDurationMin = fields.expectedDurationMin;
+  }
+  if (fields.expectedRpe !== undefined) updates.expectedRpe = fields.expectedRpe;
+}
+
+type CoachNotePrimaryField = "mainWorkout" | "accessory" | "notes";
+
+/** The edited field the coach-note metadata describes, most specific first. */
+function pickPrimaryField(fields: PlanAdjustmentUpdatedFields): CoachNotePrimaryField {
+  if (fields.mainWorkout !== undefined) return "mainWorkout";
+  if (fields.accessory !== undefined) return "accessory";
+  return "notes";
+}
+
+function pickRecommendation(
+  fields: PlanAdjustmentUpdatedFields,
+  primaryField: CoachNotePrimaryField,
+): string {
+  if (primaryField === "mainWorkout") return fields.mainWorkout ?? "";
+  if (primaryField === "accessory") return fields.accessory ?? "";
+  return fields.notes ?? "";
+}
+
 function buildUpdatePlanDayPayload(
   change: EnrichedPlanAdjustmentChange,
   day: PlanDay,
@@ -367,49 +484,12 @@ function buildUpdatePlanDayPayload(
   const fields = change.updatedFields;
   const updates: UpdatePlanDay = {};
 
-  if (!change.structured) {
-    // Free-text days: the text fields ARE the prescription.
-    if (fields.mainWorkout !== undefined) {
-      updates.mainWorkout =
-        normalizeWorkoutTextUnits(fields.mainWorkout, unitPreferences) ?? fields.mainWorkout;
-    }
-    if (fields.accessory !== undefined) {
-      updates.accessory =
-        fields.accessory === null
-          ? null
-          : (normalizeWorkoutTextUnits(fields.accessory, unitPreferences) ?? fields.accessory);
-    }
-  } else if (change.kind === "rest_conversion") {
-    // Rest conversion clears the table (below) and rewrites the text fields
-    // so the day reads as rest everywhere.
-    if (fields.mainWorkout !== undefined) updates.mainWorkout = fields.mainWorkout;
-    if (fields.accessory !== undefined) updates.accessory = fields.accessory;
-  }
-  // Structured (table-backed) prescription rewrites deliberately do NOT
-  // touch mainWorkout/accessory text — the exercise table is the source of
-  // truth there, matching applyTimelineAiSuggestion's behavior.
-
-  if (fields.focus !== undefined) updates.focus = fields.focus;
-  if (fields.notes !== undefined) updates.notes = fields.notes;
-  if (fields.scheduledDate !== undefined) updates.scheduledDate = fields.scheduledDate;
-  if (fields.expectedDurationMin !== undefined) {
-    updates.expectedDurationMin = fields.expectedDurationMin;
-  }
-  if (fields.expectedRpe !== undefined) updates.expectedRpe = fields.expectedRpe;
+  applyPrescriptionTextUpdates(updates, change, unitPreferences);
+  applyScalarFieldUpdates(updates, fields);
 
   const baseInputsUsed: CoachNoteInputs = { ...day.aiInputsUsed };
-  const primaryField =
-    fields.mainWorkout !== undefined
-      ? ("mainWorkout" as const)
-      : fields.accessory !== undefined
-        ? ("accessory" as const)
-        : ("notes" as const);
-  const recommendation =
-    primaryField === "mainWorkout"
-      ? (fields.mainWorkout ?? "")
-      : primaryField === "accessory"
-        ? (fields.accessory ?? "")
-        : (fields.notes ?? "");
+  const primaryField = pickPrimaryField(fields);
+  const recommendation = pickRecommendation(fields, primaryField);
 
   updates.aiSource = aiSource === "rag" || aiSource === "legacy" ? aiSource : null;
   updates.aiRationale = change.rationale.slice(0, 400);
@@ -434,6 +514,137 @@ function buildUpdatePlanDayPayload(
   return updates;
 }
 
+type LivePlanDay = { day: PlanDay; sets: ExerciseSet[] };
+type StructuredRows = Awaited<ReturnType<typeof parseStructuredPlanDaySuggestionRows>>;
+
+function fingerprintLiveDay({ day, sets }: LivePlanDay): string | undefined {
+  return buildWorkoutPrescriptionFingerprint({
+    mainWorkout: day.mainWorkout,
+    accessory: day.accessory ?? undefined,
+    notes: day.notes ?? undefined,
+    exerciseDetails: sets.map(mapExerciseSetToPromptDetail),
+  });
+}
+
+/**
+ * Revalidate every change against the live plan. Multi-day rebalances are
+ * coherent units, so this apply is ALL-OR-NOTHING: any stale day invalidates
+ * the whole proposal rather than applying a nonsense subset.
+ */
+async function revalidateProposalChanges(
+  changes: EnrichedPlanAdjustmentChange[],
+  userId: string,
+): Promise<{
+  liveDays: Map<string, LivePlanDay>;
+  staleChanges: Array<{ planDayId: string; dayLabel: string }>;
+}> {
+  const liveDays = new Map<string, LivePlanDay>();
+  const staleChanges: Array<{ planDayId: string; dayLabel: string }> = [];
+  for (const change of changes) {
+    const [day, sets] = await Promise.all([
+      storage.plans.getPlanDay(change.planDayId, userId),
+      storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
+    ]);
+    const live: LivePlanDay | null =
+      day && sets !== null && day.status === "planned" ? { day, sets } : null;
+    if (!live || fingerprintLiveDay(live) !== change.baseline.fingerprint) {
+      staleChanges.push({ planDayId: change.planDayId, dayLabel: change.dayLabel });
+      continue;
+    }
+    liveDays.set(change.planDayId, live);
+  }
+  return { liveDays, staleChanges };
+}
+
+/**
+ * Re-parse the table-backed prescriptions this proposal rewrites. Returns null
+ * when any day fails to parse — the caller leaves the proposal pending.
+ */
+async function reparseStructuredRows(
+  structuredChanges: EnrichedPlanAdjustmentChange[],
+  liveDays: Map<string, LivePlanDay>,
+  unitPreferences: UnitPreferences,
+  userId: string,
+  proposalId: string,
+  log: PlanAdjustmentLogger,
+): Promise<Map<string, StructuredRows> | null> {
+  const structuredRowsByDayId = new Map<string, StructuredRows>();
+  for (const change of structuredChanges) {
+    const live = liveDays.get(change.planDayId);
+    if (!live) continue;
+    try {
+      const rows = await parseStructuredPlanDaySuggestionRows(
+        {
+          workoutId: change.planDayId,
+          recommendation: buildStructuredParseText(change, live.day),
+        },
+        unitPreferences,
+        userId,
+      );
+      if (rows.length === 0) {
+        // internal identifiers only, no message or workout content.
+        // bearer:disable javascript_lang_logger_leak
+        log.warn(
+          { userId, proposalId, planDayId: change.planDayId },
+          "[plan-adjustment] Structured re-parse produced no rows",
+        );
+        return null;
+      }
+      structuredRowsByDayId.set(change.planDayId, rows);
+    } catch (err) {
+      // err is an AI parse error plus internal identifiers, no message or
+      // workout content.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn(
+        { err, userId, proposalId, planDayId: change.planDayId },
+        "[plan-adjustment] Structured re-parse failed; proposal left pending",
+      );
+      return null;
+    }
+  }
+  return structuredRowsByDayId;
+}
+
+interface WriteProposalChangesOptions {
+  readonly changes: EnrichedPlanAdjustmentChange[];
+  readonly liveDays: Map<string, LivePlanDay>;
+  readonly structuredRowsByDayId: Map<string, StructuredRows>;
+  readonly aiSource: string | null;
+  readonly unitPreferences: UnitPreferences;
+  readonly userId: string;
+}
+
+/** The whole write side of an apply, inside the caller's transaction. */
+async function writeProposalChanges(
+  tx: Tx,
+  {
+    changes,
+    liveDays,
+    structuredRowsByDayId,
+    aiSource,
+    unitPreferences,
+    userId,
+  }: WriteProposalChangesOptions,
+): Promise<void> {
+  for (const change of changes) {
+    const live = liveDays.get(change.planDayId);
+    if (!live) throw new Error(`missing live day for ${change.planDayId}`);
+
+    const updates = buildUpdatePlanDayPayload(change, live.day, aiSource, unitPreferences);
+    const updated = await storage.plans.updatePlanDay(change.planDayId, updates, userId, tx);
+    if (!updated) throw new Error(`plan day ${change.planDayId} disappeared during apply`);
+
+    const structuredRows = structuredRowsByDayId.get(change.planDayId);
+    if (structuredRows) {
+      await applyStructuredPlanDaySuggestionRows(change.planDayId, "replace", structuredRows, tx);
+    } else if (change.structured && change.kind === "rest_conversion") {
+      // Rest conversion on a table-backed day clears its prescription
+      // rows (applyStructuredPlanDaySuggestionRows early-returns on []).
+      await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, change.planDayId));
+    }
+  }
+}
+
 export async function applyPlanAdjustmentProposal(
   userId: string,
   proposalId: string,
@@ -444,37 +655,7 @@ export async function applyPlanAdjustmentProposal(
   if (proposal.status !== "pending") return applyFailure("not_pending");
 
   const changes = proposal.payload.changes;
-
-  // Revalidate every change against the live plan. Multi-day rebalances are
-  // coherent units, so this apply is ALL-OR-NOTHING: any stale day
-  // invalidates the whole proposal rather than applying a nonsense subset.
-  const liveDays = new Map<string, { day: PlanDay; sets: ExerciseSet[] }>();
-  const staleChanges: Array<{ planDayId: string; dayLabel: string }> = [];
-  for (const change of changes) {
-    const [day, sets] = await Promise.all([
-      storage.plans.getPlanDay(change.planDayId, userId),
-      storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
-    ]);
-    const currentFingerprint =
-      day && sets !== null
-        ? buildWorkoutPrescriptionFingerprint({
-            mainWorkout: day.mainWorkout,
-            accessory: day.accessory ?? undefined,
-            notes: day.notes ?? undefined,
-            exerciseDetails: sets.map(mapExerciseSetToPromptDetail),
-          })
-        : undefined;
-    if (
-      !day ||
-      sets === null ||
-      day.status !== "planned" ||
-      currentFingerprint !== change.baseline.fingerprint
-    ) {
-      staleChanges.push({ planDayId: change.planDayId, dayLabel: change.dayLabel });
-      continue;
-    }
-    liveDays.set(change.planDayId, { day, sets });
-  }
+  const { liveDays, staleChanges } = await revalidateProposalChanges(changes, userId);
 
   if (staleChanges.length > 0) {
     await storage.planProposals.resolve(proposalId, userId, "invalidated");
@@ -501,71 +682,27 @@ export async function applyPlanAdjustmentProposal(
     if (blocker) return applyFailure(blocker.reason);
   }
 
-  const structuredRowsByDayId = new Map<string, Awaited<ReturnType<typeof parseStructuredPlanDaySuggestionRows>>>();
-  for (const change of structuredChanges) {
-    const live = liveDays.get(change.planDayId);
-    if (!live) continue;
-    try {
-      const rows = await parseStructuredPlanDaySuggestionRows(
-        {
-          workoutId: change.planDayId,
-          recommendation: buildStructuredParseText(change, live.day),
-        },
-        unitPreferences,
-        userId,
-      );
-      if (rows.length === 0) {
-        // internal identifiers only, no message or workout content.
-        // bearer:disable javascript_lang_logger_leak
-        log.warn(
-          { userId, proposalId, planDayId: change.planDayId },
-          "[plan-adjustment] Structured re-parse produced no rows",
-        );
-        return applyFailure("structured_parse_failed");
-      }
-      structuredRowsByDayId.set(change.planDayId, rows);
-    } catch (err) {
-      // err is an AI parse error plus internal identifiers, no message or
-      // workout content.
-      // bearer:disable javascript_lang_logger_leak
-      log.warn(
-        { err, userId, proposalId, planDayId: change.planDayId },
-        "[plan-adjustment] Structured re-parse failed; proposal left pending",
-      );
-      return applyFailure("structured_parse_failed");
-    }
-  }
+  const structuredRowsByDayId = await reparseStructuredRows(
+    structuredChanges,
+    liveDays,
+    unitPreferences,
+    userId,
+    proposalId,
+    log,
+  );
+  if (!structuredRowsByDayId) return applyFailure("structured_parse_failed");
 
   const aiSource = proposal.aiSource;
   try {
     await db.transaction(async (tx) => {
-      for (const change of changes) {
-        const live = liveDays.get(change.planDayId);
-        if (!live) throw new Error(`missing live day for ${change.planDayId}`);
-
-        const updates = buildUpdatePlanDayPayload(change, live.day, aiSource, unitPreferences);
-        const updated = await storage.plans.updatePlanDay(
-          change.planDayId,
-          updates,
-          userId,
-          tx,
-        );
-        if (!updated) throw new Error(`plan day ${change.planDayId} disappeared during apply`);
-
-        const structuredRows = structuredRowsByDayId.get(change.planDayId);
-        if (structuredRows) {
-          await applyStructuredPlanDaySuggestionRows(
-            change.planDayId,
-            "replace",
-            structuredRows,
-            tx,
-          );
-        } else if (change.structured && change.kind === "rest_conversion") {
-          // Rest conversion on a table-backed day clears its prescription
-          // rows (applyStructuredPlanDaySuggestionRows early-returns on []).
-          await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, change.planDayId));
-        }
-      }
+      await writeProposalChanges(tx, {
+        changes,
+        liveDays,
+        structuredRowsByDayId,
+        aiSource,
+        unitPreferences,
+        userId,
+      });
 
       const resolved = await storage.planProposals.resolve(proposalId, userId, "applied", tx);
       if (!resolved) throw new Error("proposal no longer pending");

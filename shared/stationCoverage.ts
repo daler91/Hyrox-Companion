@@ -141,27 +141,35 @@ export function daysSinceDate(lastTrained: string | null, todayStr: string): num
  * the athlete's local calendar, the coach from UTC. That difference is
  * deliberate and stays with the callers.
  */
+/** Fold one session's evidence into the running last-trained-on map. */
+function recordSourceStations(
+  lastTrained: Map<CoverageStation, string>,
+  source: StationCoverageSource,
+): void {
+  const record = (station: CoverageStation) => {
+    const existing = lastTrained.get(station);
+    if (!existing || source.date > existing) lastTrained.set(station, source.date);
+  };
+
+  for (const exerciseName of source.exerciseNames) {
+    const station = stationForExerciseName(exerciseName);
+    if (station) record(station);
+  }
+  for (const text of source.freeText ?? []) {
+    if (!text) continue;
+    for (const station of stationsForFreeText(text)) record(station);
+  }
+}
+
 export function buildStationCoverage(
   sources: readonly StationCoverageSource[],
   todayStr: string,
 ): StationCoverageEntry[] {
   const lastTrained = new Map<CoverageStation, string>();
 
-  const record = (station: CoverageStation, date: string) => {
-    const existing = lastTrained.get(station);
-    if (!existing || date > existing) lastTrained.set(station, date);
-  };
-
   for (const source of sources) {
     if (!source.date) continue;
-    for (const exerciseName of source.exerciseNames) {
-      const station = stationForExerciseName(exerciseName);
-      if (station) record(station, source.date);
-    }
-    for (const text of source.freeText ?? []) {
-      if (!text) continue;
-      for (const station of stationsForFreeText(text)) record(station, source.date);
-    }
+    recordSourceStations(lastTrained, source);
   }
 
   return COVERAGE_STATIONS.map((station) => {

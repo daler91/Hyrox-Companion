@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema } from "@shared/schema";
+import { chatRequestSchema, type InsertChatMessage,insertChatMessageSchema, type OverviewAnalysisResult, parseExercisesFromImageRequestSchema, parseExercisesRequestSchema, type PlanAdjustmentProposal } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 import { z } from "zod";
 
@@ -167,7 +167,262 @@ export function computeSseDeadlineMs(req: ExpressRequest): number {
   return computeSseDeadline(req).deadlineMs;
 }
 
-protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof chatRequestSchema>>, res: Response) => {
+type ChatStreamRequest = ExpressRequest<
+  Record<string, never>,
+  unknown,
+  z.infer<typeof chatRequestSchema>
+>;
+
+/**
+ * The abort reason, tracked separately so we can tell the client whether their
+ * stream was killed because the Clerk session expired (which they can recover
+ * from by re-authing) vs a hard-cap timeout vs a generic client/shutdown abort.
+ * Wrapped in an object so TypeScript control-flow doesn't narrow it to its
+ * initial literal value (the setTimeout reassignment is async).
+ */
+interface SseAbortState {
+  reason: "auth-expired" | "timeout" | "generic";
+}
+
+type SseWriter = (payload: string) => Promise<void>;
+
+const sseEvent = (payload: unknown) => `data: ${JSON.stringify(payload)}\n\n`;
+
+/**
+ * A res.write() that honours slow-client backpressure. A slow client drains
+ * the Node write buffer slowly — without waiting on `drain` we keep
+ * res.write()-ing chunks that balloon the process's memory. The wait resolves
+ * once the socket is ready for more, or immediately when the stream is
+ * aborted so we don't leak a listener.
+ */
+function createSseWriter(res: Response, controller: AbortController): SseWriter {
+  const awaitDrain = () =>
+    new Promise<void>((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        res.off("drain", onDrain);
+        controller.signal.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      const onDrain = () => settle();
+      const onAbort = () => settle();
+      res.once("drain", onDrain);
+      controller.signal.addEventListener("abort", onAbort, { once: true });
+      // Re-check after registration: if abort fired between the caller's
+      // pre-check and our addEventListener, the listener will never be
+      // invoked and the promise would hang forever.
+      if (controller.signal.aborted) settle();
+    });
+
+  return async (payload: string) => {
+    const ok = res.write(payload);
+    if (!ok && !controller.signal.aborted) {
+      await awaitDrain();
+    }
+  };
+}
+
+/**
+ * Auto-abort when the stream exceeds its deadline (hard cap OR Clerk session
+ * expiry, whichever comes first). The deadline reason distinguishes which one
+ * fired so we report the correct cause to the client — only auth-expired is
+ * recoverable by re-authing. unref() so the timers don't block process exit on
+ * an otherwise-idle server. Returns a teardown that clears both.
+ */
+function startSseDeadline(
+  req: ExpressRequest,
+  res: Response,
+  controller: AbortController,
+  abortState: SseAbortState,
+): () => void {
+  const { deadlineMs, reason: deadlineReason } = computeSseDeadline(req);
+  let forceCloseTimer: ReturnType<typeof setTimeout> | null = null;
+  const deadlineTimer = setTimeout(() => {
+    abortState.reason = deadlineReason;
+    controller.abort();
+    // After a short grace period, forcibly destroy the underlying socket
+    // if the response is still pending — a client that's hung past the
+    // hard cap would otherwise pin the TCP connection (and FD) until OS
+    // keepalive eventually reaps it (W4). Only fires on deadline-induced
+    // aborts; normal completion clears this timer in the finally block.
+    forceCloseTimer = setTimeout(() => {
+      forceCloseTimer = null;
+      if (!res.writableEnded) {
+        reqLogger(req).warn(
+          { context: "sse", reason: abortState.reason },
+          "SSE deadline grace expired with response still open — destroying socket",
+        );
+        res.socket?.destroy();
+      }
+    }, SSE_FORCE_CLOSE_GRACE_MS);
+    forceCloseTimer.unref();
+  }, Math.max(0, deadlineMs - Date.now()));
+  deadlineTimer.unref();
+
+  return () => {
+    clearTimeout(deadlineTimer);
+    if (forceCloseTimer) clearTimeout(forceCloseTimer);
+  };
+}
+
+interface PlanEditBranchOptions {
+  readonly req: ChatStreamRequest;
+  readonly res: Response;
+  readonly userId: string;
+  readonly input: ChatInput;
+  readonly aiContext: AIContext;
+  readonly controller: AbortController;
+  readonly safeWrite: SseWriter;
+}
+
+/**
+ * Apply the proposal immediately when the athlete opted into auto-apply. On
+ * failure the proposal stays pending (or was invalidated); the card renders
+ * with its live status and the athlete can retry or dismiss manually.
+ */
+async function maybeAutoApplyProposal(
+  proposal: PlanAdjustmentProposal,
+  userId: string,
+  log: ReturnType<typeof reqLogger>,
+): Promise<PlanAdjustmentProposal> {
+  const user = await storage.users.getUser(userId);
+  if (!user?.coachAutoApplyPlanChanges) return proposal;
+  const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, log);
+  return applyResult?.applied ? { ...proposal, status: "applied" } : proposal;
+}
+
+/** Write the proposal reply as the whole response, then close the stream. */
+async function sendPlanProposalReply(
+  res: Response,
+  controller: AbortController,
+  safeWrite: SseWriter,
+  summaryText: string,
+  proposal: PlanAdjustmentProposal | null,
+): Promise<void> {
+  if (!controller.signal.aborted) {
+    await safeWrite(sseEvent({ text: summaryText }));
+    if (proposal) {
+      await safeWrite(sseEvent({ planProposal: serializePlanProposal(proposal) }));
+    }
+    res.write(sseEvent({ done: true }));
+  }
+  res.end();
+}
+
+/**
+ * Generate a structured multi-day proposal instead of a prose reply. Returns
+ * true when it answered the request and closed the stream; false falls through
+ * to the normal chat stream (including on `generation_failed`).
+ */
+async function handlePlanEditRequest({
+  req,
+  res,
+  userId,
+  input,
+  aiContext,
+  controller,
+  safeWrite,
+}: PlanEditBranchOptions): Promise<boolean> {
+  const intent = await classifyPlanEditIntent(input.message, input.history, userId);
+  if (!isPlanEditIntent(intent) || controller.signal.aborted) return false;
+
+  // Lets the client swap "Thinking..." for a plan-review status.
+  await safeWrite(sseEvent({ planProposalPending: true }));
+  const result = await createPlanAdjustmentProposal(
+    {
+      userId,
+      message: input.message,
+      history: input.history,
+      aiContext,
+      focusPlanDayId: req.body.focusPlanDayId,
+    },
+    reqLogger(req),
+  );
+  if (result.kind !== "proposal" && result.kind !== "chat_fallback") return false;
+
+  const proposal =
+    result.kind === "proposal"
+      ? await maybeAutoApplyProposal(result.proposal, userId, reqLogger(req))
+      : null;
+  const summaryText = result.kind === "proposal" ? result.proposal.summaryMessage : result.text;
+  await sendPlanProposalReply(res, controller, safeWrite, summaryText, proposal);
+  return true;
+}
+
+/**
+ * Conversational plan editing: when the message looks like a plan-change
+ * request (cheap keyword gate, then a fast-model classifier), the coach
+ * proposes changes rather than replying in prose. Any failure in this branch
+ * falls through to the normal streaming chat — the feature must never break
+ * plain conversation.
+ */
+async function tryPlanEditRequest(options: PlanEditBranchOptions): Promise<boolean> {
+  const { req, res, input, controller } = options;
+  if (req.body.planEditing === false || !hasPlanEditKeywords(input.message)) return false;
+  try {
+    return await handlePlanEditRequest(options);
+  } catch (planEditError) {
+    if (controller.signal.aborted) {
+      res.end();
+      return true;
+    }
+    reqLogger(req).warn(
+      { err: planEditError },
+      "[plan-adjustment] Chat branch failed; falling back to normal chat",
+    );
+    return false;
+  }
+}
+
+async function streamCoachReply(
+  req: ChatStreamRequest,
+  input: ChatInput,
+  aiContext: AIContext,
+  userId: string,
+  controller: AbortController,
+  safeWrite: SseWriter,
+): Promise<void> {
+  const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
+
+  for await (const chunk of stream) {
+    if (controller.signal.aborted) {
+      reqLogger(req).info("Client disconnected mid-stream, stopping AI generation");
+      break;
+    }
+    await safeWrite(sseEvent({ text: chunk }));
+  }
+}
+
+/**
+ * The stream's last event: normal completion, or why it was cut short.
+ * Best-effort — the underlying socket may already be half-closed by the time
+ * we try. The client SSE reader treats a visible error payload differently
+ * from a silent close, so we prefer a named event over letting the connection
+ * die in silence.
+ */
+function sendSseTerminalEvent(
+  res: Response,
+  controller: AbortController,
+  abortState: SseAbortState,
+): void {
+  if (!controller.signal.aborted) {
+    res.write(sseEvent({ done: true }));
+    return;
+  }
+  if (abortState.reason === "auth-expired") {
+    res.write(
+      sseEvent({ error: "auth-expired", reason: "Your session expired — please sign in again." }),
+    );
+    return;
+  }
+  if (abortState.reason === "timeout") {
+    res.write(sseEvent({ error: "timeout", reason: "The response took too long and was stopped." }));
+  }
+}
+
+protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10), middleware: [aiConsentCheck, aiBudgetCheck, validateBody(chatRequestSchema)] }, async (req: ChatStreamRequest, res: Response) => {
     const userId = getUserId(req);
     const { input, aiContext } = await prepareChatContext(req);
 
@@ -186,159 +441,35 @@ protectedPost(router, "/api/v1/chat/stream", { limiter: rateLimiter("chat", 10),
     const unregister = registerSseStream(controller);
     req.on("close", () => controller.abort());
 
-    // Track the abort reason separately so we can tell the client whether
-    // their stream was killed because the Clerk session expired (which they
-    // can recover from by re-authing) vs a hard-cap timeout vs a generic
-    // client/shutdown abort. Wrapped in an object so TypeScript control-flow
-    // doesn't narrow it to its initial literal value (the setTimeout
-    // reassignment is async).
-    const abortState: { reason: "auth-expired" | "timeout" | "generic" } = { reason: "generic" };
-
-    // Auto-abort when the stream exceeds its deadline (hard cap OR Clerk
-    // session expiry, whichever comes first). The deadline reason
-    // distinguishes which one fired so we report the correct cause to
-    // the client — only auth-expired is recoverable by re-authing. unref()
-    // so the timer doesn't block process exit on an otherwise-idle server.
-    const { deadlineMs, reason: deadlineReason } = computeSseDeadline(req);
-    let forceCloseTimer: ReturnType<typeof setTimeout> | null = null;
-    const deadlineTimer = setTimeout(() => {
-      abortState.reason = deadlineReason;
-      controller.abort();
-      // After a short grace period, forcibly destroy the underlying socket
-      // if the response is still pending — a client that's hung past the
-      // hard cap would otherwise pin the TCP connection (and FD) until OS
-      // keepalive eventually reaps it (W4). Only fires on deadline-induced
-      // aborts; normal completion clears this timer in the finally block.
-      forceCloseTimer = setTimeout(() => {
-        forceCloseTimer = null;
-        if (!res.writableEnded) {
-          reqLogger(req).warn(
-            { context: "sse", reason: abortState.reason },
-            "SSE deadline grace expired with response still open — destroying socket",
-          );
-          res.socket?.destroy();
-        }
-      }, SSE_FORCE_CLOSE_GRACE_MS);
-      forceCloseTimer.unref();
-    }, Math.max(0, deadlineMs - Date.now()));
-    deadlineTimer.unref();
-
-    // Honour slow-client backpressure. A slow client drains the Node write
-    // buffer slowly — without waiting on `drain` we keep res.write()-ing
-    // chunks that balloon the process's memory. awaitDrain resolves once
-    // the socket is ready for more, or immediately when the stream is
-    // aborted so we don't leak a listener.
-    const awaitDrain = () =>
-      new Promise<void>((resolve) => {
-        let settled = false;
-        const settle = () => {
-          if (settled) return;
-          settled = true;
-          res.off("drain", onDrain);
-          controller.signal.removeEventListener("abort", onAbort);
-          resolve();
-        };
-        const onDrain = () => settle();
-        const onAbort = () => settle();
-        res.once("drain", onDrain);
-        controller.signal.addEventListener("abort", onAbort, { once: true });
-        // Re-check after registration: if abort fired between the caller's
-        // pre-check and our addEventListener, the listener will never be
-        // invoked and the promise would hang forever.
-        if (controller.signal.aborted) settle();
-      });
-
-    const safeWrite = async (payload: string) => {
-      const ok = res.write(payload);
-      if (!ok && !controller.signal.aborted) {
-        await awaitDrain();
-      }
-    };
+    const abortState: SseAbortState = { reason: "generic" };
+    const clearDeadline = startSseDeadline(req, res, controller, abortState);
+    const safeWrite = createSseWriter(res, controller);
 
     try {
-      await safeWrite(`data: ${JSON.stringify({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) })}\n\n`);
+      await safeWrite(sseEvent({ ragInfo: sanitizeRagInfo(aiContext.ragInfo) }));
 
-      // Conversational plan editing: when the message looks like a plan-change
-      // request (cheap keyword gate, then a fast-model classifier), generate a
-      // structured multi-day proposal instead of a prose reply. Any failure in
-      // this branch falls through to the normal streaming chat — the feature
-      // must never break plain conversation.
-      if (req.body.planEditing !== false && hasPlanEditKeywords(input.message)) {
-        try {
-          const intent = await classifyPlanEditIntent(input.message, input.history, userId);
-          if (isPlanEditIntent(intent) && !controller.signal.aborted) {
-            // Lets the client swap "Thinking..." for a plan-review status.
-            await safeWrite(`data: ${JSON.stringify({ planProposalPending: true })}\n\n`);
-            const result = await createPlanAdjustmentProposal(
-              { userId, message: input.message, history: input.history, aiContext, focusPlanDayId: req.body.focusPlanDayId },
-              reqLogger(req),
-            );
-            if (result.kind === "proposal" || result.kind === "chat_fallback") {
-              let proposal = result.kind === "proposal" ? result.proposal : null;
-              if (proposal) {
-                const user = await storage.users.getUser(userId);
-                if (user?.coachAutoApplyPlanChanges) {
-                  const applyResult = await applyPlanAdjustmentProposal(userId, proposal.id, reqLogger(req));
-                  if (applyResult?.applied) {
-                    proposal = { ...proposal, status: "applied" };
-                  }
-                  // On auto-apply failure the proposal stays pending (or was
-                  // invalidated); the card renders with its live status and
-                  // the athlete can retry or dismiss manually.
-                }
-              }
-              const summaryText = result.kind === "proposal" ? result.proposal.summaryMessage : result.text;
-              if (!controller.signal.aborted) {
-                await safeWrite(`data: ${JSON.stringify({ text: summaryText })}\n\n`);
-                if (proposal) {
-                  await safeWrite(`data: ${JSON.stringify({ planProposal: serializePlanProposal(proposal) })}\n\n`);
-                }
-                res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-              }
-              res.end();
-              return;
-            }
-            // generation_failed → fall through to the normal chat stream.
-          }
-        } catch (planEditError) {
-          if (controller.signal.aborted) {
-            res.end();
-            return;
-          }
-          reqLogger(req).warn({ err: planEditError }, "[plan-adjustment] Chat branch failed; falling back to normal chat");
-        }
-      }
+      const handledAsPlanEdit = await tryPlanEditRequest({
+        req,
+        res,
+        userId,
+        input,
+        aiContext,
+        controller,
+        safeWrite,
+      });
+      if (handledAsPlanEdit) return;
 
-      const stream = streamChatWithCoach(input.message, input.history, aiContext.trainingContext, aiContext.coachingMaterials, aiContext.retrievedChunks, controller.signal, userId);
+      await streamCoachReply(req, input, aiContext, userId, controller, safeWrite);
 
-      for await (const chunk of stream) {
-        if (controller.signal.aborted) {
-          reqLogger(req).info("Client disconnected mid-stream, stopping AI generation");
-          break;
-        }
-        await safeWrite(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-      }
-
-      if (!controller.signal.aborted) {
-        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      } else if (abortState.reason === "auth-expired") {
-        // Best-effort — the underlying socket may already be half-closed
-        // by the time we try. The client SSE reader treats a visible
-        // error payload differently from a silent close, so we prefer
-        // a named event over letting the connection die in silence.
-        res.write(`data: ${JSON.stringify({ error: "auth-expired", reason: "Your session expired — please sign in again." })}\n\n`);
-      } else if (abortState.reason === "timeout") {
-        res.write(`data: ${JSON.stringify({ error: "timeout", reason: "The response took too long and was stopped." })}\n\n`);
-      }
+      sendSseTerminalEvent(res, controller, abortState);
       res.end();
     } catch (streamError) {
       if (controller.signal.aborted) return;
       reqLogger(req).error({ err: streamError }, "Stream error:");
-      res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
+      res.write(sseEvent({ error: "Stream error" }));
       res.end();
     } finally {
-      clearTimeout(deadlineTimer);
-      if (forceCloseTimer) clearTimeout(forceCloseTimer);
+      clearDeadline();
       unregister();
     }
   });

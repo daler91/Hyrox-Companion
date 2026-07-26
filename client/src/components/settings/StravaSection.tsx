@@ -23,29 +23,28 @@ interface StravaSectionProps {
   readonly stravaLoading: boolean;
 }
 
+type StravaMutations = ReturnType<typeof useStravaMutations>;
+
+/** The one line of prose under the "Strava" label. */
+function describeStravaStatus(
+  stravaStatus: StravaStatus | undefined,
+  requiresReauth: boolean,
+): string {
+  if (requiresReauth) return "Strava access was revoked. Reconnect to resume syncing.";
+  if (!stravaStatus?.connected) return "Import activities from Strava";
+  if (!stravaStatus.lastSyncedAt) return "Not yet synced";
+  return `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`;
+}
+
 export function StravaSection({
   stravaStatus,
   stravaLoading,
 }: Readonly<StravaSectionProps>) {
-  const {
-    connectStravaMutation,
-    disconnectStravaMutation,
-    syncStravaMutation,
-  } = useStravaMutations();
+  const mutations = useStravaMutations();
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
   const requiresReauth = Boolean(stravaStatus?.connected && stravaStatus.requiresReauth);
-
-  let statusText = "Import activities from Strava";
-  if (requiresReauth) {
-    statusText = "Strava access was revoked. Reconnect to resume syncing.";
-  } else if (stravaStatus?.connected) {
-    if (stravaStatus.lastSyncedAt) {
-      statusText = `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`;
-    } else {
-      statusText = "Not yet synced";
-    }
-  }
+  const statusText = describeStravaStatus(stravaStatus, requiresReauth);
 
   return (
     <Card>
@@ -67,95 +66,22 @@ export function StravaSection({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Label>Strava</Label>
-                {requiresReauth ? (
-                  <Badge variant="destructive" className="text-xs">
-                    Reconnect needed
-                  </Badge>
-                ) : (
-                  stravaStatus?.connected && (
-                    <Badge variant="outline" className="text-xs">
-                      Connected
-                    </Badge>
-                  )
-                )}
+                <StravaStatusBadge
+                  requiresReauth={requiresReauth}
+                  connected={Boolean(stravaStatus?.connected)}
+                />
               </div>
               <p className="text-sm text-muted-foreground">{statusText}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {stravaStatus?.connected ? (
-              <>
-                {requiresReauth ? (
-                  // Revoked credentials: syncing can never succeed — offer the
-                  // OAuth flow again instead (the callback upsert clears the flag).
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => connectStravaMutation.mutate()}
-                    disabled={connectStravaMutation.isPending}
-                    data-testid="button-reconnect-strava"
-                  >
-                    {connectStravaMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <StravaIcon className="h-4 w-4 text-[#FC4C02]" />
-                    )}
-                    <span className="ml-1.5">Reconnect</span>
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => syncStravaMutation.mutate()}
-                    disabled={syncStravaMutation.isPending}
-                    data-testid="button-sync-strava"
-                  >
-                    {syncStravaMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4" />
-                    )}
-                    <span className="ml-1.5">Sync</span>
-                  </Button>
-                )}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDisconnectConfirmOpen(true)}
-                        disabled={disconnectStravaMutation.isPending}
-                        aria-label="Disconnect Strava"
-                        data-testid="button-disconnect-strava"
-                      >
-                        {disconnectStravaMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Unlink className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Disconnect Strava</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => connectStravaMutation.mutate()}
-                disabled={connectStravaMutation.isPending || stravaLoading}
-                data-testid="button-connect-strava"
-              >
-                {connectStravaMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                ) : (
-                  <StravaIcon className="h-4 w-4 mr-1.5 text-[#FC4C02]" />
-                )}
-                Connect
-              </Button>
-            )}
+            <StravaActions
+              connected={Boolean(stravaStatus?.connected)}
+              requiresReauth={requiresReauth}
+              stravaLoading={stravaLoading}
+              mutations={mutations}
+              onRequestDisconnect={() => setDisconnectConfirmOpen(true)}
+            />
           </div>
         </div>
       </CardContent>
@@ -166,13 +92,154 @@ export function StravaSection({
         description="Your synced activities will remain, but new workouts will no longer be imported from Strava."
         confirmText="Disconnect"
         onConfirm={() => {
-          disconnectStravaMutation.mutate();
+          mutations.disconnectStravaMutation.mutate();
           setDisconnectConfirmOpen(false);
         }}
-        isPending={disconnectStravaMutation.isPending}
+        isPending={mutations.disconnectStravaMutation.isPending}
         isDestructive
         confirmTestId="button-confirm-disconnect-strava"
       />
     </Card>
+  );
+}
+
+function StravaStatusBadge({
+  requiresReauth,
+  connected,
+}: Readonly<{ requiresReauth: boolean; connected: boolean }>) {
+  if (requiresReauth) {
+    return (
+      <Badge variant="destructive" className="text-xs">
+        Reconnect needed
+      </Badge>
+    );
+  }
+  if (!connected) return null;
+  return (
+    <Badge variant="outline" className="text-xs">
+      Connected
+    </Badge>
+  );
+}
+
+interface StravaActionsProps {
+  readonly connected: boolean;
+  readonly requiresReauth: boolean;
+  readonly stravaLoading: boolean;
+  readonly mutations: StravaMutations;
+  readonly onRequestDisconnect: () => void;
+}
+
+function StravaActions({
+  connected,
+  requiresReauth,
+  stravaLoading,
+  mutations,
+  onRequestDisconnect,
+}: Readonly<StravaActionsProps>) {
+  if (!connected) {
+    return <ConnectStravaButton mutations={mutations} stravaLoading={stravaLoading} />;
+  }
+  return (
+    <>
+      <SyncStravaButton requiresReauth={requiresReauth} mutations={mutations} />
+      <DisconnectStravaButton mutations={mutations} onRequestDisconnect={onRequestDisconnect} />
+    </>
+  );
+}
+
+function ConnectStravaButton({
+  mutations,
+  stravaLoading,
+}: Readonly<{ mutations: StravaMutations; stravaLoading: boolean }>) {
+  const { connectStravaMutation } = mutations;
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => connectStravaMutation.mutate()}
+      disabled={connectStravaMutation.isPending || stravaLoading}
+      data-testid="button-connect-strava"
+    >
+      {connectStravaMutation.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+      ) : (
+        <StravaIcon className="h-4 w-4 mr-1.5 text-[#FC4C02]" />
+      )}
+      Connect
+    </Button>
+  );
+}
+
+function SyncStravaButton({
+  requiresReauth,
+  mutations,
+}: Readonly<{ requiresReauth: boolean; mutations: StravaMutations }>) {
+  const { connectStravaMutation, syncStravaMutation } = mutations;
+  if (requiresReauth) {
+    // Revoked credentials: syncing can never succeed — offer the
+    // OAuth flow again instead (the callback upsert clears the flag).
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => connectStravaMutation.mutate()}
+        disabled={connectStravaMutation.isPending}
+        data-testid="button-reconnect-strava"
+      >
+        {connectStravaMutation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <StravaIcon className="h-4 w-4 text-[#FC4C02]" />
+        )}
+        <span className="ml-1.5">Reconnect</span>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => syncStravaMutation.mutate()}
+      disabled={syncStravaMutation.isPending}
+      data-testid="button-sync-strava"
+    >
+      {syncStravaMutation.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <RefreshCw className="h-4 w-4" />
+      )}
+      <span className="ml-1.5">Sync</span>
+    </Button>
+  );
+}
+
+function DisconnectStravaButton({
+  mutations,
+  onRequestDisconnect,
+}: Readonly<{ mutations: StravaMutations; onRequestDisconnect: () => void }>) {
+  const { disconnectStravaMutation } = mutations;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRequestDisconnect}
+            disabled={disconnectStravaMutation.isPending}
+            aria-label="Disconnect Strava"
+            data-testid="button-disconnect-strava"
+          >
+            {disconnectStravaMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Unlink className="h-4 w-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Disconnect Strava</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
