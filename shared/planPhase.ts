@@ -26,9 +26,16 @@ export interface PlanPhase {
   remainingPhases: TrainingPhase[];
 }
 
-/** Today as `YYYY-MM-DD` in UTC — matches the server's `toDateStr()` default. */
+/**
+ * Today as `YYYY-MM-DD` in UTC — matches the server's `toDateStr()` default.
+ *
+ * Sliced rather than split on "T": `toISOString()` always yields a fixed-width
+ * `YYYY-MM-DDTHH:mm:ss.sssZ`, so the first ten characters are exactly the date,
+ * and slice stays total where an index into `split()` is `string | undefined`
+ * under this directory's `noUncheckedIndexedAccess` ratchet.
+ */
 function utcToday(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date().toISOString().slice(0, 10);
 }
 
 /**
