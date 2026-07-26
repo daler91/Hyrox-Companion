@@ -5,7 +5,15 @@
  * workout-detail summary tiles so a given percentage always reads the
  * same colour wherever it appears.
  */
-export type AdherenceTone = "good" | "partial" | "low";
+/**
+ * A three-step "on target / drifting / off" accent, shared by anything that
+ * tones a tile. Adherence named it first; MAF-ceiling compliance uses the same
+ * three steps, and two palettes that mean the same thing would be worse than
+ * one.
+ */
+export type Tone = "good" | "partial" | "low";
+
+export type AdherenceTone = Tone;
 
 export function getAdherenceTone(compliancePct: number): AdherenceTone {
   if (compliancePct >= 85) return "good";
@@ -13,13 +21,17 @@ export function getAdherenceTone(compliancePct: number): AdherenceTone {
   return "low";
 }
 
-const ADHERENCE_TONE_CLASSNAMES: Record<AdherenceTone, string> = {
+const TONE_CLASSNAMES: Record<Tone, string> = {
   good: "border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950",
   partial:
     "border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950",
   low: "border-rose-300 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950",
 };
 
+export function getToneClassName(tone: Tone): string {
+  return TONE_CLASSNAMES[tone];
+}
+
 export function getAdherenceToneClassName(compliancePct: number): string {
-  return ADHERENCE_TONE_CLASSNAMES[getAdherenceTone(compliancePct)];
+  return getToneClassName(getAdherenceTone(compliancePct));
 }

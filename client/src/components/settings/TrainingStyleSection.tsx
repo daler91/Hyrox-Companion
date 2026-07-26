@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { HeartPulse, Info } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -58,6 +58,9 @@ interface TrainingStyleSectionProps {
   readonly trainingStyleId: string;
   readonly onTrainingStyleIdChange: (value: string) => void;
   readonly hasRequiredMafInputs: boolean;
+  /** The athlete's stored MAF ceiling in bpm. Optional so non-MAF callers and
+   *  the settings test harness need not supply it. */
+  readonly mafHr?: number | null;
   readonly mafAgeInput: string;
   readonly mafConsistencyInput: MafConsistencyInput;
   readonly mafTrendInput: MafTrendInput;
@@ -83,6 +86,7 @@ export function TrainingStyleSection({
   trainingStyleId,
   onTrainingStyleIdChange,
   hasRequiredMafInputs,
+  mafHr,
   mafAgeInput,
   mafConsistencyInput,
   mafTrendInput,
@@ -176,7 +180,7 @@ export function TrainingStyleSection({
             {getStyleConstraintText(trainingStyleId)}
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
           <div className="flex gap-2">
             <Info className="h-4 w-4 mt-0.5" aria-hidden="true" />
             <p>
@@ -184,6 +188,17 @@ export function TrainingStyleSection({
               constraints and available baseline data.
             </p>
           </div>
+          {trainingStyleId === "maf_method" && mafHr != null && (
+            <div className="flex gap-2" data-testid="maf-ceiling-summary">
+              <HeartPulse className="h-4 w-4 mt-0.5" aria-hidden="true" />
+              <p>
+                Your MAF ceiling is{" "}
+                <strong className="text-foreground tabular-nums">{mafHr} bpm</strong> — 180 minus
+                your age, adjusted for consistency, trend, and health flags. Aerobic sessions are
+                scored against it, so keep easy runs at or under it.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

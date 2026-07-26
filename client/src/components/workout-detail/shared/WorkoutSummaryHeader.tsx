@@ -1,9 +1,11 @@
 import type { TimelineEntry } from "@shared/schema";
+import { isRunningExerciseName } from "@shared/schema/exercises";
 import { metersToUserDistance } from "@shared/unitConversion";
 import type { LucideIcon } from "lucide-react";
 import { Flame, Gauge, HeartPulse, ListChecks, MapPin, Target, Timer } from "lucide-react";
 
 import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
+import { summariseMafTile } from "@/lib/mafFormat";
 import { cn } from "@/lib/utils";
 
 export interface SummaryStat {
@@ -14,6 +16,8 @@ export interface SummaryStat {
   readonly value: string;
   /** Optional accent (e.g. adherence colour coding) applied to the tile. */
   readonly accentClassName?: string;
+  /** Optional hover explanation for an accented tile. */
+  readonly title?: string;
 }
 
 export type SummaryVariant = "completed" | "planned" | "preview";
@@ -30,6 +34,12 @@ interface BuildWorkoutSummaryStatsArgs {
   readonly distanceUnit: "km" | "miles";
   /** Gate for the adherence tile (mirrors the timeline card's badge gate). */
   readonly showAdherence: boolean;
+  /**
+   * The athlete's MAF ceiling, when they train to one. Tones and labels the
+   * Avg HR tile on running sessions; absent (or on a non-running session) the
+   * tile renders exactly as it always has.
+   */
+  readonly mafCeiling?: number | null;
 }
 
 const MAX_SUMMARY_STATS = 6;
@@ -48,11 +58,50 @@ export function buildWorkoutSummaryStats({
   rpe,
   distanceUnit,
   showAdherence,
+  mafCeiling,
 }: BuildWorkoutSummaryStatsArgs): SummaryStat[] {
   if (variant === "completed") {
-    return buildCompletedStats(entry, rpe ?? entry.rpe ?? null, distanceUnit, showAdherence);
+    return buildCompletedStats(
+      entry,
+      rpe ?? entry.rpe ?? null,
+      distanceUnit,
+      showAdherence,
+      mafCeiling ?? null,
+    );
   }
   return buildTargetStats(entry, variant);
+}
+
+/**
+ * The Avg HR tile, toned against the MAF ceiling when there is one to tone it
+ * against. Gated on the session containing running work: an average of 165 on
+ * wall balls is not a MAF violation, it's wall balls.
+ */
+function buildAvgHrStat(entry: TimelineEntry, mafCeiling: number | null): SummaryStat {
+  const avgHeartrate = entry.avgHeartrate ?? 0;
+  const base = {
+    key: "avg-hr",
+    icon: HeartPulse,
+    label: "Avg HR",
+    value: `${Math.round(avgHeartrate)} bpm`,
+  } as const;
+
+  const isRunning = entry.exerciseSets?.some((set) => isRunningExerciseName(set.exerciseName));
+  if (mafCeiling == null || !isRunning) return base;
+
+  const maf = summariseMafTile({
+    avgHeartRate: avgHeartrate,
+    maxHeartRate: entry.maxHeartrate ?? null,
+    ceiling: mafCeiling,
+  });
+  return {
+    ...base,
+    // The compliance is written into the visible label, so the accent colour is
+    // never the only thing carrying it.
+    label: `Avg HR${maf.labelSuffix}`,
+    accentClassName: maf.accentClassName,
+    title: maf.title,
+  };
 }
 
 function buildCompletedStats(
@@ -60,6 +109,7 @@ function buildCompletedStats(
   rpe: number | null,
   distanceUnit: "km" | "miles",
   showAdherence: boolean,
+  mafCeiling: number | null,
 ): SummaryStat[] {
   const stats: SummaryStat[] = [];
 
@@ -87,15 +137,15 @@ function buildCompletedStats(
     });
   }
   if (entry.avgHeartrate) {
-    stats.push({
-      key: "avg-hr",
-      icon: HeartPulse,
-      label: "Avg HR",
-      value: `${Math.round(entry.avgHeartrate)} bpm`,
-    });
+    stats.push(buildAvgHrStat(entry, mafCeiling));
   }
   if (entry.calories) {
-    stats.push({ key: "calories", icon: Flame, label: "Calories", value: `${entry.calories} kcal` });
+    stats.push({
+      key: "calories",
+      icon: Flame,
+      label: "Calories",
+      value: `${entry.calories} kcal`,
+    });
   }
 
   return stats.slice(0, MAX_SUMMARY_STATS);
@@ -154,13 +204,14 @@ export function WorkoutSummaryHeader({ stats, testId }: WorkoutSummaryHeaderProp
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" data-testid={testId}>
-      {stats.map(({ key, icon: Icon, label, value, accentClassName }) => (
+      {stats.map(({ key, icon: Icon, label, value, accentClassName, title }) => (
         <div
           key={key}
           className={cn(
             "flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2",
             accentClassName,
           )}
+          title={title}
           data-testid={`summary-stat-${key}`}
         >
           <Icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />

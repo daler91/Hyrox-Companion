@@ -8,13 +8,12 @@ import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ReviewSurface } from "../ReviewSurface";
-import {
-  expectWorkoutTitleRename,
-  renameWorkoutTitleFromHeader,
-} from "./workoutTitleTestHelpers";
+import { expectWorkoutTitleRename, renameWorkoutTitleFromHeader } from "./workoutTitleTestHelpers";
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
+/** null = the athlete doesn't train to a MAF ceiling, which is the common case. */
+let mafCeiling: number | null = null;
 const RENDER_TIMEOUT_MS = 10_000;
 
 installRadixPointerMocks();
@@ -30,6 +29,8 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
     showAdherenceInsights,
   }),
 }));
+
+vi.mock("@/hooks/useMafCeiling", () => ({ useMafCeiling: () => mafCeiling }));
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
   ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
@@ -142,11 +143,27 @@ function makeDetail(overrides: Record<string, unknown> = {}) {
 describe("ReviewSurface", () => {
   beforeEach(() => {
     showAdherenceInsights = true;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }),
-    );
+    mafCeiling = null;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }));
     mockUseWorkoutDetail.mockReset();
+  });
+
+  it("tones the Avg HR tile against the athlete's MAF ceiling", () => {
+    mafCeiling = 145;
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+    render(
+      <ReviewSurface
+        entry={makeEntry({
+          avgHeartrate: 152,
+          maxHeartrate: 168,
+          exerciseSets: [makeExerciseSet({ exerciseName: "easy_run" })],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // The overshoot is spelled out in the label, not carried by colour alone.
+    expect(screen.getByTestId("summary-stat-avg-hr")).toHaveTextContent("Avg HR · 7 over MAF");
   });
 
   it("wires the plan-day picker to the current link and updatePlanDay", async () => {
@@ -178,24 +195,30 @@ describe("ReviewSurface", () => {
     expect(section).not.toHaveAttribute("open");
   });
 
-  it("surfaces planned differences when adherence guidance is enabled", () => {
-    mockUseWorkoutDetail.mockReturnValue(
-      makeDetail({
-        workout: makeWorkout({
-          exerciseSets: [makeExerciseSet({
-            workoutLogId: "workout-1",
-            weight: 95,
-            plannedReps: 8,
-            plannedWeight: 100,
-          })],
+  it(
+    "surfaces planned differences when adherence guidance is enabled",
+    () => {
+      mockUseWorkoutDetail.mockReturnValue(
+        makeDetail({
+          workout: makeWorkout({
+            exerciseSets: [
+              makeExerciseSet({
+                workoutLogId: "workout-1",
+                weight: 95,
+                plannedReps: 8,
+                plannedWeight: 100,
+              }),
+            ],
+          }),
         }),
-      }),
-    );
+      );
 
-    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+      render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
 
-    expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
-  }, RENDER_TIMEOUT_MS);
+      expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
+    },
+    RENDER_TIMEOUT_MS,
+  );
 
   it("shows the just-completed success callout only when requested", () => {
     mockUseWorkoutDetail.mockReturnValue(makeDetail());
@@ -249,13 +272,7 @@ describe("ReviewSurface", () => {
     const onRenameTitle = vi.fn();
     mockUseWorkoutDetail.mockReturnValue(makeDetail());
 
-    render(
-      <ReviewSurface
-        entry={makeEntry()}
-        onClose={vi.fn()}
-        onRenameTitle={onRenameTitle}
-      />,
-    );
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} onRenameTitle={onRenameTitle} />);
 
     renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
 

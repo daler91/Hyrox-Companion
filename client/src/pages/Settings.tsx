@@ -106,15 +106,13 @@ export default function Settings() {
     setLocation("/settings?tab=integrations", { replace: true });
   }, [search, toast, setLocation, setActiveTab]);
 
-  const { data: stravaStatus, isLoading: stravaLoading } =
-    useQuery<StravaStatus>({
-      queryKey: QUERY_KEYS.stravaStatus,
-    });
+  const { data: stravaStatus, isLoading: stravaLoading } = useQuery<StravaStatus>({
+    queryKey: QUERY_KEYS.stravaStatus,
+  });
 
-  const { data: garminStatus, isLoading: garminLoading } =
-    useQuery<GarminStatus>({
-      queryKey: QUERY_KEYS.garminStatus,
-    });
+  const { data: garminStatus, isLoading: garminLoading } = useQuery<GarminStatus>({
+    queryKey: QUERY_KEYS.garminStatus,
+  });
 
   const userName = getUserDisplayName(user);
 
@@ -143,10 +141,12 @@ export default function Settings() {
                 user-facing message. Surfacing `error.message` (e.g. "500: …") in
                 production is confusing and can leak internals (matches
                 FallbackErrorBoundary's NODE_ENV gate). */}
-            {import.meta.env.DEV && (
-              <p className="text-sm text-muted-foreground">{errorMessage}</p>
-            )}
-            <Button onClick={() => refetch()} disabled={isFetching} data-testid="button-retry-load-settings">
+            {import.meta.env.DEV && <p className="text-sm text-muted-foreground">{errorMessage}</p>}
+            <Button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              data-testid="button-retry-load-settings"
+            >
               {isFetching ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
               ) : (
@@ -164,9 +164,7 @@ export default function Settings() {
     <PageContainer size="narrow" className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your account and preferences
-        </p>
+        <p className="text-muted-foreground mt-1">Manage your account and preferences</p>
       </div>
 
       <Tabs
@@ -193,11 +191,7 @@ export default function Settings() {
             <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger
-            value="data"
-            data-testid="tab-data"
-            className="col-span-2 sm:col-span-1"
-          >
+          <TabsTrigger value="data" data-testid="tab-data" className="col-span-2 sm:col-span-1">
             <Database className="h-4 w-4 mr-2" aria-hidden="true" />
             Data &amp; Privacy
           </TabsTrigger>
@@ -219,7 +213,8 @@ export default function Settings() {
             <CardHeader>
               <CardTitle>Getting Started</CardTitle>
               <CardDescription>
-                Run the welcome flow again if you skipped it or want to pick a different training plan.
+                Run the welcome flow again if you skipped it or want to pick a different training
+                plan.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -286,6 +281,7 @@ export default function Settings() {
             trainingStyleId={draft.trainingStyleId}
             onTrainingStyleIdChange={(v) => updateField("trainingStyleId", v)}
             hasRequiredMafInputs={hasRequiredMafInputs}
+            mafHr={user?.mafHr ?? null}
             mafAgeInput={draft.mafAgeInput}
             mafConsistencyInput={draft.mafConsistencyInput}
             mafTrendInput={draft.mafTrendInput}
