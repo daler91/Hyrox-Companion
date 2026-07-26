@@ -103,20 +103,23 @@ function flattenParsedToSets(parsed: ParsedExercise[]): ExerciseSet[] {
   const rows: ExerciseSet[] = [];
   let sortOrder = 0;
   for (const exercise of parsed) {
-    const sets = exercise.sets && exercise.sets.length > 0
-      ? exercise.sets
-      : [{
-          setNumber: 1,
-          reps: exercise.reps,
-          weight: exercise.weight,
-          distance: exercise.distance,
-          time: exercise.time,
-          plannedReps: exercise.plannedReps,
-          plannedWeight: exercise.plannedWeight,
-          plannedDistance: exercise.plannedDistance,
-          plannedTime: exercise.plannedTime,
-          notes: exercise.notes,
-        }];
+    const sets =
+      exercise.sets && exercise.sets.length > 0
+        ? exercise.sets
+        : [
+            {
+              setNumber: 1,
+              reps: exercise.reps,
+              weight: exercise.weight,
+              distance: exercise.distance,
+              time: exercise.time,
+              plannedReps: exercise.plannedReps,
+              plannedWeight: exercise.plannedWeight,
+              plannedDistance: exercise.plannedDistance,
+              plannedTime: exercise.plannedTime,
+              notes: exercise.notes,
+            },
+          ];
 
     for (const set of sets) {
       rows.push(
@@ -280,17 +283,16 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       const sourceIdx = data.sourceSetId
         ? prev.findIndex((row) => row.id === data.sourceSetId)
         : -1;
-      const next = sourceIdx === -1
-        ? [...prev, newRow]
-        : [...prev.slice(0, sourceIdx + 1), newRow, ...prev.slice(sourceIdx + 1)];
+      const next =
+        sourceIdx === -1
+          ? [...prev, newRow]
+          : [...prev.slice(0, sourceIdx + 1), newRow, ...prev.slice(sourceIdx + 1)];
       return next.map((row, i) => ({ ...row, sortOrder: i }));
     });
   };
 
   const handleUpdateSet = (setId: string, data: PatchExerciseSetPayload) => {
-    setExerciseSets((prev) =>
-      prev.map((row) => (row.id === setId ? { ...row, ...data } : row)),
-    );
+    setExerciseSets((prev) => prev.map((row) => (row.id === setId ? { ...row, ...data } : row)));
   };
 
   const handleDeleteSet = (setId: string) => {
@@ -301,9 +303,10 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     if (!parsed || parsed.length === 0) {
       toast({
         title: "Nothing parsed",
-        description: source === "text"
-          ? "AI couldn't pull exercises from that text. Add rows manually or refine the text."
-          : "AI couldn't identify exercises in that photo. Try a clearer shot.",
+        description:
+          source === "text"
+            ? "AI couldn't pull exercises from that text. Add rows manually or refine the text."
+            : "AI couldn't identify exercises in that photo. Try a clearer shot.",
         variant: "destructive",
       });
       return;
@@ -318,9 +321,10 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
   const handleParseError = (source: "text" | "photo") => () => {
     toast({
       title: "Parse failed",
-      description: source === "text"
-        ? "AI couldn't parse that text. Try a clearer version or add rows manually."
-        : "AI couldn't parse that photo. Try a clearer shot.",
+      description:
+        source === "text"
+          ? "AI couldn't parse that text. Try a clearer version or add rows manually."
+          : "AI couldn't parse that photo. Try a clearer shot.",
       variant: "destructive",
     });
   };
@@ -346,7 +350,9 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       const normalizedDuration = normalizeDurationMinutes(durationMinutes);
 
       if (!hasStructured && !hasFreeText) {
-        return Promise.reject(new Error("Please add at least one exercise or describe your workout."));
+        return Promise.reject(
+          new Error("Please add at least one exercise or describe your workout."),
+        );
       }
 
       const summary = hasStructured ? serializeWorkoutStructure(exerciseSets) : null;
@@ -378,7 +384,8 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
       handleClose();
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "Failed to save workout. Please try again.";
+      const message =
+        error instanceof Error ? error.message : "Failed to save workout. Please try again.";
       toast({ title: "Couldn't save", description: message, variant: "destructive" });
     },
   });
@@ -388,7 +395,8 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
     setLocation("/log");
   };
 
-  const canSave = !saveMutation.isPending && (exerciseSets.length > 0 || mainWorkout.trim().length > 0);
+  const canSave =
+    !saveMutation.isPending && (exerciseSets.length > 0 || mainWorkout.trim().length > 0);
 
   return (
     <ResponsiveSheet

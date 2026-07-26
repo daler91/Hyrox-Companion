@@ -54,9 +54,7 @@ export function SaveStatePill({
   return <SaveFlashBadge key={state.lastSavedAt} testId={testId} />;
 }
 
-export function SaveFlashBadge({
-  testId = "save-flash-badge",
-}: Readonly<{ testId?: string }>) {
+export function SaveFlashBadge({ testId = "save-flash-badge" }: Readonly<{ testId?: string }>) {
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     const id = setTimeout(() => setVisible(false), SAVE_FLASH_MS);

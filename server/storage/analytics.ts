@@ -6,29 +6,47 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, desc, eq, gte, lte, type SQL,sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, type SQL, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
-import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
+import {
+  type LoggedExerciseSetWithDate,
+  MAX_WORKOUT_LOGS_PER_QUERY,
+  queryExerciseSetsWithDates,
+  querySlimExerciseSetsWithDates,
+  type SlimLoggedExerciseSet,
+} from "./shared";
 
 export class AnalyticsStorage {
   async getExerciseLoadTags(): Promise<ExerciseLoadTag[]> {
     return await db.select().from(exerciseLoadTags);
   }
 
-  async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<LoggedExerciseSetWithDate[]> {
+  async getAllExerciseSetsWithDates(
+    userId: string,
+    from?: string,
+    to?: string,
+  ): Promise<LoggedExerciseSetWithDate[]> {
     return await queryExerciseSetsWithDates(userId, { from, to });
   }
 
   // Column-slim fetch for the Personal Records endpoint (only the fields
   // calculatePersonalRecords reads), so the all-time PR query doesn't hydrate
   // full set rows (incl. JSON columns) for tens of thousands of sets.
-  async getExerciseSetsForPersonalRecords(userId: string, from?: string, to?: string): Promise<SlimLoggedExerciseSet[]> {
+  async getExerciseSetsForPersonalRecords(
+    userId: string,
+    from?: string,
+    to?: string,
+  ): Promise<SlimLoggedExerciseSet[]> {
     return await querySlimExerciseSetsWithDates(userId, { from, to });
   }
 
-  async getWorkoutLogsByDateRange(userId: string, from?: string, to?: string): Promise<WorkoutLog[]> {
+  async getWorkoutLogsByDateRange(
+    userId: string,
+    from?: string,
+    to?: string,
+  ): Promise<WorkoutLog[]> {
     const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
     if (from) conditions.push(gte(workoutLogs.date, from));
     if (to) conditions.push(lte(workoutLogs.date, to));
@@ -57,15 +75,17 @@ export class AnalyticsStorage {
     return logs;
   }
 
-  async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ planDayId: string; date: string; focus: string; mainWorkout: string; planName?: string }[]> {
+  async getMissedWorkoutsForDate(
+    userId: string,
+    date: string,
+  ): Promise<
+    { planDayId: string; date: string; focus: string; mainWorkout: string; planName?: string }[]
+  > {
     // Relational query: fetch missed plan days for the date, include the parent
     // plan's name, and filter by plan owner in memory. The `plan` relation's
     // inner row presence is implied by the NOT NULL FK, so the filter is safe.
     const days = await db.query.planDays.findMany({
-      where: and(
-        eq(planDays.scheduledDate, date),
-        eq(planDays.status, "missed"),
-      ),
+      where: and(eq(planDays.scheduledDate, date), eq(planDays.status, "missed")),
       columns: {
         // `id` rides along so the missed-workout push can deep link straight to
         // the session (`/?workout=<planDayId>`) instead of dumping the athlete
@@ -99,10 +119,25 @@ export class AnalyticsStorage {
    * (filtered in memory like getMissedWorkoutsForDate); `status = 'planned'`
    * excludes completed/missed/skipped days (a completed day already has a log).
    */
-  async getPlannedDaysForDate(userId: string, date: string): Promise<{ focus: string; expectedDurationMin: number | null; expectedRpe: number | null; plannedTimeOfDayMin: number | null }[]> {
+  async getPlannedDaysForDate(
+    userId: string,
+    date: string,
+  ): Promise<
+    {
+      focus: string;
+      expectedDurationMin: number | null;
+      expectedRpe: number | null;
+      plannedTimeOfDayMin: number | null;
+    }[]
+  > {
     const days = await db.query.planDays.findMany({
       where: and(eq(planDays.scheduledDate, date), eq(planDays.status, "planned")),
-      columns: { focus: true, expectedDurationMin: true, expectedRpe: true, plannedTimeOfDayMin: true },
+      columns: {
+        focus: true,
+        expectedDurationMin: true,
+        expectedRpe: true,
+        plannedTimeOfDayMin: true,
+      },
       with: { plan: { columns: { userId: true } } },
     });
     return days
@@ -115,7 +150,17 @@ export class AnalyticsStorage {
       }));
   }
 
-  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
+  async getWeeklyStats(
+    userId: string,
+    weekStart: string,
+    weekEnd: string,
+  ): Promise<{
+    completedCount: number;
+    plannedCount: number;
+    missedCount: number;
+    skippedCount: number;
+    totalDuration: number;
+  }> {
     const [logs] = await db
       .select({
         completedCount: sql<number>`cast(count(*) as int)`,
@@ -126,8 +171,8 @@ export class AnalyticsStorage {
         and(
           eq(workoutLogs.userId, userId),
           sql`${workoutLogs.date} >= ${weekStart}`,
-          sql`${workoutLogs.date} <= ${weekEnd}`
-        )
+          sql`${workoutLogs.date} <= ${weekEnd}`,
+        ),
       );
 
     const days = await db
@@ -141,8 +186,8 @@ export class AnalyticsStorage {
         and(
           eq(trainingPlans.userId, userId),
           sql`${planDays.scheduledDate} >= ${weekStart}`,
-          sql`${planDays.scheduledDate} <= ${weekEnd}`
-        )
+          sql`${planDays.scheduledDate} <= ${weekEnd}`,
+        ),
       )
       .groupBy(planDays.status);
 
@@ -154,11 +199,11 @@ export class AnalyticsStorage {
     let skippedCount = 0;
 
     for (const day of days) {
-      if (day.status === 'planned') {
+      if (day.status === "planned") {
         plannedCount = day.count;
-      } else if (day.status === 'missed') {
+      } else if (day.status === "missed") {
         missedCount = day.count;
-      } else if (day.status === 'skipped') {
+      } else if (day.status === "skipped") {
         skippedCount = day.count;
       }
     }

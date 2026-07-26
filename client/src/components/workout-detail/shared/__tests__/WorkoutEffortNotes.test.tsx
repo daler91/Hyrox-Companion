@@ -14,12 +14,7 @@ describe("WorkoutEffortNotes", () => {
     // rpe stays null across renders — mirrors ReviewSurface, whose
     // server-bound RPE prop only updates once the PATCH resolves.
     render(
-      <WorkoutEffortNotes
-        rpe={null}
-        onRpeChange={onRpeChange}
-        note=""
-        onNoteChange={vi.fn()}
-      />,
+      <WorkoutEffortNotes rpe={null} onRpeChange={onRpeChange} note="" onNoteChange={vi.fn()} />,
     );
 
     const user = userEvent.setup();
@@ -31,35 +26,18 @@ describe("WorkoutEffortNotes", () => {
 
   it("adopts the RPE value when the parent prop changes", () => {
     const { rerender } = render(
-      <WorkoutEffortNotes
-        rpe={null}
-        onRpeChange={vi.fn()}
-        note=""
-        onNoteChange={vi.fn()}
-      />,
+      <WorkoutEffortNotes rpe={null} onRpeChange={vi.fn()} note="" onNoteChange={vi.fn()} />,
     );
     expect(screen.queryByTestId("text-rpe-label")).not.toBeInTheDocument();
 
-    rerender(
-      <WorkoutEffortNotes
-        rpe={5}
-        onRpeChange={vi.fn()}
-        note=""
-        onNoteChange={vi.fn()}
-      />,
-    );
+    rerender(<WorkoutEffortNotes rpe={5} onRpeChange={vi.fn()} note="" onNoteChange={vi.fn()} />);
     expect(screen.getByTestId("text-rpe-label")).toHaveTextContent("Moderate");
   });
 
   it("fires note changes on every keystroke for local consumers", async () => {
     const onNoteChange = vi.fn();
     render(
-      <WorkoutEffortNotes
-        rpe={null}
-        onRpeChange={vi.fn()}
-        note=""
-        onNoteChange={onNoteChange}
-      />,
+      <WorkoutEffortNotes rpe={null} onRpeChange={vi.fn()} note="" onNoteChange={onNoteChange} />,
     );
 
     const user = userEvent.setup();

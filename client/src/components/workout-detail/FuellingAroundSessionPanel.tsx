@@ -110,7 +110,10 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
   ) : undefined;
 
   return (
-    <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm" data-testid="fuelling-panel">
+    <section
+      className="space-y-3 rounded-xl border bg-card p-4 shadow-sm"
+      data-testid="fuelling-panel"
+    >
       <div className="flex items-center gap-2">
         <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold">Fuelling around this session</h3>
@@ -149,8 +152,12 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
           )}
 
           {!data.usedStartTime && (
-            <p className="text-[11px] text-muted-foreground/80" data-testid="fuelling-fallback-note">
-              Based on your pre/post-workout meal tags. Connect Strava or Garmin for exact session timing.
+            <p
+              className="text-[11px] text-muted-foreground/80"
+              data-testid="fuelling-fallback-note"
+            >
+              Based on your pre/post-workout meal tags. Connect Strava or Garmin for exact session
+              timing.
             </p>
           )}
         </>

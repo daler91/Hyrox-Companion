@@ -1,16 +1,17 @@
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockWorkoutLog } from "../../../test/factories";
 import { db } from "../../db";
 import { WorkoutStorage } from "../workouts";
-
 
 vi.mock("../../db", () => {
   const db: Record<string, unknown> = {
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
-    select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
+    select: vi
+      .fn()
+      .mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
   };
   // createWorkoutLog and deleteWorkoutLog both wrap their DB calls in a
   // db.transaction(tx => ...) block. The mocked transaction just invokes
@@ -97,11 +98,15 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-    const result = await storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-01", userId: "u1" }));
+    const result = await storage.createWorkoutLog(
+      createMockWorkoutLog({ date: "2026-01-01", userId: "u1" }),
+    );
 
     expect(result).toEqual(mockLog);
     expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(valuesMock).toHaveBeenCalledWith(expect.objectContaining({ date: "2026-01-01", userId: "u1" }));
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ date: "2026-01-01", userId: "u1" }),
+    );
     expect(db.update).not.toHaveBeenCalled();
   });
 
@@ -117,7 +122,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const updateSetMock = vi.fn().mockReturnValue({ from: updateFromMock });
     vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
 
-    const result = await storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" }));
+    const result = await storage.createWorkoutLog(
+      createMockWorkoutLog({ date: "2026-01-02", userId: "u1", planDayId: "pd1" }),
+    );
 
     expect(result).toEqual(mockLog);
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -136,7 +143,7 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
     await expect(
-      storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-03", userId: "u1" }))
+      storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-03", userId: "u1" })),
     ).rejects.toThrow("Unique constraint violation");
 
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -159,7 +166,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     vi.mocked(db.update).mockReturnValue({ set: updateSetMock });
 
     await expect(
-      storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" }))
+      storage.createWorkoutLog(
+        createMockWorkoutLog({ date: "2026-01-04", userId: "u1", planDayId: "pd2" }),
+      ),
     ).rejects.toThrow("Database connection dropped during update");
 
     expect(db.insert).toHaveBeenCalledTimes(1);
@@ -172,7 +181,9 @@ describe("WorkoutStorage.createWorkoutLog", () => {
     const valuesMock = vi.fn().mockReturnValue({ returning: returningMock });
     vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
 
-    const result = await storage.createWorkoutLog(createMockWorkoutLog({ date: "2026-01-05", userId: "u1" }));
+    const result = await storage.createWorkoutLog(
+      createMockWorkoutLog({ date: "2026-01-05", userId: "u1" }),
+    );
 
     // Drizzle typing for `returning()` returns an array. If it's empty, `[workoutLog]` assigns `undefined`.
     expect(result).toBeUndefined();
@@ -279,7 +290,13 @@ describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18
 
   it("does a blind UPDATE when expectedVersion is omitted (back-compat)", async () => {
     mockOwned(3);
-    const updatedRow = { id: "set-1", workoutLogId: "workout-1", version: 4, blockId: null, stepNumber: null };
+    const updatedRow = {
+      id: "set-1",
+      workoutLogId: "workout-1",
+      version: 4,
+      blockId: null,
+      stepNumber: null,
+    };
     const { setMock } = mockUpdateReturning([updatedRow]);
 
     const result = await storage.updateExerciseSetNormalized(
@@ -297,7 +314,13 @@ describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18
 
   it("bumps version and returns the new row when expectedVersion matches", async () => {
     mockOwned(3);
-    const updatedRow = { id: "set-1", workoutLogId: "workout-1", version: 4, blockId: null, stepNumber: null };
+    const updatedRow = {
+      id: "set-1",
+      workoutLogId: "workout-1",
+      version: 4,
+      blockId: null,
+      stepNumber: null,
+    };
     mockUpdateReturning([updatedRow]);
 
     const result = await storage.updateExerciseSetNormalized(

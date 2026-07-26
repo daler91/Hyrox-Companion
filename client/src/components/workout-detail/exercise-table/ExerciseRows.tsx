@@ -31,12 +31,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { categoryColor } from "@/lib/categoryColors";
 import { getExerciseLabel, type GroupedExercise } from "@/lib/exerciseUtils";
@@ -48,6 +43,7 @@ import {
   UNASSIGNED_BLOCK_VALUE,
 } from "@/lib/workoutStructureAssignments";
 
+import { LastTimeRow } from "./LastTimeRow";
 import {
   buildPlannedDiffSummary,
   buildPrimaryMetric,
@@ -68,6 +64,8 @@ export function ExerciseRowRenderer({
   readableSummary,
   showPlannedDiffs,
   blockAssignmentOptions,
+  showLastTime,
+  currentWorkoutLogId,
 }: Readonly<{
   groups: readonly GroupedExercise[];
   rowKeys: readonly string[];
@@ -81,6 +79,8 @@ export function ExerciseRowRenderer({
   readableSummary: boolean;
   showPlannedDiffs: boolean;
   blockAssignmentOptions: readonly BlockAssignmentOption[];
+  showLastTime?: boolean;
+  currentWorkoutLogId?: string | null;
 }>) {
   return groups.map((group, idx) => {
     const rowKey = rowKeys[idx];
@@ -101,6 +101,8 @@ export function ExerciseRowRenderer({
         readableSummary={readableSummary}
         showPlannedDiffs={showPlannedDiffs}
         blockAssignmentOptions={blockAssignmentOptions}
+        showLastTime={showLastTime}
+        currentWorkoutLogId={currentWorkoutLogId}
       />
     );
   });
@@ -126,6 +128,11 @@ interface GroupRowProps {
   readonly readableSummary: boolean;
   readonly showPlannedDiffs: boolean;
   readonly blockAssignmentOptions: readonly BlockAssignmentOption[];
+  /** Opt-in: fetches per-exercise history, so only surfaces that want the
+   *  "Last time" line pay for the queries. */
+  readonly showLastTime?: boolean;
+  /** The workout being viewed, excluded from its own history. */
+  readonly currentWorkoutLogId?: string | null;
   /**
    * Sortable attrs + listeners forwarded from `SortableGroupRow`. Applied
    * to the leading `GripVertical` button so the handle, and only the
@@ -136,14 +143,9 @@ interface GroupRowProps {
 }
 
 function SortableGroupRow(props: GroupRowProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: props.rowKey });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.rowKey,
+  });
 
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -153,10 +155,7 @@ function SortableGroupRow(props: GroupRowProps) {
     zIndex: isDragging ? 20 : undefined,
   };
 
-  const dragHandleProps = useMemo(
-    () => ({ attributes, listeners }),
-    [attributes, listeners],
-  );
+  const dragHandleProps = useMemo(() => ({ attributes, listeners }), [attributes, listeners]);
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -241,11 +240,7 @@ function BlockAssignmentBadge({
   );
 }
 
-function BlockAssignmentAction({
-  value,
-  options,
-  onAssign,
-}: Readonly<BlockAssignmentPickerProps>) {
+function BlockAssignmentAction({ value, options, onAssign }: Readonly<BlockAssignmentPickerProps>) {
   if (options.length === 0) return null;
   return (
     <DropdownMenuSub>
@@ -270,6 +265,8 @@ const GroupRow = memo(function GroupRow({
   readableSummary,
   showPlannedDiffs,
   blockAssignmentOptions,
+  showLastTime,
+  currentWorkoutLogId,
   dragHandleProps,
 }: GroupRowProps) {
   const handleToggle = useCallback(() => onToggle(rowKey), [onToggle, rowKey]);
@@ -285,10 +282,7 @@ const GroupRow = memo(function GroupRow({
     () => buildPrimaryMetric(group.exerciseName, uniformity, distanceUnit),
     [group.exerciseName, uniformity, distanceUnit],
   );
-  const hasWeight = useMemo(
-    () => shouldShowLoad(group, metric.field),
-    [group, metric.field],
-  );
+  const hasWeight = useMemo(() => shouldShowLoad(group, metric.field), [group, metric.field]);
   const loadVaries = uniformity.weightVaries;
 
   const handleDeleteRow = () => {
@@ -308,10 +302,13 @@ const GroupRow = memo(function GroupRow({
     setChangeExerciseOpen(false);
   };
   const blockAssignmentValue = assignmentValueForGroup(group, blockAssignmentOptions);
-  const handleAssignBlock = useCallback((value: string) => {
-    const patch = assignmentPatchForValue(value, blockAssignmentOptions);
-    for (const set of group.sets) onUpdateSet(set.id, patch);
-  }, [blockAssignmentOptions, group.sets, onUpdateSet]);
+  const handleAssignBlock = useCallback(
+    (value: string) => {
+      const patch = assignmentPatchForValue(value, blockAssignmentOptions);
+      for (const set of group.sets) onUpdateSet(set.id, patch);
+    },
+    [blockAssignmentOptions, group.sets, onUpdateSet],
+  );
   const prescription = formatPrescription({
     setCount,
     metricValue: metric.value,
@@ -443,6 +440,20 @@ const GroupRow = memo(function GroupRow({
             )}
           </button>
         )}
+        {/* Below the prescription and outside the expand toggle, so it reads
+            beside "this time" whether or not the row is open. */}
+        {showLastTime && (
+          <LastTimeRow
+            exerciseName={group.exerciseName}
+            category={group.category}
+            currentSets={group.sets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            currentWorkoutLogId={currentWorkoutLogId}
+            onUpdateSet={onUpdateSet}
+            showUseLast={isExpanded}
+          />
+        )}
       </div>
 
       {isExpanded && (
@@ -467,8 +478,8 @@ const GroupRow = memo(function GroupRow({
           <DialogHeader>
             <DialogTitle>Change exercise</DialogTitle>
             <DialogDescription>
-              Replace {label} with another exercise. Your reps, weight, and other set
-              values stay the same.
+              Replace {label} with another exercise. Your reps, weight, and other set values stay
+              the same.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto pr-1">

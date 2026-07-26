@@ -1,8 +1,4 @@
-import {
-  type ExerciseSet,
-  type InsertExerciseSet,
-  workoutLogs,
-} from "@shared/schema";
+import { type ExerciseSet, type InsertExerciseSet, workoutLogs } from "@shared/schema";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { db } from "../db";
@@ -14,10 +10,7 @@ import { logger } from "../logger";
  * Used by both copyPrescribedSetsIntoLog (workoutService) and
  * seedExerciseSetsFromPlanDay (WorkoutStorage) to ensure consistency.
  */
-export function prescribedSetToLogRow(
-  p: ExerciseSet,
-  workoutLogId: string,
-): InsertExerciseSet {
+export function prescribedSetToLogRow(p: ExerciseSet, workoutLogId: string): InsertExerciseSet {
   const jsonValue = (value: unknown) => value as InsertExerciseSet["intensity"];
   return {
     workoutLogId,
@@ -75,7 +68,7 @@ export async function queryExerciseSetsWithDates(
     exerciseName?: string;
     from?: string;
     to?: string;
-  }
+  },
 ): Promise<LoggedExerciseSetWithDate[]> {
   // Relational query: fetch the user's workout logs (with optional date range)
   // and pull their exercise sets. The output flattens sets + the parent log's
@@ -111,6 +104,30 @@ export async function queryExerciseSetsWithDates(
     }
   }
   return result;
+}
+
+/**
+ * Keep only the rows belonging to the `sessionLimit` most recent dates.
+ *
+ * Rows arrive already ordered newest-date-first, so this is a single pass that
+ * stops once it has seen enough distinct dates. Bounding *sessions* rather than
+ * rows means a session's sets are never split in half.
+ */
+export function takeMostRecentSessions<T extends { date: string }>(
+  rows: readonly T[],
+  sessionLimit: number,
+): T[] {
+  if (sessionLimit <= 0) return [];
+  const kept: T[] = [];
+  const dates = new Set<string>();
+  for (const row of rows) {
+    if (!dates.has(row.date)) {
+      if (dates.size >= sessionLimit) break;
+      dates.add(row.date);
+    }
+    kept.push(row);
+  }
+  return kept;
 }
 
 // Column-slim variant for the Personal Records endpoint, which only reads a few

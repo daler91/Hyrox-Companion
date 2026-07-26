@@ -120,12 +120,7 @@ interface LogSheetTitleProps {
   readonly isRenamingTitle: boolean;
 }
 
-function LogSheetTitle({
-  entry,
-  mode,
-  onRenameTitle,
-  isRenamingTitle,
-}: LogSheetTitleProps) {
+function LogSheetTitle({ entry, mode, onRenameTitle, isRenamingTitle }: LogSheetTitleProps) {
   return (
     <EditableWorkoutTitle
       title={entry.focus}
@@ -184,7 +179,9 @@ function PlannedPrescription({
                 [field]: value.trim().length === 0 ? null : value,
               })
             }
-            onParseText={(payload: PrescriptionTextPayload) => planSets.reparseFreeText.mutate(payload)}
+            onParseText={(payload: PrescriptionTextPayload) =>
+              planSets.reparseFreeText.mutate(payload)
+            }
             onParseImage={(payload) => planSets.reparseFromImage.mutate(payload)}
             isParsingText={planSets.reparseFreeText.isPending}
             isParsingImage={planSets.reparseFromImage.isPending}
@@ -209,6 +206,7 @@ function PlannedPrescription({
             onOpenConversionHelper={() => planSets.reparseFreeText.mutate(undefined)}
             defaultExpanded
             hasUnparsedText={hasUnparsedText}
+            showLastTime
             structureBlocks={planSets.structureBlocks}
           />
         }
@@ -461,12 +459,7 @@ function LogSheetFooter({
 }: LogSheetFooterProps) {
   if (isEditMode) {
     return (
-      <EditSecondaryActions
-        entry={entry}
-        onDone={onDone}
-        onAskCoach={onAskCoach}
-        onSkip={onSkip}
-      />
+      <EditSecondaryActions entry={entry} onDone={onDone} onAskCoach={onAskCoach} onSkip={onSkip} />
     );
   }
 

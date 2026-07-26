@@ -103,17 +103,29 @@ describe("MafTestStorage.updateTestWithAnalysis", () => {
   };
 
   it("updates the test metrics and replaces the analysis in one transaction", async () => {
-    const { updSet, delWhere, insValues } = mockChains({ id: "t1", metrics }, { id: "a1", compliancePct: 100 });
+    const { updSet, delWhere, insValues } = mockChains(
+      { id: "t1", metrics },
+      { id: "a1", compliancePct: 100 },
+    );
 
     const result = await storage.updateTestWithAnalysis(
       "u1",
       "w1",
       { metrics, protocolType: "fixed_time_run" },
-      { userId: "u1", workoutLogId: "w1", compliancePct: 100, classification: "compliant", nextAction: "x", analysisDetails: {} },
+      {
+        userId: "u1",
+        workoutLogId: "w1",
+        compliancePct: 100,
+        classification: "compliant",
+        nextAction: "x",
+        analysisDetails: {},
+      },
     );
 
     expect(db.transaction).toHaveBeenCalledTimes(1);
-    expect(updSet).toHaveBeenCalledWith(expect.objectContaining({ metrics, protocolType: "fixed_time_run" }));
+    expect(updSet).toHaveBeenCalledWith(
+      expect.objectContaining({ metrics, protocolType: "fixed_time_run" }),
+    );
     expect(delWhere).toHaveBeenCalledTimes(1); // old analysis removed first
     expect(insValues).toHaveBeenCalledTimes(1); // recomputed analysis inserted
     expect(result.testResult).toMatchObject({ id: "t1" });

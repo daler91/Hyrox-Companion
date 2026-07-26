@@ -23,9 +23,21 @@ import {
   type User,
   users,
 } from "@shared/schema";
-import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
-import { decryptToken,encryptToken } from "../crypto";
+import { decryptToken, encryptToken } from "../crypto";
 import { db } from "../db";
 import { logger } from "../logger";
 
@@ -116,7 +128,10 @@ export class UserStorage {
                 .where(eq(recipeIngredients.foodId, foods.id)),
             ),
             notExists(
-              tx.select({ one: sql`1` }).from(recipes).where(eq(recipes.foodId, foods.id)),
+              tx
+                .select({ one: sql`1` })
+                .from(recipes)
+                .where(eq(recipes.foodId, foods.id)),
             ),
           ),
         )
@@ -197,7 +212,11 @@ export class UserStorage {
         consistency: user.mafConsistency as "low" | "moderate" | "high",
         trend: user.mafTrend as "improving" | "flat" | "declining",
       });
-      const reason = JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning });
+      const reason = JSON.stringify({
+        reasonCodes: maf.reasonCodes,
+        explanation: maf.explanation,
+        warning: maf.warning,
+      });
 
       // S4: updateUserPreferences runs on every settings save, so snapshot the
       // MAF profile only when it actually changes — otherwise an unchanged
@@ -231,44 +250,56 @@ export class UserStorage {
         });
         // Operational telemetry only — the derived HR values are Art. 9 health
         // data and are intentionally kept out of the log message (Bearer leak).
-        logger.info({
-          context: "health-metrics",
-          event: "maf_hr_calculated",
-          userId,
-          trainingStyleId: user.trainingStyleId,
-        }, "MAF HR calculated and persisted");
+        logger.info(
+          {
+            context: "health-metrics",
+            event: "maf_hr_calculated",
+            userId,
+            trainingStyleId: user.trainingStyleId,
+          },
+          "MAF HR calculated and persisted",
+        );
       }
     } else if (user?.trainingStyleId === "maf_method") {
-      logger.warn({
-        context: "health-alert",
-        event: "missing_maf_hr_inputs",
-        userId,
-        hasAge: user.mafAge != null,
-        hasConsistency: user.mafConsistency != null,
-        hasTrend: user.mafTrend != null,
-        hasInjuryIllnessMedication: user.mafInjuryIllnessMedication != null,
-      }, "MAF style selected without full MAF HR inputs");
+      logger.warn(
+        {
+          context: "health-alert",
+          event: "missing_maf_hr_inputs",
+          userId,
+          hasAge: user.mafAge != null,
+          hasConsistency: user.mafConsistency != null,
+          hasTrend: user.mafTrend != null,
+          hasInjuryIllnessMedication: user.mafInjuryIllnessMedication != null,
+        },
+        "MAF style selected without full MAF HR inputs",
+      );
     }
 
     if (before && user) {
       const styleChanged = before.trainingStyleId !== user.trainingStyleId;
       const styleProvidedInPatch = Object.hasOwn(preferences, "trainingStyleId");
       if (styleChanged) {
-        logger.info({
-          context: "health-metrics",
-          event: "training_style_changed",
-          userId,
-          previousStyleId: before.trainingStyleId,
-          nextStyleId: user.trainingStyleId,
-          changedAt: user.trainingStyleChangedAt?.toISOString() ?? null,
-        }, "Training style changed");
+        logger.info(
+          {
+            context: "health-metrics",
+            event: "training_style_changed",
+            userId,
+            previousStyleId: before.trainingStyleId,
+            nextStyleId: user.trainingStyleId,
+            changedAt: user.trainingStyleChangedAt?.toISOString() ?? null,
+          },
+          "Training style changed",
+        );
       } else if (styleProvidedInPatch) {
-        logger.info({
-          context: "health-metrics",
-          event: "training_style_selected",
-          userId,
-          styleId: user.trainingStyleId,
-        }, "Training style selected");
+        logger.info(
+          {
+            context: "health-metrics",
+            event: "training_style_selected",
+            userId,
+            styleId: user.trainingStyleId,
+          },
+          "Training style selected",
+        );
       }
     }
     return user;
@@ -336,10 +367,7 @@ export class UserStorage {
   }
 
   async saveChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
-    const [chatMessage] = await db
-      .insert(chatMessages)
-      .values(message)
-      .returning();
+    const [chatMessage] = await db.insert(chatMessages).values(message).returning();
     return chatMessage;
   }
 
@@ -360,9 +388,7 @@ export class UserStorage {
       .orderBy(chatMessages.timestamp, chatMessages.id);
   }
 
-  async getStravaConnection(
-    userId: string,
-  ): Promise<StravaConnection | undefined> {
+  async getStravaConnection(userId: string): Promise<StravaConnection | undefined> {
     const [connection] = await db
       .select()
       .from(stravaConnections)
@@ -378,9 +404,7 @@ export class UserStorage {
     return connection;
   }
 
-  async upsertStravaConnection(
-    data: InsertStravaConnection,
-  ): Promise<StravaConnection> {
+  async upsertStravaConnection(data: InsertStravaConnection): Promise<StravaConnection> {
     const encryptedData = {
       ...data,
       accessToken: encryptToken(data.accessToken),
@@ -412,9 +436,7 @@ export class UserStorage {
   }
 
   async deleteStravaConnection(userId: string): Promise<boolean> {
-    const result = await db
-      .delete(stravaConnections)
-      .where(eq(stravaConnections.userId, userId));
+    const result = await db.delete(stravaConnections).where(eq(stravaConnections.userId, userId));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -476,9 +498,7 @@ export class UserStorage {
   // module never sees the wire format.
   // ---------------------------------------------------------------------------
 
-  async getGarminConnection(
-    userId: string,
-  ): Promise<GarminConnection | undefined> {
+  async getGarminConnection(userId: string): Promise<GarminConnection | undefined> {
     const [connection] = await db
       .select()
       .from(garminConnections)
@@ -489,7 +509,9 @@ export class UserStorage {
     return {
       ...connection,
       encryptedEmail: connection.encryptedEmail ? decryptToken(connection.encryptedEmail) : null,
-      encryptedPassword: connection.encryptedPassword ? decryptToken(connection.encryptedPassword) : null,
+      encryptedPassword: connection.encryptedPassword
+        ? decryptToken(connection.encryptedPassword)
+        : null,
       encryptedOauth1Token: connection.encryptedOauth1Token
         ? decryptToken(connection.encryptedOauth1Token)
         : null,
@@ -499,9 +521,7 @@ export class UserStorage {
     };
   }
 
-  async upsertGarminConnection(
-    data: InsertGarminConnection,
-  ): Promise<GarminConnection> {
+  async upsertGarminConnection(data: InsertGarminConnection): Promise<GarminConnection> {
     const encryptedData = {
       ...data,
       encryptedEmail: encryptToken(data.encryptedEmail),
@@ -534,7 +554,9 @@ export class UserStorage {
     return {
       ...connection,
       encryptedEmail: connection.encryptedEmail ? decryptToken(connection.encryptedEmail) : null,
-      encryptedPassword: connection.encryptedPassword ? decryptToken(connection.encryptedPassword) : null,
+      encryptedPassword: connection.encryptedPassword
+        ? decryptToken(connection.encryptedPassword)
+        : null,
       encryptedOauth1Token: connection.encryptedOauth1Token
         ? decryptToken(connection.encryptedOauth1Token)
         : null,
@@ -567,9 +589,7 @@ export class UserStorage {
   }
 
   async deleteGarminConnection(userId: string): Promise<boolean> {
-    const result = await db
-      .delete(garminConnections)
-      .where(eq(garminConnections.userId, userId));
+    const result = await db.delete(garminConnections).where(eq(garminConnections.userId, userId));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -604,15 +624,10 @@ export class UserStorage {
   }
 
   async getCustomExercises(userId: string): Promise<CustomExercise[]> {
-    return await db
-      .select()
-      .from(customExercises)
-      .where(eq(customExercises.userId, userId));
+    return await db.select().from(customExercises).where(eq(customExercises.userId, userId));
   }
 
-  async upsertCustomExercise(
-    data: InsertCustomExercise,
-  ): Promise<CustomExercise> {
+  async upsertCustomExercise(data: InsertCustomExercise): Promise<CustomExercise> {
     const [result] = await db
       .insert(customExercises)
       .values(data)

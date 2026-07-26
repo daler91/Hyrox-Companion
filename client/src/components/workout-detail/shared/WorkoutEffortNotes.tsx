@@ -57,12 +57,7 @@ export function WorkoutEffortNotes({
   return (
     <div className="space-y-4" data-testid="workout-effort-notes">
       <RpePrompt value={rpeEcho} onChange={handleRpeChange} />
-      <NoteInput
-        value={note}
-        onSave={onNoteChange}
-        mode="form"
-        disabled={noteDisabled}
-      />
+      <NoteInput value={note} onSave={onNoteChange} mode="form" disabled={noteDisabled} />
     </div>
   );
 }

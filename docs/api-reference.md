@@ -65,7 +65,10 @@ All errors follow a standard format:
     "issues": [
       { "path": "date", "message": "Must be a valid date in YYYY-MM-DD format" },
       { "path": "rpe", "message": "Number must be less than or equal to 10" },
-      { "path": "exercises[0].exerciseName", "message": "String must contain at least 1 character(s)" }
+      {
+        "path": "exercises[0].exerciseName",
+        "message": "String must contain at least 1 character(s)"
+      }
     ]
   }
 }
@@ -99,13 +102,13 @@ RateLimit-Reset: 1710500045
 
 **Common HTTP status codes:**
 
-| Status | Code | Meaning |
-|--------|------|---------|
-| 400 | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV` | Invalid input |
-| 401 | `UNAUTHORIZED` | Missing or invalid auth |
-| 404 | `NOT_FOUND` | Resource not found |
-| 429 | `RATE_LIMITED` | Rate limit exceeded (includes `Retry-After` header) |
-| 500 | `INTERNAL_SERVER_ERROR` | Server error |
+| Status | Code                                             | Meaning                                             |
+| ------ | ------------------------------------------------ | --------------------------------------------------- |
+| 400    | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV` | Invalid input                                       |
+| 401    | `UNAUTHORIZED`                                   | Missing or invalid auth                             |
+| 404    | `NOT_FOUND`                                      | Resource not found                                  |
+| 429    | `RATE_LIMITED`                                   | Rate limit exceeded (includes `Retry-After` header) |
+| 500    | `INTERNAL_SERVER_ERROR`                          | Server error                                        |
 
 ---
 
@@ -176,9 +179,7 @@ Validation errors return:
   "error": "First validation error message",
   "code": "VALIDATION_ERROR",
   "details": {
-    "issues": [
-      { "path": "field.nested", "message": "Must be at least 1" }
-    ]
+    "issues": [{ "path": "field.nested", "message": "Must be at least 1" }]
   }
 }
 ```
@@ -287,9 +288,7 @@ Create a new workout log, optionally with parsed exercises and/or structure bloc
       "exerciseName": "easy_run",
       "category": "running",
       "confidence": 90,
-      "sets": [
-        { "setNumber": 1, "distance": 5000, "time": 28 }
-      ]
+      "sets": [{ "setNumber": 1, "distance": 5000, "time": 28 }]
     }
   ]
 }
@@ -540,7 +539,7 @@ Create the built-in sample Hyrox training plan.
 
 ### POST /api/v1/plans/generate
 
-Kick off an **asynchronous** AI training-plan generation. The request creates a *pending* plan immediately, enqueues a background `plan-generation` job (see [Integrations — Job Queue](integrations.md#job-types)), and returns the stub so the client can poll for completion.
+Kick off an **asynchronous** AI training-plan generation. The request creates a _pending_ plan immediately, enqueues a background `plan-generation` job (see [Integrations — Job Queue](integrations.md#job-types)), and returns the stub so the client can poll for completion.
 
 - **Auth:** Required
 - **Rate limit:** `planGenerate` category, 3/min
@@ -759,14 +758,14 @@ Delete an annotation.
 
 All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
 
-**Coalesced request cache.** Exercise sets and workout logs used by these routes pass through two in-memory promise caches (`getExerciseSetsCoalesced` and `getWorkoutLogsCoalesced`) keyed by `userId + from + to`. The cache holds the *pending* promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
+**Coalesced request cache.** Exercise sets and workout logs used by these routes pass through two in-memory promise caches (`getExerciseSetsCoalesced` and `getWorkoutLogsCoalesced`) keyed by `userId + from + to`. The cache holds the _pending_ promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
 
-| Knob | Value | Source |
-|---|---|---|
-| TTL | 5 minutes (`ANALYTICS_CACHE_TTL_MS`) | `server/constants.ts` |
-| Max entries per cache | 500 (`MAX_CACHE_SIZE`) | `server/routes/analytics.ts` |
-| Eviction | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` |
-| Failure behavior | The rejected promise is evicted so the next caller retries immediately | `.catch` in `getExerciseSetsCoalesced` / `getWorkoutLogsCoalesced` |
+| Knob                  | Value                                                                  | Source                                                             |
+| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| TTL                   | 5 minutes (`ANALYTICS_CACHE_TTL_MS`)                                   | `server/constants.ts`                                              |
+| Max entries per cache | 500 (`MAX_CACHE_SIZE`)                                                 | `server/routes/analytics.ts`                                       |
+| Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()`                                                     |
+| Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `getExerciseSetsCoalesced` / `getWorkoutLogsCoalesced` |
 
 ### GET /api/v1/personal-records
 
@@ -877,9 +876,7 @@ Parse free-text or voice input into structured exercise data using the configure
     "category": "running",
     "confidence": 80,
     "missingFields": [],
-    "sets": [
-      { "setNumber": 1, "distance": 4828, "time": 24 }
-    ]
+    "sets": [{ "setNumber": 1, "distance": 4828, "time": 24 }]
   }
 ]
 ```
@@ -1286,7 +1283,7 @@ Authenticate with Garmin using email + password and persist the encrypted creden
 - **Auth:** Required
 - **Rate limit:** `garmin-connect` category, 5 per 15-minute window per user
 - **Body:** `{ email: string (valid email, max 254), password: string (1-256) }`
-- **Behavior:** Logs into Garmin *before* writing any DB row — nothing is stored on failure. Fetches `getUserProfile()` to capture the display name (optional; non-fatal if it fails).
+- **Behavior:** Logs into Garmin _before_ writing any DB row — nothing is stored on failure. Fetches `getUserProfile()` to capture the display name (optional; non-fatal if it fails).
 - **Responses:**
   - `200 { success: true, garminDisplayName: string | null }`
   - `400 { code: "BAD_REQUEST" }` — invalid email / empty password
@@ -1388,10 +1385,18 @@ Get merged timeline of planned and logged workouts.
 
 ### GET /api/v1/exercises/:exerciseName/history
 
-Get historical exercise sets for a specific exercise.
+Get historical exercise sets for a specific exercise, newest session first.
+
+The name is resolved through `normalizeExerciseName`, so `RDL` finds
+`romanian_deadlift`; names it can't resolve fall back to an exact match.
 
 - **Auth:** Required
-- **Rate limit:** `workoutHistory` category, 60/min
+- **Rate limit:** `exerciseHistory` category, 120/min — the client fires one
+  request per distinct exercise when a session is opened, so this has its own
+  bucket rather than sharing `workoutHistory`
+- **Query:** `sessions` (1–20, optional) — bounds the number of distinct
+  training **dates** returned, not the number of rows, so a session's sets are
+  never returned in part
 - **Response:** Exercise set history with dates
 
 ### GET /api/v1/export
@@ -1411,41 +1416,41 @@ Export all training data as CSV or JSON.
 
 The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. These routes are **not yet registered with the OpenAPI registry**, so they are absent from [`docs/openapi.json`](openapi.json) and Swagger UI; this catalog and [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) are the reference until they are migrated.
 
-| Method | Path | Purpose | Rate limit (per min) |
-|---|---|---|---|
-| GET | `/foods/search` | Search local cache + Edamam + USDA + Open Food Facts (fuzzy / synonym / optional semantic) | `nutritionSearch` (30) |
-| GET | `/foods/recent` | Recently logged foods (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60) |
-| GET | `/foods/custom` | The user's custom foods | `nutritionRead` (60) |
-| POST | `/foods/barcode` | Barcode → food (Open Food Facts) | `nutritionBarcode` (30) |
-| POST | `/foods` | Create a custom food (+ servings) | `nutritionWrite` (30) |
-| GET | `/foods/:id` | Food + named servings | `nutritionRead` (60) |
-| PATCH | `/foods/:id` | Edit a custom food | `nutritionWrite` (30) |
-| DELETE | `/foods/:id` | Delete a custom food (`409` if referenced by a log) | `nutritionWrite` (30) |
-| POST | `/foods/:id/servings` | Add a named serving | `nutritionWrite` (30) |
-| DELETE | `/foods/:id/servings/:servingId` | Delete a serving | `nutritionWrite` (30) |
-| GET | `/favorites` | List favourites (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60) |
-| POST | `/favorites` | Add a favourite | `nutritionFav` (30) |
-| DELETE | `/favorites/:foodId` | Remove a favourite | `nutritionFav` (30) |
-| POST | `/logs` | Log a food | `nutritionLog` (60) |
-| PATCH | `/logs/:id` | Edit a log entry | `nutritionLog` (60) |
-| DELETE | `/logs/:id` | Delete a log entry | `nutritionLog` (60) |
-| POST | `/logs/repeat` | Repeat a day / meal | `nutritionLog` (20) |
-| POST | `/logs/batch` | Confirm reviewed parsed items | `nutritionLog` (60) |
-| GET | `/summary` | Daily totals + per-meal breakdown, incl. `mealTargets` | `nutritionRead` (60) |
-| GET | `/session-fuelling/:workoutId` | Pre/post-session fuelling windows | `nutritionRead` (60) |
-| GET | `/block` | Daily intake macros vs. training UTSS | `nutritionRead` (60) |
-| GET | `/targets` | Current target + history | `nutritionRead` (60) |
-| POST | `/targets` | Set / replace the target version | `nutritionWrite` (30) |
-| GET | `/micros` | The day's micronutrients vs. RDI | `nutritionRead` (60) |
-| POST | `/parse/text` | Natural-language meal → items **(AI)** | `parse` (5) + consent + budget |
-| POST | `/parse/photo` | Photo → items **(AI)** | `parse` (5) + consent + budget |
-| GET | `/insights` | Last stored AI nutrition analysis | `nutritionRead` (60) |
-| POST | `/insights` | Regenerate the analysis **(AI)** | `suggestions` (3) + consent + budget |
-| GET | `/recipes` | List recipes | `nutritionRead` (60) |
-| POST | `/recipes` | Create a recipe | `nutritionWrite` (30) |
-| GET | `/recipes/:id` | Recipe + ingredients + per-serving macros | `nutritionRead` (60) |
-| PATCH | `/recipes/:id` | Edit a recipe | `nutritionWrite` (30) |
-| DELETE | `/recipes/:id` | Delete a recipe | `nutritionWrite` (30) |
+| Method | Path                             | Purpose                                                                                                 | Rate limit (per min)                 |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| GET    | `/foods/search`                  | Search local cache + Edamam + USDA + Open Food Facts (fuzzy / synonym / optional semantic)              | `nutritionSearch` (30)               |
+| GET    | `/foods/recent`                  | Recently logged foods (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60)                 |
+| GET    | `/foods/custom`                  | The user's custom foods                                                                                 | `nutritionRead` (60)                 |
+| POST   | `/foods/barcode`                 | Barcode → food (Open Food Facts)                                                                        | `nutritionBarcode` (30)              |
+| POST   | `/foods`                         | Create a custom food (+ servings)                                                                       | `nutritionWrite` (30)                |
+| GET    | `/foods/:id`                     | Food + named servings                                                                                   | `nutritionRead` (60)                 |
+| PATCH  | `/foods/:id`                     | Edit a custom food                                                                                      | `nutritionWrite` (30)                |
+| DELETE | `/foods/:id`                     | Delete a custom food (`409` if referenced by a log)                                                     | `nutritionWrite` (30)                |
+| POST   | `/foods/:id/servings`            | Add a named serving                                                                                     | `nutritionWrite` (30)                |
+| DELETE | `/foods/:id/servings/:servingId` | Delete a serving                                                                                        | `nutritionWrite` (30)                |
+| GET    | `/favorites`                     | List favourites (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`)       | `nutritionRead` (60)                 |
+| POST   | `/favorites`                     | Add a favourite                                                                                         | `nutritionFav` (30)                  |
+| DELETE | `/favorites/:foodId`             | Remove a favourite                                                                                      | `nutritionFav` (30)                  |
+| POST   | `/logs`                          | Log a food                                                                                              | `nutritionLog` (60)                  |
+| PATCH  | `/logs/:id`                      | Edit a log entry                                                                                        | `nutritionLog` (60)                  |
+| DELETE | `/logs/:id`                      | Delete a log entry                                                                                      | `nutritionLog` (60)                  |
+| POST   | `/logs/repeat`                   | Repeat a day / meal                                                                                     | `nutritionLog` (20)                  |
+| POST   | `/logs/batch`                    | Confirm reviewed parsed items                                                                           | `nutritionLog` (60)                  |
+| GET    | `/summary`                       | Daily totals + per-meal breakdown, incl. `mealTargets`                                                  | `nutritionRead` (60)                 |
+| GET    | `/session-fuelling/:workoutId`   | Pre/post-session fuelling windows                                                                       | `nutritionRead` (60)                 |
+| GET    | `/block`                         | Daily intake macros vs. training UTSS                                                                   | `nutritionRead` (60)                 |
+| GET    | `/targets`                       | Current target + history                                                                                | `nutritionRead` (60)                 |
+| POST   | `/targets`                       | Set / replace the target version                                                                        | `nutritionWrite` (30)                |
+| GET    | `/micros`                        | The day's micronutrients vs. RDI                                                                        | `nutritionRead` (60)                 |
+| POST   | `/parse/text`                    | Natural-language meal → items **(AI)**                                                                  | `parse` (5) + consent + budget       |
+| POST   | `/parse/photo`                   | Photo → items **(AI)**                                                                                  | `parse` (5) + consent + budget       |
+| GET    | `/insights`                      | Last stored AI nutrition analysis                                                                       | `nutritionRead` (60)                 |
+| POST   | `/insights`                      | Regenerate the analysis **(AI)**                                                                        | `suggestions` (3) + consent + budget |
+| GET    | `/recipes`                       | List recipes                                                                                            | `nutritionRead` (60)                 |
+| POST   | `/recipes`                       | Create a recipe                                                                                         | `nutritionWrite` (30)                |
+| GET    | `/recipes/:id`                   | Recipe + ingredients + per-serving macros                                                               | `nutritionRead` (60)                 |
+| PATCH  | `/recipes/:id`                   | Edit a recipe                                                                                           | `nutritionWrite` (30)                |
+| DELETE | `/recipes/:id`                   | Delete a recipe                                                                                         | `nutritionWrite` (30)                |
 
 See [Nutrition & Fuelling](nutrition.md) for request/response shapes, the per-100g scaling model, and AI safety details.
 

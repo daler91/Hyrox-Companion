@@ -11,8 +11,12 @@ describe("workout route schema heart-rate consistency", () => {
   });
 
   it("accepts max >= avg, equal values, or a single side", () => {
-    expect(updateWorkoutRouteSchema.safeParse({ avgHeartrate: 150, maxHeartrate: 180 }).success).toBe(true);
-    expect(updateWorkoutRouteSchema.safeParse({ avgHeartrate: 150, maxHeartrate: 150 }).success).toBe(true);
+    expect(
+      updateWorkoutRouteSchema.safeParse({ avgHeartrate: 150, maxHeartrate: 180 }).success,
+    ).toBe(true);
+    expect(
+      updateWorkoutRouteSchema.safeParse({ avgHeartrate: 150, maxHeartrate: 150 }).success,
+    ).toBe(true);
     expect(updateWorkoutRouteSchema.safeParse({ maxHeartrate: 150 }).success).toBe(true);
     expect(updateWorkoutRouteSchema.safeParse({ avgHeartrate: 150 }).success).toBe(true);
   });

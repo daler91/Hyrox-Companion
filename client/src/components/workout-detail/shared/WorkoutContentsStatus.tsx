@@ -41,7 +41,8 @@ export function WorkoutContentsStatus({
   let detail = "Add exercise rows or a description";
   if (exerciseCount > 0) {
     label = `${exerciseCount} exercise${exerciseCount === 1 ? "" : "s"}`;
-    detail = sourceLabel ?? (hasSource ? "Structured rows with source text" : "Structured rows ready");
+    detail =
+      sourceLabel ?? (hasSource ? "Structured rows with source text" : "Structured rows ready");
   } else if (hasSource) {
     label = "Description captured";
     detail = "No exercise rows yet";
@@ -63,7 +64,9 @@ export function WorkoutContentsStatus({
         <div className="truncate font-medium">{label}</div>
       </div>
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {exerciseCount > 0 ? <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden /> : null}
+        {exerciseCount > 0 ? (
+          <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
+        ) : null}
         <span>{detail}</span>
       </div>
     </div>

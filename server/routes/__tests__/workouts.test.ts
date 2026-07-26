@@ -30,6 +30,7 @@ vi.mock("../../storage", () => ({
       getWorkoutLog: vi.fn(),
       deleteWorkoutLog: vi.fn(),
       updateWorkoutLog: vi.fn(),
+      getExerciseHistory: vi.fn(),
     },
     plans: {
       getPlanDay: vi.fn(),
@@ -69,7 +70,9 @@ vi.mock("../../services/bulkDeleteWorkouts", () => {
   };
 });
 
-vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../../services/structuredExerciseHealth", () => ({
+  incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("../../services/exportService", () => ({
   generateCSV: vi.fn(),
@@ -86,12 +89,50 @@ type ContractCase = {
 };
 
 const endpointFixtureCases: ContractCase[] = [
-  { name: "workouts list", method: "get", path: "/api/v1/workouts", expectedStatus: 200, expectedFields: ["0.id"] },
-    { name: "workout update", method: "patch", path: "/api/v1/workouts/workout-1", body: { notes: "updated" }, expectedStatus: 200, expectedFields: ["id", "notes"] },
-  { name: "workout delete", method: "delete", path: "/api/v1/workouts/workout-1", expectedStatus: 200, expectedFields: ["success"] },
-  { name: "workout reparse", method: "post", path: "/api/v1/workouts/workout-1/reparse", body: {}, expectedStatus: 200, expectedFields: ["saved", "setCount", "exercises"] },
-  { name: "timeline list", method: "get", path: "/api/v1/timeline", expectedStatus: 200, expectedFields: ["0.id", "0.type"] },
-  { name: "export json", method: "get", path: "/api/v1/export?format=json", expectedStatus: 200, expectedFields: ["exportedAt", "workouts"] },
+  {
+    name: "workouts list",
+    method: "get",
+    path: "/api/v1/workouts",
+    expectedStatus: 200,
+    expectedFields: ["0.id"],
+  },
+  {
+    name: "workout update",
+    method: "patch",
+    path: "/api/v1/workouts/workout-1",
+    body: { notes: "updated" },
+    expectedStatus: 200,
+    expectedFields: ["id", "notes"],
+  },
+  {
+    name: "workout delete",
+    method: "delete",
+    path: "/api/v1/workouts/workout-1",
+    expectedStatus: 200,
+    expectedFields: ["success"],
+  },
+  {
+    name: "workout reparse",
+    method: "post",
+    path: "/api/v1/workouts/workout-1/reparse",
+    body: {},
+    expectedStatus: 200,
+    expectedFields: ["saved", "setCount", "exercises"],
+  },
+  {
+    name: "timeline list",
+    method: "get",
+    path: "/api/v1/timeline",
+    expectedStatus: 200,
+    expectedFields: ["0.id", "0.type"],
+  },
+  {
+    name: "export json",
+    method: "get",
+    path: "/api/v1/export?format=json",
+    expectedStatus: 200,
+    expectedFields: ["exportedAt", "workouts"],
+  },
 ];
 
 describe("Workouts Routes", () => {
@@ -102,29 +143,66 @@ describe("Workouts Routes", () => {
     clearRateLimitBuckets();
     app = createTestApp(workoutsRouter);
 
-    const [{ storage }, { createWorkout, updateWorkoutUseCase }, { reparseWorkout, updateWorkoutStructureBlockScore }, { generateCSV, generateJSON }] = await Promise.all([
+    const [
+      { storage },
+      { createWorkout, updateWorkoutUseCase },
+      { reparseWorkout, updateWorkoutStructureBlockScore },
+      { generateCSV, generateJSON },
+    ] = await Promise.all([
       import("../../storage"),
       import("../../services/workoutUseCases"),
       import("../../services/workoutService"),
       import("../../services/exportService"),
     ]);
 
-    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([{ id: "workout-1", userId: "test_user_id", date: "2026-01-02", notes: "steady" }]);
-    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "workout-1", userId: "test_user_id", mainWorkout: "Engine" });
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
+      { id: "workout-1", userId: "test_user_id", date: "2026-01-02", notes: "steady" },
+    ]);
+    vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({
+      id: "workout-1",
+      userId: "test_user_id",
+      mainWorkout: "Engine",
+    });
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([]);
     vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([]);
     vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue(true);
-    vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" });
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" });
+    vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({
+      id: "workout-1",
+      notes: "updated",
+    });
+    vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
+      id: "day-1",
+      planId: "plan-1",
+      focus: "Engine",
+    });
     vi.mocked(storage.plans.deletePlanDay).mockResolvedValue(true);
-    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }]);
-    vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "kg" });
+    vi.mocked(storage.timeline.getTimeline).mockResolvedValue([
+      { id: "timeline-1", type: "workout", date: "2026-01-02" },
+    ]);
+    vi.mocked(storage.users.getUser).mockResolvedValue({
+      id: "test_user_id",
+      aiCoachEnabled: true,
+      weightUnit: "kg",
+    });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(storage.workouts.getExerciseHistory).mockResolvedValue([]);
 
     vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" });
     vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" });
-    vi.mocked(reparseWorkout).mockResolvedValue({ exercises: [{ exerciseName: "row" }], setCount: 1 });
-    vi.mocked(updateWorkoutStructureBlockScore).mockResolvedValue([{ id: "block-1", sectionType: "main", formatType: "amrap", timeCapMinutes: 10, score: { type: "amrap", rounds: 4 }, steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }] }]);
+    vi.mocked(reparseWorkout).mockResolvedValue({
+      exercises: [{ exerciseName: "row" }],
+      setCount: 1,
+    });
+    vi.mocked(updateWorkoutStructureBlockScore).mockResolvedValue([
+      {
+        id: "block-1",
+        sectionType: "main",
+        formatType: "amrap",
+        timeCapMinutes: 10,
+        score: { type: "amrap", rounds: 4 },
+        steps: [{ stepNumber: 1, stepType: "work", exerciseName: "rowing" }],
+      },
+    ]);
 
     const { bulkDeleteWorkouts } = await import("../../services/bulkDeleteWorkouts");
     vi.mocked(bulkDeleteWorkouts).mockResolvedValue({
@@ -135,20 +213,39 @@ describe("Workouts Routes", () => {
     });
 
     vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
-    vi.mocked(generateJSON).mockResolvedValue({ exportedAt: "2026-01-02T10:00:00.000Z", workouts: [{ id: "workout-1" }] });
+    vi.mocked(generateJSON).mockResolvedValue({
+      exportedAt: "2026-01-02T10:00:00.000Z",
+      workouts: [{ id: "workout-1" }],
+    });
   });
 
   it("assigns and clears a workout's plan day via the dedicated endpoint", async () => {
     const { assignWorkoutPlanDayUseCase } = await import("../../services/workoutUseCases");
-    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValue({ id: "workout-1", planId: "plan-1", planDayId: "day-1" });
+    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValue({
+      id: "workout-1",
+      planId: "plan-1",
+      planDayId: "day-1",
+    });
 
-    const assignRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "day-1" });
+    const assignRes = await request(app)
+      .patch("/api/v1/workouts/workout-1/plan-day")
+      .send({ planDayId: "day-1" });
     expect(assignRes.status).toBe(200);
     expect(assignRes.body).toMatchObject({ planId: "plan-1", planDayId: "day-1" });
-    expect(assignWorkoutPlanDayUseCase).toHaveBeenCalledWith({ userId: "test_user_id", workoutId: "workout-1", planDayId: "day-1" });
+    expect(assignWorkoutPlanDayUseCase).toHaveBeenCalledWith({
+      userId: "test_user_id",
+      workoutId: "workout-1",
+      planDayId: "day-1",
+    });
 
-    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce({ id: "workout-1", planId: null, planDayId: null });
-    const clearRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: null });
+    vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce({
+      id: "workout-1",
+      planId: null,
+      planDayId: null,
+    });
+    const clearRes = await request(app)
+      .patch("/api/v1/workouts/workout-1/plan-day")
+      .send({ planDayId: null });
     expect(clearRes.status).toBe(200);
   });
 
@@ -157,11 +254,15 @@ describe("Workouts Routes", () => {
 
     const emptyRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({});
     expect(emptyRes.status).toBe(400);
-    const blankRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "" });
+    const blankRes = await request(app)
+      .patch("/api/v1/workouts/workout-1/plan-day")
+      .send({ planDayId: "" });
     expect(blankRes.status).toBe(400);
 
     vi.mocked(assignWorkoutPlanDayUseCase).mockResolvedValueOnce(null);
-    const missingRes = await request(app).patch("/api/v1/workouts/workout-1/plan-day").send({ planDayId: "day-1" });
+    const missingRes = await request(app)
+      .patch("/api/v1/workouts/workout-1/plan-day")
+      .send({ planDayId: "day-1" });
     expect(missingRes.status).toBe(404);
   });
 
@@ -172,7 +273,9 @@ describe("Workouts Routes", () => {
       if (testCase.body) req = req.send(testCase.body);
       const response = await req;
       const elapsedMs = Number((performance.now() - started).toFixed(2));
-      console.info(`[route-contract] ${testCase.name} ${testCase.method.toUpperCase()} ${testCase.path} => ${response.status} in ${elapsedMs}ms`);
+      console.info(
+        `[route-contract] ${testCase.name} ${testCase.method.toUpperCase()} ${testCase.path} => ${response.status} in ${elapsedMs}ms`,
+      );
 
       expect(response.status, testCase.name).toBe(testCase.expectedStatus);
       for (const fieldPath of testCase.expectedFields) {
@@ -209,10 +312,9 @@ describe("Workouts Routes", () => {
   });
 
   it("rejects incomplete bulk delete targets before deleting anything", async () => {
-    const [{ storage }, { bulkDeleteWorkouts, BULK_DELETE_WORKOUTS_NOT_FOUND }] = await Promise.all([
-      import("../../storage"),
-      import("../../services/bulkDeleteWorkouts"),
-    ]);
+    const [{ storage }, { bulkDeleteWorkouts, BULK_DELETE_WORKOUTS_NOT_FOUND }] = await Promise.all(
+      [import("../../storage"), import("../../services/bulkDeleteWorkouts")],
+    );
     vi.mocked(bulkDeleteWorkouts).mockRejectedValueOnce(new Error(BULK_DELETE_WORKOUTS_NOT_FOUND));
 
     const response = await request(app)
@@ -220,15 +322,16 @@ describe("Workouts Routes", () => {
       .send({ workoutLogIds: ["workout-1", "missing-workout"] });
 
     expect(response.status).toBe(404);
-    expect(response.body).toEqual({ error: "One or more workouts were not found", code: "NOT_FOUND" });
+    expect(response.body).toEqual({
+      error: "One or more workouts were not found",
+      code: "NOT_FOUND",
+    });
     expect(storage.workouts.deleteWorkoutLog).not.toHaveBeenCalled();
     expect(storage.plans.deletePlanDay).not.toHaveBeenCalled();
   });
 
   it("rejects empty bulk delete requests", async () => {
-    const response = await request(app)
-      .post("/api/v1/workouts/bulk-delete")
-      .send({});
+    const response = await request(app).post("/api/v1/workouts/bulk-delete").send({});
 
     expect(response.status).toBe(400);
     expect(response.body.code).toBe("VALIDATION_ERROR");
@@ -241,13 +344,15 @@ describe("Workouts Routes", () => {
 
     const listResponse = await request(app).get("/api/v1/workouts");
     expect(listResponse.status).toBe(500);
-    expect(listResponse.body).toEqual({ error: "Internal Server Error", code: "INTERNAL_SERVER_ERROR" });
+    expect(listResponse.body).toEqual({
+      error: "Internal Server Error",
+      code: "INTERNAL_SERVER_ERROR",
+    });
 
     const reparseNotFound = await request(app).post("/api/v1/workouts/missing/reparse").send({});
     expect(reparseNotFound.status).toBe(404);
     expect(reparseNotFound.body).toEqual({ error: "Workout not found", code: "NOT_FOUND" });
   });
-
 
   it("prefers structured exercise_sets for workout reads when both legacy text and sets exist", async () => {
     const { storage } = await import("../../storage");
@@ -257,7 +362,15 @@ describe("Workouts Routes", () => {
       mainWorkout: "Back squat 5x5 @ 100kg",
     });
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValueOnce([
-      { id: "set-1", workoutLogId: "workout-legacy-mixed", exerciseName: "Back Squat", reps: 5, weight: "110", setNumber: 1, sortOrder: 0 },
+      {
+        id: "set-1",
+        workoutLogId: "workout-legacy-mixed",
+        exerciseName: "Back Squat",
+        reps: 5,
+        weight: "110",
+        setNumber: 1,
+        sortOrder: 0,
+      },
     ]);
 
     const response = await request(app).get("/api/v1/workouts/workout-legacy-mixed");
@@ -274,9 +387,14 @@ describe("Workouts Routes", () => {
       import("../../services/workoutUseCases"),
       import("../../services/workoutService"),
     ]);
-    vi.mocked(updateWorkoutUseCase).mockResolvedValueOnce({ id: "workout-1", notes: "edited text" });
+    vi.mocked(updateWorkoutUseCase).mockResolvedValueOnce({
+      id: "workout-1",
+      notes: "edited text",
+    });
 
-    const patchResponse = await request(app).patch("/api/v1/workouts/workout-1").send({ mainWorkout: "edited legacy text" });
+    const patchResponse = await request(app)
+      .patch("/api/v1/workouts/workout-1")
+      .send({ mainWorkout: "edited legacy text" });
     expect(patchResponse.status).toBe(422);
     expect(storage.workouts.getExerciseSetsByWorkoutLog).not.toHaveBeenCalledWith("workout-1");
     expect(reparseWorkout).not.toHaveBeenCalled();
@@ -291,7 +409,10 @@ describe("Workouts Routes", () => {
       import("../../storage"),
       import("../../services/workoutService"),
     ]);
-    vi.mocked(storage.users.getUser).mockResolvedValueOnce({ id: "test_user_id", aiCoachEnabled: false });
+    vi.mocked(storage.users.getUser).mockResolvedValueOnce({
+      id: "test_user_id",
+      aiCoachEnabled: false,
+    });
 
     const response = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
 
@@ -306,8 +427,7 @@ describe("Workouts Routes", () => {
       import("../../services/workoutService"),
     ]);
 
-    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog)
-      .mockResolvedValueOnce([]);
+    vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValueOnce([]);
 
     const response = await request(app).get("/api/v1/workouts/workout-1");
 
@@ -316,27 +436,28 @@ describe("Workouts Routes", () => {
     expect(autoHydrateExerciseSetsFromTextIfNeeded).not.toHaveBeenCalled();
     expect(storage.workouts.getExerciseSetsByWorkoutLog).toHaveBeenCalledTimes(1);
   });
-  
 
   it("rejects text-only workout create/update on non-legacy routes", async () => {
-    const createRes = await request(app).post("/api/v1/workouts").send({ date: "2026-01-02", focus: "Conditioning", mainWorkout: "just text" });
+    const createRes = await request(app)
+      .post("/api/v1/workouts")
+      .send({ date: "2026-01-02", focus: "Conditioning", mainWorkout: "just text" });
     expect(createRes.status).toBe(422);
     expect(createRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
 
-    const updateRes = await request(app).patch("/api/v1/workouts/workout-1").send({ accessory: "also text-only" });
+    const updateRes = await request(app)
+      .patch("/api/v1/workouts/workout-1")
+      .send({ accessory: "also text-only" });
     expect(updateRes.status).toBe(422);
     expect(updateRes.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
   });
 
   it("allows text-only workout create when linked to a plan day", async () => {
-    const createRes = await request(app)
-      .post("/api/v1/workouts")
-      .send({
-        date: "2026-01-02",
-        focus: "Conditioning",
-        mainWorkout: "just text inherited from plan day",
-        planDayId: "plan-day-1",
-      });
+    const createRes = await request(app).post("/api/v1/workouts").send({
+      date: "2026-01-02",
+      focus: "Conditioning",
+      mainWorkout: "just text inherited from plan day",
+      planDayId: "plan-day-1",
+    });
 
     expect(createRes.status).toBe(200);
   });
@@ -348,34 +469,65 @@ describe("Workouts Routes", () => {
     expect(legacyOnly.status).toBe(422);
     expect(legacyOnly.body.code).toBe("STRUCTURED_ROWS_REQUIRED");
 
-    const structuredOnly = await request(app).post("/api/v1/workouts").send({
-      date: "2026-01-02",
-      focus: "Conditioning",
-      mainWorkout: "Structured row import",
-      exercises: [{ exerciseName: "rowing", category: "functional", sets: [{ setNumber: 1, distance: 500 }] }],
-    });
+    const structuredOnly = await request(app)
+      .post("/api/v1/workouts")
+      .send({
+        date: "2026-01-02",
+        focus: "Conditioning",
+        mainWorkout: "Structured row import",
+        exercises: [
+          {
+            exerciseName: "rowing",
+            category: "functional",
+            sets: [{ setNumber: 1, distance: 500 }],
+          },
+        ],
+      });
     expect(structuredOnly.status).toBe(200);
 
-    const hybrid = await request(app).post("/api/v1/workouts").send({
-      date: "2026-01-02",
-      focus: "Conditioning",
-      mainWorkout: "legacy note",
-      exercises: [{ exerciseName: "rowing", category: "functional", sets: [{ setNumber: 1, distance: 750 }] }],
-    });
+    const hybrid = await request(app)
+      .post("/api/v1/workouts")
+      .send({
+        date: "2026-01-02",
+        focus: "Conditioning",
+        mainWorkout: "legacy note",
+        exercises: [
+          {
+            exerciseName: "rowing",
+            category: "functional",
+            sets: [{ setNumber: 1, distance: 750 }],
+          },
+        ],
+      });
     expect(hybrid.status).toBe(200);
   });
 
   it("accepts text/photo parse when rows are persisted (write-through)", async () => {
-    const { reparseWorkout, reparseWorkoutFromImage } = await import("../../services/workoutService");
-    vi.mocked(reparseWorkout).mockResolvedValueOnce({ exercises: [{ exerciseName: "row" }], setCount: 2, saved: true, rejectedCount: 0, rejectionReasons: [] });
-    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({ exercises: [{ exerciseName: "wall ball" }], setCount: 1, saved: true, rejectedCount: 0, rejectionReasons: [] });
+    const { reparseWorkout, reparseWorkoutFromImage } =
+      await import("../../services/workoutService");
+    vi.mocked(reparseWorkout).mockResolvedValueOnce({
+      exercises: [{ exerciseName: "row" }],
+      setCount: 2,
+      saved: true,
+      rejectedCount: 0,
+      rejectionReasons: [],
+    });
+    vi.mocked(reparseWorkoutFromImage).mockResolvedValueOnce({
+      exercises: [{ exerciseName: "wall ball" }],
+      setCount: 1,
+      saved: true,
+      rejectedCount: 0,
+      rejectionReasons: [],
+    });
 
     const textRes = await request(app).post("/api/v1/workouts/workout-1/reparse").send({});
     expect(textRes.status).toBe(200);
     expect(textRes.body.saved).toBe(true);
     expect(textRes.body.setCount).toBeGreaterThan(0);
 
-    const photoRes = await request(app).post("/api/v1/workouts/workout-1/reparse-from-image").send({ imageBase64: "Zm9v", mimeType: "image/png" });
+    const photoRes = await request(app)
+      .post("/api/v1/workouts/workout-1/reparse-from-image")
+      .send({ imageBase64: "Zm9v", mimeType: "image/png" });
     expect(photoRes.status).toBe(200);
     expect(photoRes.body.saved).toBe(true);
     expect(photoRes.body.setCount).toBeGreaterThan(0);
@@ -424,7 +576,6 @@ describe("Workouts Routes", () => {
     expect(response.body.code).toBe("PARSE_WRITE_THROUGH_REQUIRED");
   });
 
-
   it("does not persist prescribed text overrides when parse write-through fails", async () => {
     const [{ storage }, { reparseWorkout }] = await Promise.all([
       import("../../storage"),
@@ -444,19 +595,25 @@ describe("Workouts Routes", () => {
       "test_user_id",
     );
   });
-it("captures representative high-frequency endpoint timings", async () => {
+  it("captures representative high-frequency endpoint timings", async () => {
     const samples = 6;
     const timings: Array<{ endpoint: string; elapsedMs: number }> = [];
 
     for (let i = 0; i < samples; i++) {
       const workoutStart = performance.now();
       const workoutRes = await request(app).get("/api/v1/workouts");
-      timings.push({ endpoint: "GET /api/v1/workouts", elapsedMs: Number((performance.now() - workoutStart).toFixed(2)) });
+      timings.push({
+        endpoint: "GET /api/v1/workouts",
+        elapsedMs: Number((performance.now() - workoutStart).toFixed(2)),
+      });
       expect(workoutRes.status).toBe(200);
 
       const timelineStart = performance.now();
       const timelineRes = await request(app).get("/api/v1/timeline");
-      timings.push({ endpoint: "GET /api/v1/timeline", elapsedMs: Number((performance.now() - timelineStart).toFixed(2)) });
+      timings.push({
+        endpoint: "GET /api/v1/timeline",
+        elapsedMs: Number((performance.now() - timelineStart).toFixed(2)),
+      });
       expect(timelineRes.status).toBe(200);
     }
 
@@ -467,10 +624,67 @@ it("captures representative high-frequency endpoint timings", async () => {
     }, {});
 
     for (const [endpoint, values] of Object.entries(grouped)) {
-      const avgMs = Number((values.reduce((sum, current) => sum + current, 0) / values.length).toFixed(2));
+      const avgMs = Number(
+        (values.reduce((sum, current) => sum + current, 0) / values.length).toFixed(2),
+      );
       const maxMs = Math.max(...values);
-      console.info(`[perf-fixture] ${endpoint} samples=${values.length} avg=${avgMs}ms max=${maxMs}ms`);
+      console.info(
+        `[perf-fixture] ${endpoint} samples=${values.length} avg=${avgMs}ms max=${maxMs}ms`,
+      );
       expect(avgMs).toBeLessThan(250);
     }
+  });
+
+  // The endpoint has existed since it was built with no call sites and no
+  // tests; "Last time" is its first caller.
+  describe("GET /api/v1/exercises/:exerciseName/history", () => {
+    it("returns the exercise's logged sets", async () => {
+      const { storage } = await import("../../storage");
+      vi.mocked(storage.workouts.getExerciseHistory).mockResolvedValue([
+        { id: "set-1", exerciseName: "back_squat", date: "2026-01-02" },
+      ]);
+
+      const res = await request(app).get("/api/v1/exercises/back_squat/history?sessions=3");
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(storage.workouts.getExerciseHistory).toHaveBeenCalledWith(
+        "test_user_id",
+        "back_squat",
+        { sessionLimit: 3 },
+      );
+    });
+
+    it("returns every session when no bound is given", async () => {
+      const { storage } = await import("../../storage");
+
+      const res = await request(app).get("/api/v1/exercises/back_squat/history");
+
+      expect(res.status).toBe(200);
+      expect(storage.workouts.getExerciseHistory).toHaveBeenCalledWith(
+        "test_user_id",
+        "back_squat",
+        { sessionLimit: undefined },
+      );
+    });
+
+    it.each([["0"], ["21"], ["abc"]])("rejects sessions=%s", async (sessions) => {
+      const res = await request(app).get(
+        `/api/v1/exercises/back_squat/history?sessions=${sessions}`,
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it("passes an aliased name through for the storage layer to resolve", async () => {
+      const { storage } = await import("../../storage");
+
+      await request(app).get("/api/v1/exercises/RDL/history");
+
+      expect(storage.workouts.getExerciseHistory).toHaveBeenCalledWith(
+        "test_user_id",
+        "RDL",
+        expect.anything(),
+      );
+    });
   });
 });

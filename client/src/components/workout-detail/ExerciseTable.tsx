@@ -24,7 +24,10 @@ import { buildBlockAssignmentOptions } from "@/lib/workoutStructureAssignments";
 import { useExerciseDndHandler } from "./exercise-table/dnd";
 import { ExerciseRowRenderer } from "./exercise-table/ExerciseRows";
 import { AddExerciseDialog, EmptyExerciseState } from "./exercise-table/ExerciseTableDialogs";
-import { groupsContainLegacyEmom, toggleExerciseRow as toggleExerciseRowState } from "./exercise-table/state";
+import {
+  groupsContainLegacyEmom,
+  toggleExerciseRow as toggleExerciseRowState,
+} from "./exercise-table/state";
 import { type SaveState, SaveStatePill } from "./SaveStatePill";
 
 export { dispatchSortOrderMutations, toggleExerciseRow } from "./exercise-table/state";
@@ -57,6 +60,19 @@ interface ExerciseTableProps {
   readonly defaultExpanded?: boolean;
   readonly readableSummary?: boolean;
   readonly showPlannedDiffs?: boolean;
+  /**
+   * Show each exercise's last logged session under its prescription, with a
+   * "use last" fill. Opt-in because it costs one query per distinct exercise:
+   * worth it on the surfaces where the athlete is deciding what to lift, noise
+   * in the draft-entry flow where nothing is saved yet.
+   */
+  readonly showLastTime?: boolean;
+  /**
+   * The workout log being viewed, so its own sets are excluded from its
+   * "last time". Distinct from `workoutId`, which is the *owner* id and is a
+   * plan-day id on planned surfaces.
+   */
+  readonly currentWorkoutLogId?: string | null;
   readonly onOpenConversionHelper?: () => void;
   readonly structureBlocks?: StructureBlockInput[];
 }
@@ -80,6 +96,8 @@ export function ExerciseTable({
   defaultExpanded = false,
   readableSummary = true,
   showPlannedDiffs = false,
+  showLastTime = false,
+  currentWorkoutLogId,
   onOpenConversionHelper,
   structureBlocks = [],
 }: ExerciseTableProps) {
@@ -92,10 +110,7 @@ export function ExerciseTable({
   // Stable per-group identity for @dnd-kit. Matches the React `key`
   // used below so SortableContext items align with rendered rows.
   const rowKeys = useMemo(
-    () =>
-      groups.map(
-        (g) => g.sets[0]?.id ?? `${g.exerciseName}:${g.customLabel ?? ""}`,
-      ),
+    () => groups.map((g) => g.sets[0]?.id ?? `${g.exerciseName}:${g.customLabel ?? ""}`),
     [groups],
   );
 
@@ -192,7 +207,10 @@ export function ExerciseTable({
         >
           <div>
             <p className="font-medium text-destructive">Legacy EMOM row detected</p>
-            <span>EMOM is no longer supported as a row exercise. Convert this workout via Parse to exercises.</span>
+            <span>
+              EMOM is no longer supported as a row exercise. Convert this workout via Parse to
+              exercises.
+            </span>
           </div>
           {onOpenConversionHelper ? (
             <Button
@@ -236,6 +254,8 @@ export function ExerciseTable({
                   readableSummary={readableSummary}
                   showPlannedDiffs={showPlannedDiffs}
                   blockAssignmentOptions={blockAssignmentOptions}
+                  showLastTime={showLastTime}
+                  currentWorkoutLogId={currentWorkoutLogId}
                 />
               </SortableContext>
             </DndContext>

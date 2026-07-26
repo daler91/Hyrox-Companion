@@ -15,7 +15,12 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 }));
 
 const noop = () => {};
-const emptyInitial = { avgHeartRate: null, maxHeartRate: null, durationSeconds: null, distanceMeters: null };
+const emptyInitial = {
+  avgHeartRate: null,
+  maxHeartRate: null,
+  durationSeconds: null,
+  distanceMeters: null,
+};
 
 describe("MafTestForm", () => {
   beforeEach(() => {
@@ -29,7 +34,12 @@ describe("MafTestForm", () => {
         open
         onOpenChange={noop}
         mode="edit"
-        initial={{ avgHeartRate: 150, maxHeartRate: 162, durationSeconds: 1710, distanceMeters: 5000 }}
+        initial={{
+          avgHeartRate: 150,
+          maxHeartRate: 162,
+          durationSeconds: 1710,
+          distanceMeters: 5000,
+        }}
         isPending={false}
         onSubmit={onSubmit}
       />,
@@ -54,7 +64,14 @@ describe("MafTestForm", () => {
     unit.value = "miles";
     const onSubmit = vi.fn();
     render(
-      <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
+      <MafTestForm
+        open
+        onOpenChange={noop}
+        mode="create"
+        initial={emptyInitial}
+        isPending={false}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.type(screen.getByTestId("maf-test-form-avg-hr"), "140");
@@ -71,7 +88,14 @@ describe("MafTestForm", () => {
   it("blocks submit and surfaces an error for an out-of-range heart rate", async () => {
     const onSubmit = vi.fn();
     render(
-      <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
+      <MafTestForm
+        open
+        onOpenChange={noop}
+        mode="create"
+        initial={emptyInitial}
+        isPending={false}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.type(screen.getByTestId("maf-test-form-avg-hr"), "12"); // below the 20 bpm floor
@@ -84,7 +108,14 @@ describe("MafTestForm", () => {
   it("rejects a malformed duration", async () => {
     const onSubmit = vi.fn();
     render(
-      <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
+      <MafTestForm
+        open
+        onOpenChange={noop}
+        mode="create"
+        initial={emptyInitial}
+        isPending={false}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.type(screen.getByTestId("maf-test-form-duration"), "28:75"); // seconds overflow

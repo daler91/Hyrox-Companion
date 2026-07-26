@@ -4,10 +4,7 @@ import type { ReactNode } from "react";
 import { describe, it, vi } from "vitest";
 
 import { SkippedSheet } from "../SkippedSheet";
-import {
-  expectWorkoutTitleRename,
-  renameWorkoutTitleFromHeader,
-} from "./workoutTitleTestHelpers";
+import { expectWorkoutTitleRename, renameWorkoutTitleFromHeader } from "./workoutTitleTestHelpers";
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
   ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
@@ -46,13 +43,7 @@ describe("SkippedSheet", () => {
   it("renames a skipped workout title from the sheet header", async () => {
     const onRenameTitle = vi.fn();
 
-    render(
-      <SkippedSheet
-        entry={skippedEntry}
-        onClose={vi.fn()}
-        onRenameTitle={onRenameTitle}
-      />,
-    );
+    render(<SkippedSheet entry={skippedEntry} onClose={vi.fn()} onRenameTitle={onRenameTitle} />);
 
     renameWorkoutTitleFromHeader("workout-title-entry-1", "  Skipped engine  ");
 

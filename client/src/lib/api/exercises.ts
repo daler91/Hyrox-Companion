@@ -9,6 +9,10 @@ import type {
 
 import { typedRequest } from "./client";
 
+/** A logged set plus its parent workout's date — what the history endpoint has
+ *  always returned, though the declared type here used to say otherwise. */
+export type ExerciseSetWithDate = ExerciseSet & { date: string };
+
 export interface ParseFromImagePayload {
   readonly imageBase64: string;
   readonly mimeType: AllowedImageMimeType;
@@ -29,23 +33,17 @@ export const exercises = {
     typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises", { text }, options),
 
   parseStructured: (text: string, options?: { signal?: AbortSignal }) =>
-    typedRequest<ParseWorkoutStructureResponse>("POST", "/api/v1/parse-workout-structure", { text }, options),
-
-  parseFromImage: (
-    payload: ParseFromImagePayload,
-    options?: { signal?: AbortSignal },
-  ) =>
-    typedRequest<ParsedExercise[]>(
+    typedRequest<ParseWorkoutStructureResponse>(
       "POST",
-      "/api/v1/parse-exercises-from-image",
-      payload,
+      "/api/v1/parse-workout-structure",
+      { text },
       options,
     ),
 
-  parseStructuredFromImage: (
-    payload: ParseFromImagePayload,
-    options?: { signal?: AbortSignal },
-  ) =>
+  parseFromImage: (payload: ParseFromImagePayload, options?: { signal?: AbortSignal }) =>
+    typedRequest<ParsedExercise[]>("POST", "/api/v1/parse-exercises-from-image", payload, options),
+
+  parseStructuredFromImage: (payload: ParseFromImagePayload, options?: { signal?: AbortSignal }) =>
     typedRequest<ParseWorkoutStructureResponse>(
       "POST",
       "/api/v1/parse-workout-structure-from-image",
@@ -53,8 +51,15 @@ export const exercises = {
       options,
     ),
 
-  getHistory: (exerciseName: string) =>
-    typedRequest<ExerciseSet[]>("GET", `/api/v1/exercises/${exerciseName}/history`),
+  /** Past logged sets of one exercise, newest session first. `sessions` bounds
+   *  distinct dates, not rows, so a session's sets never come back half. */
+  getHistory: (exerciseName: string, options?: { sessions?: number }) =>
+    typedRequest<ExerciseSetWithDate[]>(
+      "GET",
+      `/api/v1/exercises/${encodeURIComponent(exerciseName)}/history${
+        options?.sessions ? `?sessions=${options.sessions}` : ""
+      }`,
+    ),
 
   listCustom: () => typedRequest<CustomExercise[]>("GET", "/api/v1/custom-exercises"),
 

@@ -12,17 +12,24 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
-import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
+import { normalizeExerciseName } from "@shared/schema/exercises";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
+import {
+  prescribedSetToLogRow,
+  queryExerciseSetsWithDates,
+  takeMostRecentSessions,
+} from "./shared";
 
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
 type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
 
-function stepTargets(step: WorkoutStructureStepRow): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
+function stepTargets(
+  step: WorkoutStructureStepRow,
+): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
   const targets: Record<string, unknown> =
     step.targets && typeof step.targets === "object" && !Array.isArray(step.targets)
       ? { ...(step.targets as Record<string, unknown>) }
@@ -31,9 +38,7 @@ function stepTargets(step: WorkoutStructureStepRow): NonNullable<StructureBlockI
   if (step.targetTime != null) targets.targetTime = step.targetTime;
   if (step.targetDistance != null) targets.targetDistance = step.targetDistance;
   if (step.targetWeight != null) targets.targetWeight = step.targetWeight;
-  return Object.keys(targets).length > 0
-    ? (targets)
-    : null;
+  return Object.keys(targets).length > 0 ? targets : null;
 }
 
 function mapStructureBlockRows(
@@ -113,10 +118,12 @@ function countPrSets(
 }
 
 type MutationOwnerContext =
-  | { kind: "workout"; id: string; userId: string }
-  | { kind: "planDay"; id: string; userId: string };
+  { kind: "workout"; id: string; userId: string } | { kind: "planDay"; id: string; userId: string };
 
-type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">;
+type NormalizedSetCreateInput = Omit<
+  InsertExerciseSet,
+  "id" | "workoutLogId" | "planDayId" | "sortOrder"
+>;
 
 /**
  * Update payload accepted by updateExerciseSetNormalized. `version` is
@@ -125,7 +132,9 @@ type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | 
  * gate the WHERE clause for optimistic-concurrency control (W18); it is
  * extracted from the object before the SET clause is built.
  */
-type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "version">> & {
+type NormalizedSetUpdateInput = Partial<
+  Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "version">
+> & {
   readonly expectedVersion?: number;
 };
 
@@ -140,9 +149,10 @@ type MutationOwnerAdapter = {
   scopeWhere: (containerId: string) => ReturnType<typeof eq>;
 };
 
-
 export class WorkoutStorage {
-  private async loadStepsForBlocks(blockIds: string[]): Promise<Map<string, WorkoutStructureStepRow[]>> {
+  private async loadStepsForBlocks(
+    blockIds: string[],
+  ): Promise<Map<string, WorkoutStructureStepRow[]>> {
     if (blockIds.length === 0) return new Map();
     const steps = await db
       .select()
@@ -158,7 +168,9 @@ export class WorkoutStorage {
     return stepsByBlock;
   }
 
-  private async loadWorkoutStructure(whereClause: ReturnType<typeof eq>): Promise<StructureBlockInput[]> {
+  private async loadWorkoutStructure(
+    whereClause: ReturnType<typeof eq>,
+  ): Promise<StructureBlockInput[]> {
     const blocks = await db
       .select()
       .from(workoutStructureBlocks)
@@ -194,7 +206,7 @@ export class WorkoutStorage {
     return and(
       inArray(planDays.id, ids),
       eq(planDays.planId, trainingPlans.id),
-      eq(trainingPlans.userId, userId)
+      eq(trainingPlans.userId, userId),
     );
   }
 
@@ -204,10 +216,7 @@ export class WorkoutStorage {
     // insert and the status write, leaving the plan day's "completed" flag
     // out of sync with the underlying workout rows.
     return await db.transaction(async (tx) => {
-      const [workoutLog] = await tx
-        .insert(workoutLogs)
-        .values(log)
-        .returning();
+      const [workoutLog] = await tx.insert(workoutLogs).values(log).returning();
 
       if (log.planDayId) {
         await tx
@@ -306,7 +315,9 @@ export class WorkoutStorage {
     return this.loadWorkoutStructure(eq(workoutStructureBlocks.planDayId, planDayId));
   }
 
-  async getWorkoutStructuresByWorkoutLogs(workoutLogIds: string[]): Promise<Map<string, StructureBlockInput[]>> {
+  async getWorkoutStructuresByWorkoutLogs(
+    workoutLogIds: string[],
+  ): Promise<Map<string, StructureBlockInput[]>> {
     if (workoutLogIds.length === 0) return new Map();
     const blocks = await db
       .select()
@@ -316,7 +327,9 @@ export class WorkoutStorage {
     return this.groupWorkoutStructuresByOwner(blocks, (block) => block.workoutLogId);
   }
 
-  async getWorkoutStructuresByPlanDays(planDayIds: string[]): Promise<Map<string, StructureBlockInput[]>> {
+  async getWorkoutStructuresByPlanDays(
+    planDayIds: string[],
+  ): Promise<Map<string, StructureBlockInput[]>> {
     if (planDayIds.length === 0) return new Map();
     const blocks = await db
       .select()
@@ -330,7 +343,11 @@ export class WorkoutStorage {
   // Removed redundant pre-fetch existence check (getWorkoutLog) that duplicated
   // the same WHERE clause used by the UPDATE. The UPDATE + RETURNING already
   // yields undefined when no rows match, saving 1 DB round trip per call.
-  async updateWorkoutLog(logId: string, updates: UpdateWorkoutLog, userId: string): Promise<WorkoutLog | undefined> {
+  async updateWorkoutLog(
+    logId: string,
+    updates: UpdateWorkoutLog,
+    userId: string,
+  ): Promise<WorkoutLog | undefined> {
     const [updatedLog] = await db
       .update(workoutLogs)
       .set(updates)
@@ -378,7 +395,10 @@ export class WorkoutStorage {
     });
   }
 
-  async getWorkoutLogByPlanDayId(planDayId: string, userId: string): Promise<WorkoutLog | undefined> {
+  async getWorkoutLogByPlanDayId(
+    planDayId: string,
+    userId: string,
+  ): Promise<WorkoutLog | undefined> {
     const [log] = await db
       .select()
       .from(workoutLogs)
@@ -387,15 +407,23 @@ export class WorkoutStorage {
     return log;
   }
 
-  async getWorkoutByStravaActivityId(userId: string, stravaActivityId: string): Promise<WorkoutLog | undefined> {
+  async getWorkoutByStravaActivityId(
+    userId: string,
+    stravaActivityId: string,
+  ): Promise<WorkoutLog | undefined> {
     const [log] = await db
       .select()
       .from(workoutLogs)
-      .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)));
+      .where(
+        and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)),
+      );
     return log;
   }
 
-  async getExistingStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<string[]> {
+  async getExistingStravaActivityIds(
+    userId: string,
+    stravaActivityIds: string[],
+  ): Promise<string[]> {
     if (stravaActivityIds.length === 0) return [];
     const rows = await db
       .select({ stravaActivityId: workoutLogs.stravaActivityId })
@@ -404,8 +432,8 @@ export class WorkoutStorage {
         and(
           eq(workoutLogs.userId, userId),
           inArray(workoutLogs.stravaActivityId, stravaActivityIds),
-          isNotNull(workoutLogs.stravaActivityId)
-        )
+          isNotNull(workoutLogs.stravaActivityId),
+        ),
       );
     return rows.map((r) => r.stravaActivityId as string);
   }
@@ -416,7 +444,9 @@ export class WorkoutStorage {
    * syncs can't double-import the same activity. Routes still pre-dedupe via
    * getExistingGarminActivityIds; this is the concurrent-safety backstop.
    */
-  async createGarminWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
+  async createGarminWorkoutLogs(
+    logs: (InsertWorkoutLog & { userId: string })[],
+  ): Promise<WorkoutLog[]> {
     if (logs.length === 0) return [];
 
     const createdLogs = await db
@@ -431,7 +461,10 @@ export class WorkoutStorage {
     return createdLogs;
   }
 
-  async getExistingGarminActivityIds(userId: string, garminActivityIds: string[]): Promise<string[]> {
+  async getExistingGarminActivityIds(
+    userId: string,
+    garminActivityIds: string[],
+  ): Promise<string[]> {
     if (garminActivityIds.length === 0) return [];
     const rows = await db
       .select({ garminActivityId: workoutLogs.garminActivityId })
@@ -440,8 +473,8 @@ export class WorkoutStorage {
         and(
           eq(workoutLogs.userId, userId),
           inArray(workoutLogs.garminActivityId, garminActivityIds),
-          isNotNull(workoutLogs.garminActivityId)
-        )
+          isNotNull(workoutLogs.garminActivityId),
+        ),
       );
     return rows.map((r) => r.garminActivityId as string);
   }
@@ -474,28 +507,46 @@ export class WorkoutStorage {
   // doesn't exist or belongs to another user, zero rows are deleted (safe no-op).
   // Saves 1 DB round trip per call.
   async deleteExerciseSetsByWorkoutLog(workoutLogId: string, userId: string): Promise<boolean> {
-    await db
-      .delete(exerciseSets)
-      .where(
-        inArray(
-          exerciseSets.workoutLogId,
-          db.select({ id: workoutLogs.id })
-            .from(workoutLogs)
-            .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId)))
-        )
-      );
+    await db.delete(exerciseSets).where(
+      inArray(
+        exerciseSets.workoutLogId,
+        db
+          .select({ id: workoutLogs.id })
+          .from(workoutLogs)
+          .where(and(eq(workoutLogs.id, workoutLogId), eq(workoutLogs.userId, userId))),
+      ),
+    );
     return true;
   }
 
-  async getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]> {
-    return await queryExerciseSetsWithDates(userId, { exerciseName });
+  /**
+   * Every logged set of one exercise, newest session first.
+   *
+   * The name is resolved through `normalizeExerciseName` so "RDL" finds
+   * `romanian_deadlift`; unresolvable names fall back to the raw string, which
+   * preserves the exact-match behaviour CSV imports and custom labels rely on.
+   *
+   * `sessionLimit` bounds *distinct dates*, not rows and not the underlying log
+   * scan. Limiting logs in SQL would be wrong here: the exerciseName filter runs
+   * on the nested relation, so "the 5 most recent logs" is usually 5 logs
+   * containing none of this exercise, and the athlete gets an empty history.
+   */
+  async getExerciseHistory(
+    userId: string,
+    exerciseName: string,
+    options?: { sessionLimit?: number },
+  ): Promise<(ExerciseSet & { date: string })[]> {
+    const canonical = normalizeExerciseName(exerciseName) ?? exerciseName;
+    const rows = await queryExerciseSetsWithDates(userId, { exerciseName: canonical });
+    return options?.sessionLimit ? takeMostRecentSessions(rows, options.sessionLimit) : rows;
   }
 
   private getMutationOwnerAdapter(context: MutationOwnerContext): MutationOwnerAdapter {
     if (context.kind === "workout") {
       return {
         getContainerId: (set) => set.workoutLogId,
-        ownsContainer: (containerId, userId) => this.getWorkoutLog(containerId, userId).then(Boolean),
+        ownsContainer: (containerId, userId) =>
+          this.getWorkoutLog(containerId, userId).then(Boolean),
         buildInsertValues: (containerId, set, sortOrder) => ({
           ...set,
           workoutLogId: containerId,
@@ -572,12 +623,10 @@ export class WorkoutStorage {
       // Row exists (owned check passed above) but the version condition
       // didn't match → another writer bumped it. Surface the current
       // version in the error details so the client can refresh + retry.
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        "Exercise set was modified by another request",
-        409,
-        { currentVersion: owned.version, expectedVersion },
-      );
+      throw new AppError(ErrorCode.CONFLICT, "Exercise set was modified by another request", 409, {
+        currentVersion: owned.version,
+        expectedVersion,
+      });
     }
 
     if (updated) await this.syncStructureStepMirror(updated);
@@ -613,10 +662,12 @@ export class WorkoutStorage {
         groupId: row.groupId,
         targets: setTargetsForStructureMirror(row),
       })
-      .where(and(
-        eq(workoutStructureSteps.blockId, row.blockId),
-        eq(workoutStructureSteps.stepNumber, row.stepNumber),
-      ));
+      .where(
+        and(
+          eq(workoutStructureSteps.blockId, row.blockId),
+          eq(workoutStructureSteps.stepNumber, row.stepNumber),
+        ),
+      );
   }
 
   async deleteExerciseSetNormalized(
@@ -654,17 +705,39 @@ export class WorkoutStorage {
     return row?.set;
   }
 
-
-  async mutateExerciseSetUpdate(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, setId: string, updates: NormalizedSetUpdateInput, userId: string): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, setId, updates);
+  async mutateExerciseSetUpdate(
+    owner: { kind: "workoutLog" | "planDay"; ownerId: string },
+    setId: string,
+    updates: NormalizedSetUpdateInput,
+    userId: string,
+  ): Promise<ExerciseSet | undefined> {
+    return this.updateExerciseSetNormalized(
+      { kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId },
+      setId,
+      updates,
+    );
   }
 
-  async mutateExerciseSetAdd(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, set: NormalizedSetCreateInput, userId: string): Promise<ExerciseSet | undefined> {
-    return this.addExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, set);
+  async mutateExerciseSetAdd(
+    owner: { kind: "workoutLog" | "planDay"; ownerId: string },
+    set: NormalizedSetCreateInput,
+    userId: string,
+  ): Promise<ExerciseSet | undefined> {
+    return this.addExerciseSetNormalized(
+      { kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId },
+      set,
+    );
   }
 
-  async mutateExerciseSetDelete(owner: { kind: "workoutLog" | "planDay"; ownerId: string }, setId: string, userId: string): Promise<boolean> {
-    return this.deleteExerciseSetNormalized({ kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId }, setId);
+  async mutateExerciseSetDelete(
+    owner: { kind: "workoutLog" | "planDay"; ownerId: string },
+    setId: string,
+    userId: string,
+  ): Promise<boolean> {
+    return this.deleteExerciseSetNormalized(
+      { kind: owner.kind === "workoutLog" ? "workout" : "planDay", id: owner.ownerId, userId },
+      setId,
+    );
   }
 
   async updateExerciseSet(
@@ -673,7 +746,11 @@ export class WorkoutStorage {
     updates: NormalizedSetUpdateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized({ kind: "workout", id: workoutLogId, userId }, setId, updates);
+    return this.updateExerciseSetNormalized(
+      { kind: "workout", id: workoutLogId, userId },
+      setId,
+      updates,
+    );
   }
 
   async deleteExerciseSet(workoutLogId: string, setId: string, userId: string): Promise<boolean> {
@@ -743,10 +820,18 @@ export class WorkoutStorage {
     updates: NormalizedSetUpdateInput,
     userId: string,
   ): Promise<ExerciseSet | undefined> {
-    return this.updateExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId, updates);
+    return this.updateExerciseSetNormalized(
+      { kind: "planDay", id: planDayId, userId },
+      setId,
+      updates,
+    );
   }
 
-  async deleteExerciseSetForPlanDay(planDayId: string, setId: string, userId: string): Promise<boolean> {
+  async deleteExerciseSetForPlanDay(
+    planDayId: string,
+    setId: string,
+    userId: string,
+  ): Promise<boolean> {
     return this.deleteExerciseSetNormalized({ kind: "planDay", id: planDayId, userId }, setId);
   }
 
@@ -790,12 +875,7 @@ export class WorkoutStorage {
       })
       .from(exerciseSets)
       .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-      .where(
-        and(
-          eq(workoutLogs.userId, userId),
-          inArray(exerciseSets.exerciseName, exerciseNames),
-        ),
-      )
+      .where(and(eq(workoutLogs.userId, userId), inArray(exerciseSets.exerciseName, exerciseNames)))
       .groupBy(exerciseSets.exerciseName);
     const maxByExercise = new Map(userMaxes.map((m) => [m.exerciseName, m.maxWeight]));
 
@@ -826,11 +906,14 @@ export class WorkoutStorage {
   async getWorkoutHistoryStats(
     workoutLogId: string,
     userId: string,
-  ): Promise<{
-    lastSameFocus: { date: string; focus: string } | null;
-    prSetCount: number;
-    blockAvgRpe: number | null;
-  } | undefined> {
+  ): Promise<
+    | {
+        lastSameFocus: { date: string; focus: string } | null;
+        prSetCount: number;
+        blockAvgRpe: number | null;
+      }
+    | undefined
+  > {
     const log = await this.getWorkoutLog(workoutLogId, userId);
     if (!log) return undefined;
 
@@ -902,9 +985,9 @@ export class WorkoutStorage {
           eq(workoutLogs.userId, userId),
           isNull(exerciseSets.id),
           isNotNull(workoutLogs.mainWorkout),
-          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`
-        )
+          sql`TRIM(${workoutLogs.mainWorkout}) <> ''`,
+        ),
       );
-    return results.map(r => r.workoutLog);
+    return results.map((r) => r.workoutLog);
   }
 }

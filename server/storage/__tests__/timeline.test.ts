@@ -241,10 +241,7 @@ describe("TimelineStorage standalone workout plan association", () => {
   });
 
   it("forwards the selected plan filter to the standalone query, and omits it for All Plans", async () => {
-    const spy = vi.spyOn(
-      storage,
-      "fetchStandaloneWorkouts",
-    );
+    const spy = vi.spyOn(storage, "fetchStandaloneWorkouts");
 
     // Filtering by a specific plan must thread that planId into the standalone
     // fetch so other-plan workouts can be excluded (the bug: it never was).

@@ -24,26 +24,15 @@ export class TimelineAnnotationsStorage {
       .orderBy(asc(timelineAnnotations.startDate));
   }
 
-  async findById(
-    userId: string,
-    id: string,
-  ): Promise<TimelineAnnotation | undefined> {
+  async findById(userId: string, id: string): Promise<TimelineAnnotation | undefined> {
     const [row] = await db
       .select()
       .from(timelineAnnotations)
-      .where(
-        and(
-          eq(timelineAnnotations.id, id),
-          eq(timelineAnnotations.userId, userId),
-        ),
-      );
+      .where(and(eq(timelineAnnotations.id, id), eq(timelineAnnotations.userId, userId)));
     return row;
   }
 
-  async create(
-    userId: string,
-    data: InsertTimelineAnnotation,
-  ): Promise<TimelineAnnotation> {
+  async create(userId: string, data: InsertTimelineAnnotation): Promise<TimelineAnnotation> {
     const [row] = await db
       .insert(timelineAnnotations)
       .values({
@@ -71,12 +60,7 @@ export class TimelineAnnotationsStorage {
         ...(data.note !== undefined && { note: data.note }),
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(timelineAnnotations.id, id),
-          eq(timelineAnnotations.userId, userId),
-        ),
-      )
+      .where(and(eq(timelineAnnotations.id, id), eq(timelineAnnotations.userId, userId)))
       .returning();
     return row;
   }
@@ -84,12 +68,7 @@ export class TimelineAnnotationsStorage {
   async delete(userId: string, id: string): Promise<boolean> {
     const result = await db
       .delete(timelineAnnotations)
-      .where(
-        and(
-          eq(timelineAnnotations.id, id),
-          eq(timelineAnnotations.userId, userId),
-        ),
-      )
+      .where(and(eq(timelineAnnotations.id, id), eq(timelineAnnotations.userId, userId)))
       .returning({ id: timelineAnnotations.id });
     return result.length > 0;
   }

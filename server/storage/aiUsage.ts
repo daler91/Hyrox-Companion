@@ -23,21 +23,14 @@ export class AiUsageStorage {
     const [row] = await db
       .select({ total: sum(aiUsageLogs.estimatedCostCents) })
       .from(aiUsageLogs)
-      .where(
-        and(
-          eq(aiUsageLogs.userId, userId),
-          gt(aiUsageLogs.createdAt, cutoff),
-        ),
-      );
+      .where(and(eq(aiUsageLogs.userId, userId), gt(aiUsageLogs.createdAt, cutoff)));
     return Number(row?.total ?? 0);
   }
 
   /** Delete logs older than the given number of days. Returns count deleted. */
   async deleteExpiredLogs(olderThanDays: number = 7): Promise<number> {
     const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
-    const result = await db
-      .delete(aiUsageLogs)
-      .where(sql`${aiUsageLogs.createdAt} < ${cutoff}`);
+    const result = await db.delete(aiUsageLogs).where(sql`${aiUsageLogs.createdAt} < ${cutoff}`);
     return result.rowCount ?? 0;
   }
 

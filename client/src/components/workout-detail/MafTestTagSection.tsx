@@ -114,7 +114,10 @@ export function MafTestTagSection({
         <div className="space-y-2">
           {alreadyTagged ? (
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`maf-test-tagged-${workoutLogId}`}>
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+                data-testid={`maf-test-tagged-${workoutLogId}`}
+              >
                 <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
                 Tracked in your MAF trend
               </div>

@@ -19,9 +19,7 @@ describe("SaveStatePill", () => {
   });
 
   it("shows an assertive error when the latest save failed", () => {
-    render(
-      <SaveStatePill state={{ isSaving: false, lastSavedAt: 1000, lastSaveErrorAt: 2000 }} />,
-    );
+    render(<SaveStatePill state={{ isSaving: false, lastSavedAt: 1000, lastSaveErrorAt: 2000 }} />);
     const pill = screen.getByTestId("save-state-pill");
     expect(pill).toHaveAttribute("data-state", "error");
     expect(pill).toHaveAttribute("aria-live", "assertive");
@@ -34,16 +32,12 @@ describe("SaveStatePill", () => {
   });
 
   it("clears the error once a newer save succeeds", () => {
-    render(
-      <SaveStatePill state={{ isSaving: false, lastSavedAt: 3000, lastSaveErrorAt: 2000 }} />,
-    );
+    render(<SaveStatePill state={{ isSaving: false, lastSavedAt: 3000, lastSaveErrorAt: 2000 }} />);
     expect(screen.getByTestId("save-state-pill")).toHaveAttribute("data-state", "saved");
   });
 
   it("prefers the in-flight saving state over a prior error", () => {
-    render(
-      <SaveStatePill state={{ isSaving: true, lastSavedAt: 1000, lastSaveErrorAt: 2000 }} />,
-    );
+    render(<SaveStatePill state={{ isSaving: true, lastSavedAt: 1000, lastSaveErrorAt: 2000 }} />);
     expect(screen.getByTestId("save-state-pill")).toHaveAttribute("data-state", "saving");
   });
 

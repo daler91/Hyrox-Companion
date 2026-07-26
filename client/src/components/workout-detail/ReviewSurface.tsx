@@ -646,6 +646,8 @@ function ReviewActualsSection({
             onOpenConversionHelper={parseVisibleReference}
             defaultExpanded
             showPlannedDiffs={showPlannedDiffs}
+            showLastTime
+            currentWorkoutLogId={workoutLogId}
             structureBlocks={structureBlocks}
           />
         }

@@ -15,10 +15,25 @@ describe("ExerciseTable state units", () => {
 
   it("dispatches sortOrder mutations only when positions changed", () => {
     const onUpdateSet = vi.fn();
-    dispatchSortOrderMutations([
-      { exerciseName: "custom", customLabel: null, category: "conditioning", confidence: 80, sets: [makeSet({ id: "c", sortOrder: 3 })] },
-      { exerciseName: "back_squat", customLabel: null, category: "strength", confidence: 80, sets: [makeSet({ id: "a", sortOrder: 0 })] },
-    ], onUpdateSet);
+    dispatchSortOrderMutations(
+      [
+        {
+          exerciseName: "custom",
+          customLabel: null,
+          category: "conditioning",
+          confidence: 80,
+          sets: [makeSet({ id: "c", sortOrder: 3 })],
+        },
+        {
+          exerciseName: "back_squat",
+          customLabel: null,
+          category: "strength",
+          confidence: 80,
+          sets: [makeSet({ id: "a", sortOrder: 0 })],
+        },
+      ],
+      onUpdateSet,
+    );
     expect(onUpdateSet).toHaveBeenCalledWith("c", { sortOrder: 0 });
     expect(onUpdateSet).toHaveBeenCalledWith("a", { sortOrder: 1 });
   });

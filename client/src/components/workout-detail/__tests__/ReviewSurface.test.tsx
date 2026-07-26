@@ -32,6 +32,13 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 
 vi.mock("@/hooks/useMafCeiling", () => ({ useMafCeiling: () => mafCeiling }));
 
+// These suites render ExerciseTable directly, without a QueryClientProvider.
+// The "last time" line is not what they are testing; an empty history is the
+// no-op case and keeps them focused.
+vi.mock("@/hooks/useExerciseHistory", () => ({
+  useExerciseHistory: () => ({ data: undefined }),
+}));
+
 vi.mock("@/components/ui/responsive-sheet", () => ({
   ResponsiveSheet: ({ children, title }: { children: ReactNode; title: ReactNode }) => (
     <div>

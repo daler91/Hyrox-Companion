@@ -71,8 +71,12 @@ export function MafTestForm({
   // display unit and duration into mm:ss. The parent remounts this dialog (via a
   // changing `key`) each time it opens, so these initializers re-read the latest
   // `initial` rather than needing a setState-in-effect resync.
-  const [avgHr, setAvgHr] = useState(initial.avgHeartRate == null ? "" : String(initial.avgHeartRate));
-  const [maxHr, setMaxHr] = useState(initial.maxHeartRate == null ? "" : String(initial.maxHeartRate));
+  const [avgHr, setAvgHr] = useState(
+    initial.avgHeartRate == null ? "" : String(initial.avgHeartRate),
+  );
+  const [maxHr, setMaxHr] = useState(
+    initial.maxHeartRate == null ? "" : String(initial.maxHeartRate),
+  );
   const [duration, setDuration] = useState(
     initial.durationSeconds == null ? "" : formatSecondsToMmSs(initial.durationSeconds),
   );

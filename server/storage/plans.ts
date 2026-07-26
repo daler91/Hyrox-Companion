@@ -189,11 +189,7 @@ export class PlanStorage {
     return updatedDay;
   }
 
-  async getPlanDay(
-    dayId: string,
-    userId: string,
-    tx?: DbExecutor,
-  ): Promise<PlanDay | undefined> {
+  async getPlanDay(dayId: string, userId: string, tx?: DbExecutor): Promise<PlanDay | undefined> {
     const executor = tx ?? db;
     // Uses the relational query API: fetch the plan day and filter via its
     // parent plan's owner in-memory. Equivalent to an inner join with an auth
@@ -285,9 +281,7 @@ export class PlanStorage {
         id: day.id,
         scheduledDate: dateStr,
         resetStatus:
-          dateChanged &&
-          (day.status === "missed" || day.status === "skipped") &&
-          dateStr >= today,
+          dateChanged && (day.status === "missed" || day.status === "skipped") && dateStr >= today,
       });
     }
 

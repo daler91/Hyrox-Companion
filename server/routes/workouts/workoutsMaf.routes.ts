@@ -36,9 +36,16 @@ export function registerWorkoutMafRoutes(router: Router): void {
     router,
     "/api/v1/workouts/:id/maf-test",
     { limiter: rateLimiter("mafTest", 20), middleware: [validateBody(mafTestBodySchema)] },
-    async (req: Request<{ id: string }, unknown, z.infer<typeof mafTestBodySchema>>, res: Response) => {
+    async (
+      req: Request<{ id: string }, unknown, z.infer<typeof mafTestBodySchema>>,
+      res: Response,
+    ) => {
       const userId = getUserId(req);
-      const { created, ...record } = await recordMafTestFromWorkout(userId, req.params.id, req.body);
+      const { created, ...record } = await recordMafTestFromWorkout(
+        userId,
+        req.params.id,
+        req.body,
+      );
       // 201 on first tag; 200 when an already-tagged workout is returned idempotently.
       res.status(created ? 201 : 200).json(record);
     },
@@ -51,9 +58,16 @@ export function registerWorkoutMafRoutes(router: Router): void {
     router,
     "/api/v1/workouts/:id/maf-test",
     { limiter: rateLimiter("mafTest", 20), middleware: [validateBody(mafTestBodySchema)] },
-    async (req: Request<{ id: string }, unknown, z.infer<typeof mafTestBodySchema>>, res: Response) => {
+    async (
+      req: Request<{ id: string }, unknown, z.infer<typeof mafTestBodySchema>>,
+      res: Response,
+    ) => {
       const userId = getUserId(req);
-      const { testResult, analysis } = await updateMafTestForWorkout(userId, req.params.id, req.body);
+      const { testResult, analysis } = await updateMafTestForWorkout(
+        userId,
+        req.params.id,
+        req.body,
+      );
       res.json({ testResult, analysis });
     },
   );
