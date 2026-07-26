@@ -17,7 +17,8 @@ import {
   MUSCLE_HEAT_MAP_GROUPS,
 } from "@shared/schema";
 
-import { FUNCTIONAL_STATIONS_WITH_RUNNING } from "../constants";
+import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
+
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storage/shared";
 import { getLocalDateStrSafe } from "../timezone";
@@ -79,7 +80,11 @@ const TIME_NOT_A_PR_METRIC = new Set<string>(["amrap", "emom"]);
  * detection). Mirrors updateBestTime exactly: longer is better for isometric
  * holds, AMRAP/EMOM never count as a time PR, otherwise faster is better.
  */
-export function isTimePrImprovement(exerciseName: string, current: number, previous: number): boolean {
+export function isTimePrImprovement(
+  exerciseName: string,
+  current: number,
+  previous: number,
+): boolean {
   if (TIME_NOT_A_PR_METRIC.has(exerciseName)) return false;
   return TIME_LONGER_IS_BETTER.has(exerciseName) ? current > previous : current < previous;
 }
@@ -90,8 +95,7 @@ function updateBestTime(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
 
   const longerIsBetter = TIME_LONGER_IS_BETTER.has(set.exerciseName);
   const isImprovement =
-    !pr.bestTime ||
-    (longerIsBetter ? set.time > pr.bestTime.value : set.time < pr.bestTime.value);
+    !pr.bestTime || (longerIsBetter ? set.time > pr.bestTime.value : set.time < pr.bestTime.value);
 
   if (isImprovement) {
     pr.bestTime = { value: set.time, date: set.date, workoutLogId: set.workoutLogId };
@@ -118,7 +122,9 @@ function updateE1RM(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   }
 }
 
-export function calculatePersonalRecords(allSets: SlimLoggedExerciseSet[]): Record<string, PersonalRecord> {
+export function calculatePersonalRecords(
+  allSets: SlimLoggedExerciseSet[],
+): Record<string, PersonalRecord> {
   const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
 
   for (const set of allSets) {
@@ -185,7 +191,9 @@ function sortByDateAsc(a: DayAnalytics, b: DayAnalytics): number {
   return 0;
 }
 
-export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Record<string, DayAnalytics[]> {
+export function calculateExerciseAnalytics(
+  allSets: ExerciseSetWithDate[],
+): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
   for (const s of allSets) {
@@ -204,7 +212,7 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
         maxWeight: 0,
         totalSets: 0,
         totalReps: 0,
-        totalDistance: 0
+        totalDistance: 0,
       };
     }
 
@@ -241,23 +249,42 @@ function getMonday(dateStr: string): string {
   return res;
 }
 
-function buildWeeklySummaries(
-  workoutLogs: WorkoutLog[],
-): { summaries: WeeklySummary[]; workoutDates: string[] } {
-  const weekMap = new Map<string, { count: number; totalDuration: number; rpeSum: number; rpeCount: number; categoryBreakdown: Record<string, number> }>();
+function buildWeeklySummaries(workoutLogs: WorkoutLog[]): {
+  summaries: WeeklySummary[];
+  workoutDates: string[];
+} {
+  const weekMap = new Map<
+    string,
+    {
+      count: number;
+      totalDuration: number;
+      rpeSum: number;
+      rpeCount: number;
+      categoryBreakdown: Record<string, number>;
+    }
+  >();
   const workoutDates: string[] = [];
 
   for (const log of workoutLogs) {
     const weekStart = getMonday(log.date);
     if (!weekMap.has(weekStart)) {
-      weekMap.set(weekStart, { count: 0, totalDuration: 0, rpeSum: 0, rpeCount: 0, categoryBreakdown: {} });
+      weekMap.set(weekStart, {
+        count: 0,
+        totalDuration: 0,
+        rpeSum: 0,
+        rpeCount: 0,
+        categoryBreakdown: {},
+      });
     }
     // Safe: we just set this key above if it was missing
     const week = weekMap.get(weekStart);
     if (!week) continue;
     week.count++;
     if (log.duration) week.totalDuration += log.duration;
-    if (log.rpe) { week.rpeSum += log.rpe; week.rpeCount++; }
+    if (log.rpe) {
+      week.rpeSum += log.rpe;
+      week.rpeCount++;
+    }
 
     const focus = (log.focus ?? "other").toLowerCase();
     week.categoryBreakdown[focus] = (week.categoryBreakdown[focus] ?? 0) + 1;
@@ -304,40 +331,55 @@ function buildCategoryTotals(
   return categoryTotals;
 }
 
-function buildStationCoverage(
+/**
+ * Group logged sets into one coverage source per session, carrying the parent
+ * log's `focus` and any custom-exercise labels as free text.
+ *
+ * The focus is what lets the card agree with the AI coach, which has always
+ * keyword-scanned it; the custom labels preserve what the old substring match
+ * gave us for free, where a set logged as custom "Heavy sled push finisher"
+ * counted toward the sled push. `workoutLogs` may be empty while sets are not
+ * (several analytics callers pass only sets), so the focus is optional.
+ */
+function buildCoverageSources(
+  workoutLogs: WorkoutLog[],
   exerciseSets: ExerciseSetWithDate[],
-  todayStr: string,
-): Array<{ station: string; lastTrained: string | null; daysSince: number | null }> {
-  const stationLastTrained = new Map<string, string>();
-
-  // Cache to avoid O(n^2) regex matching and string inclusions inside the loop
-  const stationMatchesCache = new Map<string, string[]>();
-
-  for (const set of exerciseSets) {
-    const key = getExerciseKey(set);
-    let matches = stationMatchesCache.get(key);
-
-    if (!matches) {
-      const normalizedKey = key.toLowerCase().replaceAll(/[\s-]/g, "_");
-      matches = FUNCTIONAL_STATIONS_WITH_RUNNING.filter((station) =>
-        normalizedKey.includes(station)
-      );
-      stationMatchesCache.set(key, matches);
-    }
-
-    for (const station of matches) {
-      const existing = stationLastTrained.get(station);
-      if (!existing || set.date > existing) {
-        stationLastTrained.set(station, set.date);
-      }
-    }
+): StationCoverageSource[] {
+  const focusByLogId = new Map<string, string>();
+  for (const log of workoutLogs) {
+    if (log.focus) focusByLogId.set(log.id, log.focus);
   }
 
-  return FUNCTIONAL_STATIONS_WITH_RUNNING.map((station) => {
-    const lastTrained = stationLastTrained.get(station) ?? null;
-    const daysSince = calculateDaysSince(lastTrained, todayStr);
-    return { station, lastTrained, daysSince };
-  });
+  // Keyed by (log, date) rather than log alone. A log has one date in practice,
+  // but a set carries its own, and grouping on the log would date every station
+  // in the group from whichever set happened to be seen first.
+  const sources = new Map<string, { date: string; exerciseNames: string[]; freeText: string[] }>();
+  const seenLogIds = new Set<string>();
+
+  for (const set of exerciseSets) {
+    const key = `${set.workoutLogId}:${set.date}`;
+    let source = sources.get(key);
+    if (!source) {
+      const focus = focusByLogId.get(set.workoutLogId);
+      source = { date: set.date, exerciseNames: [], freeText: focus ? [focus] : [] };
+      sources.set(key, source);
+    }
+    seenLogIds.add(set.workoutLogId);
+    source.exerciseNames.push(set.exerciseName);
+    if (set.customLabel) source.freeText.push(set.customLabel);
+  }
+
+  // Sessions with no sets at all still carry a focus worth scanning.
+  for (const log of workoutLogs) {
+    if (seenLogIds.has(log.id) || !log.focus) continue;
+    sources.set(`${log.id}:${log.date}`, {
+      date: log.date,
+      exerciseNames: [],
+      freeText: [log.focus],
+    });
+  }
+
+  return [...sources.values()];
 }
 
 function calculateDaysSince(lastTrained: string | null, todayStr: string): number | null {
@@ -353,11 +395,14 @@ export function buildMovementPatternCoverage(
   exerciseSets: ExerciseSetWithDate[],
   todayStr: string,
 ): MovementPatternCoverage[] {
-  const patternStats = new Map<MovementPattern, {
-    workoutLogIds: Set<string>;
-    totalSets: number;
-    lastTrained: string | null;
-  }>();
+  const patternStats = new Map<
+    MovementPattern,
+    {
+      workoutLogIds: Set<string>;
+      totalSets: number;
+      lastTrained: string | null;
+    }
+  >();
 
   for (const { pattern } of MOVEMENT_PATTERNS) {
     patternStats.set(pattern, {
@@ -398,11 +443,14 @@ export function buildMuscleGroupCoverage(
   exerciseSets: ExerciseSetWithDate[],
   todayStr: string,
 ): MuscleGroupCoverage[] {
-  const muscleStats = new Map<HeatMapMuscle, {
-    workoutLogIds: Set<string>;
-    totalSets: number;
-    lastTrained: string | null;
-  }>();
+  const muscleStats = new Map<
+    HeatMapMuscle,
+    {
+      workoutLogIds: Set<string>;
+      totalSets: number;
+      lastTrained: string | null;
+    }
+  >();
 
   for (const { muscle } of MUSCLE_HEAT_MAP_GROUPS) {
     muscleStats.set(muscle, {
@@ -523,7 +571,10 @@ export function calculateTrainingOverview(
   // builders each minted their own UTC date and so could report a coverage gap
   // a day early for anyone west of UTC.
   const todayStr = getLocalDateStrSafe(new Date(), userTimezone);
-  const stationCoverage = buildStationCoverage(exerciseSets, todayStr);
+  const stationCoverage = buildStationCoverage(
+    buildCoverageSources(workoutLogs, exerciseSets),
+    todayStr,
+  );
   const movementPatternCoverage = buildMovementPatternCoverage(exerciseSets, todayStr);
   const muscleGroupCoverage = buildMuscleGroupCoverage(exerciseSets, todayStr);
   const trainingLoad = calculateTrainingLoad(
@@ -560,23 +611,23 @@ export function calculateTrainingOverview(
   // previous window).
   const previousStats = previousWorkoutLogs
     ? (() => {
-      const stats = computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries);
-      // ⚡ Bolt Performance Optimization:
-      // Replaced chained .map().filter().reduce() with a single for...of loop
-      // to avoid intermediate array allocations and O(3N) passes.
-      let prevComplianceSum = 0;
-      let prevComplianceCount = 0;
-      for (const w of previousWorkoutLogs) {
-        if (typeof w.compliancePct === "number") {
-          prevComplianceSum += w.compliancePct;
-          prevComplianceCount++;
+        const stats = computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries);
+        // ⚡ Bolt Performance Optimization:
+        // Replaced chained .map().filter().reduce() with a single for...of loop
+        // to avoid intermediate array allocations and O(3N) passes.
+        let prevComplianceSum = 0;
+        let prevComplianceCount = 0;
+        for (const w of previousWorkoutLogs) {
+          if (typeof w.compliancePct === "number") {
+            prevComplianceSum += w.compliancePct;
+            prevComplianceCount++;
+          }
         }
-      }
-      if (prevComplianceCount > 0) {
-        stats.avgCompliancePct = Math.round(prevComplianceSum / prevComplianceCount);
-      }
-      return stats;
-    })()
+        if (prevComplianceCount > 0) {
+          stats.avgCompliancePct = Math.round(prevComplianceSum / prevComplianceCount);
+        }
+        return stats;
+      })()
     : undefined;
 
   return {

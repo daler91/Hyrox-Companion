@@ -88,10 +88,6 @@ export const DB_STATEMENT_TIMEOUT_MS = 30_000;
  */
 export const PGBOSS_STATEMENT_TIMEOUT_MS = 45 * 60 * 1000;
 
-/** The 8 functional fitness stations (matches hyrox-style racing) + running */
-export const FUNCTIONAL_STATIONS = [
-  "skierg", "sled_push", "sled_pull", "burpee_broad_jump",
-  "rowing", "farmers_carry", "sandbag_lunges", "wall_balls",
-] as const;
-
-export const FUNCTIONAL_STATIONS_WITH_RUNNING = [...FUNCTIONAL_STATIONS, "running"] as const;
+// The station list lives in shared/raceConstants.ts (HYROX_STATION_ORDER), and
+// coverage over it in shared/stationCoverage.ts. The duplicates that used to
+// sit here were one of three copies that had drifted apart.

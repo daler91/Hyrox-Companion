@@ -1,6 +1,12 @@
-import { afterEach, describe, expect,it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeOverviewStats, countPersonalRecordsInRange } from "./analyticsService";
+import {
+  calculateExerciseAnalytics,
+  calculatePersonalRecords,
+  calculateTrainingOverview,
+  computeOverviewStats,
+  countPersonalRecordsInRange,
+} from "./analyticsService";
 
 function makeSet(overrides: Record<string, unknown> = {}) {
   return {
@@ -50,7 +56,9 @@ describe("countPersonalRecordsInRange (W18 weekly-email PR count)", () => {
   });
 
   it("returns 0 when there are no records", () => {
-    expect(countPersonalRecordsInRange(calculatePersonalRecords([]), "2026-01-01", "2026-01-07")).toBe(0);
+    expect(
+      countPersonalRecordsInRange(calculatePersonalRecords([]), "2026-01-01", "2026-01-07"),
+    ).toBe(0);
   });
 });
 
@@ -64,7 +72,7 @@ describe("calculatePersonalRecords", () => {
     expect(Object.keys(result)).toEqual([]);
     expect(Object.getPrototypeOf(result)).toBeNull();
     // We expect it to strictly match the shape of Record<string, PRRecord> which is an empty object
-    expect(typeof result).toBe('object');
+    expect(typeof result).toBe("object");
   });
 
   it("tracks maxWeight PR", () => {
@@ -83,9 +91,27 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks bestTime PR (lower is better)", () => {
     const sets = [
-      makeSet({ exerciseName: "easy_run", category: "running", time: 30, date: "2026-01-10", workoutLogId: "w1" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 25, date: "2026-01-15", workoutLogId: "w2" }),
-      makeSet({ exerciseName: "easy_run", category: "running", time: 28, date: "2026-01-20", workoutLogId: "w3" }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        time: 30,
+        date: "2026-01-10",
+        workoutLogId: "w1",
+      }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        time: 25,
+        date: "2026-01-15",
+        workoutLogId: "w2",
+      }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        time: 28,
+        date: "2026-01-20",
+        workoutLogId: "w3",
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["easy_run"].bestTime).toEqual({
@@ -97,9 +123,27 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks bestTime as the LONGEST hold for isometric exercises (higher is better)", () => {
     const sets = [
-      makeSet({ exerciseName: "plank", category: "strength", time: 60, date: "2026-01-10", workoutLogId: "w1" }),
-      makeSet({ exerciseName: "plank", category: "strength", time: 120, date: "2026-01-15", workoutLogId: "w2" }),
-      makeSet({ exerciseName: "plank", category: "strength", time: 90, date: "2026-01-20", workoutLogId: "w3" }),
+      makeSet({
+        exerciseName: "plank",
+        category: "strength",
+        time: 60,
+        date: "2026-01-10",
+        workoutLogId: "w1",
+      }),
+      makeSet({
+        exerciseName: "plank",
+        category: "strength",
+        time: 120,
+        date: "2026-01-15",
+        workoutLogId: "w2",
+      }),
+      makeSet({
+        exerciseName: "plank",
+        category: "strength",
+        time: 90,
+        date: "2026-01-20",
+        workoutLogId: "w3",
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     // The 120s hold is the PR — the later 90s hold must NOT register as a new best.
@@ -112,8 +156,20 @@ describe("calculatePersonalRecords", () => {
 
   it("does not record a bestTime PR for AMRAP/EMOM (time is a prescribed cap, not a metric)", () => {
     const sets = [
-      makeSet({ exerciseName: "amrap", category: "conditioning", time: 1200, date: "2026-01-10", workoutLogId: "w1" }),
-      makeSet({ exerciseName: "amrap", category: "conditioning", time: 600, date: "2026-01-15", workoutLogId: "w2" }),
+      makeSet({
+        exerciseName: "amrap",
+        category: "conditioning",
+        time: 1200,
+        date: "2026-01-10",
+        workoutLogId: "w1",
+      }),
+      makeSet({
+        exerciseName: "amrap",
+        category: "conditioning",
+        time: 600,
+        date: "2026-01-15",
+        workoutLogId: "w2",
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["amrap"].bestTime).toBeUndefined();
@@ -121,8 +177,18 @@ describe("calculatePersonalRecords", () => {
 
   it("tracks maxDistance PR", () => {
     const sets = [
-      makeSet({ exerciseName: "skierg", category: "functional", distance: 1000, workoutLogId: "w1" }),
-      makeSet({ exerciseName: "skierg", category: "functional", distance: 2000, workoutLogId: "w2" }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "functional",
+        distance: 1000,
+        workoutLogId: "w1",
+      }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "functional",
+        distance: 2000,
+        workoutLogId: "w2",
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["skierg"].maxDistance?.value).toBe(2000);
@@ -130,7 +196,12 @@ describe("calculatePersonalRecords", () => {
 
   it("uses custom:Label key for custom exercises", () => {
     const sets = [
-      makeSet({ exerciseName: "custom", customLabel: "KB Press", category: "conditioning", weight: 24 }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "KB Press",
+        category: "conditioning",
+        weight: 24,
+      }),
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["custom:KB Press"]).toBeDefined();
@@ -151,14 +222,17 @@ describe("calculatePersonalRecords", () => {
     expect(prs["back_squat"].bestTime).toBeUndefined();
   });
 
-
-
   it("does not pollute Object.prototype for special exercise keys", () => {
     delete (Object.prototype as Record<string, unknown>).maxWeight;
     const specialExerciseKey = ["__", "proto__"].join("");
 
     const sets = [
-      makeSet({ exerciseName: specialExerciseKey, weight: 123, date: "2026-01-22", workoutLogId: "w9" }),
+      makeSet({
+        exerciseName: specialExerciseKey,
+        weight: 123,
+        date: "2026-01-22",
+        workoutLogId: "w9",
+      }),
     ];
 
     const prs = calculatePersonalRecords(sets);
@@ -196,9 +270,7 @@ describe("calculatePersonalRecords", () => {
   it("skips e1RM for 1-rep sets (already captured as maxWeight) to avoid duplicate chips", () => {
     // A heavy single renders as maxWeight = 140; emitting an identical 140 kg
     // e1RM chip right next to it is noise (reviewer finding #9).
-    const sets = [
-      makeSet({ weight: 140, reps: 1, date: "2026-01-10", workoutLogId: "w1" }),
-    ];
+    const sets = [makeSet({ weight: 140, reps: 1, date: "2026-01-10", workoutLogId: "w1" })];
     const prs = calculatePersonalRecords(sets);
     expect(prs["back_squat"].maxWeight?.value).toBe(140);
     expect(prs["back_squat"].estimated1RM).toBeUndefined();
@@ -224,7 +296,7 @@ describe("calculateExerciseAnalytics", () => {
     expect(Object.keys(result)).toHaveLength(0);
     expect(result).not.toBeNull();
     expect(result).not.toBeUndefined();
-    expect(typeof result).toBe('object');
+    expect(typeof result).toBe("object");
   });
 
   it("calculates single-day analytics correctly", () => {
@@ -263,8 +335,18 @@ describe("calculateExerciseAnalytics", () => {
 
   it("accumulates distance", () => {
     const sets = [
-      makeSet({ exerciseName: "skierg", category: "functional", distance: 500, date: "2026-01-15" }),
-      makeSet({ exerciseName: "skierg", category: "functional", distance: 500, date: "2026-01-15" }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "functional",
+        distance: 500,
+        date: "2026-01-15",
+      }),
+      makeSet({
+        exerciseName: "skierg",
+        category: "functional",
+        distance: 500,
+        date: "2026-01-15",
+      }),
     ];
     const analytics = calculateExerciseAnalytics(sets);
     expect(analytics["skierg"][0].totalDistance).toBe(1000);
@@ -272,8 +354,20 @@ describe("calculateExerciseAnalytics", () => {
 
   it("separates custom exercises by label", () => {
     const sets = [
-      makeSet({ exerciseName: "custom", customLabel: "A", weight: 10, reps: 5, date: "2026-01-15" }),
-      makeSet({ exerciseName: "custom", customLabel: "B", weight: 20, reps: 5, date: "2026-01-15" }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "A",
+        weight: 10,
+        reps: 5,
+        date: "2026-01-15",
+      }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "B",
+        weight: 20,
+        reps: 5,
+        date: "2026-01-15",
+      }),
     ];
     const analytics = calculateExerciseAnalytics(sets);
     expect(analytics["custom:A"]).toBeDefined();
@@ -323,27 +417,35 @@ describe("calculateTrainingOverview", () => {
     expect(result.stationCoverage).toHaveLength(9); // 8 stations + running
     expect(result.stationCoverage.every((s) => s.lastTrained === null)).toBe(true);
     expect(result.movementPatternCoverage).toHaveLength(10);
-    expect(result.movementPatternCoverage.every((pattern) => (
-      pattern.sessionCount === 0 &&
-      pattern.totalSets === 0 &&
-      pattern.lastTrained === null &&
-      pattern.daysSince === null
-    ))).toBe(true);
+    expect(
+      result.movementPatternCoverage.every(
+        (pattern) =>
+          pattern.sessionCount === 0 &&
+          pattern.totalSets === 0 &&
+          pattern.lastTrained === null &&
+          pattern.daysSince === null,
+      ),
+    ).toBe(true);
     expect(result.muscleGroupCoverage).toHaveLength(20);
-    expect(result.muscleGroupCoverage.every((muscle) => (
-      muscle.sessionCount === 0 &&
-      muscle.totalSets === 0 &&
-      muscle.lastTrained === null &&
-      muscle.daysSince === null
-    ))).toBe(true);
+    expect(
+      result.muscleGroupCoverage.every(
+        (muscle) =>
+          muscle.sessionCount === 0 &&
+          muscle.totalSets === 0 &&
+          muscle.lastTrained === null &&
+          muscle.daysSince === null,
+      ),
+    ).toBe(true);
     expect(result.currentStreak).toBe(0);
     expect(result.weeklyCompletedWorkouts).toBe(0);
     expect(result.weeklyGoal).toBe(5);
-    expect(result.trainingLoad).toEqual(expect.objectContaining({
-      currentUtss: 0,
-      acwr: null,
-      zone: "insufficient_data",
-    }));
+    expect(result.trainingLoad).toEqual(
+      expect.objectContaining({
+        currentUtss: 0,
+        acwr: null,
+        zone: "insufficient_data",
+      }),
+    );
   });
 
   it("returns AI-aligned streak and Monday-week completion fields", () => {
@@ -383,8 +485,6 @@ describe("calculateTrainingOverview", () => {
     expect(week2.workoutCount).toBe(1);
   });
 
-
-
   it("groups Sunday logs into the same Monday-start week (UTC date semantics)", () => {
     const logs = [
       makeWorkoutLog({ id: "w1", date: "2026-01-11" }), // Sunday
@@ -407,9 +507,24 @@ describe("calculateTrainingOverview", () => {
 
   it("computes category totals from exercise sets", () => {
     const sets = [
-      makeSet({ exerciseName: "back_squat", category: "strength", workoutLogId: "w1", date: "2026-01-13" }),
-      makeSet({ exerciseName: "back_squat", category: "strength", workoutLogId: "w1", date: "2026-01-13" }),
-      makeSet({ exerciseName: "easy_run", category: "running", workoutLogId: "w2", date: "2026-01-14" }),
+      makeSet({
+        exerciseName: "back_squat",
+        category: "strength",
+        workoutLogId: "w1",
+        date: "2026-01-13",
+      }),
+      makeSet({
+        exerciseName: "back_squat",
+        category: "strength",
+        workoutLogId: "w1",
+        date: "2026-01-13",
+      }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        workoutLogId: "w2",
+        date: "2026-01-14",
+      }),
     ];
     const result = calculateTrainingOverview([], sets);
     expect(result.categoryTotals["strength"]).toEqual({ count: 1, totalSets: 2 });
@@ -435,6 +550,46 @@ describe("calculateTrainingOverview", () => {
     expect(sledPush?.daysSince).toBeNull();
   });
 
+  it("populates the running row from any running exercise", () => {
+    // Previously this row was null for essentially every athlete: the substring
+    // match looked for "running", and no canonical run exercise contains it.
+    const sets = [makeSet({ exerciseName: "easy_run", category: "running", date: "2026-03-22" })];
+    const result = calculateTrainingOverview([], sets);
+
+    expect(result.stationCoverage.find((s) => s.station === "running")?.lastTrained).toBe(
+      "2026-03-22",
+    );
+  });
+
+  it("credits a station named only in the session's focus", () => {
+    // The coach has always keyword-scanned focus; the card never did, which is
+    // half of why the two disagreed.
+    const logs = [makeWorkoutLog({ id: "w9", date: "2026-03-24", focus: "Sled push intervals" })];
+    const result = calculateTrainingOverview(logs, []);
+
+    expect(result.stationCoverage.find((s) => s.station === "sled_push")?.lastTrained).toBe(
+      "2026-03-24",
+    );
+  });
+
+  it("credits a station named in a custom exercise's label", () => {
+    // The old substring match caught this via "custom:heavy_sled_push_finisher";
+    // the label now reaches the keyword scan instead, so it still counts.
+    const sets = [
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "Heavy sled push finisher",
+        category: "functional",
+        date: "2026-03-23",
+      }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    expect(result.stationCoverage.find((s) => s.station === "sled_push")?.lastTrained).toBe(
+      "2026-03-23",
+    );
+  });
+
   it("aggregates movement pattern sessions, sets, and recency from mapped exercise sets", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-20T12:00:00Z"));
@@ -456,20 +611,34 @@ describe("calculateTrainingOverview", () => {
       daysSince: 3,
     });
 
-    const horizontalPush = result.movementPatternCoverage.find((pattern) => pattern.pattern === "horizontal_push");
-    expect(horizontalPush).toEqual(expect.objectContaining({
-      sessionCount: 1,
-      totalSets: 1,
-      lastTrained: "2026-01-18",
-      daysSince: 2,
-    }));
+    const horizontalPush = result.movementPatternCoverage.find(
+      (pattern) => pattern.pattern === "horizontal_push",
+    );
+    expect(horizontalPush).toEqual(
+      expect.objectContaining({
+        sessionCount: 1,
+        totalSets: 1,
+        lastTrained: "2026-01-18",
+        daysSince: 2,
+      }),
+    );
   });
 
   it("counts multi-pattern exercises toward each mapped movement pattern", () => {
     const sets = [
       makeSet({ exerciseName: "trap_bar_deadlift", workoutLogId: "w1", date: "2026-01-15" }),
-      makeSet({ exerciseName: "wall_balls", category: "functional", workoutLogId: "w2", date: "2026-01-16" }),
-      makeSet({ exerciseName: "burpee_broad_jump", category: "functional", workoutLogId: "w3", date: "2026-01-17" }),
+      makeSet({
+        exerciseName: "wall_balls",
+        category: "functional",
+        workoutLogId: "w2",
+        date: "2026-01-16",
+      }),
+      makeSet({
+        exerciseName: "burpee_broad_jump",
+        category: "functional",
+        workoutLogId: "w3",
+        date: "2026-01-17",
+      }),
     ];
     const result = calculateTrainingOverview([], sets);
 
@@ -478,14 +647,28 @@ describe("calculateTrainingOverview", () => {
 
     expect(getPattern("squat")).toEqual(expect.objectContaining({ sessionCount: 3, totalSets: 3 }));
     expect(getPattern("hinge")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
-    expect(getPattern("horizontal_push")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
-    expect(getPattern("vertical_push")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+    expect(getPattern("horizontal_push")).toEqual(
+      expect.objectContaining({ sessionCount: 1, totalSets: 1 }),
+    );
+    expect(getPattern("vertical_push")).toEqual(
+      expect.objectContaining({ sessionCount: 1, totalSets: 1 }),
+    );
   });
 
   it("always returns every movement pattern and excludes custom or unmapped exercises", () => {
     const sets = [
-      makeSet({ exerciseName: "custom", customLabel: "Odd lift", workoutLogId: "w1", date: "2026-01-15" }),
-      makeSet({ exerciseName: "easy_run", category: "running", workoutLogId: "w2", date: "2026-01-16" }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "Odd lift",
+        workoutLogId: "w1",
+        date: "2026-01-15",
+      }),
+      makeSet({
+        exerciseName: "easy_run",
+        category: "running",
+        workoutLogId: "w2",
+        date: "2026-01-16",
+      }),
     ];
     const result = calculateTrainingOverview([], sets);
 
@@ -501,7 +684,9 @@ describe("calculateTrainingOverview", () => {
       "core_flexion",
       "core_anti_rotation",
     ]);
-    expect(result.movementPatternCoverage.every((pattern) => pattern.sessionCount === 0)).toBe(true);
+    expect(result.movementPatternCoverage.every((pattern) => pattern.sessionCount === 0)).toBe(
+      true,
+    );
     expect(result.movementPatternCoverage.every((pattern) => pattern.totalSets === 0)).toBe(true);
   });
 
@@ -528,13 +713,15 @@ describe("calculateTrainingOverview", () => {
     });
 
     const chest = result.muscleGroupCoverage.find((muscle) => muscle.muscle === "chest");
-    expect(chest).toEqual(expect.objectContaining({
-      bodyRegion: "upper",
-      sessionCount: 1,
-      totalSets: 1,
-      lastTrained: "2026-01-18",
-      daysSince: 2,
-    }));
+    expect(chest).toEqual(
+      expect.objectContaining({
+        bodyRegion: "upper",
+        sessionCount: 1,
+        totalSets: 1,
+        lastTrained: "2026-01-18",
+        daysSince: 2,
+      }),
+    );
   });
 
   it("counts broad and multi-muscle exercises toward each mapped heat map muscle", () => {
@@ -549,12 +736,19 @@ describe("calculateTrainingOverview", () => {
     expect(getMuscle("chest")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
     expect(getMuscle("lats")).toEqual(expect.objectContaining({ sessionCount: 2, totalSets: 2 }));
     expect(getMuscle("quads")).toEqual(expect.objectContaining({ sessionCount: 2, totalSets: 2 }));
-    expect(getMuscle("lower_back")).toEqual(expect.objectContaining({ sessionCount: 1, totalSets: 1 }));
+    expect(getMuscle("lower_back")).toEqual(
+      expect.objectContaining({ sessionCount: 1, totalSets: 1 }),
+    );
   });
 
   it("always returns every heat map muscle and excludes custom or unmapped exercises", () => {
     const sets = [
-      makeSet({ exerciseName: "custom", customLabel: "Odd lift", workoutLogId: "w1", date: "2026-01-15" }),
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "Odd lift",
+        workoutLogId: "w1",
+        date: "2026-01-15",
+      }),
       makeSet({ exerciseName: "made_up_movement", workoutLogId: "w2", date: "2026-01-16" }),
     ];
     const result = calculateTrainingOverview([], sets);
@@ -639,9 +833,7 @@ describe("calculateTrainingOverview", () => {
       makeWorkoutLog({ id: "c1", date: "2026-02-02", duration: 60, rpe: 7 }),
       makeWorkoutLog({ id: "c2", date: "2026-02-04", duration: 50, rpe: 6 }),
     ];
-    const previousLogs = [
-      makeWorkoutLog({ id: "p1", date: "2026-01-26", duration: 40, rpe: 5 }),
-    ];
+    const previousLogs = [makeWorkoutLog({ id: "p1", date: "2026-01-26", duration: 40, rpe: 5 })];
     const result = calculateTrainingOverview(currentLogs, [], previousLogs);
 
     expect(result.currentStats.totalWorkouts).toBe(2);
@@ -678,9 +870,27 @@ describe("computeOverviewStats", () => {
 
   it("rounds avgPerWeek to one decimal place", () => {
     const weeks = [
-      { weekStart: "2026-01-05", workoutCount: 4, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
-      { weekStart: "2026-01-12", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
-      { weekStart: "2026-01-19", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      {
+        weekStart: "2026-01-05",
+        workoutCount: 4,
+        totalDuration: 0,
+        avgRpe: null,
+        categoryBreakdown: {},
+      },
+      {
+        weekStart: "2026-01-12",
+        workoutCount: 3,
+        totalDuration: 0,
+        avgRpe: null,
+        categoryBreakdown: {},
+      },
+      {
+        weekStart: "2026-01-19",
+        workoutCount: 3,
+        totalDuration: 0,
+        avgRpe: null,
+        categoryBreakdown: {},
+      },
     ];
     // 10 / 3 = 3.333... → rounded to 3.3
     expect(computeOverviewStats(weeks).avgPerWeek).toBe(3.3);
@@ -688,9 +898,27 @@ describe("computeOverviewStats", () => {
 
   it("only averages weeks that had at least one RPE entry", () => {
     const weeks = [
-      { weekStart: "2026-01-05", workoutCount: 2, totalDuration: 0, avgRpe: 8, categoryBreakdown: {} },
-      { weekStart: "2026-01-12", workoutCount: 2, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
-      { weekStart: "2026-01-19", workoutCount: 2, totalDuration: 0, avgRpe: 6, categoryBreakdown: {} },
+      {
+        weekStart: "2026-01-05",
+        workoutCount: 2,
+        totalDuration: 0,
+        avgRpe: 8,
+        categoryBreakdown: {},
+      },
+      {
+        weekStart: "2026-01-12",
+        workoutCount: 2,
+        totalDuration: 0,
+        avgRpe: null,
+        categoryBreakdown: {},
+      },
+      {
+        weekStart: "2026-01-19",
+        workoutCount: 2,
+        totalDuration: 0,
+        avgRpe: 6,
+        categoryBreakdown: {},
+      },
     ];
     // avg over the 2 weeks with RPE, not all 3
     expect(computeOverviewStats(weeks).avgRpe).toBe(7);
@@ -698,7 +926,13 @@ describe("computeOverviewStats", () => {
 
   it("returns avgDuration of 0 when no workouts were logged", () => {
     const weeks = [
-      { weekStart: "2026-01-05", workoutCount: 0, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      {
+        weekStart: "2026-01-05",
+        workoutCount: 0,
+        totalDuration: 0,
+        avgRpe: null,
+        categoryBreakdown: {},
+      },
     ];
     expect(computeOverviewStats(weeks).avgDuration).toBe(0);
   });

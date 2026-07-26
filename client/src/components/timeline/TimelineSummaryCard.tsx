@@ -10,6 +10,8 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { getTodayString } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 
+import { buildStationRadar, StationRadar } from "./StationRadar";
+
 interface TimelineSummaryCardProps {
   readonly selectedPlanId?: string | null;
 }
@@ -31,18 +33,26 @@ function choosePlan(
   todayStr: string,
 ): TrainingPlan | undefined {
   if (selectedPlanId) return plans.find((plan) => plan.id === selectedPlanId);
-  return plans.find((plan) =>
-    plan.startDate != null &&
-    plan.endDate != null &&
-    plan.startDate <= todayStr &&
-    plan.endDate >= todayStr,
-  ) ?? plans.find((plan) => plan.endDate != null);
+  return (
+    plans.find(
+      (plan) =>
+        plan.startDate != null &&
+        plan.endDate != null &&
+        plan.startDate <= todayStr &&
+        plan.endDate >= todayStr,
+    ) ?? plans.find((plan) => plan.endDate != null)
+  );
 }
 
-function getTodayEntry(entries: readonly TimelineEntry[], todayStr: string): TimelineEntry | undefined {
-  return entries.find((entry) => entry.date === todayStr && entry.status === "planned")
-    ?? entries.find((entry) => entry.date === todayStr && entry.status === "completed")
-    ?? entries.find((entry) => entry.date === todayStr);
+function getTodayEntry(
+  entries: readonly TimelineEntry[],
+  todayStr: string,
+): TimelineEntry | undefined {
+  return (
+    entries.find((entry) => entry.date === todayStr && entry.status === "planned") ??
+    entries.find((entry) => entry.date === todayStr && entry.status === "completed") ??
+    entries.find((entry) => entry.date === todayStr)
+  );
 }
 
 // The athlete's race day. Prefer the explicit raceDate; fall back to endDate for
@@ -162,6 +172,8 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
   const weeklyCompleted = overview?.weeklyCompletedWorkouts ?? 0;
   const streak = overview?.currentStreak ?? 0;
 
+  const stationRadar = buildStationRadar(overview?.stationCoverage ?? []);
+
   const todayValue = todayEntry?.focus?.trim() || "No planned session today";
   let todayDetail = selectedPlan?.name;
   if (todayEntry?.status === "completed") {
@@ -235,6 +247,13 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
           detail={formatRaceDate(raceDate) ?? selectedPlan?.name}
         />
       </CardContent>
+      {/* Full-width below the tile grid, so the column template above is
+          untouched. Absent until at least one station has been trained. */}
+      {stationRadar ? (
+        <CardContent className="border-t pt-4">
+          <StationRadar radar={stationRadar} />
+        </CardContent>
+      ) : null}
     </Card>
   );
 }

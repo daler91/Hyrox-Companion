@@ -374,6 +374,33 @@ describe("computeExerciseGaps", () => {
     expect(gaps.skierg).toBeNull();
     expect(gaps.rowing).toBeNull();
   });
+
+  it.each(["run_1k", "recovery_run", "hill_repeats", "fartlek_run", "treadmill_run"])(
+    "counts %s as running",
+    (exerciseName) => {
+      // The hard-coded running set this replaced knew easy/tempo/interval/long
+      // only, so an athlete doing 1 km repeats was told they hadn't run.
+      const gaps = gapsByStation([
+        makeEntry({ date: "2026-06-13", exerciseSets: [makeSet({ exerciseName })] }),
+      ]);
+      expect(gaps.running).toBe(2);
+    },
+  );
+
+  it("counts the erg interval variants toward their station", () => {
+    const gaps = gapsByStation([
+      makeEntry({
+        date: "2026-06-12",
+        exerciseSets: [makeSet({ exerciseName: "rowing_intervals" })],
+      }),
+      makeEntry({
+        date: "2026-06-11",
+        exerciseSets: [makeSet({ exerciseName: "ski_erg_intervals" })],
+      }),
+    ]);
+    expect(gaps.rowing).toBe(3);
+    expect(gaps.skierg).toBe(4);
+  });
 });
 
 describe("computeProgressionFlags", () => {

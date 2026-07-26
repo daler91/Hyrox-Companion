@@ -59,30 +59,35 @@ const emptyTrainingLoad = {
   trend: [],
 };
 
+function makeOverview(overrides: Record<string, unknown> = {}) {
+  return {
+    weeklySummaries: [],
+    workoutDates: [],
+    categoryTotals: {},
+    stationCoverage: [],
+    movementPatternCoverage: [],
+    muscleGroupCoverage: [],
+    currentStats: {
+      totalWorkouts: 12,
+      avgPerWeek: 3,
+      totalDuration: 480,
+      avgDuration: 40,
+      avgRpe: 7,
+      avgCompliancePct: null,
+    },
+    currentStreak: 4,
+    weeklyCompletedWorkouts: 3,
+    weeklyGoal: 5,
+    trainingLoad: emptyTrainingLoad,
+    ...overrides,
+  };
+}
+
 describe("TimelineSummaryCard", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-05-20T12:00:00"));
-    mocks.getOverview.mockResolvedValue({
-      weeklySummaries: [],
-      workoutDates: [],
-      categoryTotals: {},
-      stationCoverage: [],
-      movementPatternCoverage: [],
-      muscleGroupCoverage: [],
-      currentStats: {
-        totalWorkouts: 12,
-        avgPerWeek: 3,
-        totalDuration: 480,
-        avgDuration: 40,
-        avgRpe: 7,
-        avgCompliancePct: null,
-      },
-      currentStreak: 4,
-      weeklyCompletedWorkouts: 3,
-      weeklyGoal: 5,
-      trainingLoad: emptyTrainingLoad,
-    });
+    mocks.getOverview.mockResolvedValue(makeOverview());
     mocks.getPlans.mockResolvedValue([
       {
         id: "plan-1",
@@ -131,6 +136,36 @@ describe("TimelineSummaryCard", () => {
     expect(screen.getByText("4 days")).toBeInTheDocument();
     expect(screen.getByText("Race day in 10 days")).toBeInTheDocument();
     expect(mocks.getTimeline).toHaveBeenCalledWith("plan-1");
+  });
+
+  it("names the coldest station once there is coverage to report", async () => {
+    mocks.getOverview.mockResolvedValue(
+      makeOverview({
+        stationCoverage: [
+          { station: "skierg", lastTrained: "2026-05-19", daysSince: 1 },
+          { station: "sled_pull", lastTrained: "2026-04-27", daysSince: 23 },
+        ],
+      }),
+    );
+    renderSummary("plan-1");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("station-radar")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("station-radar-headline")).toHaveTextContent(
+      "Sled Pull is coldest — 23d ago.",
+    );
+    expect(screen.getByTestId("station-radar-chip-skierg")).toHaveTextContent("SkiErg Yesterday");
+  });
+
+  it("omits the radar entirely before any station has been trained", async () => {
+    // The default fixture ships an empty stationCoverage.
+    renderSummary("plan-1");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-summary-card")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("station-radar")).not.toBeInTheDocument();
   });
 
   it("places the athlete in the selected plan's block", async () => {
