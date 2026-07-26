@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useSearchFoods } from "@/hooks/useNutrition";
 
+import { FavoriteStarButton } from "./FavoriteStarButton";
+
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
 
@@ -62,26 +64,33 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
               No foods found.
             </p>
           )}
+          {/* The row is a flex container rather than one big button: a star
+              cannot legally nest inside the button that picks the food. */}
           {results.map((food) => (
-            <button
+            <div
               key={food.id}
-              type="button"
-              onClick={() => onSelect(food)}
-              className="flex w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
-              data-testid={`result-food-${food.id}`}
+              className="flex items-center gap-1 border-b pr-1 transition-colors last:border-b-0 hover:bg-accent"
             >
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{food.name}</span>
-                {food.brand && (
-                  <span className="block truncate text-xs text-muted-foreground">{food.brand}</span>
-                )}
-              </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {food.caloriesPer100g == null
-                  ? "—"
-                  : `${Math.round(food.caloriesPer100g)} kcal/100g`}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onSelect(food)}
+                className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+                data-testid={`result-food-${food.id}`}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{food.name}</span>
+                  {food.brand && (
+                    <span className="block truncate text-xs text-muted-foreground">{food.brand}</span>
+                  )}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {food.caloriesPer100g == null
+                    ? "—"
+                    : `${Math.round(food.caloriesPer100g)} kcal/100g`}
+                </span>
+              </button>
+              <FavoriteStarButton foodId={food.id} foodName={food.name} size="sm" />
+            </div>
           ))}
         </div>
       )}

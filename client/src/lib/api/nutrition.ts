@@ -11,6 +11,7 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodServing,
+  FoodWithPortionMemory,
   FoodWithServingsResponse,
   FuellingRangeResponse,
   MealTarget,
@@ -50,7 +51,7 @@ export const nutrition = {
   search: (q: string) =>
     typedRequest<FoodSearchResponse>("GET", `${base}/foods/search?q=${enc(q)}`),
 
-  recent: () => typedRequest<Food[]>("GET", `${base}/foods/recent`),
+  recent: () => typedRequest<FoodWithPortionMemory[]>("GET", `${base}/foods/recent`),
 
   getSummary: (date?: string) =>
     typedRequest<DailySummaryResponse>(
@@ -71,7 +72,7 @@ export const nutrition = {
   deleteLog: (id: string) =>
     typedRequest<{ success: boolean }>("DELETE", `${base}/logs/${enc(id)}`),
 
-  listFavorites: () => typedRequest<Food[]>("GET", `${base}/favorites`),
+  listFavorites: () => typedRequest<FoodWithPortionMemory[]>("GET", `${base}/favorites`),
 
   addFavorite: (data: AddFavoriteInput) =>
     typedRequest<{ success: boolean }>("POST", `${base}/favorites`, data),

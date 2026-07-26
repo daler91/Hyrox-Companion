@@ -107,6 +107,7 @@ function planDayRow(overrides: Record<string, unknown> = {}) {
     expectedDurationMin: null,
     expectedRpe: null,
     plannedTimeOfDayMin: null,
+    skipReason: null,
     ...overrides,
   };
 }

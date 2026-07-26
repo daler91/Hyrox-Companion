@@ -59,10 +59,7 @@ export function computeCurrentWeek(
  * still ends on a taper rather than reading as "peak" throughout.
  * Returns `undefined` for a block we cannot place a week inside.
  */
-export function computePlanPhase(
-  totalWeeks: number,
-  currentWeek: number,
-): PlanPhase | undefined {
+export function computePlanPhase(totalWeeks: number, currentWeek: number): PlanPhase | undefined {
   if (totalWeeks <= 0 || currentWeek <= 0) return undefined;
 
   const progressPct = Math.round((currentWeek / totalWeeks) * 100);
@@ -77,7 +74,13 @@ export function computePlanPhase(
   const phaseIndex = PLAN_PHASE_ORDER.indexOf(phaseLabel);
   const remainingPhases = PLAN_PHASE_ORDER.slice(Math.max(phaseIndex + 1, 0));
 
-  return { currentWeek, totalWeeks, phaseLabel, progressPct, remainingPhases: [...remainingPhases] };
+  return {
+    currentWeek,
+    totalWeeks,
+    phaseLabel,
+    progressPct,
+    remainingPhases: [...remainingPhases],
+  };
 }
 
 /** Phase label as prose: `race_week` → "Race week", everything else capitalised. */

@@ -446,6 +446,39 @@ describe("nutrition routes", () => {
       vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue(undefined);
       expect((await request(app).post("/api/v1/nutrition/favorites").send({ foodId: "x" })).status).toBe(404);
     });
+
+    it("lists favorites with the portion each was last logged in", async () => {
+      vi.mocked(storage.nutrition.listFavorites).mockResolvedValue([
+        { id: "f1", name: "Banana", lastQuantityG: 140, lastMealType: "breakfast" },
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/favorites");
+
+      expect(res.status).toBe(200);
+      // The portion is what lets a favourite chip log in one tap.
+      expect(res.body[0]).toMatchObject({ lastQuantityG: 140, lastMealType: "breakfast" });
+    });
+
+    it("returns nulls for a favourite that has never been logged", async () => {
+      vi.mocked(storage.nutrition.listFavorites).mockResolvedValue([
+        { id: "f1", name: "Banana", lastQuantityG: null, lastMealType: null },
+      ]);
+
+      const res = await request(app).get("/api/v1/nutrition/favorites");
+
+      expect(res.status).toBe(200);
+      expect(res.body[0]).toMatchObject({ lastQuantityG: null, lastMealType: null });
+    });
+
+    it("removes a favorite, and 404s when it was not one", async () => {
+      vi.mocked(storage.nutrition.removeFavorite).mockResolvedValue(true);
+      expect((await request(app).delete("/api/v1/nutrition/favorites/f1")).status).toBe(200);
+
+      // The client treats this 404 as success — un-starring something already
+      // gone is not a failure worth surfacing.
+      vi.mocked(storage.nutrition.removeFavorite).mockResolvedValue(false);
+      expect((await request(app).delete("/api/v1/nutrition/favorites/f1")).status).toBe(404);
+    });
   });
 
   describe("barcode (FR-2.1)", () => {

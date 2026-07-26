@@ -1,9 +1,25 @@
 import type { FoodLogEntryWithNutrition, MealFuelTarget } from "@shared/schema";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { renderWithClient } from "@/test/support/renderWithClient";
+
 import { MealSection } from "./MealSection";
+
+// Each entry row carries a favourite star, which reads the favourites query.
+vi.mock("@/lib/api", () => ({
+  api: {
+    nutrition: {
+      listFavorites: vi.fn().mockResolvedValue([]),
+      addFavorite: vi.fn(),
+      removeFavorite: vi.fn(),
+    },
+  },
+  QUERY_KEYS: { nutritionFavorites: ["/api/v1/nutrition/favorites"] },
+}));
+
+const render = renderWithClient;
 
 const ENTRY: FoodLogEntryWithNutrition = {
   id: "e1",
@@ -107,21 +123,23 @@ describe("MealSection", () => {
   });
 
   it("shows an AI badge only for nl/photo entries", () => {
-    const { rerender } = render(
-      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={vi.fn()} />,
-    );
-    expect(screen.queryByTestId("ai-badge-e1")).not.toBeInTheDocument();
-
-    rerender(
+    render(
       <MealSection
         label="Breakfast"
         mealType="breakfast"
-        entries={[{ ...ENTRY, entryMethod: "nl" }]}
+        entries={[
+          ENTRY,
+          { ...ENTRY, id: "e2", entryMethod: "nl" },
+          { ...ENTRY, id: "e3", entryMethod: "photo" },
+        ]}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />,
     );
-    expect(screen.getByTestId("ai-badge-e1")).toBeInTheDocument();
+
+    expect(screen.queryByTestId("ai-badge-e1")).not.toBeInTheDocument();
+    expect(screen.getByTestId("ai-badge-e2")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-badge-e3")).toBeInTheDocument();
   });
 
   it("opens the per-meal target editor when a target + handler are provided", async () => {

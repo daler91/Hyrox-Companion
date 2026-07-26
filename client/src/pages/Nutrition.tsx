@@ -1,7 +1,7 @@
-import type { ParseMealResponse } from "@shared/schema";
+import type { Food, ParseMealResponse } from "@shared/schema";
 import { MEAL_TYPES } from "@shared/schema/enums";
 import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine, Target } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -13,6 +13,7 @@ import {
   useDeleteLog,
   useNutritionDay,
   useNutritionTargets,
+  usePortionMemory,
   useRepeatDay,
 } from "@/hooks/useNutrition";
 
@@ -81,6 +82,16 @@ export default function Nutrition() {
   const currentTarget = targets.data?.current ?? null;
   const deleteLog = useDeleteLog(date);
   const repeatDay = useRepeatDay(date);
+  const portionMemory = usePortionMemory();
+
+  // Every "log this food" entry point goes through here so a food the athlete
+  // has logged before opens pre-filled with the portion they actually use —
+  // including one reached from search, not just from the quick-add chips.
+  const openCreateDialog = useCallback(
+    (food: Food, entryMethod?: "manual" | "barcode") =>
+      setDialog({ mode: "create", food, entryMethod, portionHint: portionMemory(food.id) }),
+    [portionMemory],
+  );
 
   if (authLoading) {
     return (
@@ -224,8 +235,8 @@ export default function Nutrition() {
         />
         <EnergyBalanceCard energy={summary?.energy ?? null} />
 
-        <FoodSearch onSelect={(food) => setDialog({ mode: "create", food })} />
-        <QuickAddBar onSelect={(food) => setDialog({ mode: "create", food })} />
+        <FoodSearch onSelect={openCreateDialog} />
+        <QuickAddBar onSelect={openCreateDialog} date={date} />
 
         <div className="flex flex-wrap gap-2">
           <DescribeMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })} />
@@ -287,14 +298,14 @@ export default function Nutrition() {
       <BarcodeScanner
         open={barcodeOpen}
         onClose={() => setBarcodeOpen(false)}
-        onResolved={(food) => setDialog({ mode: "create", food, entryMethod: "barcode" })}
+        onResolved={(food) => openCreateDialog(food, "barcode")}
       />
       <CustomFoodDialog
         state={customFood}
         onClose={() => setCustomFood(null)}
         // "Save & log" (label-scan flow): chain into LogFoodDialog with the
         // just-created food, exactly like a resolved barcode.
-        onCreated={(food) => setDialog({ mode: "create", food })}
+        onCreated={openCreateDialog}
       />
       <RecipeBuilderDialog
         open={recipe.open}

@@ -167,6 +167,18 @@ export interface FoodSearchResponse {
   apiDegraded: boolean;
 }
 
+/**
+ * A food the athlete has logged before, carrying the portion and meal they last
+ * used it in. Returned by the recents and favourites lists so re-logging a
+ * regular can seed the real amount instead of a generic 100 g.
+ *
+ * Both fields are null for a favourite starred but never logged.
+ */
+export interface FoodWithPortionMemory extends Food {
+  lastQuantityG: number | null;
+  lastMealType: MealType | null;
+}
+
 export interface NutritionMacroTotals {
   calories: number;
   protein: number;
