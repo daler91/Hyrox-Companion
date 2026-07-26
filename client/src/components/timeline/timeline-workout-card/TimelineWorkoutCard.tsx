@@ -18,7 +18,13 @@ import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { CoachNote } from "./CoachNote";
 import { ExerciseChips } from "./ExerciseChips";
 import { FuellingTargetChip } from "./FuellingTargetChip";
+import { MafCeilingChip } from "./MafCeilingChip";
 import type { TimelineWorkoutCardProps } from "./types";
 import { getCardClasses, getStatusBadge } from "./utils";
 import { WorkoutStravaStats } from "./WorkoutStravaStats";
@@ -138,7 +145,12 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
     return groupTimelineExerciseSets(entry.exerciseSets);
   }, [entry.exerciseSets]);
 
-  const baseCardClasses = getCardClasses(isBeingCombined, canBeCombinedWith, entry.status, entry.focus);
+  const baseCardClasses = getCardClasses(
+    isBeingCombined,
+    canBeCombinedWith,
+    entry.status,
+    entry.focus,
+  );
   const aiCoachClasses = getAiCoachCardClasses(isTargetedByCoach);
   const dragClasses = getDragCardClasses(isDragging, isMoving);
 
@@ -277,7 +289,10 @@ function canMoveTimelineEntry({
   onMove,
   isCombining,
   isBulkSelectMode,
-}: Pick<TimelineWorkoutCardProps, "entry" | "onMove" | "isCombining" | "isBulkSelectMode">): boolean {
+}: Pick<
+  TimelineWorkoutCardProps,
+  "entry" | "onMove" | "isCombining" | "isBulkSelectMode"
+>): boolean {
   const hasMoveAnchor = Boolean(entry.planDayId || entry.workoutLogId);
   return Boolean(onMove && hasMoveAnchor && !isCombining && !isBulkSelectMode);
 }
@@ -289,10 +304,7 @@ function getAiCoachCardClasses(isTargetedByCoach: boolean): string {
 }
 
 function getDragCardClasses(isDragging: boolean, isMoving: boolean | undefined): string {
-  return cn(
-    isDragging && "opacity-50 ring-2 ring-primary/60",
-    isMoving && "opacity-70",
-  );
+  return cn(isDragging && "opacity-50 ring-2 ring-primary/60", isMoving && "opacity-70");
 }
 
 function handleCardKeyActivation(e: React.KeyboardEvent, onActivate: () => void) {
@@ -358,7 +370,11 @@ function groupTimelineExerciseSets(exerciseSets: TimelineWorkoutEntry["exerciseS
   return exerciseSets?.length ? groupExerciseSets(exerciseSets) : [];
 }
 
-function getCardAriaLabel(entry: TimelineWorkoutEntry, isBulkSelectMode: boolean | undefined, isBulkSelected: boolean | undefined): string {
+function getCardAriaLabel(
+  entry: TimelineWorkoutEntry,
+  isBulkSelectMode: boolean | undefined,
+  isBulkSelected: boolean | undefined,
+): string {
   const focus = entry.focus || "Workout";
   if (!isBulkSelectMode) return `${focus}, ${entry.status}`;
   return `${isBulkSelected ? "Deselect" : "Select"} ${entry.focus || "workout"}, ${entry.status}`;
@@ -567,13 +583,14 @@ function TimelineCardWorkoutBody({
       {entry.accessory && (
         <p className="text-sm text-muted-foreground/70 mb-1">{entry.accessory}</p>
       )}
-      {entry.notes && (
-        <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>
-      )}
+      {entry.notes && <p className="text-xs text-muted-foreground italic mt-2">{entry.notes}</p>}
       {metricsText && <p className="text-xs text-muted-foreground mt-1">{metricsText}</p>}
       {featureFlags.nutritionEnabled && isPlannedTimelineEntry(entry) && (
         <FuellingTargetChip entry={entry} />
       )}
+      {/* No feature flag — the chip self-gates on training style, a stored
+          ceiling, and the session actually containing running work. */}
+      {isPlannedTimelineEntry(entry) && <MafCeilingChip entry={entry} />}
       <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
       {entry.aiRationale && (
         <CoachNote

@@ -9,6 +9,8 @@ import {
   type VisualSegment,
 } from "@/components/exercise-row/formatPrescription";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
+
+import { LastTimeRow } from "./LastTimeRow";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -68,6 +70,8 @@ export function ExerciseRowRenderer({
   readableSummary,
   showPlannedDiffs,
   blockAssignmentOptions,
+  showLastTime,
+  currentWorkoutLogId,
 }: Readonly<{
   groups: readonly GroupedExercise[];
   rowKeys: readonly string[];
@@ -81,6 +85,8 @@ export function ExerciseRowRenderer({
   readableSummary: boolean;
   showPlannedDiffs: boolean;
   blockAssignmentOptions: readonly BlockAssignmentOption[];
+  showLastTime?: boolean;
+  currentWorkoutLogId?: string | null;
 }>) {
   return groups.map((group, idx) => {
     const rowKey = rowKeys[idx];
@@ -101,6 +107,8 @@ export function ExerciseRowRenderer({
         readableSummary={readableSummary}
         showPlannedDiffs={showPlannedDiffs}
         blockAssignmentOptions={blockAssignmentOptions}
+        showLastTime={showLastTime}
+        currentWorkoutLogId={currentWorkoutLogId}
       />
     );
   });
@@ -126,6 +134,11 @@ interface GroupRowProps {
   readonly readableSummary: boolean;
   readonly showPlannedDiffs: boolean;
   readonly blockAssignmentOptions: readonly BlockAssignmentOption[];
+  /** Opt-in: fetches per-exercise history, so only surfaces that want the
+   *  "Last time" line pay for the queries. */
+  readonly showLastTime?: boolean;
+  /** The workout being viewed, excluded from its own history. */
+  readonly currentWorkoutLogId?: string | null;
   /**
    * Sortable attrs + listeners forwarded from `SortableGroupRow`. Applied
    * to the leading `GripVertical` button so the handle, and only the
@@ -270,6 +283,8 @@ const GroupRow = memo(function GroupRow({
   readableSummary,
   showPlannedDiffs,
   blockAssignmentOptions,
+  showLastTime,
+  currentWorkoutLogId,
   dragHandleProps,
 }: GroupRowProps) {
   const handleToggle = useCallback(() => onToggle(rowKey), [onToggle, rowKey]);
@@ -442,6 +457,20 @@ const GroupRow = memo(function GroupRow({
               </span>
             )}
           </button>
+        )}
+        {/* Below the prescription and outside the expand toggle, so it reads
+            beside "this time" whether or not the row is open. */}
+        {showLastTime && (
+          <LastTimeRow
+            exerciseName={group.exerciseName}
+            category={group.category}
+            currentSets={group.sets}
+            weightUnit={weightUnit}
+            distanceUnit={distanceUnit}
+            currentWorkoutLogId={currentWorkoutLogId}
+            onUpdateSet={onUpdateSet}
+            showUseLast={isExpanded}
+          />
         )}
       </div>
 

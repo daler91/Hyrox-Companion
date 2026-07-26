@@ -12,12 +12,13 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
+import { normalizeExerciseName } from "@shared/schema/exercises";
 import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
+import { prescribedSetToLogRow, queryExerciseSetsWithDates, takeMostRecentSessions } from "./shared";
 
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
 type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
@@ -487,8 +488,22 @@ export class WorkoutStorage {
     return true;
   }
 
-  async getExerciseHistory(userId: string, exerciseName: string): Promise<(ExerciseSet & { date: string })[]> {
-    return await queryExerciseSetsWithDates(userId, { exerciseName });
+  /**
+   * Every logged set of one exercise, newest session first.
+   *
+   * The name is resolved through `normalizeExerciseName` so "RDL" finds
+   * `romanian_deadlift`; unresolvable names fall back to the raw string, which
+   * preserves the exact-match behaviour CSV imports and custom labels rely on.
+   *
+   * `sessionLimit` bounds *distinct dates*, not rows and not the underlying log
+   * scan. Limiting logs in SQL would be wrong here: the exerciseName filter runs
+   * on the nested relation, so "the 5 most recent logs" is usually 5 logs
+   * containing none of this exercise, and the athlete gets an empty history.
+   */
+  async getExerciseHistory(userId: string, exerciseName: string, options?: { sessionLimit?: number }): Promise<(ExerciseSet & { date: string })[]> {
+    const canonical = normalizeExerciseName(exerciseName) ?? exerciseName;
+    const rows = await queryExerciseSetsWithDates(userId, { exerciseName: canonical });
+    return options?.sessionLimit ? takeMostRecentSessions(rows, options.sessionLimit) : rows;
   }
 
   private getMutationOwnerAdapter(context: MutationOwnerContext): MutationOwnerAdapter {

@@ -17,7 +17,7 @@ import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
-import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody } from "../../routeUtils";
+import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
 import {
   BULK_DELETE_WORKOUTS_NOT_FOUND,
   bulkDeleteWorkouts,
@@ -41,6 +41,13 @@ const workoutSetUseCase = createMutateExerciseSetUseCase({
   updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
   addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
   deleteSet: (owner, setId, userId) => storage.workouts.mutateExerciseSetDelete(owner, setId, userId),
+});
+
+// How many past sessions of one exercise to return. The client asks for a
+// handful to render "last time"; the ceiling keeps a hand-crafted request
+// from pulling an athlete's entire history of a staple lift.
+const exerciseHistoryQuerySchema = z.object({
+  sessions: z.coerce.number().int().min(1).max(20).optional(),
 });
 
 const combineWorkoutsSchema = z.object({
@@ -272,8 +279,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     res.status(201).json(result);
   });
 
-  router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, rateLimiter("workoutHistory", 60), asyncHandler(async (req: Request<{ exerciseName: string }>, res: Response) => {
-    const history = await storage.workouts.getExerciseHistory(getUserId(req), req.params.exerciseName);
+  // Its own rate-limit bucket, not the one shared with /workouts/:id/history:
+  // opening a session fires one of these per distinct exercise, so a 10-lift
+  // day would eat a sixth of a 60/min budget in a single screen.
+  router.get("/api/v1/exercises/:exerciseName/history", isAuthenticated, rateLimiter("exerciseHistory", 120), validateQuery(exerciseHistoryQuerySchema), asyncHandler(async (req: Request<{ exerciseName: string }>, res: Response) => {
+    const { sessions } = req.query as z.infer<typeof exerciseHistoryQuerySchema>;
+    const history = await storage.workouts.getExerciseHistory(getUserId(req), req.params.exerciseName, { sessionLimit: sessions });
     res.json(history);
   }));
 }

@@ -1,12 +1,28 @@
-export type { AnalyticsExportFormat, OverviewAnalysisResponse, RacePredictionView, Suggestion } from "./analytics";
+export type {
+  AnalyticsExportFormat,
+  OverviewAnalysisResponse,
+  RacePredictionView,
+  Suggestion,
+} from "./analytics";
 export { analytics, timeline } from "./analytics";
 export type { RagInfo, RagStatus } from "./coaching";
 export { chat, coaching } from "./coaching";
 export type { ReparseResponse } from "./constants";
-export { IMAGE_REPARSE_REQUEST_OPTIONS, IMAGE_REPARSE_TIMEOUT_MS, isTimeoutLikeApiError } from "./constants";
+export {
+  IMAGE_REPARSE_REQUEST_OPTIONS,
+  IMAGE_REPARSE_TIMEOUT_MS,
+  isTimeoutLikeApiError,
+} from "./constants";
 export type { ParseFromImagePayload, ParseWorkoutStructureResponse } from "./exercises";
 export { exercises } from "./exercises";
-export type { MafTagResponse, MafTestMetricsInput, MafTestMutationPayload, MafTestResult, MafTestsListResponse, MafWorkoutAnalysis } from "./mafTests";
+export type {
+  MafTagResponse,
+  MafTestMetricsInput,
+  MafTestMutationPayload,
+  MafTestResult,
+  MafTestsListResponse,
+  MafWorkoutAnalysis,
+} from "./mafTests";
 export { mafTests } from "./mafTests";
 export { nutrition } from "./nutrition";
 export type { ApplyPlanProposalResponse, PlanProposalView } from "./planProposals";
@@ -14,9 +30,22 @@ export { planProposals } from "./planProposals";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
 export { timelineAnnotations } from "./timelineAnnotations";
-export type { GarminStatus, GarminSyncResponse, StravaStatus, StravaSyncResponse, UserPreferences } from "./user";
+export type {
+  GarminStatus,
+  GarminSyncResponse,
+  StravaStatus,
+  StravaSyncResponse,
+  UserPreferences,
+} from "./user";
 export { auth, email, garmin, preferences, strava } from "./user";
-export type { BatchReparseResponse, BulkDeleteWorkoutsPayload, BulkDeleteWorkoutsResponse, ReparseWorkoutTextPayload, WorkoutHistoryStats, WorkoutReferenceTextPayload } from "./workouts";
+export type {
+  BatchReparseResponse,
+  BulkDeleteWorkoutsPayload,
+  BulkDeleteWorkoutsResponse,
+  ReparseWorkoutTextPayload,
+  WorkoutHistoryStats,
+  WorkoutReferenceTextPayload,
+} from "./workouts";
 export { workouts } from "./workouts";
 
 // ---------------------------------------------------------------------------
@@ -65,6 +94,8 @@ export const QUERY_KEYS = {
   workouts: ["/api/v1/workouts"] as const,
   workout: (id: string) => ["/api/v1/workouts", id] as const,
   workoutHistory: (id: string) => ["/api/v1/workouts", id, "history"] as const,
+  exerciseHistory: (exerciseName: string, sessions: number) =>
+    ["/api/v1/exercises", exerciseName, "history", sessions] as const,
   planDayExercises: (dayId: string) => ["/api/v1/plans/days", dayId, "sets"] as const,
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
@@ -95,8 +126,7 @@ export const QUERY_KEYS = {
     ["/api/v1/nutrition/session-fuelling", workoutId] as const,
   nutritionPlannedSessionEstimate: (planDayId: string) =>
     ["/api/v1/nutrition/planned-session-estimate", planDayId] as const,
-  nutritionBlock: (from: string, to: string) =>
-    ["/api/v1/nutrition/block", from, to] as const,
+  nutritionBlock: (from: string, to: string) => ["/api/v1/nutrition/block", from, to] as const,
   nutritionRange: (from: string, to: string) =>
     ["/api/v1/nutrition/summary-range", from, to] as const,
   // Prefix for invalidating every per-day range query regardless of from/to

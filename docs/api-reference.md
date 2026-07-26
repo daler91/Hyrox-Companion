@@ -1388,10 +1388,18 @@ Get merged timeline of planned and logged workouts.
 
 ### GET /api/v1/exercises/:exerciseName/history
 
-Get historical exercise sets for a specific exercise.
+Get historical exercise sets for a specific exercise, newest session first.
+
+The name is resolved through `normalizeExerciseName`, so `RDL` finds
+`romanian_deadlift`; names it can't resolve fall back to an exact match.
 
 - **Auth:** Required
-- **Rate limit:** `workoutHistory` category, 60/min
+- **Rate limit:** `exerciseHistory` category, 120/min — the client fires one
+  request per distinct exercise when a session is opened, so this has its own
+  bucket rather than sharing `workoutHistory`
+- **Query:** `sessions` (1–20, optional) — bounds the number of distinct
+  training **dates** returned, not the number of rows, so a session's sets are
+  never returned in part
 - **Response:** Exercise set history with dates
 
 ### GET /api/v1/export

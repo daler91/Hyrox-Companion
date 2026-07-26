@@ -364,9 +364,22 @@ synthesise the `Food` that list holds.
 each food plus the `lastQuantityG` / `lastMealType` it was last logged in (null
 for a favourite starred but never logged). That powers one-tap logging from the
 favourites chips and pre-fills `LogFoodDialog` with the portion the athlete
-actually uses. The hint is always seeded in grams, never mapped back onto a named
-serving, because named servings load asynchronously and every seed runs in a
-`useState` initializer.
+actually uses. The hint is seeded in grams rather than mapped onto a named
+serving: it runs in a `useState` initializer, before `useFoodWithServings` has
+resolved.
+
+Editing an existing entry does map back. `LogFoodDialog` runs the same count +
+unit control in both modes, and `matchPortionForGrams` re-expresses the entry's
+stored grams in the friendliest named portion available — 190 g of a food with a
+95 g "1 slice" portion reopens as "2 slices". A portion qualifies when it divides
+the quantity into a whole or half count within a 2% tolerance; the largest
+qualifying portion wins, and grams are the fallback. Because the servings arrive
+after first render, the count and unit are **derived** state (null until the
+athlete touches them) rather than `useState` initializers or a reset effect —
+`useAddServing` invalidates the very query the seed reads from, so an effect
+would stomp typed input the moment a portion was added. The stored value is
+unaffected: `food_log_entries` holds grams only, and the dialog still submits
+grams.
 
 ---
 

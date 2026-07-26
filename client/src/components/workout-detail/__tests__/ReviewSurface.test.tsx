@@ -15,6 +15,8 @@ import {
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
+/** null = the athlete doesn't train to a MAF ceiling, which is the common case. */
+let mafCeiling: number | null = null;
 const RENDER_TIMEOUT_MS = 10_000;
 
 installRadixPointerMocks();
@@ -29,6 +31,14 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
     distanceUnit: "km",
     showAdherenceInsights,
   }),
+}));
+
+vi.mock("@/hooks/useMafCeiling", () => ({ useMafCeiling: () => mafCeiling }));
+
+// This suite renders ExerciseTable without a QueryClientProvider. The "last
+// time" line is not what it is testing; an empty history is the no-op case.
+vi.mock("@/hooks/useExerciseHistory", () => ({
+  useExerciseHistory: () => ({ data: undefined }),
 }));
 
 vi.mock("@/components/ui/responsive-sheet", () => ({
@@ -142,11 +152,30 @@ function makeDetail(overrides: Record<string, unknown> = {}) {
 describe("ReviewSurface", () => {
   beforeEach(() => {
     showAdherenceInsights = true;
+    mafCeiling = null;
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }),
     );
     mockUseWorkoutDetail.mockReset();
+  });
+
+  it("tones the Avg HR tile against the athlete's MAF ceiling", () => {
+    mafCeiling = 145;
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+    render(
+      <ReviewSurface
+        entry={makeEntry({
+          avgHeartrate: 152,
+          maxHeartrate: 168,
+          exerciseSets: [makeExerciseSet({ exerciseName: "easy_run" })],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // The overshoot is spelled out in the label, not carried by colour alone.
+    expect(screen.getByTestId("summary-stat-avg-hr")).toHaveTextContent("Avg HR · 7 over MAF");
   });
 
   it("wires the plan-day picker to the current link and updatePlanDay", async () => {

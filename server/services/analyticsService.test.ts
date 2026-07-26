@@ -435,6 +435,35 @@ describe("calculateTrainingOverview", () => {
     expect(sledPush?.daysSince).toBeNull();
   });
 
+  it("populates the running row from any running exercise", () => {
+    // Previously this row was null for essentially every athlete: the substring
+    // match looked for "running", and no canonical run exercise contains it.
+    const sets = [makeSet({ exerciseName: "easy_run", category: "running", date: "2026-03-22" })];
+    const result = calculateTrainingOverview([], sets);
+
+    expect(result.stationCoverage.find((s) => s.station === "running")?.lastTrained).toBe("2026-03-22");
+  });
+
+  it("credits a station named only in the session's focus", () => {
+    // The coach has always keyword-scanned focus; the card never did, which is
+    // half of why the two disagreed.
+    const logs = [makeWorkoutLog({ id: "w9", date: "2026-03-24", focus: "Sled push intervals" })];
+    const result = calculateTrainingOverview(logs, []);
+
+    expect(result.stationCoverage.find((s) => s.station === "sled_push")?.lastTrained).toBe("2026-03-24");
+  });
+
+  it("credits a station named in a custom exercise's label", () => {
+    // The old substring match caught this via "custom:heavy_sled_push_finisher";
+    // the label now reaches the keyword scan instead, so it still counts.
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "Heavy sled push finisher", category: "functional", date: "2026-03-23" }),
+    ];
+    const result = calculateTrainingOverview([], sets);
+
+    expect(result.stationCoverage.find((s) => s.station === "sled_push")?.lastTrained).toBe("2026-03-23");
+  });
+
   it("aggregates movement pattern sessions, sets, and recency from mapped exercise sets", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-20T12:00:00Z"));

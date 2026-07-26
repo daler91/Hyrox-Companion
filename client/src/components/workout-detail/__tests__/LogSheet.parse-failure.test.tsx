@@ -12,6 +12,13 @@ vi.mock("@/hooks/usePlanDayExercises", () => ({
   usePlanDayExercises: (planDayId: string | null) => mockUsePlanDayExercises(planDayId),
 }));
 
+// These suites render ExerciseTable directly, without a QueryClientProvider.
+// The "last time" line is not what they are testing; an empty history is the
+// no-op case and keeps them focused.
+vi.mock("@/hooks/useExerciseHistory", () => ({
+  useExerciseHistory: () => ({ data: undefined }),
+}));
+
 vi.mock("@/hooks/useUnitPreferences", () => ({
   useUnitPreferences: () => ({ weightUnit: "kg", distanceUnit: "m" }),
 }));

@@ -1,32 +1,9 @@
+import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
+
 import type { TrainingContext } from "../../gemini/index";
 import { toDateStr } from "../../types";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { TimelineEntry } from "./types";
-
-const FUNCTIONAL_EXERCISE_NAMES = [
-  "skierg", "sled_push", "sled_pull", "burpee_broad_jump",
-  "rowing", "farmers_carry", "sandbag_lunges", "wall_balls",
-];
-
-const EXERCISE_FOCUS_MAP: Record<string, string> = {
-  "skierg": "skierg", "ski erg": "skierg", "ski-erg": "skierg",
-  "sled push": "sled_push", "sled_push": "sled_push",
-  "sled pull": "sled_pull", "sled_pull": "sled_pull",
-  "burpee": "burpee_broad_jump", "burpee broad jump": "burpee_broad_jump", "burpee_broad_jump": "burpee_broad_jump",
-  "rowing": "rowing", "row": "rowing",
-  "farmers carry": "farmers_carry", "farmer carry": "farmers_carry", "farmers_carry": "farmers_carry",
-  "sandbag lunges": "sandbag_lunges", "sandbag lunge": "sandbag_lunges", "sandbag_lunges": "sandbag_lunges",
-  "wall balls": "wall_balls", "wall ball": "wall_balls", "wall_balls": "wall_balls",
-  "running": "running", "run": "running",
-};
-
-const RUNNING_EXERCISE_NAMES = new Set(["easy_run", "tempo_run", "interval_run", "long_run"]);
-
-function daysBetween(dateA: string, dateB: string): number {
-  const a = new Date(dateA);
-  const b = new Date(dateB);
-  return Math.round(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
-}
 
 export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"]): Pick<
   NonNullable<TrainingContext["coachingInsights"]>,
@@ -70,51 +47,31 @@ export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"
   return { rpeTrend, avgRpeLast3: avgLast3, avgRpePrior3: avgPrior3, fatigueFlag, undertrainingFlag };
 }
 
-function updateLastTrained(record: Record<string, string | null>, key: string, date: string): void {
-  const current = record[key];
-  if (!current || date > current) {
-    record[key] = date;
-  }
-}
-
-function updateExerciseDatesFromSets(
-  record: Record<string, string | null>,
-  exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
-  date: string,
-  allStationsSet: Set<string>,
-): void {
-  for (const es of exerciseSets) {
-    const name = es.exerciseName.toLowerCase();
-    // ⚡ Perf: Use Set for O(1) lookups instead of Array.includes() which is O(N)
-    if (allStationsSet.has(name)) updateLastTrained(record, name, date);
-    if (RUNNING_EXERCISE_NAMES.has(name)) updateLastTrained(record, "running", date);
-  }
-}
-
-function updateExerciseDatesFromFocus(record: Record<string, string | null>, focus: string, date: string): void {
-  const focusLower = focus.toLowerCase();
-  for (const [keyword, station] of Object.entries(EXERCISE_FOCUS_MAP)) {
-    if (focusLower.includes(keyword)) updateLastTrained(record, station, date);
-  }
-}
-
+/**
+ * Days since each HYROX station was last trained, for the coaching prompt.
+ *
+ * A thin adapter over the shared coverage builder — the station list, the
+ * exercise matching and the focus-text keywords all used to be duplicated here,
+ * and had drifted from the copy behind the analytics payload badly enough that
+ * the two reported different gaps for the same station. The shape and the
+ * exported name are unchanged; every downstream consumer is untouched.
+ */
 export function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
-  const today = toDateStr();
-  const allStations = [...FUNCTIONAL_EXERCISE_NAMES, "running"];
-  const allStationsSet = new Set(allStations);
-  const lastTrainedDate: Record<string, string | null> = {};
-  for (const station of allStations) lastTrainedDate[station] = null;
+  const sources: StationCoverageSource[] = [];
 
   for (const entry of timeline) {
     if (entry.status !== "completed" || !entry.date) continue;
-    if (entry.exerciseSets) updateExerciseDatesFromSets(lastTrainedDate, entry.exerciseSets, entry.date, allStationsSet);
-    if (entry.focus) updateExerciseDatesFromFocus(lastTrainedDate, entry.focus, entry.date);
+    sources.push({
+      date: entry.date,
+      exerciseNames: (entry.exerciseSets ?? []).map(es => es.exerciseName),
+      freeText: entry.focus ? [entry.focus] : [],
+    });
   }
 
-  return allStations.map(station => {
-    const last = lastTrainedDate[station];
-    return { station, daysSinceLastTrained: last ? daysBetween(last, today) : null };
-  });
+  return buildStationCoverage(sources, toDateStr()).map(({ station, daysSince }) => ({
+    station,
+    daysSinceLastTrained: daysSince,
+  }));
 }
 
 export function computeWeeklyVolume(

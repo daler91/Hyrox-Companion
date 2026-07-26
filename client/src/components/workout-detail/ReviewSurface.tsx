@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { featureFlags } from "@/lib/featureFlags";
@@ -359,6 +360,10 @@ function ReviewDetailsColumn({
   onDeleteClick,
   onResolveReview,
 }: ReviewDetailsColumnProps) {
+  // Read here rather than threading a 25th prop down — it rides on the auth
+  // user query the sheet already holds.
+  const mafCeiling = useMafCeiling();
+
   return (
     <>
       <WorkoutSummaryHeader
@@ -368,6 +373,7 @@ function ReviewDetailsColumn({
           rpe,
           distanceUnit,
           showAdherence: showPlannedDiffs,
+          mafCeiling,
         })}
         testId={`review-summary-${entry.id}`}
       />
@@ -392,7 +398,10 @@ function ReviewDetailsColumn({
         onSaveNote={onSaveNote}
         onTimeOfDayChange={onTimeOfDayChange}
       />
-      <CoachRationaleSection rationale={entry.aiRationale} testId={`review-rationale-${entry.id}`} />
+      <CoachRationaleSection
+        rationale={entry.aiRationale}
+        testId={`review-rationale-${entry.id}`}
+      />
       {featureFlags.nutritionEnabled && workoutLogId ? (
         <FuellingAroundSessionPanel workoutLogId={workoutLogId} />
       ) : null}
@@ -429,7 +438,11 @@ function ReviewStravaSection({ entry, distanceUnit, isStrava }: ReviewStravaSect
   // WorkoutStravaStats renders nothing without chip-level stats; gate
   // here too so we never paint an empty titled card.
   const hasChipStats =
-    !!entry.calories || !!entry.avgWatts || !!entry.sufferScore || !!entry.avgCadence || !!entry.avgSpeed;
+    !!entry.calories ||
+    !!entry.avgWatts ||
+    !!entry.sufferScore ||
+    !!entry.avgCadence ||
+    !!entry.avgSpeed;
   if (!isStrava || !hasChipStats) return null;
 
   return (
@@ -559,7 +572,8 @@ function ReviewActualsSection({
   if (!canEditActuals || !workoutLogId) return null;
 
   const workout = detail.workout;
-  const referenceMainWorkout = workout?.prescribedMainWorkout ?? workout?.mainWorkout ?? entry.mainWorkout;
+  const referenceMainWorkout =
+    workout?.prescribedMainWorkout ?? workout?.mainWorkout ?? entry.mainWorkout;
   const referenceAccessory = workout?.prescribedAccessory ?? workout?.accessory ?? entry.accessory;
   const hasReferenceText = hasText(referenceMainWorkout) || hasText(referenceAccessory);
   const handleExplicitTextParse = (payload: PrescriptionTextPayload) => {
@@ -632,6 +646,8 @@ function ReviewActualsSection({
             onOpenConversionHelper={parseVisibleReference}
             defaultExpanded
             showPlannedDiffs={showPlannedDiffs}
+            showLastTime
+            currentWorkoutLogId={workoutLogId}
             structureBlocks={structureBlocks}
           />
         }

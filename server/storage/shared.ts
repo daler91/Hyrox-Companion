@@ -113,6 +113,30 @@ export async function queryExerciseSetsWithDates(
   return result;
 }
 
+/**
+ * Keep only the rows belonging to the `sessionLimit` most recent dates.
+ *
+ * Rows arrive already ordered newest-date-first, so this is a single pass that
+ * stops once it has seen enough distinct dates. Bounding *sessions* rather than
+ * rows means a session's sets are never split in half.
+ */
+export function takeMostRecentSessions<T extends { date: string }>(
+  rows: readonly T[],
+  sessionLimit: number,
+): T[] {
+  if (sessionLimit <= 0) return [];
+  const kept: T[] = [];
+  const dates = new Set<string>();
+  for (const row of rows) {
+    if (!dates.has(row.date)) {
+      if (dates.size >= sessionLimit) break;
+      dates.add(row.date);
+    }
+    kept.push(row);
+  }
+  return kept;
+}
+
 // Column-slim variant for the Personal Records endpoint, which only reads a few
 // scalar fields. Projecting just those (no JSON intensity/load/tempo/standards,
 // no planned*/block columns) keeps the all-time PR fetch's payload + memory

@@ -30,6 +30,7 @@ vi.mock("../../storage", () => ({
       getWorkoutLog: vi.fn(),
       deleteWorkoutLog: vi.fn(),
       updateWorkoutLog: vi.fn(),
+      getExerciseHistory: vi.fn(),
     },
     plans: {
       getPlanDay: vi.fn(),
@@ -120,6 +121,7 @@ describe("Workouts Routes", () => {
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }]);
     vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "kg" });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
+    vi.mocked(storage.workouts.getExerciseHistory).mockResolvedValue([]);
 
     vi.mocked(createWorkout).mockResolvedValue({ id: "created-1", date: "2026-01-02" });
     vi.mocked(updateWorkoutUseCase).mockResolvedValue({ id: "workout-1", notes: "updated" });
@@ -473,4 +475,44 @@ it("captures representative high-frequency endpoint timings", async () => {
       expect(avgMs).toBeLessThan(250);
     }
   });
+
+  // The endpoint has existed since it was built with no call sites and no
+  // tests; "Last time" is its first caller.
+  describe("GET /api/v1/exercises/:exerciseName/history", () => {
+    it("returns the exercise's logged sets", async () => {
+      const { storage } = await import("../../storage");
+      vi.mocked(storage.workouts.getExerciseHistory).mockResolvedValue([
+        { id: "set-1", exerciseName: "back_squat", date: "2026-01-02" },
+      ]);
+
+      const res = await request(app).get("/api/v1/exercises/back_squat/history?sessions=3");
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(storage.workouts.getExerciseHistory).toHaveBeenCalledWith("test_user_id", "back_squat", { sessionLimit: 3 });
+    });
+
+    it("returns every session when no bound is given", async () => {
+      const { storage } = await import("../../storage");
+
+      const res = await request(app).get("/api/v1/exercises/back_squat/history");
+
+      expect(res.status).toBe(200);
+      expect(storage.workouts.getExerciseHistory).toHaveBeenCalledWith("test_user_id", "back_squat", { sessionLimit: undefined });
+    });
+
+    it.each([["0"], ["21"], ["abc"]])("rejects sessions=%s", async (sessions) => {
+      const res = await request(app).get(`/api/v1/exercises/back_squat/history?sessions=${sessions}`);
+      expect(res.status).toBe(400);
+    });
+
+    it("passes an aliased name through for the storage layer to resolve", async () => {
+      const { storage } = await import("../../storage");
+
+      await request(app).get("/api/v1/exercises/RDL/history");
+
+      expect(storage.workouts.getExerciseHistory).toHaveBeenCalledWith("test_user_id", "RDL", expect.anything());
+    });
+  });
+
 });

@@ -708,6 +708,17 @@ export function normalizeExerciseName(raw: string): ExerciseName | null {
   return EXERCISE_NAME_ALIASES[normalized] ?? null;
 }
 
+/**
+ * Whether an exercise is running work, resolved from its definition rather than
+ * a hand-kept list — there are nine `category: "running"` exercises and the two
+ * hard-coded lists that used to answer this question each knew about four.
+ */
+export function isRunningExerciseName(exerciseName: string): boolean {
+  const normalized = normalizeExerciseName(exerciseName);
+  if (!normalized) return false;
+  return EXERCISE_DEFINITIONS[normalized].category === "running";
+}
+
 export function getExerciseMovementPatterns(exerciseName: string): readonly MovementPattern[] {
   const normalizedExerciseName = normalizeExerciseName(exerciseName);
   if (!normalizedExerciseName || !(normalizedExerciseName in EXERCISE_MOVEMENT_PATTERNS)) {
