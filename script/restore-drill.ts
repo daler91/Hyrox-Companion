@@ -82,7 +82,7 @@ function schemaTableNames(): string[] {
     if (!is(exported, PgTable)) continue;
     names.push(getTableName(exported));
   }
-  return names.sort();
+  return names.sort((a, b) => a.localeCompare(b));
 }
 
 function journalEntryCount(): number {

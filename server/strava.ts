@@ -632,28 +632,70 @@ function sendStravaFetchError(res: Response, err: unknown): Response {
   });
 }
 
+type StravaTokenFailureReason = Extract<StravaAccessResult, { ok: false }>["reason"];
+
+function sendStravaTokenFailure(res: Response, reason: StravaTokenFailureReason): Response {
+  if (reason === "reauth_required") {
+    return res.status(401).json({
+      error: "Strava authorization was revoked — please reconnect your account",
+      code: "STRAVA_REAUTH_REQUIRED",
+    });
+  }
+  if (reason === "not_connected") {
+    return res.status(401).json({ error: "Strava not connected", code: "UNAUTHORIZED" });
+  }
+  // transient: refresh failed on a retryable error or a concurrent
+  // refresh didn't land in time — the client can simply retry.
+  return res.status(502).json({
+    error: "Strava is temporarily unavailable. Please try again shortly.",
+    code: "EXTERNAL_API_ERROR",
+  });
+}
+
+/** Drop activities already imported for this athlete; map the rest for insert. */
+async function selectStravaWorkoutsToImport(
+  activities: StravaActivity[],
+  userId: string,
+  distanceUnit: DistanceUnit,
+) {
+  const existingStravaIds = new Set(
+    await storage.workouts.getExistingStravaActivityIds(
+      userId,
+      activities.map((a) => String(a.id)),
+    ),
+  );
+  const fresh = activities.filter((a) => !existingStravaIds.has(String(a.id)));
+  return {
+    workoutsToImport: fresh.map((a) => mapStravaActivityToWorkout(a, userId, distanceUnit)),
+    skipped: activities.length - fresh.length,
+  };
+}
+
+async function advanceStravaSyncCursor(
+  userId: string,
+  activities: StravaActivity[],
+  hasMore: boolean,
+): Promise<void> {
+  if (hasMore && activities.length > 0) {
+    // Capped sync: advance the cursor only through the fetched window
+    // (ascending order ⇒ last element is the newest we saw) so the next
+    // sync resumes exactly where this one stopped instead of skipping the
+    // unfetched activities.
+    await storage.users.updateStravaLastSync(
+      userId,
+      new Date(activities[activities.length - 1].start_date),
+    );
+    return;
+  }
+  await storage.users.updateStravaLastSync(userId);
+}
+
 async function handleStravaSync(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     const tokenResult = await getValidAccessToken(userId);
 
-    if (!tokenResult.ok) {
-      if (tokenResult.reason === "reauth_required") {
-        return res.status(401).json({
-          error: "Strava authorization was revoked — please reconnect your account",
-          code: "STRAVA_REAUTH_REQUIRED",
-        });
-      }
-      if (tokenResult.reason === "not_connected") {
-        return res.status(401).json({ error: "Strava not connected", code: "UNAUTHORIZED" });
-      }
-      // transient: refresh failed on a retryable error or a concurrent
-      // refresh didn't land in time — the client can simply retry.
-      return res.status(502).json({
-        error: "Strava is temporarily unavailable. Please try again shortly.",
-        code: "EXTERNAL_API_ERROR",
-      });
-    }
+    if (!tokenResult.ok) return sendStravaTokenFailure(res, tokenResult.reason);
     const { accessToken, connection } = tokenResult;
 
     const user = await storage.users.getUser(userId);
@@ -677,21 +719,11 @@ async function handleStravaSync(req: Request, res: Response) {
       return sendStravaFetchError(res, err);
     }
 
-    const activityIds = activities.map(a => String(a.id));
-    const existingIds = await storage.workouts.getExistingStravaActivityIds(userId, activityIds);
-    const existingStravaIds = new Set(existingIds);
-
-    let skipped = 0;
-    const workoutsToImport = [];
-
-    for (const activity of activities) {
-      if (existingStravaIds.has(String(activity.id))) {
-        skipped++;
-        continue;
-      }
-
-      workoutsToImport.push(mapStravaActivityToWorkout(activity, userId, distanceUnit));
-    }
+    const { workoutsToImport, skipped } = await selectStravaWorkoutsToImport(
+      activities,
+      userId,
+      distanceUnit,
+    );
 
     if (workoutsToImport.length > 0) {
       await enrichCaloriesFromDetail(accessToken, workoutsToImport, reqLogger(req));
@@ -708,18 +740,7 @@ async function handleStravaSync(req: Request, res: Response) {
     const imported = createdLogs.length;
     const raceSkipped = workoutsToImport.length - createdLogs.length;
 
-    if (hasMore && activities.length > 0) {
-      // Capped sync: advance the cursor only through the fetched window
-      // (ascending order ⇒ last element is the newest we saw) so the next
-      // sync resumes exactly where this one stopped instead of skipping the
-      // unfetched activities.
-      await storage.users.updateStravaLastSync(
-        userId,
-        new Date(activities[activities.length - 1].start_date),
-      );
-    } else {
-      await storage.users.updateStravaLastSync(userId);
-    }
+    await advanceStravaSyncCursor(userId, activities, hasMore);
 
     reqLogger(req).info(
       { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length, hasMore },

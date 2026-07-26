@@ -88,6 +88,88 @@ function packageServings(
   return [{ label: `Whole package (${round1(servingsPerContainer)} servings)`, grams }];
 }
 
+/** One printed column normalized to kcal, or null when nothing was legible. */
+function toColumn(set: RawMacroSet, energyUnit: RawLabel["energyUnit"]): LabelMacroSet | null {
+  if (!hasAnyValue(set)) return null;
+  return energyUnit === "kJ" ? toKcal(set) : set;
+}
+
+function deriveBasis(
+  per100g: LabelMacroSet | null,
+  perServing: LabelMacroSet | null,
+): ExtractedNutritionLabel["basis"] {
+  if (per100g && perServing) return "both";
+  if (per100g) return "per100g";
+  return "perServing";
+}
+
+function scaleToPer100g(perServing: LabelMacroSet, servingSizeG: number): LabelMacroSet {
+  const scale = 100 / servingSizeG;
+  const scaleValue = (value: number | null) => (value == null ? null : round1(value * scale));
+  return {
+    calories: scaleValue(perServing.calories),
+    protein: scaleValue(perServing.protein),
+    carb: scaleValue(perServing.carb),
+    fat: scaleValue(perServing.fat),
+    fiber: scaleValue(perServing.fiber),
+  };
+}
+
+/**
+ * The per-100g column to seed the custom-food form with: the printed one when
+ * present, otherwise scaled up from per-serving. Returns the warning that
+ * derivation earned, since a scaled (or missing) column is worth telling the
+ * athlete about.
+ */
+function derivePer100g(
+  per100g: LabelMacroSet | null,
+  perServing: LabelMacroSet | null,
+  servingSizeG: number | null,
+): { suggested: LabelMacroSet | null; warning: string | null } {
+  if (per100g) return { suggested: per100g, warning: null };
+  if (!perServing) return { suggested: null, warning: null };
+  if (servingSizeG == null) {
+    return {
+      suggested: null,
+      warning:
+        "The label only shows per-serving values without a gram weight, so per-100g macros must be entered manually.",
+    };
+  }
+  return {
+    suggested: scaleToPer100g(perServing, servingSizeG),
+    warning: "Per-100g values were derived from the printed per-serving column.",
+  };
+}
+
+type SuggestionMacros = Pick<
+  LabelFoodSuggestion,
+  "caloriesPer100g" | "proteinPer100g" | "carbPer100g" | "fatPer100g" | "fiberPer100g"
+>;
+
+/** Clamp to the shared custom-food caps so the prefilled form can always save. */
+function clampPer100g(suggested: LabelMacroSet | null): {
+  macros: SuggestionMacros;
+  clampedAny: boolean;
+} {
+  let clampedAny = false;
+  const clamp = (v: number | null | undefined, max: number) => {
+    if (v == null) return null;
+    if (v > max) {
+      clampedAny = true;
+      return null;
+    }
+    return v;
+  };
+  const macros: SuggestionMacros = {
+    caloriesPer100g: clamp(suggested?.calories, CALORIES_PER_100G_MAX),
+    proteinPer100g: clamp(suggested?.protein, MACRO_PER_100G_MAX),
+    carbPer100g: clamp(suggested?.carb, MACRO_PER_100G_MAX),
+    fatPer100g: clamp(suggested?.fat, MACRO_PER_100G_MAX),
+    fiberPer100g: clamp(suggested?.fiber, MACRO_PER_100G_MAX),
+  };
+  return { macros, clampedAny };
+}
+
 /**
  * Normalize a transcribed label into the review payload: pick the per-100g
  * column when printed, otherwise derive it from per-serving + serving grams.
@@ -98,65 +180,28 @@ function packageServings(
 export function normalizeLabel(raw: RawLabel): ParseLabelResponse {
   const warnings = [...raw.warnings];
 
-  const toColumn = (set: RawMacroSet): LabelMacroSet | null => {
-    if (!hasAnyValue(set)) return null;
-    return raw.energyUnit === "kJ" ? toKcal(set) : set;
-  };
-  const per100g = toColumn(raw.per100g);
-  const perServing = toColumn(raw.perServing);
+  const per100g = toColumn(raw.per100g, raw.energyUnit);
+  const perServing = toColumn(raw.perServing, raw.energyUnit);
   if (!per100g && !perServing) return NO_LABEL;
   if (raw.energyUnit === "kJ" && (per100g?.calories != null || perServing?.calories != null)) {
     warnings.push("Energy was printed in kJ and converted to kcal.");
   }
 
-  let basis: ExtractedNutritionLabel["basis"];
-  if (per100g && perServing) basis = "both";
-  else if (per100g) basis = "per100g";
-  else basis = "perServing";
+  const { suggested, warning } = derivePer100g(per100g, perServing, raw.servingSizeG);
+  if (warning) warnings.push(warning);
 
-  let suggested: LabelMacroSet | null = per100g;
-  if (!suggested && perServing) {
-    if (raw.servingSizeG != null) {
-      const scale = 100 / raw.servingSizeG;
-      suggested = {
-        calories: perServing.calories == null ? null : round1(perServing.calories * scale),
-        protein: perServing.protein == null ? null : round1(perServing.protein * scale),
-        carb: perServing.carb == null ? null : round1(perServing.carb * scale),
-        fat: perServing.fat == null ? null : round1(perServing.fat * scale),
-        fiber: perServing.fiber == null ? null : round1(perServing.fiber * scale),
-      };
-      warnings.push("Per-100g values were derived from the printed per-serving column.");
-    } else {
-      warnings.push(
-        "The label only shows per-serving values without a gram weight, so per-100g macros must be entered manually.",
-      );
-    }
-  }
-
-  // Clamp to the shared custom-food caps so the prefilled form can always save.
-  let clampedAny = false;
-  const clamp = (v: number | null, max: number) => {
-    if (v == null) return null;
-    if (v > max) {
-      clampedAny = true;
-      return null;
-    }
-    return v;
-  };
-  const suggestion: LabelFoodSuggestion = {
-    name: raw.productName,
-    brand: raw.brand,
-    caloriesPer100g: clamp(suggested?.calories ?? null, CALORIES_PER_100G_MAX),
-    proteinPer100g: clamp(suggested?.protein ?? null, MACRO_PER_100G_MAX),
-    carbPer100g: clamp(suggested?.carb ?? null, MACRO_PER_100G_MAX),
-    fatPer100g: clamp(suggested?.fat ?? null, MACRO_PER_100G_MAX),
-    fiberPer100g: clamp(suggested?.fiber ?? null, MACRO_PER_100G_MAX),
-    servingSizeG: raw.servingSizeG,
-    servings: packageServings(raw.servingSizeG, raw.servingsPerContainer),
-  };
+  const { macros, clampedAny } = clampPer100g(suggested);
   if (clampedAny) {
     warnings.push("Some values looked implausible for 100 g and were left blank.");
   }
+
+  const suggestion: LabelFoodSuggestion = {
+    name: raw.productName,
+    brand: raw.brand,
+    ...macros,
+    servingSizeG: raw.servingSizeG,
+    servings: packageServings(raw.servingSizeG, raw.servingsPerContainer),
+  };
 
   return {
     label: {
@@ -167,7 +212,7 @@ export function normalizeLabel(raw: RawLabel): ParseLabelResponse {
       servingsPerContainer: raw.servingsPerContainer,
       per100g,
       perServing,
-      basis,
+      basis: deriveBasis(per100g, perServing),
       confidence: raw.confidence,
     },
     suggestion,

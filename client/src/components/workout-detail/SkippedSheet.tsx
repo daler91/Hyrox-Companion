@@ -1,6 +1,6 @@
 import type { TimelineEntry } from "@shared/schema";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 
@@ -115,7 +115,10 @@ interface SkippedActionsProps {
   readonly onUndoSkip?: (entry: TimelineEntry) => void;
 }
 
-function SkippedActions({
+type SkippedAction = ComponentProps<typeof ReadOnlyWorkoutActionGrid>["actions"][number];
+
+/** An action with no handler is dropped by the grid, which is how gating works. */
+function buildSkippedActions({
   confirmingDelete,
   entry,
   seedText,
@@ -123,36 +126,38 @@ function SkippedActions({
   onDelete,
   onDeleteClick,
   onUndoSkip,
-}: SkippedActionsProps) {
+}: SkippedActionsProps): SkippedAction[] {
+  return [
+    {
+      icon: RotateCcw,
+      label: "Undo skip",
+      onClick: onUndoSkip && entry.planDayId ? () => onUndoSkip(entry) : undefined,
+      testId: `skipped-undo-${entry.id}`,
+      variant: "default",
+    },
+    {
+      icon: MessageSquare,
+      label: "Ask coach",
+      onClick: onAskCoach ? () => onAskCoach(entry, seedText) : undefined,
+      testId: `skipped-ask-coach-${entry.id}`,
+      variant: "outline",
+    },
+    {
+      icon: Trash2,
+      label: confirmingDelete ? "Tap again to confirm" : "Delete",
+      onClick: onDelete ? onDeleteClick : undefined,
+      testId: `skipped-delete-${entry.id}`,
+      variant: confirmingDelete ? "destructive" : "ghost",
+    },
+  ];
+}
+
+function SkippedActions(props: SkippedActionsProps) {
   return (
     <>
-      <ReadOnlyWorkoutActionGrid
-        actions={[
-          {
-            icon: RotateCcw,
-            label: "Undo skip",
-            onClick: onUndoSkip && entry.planDayId ? () => onUndoSkip(entry) : undefined,
-            testId: `skipped-undo-${entry.id}`,
-            variant: "default",
-          },
-          {
-            icon: MessageSquare,
-            label: "Ask coach",
-            onClick: onAskCoach ? () => onAskCoach(entry, seedText) : undefined,
-            testId: `skipped-ask-coach-${entry.id}`,
-            variant: "outline",
-          },
-          {
-            icon: Trash2,
-            label: confirmingDelete ? "Tap again to confirm" : "Delete",
-            onClick: onDelete ? onDeleteClick : undefined,
-            testId: `skipped-delete-${entry.id}`,
-            variant: confirmingDelete ? "destructive" : "ghost",
-          },
-        ]}
-      />
+      <ReadOnlyWorkoutActionGrid actions={buildSkippedActions(props)} />
       <span role="status" aria-live="assertive" className="sr-only">
-        {confirmingDelete ? "Tap delete again to confirm removal" : ""}
+        {props.confirmingDelete ? "Tap delete again to confirm removal" : ""}
       </span>
     </>
   );

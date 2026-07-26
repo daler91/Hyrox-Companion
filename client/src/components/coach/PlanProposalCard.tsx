@@ -1,4 +1,8 @@
-import type { EnrichedPlanAdjustmentChange, PlanAdjustmentChangeKind } from "@shared/schema";
+import type {
+  EnrichedPlanAdjustmentChange,
+  PlanAdjustmentChangeKind,
+  PlanAdjustmentUpdatedFields,
+} from "@shared/schema";
 import { ArrowRight, CalendarClock, Check, ChevronDown, Loader2, Wand2, XIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -45,47 +49,49 @@ interface FieldDiff {
   after: string;
 }
 
+/** Every value a diffable field can hold on either side of the comparison. */
+type DiffValue = string | number | null | undefined;
+
+const formatPlainValue = (value: DiffValue): string => (value == null ? "—" : String(value));
+const formatDateValue = (value: DiffValue): string =>
+  formatShortDate(value == null ? null : String(value));
+const formatMinutesValue = (value: DiffValue): string => (value == null ? "—" : `${value} min`);
+
+interface DiffFieldSpec {
+  readonly key: keyof PlanAdjustmentUpdatedFields;
+  readonly label: string;
+  readonly format: (value: DiffValue) => string;
+  /** After-side wording when the change clears an optional field. */
+  readonly removedLabel?: string;
+}
+
+// Rendered in this order, which is also the order the card reads top to bottom.
+const DIFF_FIELDS: readonly DiffFieldSpec[] = [
+  { key: "scheduledDate", label: "Date", format: formatDateValue },
+  { key: "focus", label: "Focus", format: formatPlainValue },
+  { key: "mainWorkout", label: "Main workout", format: formatPlainValue },
+  { key: "accessory", label: "Accessory", format: formatPlainValue, removedLabel: "Removed" },
+  { key: "notes", label: "Notes", format: formatPlainValue, removedLabel: "Removed" },
+  { key: "expectedDurationMin", label: "Duration", format: formatMinutesValue },
+  { key: "expectedRpe", label: "RPE", format: formatPlainValue },
+];
+
+function formatAfterValue(spec: DiffFieldSpec, value: DiffValue): string {
+  if (value === null && spec.removedLabel) return spec.removedLabel;
+  return spec.format(value);
+}
+
 function collectFieldDiffs(change: EnrichedPlanAdjustmentChange): FieldDiff[] {
   const { updatedFields: fields, baseline } = change;
   const diffs: FieldDiff[] = [];
-  if (fields.scheduledDate !== undefined && fields.scheduledDate !== baseline.scheduledDate) {
+  for (const spec of DIFF_FIELDS) {
+    const after = fields[spec.key];
+    // `undefined` means "untouched"; an unchanged value isn't worth a row.
+    if (after === undefined || after === baseline[spec.key]) continue;
     diffs.push({
-      label: "Date",
-      before: formatShortDate(baseline.scheduledDate),
-      after: formatShortDate(fields.scheduledDate),
-    });
-  }
-  if (fields.focus !== undefined && fields.focus !== baseline.focus) {
-    diffs.push({ label: "Focus", before: baseline.focus, after: fields.focus });
-  }
-  if (fields.mainWorkout !== undefined && fields.mainWorkout !== baseline.mainWorkout) {
-    diffs.push({ label: "Main workout", before: baseline.mainWorkout, after: fields.mainWorkout });
-  }
-  if (fields.accessory !== undefined && fields.accessory !== baseline.accessory) {
-    diffs.push({
-      label: "Accessory",
-      before: baseline.accessory ?? "—",
-      after: fields.accessory ?? "Removed",
-    });
-  }
-  if (fields.notes !== undefined && fields.notes !== baseline.notes) {
-    diffs.push({ label: "Notes", before: baseline.notes ?? "—", after: fields.notes ?? "Removed" });
-  }
-  if (
-    fields.expectedDurationMin !== undefined &&
-    fields.expectedDurationMin !== baseline.expectedDurationMin
-  ) {
-    diffs.push({
-      label: "Duration",
-      before: baseline.expectedDurationMin != null ? `${baseline.expectedDurationMin} min` : "—",
-      after: fields.expectedDurationMin != null ? `${fields.expectedDurationMin} min` : "—",
-    });
-  }
-  if (fields.expectedRpe !== undefined && fields.expectedRpe !== baseline.expectedRpe) {
-    diffs.push({
-      label: "RPE",
-      before: baseline.expectedRpe != null ? `${baseline.expectedRpe}` : "—",
-      after: fields.expectedRpe != null ? `${fields.expectedRpe}` : "—",
+      label: spec.label,
+      before: spec.format(baseline[spec.key]),
+      after: formatAfterValue(spec, after),
     });
   }
   return diffs;

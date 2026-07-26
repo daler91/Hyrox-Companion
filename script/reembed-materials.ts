@@ -128,71 +128,81 @@ async function processUser(userId: string, flags: Flags): Promise<UserOutcome> {
   };
 }
 
-async function main(): Promise<void> {
-  let flags: Flags;
+/** A live rebuild — neither of the two read-only modes. */
+function isRebuild(flags: Flags): boolean {
+  return !flags.dryRun && !flags.verifyOnly;
+}
+
+function describeMode(flags: Flags): string {
+  if (flags.dryRun) return "dry run";
+  if (flags.verifyOnly) return "verify only";
+  return "re-embedding";
+}
+
+function resolveFlags(): Flags {
   try {
-    flags = parseFlags(process.argv.slice(2));
+    return parseFlags(process.argv.slice(2));
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     process.exit(2);
   }
+}
 
-  // Fail before touching the DB rather than after half a fleet has been walked.
-  if (!flags.dryRun && !flags.verifyOnly && !env.GEMINI_API_KEY) {
-    console.error("GEMINI_API_KEY is not set — re-embedding calls the embedding provider.\nUse --dry-run or --verify-only to inspect state without it.");
-    process.exit(2);
+/**
+ * Makes this a complete §5.3 rebuild: an operator pointing at a freshly
+ * restored (or freshly created) vector DB should not have to boot the app once
+ * just to get the tables. Same code path boot uses, so there is one definition
+ * of the vector schema, not two. False means nothing can be re-embedded.
+ */
+async function prepareVectorSchema(): Promise<boolean> {
+  await ensurePgvectorExtension();
+  await ensureVectorSchema();
+  const status = getVectorSchemaStatus();
+  if (status === "failed") {
+    console.error("Vector schema setup failed — see the logged error above. Nothing was re-embedded.");
+    return false;
   }
+  console.log(`Vector schema: ${status}${status === "degraded" ? " (no HNSW index — search will be a sequential scan; needs pgvector >= 0.7.0)" : ""}`);
+  return true;
+}
 
-  const mode = flags.dryRun ? "dry run" : flags.verifyOnly ? "verify only" : "re-embedding";
-  const startedAt = Date.now();
+function reportUserOutcome(outcome: UserOutcome, flags: Flags): void {
+  const parts = [`${outcome.materials} material(s)`];
+  if (isRebuild(flags)) parts.push(`${outcome.embedded} embedded`);
+  if (outcome.errors.length > 0) parts.push(`${outcome.errors.length} error(s)`);
+  if (outcome.unembedded.length > 0) parts.push(`${outcome.unembedded.length} still without chunks`);
+  console.log(`  ${outcome.userId}: ${parts.join(", ")}`);
+  for (const error of outcome.errors) console.log(`      error: ${error}`);
+  for (const missing of outcome.unembedded) console.log(`      no chunks: ${missing}`);
+}
+
+/**
+ * Never let one athlete's failure end the fleet-wide rebuild: a DR run that
+ * stops at the first bad material leaves everyone after it unfixed.
+ */
+async function runFleet(userIds: string[], flags: Flags): Promise<UserOutcome[]> {
   const outcomes: UserOutcome[] = [];
-
-  try {
-    if (!flags.dryRun && !flags.verifyOnly) {
-      // Makes this a complete §5.3 rebuild: an operator pointing at a freshly
-      // restored (or freshly created) vector DB should not have to boot the app
-      // once just to get the tables. Same code path boot uses, so there is one
-      // definition of the vector schema, not two.
-      await ensurePgvectorExtension();
-      await ensureVectorSchema();
-      const status = getVectorSchemaStatus();
-      if (status === "failed") {
-        console.error("Vector schema setup failed — see the logged error above. Nothing was re-embedded.");
-        process.exitCode = 1;
-        return;
-      }
-      console.log(`Vector schema: ${status}${status === "degraded" ? " (no HNSW index — search will be a sequential scan; needs pgvector >= 0.7.0)" : ""}`);
+  for (const userId of userIds) {
+    try {
+      const outcome = await processUser(userId, flags);
+      outcomes.push(outcome);
+      reportUserOutcome(outcome, flags);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      outcomes.push({ userId, materials: 0, embedded: 0, errors: [message], unembedded: [] });
+      console.log(`  ${userId}: FAILED — ${message}`);
     }
-
-    const userIds = await targetUserIds(flags);
-    console.log(`${userIds.length} athlete(s) with coaching materials — ${mode}\n`);
-
-    for (const userId of userIds) {
-      // Never let one athlete's failure end the fleet-wide rebuild: a DR run
-      // that stops at the first bad material leaves everyone after it unfixed.
-      try {
-        const outcome = await processUser(userId, flags);
-        outcomes.push(outcome);
-        const parts = [`${outcome.materials} material(s)`];
-        if (!flags.dryRun && !flags.verifyOnly) parts.push(`${outcome.embedded} embedded`);
-        if (outcome.errors.length > 0) parts.push(`${outcome.errors.length} error(s)`);
-        if (outcome.unembedded.length > 0) parts.push(`${outcome.unembedded.length} still without chunks`);
-        console.log(`  ${userId}: ${parts.join(", ")}`);
-        for (const error of outcome.errors) console.log(`      error: ${error}`);
-        for (const missing of outcome.unembedded) console.log(`      no chunks: ${missing}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        outcomes.push({ userId, materials: 0, embedded: 0, errors: [message], unembedded: [] });
-        console.log(`  ${userId}: FAILED — ${message}`);
-      }
-    }
-  } finally {
-    await pool.end();
-    // Separate pool in split-DB mode; the same one in single-DB mode, where
-    // ending it twice is a no-op.
-    await vectorPool.end().catch(() => undefined);
   }
+  return outcomes;
+}
 
+/** Prints the tail summary; false when the run left work for an operator. */
+function printSummary(
+  outcomes: UserOutcome[],
+  flags: Flags,
+  mode: string,
+  startedAt: number,
+): boolean {
   const materials = outcomes.reduce((sum, o) => sum + o.materials, 0);
   const embedded = outcomes.reduce((sum, o) => sum + o.embedded, 0);
   const errors = outcomes.reduce((sum, o) => sum + o.errors.length, 0);
@@ -204,7 +214,45 @@ async function main(): Promise<void> {
     `, ${errors} error(s), ${missing} without chunks — ${((Date.now() - startedAt) / 1000).toFixed(1)}s`,
   );
   if (flags.dryRun) console.log("Dry run: nothing was written. Re-run without --dry-run to rebuild.");
-  if (errors > 0 || missing > 0) process.exitCode = 1;
+  return errors === 0 && missing === 0;
+}
+
+/** Walk the fleet, always closing the pools. Null means nothing ran at all. */
+async function collectOutcomes(flags: Flags, mode: string): Promise<UserOutcome[] | null> {
+  try {
+    if (isRebuild(flags) && !(await prepareVectorSchema())) return null;
+
+    const userIds = await targetUserIds(flags);
+    console.log(`${userIds.length} athlete(s) with coaching materials — ${mode}\n`);
+
+    return await runFleet(userIds, flags);
+  } finally {
+    await pool.end();
+    // Separate pool in split-DB mode; the same one in single-DB mode, where
+    // ending it twice is a no-op.
+    await vectorPool.end().catch(() => undefined);
+  }
+}
+
+async function main(): Promise<void> {
+  const flags = resolveFlags();
+
+  // Fail before touching the DB rather than after half a fleet has been walked.
+  if (isRebuild(flags) && !env.GEMINI_API_KEY) {
+    console.error("GEMINI_API_KEY is not set — re-embedding calls the embedding provider.\nUse --dry-run or --verify-only to inspect state without it.");
+    process.exit(2);
+  }
+
+  const mode = describeMode(flags);
+  const startedAt = Date.now();
+
+  const outcomes = await collectOutcomes(flags, mode);
+  if (!outcomes) {
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!printSummary(outcomes, flags, mode, startedAt)) process.exitCode = 1;
 }
 
 // Importing this module (for tests) must not start a rebuild.
