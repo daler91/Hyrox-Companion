@@ -67,7 +67,11 @@
       "Bash(grep -oEn '^\\\\s+\"[a-z_]+\",$' shared/schema/tables.ts)",
       "Bash(sed -n '/foodLogEntries = pgTable/,/^\\);/p' shared/schema/tables.ts | head -40)",
       "Bash(grep -oE '\\\\{\"name\":\"[^\"]*[Ww]eight[^\"]*\",\"verdict\":\"[a-z]+\",\"reasoning\":\".{0,700}')",
-      "Bash(grep -oE '\"name\":\"[^\"]{3,60}\",\"verdict\":\"\\(strong|viable|weak|kill\\)\"')"
+      "Bash(grep -oE '\"name\":\"[^\"]{3,60}\",\"verdict\":\"\\(strong|viable|weak|kill\\)\"')",
+      "Bash(git -C /home/user/Hyrox-Companion branch -a --list)",
+      "Bash(git -C /home/user/Hyrox-Companion log --oneline -10)",
+      "Bash(grep -n \"id: \\\\`pd-\\\\|id: \\\\`log-\\\\|id: \\\\`\" /home/user/Hyrox-Companion/server/storage/timeline.ts)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const s=p.scripts; Object.keys\\(s\\).filter\\(k=>/^\\(test|lint|check|typecheck|db|build|dev|format|verify|ci\\)/.test\\(k\\)\\).forEach\\(k=>console.log\\(k.padEnd\\(28\\), s[k].slice\\(0,150\\)\\)\\)\")"
     ]
   }
 }
