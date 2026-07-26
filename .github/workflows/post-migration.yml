@@ -29,7 +29,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # --ignore-scripts keeps dependency lifecycle scripts from executing in
+        # CI. It also skips this repo's own postinstall, which only patches the
+        # vendored deps inside the Cypress binary — nothing this job touches.
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Apply migrations to Neon
         env:
