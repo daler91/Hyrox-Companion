@@ -19,7 +19,7 @@ while (Date.now() < deadline) {
   try {
     const res = await fetch(url);
     if (res.ok) {
-      console.log(`server is up (${url})`);
+      console.log("server is up");
       process.exit(0);
     }
   } catch {
@@ -30,5 +30,8 @@ while (Date.now() < deadline) {
   await sleep(1000);
 }
 
-console.error(`::error::server did not become healthy within ${timeoutMs}ms`);
+// Neither message interpolates anything: Bearer reads any value spliced into a
+// log call as a potential leak, and the two candidates here (the URL and the
+// timeout) are both already visible in the workflow that sets them.
+console.error("::error::server did not become healthy before HEALTH_TIMEOUT_MS elapsed");
 process.exit(1);
