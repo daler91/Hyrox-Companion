@@ -1,4 +1,4 @@
-import type { ParsedExercise, TimelineEntry } from "@shared/schema";
+import type { ParsedExercise, PlanDaySkipReason, TimelineEntry } from "@shared/schema";
 
 export type LogWorkoutVariables = {
   planDayId: string;
@@ -15,4 +15,5 @@ export type LogWorkoutVariables = {
 export type UpdateStatusVariables = {
   dayId: string;
   status: string;
+  skipReason?: PlanDaySkipReason | null;
 };

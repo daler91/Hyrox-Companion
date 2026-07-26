@@ -106,6 +106,9 @@ interface TimelineWorkoutSurfacesProps {
     | "annotationInitialDate"
     | "setAnnotationInitialDate"
   >;
+  /** Reschedule, so the skip dialog can offer moving a session instead of skipping it. */
+  readonly onMoveEntry?: (entry: TimelineEntry, newDate: string) => void;
+  readonly isMovingEntry?: boolean;
 }
 
 function isMobileCoachPanelActive(
@@ -128,6 +131,8 @@ export function TimelineWorkoutSurfaces({
   planImport,
   combine,
   annotations,
+  onMoveEntry,
+  isMovingEntry,
 }: Readonly<TimelineWorkoutSurfacesProps>) {
   const {
     previewEntry,
@@ -390,6 +395,8 @@ export function TimelineWorkoutSurfaces({
         entry={skipConfirmEntry}
         onOpenChange={() => setSkipConfirmEntry(null)}
         onConfirm={confirmSkip}
+        onMove={onMoveEntry}
+        isMoving={isMovingEntry}
       />
 
       <ImportPreviewDialog

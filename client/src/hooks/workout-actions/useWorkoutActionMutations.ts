@@ -96,14 +96,19 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
     // fires and the optimistic status flip persists until the replay lands.
     // (In-session only — after a reload the flip reappears once the queue
     // syncs and the post-sync invalidation refetches.)
-    mutationFn: ({ dayId, status }: UpdateStatusVariables) =>
-      runWithOfflineFallback({
+    mutationFn: ({ dayId, status, skipReason }: UpdateStatusVariables) => {
+      // The reason has to live in `body`, not just in the `perform` closure:
+      // offlineMutationFallback enqueues `body` verbatim for replay, so a skip
+      // made offline would otherwise sync with the reason silently dropped.
+      const body = skipReason === undefined ? { status } : { status, skipReason };
+      return runWithOfflineFallback({
         method: "PATCH",
         url: `/api/v1/plans/days/${dayId}/status`,
-        body: { status },
+        body,
         perform: (idempotencyKey) =>
-          api.plans.updateDayStatus(dayId, status, idempotencyKey ? { idempotencyKey } : undefined),
-      }),
+          api.plans.updateDayStatus(dayId, body, idempotencyKey ? { idempotencyKey } : undefined),
+      });
+    },
     successToast: (result) =>
       result.status === "queued"
         ? {

@@ -17,6 +17,18 @@
 export const workoutStatusEnum = ["planned", "completed", "missed", "skipped"] as const;
 export type WorkoutStatus = (typeof workoutStatusEnum)[number];
 
+/**
+ * Why a planned session was skipped, when the athlete volunteers it. Always
+ * optional — a required field on the app's most frequent negative interaction
+ * would only train people to dismiss the dialog.
+ *
+ * `ill` and `injured` are kept distinct from each other (and from the
+ * circumstantial reasons) because they are the two that a coach should train
+ * around rather than nudge about.
+ */
+export const planDaySkipReasonEnum = ["ill", "injured", "schedule", "low_energy"] as const;
+export type PlanDaySkipReason = (typeof planDaySkipReasonEnum)[number];
+
 export const exerciseCategoryEnum = ["functional", "running", "strength", "conditioning"] as const;
 export type ExerciseCategory = (typeof exerciseCategoryEnum)[number];
 

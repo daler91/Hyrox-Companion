@@ -1,4 +1,4 @@
-import type { TimelineEntry, WorkoutStatus } from "@shared/schema";
+import type { PlanDaySkipReason, TimelineEntry, WorkoutStatus } from "@shared/schema";
 import { useCallback, useState } from "react";
 
 import { isTimelineEntryBulkDeletable } from "./workout-actions/bulkDelete";
@@ -54,11 +54,14 @@ export function useWorkoutActions(selectedPlanId: string | null) {
     setSkipConfirmEntry(entry);
   }, []);
 
-  const confirmSkip = useCallback(() => {
+  const confirmSkip = useCallback((reason: PlanDaySkipReason | null = null) => {
     if (!skipConfirmEntry?.planDayId) return;
     updateStatusMutation.mutate({
       dayId: skipConfirmEntry.planDayId,
       status: "skipped",
+      // Only send the key when the athlete actually picked one, so an
+      // unanswered dialog doesn't overwrite a reason on a re-skip.
+      ...(reason ? { skipReason: reason } : {}),
     });
     setSkipConfirmEntry(null);
   }, [skipConfirmEntry, updateStatusMutation]);

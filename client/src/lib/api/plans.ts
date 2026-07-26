@@ -1,4 +1,4 @@
-import type { ExerciseSet, GeneratePlanInput, PlanDay, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { ExerciseSet, GeneratePlanInput, PlanDay, PlanDaySkipReason, StructureBlockInput, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 
 import { rawRequest,typedRequest } from "./client";
 import { IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
@@ -39,12 +39,16 @@ export const plans = {
   schedule: (planId: string, startDate: string) =>
     rawRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate }).then(() => undefined),
 
-  updateDayStatus: (dayId: string, status: string, options?: { idempotencyKey: string }) =>
+  updateDayStatus: (
+    dayId: string,
+    body: { status: string; skipReason?: PlanDaySkipReason | null },
+    options?: { idempotencyKey: string },
+  ) =>
     options?.idempotencyKey
-      ? typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }, {
+      ? typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, body, {
         headers: { "X-Idempotency-Key": options.idempotencyKey },
       })
-      : typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, { status }),
+      : typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}/status`, body),
 
   generate: (input: GeneratePlanInput) =>
     typedRequest<TrainingPlanWithDays>("POST", "/api/v1/plans/generate", input),

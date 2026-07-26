@@ -98,6 +98,7 @@ export function createMockPlanDay(overrides: Partial<PlanDay> = {}): PlanDay {
     expectedDurationMin: null,
     expectedRpe: null,
     plannedTimeOfDayMin: null,
+    skipReason: null,
     ...overrides,
   };
 }
