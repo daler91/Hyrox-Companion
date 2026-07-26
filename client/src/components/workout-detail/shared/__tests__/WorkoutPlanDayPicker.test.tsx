@@ -52,10 +52,7 @@ describe("WorkoutPlanDayPicker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.plans.list).mockResolvedValue([PLAN] as never);
-    vi.mocked(api.plans.get).mockResolvedValue({
-      ...PLAN,
-      days: [SCHEDULED_DAY, UNSCHEDULED_DAY],
-    } as never);
+    vi.mocked(api.plans.get).mockResolvedValue({ ...PLAN, days: [SCHEDULED_DAY, UNSCHEDULED_DAY] } as never);
   });
 
   it("cascades plan -> scheduled day and emits the link only when a day is picked", async () => {

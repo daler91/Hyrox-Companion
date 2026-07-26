@@ -36,7 +36,11 @@ export function syncPlanDayStatusFromWorkouts(
   return db.transaction((newTx) => syncInTransaction(planDayId, userId, newTx));
 }
 
-async function syncInTransaction(planDayId: string, userId: string, tx: DbExecutor): Promise<void> {
+async function syncInTransaction(
+  planDayId: string,
+  userId: string,
+  tx: DbExecutor,
+): Promise<void> {
   // SELECT FOR UPDATE on plan_days only (not training_plans) — locks the
   // single row whose status we may update. createWorkoutLog's subsequent
   // UPDATE on this row will block until our transaction commits.
@@ -56,10 +60,18 @@ async function syncInTransaction(planDayId: string, userId: string, tx: DbExecut
   const [counted] = await tx
     .select({ count: sql<number>`cast(count(*) as int)` })
     .from(workoutLogs)
-    .where(and(eq(workoutLogs.planDayId, planDayId), eq(workoutLogs.userId, userId)));
+    .where(
+      and(
+        eq(workoutLogs.planDayId, planDayId),
+        eq(workoutLogs.userId, userId),
+      ),
+    );
 
   const nextStatus: "planned" | "completed" = (counted?.count ?? 0) > 0 ? "completed" : "planned";
   if (row.status === nextStatus) return;
 
-  await tx.update(planDays).set({ status: nextStatus }).where(eq(planDays.id, planDayId));
+  await tx
+    .update(planDays)
+    .set({ status: nextStatus })
+    .where(eq(planDays.id, planDayId));
 }

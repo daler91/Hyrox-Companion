@@ -51,7 +51,10 @@ function AthleteNoteInputView({
   if (mode === "form") {
     return (
       <section className="flex flex-col gap-2" data-testid="athlete-note-input" data-mode="form">
-        <label htmlFor="athlete-note-textarea" className="text-sm font-semibold text-foreground">
+        <label
+          htmlFor="athlete-note-textarea"
+          className="text-sm font-semibold text-foreground"
+        >
           Notes
         </label>
         <Textarea

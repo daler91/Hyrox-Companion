@@ -11,10 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  CoachPrescriptionCollapsible,
-  type PrescriptionField,
-} from "@/components/workout-detail/CoachPrescriptionCollapsible";
+import { CoachPrescriptionCollapsible, type PrescriptionField } from "@/components/workout-detail/CoachPrescriptionCollapsible";
 import type { CompressedImage } from "@/lib/image";
 
 export interface PrescriptionEditorProps {

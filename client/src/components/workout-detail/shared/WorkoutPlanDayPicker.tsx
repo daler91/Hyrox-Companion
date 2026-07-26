@@ -74,9 +74,7 @@ export function WorkoutPlanDayPicker({
   const planDetailQuery = usePlanDetailQuery(selectedPlanId);
 
   const plans = plansQuery.data ?? [];
-  const scheduledDays = (planDetailQuery.data?.days ?? []).filter(
-    (day) => day.scheduledDate != null,
-  );
+  const scheduledDays = (planDetailQuery.data?.days ?? []).filter((day) => day.scheduledDate != null);
 
   const handlePlanChange = (value: string) => {
     if (value === NO_PLAN) {
@@ -97,10 +95,7 @@ export function WorkoutPlanDayPicker({
 
   if (plansQuery.isLoading) {
     return (
-      <div
-        className="flex items-center gap-2 text-sm text-muted-foreground"
-        data-testid={`${idPrefix}-loading`}
-      >
+      <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`${idPrefix}-loading`}>
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         Loading plans...
       </div>
@@ -121,16 +116,8 @@ export function WorkoutPlanDayPicker({
     <div className="space-y-3">
       <div className="space-y-1.5">
         <Label htmlFor={`${idPrefix}-plan`}>Plan</Label>
-        <Select
-          value={selectedPlanId ?? NO_PLAN}
-          onValueChange={handlePlanChange}
-          disabled={disabled}
-        >
-          <SelectTrigger
-            id={`${idPrefix}-plan`}
-            aria-label="Select training plan"
-            data-testid={`${idPrefix}-plan-select`}
-          >
+        <Select value={selectedPlanId ?? NO_PLAN} onValueChange={handlePlanChange} disabled={disabled}>
+          <SelectTrigger id={`${idPrefix}-plan`} aria-label="Select training plan" data-testid={`${idPrefix}-plan-select`}>
             <SelectValue placeholder="No plan" />
           </SelectTrigger>
           <SelectContent>
@@ -152,11 +139,7 @@ export function WorkoutPlanDayPicker({
             onValueChange={handleDayChange}
             disabled={disabled || daysLoading || scheduledDays.length === 0}
           >
-            <SelectTrigger
-              id={`${idPrefix}-day`}
-              aria-label="Select plan day"
-              data-testid={`${idPrefix}-day-select`}
-            >
+            <SelectTrigger id={`${idPrefix}-day`} aria-label="Select plan day" data-testid={`${idPrefix}-day-select`}>
               <SelectValue placeholder={daysLoading ? "Loading days..." : "Choose a day"} />
             </SelectTrigger>
             <SelectContent>

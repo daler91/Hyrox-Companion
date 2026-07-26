@@ -5,23 +5,18 @@ import { toDateStr } from "../../types";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { TimelineEntry } from "./types";
 
-export function computeRpeTrend(
-  recentWorkouts: TrainingContext["recentWorkouts"],
-): Pick<
+export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"]): Pick<
   NonNullable<TrainingContext["coachingInsights"]>,
   "rpeTrend" | "avgRpeLast3" | "avgRpePrior3" | "fatigueFlag" | "undertrainingFlag"
 > {
-  const withRpe = recentWorkouts.filter(
-    (w): w is typeof w & { rpe: number } => w.rpe != null && w.rpe > 0,
-  );
+  const withRpe = recentWorkouts.filter((w): w is typeof w & { rpe: number } => w.rpe != null && w.rpe > 0);
   if (withRpe.length < 3) {
     return { rpeTrend: "insufficient_data", fatigueFlag: false, undertrainingFlag: false };
   }
 
   const last3 = withRpe.slice(0, 3);
   const prior3 = withRpe.slice(3, 6);
-  const avgLast3 =
-    Math.round((last3.reduce((s, w) => s + (w.rpe ?? 0), 0) / last3.length) * 10) / 10;
+  const avgLast3 = Math.round((last3.reduce((s, w) => s + (w.rpe ?? 0), 0) / last3.length) * 10) / 10;
 
   if (prior3.length < 2) {
     return {
@@ -32,8 +27,7 @@ export function computeRpeTrend(
     };
   }
 
-  const avgPrior3 =
-    Math.round((prior3.reduce((s, w) => s + (w.rpe ?? 0), 0) / prior3.length) * 10) / 10;
+  const avgPrior3 = Math.round((prior3.reduce((s, w) => s + (w.rpe ?? 0), 0) / prior3.length) * 10) / 10;
   const diff = avgLast3 - avgPrior3;
 
   let rpeTrend: "rising" | "stable" | "falling";
@@ -50,13 +44,7 @@ export function computeRpeTrend(
   const fatigueFlag = avgLast3 >= 8 || (rpeTrend === "rising" && avgLast3 >= 7);
   const undertrainingFlag = avgLast3 <= 4 || (rpeTrend === "falling" && avgLast3 <= 5);
 
-  return {
-    rpeTrend,
-    avgRpeLast3: avgLast3,
-    avgRpePrior3: avgPrior3,
-    fatigueFlag,
-    undertrainingFlag,
-  };
+  return { rpeTrend, avgRpeLast3: avgLast3, avgRpePrior3: avgPrior3, fatigueFlag, undertrainingFlag };
 }
 
 /**
@@ -68,16 +56,14 @@ export function computeRpeTrend(
  * the two reported different gaps for the same station. The shape and the
  * exported name are unchanged; every downstream consumer is untouched.
  */
-export function computeExerciseGaps(
-  timeline: TimelineEntry[],
-): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
+export function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
   const sources: StationCoverageSource[] = [];
 
   for (const entry of timeline) {
     if (entry.status !== "completed" || !entry.date) continue;
     sources.push({
       date: entry.date,
-      exerciseNames: (entry.exerciseSets ?? []).map((es) => es.exerciseName),
+      exerciseNames: (entry.exerciseSets ?? []).map(es => es.exerciseName),
       freeText: entry.focus ? [entry.focus] : [],
     });
   }
@@ -120,9 +106,7 @@ function compareEntryDates(a: TimelineEntry, b: TimelineEntry): number {
   return 0;
 }
 
-function aggregateExercisePeaks(
-  exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
-): Record<string, { maxWeight?: number; bestTime?: number }> {
+function aggregateExercisePeaks(exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>): Record<string, { maxWeight?: number; bestTime?: number }> {
   const perExercise: Record<string, { maxWeight?: number; bestTime?: number }> = {};
   for (const es of exerciseSets) {
     if (!perExercise[es.exerciseName]) perExercise[es.exerciseName] = {};
@@ -133,18 +117,11 @@ function aggregateExercisePeaks(
   return perExercise;
 }
 
-function collectExerciseHistory(
-  timeline: TimelineEntry[],
-): Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> {
-  const history: Record<
-    string,
-    Array<{ date: string; maxWeight?: number; bestTime?: number }>
-  > = {};
+function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> {
+  const history: Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> = {};
 
   const completed = timeline
-    .filter(
-      (e) => e.status === "completed" && e.date && e.exerciseSets && e.exerciseSets.length > 0,
-    )
+    .filter(e => e.status === "completed" && e.date && e.exerciseSets && e.exerciseSets.length > 0)
     .sort(compareEntryDates);
 
   for (const entry of completed) {
@@ -161,26 +138,14 @@ function collectExerciseHistory(
 function analyzeWeightProgression(exercise: string, values: number[]): ProgressionFlag | null {
   if (values.length < 3) return null;
   const recent3 = values.slice(-3);
-  if (recent3.every((w) => w === recent3[0])) {
-    return {
-      exercise,
-      flag: "plateau",
-      detail: `Weight stuck at ${recent3[0]}kg for last ${recent3.length} sessions`,
-    };
+  if (recent3.every(w => w === recent3[0])) {
+    return { exercise, flag: "plateau", detail: `Weight stuck at ${recent3[0]}kg for last ${recent3.length} sessions` };
   }
   if (recent3[2] > recent3[0]) {
-    return {
-      exercise,
-      flag: "progressing",
-      detail: `Weight increased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions`,
-    };
+    return { exercise, flag: "progressing", detail: `Weight increased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` };
   }
   if (recent3[2] < recent3[0]) {
-    return {
-      exercise,
-      flag: "regressing",
-      detail: `Weight decreased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions`,
-    };
+    return { exercise, flag: "regressing", detail: `Weight decreased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` };
   }
   return null;
 }
@@ -188,35 +153,20 @@ function analyzeWeightProgression(exercise: string, values: number[]): Progressi
 function analyzeTimeProgression(exercise: string, values: number[]): ProgressionFlag | null {
   if (values.length < 3) return null;
   const recent3 = values.slice(-3);
-  if (recent3.every((t) => Math.abs(t - recent3[0]) < 0.1)) {
-    return {
-      exercise,
-      flag: "plateau",
-      detail: `Time stuck at ${recent3[0]}min for last ${recent3.length} sessions`,
-    };
+  if (recent3.every(t => Math.abs(t - recent3[0]) < 0.1)) {
+    return { exercise, flag: "plateau", detail: `Time stuck at ${recent3[0]}min for last ${recent3.length} sessions` };
   }
   if (recent3[2] < recent3[0]) {
-    return {
-      exercise,
-      flag: "progressing",
-      detail: `Time improved from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions`,
-    };
+    return { exercise, flag: "progressing", detail: `Time improved from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` };
   }
   if (recent3[2] > recent3[0]) {
-    return {
-      exercise,
-      flag: "regressing",
-      detail: `Time worsened from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions`,
-    };
+    return { exercise, flag: "regressing", detail: `Time worsened from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` };
   }
   return null;
 }
 
 /** Single-pass extraction of weight and time values from exercise history. */
-function extractWeightsAndTimes(history: Array<{ maxWeight?: number; bestTime?: number }>): {
-  weights: number[];
-  times: number[];
-} {
+function extractWeightsAndTimes(history: Array<{ maxWeight?: number; bestTime?: number }>): { weights: number[]; times: number[] } {
   const weights: number[] = [];
   const times: number[] = [];
   for (const h of history) {
@@ -226,9 +176,7 @@ function extractWeightsAndTimes(history: Array<{ maxWeight?: number; bestTime?: 
   return { weights, times };
 }
 
-export function computeProgressionFlags(
-  timeline: TimelineEntry[],
-): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
+export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
   const exerciseHistory = collectExerciseHistory(timeline);
   const flags: ProgressionFlag[] = [];
 
@@ -242,10 +190,7 @@ export function computeProgressionFlags(
     const { weights, times } = extractWeightsAndTimes(history);
 
     const weightFlag = analyzeWeightProgression(exercise, weights);
-    if (weightFlag) {
-      flags.push(weightFlag);
-      continue;
-    }
+    if (weightFlag) { flags.push(weightFlag); continue; }
 
     const timeFlag = analyzeTimeProgression(exercise, times);
     if (timeFlag) flags.push(timeFlag);

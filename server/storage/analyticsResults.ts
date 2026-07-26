@@ -82,11 +82,7 @@ export class AnalyticsResultsStorage {
    * can never both recompute the same feature in a day (W4 — race between the
    * cron scan enqueue and the worker run, robust to at-least-once delivery).
    */
-  async markRecomputedOn(
-    userId: string,
-    feature: AnalyticsFeature,
-    localDate: string,
-  ): Promise<boolean> {
+  async markRecomputedOn(userId: string, feature: AnalyticsFeature, localDate: string): Promise<boolean> {
     const result = await db
       .update(analyticsResults)
       .set({ recomputedOn: localDate, updatedAt: new Date() })

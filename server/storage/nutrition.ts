@@ -358,10 +358,7 @@ export class NutritionStorage {
     if (recent.length === 0) return [];
     const ids = recent.map((r) => r.foodId);
     const [rows, portions] = await Promise.all([
-      db
-        .select()
-        .from(foods)
-        .where(and(inArray(foods.id, ids), visibleTo(userId))),
+      db.select().from(foods).where(and(inArray(foods.id, ids), visibleTo(userId))),
       this.getLastPortions(userId, ids),
     ]);
     const byId = new Map(rows.map((f) => [f.id, f]));
@@ -470,11 +467,7 @@ export class NutritionStorage {
       .select({ id: foods.id })
       .from(foods)
       .where(
-        and(
-          eq(foods.createdByUserId, userId),
-          eq(foods.source, "custom"),
-          eq(foods.isPublic, false),
-        ),
+        and(eq(foods.createdByUserId, userId), eq(foods.source, "custom"), eq(foods.isPublic, false)),
       );
     return rows.map((r) => r.id);
   }
@@ -769,10 +762,7 @@ export class NutritionStorage {
     const items = rows.map((r) => r.food);
     // A favourite can be starred without ever having been logged, so the
     // portion lookup is a left-join in spirit: missing entries stay null.
-    const portions = await this.getLastPortions(
-      userId,
-      items.map((f) => f.id),
-    );
+    const portions = await this.getLastPortions(userId, items.map((f) => f.id));
     return NutritionStorage.withPortionMemory(items, portions);
   }
 

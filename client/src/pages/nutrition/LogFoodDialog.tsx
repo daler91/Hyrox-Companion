@@ -51,12 +51,12 @@ import {
 /** Either creating a log from a searched/quick-add/barcode food, or editing an entry. */
 export type LogDialogState =
   | {
-      mode: "create";
-      food: Food;
-      entryMethod?: "manual" | "barcode";
-      /** Last portion this food was logged in, when we have one (see usePortionMemory). */
-      portionHint?: PortionHint;
-    }
+    mode: "create";
+    food: Food;
+    entryMethod?: "manual" | "barcode";
+    /** Last portion this food was logged in, when we have one (see usePortionMemory). */
+    portionHint?: PortionHint;
+  }
   | { mode: "edit"; entry: FoodLogEntryWithNutrition };
 
 export interface UnitOption {
@@ -264,13 +264,7 @@ function LogFoodForm({
   const logFood = useLogFood(date);
   const updateLog = useUpdateLog(date);
   const isCreate = state.mode === "create";
-  const {
-    foodId,
-    detailFoodId,
-    servingSizeG: stateServingSizeG,
-    name,
-    brand,
-  } = deriveFoodFields(state);
+  const { foodId, detailFoodId, servingSizeG: stateServingSizeG, name, brand } = deriveFoodFields(state);
 
   // Food + named servings. Fetched in both modes: both use the servings for the
   // unit selector, and both use the enriched food (USDA micros are filled in on

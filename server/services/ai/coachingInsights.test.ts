@@ -389,14 +389,8 @@ describe("computeExerciseGaps", () => {
 
   it("counts the erg interval variants toward their station", () => {
     const gaps = gapsByStation([
-      makeEntry({
-        date: "2026-06-12",
-        exerciseSets: [makeSet({ exerciseName: "rowing_intervals" })],
-      }),
-      makeEntry({
-        date: "2026-06-11",
-        exerciseSets: [makeSet({ exerciseName: "ski_erg_intervals" })],
-      }),
+      makeEntry({ date: "2026-06-12", exerciseSets: [makeSet({ exerciseName: "rowing_intervals" })] }),
+      makeEntry({ date: "2026-06-11", exerciseSets: [makeSet({ exerciseName: "ski_erg_intervals" })] }),
     ]);
     expect(gaps.rowing).toBe(3);
     expect(gaps.skierg).toBe(4);

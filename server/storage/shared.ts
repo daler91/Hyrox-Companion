@@ -1,4 +1,8 @@
-import { type ExerciseSet, type InsertExerciseSet, workoutLogs } from "@shared/schema";
+import {
+  type ExerciseSet,
+  type InsertExerciseSet,
+  workoutLogs,
+} from "@shared/schema";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { db } from "../db";
@@ -10,7 +14,10 @@ import { logger } from "../logger";
  * Used by both copyPrescribedSetsIntoLog (workoutService) and
  * seedExerciseSetsFromPlanDay (WorkoutStorage) to ensure consistency.
  */
-export function prescribedSetToLogRow(p: ExerciseSet, workoutLogId: string): InsertExerciseSet {
+export function prescribedSetToLogRow(
+  p: ExerciseSet,
+  workoutLogId: string,
+): InsertExerciseSet {
   const jsonValue = (value: unknown) => value as InsertExerciseSet["intensity"];
   return {
     workoutLogId,
@@ -68,7 +75,7 @@ export async function queryExerciseSetsWithDates(
     exerciseName?: string;
     from?: string;
     to?: string;
-  },
+  }
 ): Promise<LoggedExerciseSetWithDate[]> {
   // Relational query: fetch the user's workout logs (with optional date range)
   // and pull their exercise sets. The output flattens sets + the parent log's

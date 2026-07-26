@@ -77,7 +77,10 @@ export function WorkoutCoachLayout({
   return (
     <div className={panelState.layoutClassName}>
       <div
-        className={cn("min-w-0 space-y-4", detailsScrollable && "min-h-0 overflow-y-auto pr-1")}
+        className={cn(
+          "min-w-0 space-y-4",
+          detailsScrollable && "min-h-0 overflow-y-auto pr-1",
+        )}
         hidden={panelState.detailsHidden}
         data-testid={detailsTestId}
       >
@@ -110,11 +113,7 @@ export function WorkoutCoachChatPanel({
       entry={entry}
       seedText={coachSeedText ?? currentCoachSeedText}
       seedNonce={coachChatNonce}
-      onBack={getCoachBackHandler(
-        panelState.coachPanelOpen,
-        onShowWorkoutDetails,
-        onCloseCoachChat,
-      )}
+      onBack={getCoachBackHandler(panelState.coachPanelOpen, onShowWorkoutDetails, onCloseCoachChat)}
       backButtonText={panelState.coachPanelOpen ? "Workout details" : undefined}
       chatAreaClassName={EXPANDED_COACH_CHAT_AREA}
       className={panelState.coachPanelOpen ? MOBILE_COACH_CARD : undefined}

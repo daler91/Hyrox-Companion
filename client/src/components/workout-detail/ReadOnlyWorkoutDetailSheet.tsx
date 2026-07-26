@@ -17,11 +17,7 @@ import {
   type SummaryVariant,
   WorkoutSummaryHeader,
 } from "./shared/WorkoutSummaryHeader";
-import {
-  getWorkoutCoachPanelState,
-  WorkoutCoachChatPanel,
-  WorkoutCoachLayout,
-} from "./WorkoutCoachPanel";
+import { getWorkoutCoachPanelState, WorkoutCoachChatPanel, WorkoutCoachLayout } from "./WorkoutCoachPanel";
 
 export interface WorkoutCoachSheetProps {
   readonly coachChatNonce?: number;
@@ -55,22 +51,12 @@ interface ReadOnlyWorkoutDetailSheetProps extends WorkoutCoachSheetProps {
   readonly summaryVariant?: SummaryVariant;
 }
 
-export function ReadOnlyWorkoutActionGrid({
-  actions,
-}: {
-  readonly actions: ReadOnlyWorkoutAction[];
-}) {
+export function ReadOnlyWorkoutActionGrid({ actions }: { readonly actions: ReadOnlyWorkoutAction[] }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {actions.map(({ icon: Icon, label, onClick, testId, variant }) =>
         onClick ? (
-          <Button
-            key={testId}
-            type="button"
-            variant={variant}
-            onClick={onClick}
-            data-testid={testId}
-          >
+          <Button key={testId} type="button" variant={variant} onClick={onClick} data-testid={testId}>
             <Icon className="mr-2 h-4 w-4" />
             {label}
           </Button>

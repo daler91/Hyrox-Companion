@@ -3,7 +3,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ImageCaptureButton } from "@/components/ImageCaptureButton";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ExerciseImagePreview } from "@/components/workout/ExerciseImagePreview";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import type { CompressedImage } from "@/lib/image";
@@ -108,7 +112,9 @@ export function CoachPrescriptionCollapsible({
   const previewActive = !!imagePreview && !!onRetakeImage && !!onParseImage;
   if (!hasContent && !editable && !previewActive) return null;
 
-  const collapsibleProps = open === undefined ? { defaultOpen } : { open, onOpenChange };
+  const collapsibleProps = open === undefined
+    ? { defaultOpen }
+    : { open, onOpenChange };
 
   return (
     <Collapsible
@@ -116,19 +122,20 @@ export function CoachPrescriptionCollapsible({
       className={cn("rounded-lg border border-border", compact && "border-border/70")}
       data-testid="coach-prescription-collapsible"
     >
-      <div
-        className={cn(
-          "group flex w-full items-center gap-2 text-left font-medium uppercase tracking-wide text-muted-foreground",
-          compact ? "px-3 py-1.5 text-[10px]" : "px-4 py-2 text-xs",
-        )}
-      >
+      <div className={cn(
+        "group flex w-full items-center gap-2 text-left font-medium uppercase tracking-wide text-muted-foreground",
+        compact ? "px-3 py-1.5 text-[10px]" : "px-4 py-2 text-xs",
+      )}>
         <CollapsibleTrigger
           className="flex flex-1 items-center justify-between gap-2 hover:text-foreground"
           data-testid="coach-prescription-toggle"
         >
           <span>{title}</span>
           <ChevronDown
-            className={cn("size-4 transition-transform", "group-data-[state=open]:rotate-180")}
+            className={cn(
+              "size-4 transition-transform",
+              "group-data-[state=open]:rotate-180",
+            )}
             aria-hidden
           />
         </CollapsibleTrigger>
@@ -167,12 +174,10 @@ export function CoachPrescriptionCollapsible({
           </Button>
         )}
       </div>
-      <CollapsibleContent
-        className={cn(
-          "flex flex-col gap-3 border-t border-border",
-          compact ? "px-3 py-2 text-xs" : "px-4 py-3 text-sm",
-        )}
-      >
+      <CollapsibleContent className={cn(
+        "flex flex-col gap-3 border-t border-border",
+        compact ? "px-3 py-2 text-xs" : "px-4 py-3 text-sm",
+      )}>
         {previewActive ? (
           <ExerciseImagePreview
             previewUrl={imagePreview.url}
@@ -242,22 +247,8 @@ function PrescriptionSection({
     if (!hasText(text)) return null;
     return (
       <div className="flex flex-col gap-1">
-        <span
-          className={cn(
-            "text-xs font-medium uppercase tracking-wide text-muted-foreground",
-            compact && "text-[10px]",
-          )}
-        >
-          {label}
-        </span>
-        <p
-          className={cn(
-            "whitespace-pre-wrap text-foreground",
-            compact && "text-xs text-muted-foreground",
-          )}
-        >
-          {text}
-        </p>
+        <span className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", compact && "text-[10px]")}>{label}</span>
+        <p className={cn("whitespace-pre-wrap text-foreground", compact && "text-xs text-muted-foreground")}>{text}</p>
       </div>
     );
   }
@@ -335,14 +326,7 @@ function EditablePrescription({
 
   return (
     <label className="flex flex-col gap-1" htmlFor={`prescription-${field}`}>
-      <span
-        className={cn(
-          "text-xs font-medium uppercase tracking-wide text-muted-foreground",
-          compact && "text-[10px]",
-        )}
-      >
-        {label}
-      </span>
+      <span className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", compact && "text-[10px]")}>{label}</span>
       <textarea
         id={`prescription-${field}`}
         className={cn(

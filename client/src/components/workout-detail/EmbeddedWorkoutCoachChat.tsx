@@ -31,10 +31,7 @@ export function buildWorkoutCoachSeedMessage(
   const groups = groupExerciseSets([...exerciseSets]);
   const exerciseLabel = groups.length === 1 ? "exercise" : "exercises";
   const setLabel = exerciseSets.length === 1 ? "set" : "sets";
-  const stats =
-    groups.length > 0
-      ? ` (${groups.length} ${exerciseLabel}, ${exerciseSets.length} ${setLabel})`
-      : "";
+  const stats = groups.length > 0 ? ` (${groups.length} ${exerciseLabel}, ${exerciseSets.length} ${setLabel})` : "";
 
   return `Can you walk me through your take on my ${focus} workout on ${formatScheduledDate(
     entry.date,
@@ -102,10 +99,7 @@ export function EmbeddedWorkoutCoachChat({
                 type="button"
                 variant="ghost"
                 size={backButtonText ? "sm" : "icon"}
-                className={cn(
-                  "shrink-0 text-muted-foreground",
-                  backButtonText ? "h-8 px-2" : "size-7",
-                )}
+                className={cn("shrink-0 text-muted-foreground", backButtonText ? "h-8 px-2" : "size-7")}
                 onClick={onBack}
                 aria-label="Back to workout details"
                 data-testid="embedded-workout-coach-chat-back"
@@ -120,9 +114,7 @@ export function EmbeddedWorkoutCoachChat({
         <Sparkles className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs font-medium uppercase text-muted-foreground">
           <span className="sr-only">Asking about </span>
-          <span className="block truncate text-foreground">
-            {entry.focus?.trim() || "This workout"}
-          </span>
+          <span className="block truncate text-foreground">{entry.focus?.trim() || "This workout"}</span>
         </div>
       </header>
 
@@ -160,7 +152,8 @@ function noopSuggestion(): void {
   // Suggestions are not wired inside workout-detail chat.
 }
 
-function noopId(): void {}
+function noopId(): void {
+}
 
 function ignoreAsyncError(): undefined {
   return undefined;

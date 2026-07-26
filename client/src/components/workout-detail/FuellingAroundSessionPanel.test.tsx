@@ -1,8 +1,4 @@
-import type {
-  FoodLogEntryWithNutrition,
-  NutritionMacroTotals,
-  SessionFuellingResponse,
-} from "@shared/schema";
+import type { FoodLogEntryWithNutrition, NutritionMacroTotals, SessionFuellingResponse } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -92,13 +88,7 @@ describe("FuellingAroundSessionPanel", () => {
       post: [],
       preTotals: ZERO,
       postTotals: ZERO,
-      target: {
-        preCarbG: 30,
-        postCarbG: 60,
-        postProteinG: 25,
-        reasonCodes: [],
-        explanation: "Guidance only.",
-      },
+      target: { preCarbG: 30, postCarbG: 60, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
       gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
     };
     vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
@@ -120,13 +110,7 @@ describe("FuellingAroundSessionPanel", () => {
       post: [makeEntry("e2")],
       preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
       postTotals: { calories: 200, protein: 15, carb: 30, fat: 5, fiber: 2 },
-      target: {
-        preCarbG: 30,
-        postCarbG: 80,
-        postProteinG: 25,
-        reasonCodes: [],
-        explanation: "Guidance only.",
-      },
+      target: { preCarbG: 30, postCarbG: 80, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
       gap: { preCarbG: 12, postCarbG: 50, postProteinG: 10 },
     };
     vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);

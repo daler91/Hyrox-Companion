@@ -5,7 +5,7 @@ import {
   type InsertCoachingMaterial,
   type InsertDocumentChunk,
 } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and,eq } from "drizzle-orm";
 
 import { db } from "../db";
 import { EMBEDDING_DIMENSIONS } from "../gemini/client";
@@ -29,7 +29,10 @@ export class CoachingStorage {
   }
 
   async createCoachingMaterial(data: InsertCoachingMaterial): Promise<CoachingMaterial> {
-    const [material] = await db.insert(coachingMaterials).values(data).returning();
+    const [material] = await db
+      .insert(coachingMaterials)
+      .values(data)
+      .returning();
     return material;
   }
 
@@ -76,9 +79,7 @@ export class CoachingStorage {
             const o = j * 5;
             return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5})`;
           })
-          .join(
-            ", ",
-          )} RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
+          .join(", ")} RETURNING id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"`,
         values,
       );
       results.push(...result.rows);
@@ -117,13 +118,7 @@ export class CoachingStorage {
         const values: unknown[] = [];
         const rows = batch.map((c, j) => {
           const o = j * 5;
-          values.push(
-            c.materialId,
-            c.userId,
-            c.content,
-            c.chunkIndex,
-            c.embedding ? `[${c.embedding.join(",")}]` : null,
-          );
+          values.push(c.materialId, c.userId, c.content, c.chunkIndex, c.embedding ? `[${c.embedding.join(",")}]` : null);
           return `(gen_random_uuid(), $${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5})`;
         });
         const result = await client.query<DocumentChunk>(
@@ -167,9 +162,7 @@ export class CoachingStorage {
     return result.rows;
   }
 
-  async getChunkCountsByMaterial(
-    userId: string,
-  ): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]> {
+  async getChunkCountsByMaterial(userId: string): Promise<{ materialId: string; chunkCount: number; hasEmbeddings: boolean }[]> {
     const result = await vectorPool.query(
       `SELECT material_id AS "materialId",
               COUNT(*)::int AS "chunkCount",
@@ -179,13 +172,11 @@ export class CoachingStorage {
        GROUP BY material_id`,
       [userId],
     );
-    return result.rows.map(
-      (r: { materialId: string; chunkCount: number; embeddedCount: number }) => ({
-        materialId: r.materialId,
-        chunkCount: r.chunkCount,
-        hasEmbeddings: r.embeddedCount > 0,
-      }),
-    );
+    return result.rows.map((r: { materialId: string; chunkCount: number; embeddedCount: number }) => ({
+      materialId: r.materialId,
+      chunkCount: r.chunkCount,
+      hasEmbeddings: r.embeddedCount > 0,
+    }));
   }
 
   async hasChunksForUser(userId: string): Promise<boolean> {

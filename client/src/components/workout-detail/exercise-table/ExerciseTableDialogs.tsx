@@ -35,7 +35,9 @@ export function AddExerciseDialog({
           <ExerciseSelector selectedExercises={[]} onToggle={onPick} />
         </div>
         <div className="flex items-center justify-between border-t border-border pt-3">
-          <span className="text-xs text-muted-foreground">Can't find it? Add a custom one.</span>
+          <span className="text-xs text-muted-foreground">
+            Can't find it? Add a custom one.
+          </span>
           <Button
             type="button"
             variant="outline"
@@ -63,10 +65,7 @@ export function EmptyExerciseState({
         className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground"
         data-testid="exercise-table-empty-parse-hint"
       >
-        <span>
-          <strong className="font-medium text-foreground">Text prescription saved.</strong> No
-          exercise rows yet.
-        </span>
+        <span><strong className="font-medium text-foreground">Text prescription saved.</strong> No exercise rows yet.</span>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button
             type="button"

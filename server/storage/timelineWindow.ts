@@ -1,4 +1,4 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { TimelineEntry } from '@shared/schema';
 
 export function sortAndWindowTimelineEntries(
   entries: TimelineEntry[],

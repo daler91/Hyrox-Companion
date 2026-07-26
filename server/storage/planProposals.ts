@@ -52,7 +52,9 @@ export class PlanProposalStorage {
     const [row] = await db
       .select()
       .from(planAdjustmentProposals)
-      .where(and(eq(planAdjustmentProposals.id, id), eq(planAdjustmentProposals.userId, userId)))
+      .where(
+        and(eq(planAdjustmentProposals.id, id), eq(planAdjustmentProposals.userId, userId)),
+      )
       .limit(1);
     return row;
   }

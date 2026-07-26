@@ -1,11 +1,4 @@
-import {
-  exercisesPayloadSchema,
-  insertCustomExerciseSchema,
-  insertWorkoutLogSchema,
-  MAX_WORKOUT_TEXT_LEN,
-  structureBlocksPayloadSchema,
-  updateWorkoutLogSchema,
-} from "@shared/schema";
+import { exercisesPayloadSchema, insertCustomExerciseSchema, insertWorkoutLogSchema, MAX_WORKOUT_TEXT_LEN, structureBlocksPayloadSchema, updateWorkoutLogSchema } from "@shared/schema";
 import { z } from "zod";
 
 /**
@@ -33,23 +26,12 @@ function enforceHeartRateConsistency(
 }
 
 export const createWorkoutRouteSchema = insertWorkoutLogSchema
-  .extend({
-    exercises: exercisesPayloadSchema.optional(),
-    structureBlocks: structureBlocksPayloadSchema,
-  })
+  .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
 export const updateWorkoutRouteSchema = updateWorkoutLogSchema
-  .extend({
-    exercises: exercisesPayloadSchema.optional(),
-    structureBlocks: structureBlocksPayloadSchema,
-  })
+  .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
 export const assignWorkoutPlanDaySchema = z.object({ planDayId: z.string().min(1).nullable() });
 export const reparseWorkoutParamsSchema = z.object({ id: z.string().min(1) });
-export const reparseWorkoutRouteSchema = z
-  .object({
-    prescribedMainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
-    prescribedAccessory: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(),
-  })
-  .strict();
+export const reparseWorkoutRouteSchema = z.object({ prescribedMainWorkout: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional(), prescribedAccessory: z.string().max(MAX_WORKOUT_TEXT_LEN).nullable().optional() }).strict();
 export const createCustomExerciseSchema = insertCustomExerciseSchema.omit({ userId: true });

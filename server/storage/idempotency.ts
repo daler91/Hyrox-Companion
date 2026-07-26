@@ -87,11 +87,7 @@ export class IdempotencyStorage {
     if (!existing || existing.statusCode === IN_PROGRESS_STATUS) {
       return { outcome: "in_progress" };
     }
-    return {
-      outcome: "completed",
-      statusCode: existing.statusCode,
-      responseBody: existing.responseBody,
-    };
+    return { outcome: "completed", statusCode: existing.statusCode, responseBody: existing.responseBody };
   }
 
   /**

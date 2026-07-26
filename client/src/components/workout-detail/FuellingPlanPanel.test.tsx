@@ -140,7 +140,9 @@ describe("FuellingPlanPanel", () => {
     renderWithClient(<FuellingPlanPanel entry={entry} />);
 
     await user.click(screen.getByTestId("fuelling-plan-adjust"));
-    await waitFor(() => expect(screen.getByTestId("fuelling-plan-duration")).toHaveValue(48));
+    await waitFor(() =>
+      expect(screen.getByTestId("fuelling-plan-duration")).toHaveValue(48),
+    );
   });
 
   it("persists an edited expected effort to the plan day", async () => {

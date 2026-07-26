@@ -1,5 +1,5 @@
 import { PgDialect } from "drizzle-orm/pg-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
 import { PlanStorage } from "../plans";
@@ -65,12 +65,7 @@ describe("PlanStorage", () => {
       const mockPlan = { id: "plan-1", userId: "u1", name: "My Plan", totalWeeks: 8 };
       mockInsertChain([mockPlan]);
 
-      const result = await storage.createTrainingPlan({
-        userId: "u1",
-        name: "My Plan",
-        totalWeeks: 8,
-        sourceFileName: null,
-      });
+      const result = await storage.createTrainingPlan({ userId: "u1", name: "My Plan", totalWeeks: 8, sourceFileName: null });
       expect(result).toEqual(mockPlan);
       expect(db.insert).toHaveBeenCalledTimes(1);
     });
@@ -78,10 +73,7 @@ describe("PlanStorage", () => {
 
   describe("listTrainingPlans", () => {
     it("should return all plans for a user", async () => {
-      const mockPlans = [
-        { id: "plan-1", userId: "u1", name: "Plan A" },
-        { id: "plan-2", userId: "u1", name: "Plan B" },
-      ];
+      const mockPlans = [{ id: "plan-1", userId: "u1", name: "Plan A" }, { id: "plan-2", userId: "u1", name: "Plan B" }];
       mockSelectChain(mockPlans);
 
       const result = await storage.listTrainingPlans("u1");
@@ -104,12 +96,8 @@ describe("PlanStorage", () => {
       ];
 
       vi.mocked(db.select)
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([mockPlan]) }),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(mockDays) }),
-        });
+        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue([mockPlan]) }) })
+        .mockReturnValueOnce({ from: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(mockDays) }) });
 
       const result = await storage.getTrainingPlan("plan-1", "u1");
       expect(result).toBeDefined();
@@ -144,14 +132,7 @@ describe("PlanStorage", () => {
       mockInsertChain(mockDays);
 
       const result = await storage.createPlanDays([
-        {
-          planId: "plan-1",
-          weekNumber: 1,
-          dayName: "Monday",
-          focus: "Strength",
-          mainWorkout: "Squats",
-          status: "planned",
-        },
+        { planId: "plan-1", weekNumber: 1, dayName: "Monday", focus: "Strength", mainWorkout: "Squats", status: "planned" },
       ]);
       expect(result).toEqual(mockDays);
     });
@@ -166,9 +147,7 @@ describe("PlanStorage", () => {
     it("should delete plan and its days in a transaction", async () => {
       mockSelectChain([{ id: "plan-1" }]);
       vi.mocked(db.transaction).mockImplementation(async (callback) => {
-        const mockTx = {
-          delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) }),
-        };
+        const mockTx = { delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) }) };
         return await callback(mockTx);
       });
 
@@ -235,7 +214,9 @@ describe("PlanStorage", () => {
 
       expect(count).toBe(2);
       expect(db.update).toHaveBeenCalledTimes(1);
-      expect(setMock).toHaveBeenCalledWith(expect.objectContaining({ generationStatus: "failed" }));
+      expect(setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ generationStatus: "failed" }),
+      );
     });
 
     it("returns 0 when no plan generation is stale", async () => {
@@ -274,7 +255,9 @@ describe("PlanStorage.markMissedPlanDays", () => {
     const dialect = new PgDialect();
     return whereClauses.map((clause) => {
       const params = dialect.sqlToQuery(clause as never).params;
-      return params.find((p) => typeof p === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p)) as string;
+      return params.find(
+        (p) => typeof p === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p),
+      ) as string;
     });
   }
 

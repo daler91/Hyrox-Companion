@@ -8,7 +8,10 @@ import { makeExerciseSet } from "@/test/factories/exerciseSetFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { ReviewSurface } from "../ReviewSurface";
-import { expectWorkoutTitleRename, renameWorkoutTitleFromHeader } from "./workoutTitleTestHelpers";
+import {
+  expectWorkoutTitleRename,
+  renameWorkoutTitleFromHeader,
+} from "./workoutTitleTestHelpers";
 
 const mockUseWorkoutDetail = vi.fn();
 let showAdherenceInsights = true;
@@ -32,9 +35,8 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 
 vi.mock("@/hooks/useMafCeiling", () => ({ useMafCeiling: () => mafCeiling }));
 
-// These suites render ExerciseTable directly, without a QueryClientProvider.
-// The "last time" line is not what they are testing; an empty history is the
-// no-op case and keeps them focused.
+// This suite renders ExerciseTable without a QueryClientProvider. The "last
+// time" line is not what it is testing; an empty history is the no-op case.
 vi.mock("@/hooks/useExerciseHistory", () => ({
   useExerciseHistory: () => ({ data: undefined }),
 }));
@@ -151,7 +153,10 @@ describe("ReviewSurface", () => {
   beforeEach(() => {
     showAdherenceInsights = true;
     mafCeiling = null;
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ json: vi.fn().mockResolvedValue([]) }),
+    );
     mockUseWorkoutDetail.mockReset();
   });
 
@@ -202,30 +207,24 @@ describe("ReviewSurface", () => {
     expect(section).not.toHaveAttribute("open");
   });
 
-  it(
-    "surfaces planned differences when adherence guidance is enabled",
-    () => {
-      mockUseWorkoutDetail.mockReturnValue(
-        makeDetail({
-          workout: makeWorkout({
-            exerciseSets: [
-              makeExerciseSet({
-                workoutLogId: "workout-1",
-                weight: 95,
-                plannedReps: 8,
-                plannedWeight: 100,
-              }),
-            ],
-          }),
+  it("surfaces planned differences when adherence guidance is enabled", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({
+          exerciseSets: [makeExerciseSet({
+            workoutLogId: "workout-1",
+            weight: 95,
+            plannedReps: 8,
+            plannedWeight: 100,
+          })],
         }),
-      );
+      }),
+    );
 
-      render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
 
-      expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
-    },
-    RENDER_TIMEOUT_MS,
-  );
+    expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 100 kg");
+  }, RENDER_TIMEOUT_MS);
 
   it("shows the just-completed success callout only when requested", () => {
     mockUseWorkoutDetail.mockReturnValue(makeDetail());
@@ -279,7 +278,13 @@ describe("ReviewSurface", () => {
     const onRenameTitle = vi.fn();
     mockUseWorkoutDetail.mockReturnValue(makeDetail());
 
-    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} onRenameTitle={onRenameTitle} />);
+    render(
+      <ReviewSurface
+        entry={makeEntry()}
+        onClose={vi.fn()}
+        onRenameTitle={onRenameTitle}
+      />,
+    );
 
     renameWorkoutTitleFromHeader("workout-title-entry-1", "  Renamed strength  ");
 

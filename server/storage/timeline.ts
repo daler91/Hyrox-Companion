@@ -484,11 +484,7 @@ export class TimelineStorage {
     const today = await this.resolveUserToday(userId);
     const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
 
-    const { scheduledDays, planNameById } = await this.fetchScheduledDays(
-      userId,
-      planId,
-      sqlOverFetch,
-    );
+    const { scheduledDays, planNameById } = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
     // W7: planNameById already came from fetchScheduledDays above, so no second

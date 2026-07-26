@@ -20,7 +20,12 @@ export class PushStorage {
   async removeSubscription(userId: string, endpoint: string): Promise<boolean> {
     const result = await db
       .delete(pushSubscriptions)
-      .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+      .where(
+        and(
+          eq(pushSubscriptions.userId, userId),
+          eq(pushSubscriptions.endpoint, endpoint),
+        ),
+      );
     return (result.rowCount ?? 0) > 0;
   }
 
