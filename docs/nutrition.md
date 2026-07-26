@@ -354,8 +354,19 @@ and `FuellingTab` (Analytics) consume `useSessionFuelling` and `useBlockView`.
 `useNutritionTargets`, `useMicros`, `useNutritionInsights`, `useSessionFuelling`,
 `useBlockView`) and ~17 mutation hooks covering log/edit/delete, favourites,
 repeat-day, barcode, custom foods, recipes, parse text/photo, batch log, targets,
-and insights regeneration — each invalidating the relevant query keys. Favourite
-toggles and entry deletes use optimistic/pending UI.
+and insights regeneration — each invalidating the relevant query keys. Entry
+deletes use pending UI. The favourite toggle shows its flip locally in
+`FavoriteStarButton` rather than writing the favourites cache: a star can be
+tapped from a meal row, which knows only a food's id and name — not enough to
+synthesise the `Food` that list holds.
+
+`GET /foods/recent` and `GET /favorites` both return `FoodWithPortionMemory` —
+each food plus the `lastQuantityG` / `lastMealType` it was last logged in (null
+for a favourite starred but never logged). That powers one-tap logging from the
+favourites chips and pre-fills `LogFoodDialog` with the portion the athlete
+actually uses. The hint is always seeded in grams, never mapped back onto a named
+serving, because named servings load asynchronously and every seed runs in a
+`useState` initializer.
 
 ---
 

@@ -23,6 +23,12 @@ interface ConfirmDialogProps {
   readonly isDestructive?: boolean;
   readonly cancelTestId?: string;
   readonly confirmTestId?: string;
+  /**
+   * Extra content between the description and the buttons. Rendered as a
+   * sibling of `AlertDialogDescription` rather than inside it, because that
+   * component is a `<p>` and interactive controls cannot legally nest there.
+   */
+  readonly children?: React.ReactNode;
 }
 
 export function ConfirmDialog({
@@ -37,6 +43,7 @@ export function ConfirmDialog({
   isDestructive,
   cancelTestId,
   confirmTestId,
+  children,
 }: Readonly<ConfirmDialogProps>) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -45,6 +52,7 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           <AlertDialogCancel data-testid={cancelTestId}>{cancelText}</AlertDialogCancel>
           <AlertDialogAction

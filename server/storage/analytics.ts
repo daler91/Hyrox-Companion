@@ -57,7 +57,7 @@ export class AnalyticsStorage {
     return logs;
   }
 
-  async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ date: string; focus: string; mainWorkout: string; planName?: string }[]> {
+  async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ planDayId: string; date: string; focus: string; mainWorkout: string; planName?: string }[]> {
     // Relational query: fetch missed plan days for the date, include the parent
     // plan's name, and filter by plan owner in memory. The `plan` relation's
     // inner row presence is implied by the NOT NULL FK, so the filter is safe.
@@ -67,6 +67,10 @@ export class AnalyticsStorage {
         eq(planDays.status, "missed"),
       ),
       columns: {
+        // `id` rides along so the missed-workout push can deep link straight to
+        // the session (`/?workout=<planDayId>`) instead of dumping the athlete
+        // on the timeline root.
+        id: true,
         scheduledDate: true,
         focus: true,
         mainWorkout: true,
@@ -80,6 +84,7 @@ export class AnalyticsStorage {
     return days
       .filter((d) => d.plan?.userId === userId)
       .map((d) => ({
+        planDayId: d.id,
         date: d.scheduledDate || date,
         focus: d.focus,
         mainWorkout: d.mainWorkout,

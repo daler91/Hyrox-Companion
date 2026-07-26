@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -245,14 +245,17 @@ protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("
 const patchDayStatusSchema = z.object({
   status: z.enum(workoutStatusEnum).optional(),
   scheduledDate: dateStringSchema.nullable().optional(),
+  // Optional, and only meaningful alongside `status: "skipped"` — any other
+  // status clears it in updatePlanDayStatus.
+  skipReason: z.enum(planDaySkipReasonEnum).nullable().optional(),
 });
 
 protectedPatch(router, "/api/v1/plans/days/:dayId/status", { limiter: rateLimiter("planDayStatus", 20), middleware: [validateBody(patchDayStatusSchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, z.infer<typeof patchDayStatusSchema>>, res: Response) => {
     const { dayId } = req.params;
     const userId = getUserId(req);
-    const { status, scheduledDate } = req.body;
+    const { status, scheduledDate, skipReason } = req.body;
 
-    const updatedDay = await updatePlanDayStatus(dayId, { status, scheduledDate }, userId);
+    const updatedDay = await updatePlanDayStatus(dayId, { status, scheduledDate, skipReason }, userId);
     if (!updatedDay) {
       return sendNotFound(res, "Day not found");
     }

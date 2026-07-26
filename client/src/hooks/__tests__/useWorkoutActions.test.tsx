@@ -240,6 +240,49 @@ describe('useWorkoutActions', () => {
           expect(result.current.skipConfirmEntry).toBeNull();
         });
       });
+
+      it('sends the reason when the athlete gives one', async () => {
+        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
+
+        act(() => {
+          result.current.handleSkip(mockEntry);
+        });
+
+        act(() => {
+          result.current.confirmSkip('injured');
+        });
+
+        await waitFor(() => {
+          expect(queryClientLib.apiRequest).toHaveBeenCalledWith(
+            'PATCH',
+            '/api/v1/plans/days/pd-1/status',
+            { status: 'skipped', skipReason: 'injured' },
+            expect.any(AbortSignal),
+            { 'X-Idempotency-Key': expect.any(String) },
+          );
+        });
+      });
+
+      it('omits skipReason entirely when the dialog is confirmed unanswered', async () => {
+        const { result } = renderHook(() => useWorkoutActions('test-plan-id'), { wrapper });
+        const mockEntry = createMockTimelineEntry({ planDayId: 'pd-1', date: '2024-01-01', focus: 'cardio' });
+
+        act(() => {
+          result.current.handleSkip(mockEntry);
+        });
+
+        act(() => {
+          result.current.confirmSkip(null);
+        });
+
+        await waitFor(() => {
+          const body = vi.mocked(queryClientLib.apiRequest).mock.calls.at(-1)?.[2];
+          // Absent rather than null: a re-skip with no answer must not wipe a
+          // reason the athlete gave earlier.
+          expect(body).not.toHaveProperty('skipReason');
+        });
+      });
     });
 
     describe('handleChangeStatus', () => {

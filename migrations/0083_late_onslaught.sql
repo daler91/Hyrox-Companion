@@ -1,0 +1,2 @@
+ALTER TABLE "plan_days" ADD COLUMN "skip_reason" text;--> statement-breakpoint
+ALTER TABLE "plan_days" ADD CONSTRAINT "plan_days_skip_reason_check" CHECK (skip_reason IS NULL OR skip_reason IN ('ill', 'injured', 'schedule', 'low_energy'));

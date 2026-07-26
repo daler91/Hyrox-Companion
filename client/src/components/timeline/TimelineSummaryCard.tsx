@@ -1,6 +1,7 @@
+import { computeCurrentWeek, computePlanPhase, formatPhaseName } from "@shared/planPhase";
 import type { TimelineEntry, TrainingOverview, TrainingPlan } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Flag, Flame, type LucideIcon, Target } from "lucide-react";
+import { CalendarDays, CalendarRange, Flag, Flame, type LucideIcon, Target } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +58,16 @@ function formatRaceCountdown(raceDate: string | null): string {
   if (days > 0) return `Race day in ${days} day${days === 1 ? "" : "s"}`;
   const elapsed = Math.abs(days);
   return `Race day was ${elapsed} day${elapsed === 1 ? "" : "s"} ago`;
+}
+
+// Where the athlete is in the selected block. Derived from the plan the card is
+// already showing rather than from the server's *active* plan, so this tile and
+// the Race tile beside it always describe the same plan when the user filters to
+// a past one. Returns null for a plan we cannot place a week inside.
+function planWeekPhase(plan: TrainingPlan | undefined, todayStr: string) {
+  if (!plan?.startDate || !plan.totalWeeks || plan.totalWeeks <= 0) return null;
+  const currentWeek = computeCurrentWeek(plan.startDate, plan.totalWeeks, todayStr);
+  return computePlanPhase(plan.totalWeeks, currentWeek) ?? null;
 }
 
 function formatRaceDate(raceDate: string | null): string | undefined {
@@ -146,6 +157,7 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
   const todayEntry = getTodayEntry(timelineData, todayStr);
   const selectedPlan = choosePlan(plans, selectedPlanId, todayStr);
   const raceDate = planRaceDate(selectedPlan);
+  const phase = planWeekPhase(selectedPlan, todayStr);
   const weeklyGoal = Math.max(overview?.weeklyGoal ?? 0, 1);
   const weeklyCompleted = overview?.weeklyCompletedWorkouts ?? 0;
   const streak = overview?.currentStreak ?? 0;
@@ -163,7 +175,14 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
       <CardHeader className="pb-4">
         <CardTitle className="text-lg">This Week</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
+      <CardContent
+        className={cn(
+          "grid gap-5",
+          phase
+            ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1fr)]"
+            : "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)]",
+        )}
+      >
         <SummaryItem
           icon={CalendarDays}
           label="Today"
@@ -199,6 +218,15 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
           value={`${streak} day${streak === 1 ? "" : "s"}`}
           detail={streak > 0 ? "Current streak" : "No active streak"}
         />
+
+        {phase ? (
+          <SummaryItem
+            icon={CalendarRange}
+            label="Plan"
+            value={`Week ${phase.currentWeek} of ${phase.totalWeeks}`}
+            detail={`${formatPhaseName(phase.phaseLabel)} phase`}
+          />
+        ) : null}
 
         <SummaryItem
           icon={Flag}

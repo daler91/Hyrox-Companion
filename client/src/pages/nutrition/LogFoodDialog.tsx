@@ -24,6 +24,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  type PortionHint,
   useAddServing,
   useFoodWithServings,
   useLogFood,
@@ -32,6 +33,7 @@ import {
 } from "@/hooks/useNutrition";
 
 import { CalorieBreakdownRing } from "./CalorieBreakdownRing";
+import { FavoriteStarButton } from "./FavoriteStarButton";
 import { GoalContributionRows } from "./GoalContributionRows";
 import { MacroRows } from "./MacroRows";
 import { MicronutrientPreviewPanel } from "./MicronutrientPreviewPanel";
@@ -48,7 +50,13 @@ import {
 
 /** Either creating a log from a searched/quick-add/barcode food, or editing an entry. */
 export type LogDialogState =
-  | { mode: "create"; food: Food; entryMethod?: "manual" | "barcode" }
+  | {
+    mode: "create";
+    food: Food;
+    entryMethod?: "manual" | "barcode";
+    /** Last portion this food was logged in, when we have one (see usePortionMemory). */
+    portionHint?: PortionHint;
+  }
   | { mode: "edit"; entry: FoodLogEntryWithNutrition };
 
 interface UnitOption {
@@ -133,16 +141,25 @@ function resolveSelectedUnit(
   );
 }
 
-/** Initial amount: a new food seeds 1 named serving (or 100 g); edit mode starts
- *  at 0 because it drives quantity via grams instead. */
+/** Initial amount: the portion this food was last logged in, else 1 named
+ *  serving (or 100 g); edit mode starts at 0 because it drives quantity via
+ *  grams instead. */
 function initialCount(state: LogDialogState, hasServingSize: boolean): number {
   if (state.mode !== "create") return 0;
+  if (state.portionHint) return state.portionHint.quantityG;
   return hasServingSize ? 1 : 100;
 }
 
-/** Initial unit: the synthetic "__serving" when a new food has a known serving, else grams. */
+/** Initial unit: grams when we are seeding a remembered portion, the synthetic
+ *  "__serving" when a new food has a known serving, else grams.
+ *
+ *  A remembered portion is always seeded in grams, never mapped back onto a
+ *  named serving ("1 slice"): named servings arrive asynchronously via
+ *  useFoodWithServings, and every seed here runs in a useState initializer. */
 function initialUnitValue(state: LogDialogState, hasServingSize: boolean): string {
-  return state.mode === "create" && hasServingSize ? "__serving" : "g";
+  if (state.mode !== "create") return "g";
+  if (state.portionHint) return "g";
+  return hasServingSize ? "__serving" : "g";
 }
 
 /** Initial grams for edit mode (rounded); 0 in create mode where count drives it. */
@@ -150,9 +167,11 @@ function initialEditGrams(state: LogDialogState): number {
   return state.mode === "edit" ? Math.round(state.entry.quantityG) : 0;
 }
 
-/** Initial meal: the time-of-day default for a new log, else the entry's own meal. */
+/** Initial meal: the meal this food was last logged in, else the time-of-day
+ *  default for a new log, else the entry's own meal. */
 function initialMealType(state: LogDialogState): MealType {
-  return state.mode === "create" ? defaultMealForNow() : state.entry.mealType;
+  if (state.mode !== "create") return state.entry.mealType;
+  return state.portionHint?.mealType ?? defaultMealForNow();
 }
 
 /** Fields that differ by mode — from the picked Food (create) or the existing
@@ -330,9 +349,13 @@ function LogFoodForm({
 
   return (
     <div className="space-y-4">
-      <div className="min-w-0">
-        <p className="truncate font-medium">{name}</p>
-        {brand && <p className="truncate text-sm text-muted-foreground">{brand}</p>}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{name}</p>
+          {brand && <p className="truncate text-sm text-muted-foreground">{brand}</p>}
+        </div>
+        {/* detailFoodId, not foodId — the latter is intentionally "" in edit mode. */}
+        <FavoriteStarButton foodId={detailFoodId} foodName={name} size="sm" />
       </div>
 
       {isCreate ? (

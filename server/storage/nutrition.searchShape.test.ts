@@ -1,7 +1,7 @@
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { buildVariantMatch, TRGM_SIMILARITY_THRESHOLD } from "./nutrition";
+import { buildLastPortionsQuery, buildVariantMatch, TRGM_SIMILARITY_THRESHOLD } from "./nutrition";
 
 /**
  * SQL-shape regression test for the fuzzy food-search predicate. The routes and
@@ -54,5 +54,34 @@ describe("buildVariantMatch", () => {
     // If a different threshold is ever wanted, the GUC must be SET per pooled
     // connection (the `%` operator reads it) and this constant updated with it.
     expect(TRGM_SIMILARITY_THRESHOLD).toBe(0.3);
+  });
+});
+
+/**
+ * The portion-memory lookup behind the favourites/recents lists. Both callers
+ * mock storage, so this is the only place the DISTINCT ON shape is pinned.
+ */
+describe("buildLastPortionsQuery", () => {
+  const dialect = new PgDialect();
+  const rendered = () =>
+    dialect.sqlToQuery(buildLastPortionsQuery("u1", ["f1", "f2"]).getSQL()).sql;
+
+  it("takes one row per food via DISTINCT ON", () => {
+    expect(rendered()).toContain(`distinct on ("food_log_entries"."food_id")`);
+  });
+
+  it("orders by the distinct key first, then newest-logged", () => {
+    // Both terms matter: Postgres rejects a DISTINCT ON whose ORDER BY does not
+    // lead with the distinct expression, and losing the DESC silently returns
+    // the oldest portion instead of the most recent one.
+    expect(rendered()).toContain(
+      `order by "food_log_entries"."food_id", "food_log_entries"."logged_at" desc`,
+    );
+  });
+
+  it("scopes to the owner as well as the requested foods", () => {
+    const sql = rendered();
+    expect(sql).toContain(`"food_log_entries"."user_id" = `);
+    expect(sql).toContain(`"food_log_entries"."food_id" in `);
   });
 });

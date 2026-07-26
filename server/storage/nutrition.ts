@@ -10,6 +10,7 @@ import {
   foods,
   type FoodServing,
   foodServings,
+  type FoodWithPortionMemory,
   type MealTarget,
   mealTargets,
   type MealType,
@@ -101,6 +102,29 @@ export function visibleTo(userId: string) {
  *
  * Exported ONLY for the SQL-shape regression test (nutrition.searchShape.test.ts).
  */
+/**
+ * The most recent log entry per food, for the given ids.
+ *
+ * `DISTINCT ON (food_id)` with `ORDER BY food_id, logged_at DESC` keeps the
+ * newest row per food. The two ORDER BY terms are load-bearing and easy to
+ * break: Postgres requires the leading term to match the DISTINCT ON
+ * expression, and dropping the `DESC` silently returns the *oldest* portion —
+ * a wrong answer rather than an error. Hence the shape test.
+ *
+ * Exported ONLY for the SQL-shape regression test (nutrition.searchShape.test.ts).
+ */
+export function buildLastPortionsQuery(userId: string, foodIds: string[]) {
+  return db
+    .selectDistinctOn([foodLogEntries.foodId], {
+      foodId: foodLogEntries.foodId,
+      quantityG: foodLogEntries.quantityG,
+      mealType: foodLogEntries.mealType,
+    })
+    .from(foodLogEntries)
+    .where(and(eq(foodLogEntries.userId, userId), inArray(foodLogEntries.foodId, foodIds)))
+    .orderBy(foodLogEntries.foodId, desc(foodLogEntries.loggedAt));
+}
+
 export function buildVariantMatch(v: string, fuzzy: boolean) {
   const contains = `%${escapeLike(v)}%`;
   const base = sql`(lower(${foods.name}) like ${contains} or (${foods.brand} is not null and lower(${foods.brand}) like ${contains}))`;
@@ -283,8 +307,43 @@ export class NutritionStorage {
     return new Map(rows.map((f) => [f.id, f]));
   }
 
+  /**
+   * The portion and meal each of `foodIds` was last logged in.
+   *
+   * Kept as a separate bounded query rather than folded into the aggregates
+   * below so the callers keep their existing ordering and limits — the id list
+   * is already capped before this runs.
+   */
+  private async getLastPortions(
+    userId: string,
+    foodIds: string[],
+  ): Promise<Map<string, { quantityG: number; mealType: MealType }>> {
+    if (foodIds.length === 0) return new Map();
+    const rows = await buildLastPortionsQuery(userId, foodIds);
+    return new Map(
+      rows.map((r) => [r.foodId, { quantityG: r.quantityG, mealType: r.mealType as MealType }]),
+    );
+  }
+
+  /** Attach each food's last-used portion, or nulls when it has never been logged. */
+  private static withPortionMemory(
+    items: Food[],
+    portions: Map<string, { quantityG: number; mealType: MealType }>,
+  ): FoodWithPortionMemory[] {
+    return items.map((food) => {
+      const last = portions.get(food.id);
+      return {
+        ...food,
+        lastQuantityG: last?.quantityG ?? null,
+        lastMealType: last?.mealType ?? null,
+      };
+    });
+  }
+
   /** Distinct foods from the user's most recent log entries, newest first (FR-1.4). */
-  async getRecentFoods(userId: string, limit = 20): Promise<Food[]> {
+  // (getLastPortions' query lives at module scope as buildLastPortionsQuery so
+  // its SQL shape can be pinned — see nutrition.searchShape.test.ts.)
+  async getRecentFoods(userId: string, limit = 20): Promise<FoodWithPortionMemory[]> {
     const recent = await db
       .select({
         foodId: foodLogEntries.foodId,
@@ -298,12 +357,13 @@ export class NutritionStorage {
 
     if (recent.length === 0) return [];
     const ids = recent.map((r) => r.foodId);
-    const rows = await db
-      .select()
-      .from(foods)
-      .where(and(inArray(foods.id, ids), visibleTo(userId)));
+    const [rows, portions] = await Promise.all([
+      db.select().from(foods).where(and(inArray(foods.id, ids), visibleTo(userId))),
+      this.getLastPortions(userId, ids),
+    ]);
     const byId = new Map(rows.map((f) => [f.id, f]));
-    return ids.map((id) => byId.get(id)).filter((f): f is Food => Boolean(f));
+    const ordered = ids.map((id) => byId.get(id)).filter((f): f is Food => Boolean(f));
+    return NutritionStorage.withPortionMemory(ordered, portions);
   }
 
   // --- custom foods (FR-2.2) ------------------------------------------------
@@ -691,14 +751,19 @@ export class NutritionStorage {
 
   // --- favorites ------------------------------------------------------------
 
-  async listFavorites(userId: string): Promise<Food[]> {
+  async listFavorites(userId: string): Promise<FoodWithPortionMemory[]> {
     const rows = await db
       .select({ food: foods })
       .from(foodFavorites)
       .innerJoin(foods, eq(foodFavorites.foodId, foods.id))
       .where(and(eq(foodFavorites.userId, userId), visibleTo(userId)))
       .orderBy(desc(foodFavorites.createdAt));
-    return rows.map((r) => r.food);
+
+    const items = rows.map((r) => r.food);
+    // A favourite can be starred without ever having been logged, so the
+    // portion lookup is a left-join in spirit: missing entries stay null.
+    const portions = await this.getLastPortions(userId, items.map((f) => f.id));
+    return NutritionStorage.withPortionMemory(items, portions);
   }
 
   async addFavorite(userId: string, foodId: string): Promise<FoodFavorite | undefined> {

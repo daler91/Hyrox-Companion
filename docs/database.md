@@ -175,9 +175,11 @@ Individual workout days within a training plan.
 | `ai_rationale` | `text` | nullable — auto-coach prescriptive rationale for the day |
 | `ai_note_updated_at` | `timestamp with time zone` | nullable |
 | `ai_inputs_used` | `jsonb` | nullable — typed `CoachNoteInputs`, the inputs that produced the rationale |
+| `skip_reason` | `text` | nullable — why a skipped day was skipped; cleared on any transition away from `skipped` |
 
 **Check constraints:**
 - `status_check`: `status IN ('planned', 'completed', 'missed', 'skipped')`
+- `plan_days_skip_reason_check`: `skip_reason IS NULL OR skip_reason IN ('ill', 'injured', 'schedule', 'low_energy')`
 
 **Indexes:**
 - `idx_plan_days_plan_id` on (`plan_id`)

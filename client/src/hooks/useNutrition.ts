@@ -10,6 +10,7 @@ import type {
   FoodLogEntry,
   FoodSearchResponse,
   FoodServing,
+  FoodWithPortionMemory,
   FoodWithServingsResponse,
   FuellingRangeResponse,
   MealTarget,
@@ -32,6 +33,7 @@ import type {
   UpsertNutritionTargetInput,
 } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
@@ -57,7 +59,7 @@ export function useSearchFoods(query: string) {
 }
 
 export function useRecentFoods(enabled = true) {
-  return useQuery<Food[]>({
+  return useQuery<FoodWithPortionMemory[]>({
     queryKey: QUERY_KEYS.nutritionRecent,
     queryFn: () => api.nutrition.recent(),
     enabled,
@@ -65,11 +67,45 @@ export function useRecentFoods(enabled = true) {
 }
 
 export function useFavorites(enabled = true) {
-  return useQuery<Food[]>({
+  return useQuery<FoodWithPortionMemory[]>({
     queryKey: QUERY_KEYS.nutritionFavorites,
     queryFn: () => api.nutrition.listFavorites(),
     enabled,
   });
+}
+
+/** Which foods are starred, for rendering the star's filled/hollow state. */
+export function useFavoriteIds(enabled = true): ReadonlySet<string> {
+  const { data: favorites } = useFavorites(enabled);
+  return useMemo(() => new Set((favorites ?? []).map((f) => f.id)), [favorites]);
+}
+
+export interface PortionHint {
+  quantityG: number;
+  mealType: MealType;
+}
+
+/**
+ * The portion and meal a food was last logged in, looked up by id.
+ *
+ * Reads the recents and favourites lists already in cache, so a food reached
+ * from search results gets its memory too as long as the athlete has logged it
+ * recently or starred it. Favourites win on a tie — a starred food is the one
+ * the athlete curated.
+ */
+export function usePortionMemory(enabled = true): (foodId: string) => PortionHint | undefined {
+  const { data: recent } = useRecentFoods(enabled);
+  const { data: favorites } = useFavorites(enabled);
+
+  return useMemo(() => {
+    const byId = new Map<string, PortionHint>();
+    for (const food of [...(recent ?? []), ...(favorites ?? [])]) {
+      if (food.lastQuantityG != null && food.lastMealType != null) {
+        byId.set(food.id, { quantityG: food.lastQuantityG, mealType: food.lastMealType });
+      }
+    }
+    return (foodId: string) => byId.get(foodId);
+  }, [recent, favorites]);
 }
 
 const NUTRITION_LOG_URL = "/api/v1/nutrition/logs";
@@ -128,9 +164,26 @@ export function useDeleteLog(date: string) {
 
 export function useToggleFavorite() {
   return useApiMutation<{ success: boolean }, Error, { foodId: string; isFavorite: boolean }>({
-    mutationFn: ({ foodId, isFavorite }) =>
-      isFavorite ? api.nutrition.removeFavorite(foodId) : api.nutrition.addFavorite({ foodId }),
+    mutationFn: async ({ foodId, isFavorite }) => {
+      if (!isFavorite) return api.nutrition.addFavorite({ foodId });
+      try {
+        return await api.nutrition.removeFavorite(foodId);
+      } catch (error) {
+        // DELETE /favorites/:foodId 404s when the row was already gone. From
+        // the athlete's point of view, un-starring something that isn't starred
+        // succeeded — don't surface an error for a stale toggle.
+        if (error instanceof Error && error.message.startsWith("404")) {
+          return { success: true };
+        }
+        throw error;
+      }
+    },
+    // Note: no optimistic cache write. A star can be toggled from a meal row,
+    // which carries only a foodId and a name — not enough to synthesise the
+    // Food this list holds. FavoriteStarButton shows the flip locally instead,
+    // and the invalidation below fills in the real row.
     invalidateQueries: [QUERY_KEYS.nutritionFavorites],
+    errorToast: "Couldn't update your favourites",
   });
 }
 

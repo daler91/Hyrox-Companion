@@ -408,11 +408,12 @@ describe("planService", () => {
         });
 
       mockTx.delete = vi.fn().mockReturnValue({ where: mockTx.deleteWhere });
-      mockTx.update = vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({ returning: mockTx.updateReturning }),
-        }),
+      // `set` routes through mockTx.updateSet so tests can assert on the exact
+      // column payload written to the plan day.
+      mockTx.updateSet = vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: mockTx.updateReturning }),
       });
+      mockTx.update = vi.fn().mockReturnValue({ set: mockTx.updateSet });
       // Insert (used for copy-back of logged sets onto the plan day).
       (mockTx as unknown as { insert: ReturnType<typeof vi.fn> }).insert = vi.fn().mockReturnValue({
         values: vi.fn().mockResolvedValue(undefined),
@@ -487,6 +488,40 @@ describe("planService", () => {
       await expect(
         updatePlanDayStatus(dayId, { status: "completed" }, userId),
       ).rejects.toThrow(/Plan day not found/);
+    });
+
+    it("stores the skip reason alongside the skipped status", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "skipped" });
+      const tx = setupTx([{ status: "planned" }], [], [returned]);
+
+      await updatePlanDayStatus(dayId, { status: "skipped", skipReason: "injured" }, userId);
+
+      expect(tx.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "skipped", skipReason: "injured" }),
+      );
+    });
+
+    it("leaves an existing reason alone when a skip arrives without one", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "skipped" });
+      const tx = setupTx([{ status: "planned" }], [], [returned]);
+
+      await updatePlanDayStatus(dayId, { status: "skipped" }, userId);
+
+      // Absent, not null — an unanswered dialog must not wipe a reason the
+      // athlete gave on a previous skip.
+      expect(tx.updateSet.mock.calls[0][0]).not.toHaveProperty("skipReason");
+    });
+
+    it("clears the reason when the day transitions away from skipped", async () => {
+      const returned = createMockPlanDay({ id: dayId, status: "completed" });
+      const tx = setupTx([{ status: "skipped" }], [], [returned]);
+
+      await updatePlanDayStatus(dayId, { status: "completed" }, userId);
+
+      // The reason belonged to a decision that has now been reversed.
+      expect(tx.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "completed", skipReason: null }),
+      );
     });
 
     it("skips transition check when only scheduledDate changes", async () => {

@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { FavoriteStarButton } from "./FavoriteStarButton";
 import { MacroProgressBar } from "./MacroProgressBar";
 import { computeTargetProgress } from "./utils";
 
@@ -164,6 +165,8 @@ export function MealSection({
               </div>
               <TooltipProvider>
                 <div className="flex shrink-0 items-center gap-1">
+                  <FavoriteStarButton foodId={e.foodId} foodName={e.name} />
+
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button

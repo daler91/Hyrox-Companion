@@ -12,6 +12,8 @@ import {
   useRecipes,
 } from "@/hooks/useNutrition";
 
+import { FavoriteStarButton } from "./FavoriteStarButton";
+
 /** Manage the user's custom foods and recipes (edit/delete). Logging happens via search. */
 export function MyFoodsSection({
   onEditFood,
@@ -99,6 +101,7 @@ export function MyFoodsSection({
               <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2">
                 <span className="min-w-0 truncate text-sm">{f.name}</span>
                 <div className="flex shrink-0 items-center gap-1">
+                  <FavoriteStarButton foodId={f.id} foodName={f.name} />
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>

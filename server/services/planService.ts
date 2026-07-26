@@ -1,4 +1,4 @@
-import type { InsertPlanDay, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
+import type { InsertPlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { parse } from "csv-parse/sync";
 import { and, asc, eq } from "drizzle-orm";
@@ -301,7 +301,11 @@ const ALLOWED_TRANSITIONS: Record<PlanDayStatus, readonly PlanDayStatus[]> = {
 
 export async function updatePlanDayStatus(
   dayId: string,
-  { status, scheduledDate }: { status?: PlanDayStatus; scheduledDate?: string | null },
+  {
+    status,
+    scheduledDate,
+    skipReason,
+  }: { status?: PlanDayStatus; scheduledDate?: string | null; skipReason?: PlanDaySkipReason | null },
   userId: string,
 ) {
   // Date-only update: no transition check needed.
@@ -353,6 +357,15 @@ export async function updatePlanDayStatus(
 
     const updates: Record<string, string | null> = { status };
     if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate ?? null;
+
+    // The reason belongs to the skip. Landing on any other status clears it, so
+    // un-skipping and re-skipping never resurrects a reason the athlete gave for
+    // a decision they have since reversed.
+    if (status !== "skipped") {
+      updates.skipReason = null;
+    } else if (skipReason !== undefined) {
+      updates.skipReason = skipReason ?? null;
+    }
 
     // Only clean up the linked workout log when actually leaving "completed".
     // Running this on same-state idempotent writes (e.g. planned → planned)

@@ -477,6 +477,8 @@ export default function Timeline() {
               planImport={planImport}
               combine={combine}
               annotations={dialogState}
+              onMoveEntry={moveEntry}
+              isMovingEntry={isMoving}
             />
           </PageContainer>
         </div>

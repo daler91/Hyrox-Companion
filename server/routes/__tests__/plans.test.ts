@@ -68,6 +68,7 @@ vi.mock("../../services/planService", () => ({
   importPlanFromCSV: vi.fn().mockResolvedValue({ id: "mock_plan_id", name: "Mock Plan" }),
   createSamplePlan: vi.fn(),
   updatePlanDayWithCleanup: vi.fn(),
+  updatePlanDayStatus: vi.fn(),
 }));
 
 vi.mock("../../services/workoutService", () => ({
@@ -221,6 +222,44 @@ describe("POST /api/v1/plans/generate", () => {
     expect(response.body.code).toBe("PLAN_GENERATION_IN_PROGRESS");
     expect(createPendingPlan).not.toHaveBeenCalled();
     expect(sendJobNoRetry).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /api/v1/plans/days/:dayId/status", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+  });
+
+  it("passes a valid skip reason through to the service", async () => {
+    const { updatePlanDayStatus } = await import("../../services/planService");
+    vi.mocked(updatePlanDayStatus).mockResolvedValue({ id: "day-1", status: "skipped" } as never);
+
+    const response = await request(app)
+      .patch("/api/v1/plans/days/day-1/status")
+      .send({ status: "skipped", skipReason: "low_energy" });
+
+    expect(response.status).toBe(200);
+    expect(updatePlanDayStatus).toHaveBeenCalledWith(
+      "day-1",
+      expect.objectContaining({ status: "skipped", skipReason: "low_energy" }),
+      "test_user_id",
+    );
+  });
+
+  it("rejects a skip reason outside the enum", async () => {
+    const { updatePlanDayStatus } = await import("../../services/planService");
+
+    const response = await request(app)
+      .patch("/api/v1/plans/days/day-1/status")
+      .send({ status: "skipped", skipReason: "couldnt-be-bothered" });
+
+    expect(response.status).toBe(400);
+    expect(updatePlanDayStatus).not.toHaveBeenCalled();
   });
 });
 

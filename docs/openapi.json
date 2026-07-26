@@ -876,6 +876,10 @@
             "nullable": true,
             "minimum": 0,
             "maximum": 1439
+          },
+          "skipReason": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [

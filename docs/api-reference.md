@@ -597,12 +597,16 @@ Update a plan day with cleanup (unlinks workout logs when changing status away f
 
 ### PATCH /api/v1/plans/days/:dayId/status
 
-Update only the status and/or scheduled date of a plan day.
+Update only the status, scheduled date and/or skip reason of a plan day.
 
 - **Auth:** Required
 - **Rate limit:** `planDayStatus` category, 20/min
-- **Body:** `{ status?: "planned" | "completed" | "skipped", scheduledDate?: string | null }`
+- **Body:** `{ status?: "planned" | "completed" | "missed" | "skipped", scheduledDate?: string | null, skipReason?: "ill" | "injured" | "schedule" | "low_energy" | null }`
 - **Response:** Updated `PlanDay`
+- **Notes:** `skipReason` is only meaningful alongside `status: "skipped"` — any
+  other status clears it. Omitting the key leaves an existing reason untouched;
+  sending `null` clears it explicitly. Sending only `scheduledDate` (no `status`)
+  takes the reschedule path and skips the status-transition check.
 
 ### DELETE /api/v1/plans/:id
 
@@ -1410,7 +1414,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | Method | Path | Purpose | Rate limit (per min) |
 |---|---|---|---|
 | GET | `/foods/search` | Search local cache + Edamam + USDA + Open Food Facts (fuzzy / synonym / optional semantic) | `nutritionSearch` (30) |
-| GET | `/foods/recent` | Recently logged foods | `nutritionRead` (60) |
+| GET | `/foods/recent` | Recently logged foods (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60) |
 | GET | `/foods/custom` | The user's custom foods | `nutritionRead` (60) |
 | POST | `/foods/barcode` | Barcode → food (Open Food Facts) | `nutritionBarcode` (30) |
 | POST | `/foods` | Create a custom food (+ servings) | `nutritionWrite` (30) |
@@ -1419,7 +1423,7 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | DELETE | `/foods/:id` | Delete a custom food (`409` if referenced by a log) | `nutritionWrite` (30) |
 | POST | `/foods/:id/servings` | Add a named serving | `nutritionWrite` (30) |
 | DELETE | `/foods/:id/servings/:servingId` | Delete a serving | `nutritionWrite` (30) |
-| GET | `/favorites` | List favourites | `nutritionRead` (60) |
+| GET | `/favorites` | List favourites (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60) |
 | POST | `/favorites` | Add a favourite | `nutritionFav` (30) |
 | DELETE | `/favorites/:foodId` | Remove a favourite | `nutritionFav` (30) |
 | POST | `/logs` | Log a food | `nutritionLog` (60) |

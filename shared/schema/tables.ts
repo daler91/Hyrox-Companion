@@ -270,9 +270,18 @@ export const planDays = pgTable(
     // which meals are the pre/recovery meals in the per-meal fuel targets (morning
     // vs midday vs evening session); null falls back to the morning assumption.
     plannedTimeOfDayMin: integer("planned_time_of_day_min"),
+    // Why a skipped session was skipped, when the athlete volunteers it. Kept
+    // separate from `notes` because that column carries the prescription and is
+    // overwritten from the workout log on a completed→planned transition.
+    // Cleared whenever the day transitions away from `skipped`.
+    skipReason: text("skip_reason"),
   },
   (table) => [
     check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
+    check(
+      "plan_days_skip_reason_check",
+      sql`skip_reason IS NULL OR skip_reason IN ('ill', 'injured', 'schedule', 'low_energy')`,
+    ),
     check(
       "plan_days_expected_duration_check",
       sql`expected_duration_min IS NULL OR (expected_duration_min BETWEEN 1 AND 600)`,

@@ -324,7 +324,7 @@ describe('claim-before-send ledger', () => {
           getAllExerciseSetsWithDates: vi.fn().mockResolvedValue([]),
           getMissedWorkoutsForDate: vi
             .fn()
-            .mockResolvedValue([{ date: '2026-07-19', focus: 'Easy Run', mainWorkout: '5k', planName: 'Plan' }]),
+            .mockResolvedValue([{ planDayId: 'pd-1', date: '2026-07-19', focus: 'Easy Run', mainWorkout: '5k', planName: 'Plan' }]),
         },
         timeline: { getTimeline: vi.fn().mockResolvedValue([]) },
       } as unknown as IStorage,
@@ -388,5 +388,39 @@ describe('claim-before-send ledger', () => {
 
     expect(sent).toBe(false);
     expect(claim).not.toHaveBeenCalled();
+  });
+
+  it('names the single missed session and deep links to it', async () => {
+    const { sendPushToUser } = await import('./pushNotifications');
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage } = emailStorage(user, [true]);
+
+    await processMissedWorkoutReminder(storage, user as never, monday);
+
+    // `?workout=` carries the raw plan_days id, which the timeline matches and
+    // routes to the log surface — the whole point of the deep link.
+    expect(sendPushToUser).toHaveBeenCalledWith(1, {
+      title: 'Missed: Easy Run',
+      body: 'Still worth doing — log it, or move it to a day that works.',
+      url: '/?workout=pd-1',
+    });
+  });
+
+  it('falls back to the timeline root when several sessions were missed', async () => {
+    const { sendPushToUser } = await import('./pushNotifications');
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage } = emailStorage(user, [true]);
+    vi.mocked(storage.analytics.getMissedWorkoutsForDate).mockResolvedValue([
+      { planDayId: 'pd-1', date: '2026-07-19', focus: 'Easy Run', mainWorkout: '5k', planName: 'Plan' },
+      { planDayId: 'pd-2', date: '2026-07-19', focus: 'Sled Push', mainWorkout: '6x25m', planName: 'Plan' },
+    ]);
+
+    await processMissedWorkoutReminder(storage, user as never, monday);
+
+    const payload = vi.mocked(sendPushToUser).mock.calls[0][1];
+    expect(payload.title).toBe('2 missed sessions');
+    expect(payload.body).toContain('Easy Run, Sled Push');
+    // No single day to open, so the deep link is deliberately absent.
+    expect(payload.url).toBe('/');
   });
 });
