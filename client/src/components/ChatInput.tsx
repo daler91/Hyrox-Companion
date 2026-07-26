@@ -97,6 +97,7 @@ export function ChatInput({
           placeholder={isListening ? "Listening..." : placeholder}
           className="min-h-[44px] max-h-32 resize-none"
           disabled={isLoading}
+          enterKeyHint="send"
           aria-label="Chat message"
           data-testid="input-chat-message"
         />

@@ -106,6 +106,7 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="Search exercises"
+          enterKeyHint="search"
           aria-label="Search exercises"
           autoComplete="off"
           className="pl-9"

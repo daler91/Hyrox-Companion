@@ -169,6 +169,7 @@ export function BarcodeScanner({
                 inputMode="numeric"
                 pattern="\d*"
                 placeholder="e.g. 3017620422003"
+                enterKeyHint="go"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
                 data-testid="input-barcode"
