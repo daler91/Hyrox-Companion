@@ -135,6 +135,7 @@ export default tseslint.config(
         clearTimeout: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
+        fetch: "readonly",
       },
     },
   },

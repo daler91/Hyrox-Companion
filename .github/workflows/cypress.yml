@@ -123,24 +123,13 @@ jobs:
           ALLOW_DEV_AUTH_BYPASS: "true"
 
       - name: Wait for server
-        # Polls with curl rather than `npx wait-on`: wait-on is not a dependency
-        # of this repo, so npx would resolve it from the registry on every run —
-        # an unpinned package fetched and executed mid-pipeline.
-        #
-        # The URL is deliberately scheme-less. curl defaults to HTTP, so this is
-        # the same request either way, but spelling out `http://` trips the
-        # clear-text-protocol scanners on what is a loopback call to a throwaway
-        # test server inside the runner. Nothing here crosses a network boundary.
-        run: |
-          for _ in $(seq 1 120); do
-            if curl -fsS localhost:5000/api/v1/health > /dev/null; then
-              echo "server is up"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::server did not become healthy within 120s"
-          exit 1
+        # Replaces `npx wait-on`, which resolved an unpinned package from the
+        # registry on every run. wait-on is not a dependency here, so there was
+        # no local copy for `pnpm exec` to reach — hence a script rather than a
+        # swapped command. It uses node's built-in fetch and adds no dependency.
+        run: node script/wait-for-health.js
+        env:
+          PORT: 5000
 
       - name: Cypress run
         uses: cypress-io/github-action@fa4a118725a8f001170d49631ea89e5d66fee626 # v7.4.1
