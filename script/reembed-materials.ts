@@ -162,8 +162,8 @@ async function prepareVectorSchema(): Promise<boolean> {
     console.error("Vector schema setup failed — see the logged error above. Nothing was re-embedded.");
     return false;
   }
-  // bearer:disable javascript_lang_logger_leak — the schema status enum only,
-  // no user data.
+  // the schema status enum only, no user data.
+  // bearer:disable javascript_lang_logger_leak
   console.log(`Vector schema: ${status}${status === "degraded" ? " (no HNSW index — search will be a sequential scan; needs pgvector >= 0.7.0)" : ""}`);
   return true;
 }
@@ -173,17 +173,19 @@ function reportUserOutcome(outcome: UserOutcome, flags: Flags): void {
   if (isRebuild(flags)) parts.push(`${outcome.embedded} embedded`);
   if (outcome.errors.length > 0) parts.push(`${outcome.errors.length} error(s)`);
   if (outcome.unembedded.length > 0) parts.push(`${outcome.unembedded.length} still without chunks`);
-  // bearer:disable javascript_lang_logger_leak — an internal athlete id and
-  // counts, printed to the operator's terminal, no athlete-authored content.
+  // an internal athlete id and counts only, no athlete-authored content.
+  // bearer:disable javascript_lang_logger_leak
   console.log(`  ${outcome.userId}: ${parts.join(", ")}`);
   for (const error of outcome.errors) {
-    // bearer:disable javascript_lang_logger_leak — the embedding/DB error text
-    // this command exists to surface to the operator running it.
+    // the embedding/DB error text this command exists to surface to the
+    // operator running it.
+    // bearer:disable javascript_lang_logger_leak
     console.log(`      error: ${error}`);
   }
   for (const missing of outcome.unembedded) {
-    // bearer:disable javascript_lang_logger_leak — material id and title, which
-    // is the report itself: which materials still need embedding by name.
+    // material id and title — the report itself is "which materials still
+    // need embedding", which is unusable without naming them.
+    // bearer:disable javascript_lang_logger_leak
     console.log(`      no chunks: ${missing}`);
   }
 }
@@ -202,8 +204,9 @@ async function runFleet(userIds: string[], flags: Flags): Promise<UserOutcome[]>
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       outcomes.push({ userId, materials: 0, embedded: 0, errors: [message], unembedded: [] });
-      // bearer:disable javascript_lang_logger_leak — an internal athlete id and
-      // the operational error that stopped their rebuild, no athlete content.
+      // an internal athlete id and the operational error that stopped their
+      // rebuild, no athlete content.
+      // bearer:disable javascript_lang_logger_leak
       console.log(`  ${userId}: FAILED — ${message}`);
     }
   }
@@ -237,8 +240,8 @@ async function collectOutcomes(flags: Flags, mode: string): Promise<UserOutcome[
     if (isRebuild(flags) && !(await prepareVectorSchema())) return null;
 
     const userIds = await targetUserIds(flags);
-    // bearer:disable javascript_lang_logger_leak — an athlete count and the
-    // run mode, no identifiers or user data.
+    // an athlete count and the run mode, no identifiers or user data.
+    // bearer:disable javascript_lang_logger_leak
     console.log(`${userIds.length} athlete(s) with coaching materials — ${mode}\n`);
 
     return await runFleet(userIds, flags);
