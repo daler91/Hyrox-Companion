@@ -133,6 +133,43 @@ describe("TimelineSummaryCard", () => {
     expect(mocks.getTimeline).toHaveBeenCalledWith("plan-1");
   });
 
+  it("places the athlete in the selected plan's block", async () => {
+    renderSummary("plan-1");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-summary-card")).toBeInTheDocument();
+    });
+
+    // May 1 start, May 20 today => day 19 => week 3 of 8 => 38% => build.
+    expect(screen.getByText("Week 3 of 8")).toBeInTheDocument();
+    expect(screen.getByText("Build phase")).toBeInTheDocument();
+  });
+
+  it("omits the plan tile when the plan has no start date to measure from", async () => {
+    mocks.getPlans.mockResolvedValue([
+      {
+        id: "plan-1",
+        userId: "user-1",
+        name: "HYROX build",
+        sourceFileName: null,
+        totalWeeks: 8,
+        goal: null,
+        startDate: null,
+        endDate: "2026-05-30",
+      },
+    ]);
+
+    renderSummary("plan-1");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-summary-card")).toBeInTheDocument();
+    });
+
+    // Without a start date there is no honest week to report, so the card falls
+    // back to its original four tiles rather than guessing week 1.
+    expect(screen.queryByText(/^Week \d+ of \d+$/)).not.toBeInTheDocument();
+  });
+
   it("counts down to the explicit race date rather than the plan end date", async () => {
     mocks.getPlans.mockResolvedValue([
       {

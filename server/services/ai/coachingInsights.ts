@@ -117,28 +117,6 @@ export function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<Trai
   });
 }
 
-export function computePlanPhase(
-  totalWeeks: number,
-  currentWeek: number,
-): NonNullable<TrainingContext["coachingInsights"]>["planPhase"] {
-  if (totalWeeks <= 0 || currentWeek <= 0) return undefined;
-
-  const progressPct = Math.round((currentWeek / totalWeeks) * 100);
-  const orderedPhases = ["early", "build", "peak", "taper", "race_week"] as const;
-
-  let phaseLabel: "early" | "build" | "peak" | "taper" | "race_week";
-  if (currentWeek >= totalWeeks) phaseLabel = "race_week";
-  else if (progressPct >= 85) phaseLabel = "taper";
-  else if (progressPct >= 60) phaseLabel = "peak";
-  else if (progressPct >= 25) phaseLabel = "build";
-  else phaseLabel = "early";
-
-  const phaseIndex = orderedPhases.indexOf(phaseLabel);
-  const remainingPhases = orderedPhases.slice(Math.max(phaseIndex + 1, 0));
-
-  return { currentWeek, totalWeeks, phaseLabel, progressPct, remainingPhases };
-}
-
 export function computeWeeklyVolume(
   timeline: TimelineEntry[],
   weeklyGoal: number,
@@ -264,10 +242,7 @@ export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<
   return flags;
 }
 
-export function computeCurrentWeek(planStartDate: string | null | undefined, totalWeeks: number): number {
-  if (!planStartDate) return 1;
-  const today = toDateStr();
-  const days = daysBetween(planStartDate, today);
-  const week = Math.max(1, Math.ceil((days + 1) / 7));
-  return Math.min(week, totalWeeks);
-}
+// Plan-phase math lives in shared/ so the Timeline summary card renders the same
+// week and phase the coaching prompts are built from. Re-exported here because
+// every server caller already imports it from this module.
+export { computeCurrentWeek, computePlanPhase } from "@shared/planPhase";

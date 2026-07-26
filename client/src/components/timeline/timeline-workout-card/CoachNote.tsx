@@ -1,3 +1,4 @@
+import { formatPhaseName, PLAN_PHASE_ORDER } from "@shared/planPhase";
 import type { CoachNoteInputs, TimelineEntry } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
@@ -40,13 +41,6 @@ function sourceBadgeClasses(source: CoachNoteSource): string {
 const DEFAULT_SOURCE_BADGE_CLASSES =
   "text-muted-foreground border-border bg-muted/40";
 
-const planPhaseOrder = ["early", "build", "peak", "taper", "race_week"] as const;
-
-function formatPhaseName(phase: (typeof planPhaseOrder)[number]): string {
-  if (phase === "race_week") return "Race week";
-  return `${phase.charAt(0).toUpperCase()}${phase.slice(1)}`;
-}
-
 function phaseChip(phase: CoachNoteInputs["planPhase"]): string | null {
   if (!phase) return null;
   return `${formatPhaseName(phase)} phase`;
@@ -54,9 +48,9 @@ function phaseChip(phase: CoachNoteInputs["planPhase"]): string | null {
 
 function remainingPhasesChip(phase: CoachNoteInputs["planPhase"]): string | null {
   if (!phase) return null;
-  const phaseIndex = planPhaseOrder.indexOf(phase);
-  if (phaseIndex < 0 || phaseIndex >= planPhaseOrder.length - 1) return null;
-  const upcoming = planPhaseOrder
+  const phaseIndex = PLAN_PHASE_ORDER.indexOf(phase);
+  if (phaseIndex < 0 || phaseIndex >= PLAN_PHASE_ORDER.length - 1) return null;
+  const upcoming = PLAN_PHASE_ORDER
     .slice(phaseIndex + 1)
     .map(formatPhaseName)
     .join(" → ");
