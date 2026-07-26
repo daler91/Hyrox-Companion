@@ -40,6 +40,7 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
           placeholder="Search foods (e.g. banana, chicken breast)"
           autoComplete="off"
           className="pl-9"
+          enterKeyHint="search"
           aria-label="Search foods"
           data-testid="input-food-search"
         />
