@@ -2,7 +2,7 @@ import type { User } from "@shared/schema";
 
 import { type MissedWorkoutData, sendMafTestReminder,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
 import { logger } from "./logger";
-import { sendPushToUser } from "./pushNotifications";
+import { type PushPayload,sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import { calculatePersonalRecords, countPersonalRecordsInRange } from "./services/analyticsService";
@@ -124,6 +124,7 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   if (!claimed) return false;
 
   const missedData: MissedWorkoutData[] = missed.map(m => ({
+    planDayId: m.planDayId,
     date: m.date,
     focus: m.focus,
     mainWorkout: m.mainWorkout,
@@ -132,14 +133,37 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   const sent = await sendMissedWorkoutReminder(user, missedData);
 
   // Also send push notification (fire-and-forget)
-  const missedNames = missedData.map(m => m.focus).join(", ");
-  void sendPushToUser(user.id, {
-    title: "Missed Workout Reminder",
-    body: `You missed: ${missedNames}. Get back on track today!`,
-    url: "/",
-  });
+  void sendPushToUser(user.id, buildMissedWorkoutPush(missedData));
 
   return sent;
+}
+
+/**
+ * The missed-workout push. A single missed session is named in the title and
+ * deep-linked, so the tap lands on that session's log surface — `?workout=`
+ * carries the raw `plan_days.id`, which `useTimelineSurfaceSelection` matches
+ * and routes to the LogSheet. With more than one there is no single day to open,
+ * so it falls back to the timeline root.
+ *
+ * Copy is deliberately an invitation rather than a reprimand: the athlete who
+ * gets this has already missed the session, and the useful thing to offer is the
+ * next action, not the verdict.
+ */
+export function buildMissedWorkoutPush(missed: MissedWorkoutData[]): PushPayload {
+  const [first] = missed;
+  if (missed.length === 1 && first) {
+    return {
+      title: `Missed: ${first.focus}`,
+      body: "Still worth doing — log it, or move it to a day that works.",
+      url: `/?workout=${encodeURIComponent(first.planDayId)}`,
+    };
+  }
+
+  return {
+    title: `${missed.length} missed sessions`,
+    body: `${missed.map(m => m.focus).join(", ")} — log them or move them to a day that works.`,
+    url: "/",
+  };
 }
 
 export async function processMafTestReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {

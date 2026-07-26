@@ -17,6 +17,8 @@ export interface WeeklySummaryData {
 }
 
 export interface MissedWorkoutData {
+  /** The `plan_days` row id — what `?workout=` deep links to. */
+  planDayId: string;
   date: string;
   focus: string;
   mainWorkout: string;
@@ -205,7 +207,7 @@ ${workoutItems}
     <p style="font-size:14px;color:#64748b;margin-top:16px;">Missing a session happens to everyone. The important thing is to get back on track. You can mark these as skipped or reschedule them in the app.</p>
 
     <div style="margin-top: 24px; text-align: center;">
-      <a href="${getAppUrl()}/timeline" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
+      <a href="${getAppUrl()}/" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
     </div>
   </div>
   <div class="footer">
