@@ -9,8 +9,6 @@ import {
   type VisualSegment,
 } from "@/components/exercise-row/formatPrescription";
 import { InlineSetEditor } from "@/components/exercise-row/InlineSetEditor";
-
-import { LastTimeRow } from "./LastTimeRow";
 import { ExerciseSelector } from "@/components/ExerciseSelector";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -50,6 +48,7 @@ import {
   UNASSIGNED_BLOCK_VALUE,
 } from "@/lib/workoutStructureAssignments";
 
+import { LastTimeRow } from "./LastTimeRow";
 import {
   buildPlannedDiffSummary,
   buildPrimaryMetric,
