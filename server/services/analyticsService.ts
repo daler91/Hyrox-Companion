@@ -16,7 +16,6 @@ import {
   MOVEMENT_PATTERNS,
   MUSCLE_HEAT_MAP_GROUPS,
 } from "@shared/schema";
-
 import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
 
 import { calculateStreak } from "../routeUtils";
