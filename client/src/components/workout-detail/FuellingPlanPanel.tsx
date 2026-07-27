@@ -245,7 +245,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
               }}
               aria-label="Planned session start time"
               data-testid="fuelling-plan-time"
-              className="w-32 rounded-md border bg-background px-2 py-1 text-sm"
+              className="w-32 rounded-md border bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </div>
         </div>

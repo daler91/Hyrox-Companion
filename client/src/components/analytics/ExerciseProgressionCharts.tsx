@@ -11,6 +11,7 @@ import { type ExerciseAnalyticDay,MiniBarChart } from "@/components/analytics/Mi
 import { MiniLineChart } from "@/components/analytics/MiniLineChart";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type TrendDirection = "up" | "down" | "flat";
 const FLAT: TrendDirection = "flat";
@@ -150,26 +151,42 @@ export function ExerciseProgressionCharts({
   return (
     <div className="space-y-4">
       {/* Chart mode toggle */}
-      <div className="flex justify-end gap-1">
-        <Button
-          variant={chartMode === "bar" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setChartMode("bar")}
-          aria-label="Bar chart view"
-          aria-pressed={chartMode === "bar"}
-        >
-          <BarChart3 className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={chartMode === "line" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setChartMode("line")}
-          aria-label="Line chart view"
-          aria-pressed={chartMode === "line"}
-        >
-          <LineChartIcon className="h-4 w-4" />
-        </Button>
-      </div>
+      <TooltipProvider>
+        <div className="flex justify-end gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={chartMode === "bar" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setChartMode("bar")}
+                aria-label="Bar chart view"
+                aria-pressed={chartMode === "bar"}
+              >
+                <BarChart3 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Bar chart</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={chartMode === "line" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setChartMode("line")}
+                aria-label="Line chart view"
+                aria-pressed={chartMode === "line"}
+              >
+                <LineChartIcon className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Line chart</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
 
       <div className="grid gap-6 sm:grid-cols-2">
         {analyticsData.hasVolume && (
