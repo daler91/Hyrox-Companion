@@ -50,6 +50,7 @@ export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightU
             <Input
               key={field}
               type="number"
+              inputMode={field === "reps" ? "numeric" : "decimal"}
               placeholder="--"
               value={set[field] ?? ""}
               onChange={(e) => onSetChange(idx, field, e.target.value)}

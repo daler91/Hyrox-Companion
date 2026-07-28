@@ -31,6 +31,7 @@ export function SingleSetFields({ exerciseName, idPrefix, fields, fieldConfig, s
             <Input
               id={inputId}
               type="number"
+              inputMode={field === "reps" ? "numeric" : "decimal"}
               placeholder="0"
               value={set[field] ?? ""}
               onChange={(e) => onSetChange(0, field, e.target.value)}
