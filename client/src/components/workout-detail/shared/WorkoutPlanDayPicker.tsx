@@ -95,7 +95,7 @@ export function WorkoutPlanDayPicker({
 
   if (plansQuery.isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid={`${idPrefix}-loading`}>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite" data-testid={`${idPrefix}-loading`}>
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
         Loading plans...
       </div>

@@ -1,11 +1,12 @@
 import type { TimelineAnnotation, TimelineAnnotationType } from "@shared/schema";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { TYPE_COLORS, TYPE_LABELS } from "@/components/timeline/annotation-style";
 import { AnnotationTypeIcon } from "@/components/timeline/AnnotationTypeIcon";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -29,7 +30,7 @@ export function AnnotationList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-6" data-testid="annotations-loading">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoadingSpinner label="Loading annotations" iconClassName="h-4 w-4" />
       </div>
     );
   }
