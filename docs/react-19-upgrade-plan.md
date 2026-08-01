@@ -64,8 +64,9 @@ only as verification (§5, Phase 0).
 Dependency audit: **all ~30 React-facing packages are compatible as-is.** Every
 currently-resolved version's peer range admits React 19 (16 Radix packages:
 `^16.8 || ^17.0 || ^18.0 || ^19.0`; @tanstack/react-query `^18 || ^19`;
-@sentry/react `16.14–19.x`; @dnd-kit, wouter, react-day-picker, lucide-react:
-`>=16.8`; react-markdown `>=18`; recharts `^16.8–^19`; @testing-library/react
+@sentry/react `16.14–19.x`; @dnd-kit, wouter, react-day-picker: `>=16.8`;
+lucide-react `^16.5.1 || ^17 || ^18 || ^19`; react-markdown `>=18`; recharts
+`^16.8–^19`; @testing-library/react
 `^18 || ^19`; @clerk/react — see §7 risk register). **Zero library bumps are
 required.** Vitest/jsdom/user-event/jest-dom/Cypress have no React peers.
 
@@ -159,7 +160,8 @@ working (it captures via `componentDidCatch`).
   not widened by this upgrade (the 66th exclusion, `client/src/main.tsx`, is
   still covered by the main config).
 - **TS toolchain**: checks run on the native TS 7 binary (`typescript7` alias).
-  `@types/react@19` supports TS 5.0–6.0+; no floor conflict. After the bump,
+  `@types/react@19.2.18` declares a TS 5.6 minimum (DefinitelyTyped publishes
+  it for TS 5.6–6.0); no floor conflict with TS 6.0.3 or 7.0.2. After the bump,
   diff `pnpm check` output once against `node_modules/typescript/bin/tsc`
   (TS 6.0.3, what the editor/typescript-eslint sees) to confirm error parity.
 - **Deprecation-only type churn** (compiles fine on 19, cleanup in §6.1):
@@ -310,7 +312,7 @@ Ordered by value/effort; none block the upgrade.
 
 | Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- |
-| @clerk/react tilde-pins React minors (`~19.2.3` etc.) — a future `pnpm update` to React 19.3.x breaks its peer range until Clerk ships a new range | Medium (future) | Install warnings / auth regressions | Lockfile is frozen in CI; when bumping to 19.3+ later, check `npm view @clerk/react peerDependencies` first |
+| @clerk/react tilde-pins React minors (`^18.0.0 \|\| ~19.0.3 \|\| ~19.1.4 \|\| ~19.2.3 \|\| ~19.3.0-0`) — 19.2.8 satisfies `~19.2.3`, and `~19.3.0-0` pre-authorizes all of stable 19.3.x (semver prerelease-bound rules), but a future React **19.4.x** falls outside the range until Clerk ships a new one | Medium (future) | Install warnings / auth regressions | Lockfile is frozen in CI; when bumping past 19.3 later, check `npm view @clerk/react peerDependencies` first |
 | Stale `react-is@18` resolution breaks recharts element detection | Low | Charts crash | §2 lockfile check; optionally add `react-is@^19.2.8` as an explicit dep |
 | waitFor / fake-timer test flakes from batching+microtask scheduling changes | Medium | CI red, triage time | Priority list in Phase 2; fix tests (assert final states), don't pin timing |
 | Coverage ratchet trips from changed execution paths | Low–Medium | `test.yml` red | Re-measure and re-ratchet per house convention |
