@@ -58,61 +58,74 @@ export class AnalyticsStorage {
   }
 
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ planDayId: string; date: string; focus: string; mainWorkout: string; planName?: string }[]> {
-    // Relational query: fetch missed plan days for the date, include the parent
-    // plan's name, and filter by plan owner in memory. The `plan` relation's
-    // inner row presence is implied by the NOT NULL FK, so the filter is safe.
-    const days = await db.query.planDays.findMany({
-      where: and(
-        eq(planDays.scheduledDate, date),
-        eq(planDays.status, "missed"),
-      ),
-      columns: {
-        // `id` rides along so the missed-workout push can deep link straight to
-        // the session (`/?workout=<planDayId>`) instead of dumping the athlete
-        // on the timeline root.
-        id: true,
-        scheduledDate: true,
-        focus: true,
-        mainWorkout: true,
-      },
-      with: {
-        plan: {
-          columns: { userId: true, name: true },
-        },
-      },
-    });
-    return days
-      .filter((d) => d.plan?.userId === userId)
-      .map((d) => ({
-        planDayId: d.id,
-        date: d.scheduledDate || date,
-        focus: d.focus,
-        mainWorkout: d.mainWorkout,
-        planName: d.plan?.name || undefined,
-      }));
+    // Scoped to the plan owner in SQL via the join, not in memory: this runs
+    // once per user per day (one send-missed-reminder job each), so filtering
+    // after the fetch made every user's job read *every other* user's missed
+    // days for that date — O(users²) rows across the daily run. The join uses
+    // the existing idx_training_plans_user_id / idx_plan_days_plan_scheduled
+    // indexes, so each call is now an indexed lookup over one user's plans.
+    // `id` rides along so the missed-workout push can deep link straight to
+    // the session (`/?workout=<planDayId>`) instead of dumping the athlete on
+    // the timeline root.
+    const days = await db
+      .select({
+        id: planDays.id,
+        scheduledDate: planDays.scheduledDate,
+        focus: planDays.focus,
+        mainWorkout: planDays.mainWorkout,
+        planName: trainingPlans.name,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          eq(planDays.scheduledDate, date),
+          eq(planDays.status, "missed"),
+        ),
+      );
+    return days.map((d) => ({
+      planDayId: d.id,
+      date: d.scheduledDate || date,
+      focus: d.focus,
+      mainWorkout: d.mainWorkout,
+      planName: d.planName || undefined,
+    }));
   }
 
   /**
    * Planned (not-yet-logged) plan days scheduled for `date`, for the per-meal
    * fuelling targets: their expected duration/effort drive a morning session's
-   * fuel anchors before the workout is logged. User-scoped via the parent plan
-   * (filtered in memory like getMissedWorkoutsForDate); `status = 'planned'`
+   * fuel anchors before the workout is logged. User-scoped in SQL via the
+   * parent plan (like getMissedWorkoutsForDate); `status = 'planned'`
    * excludes completed/missed/skipped days (a completed day already has a log).
    */
   async getPlannedDaysForDate(userId: string, date: string): Promise<{ focus: string; expectedDurationMin: number | null; expectedRpe: number | null; plannedTimeOfDayMin: number | null }[]> {
-    const days = await db.query.planDays.findMany({
-      where: and(eq(planDays.scheduledDate, date), eq(planDays.status, "planned")),
-      columns: { focus: true, expectedDurationMin: true, expectedRpe: true, plannedTimeOfDayMin: true },
-      with: { plan: { columns: { userId: true } } },
-    });
-    return days
-      .filter((d) => d.plan?.userId === userId)
-      .map((d) => ({
-        focus: d.focus,
-        expectedDurationMin: d.expectedDurationMin ?? null,
-        expectedRpe: d.expectedRpe ?? null,
-        plannedTimeOfDayMin: d.plannedTimeOfDayMin ?? null,
-      }));
+    // Same join-scoping as getMissedWorkoutsForDate: this one is hit on every
+    // meal-log request, where the in-memory filter made a single user's meal
+    // log scan all users' planned days for that date.
+    const days = await db
+      .select({
+        focus: planDays.focus,
+        expectedDurationMin: planDays.expectedDurationMin,
+        expectedRpe: planDays.expectedRpe,
+        plannedTimeOfDayMin: planDays.plannedTimeOfDayMin,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          eq(planDays.scheduledDate, date),
+          eq(planDays.status, "planned"),
+        ),
+      );
+    return days.map((d) => ({
+      focus: d.focus,
+      expectedDurationMin: d.expectedDurationMin ?? null,
+      expectedRpe: d.expectedRpe ?? null,
+      plannedTimeOfDayMin: d.plannedTimeOfDayMin ?? null,
+    }));
   }
 
   async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
