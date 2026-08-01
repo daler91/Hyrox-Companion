@@ -1,7 +1,8 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo/strict.tsbuildinfo"
   },
   "include": [
     "shared/**/*"

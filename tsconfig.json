@@ -13,7 +13,7 @@
   ],
   "compilerOptions": {
     "incremental": true,
-    "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo/main.tsbuildinfo",
     "noEmit": true,
     "target": "ES2022",
     "module": "ESNext",
@@ -28,8 +28,6 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "types": [
       "node",
       "vite/client",
