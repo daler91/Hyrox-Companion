@@ -98,7 +98,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "csrf-csrf": "^4.0.3",
-    "csv-parse": "^6.2.1",
+    "csv-parse": "^7.0.1",
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",

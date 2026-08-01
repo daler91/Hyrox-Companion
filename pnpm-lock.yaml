@@ -153,8 +153,8 @@ importers:
         specifier: ^4.0.3
         version: 4.0.3
       csv-parse:
-        specifier: ^6.2.1
-        version: 6.2.1
+        specifier: ^7.0.1
+        version: 7.0.1
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
@@ -3589,8 +3589,8 @@ packages:
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
-  csv-parse@6.2.1:
-    resolution: {integrity: sha512-LRLMV+UCyfMokp8Wb411duBf1gaBKJfOfBWU9eHMJ+b+cJYZsNu3AFmjJf3+yPGd59Exz1TsMjaSFyxnYB9+IQ==}
+  csv-parse@7.0.1:
+    resolution: {integrity: sha512-+2z7Ar0APQ7Uu6fX4cn+pitRmxjZ1WPBcGmZFKmA74FCyi7Et/XZx8cjNQ5CjbZ4HCOxXCOpRBYvYH08Qa003A==}
 
   cypress@15.19.0:
     resolution: {integrity: sha512-kjy1u3SWlMRWS5qffH3U+bXx1PqPP7qwhIzEY3UtERcW2r/8zy5uk6uSwa75pYXJyYFVP1SO8mAn/avZUvUbfg==}
@@ -9929,7 +9929,7 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  csv-parse@6.2.1: {}
+  csv-parse@7.0.1: {}
 
   cypress@15.19.0:
     dependencies:
