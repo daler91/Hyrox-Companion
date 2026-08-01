@@ -50,14 +50,14 @@ export default function SuggestionsPanel({
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-2">
           <CollapsibleTrigger asChild>
-            <div className="flex items-center justify-between cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            <button type="button" className="flex w-full items-center justify-between rounded-lg bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Lightbulb className="h-4 w-4 text-primary" />
                 AI Training Suggestions
                 <Badge variant="secondary">{suggestions.length}</Badge>
               </CardTitle>
               {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </div>
+            </button>
           </CollapsibleTrigger>
         </CardHeader>
         <CollapsibleContent>
