@@ -340,7 +340,12 @@ export default function Settings() {
       </Tabs>
 
       {hasChanges && (
-        <div className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40">
+        <div
+          className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="sr-only">You have unsaved changes.</span>
           <Button
             onClick={handleSave}
             className="w-full"
