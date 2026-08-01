@@ -276,7 +276,7 @@ Auto-logging is filtered to API routes only (`req.url` starting with `/api/v1`).
 - `GET /api/v1/health` returns `{ status: "starting" }` while bootstrapping
 - After `registerRoutes()` completes, `isReady = true` -- returns `{ status: "ok" }`
 - If startup throws, `startupError` is set -- returns `{ status: "error", error: "..." }` with 503
-- CI tools (wait-on) poll this endpoint to know when the server is ready
+- CI polls this endpoint via `script/wait-for-health.js` to know when the server is ready
 
 ---
 
