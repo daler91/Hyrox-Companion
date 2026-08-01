@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface DeltaIndicatorProps {
@@ -46,14 +47,23 @@ export function DeltaIndicator({
   if (previous === 0 && current === 0) return null;
 
   if (previous === 0) {
+    const tip = `Previous period: 0${unit} → Current: ${current}${unit}`;
     return (
-      <span
-        className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground"
-        data-testid={testIdSuffix ? `delta-new-${testIdSuffix}` : undefined}
-        title={`Previous period: 0${unit} → Current: ${current}${unit}`}
-      >
-        new
-      </span>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              tabIndex={0}
+              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              data-testid={testIdSuffix ? `delta-new-${testIdSuffix}` : undefined}
+              aria-label={`New metric: ${current}${unit}`}
+            >
+              new
+            </span>
+          </TooltipTrigger>
+          <TooltipContent><p>{tip}</p></TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -65,15 +75,24 @@ export function DeltaIndicator({
   // runs on the unrounded value so that 0.45%–0.49% aren't rounded up to
   // 0.5% and mistakenly shown as regressions/improvements.
   if (absRaw < 0.5) {
+    const tip = `No meaningful change vs previous period (${previous}${unit} → ${current}${unit})`;
     return (
-      <span
-        className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground"
-        data-testid={testIdSuffix ? `delta-flat-${testIdSuffix}` : undefined}
-        title={`No meaningful change vs previous period (${previous}${unit} → ${current}${unit})`}
-      >
-        <ArrowRight className="h-2.5 w-2.5" aria-hidden="true" />
-        =
-      </span>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              tabIndex={0}
+              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              data-testid={testIdSuffix ? `delta-flat-${testIdSuffix}` : undefined}
+              aria-label={`Unchanged at ${current}${unit} vs previous period`}
+            >
+              <ArrowRight className="h-2.5 w-2.5" aria-hidden="true" />
+              =
+            </span>
+          </TooltipTrigger>
+          <TooltipContent><p>{tip}</p></TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -85,18 +104,27 @@ export function DeltaIndicator({
   const Arrow = isIncrease ? ArrowUp : ArrowDown;
   const direction = isImprovement ? "up" : "down";
 
+  const tip = `Previous period: ${previous}${unit} → Current: ${current}${unit}`;
+
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 text-[10px] font-medium",
-        isImprovement ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
-      )}
-      data-testid={testIdSuffix ? `delta-${direction}-${testIdSuffix}` : undefined}
-      title={`Previous period: ${previous}${unit} → Current: ${current}${unit}`}
-      aria-label={`${isImprovement ? "Improved" : "Regressed"} by ${absPercent}% vs previous period`}
-    >
-      <Arrow className="h-2.5 w-2.5" aria-hidden="true" />
-      {absPercent}%
-    </span>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className={cn(
+              "inline-flex items-center gap-0.5 text-[10px] font-medium rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              isImprovement ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+            )}
+            data-testid={testIdSuffix ? `delta-${direction}-${testIdSuffix}` : undefined}
+            aria-label={`${isImprovement ? "Improved" : "Regressed"} by ${absPercent}% vs previous period`}
+          >
+            <Arrow className="h-2.5 w-2.5" aria-hidden="true" />
+            {absPercent}%
+          </span>
+        </TooltipTrigger>
+        <TooltipContent><p>{tip}</p></TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

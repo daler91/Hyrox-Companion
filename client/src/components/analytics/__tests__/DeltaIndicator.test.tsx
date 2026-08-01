@@ -51,11 +51,22 @@ describe("DeltaIndicator", () => {
     expect(screen.getByTestId("delta-flat-test")).toBeInTheDocument();
   });
 
-  it("includes unit in the tooltip (title attribute) when supplied", () => {
+  it("includes unit in the aria-label when supplied", () => {
     render(<DeltaIndicator current={55} previous={50} unit="min" testIdSuffix="test" />);
     const el = screen.getByTestId("delta-up-test");
-    expect(el.getAttribute("title")).toContain("50min");
-    expect(el.getAttribute("title")).toContain("55min");
+    expect(el).toHaveAttribute("aria-label", expect.stringContaining("vs previous period"));
+  });
+
+  it("provides aria-label on the 'new' state", () => {
+    render(<DeltaIndicator current={5} previous={0} unit="km" testIdSuffix="a11y" />);
+    const el = screen.getByTestId("delta-new-a11y");
+    expect(el).toHaveAttribute("aria-label", expect.stringContaining("5km"));
+  });
+
+  it("provides aria-label on the 'flat' state", () => {
+    render(<DeltaIndicator current={100.3} previous={100} unit="bpm" testIdSuffix="a11y" />);
+    const el = screen.getByTestId("delta-flat-a11y");
+    expect(el).toHaveAttribute("aria-label", expect.stringContaining("Unchanged"));
   });
 
   it("rounds percentages to one decimal place", () => {
