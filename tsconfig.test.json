@@ -94,6 +94,7 @@
   ],
   "compilerOptions": {
     "strict": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo/test.tsbuildinfo",
     "types": ["node", "vite/client", "vitest/globals", "vitest/importMeta", "@testing-library/jest-dom"]
   }
 }

@@ -35,7 +35,7 @@ Run these locally before pushing; they also run in CI:
 
 | Command             | Purpose                                                                      |
 | ------------------- | ---------------------------------------------------------------------------- |
-| `pnpm check`        | TypeScript type checking                                                     |
+| `pnpm check`        | TypeScript type checking (TS 7 native compiler)                              |
 | `pnpm test`         | Vitest unit/component/route suite (includes `jest-axe` accessibility checks) |
 | `pnpm lint`         | ESLint                                                                       |
 | `pnpm format:check` | Prettier formatting check (use `pnpm format` to fix)                         |
@@ -53,6 +53,30 @@ copy-pasting large factory objects across suites) and avoid commented-out code.
 See [`docs/testing.md`](docs/testing.md) for the full testing guide, including the local
 database requirements, the [SonarCloud quality gate](docs/testing.md#sonarcloud-quality-gate),
 and Cypress conventions.
+
+### Two TypeScript installs (temporary)
+
+Type-checking runs on the **TypeScript 7 native compiler**, installed as the
+`typescript7` npm alias; the `check`, `check:strict`, and `check:test` scripts
+invoke it explicitly. The package named `typescript` intentionally stays on
+**6.0.x**, because typescript-eslint's type-aware rules and Cypress's spec
+preprocessor resolve that package for the JS compiler API, which typescript@7
+no longer ships (a new API arrives with TypeScript 7.1).
+
+Practical consequences:
+
+- Don't run bare `tsc` / `pnpm exec tsc` — with two installs providing the
+  `tsc` bin the winner is a pnpm implementation detail (currently TS 7).
+  Always go through `pnpm check` and friends.
+- `pnpm install` warns about the conflicting `tsc` bin. That's expected; don't
+  "fix" it by removing either package.
+- Editors that use the workspace `typescript` (tsserver) type-check with TS 6,
+  which Microsoft keeps behavior-matched to 7 — CI is still the authority. For
+  native TS 7 in VS Code, install the official "TypeScript 7" extension.
+- Removing the `typescript` 6.0.x dependency breaks `pnpm lint` and Cypress.
+
+See `TECHNICAL_DEBT.md` for the conditions under which this collapses back to
+a single `typescript` dependency.
 
 ## Code style
 

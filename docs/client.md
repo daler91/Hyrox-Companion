@@ -6,7 +6,7 @@ The fitai.coach frontend is a single-page application for AI-powered fitness tra
 
 - **React 18** (via `react-dom/client` `createRoot`)
 - **Vite 6** as the build tool and dev server
-- **TypeScript 6**
+- **TypeScript 7** (native compiler for type-checking; TS 6 is kept installed for typescript-eslint — see CONTRIBUTING.md)
 - **Tailwind CSS 4** (using `@tailwindcss/vite` plugin)
 - **shadcn/ui** (New York style, Radix UI primitives)
 - **wouter** for client-side routing
