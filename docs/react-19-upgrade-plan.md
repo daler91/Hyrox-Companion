@@ -26,7 +26,8 @@ time), keep every CI gate green, and position the app to adopt React 19 features
   two sources of behavior change).
 - **No forwardRef → ref-as-prop rewrite** of the vendored shadcn/ui primitives
   (follow-up, §6.5; `forwardRef` remains fully supported throughout 19.x, and
-  TECHNICAL_DEBT #13 keeps vendored shadcn files as-is).
+  the ui/ primitives are vendor code — realign with upstream shadcn, which
+  dropped `forwardRef` in its React 19 refactor, at a future re-vendor).
 - **No new-API adoption** (Actions, `use()`, `<Activity>`, metadata hoisting) in
   the upgrade PR — menu of options in §6.5.
 
@@ -52,7 +53,7 @@ The codebase was audited file-by-file for every React 19 breaking change
 | Old JSX transform | n/a — Vite automatic runtime (`react()` plugin, default options); tsconfig `"jsx": "preserve"` |
 | Global `JSX.*` namespace (types) | 0 |
 | `useRef()` without argument (types) | 0 — all 93 call sites pass an initial value |
-| Ref callbacks with implicit returns (types) | 0 — all 84 `ref={...}` sites pass identifiers; the one hand-rolled composed ref (`TimelineDateGroup.tsx`) uses a void block body |
+| Ref callbacks with implicit returns (types) | 0 — none of the 80 `ref={...}` sites is an inline callback (they pass identifiers, conditional identifiers, or library callbacks); the one hand-rolled composed ref (`TimelineDateGroup.tsx`) uses a void block body |
 | `useReducer` explicit generics (types) | 0 |
 
 Because the app is already on 18.3.1 (which warns on every removed API) and the
@@ -153,9 +154,10 @@ working (it captures via `componentDidCatch`).
 - **Typecheck surface**: `tsconfig.json` excludes only `**/*.test.ts`, so all
   122 `client/src/**/*.test.tsx` files are typechecked by plain `pnpm check` —
   the audit covered them (clean). `tsconfig.strict.json` covers `shared/**`
-  only (no React surface). The 66 files excluded by `tsconfig.test.json` will
-  silently accumulate type drift — pre-existing gap, not widened by this
-  upgrade.
+  only (no React surface). The 65 legacy test files excluded by
+  `tsconfig.test.json` will silently accumulate type drift — pre-existing gap,
+  not widened by this upgrade (the 66th exclusion, `client/src/main.tsx`, is
+  still covered by the main config).
 - **TS toolchain**: checks run on the native TS 7 binary (`typescript7` alias).
   `@types/react@19` supports TS 5.0–6.0+; no floor conflict. After the bump,
   diff `pnpm check` output once against `node_modules/typescript/bin/tsc`
@@ -213,7 +215,8 @@ pnpm run build && pnpm check:bundle
 CI gates that must pass (all existing, none new): `build.yml` (eslint, check,
 check:strict, check:test, OpenAPI drift), `test.yml` (`pnpm test:coverage` with
 ratcheted thresholds 68/62/60/67), `cypress.yml` (build, check:bundle,
-integration, drizzle push, smoke, 12 e2e specs), SonarCloud quality gate,
+integration, drizzle push, smoke, 12 e2e specs), SonarCloud quality gate (runs
+via SonarQube Cloud Automatic Analysis, not an Actions workflow),
 dependency-review (moderate+), gitleaks/DevSkim/Bearer.
 
 Manual smoke focus — the React 19 behavior changes that don't throw:
@@ -279,8 +282,8 @@ Ordered by value/effort; none block the upgrade.
    pick up new versions without closing all tabs. Generic hygiene the upgrade
    makes visible.
 4. **React Compiler evaluation**: `babel-plugin-react-compiler@1.0.0` is
-   stable; the client has 328 manual memoization sites (115 `useMemo`,
-   212 `useCallback`, ~10 `memo`) across 85 files the compiler could subsume.
+   stable; the client has ~234 manual memoization call sites (70 `useMemo`,
+   154 `useCallback`, 10 `memo`) across 85 files the compiler could subsume.
    `eslint-plugin-react-hooks@7.1.1` already ships the compiler lint rules.
    Caveats: verify the babel hook path under rolldown-vite
    (`@vitejs/plugin-react` may need `@rolldown/plugin-babel`), and adding
