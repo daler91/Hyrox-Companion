@@ -16,7 +16,7 @@
   </p>
 
   <p>
-    <img src="https://img.shields.io/badge/TypeScript-6.0-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 6">
+    <img src="https://img.shields.io/badge/TypeScript-7.0-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 7">
     <img src="https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 18">
     <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8">
     <img src="https://img.shields.io/badge/Node.js-%3E%3D20-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=20">
@@ -100,7 +100,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Frontend
 
-- **Framework**: React 18, Vite 8, TypeScript 6
+- **Framework**: React 18, Vite 8, TypeScript 7
 - **Styling**: Tailwind CSS 4 with shadcn/ui-style Radix primitives
 - **State management**: TanStack Query for server state and cache invalidation
 - **Routing**: wouter
@@ -111,7 +111,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Backend
 
-- **Runtime**: Node.js >=20, Express 5, TypeScript 6
+- **Runtime**: Node.js >=20, Express 5, TypeScript 7
 - **Database**: PostgreSQL with Drizzle ORM, with `pg_trgm` trigram indexes for fuzzy food search
 - **Vector search**: pgvector, optionally on a separate `VECTOR_DATABASE_URL`, backing both RAG retrieval and semantic food search
 - **Authentication**: Clerk JWT middleware with local dev bypass support
@@ -361,7 +361,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | `pnpm dev`                  | Start the development server with `.env` loaded       |
 | `pnpm build`                | Build the client and server for production            |
 | `pnpm start`                | Run the production build from `dist/`                 |
-| `pnpm check`                | Run TypeScript type checking                          |
+| `pnpm check`                | Run TypeScript type checking (TS 7 native compiler)   |
 | `pnpm test`                 | Run the Vitest unit test suite                        |
 | `pnpm test:watch`           | Run Vitest in watch mode                              |
 | `pnpm test:smoke`           | Run the fast smoke suite via `vitest.smoke.config.ts` |
@@ -391,7 +391,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Production smoke tests | Vitest smoke config    | `pnpm test:smoke`                                            |
 | End-to-end tests       | Cypress                | `pnpm exec cypress open` or `pnpm exec cypress run`          |
 | Accessibility checks   | jest-axe via Vitest    | `pnpm test`                                                  |
-| Type safety            | TypeScript 6           | `pnpm check`                                                 |
+| Type safety            | TypeScript 7 (native)  | `pnpm check`                                                 |
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 

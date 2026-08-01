@@ -68,6 +68,12 @@
 
 - ~~**23. Performance optimizations**~~ — Added 120s-TTL in-memory cache for RAG retrieval in `server/services/ragService.ts` (keyed by userId+query+topK, invalidated on `embedCoachingMaterial`). Debounced auto-coach via pg-boss `singletonKey: auto-coach:${userId}`/`singletonSeconds: 60` in `server/services/workoutService.ts` so bulk workout creation coalesces into a single coach run per user.
 
+- **29. Dual TypeScript installs (6.x + 7.x side by side)** — OPEN (intentional, blocked on ecosystem)
+- **Files:** `package.json` (`typescript` 6.0.3 + `typescript7` npm alias for 7.0.2), `.github/dependabot.yml` (typescript major/minor ignore), `CONTRIBUTING.md` (contributor-facing notes)
+- **Issue:** Type-checking runs on the TypeScript 7 native compiler (`check`/`check:strict`/`check:test` invoke `node node_modules/typescript7/bin/tsc`), but the package named `typescript` must stay on 6.0.x because typescript@7 ships no JS compiler API and both typescript-eslint (type-aware linting crashes at module load under TS 7; peer range `<6.1.0`) and Cypress's spec preprocessor (its TS≥7 babel fallback is broken in released binaries ≤15.19.0) resolve that package. This is the interim pattern Microsoft and the typescript-eslint maintainers recommend.
+- **Cost:** two TS installs (~one extra native binary per platform at install time), a permanent pnpm warning about the conflicting `tsc` bin, `typescript7` must be bumped manually (Dependabot ignores `npm:` aliases), and editors using the workspace tsserver check with 6.x while CI checks with 7.x.
+- **Remove when ALL hold:** (i) TypeScript 7.1 ships its stable API, (ii) typescript-eslint releases TS 7 support (watch typescript-eslint/typescript-eslint#10940), (iii) Cypress ≥ 15.19.1 is published. Then: drop the `typescript7` alias and the 6.0.x pin, set `typescript` to 7.x, restore plain `tsc` in the three check scripts, remove the Dependabot ignore block, bump Cypress, and delete the dual-install notes in CONTRIBUTING.md and the `//overrides` guardrail about aliased typescript.
+
 ---
 
 ## Summary
@@ -77,5 +83,5 @@
 | P0 — Quick Wins | 6/6 | 0 | All resolved |
 | P1 — High | 6/6 | 0 | All resolved |
 | P2 — Medium | 6/6 | 0 | All resolved |
-| P3 — Low | 10/10 | 0 | All resolved (#22 CSRF resolved via `csrf-csrf` double-submit) |
-| **Total** | **28/28** | **0** | All catalogued debt resolved |
+| P3 — Low | 10/11 | 1 | #22 CSRF resolved via `csrf-csrf` double-submit; #29 dual-TS installs open (blocked on TS 7.1 API + typescript-eslint + Cypress) |
+| **Total** | **28/29** | **1** | #29 is intentional interim state, not actionable until upstream ships |
