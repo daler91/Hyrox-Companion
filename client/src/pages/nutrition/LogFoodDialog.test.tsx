@@ -145,6 +145,78 @@ describe("LogFoodDialog", () => {
     );
   });
 
+  it("seeds a new log from the food's remembered portion, not the default serving", async () => {
+    renderWithClient(
+      <LogFoodDialog
+        state={{ mode: "create", food: FOOD, portionHint: { quantityG: 140, mealType: "lunch" } }}
+        date="2026-06-07"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Without a remembered portion this food (118 g serving) would default to
+    // "1 serving"; the portion hint seeds grams and the athlete's own amount
+    // instead.
+    expect(screen.getByTestId("input-quantity")).toHaveValue(140);
+    expect(screen.getByTestId("select-unit")).toHaveTextContent("grams");
+    expect(screen.getByTestId("select-meal-type")).toHaveTextContent("Lunch");
+  });
+
+  describe("removing a portion", () => {
+    const SLICE: FoodServing = {
+      id: "s9",
+      foodId: "f1",
+      label: "1 slice",
+      grams: 95,
+      createdByUserId: "u1",
+    };
+
+    it("falls back to grams when the removed portion was the selected one", async () => {
+      vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [SLICE] });
+      vi.mocked(api.nutrition.removeServing).mockResolvedValue({ success: true });
+      const user = userEvent.setup();
+      renderWithClient(
+        <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
+      );
+
+      await user.click(screen.getByTestId("select-unit"));
+      await user.click(await screen.findByRole("option", { name: "1 slice" }));
+      expect(screen.getByTestId("select-unit")).toHaveTextContent("1 slice");
+
+      await user.click(screen.getByTestId("button-remove-portion"));
+
+      // The removed portion was the selected one (1 slice = 95 g) — the amount
+      // carries over as grams rather than reinterpreting the count (1) as 1 g.
+      await waitFor(() => expect(screen.getByTestId("select-unit")).toHaveTextContent("grams"));
+      expect(screen.getByTestId("input-quantity")).toHaveValue(95);
+      await waitFor(() =>
+        expect(api.nutrition.removeServing).toHaveBeenCalledWith("f1", "s9"),
+      );
+    });
+
+    it("keeps the current selection when removing a portion that isn't selected", async () => {
+      vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [SLICE] });
+      vi.mocked(api.nutrition.removeServing).mockResolvedValue({ success: true });
+      const user = userEvent.setup();
+      renderWithClient(
+        <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
+      );
+
+      // Default create-mode selection is "1 serving (118 g)", not the slice.
+      await waitFor(() => expect(screen.getByTestId("button-remove-portion")).toBeInTheDocument());
+      expect(screen.getByTestId("select-unit")).toHaveTextContent("1 serving");
+
+      await user.click(screen.getByTestId("button-remove-portion"));
+
+      // Untouched selection — still the default serving, still a count of 1.
+      expect(screen.getByTestId("select-unit")).toHaveTextContent("1 serving");
+      expect(screen.getByTestId("input-quantity")).toHaveValue(1);
+      await waitFor(() =>
+        expect(api.nutrition.removeServing).toHaveBeenCalledWith("f1", "s9"),
+      );
+    });
+  });
+
   it("saves an edited entry", async () => {
     const entry: FoodLogEntryWithNutrition = {
       id: "e1",

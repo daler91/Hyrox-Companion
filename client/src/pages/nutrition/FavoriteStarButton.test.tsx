@@ -117,4 +117,27 @@ describe("FavoriteStarButton", () => {
 
     expect(await screen.findByText("Couldn't update your favourites")).toBeInTheDocument();
   });
+
+  it("surfaces a real failure when un-starring, not just a stale-404 success", async () => {
+    vi.mocked(api.nutrition.listFavorites).mockResolvedValue([STARRED]);
+    vi.mocked(api.nutrition.removeFavorite).mockRejectedValue(new Error("500: boom"));
+    const user = userEvent.setup();
+    renderWithClient(
+      <>
+        <FavoriteStarButton foodId="f1" foodName="Banana" />
+        <Toaster />
+      </>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("favorite-toggle-f1")).toHaveAttribute("aria-pressed", "true");
+    });
+    await user.click(screen.getByTestId("favorite-toggle-f1"));
+
+    expect(await screen.findByText("Couldn't update your favourites")).toBeInTheDocument();
+    // The optimistic flip rolled back — the star still reads as favourited.
+    await waitFor(() => {
+      expect(screen.getByTestId("favorite-toggle-f1")).toHaveAttribute("aria-pressed", "true");
+    });
+  });
 });

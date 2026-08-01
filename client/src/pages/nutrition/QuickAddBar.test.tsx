@@ -1,7 +1,7 @@
 import type { FoodWithPortionMemory } from "@shared/schema";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/toaster";
 import { api } from "@/lib/api";
@@ -10,6 +10,11 @@ import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 import { renderWithClient } from "@/test/support/renderWithClient";
 
 import { QuickAddBar } from "./QuickAddBar";
+
+const offlineQueueMocks = vi.hoisted(() => ({
+  enqueueMutation: vi.fn(),
+  createOfflineMutationId: vi.fn(() => "queued-id"),
+}));
 
 vi.mock("@/lib/api", () => ({
   api: {
@@ -27,6 +32,11 @@ vi.mock("@/lib/api", () => ({
     nutritionRangePrefix: ["/api/v1/nutrition/range"],
   },
 }));
+vi.mock("@/lib/offlineQueue", () => offlineQueueMocks);
+
+function setOnline(online: boolean) {
+  Object.defineProperty(globalThis.navigator, "onLine", { value: online, configurable: true });
+}
 
 const DATE = "2026-07-20";
 
@@ -47,7 +57,11 @@ describe("QuickAddBar", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    offlineQueueMocks.createOfflineMutationId.mockReturnValue("queued-id");
+    setOnline(true);
   });
+
+  afterEach(() => setOnline(true));
 
   it("renders nothing when there are no recent or favorite foods", () => {
     vi.mocked(api.nutrition.recent).mockResolvedValue([]);
@@ -110,6 +124,30 @@ describe("QuickAddBar", () => {
     await waitFor(() => {
       expect(api.nutrition.deleteLog).toHaveBeenCalledWith("entry-1");
     });
+  });
+
+  it("queues a favourite's quick-log offline without the undo toast", async () => {
+    setOnline(false);
+    vi.mocked(api.nutrition.recent).mockResolvedValue([]);
+    vi.mocked(api.nutrition.listFavorites).mockResolvedValue([remembered()]);
+    const user = userEvent.setup();
+    renderWithClient(
+      <>
+        <QuickAddBar onSelect={vi.fn()} date={DATE} />
+        <Toaster />
+      </>,
+    );
+
+    await user.click(await screen.findByTestId("quickadd-favorites-f1"));
+
+    // A queued write never reaches the server, so there is no entry id to
+    // undo yet — the "Food logged" toast (with its undo action) must not
+    // appear at all for this mutation.
+    await waitFor(() => {
+      expect(offlineQueueMocks.enqueueMutation).toHaveBeenCalled();
+    });
+    expect(api.nutrition.createLog).not.toHaveBeenCalled();
+    expect(screen.queryByText("Food logged")).not.toBeInTheDocument();
   });
 
   it("falls back to the dialog for a favourite that has never been logged", async () => {
