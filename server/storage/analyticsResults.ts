@@ -36,6 +36,18 @@ export class AnalyticsResultsStorage {
     return row;
   }
 
+  /**
+   * ⚡ Perf: batched counterpart to `get()`. Fetches every stored row (all
+   * features) for a set of users in a single `IN (...)` query instead of one
+   * round trip per (userId, feature) pair — see the midnight recompute scan
+   * in analyticsRecomputeScheduler.ts, which previously issued up to 4
+   * sequential `get()` calls per eligible user.
+   */
+  async getMany(userIds: string[]): Promise<AnalyticsResult[]> {
+    if (userIds.length === 0) return [];
+    return db.select().from(analyticsResults).where(inArray(analyticsResults.userId, userIds));
+  }
+
   async upsert(input: UpsertAnalyticsResultInput): Promise<void> {
     const now = new Date();
     await db
@@ -82,7 +94,11 @@ export class AnalyticsResultsStorage {
    * can never both recompute the same feature in a day (W4 — race between the
    * cron scan enqueue and the worker run, robust to at-least-once delivery).
    */
-  async markRecomputedOn(userId: string, feature: AnalyticsFeature, localDate: string): Promise<boolean> {
+  async markRecomputedOn(
+    userId: string,
+    feature: AnalyticsFeature,
+    localDate: string,
+  ): Promise<boolean> {
     const result = await db
       .update(analyticsResults)
       .set({ recomputedOn: localDate, updatedAt: new Date() })

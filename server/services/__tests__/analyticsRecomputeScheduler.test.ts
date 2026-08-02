@@ -30,15 +30,28 @@ function makeStorage(data: FakeData): IStorage {
     analyticsResults: {
       listEngagedUserIds: vi.fn(async () => data.engagedUserIds),
       get: vi.fn(async (userId: string, feature: Feature) => data.rows[userId]?.[feature]),
+      getMany: vi.fn(async (userIds: string[]) =>
+        userIds.flatMap((userId) =>
+          Object.entries(data.rows[userId] ?? {}).map(([feature, row]) => ({
+            ...row,
+            userId,
+            feature,
+          })),
+        ),
+      ),
       upsert: vi.fn(),
       markRecomputedOn: vi.fn(),
     },
     users: {
       getUser: vi.fn(async (userId: string) => data.users[userId]),
-      getUsers: vi.fn(async (userIds: string[]) => userIds.map(id => {
-        const u = data.users[id];
-        return u ? { id, ...u } : undefined;
-      }).filter((u): u is {id: string, userTimezone: string} => u !== undefined)),
+      getUsers: vi.fn(async (userIds: string[]) =>
+        userIds
+          .map((id) => {
+            const u = data.users[id];
+            return u ? { id, ...u } : undefined;
+          })
+          .filter((u): u is { id: string; userTimezone: string } => u !== undefined),
+      ),
     },
     workouts: {
       listWorkoutLogs: vi.fn(async (userId: string) => {
@@ -47,7 +60,9 @@ function makeStorage(data: FakeData): IStorage {
       }),
     },
     nutrition: {
-      getLatestLogDate: vi.fn(async (userId: string) => data.latestNutritionLogDate?.[userId] ?? null),
+      getLatestLogDate: vi.fn(
+        async (userId: string) => data.latestNutritionLogDate?.[userId] ?? null,
+      ),
     },
   } as unknown as IStorage;
 }
@@ -90,7 +105,9 @@ describe("runAnalyticsRecomputeScan", () => {
       engagedUserIds: ["u1"],
       users: { u1: { userTimezone: "America/New_York" } },
       latestWorkoutDate: { u1: "2026-06-05" },
-      rows: { u1: { coach_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } } },
+      rows: {
+        u1: { coach_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } },
+      },
     });
 
     const result = await runAnalyticsRecomputeScan(storage, NOW);
@@ -104,7 +121,11 @@ describe("runAnalyticsRecomputeScan", () => {
       engagedUserIds: ["u1"],
       users: { u1: { userTimezone: "UTC" } },
       latestWorkoutDate: { u1: "2026-06-05" },
-      rows: { u1: { coach_insights: { recomputedOn: "2026-06-05", lastWorkoutDateAtGeneration: "2026-06-01" } } },
+      rows: {
+        u1: {
+          coach_insights: { recomputedOn: "2026-06-05", lastWorkoutDateAtGeneration: "2026-06-01" },
+        },
+      },
     });
 
     const result = await runAnalyticsRecomputeScan(storage, NOW);
@@ -119,14 +140,20 @@ describe("runAnalyticsRecomputeScan", () => {
       users: { u1: { userTimezone: "UTC" } },
       latestWorkoutDate: { u1: "2026-06-05" },
       // Only a race_prediction row exists; coach_insights is absent and must be skipped.
-      rows: { u1: { race_prediction: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } } },
+      rows: {
+        u1: { race_prediction: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } },
+      },
     });
 
     const result = await runAnalyticsRecomputeScan(storage, NOW);
 
     expect(result.enqueued).toBe(1);
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(sendMock.mock.calls[0][1]).toEqual({ userId: "u1", feature: "race_prediction", localDate: "2026-06-05" });
+    expect(sendMock.mock.calls[0][1]).toEqual({
+      userId: "u1",
+      feature: "race_prediction",
+      localDate: "2026-06-05",
+    });
   });
 
   it("enqueues no workout-anchored jobs for users with no logged workouts", async () => {
@@ -152,7 +179,9 @@ describe("runAnalyticsRecomputeScan", () => {
       latestWorkoutDate: { u1: "2026-06-05" },
       latestNutritionLogDate: { u1: "2026-06-01" },
       rows: {
-        u1: { nutrition_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } },
+        u1: {
+          nutrition_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" },
+        },
       },
     });
 
@@ -169,7 +198,9 @@ describe("runAnalyticsRecomputeScan", () => {
       latestWorkoutDate: { u1: null }, // the old early return starved these users
       latestNutritionLogDate: { u1: "2026-06-04" },
       rows: {
-        u1: { nutrition_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" } },
+        u1: {
+          nutrition_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-01" },
+        },
       },
     });
 
