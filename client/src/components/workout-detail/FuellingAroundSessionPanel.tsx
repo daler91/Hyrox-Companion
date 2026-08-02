@@ -1,7 +1,9 @@
 import type { NutritionMacroTotals } from "@shared/schema";
 import { UtensilsCrossed } from "lucide-react";
 import type { ReactNode } from "react";
+import { useLocation } from "wouter";
 
+import { Button } from "@/components/ui/button";
 import { useSessionFuelling } from "@/hooks/useNutrition";
 import { cn } from "@/lib/utils";
 
@@ -82,12 +84,16 @@ function FuellingGroup({
  */
 export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutLogId: string }) {
   const { data, isLoading, isError } = useSessionFuelling(workoutLogId);
+  const [, setLocation] = useLocation();
 
   // Don't clutter the sheet if the fuelling lookup failed — it's supplementary.
   if (isError) return null;
 
   const target = data?.target ?? null;
   const gap = data?.gap ?? null;
+  // Recovery fuel still owed → offer the action the numbers imply, deep-linking
+  // into Nutrition on the session's day with post-workout pre-selected.
+  const hasPostGap = gap !== null && (gap.postCarbG > 0 || gap.postProteinG > 0);
 
   const preTarget = target ? (
     <PreCarbTargetLine
@@ -137,6 +143,17 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
               targetLine={postTarget}
             />
           </div>
+
+          {hasPostGap && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation(`/nutrition?date=${data.date}&meal=post_workout`)}
+              data-testid="button-log-recovery-meal"
+            >
+              <UtensilsCrossed className="mr-2 h-4 w-4" aria-hidden="true" /> Log recovery meal
+            </Button>
+          )}
 
           {target && (
             <p

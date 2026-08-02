@@ -15,6 +15,9 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+const setLocationSpy = vi.hoisted(() => vi.fn());
+vi.mock("wouter", () => ({ useLocation: () => ["/", setLocationSpy] }));
+
 const ZERO: NutritionMacroTotals = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
 
 function makeEntry(id: string): FoodLogEntryWithNutrition {
@@ -122,5 +125,46 @@ describe("FuellingAroundSessionPanel", () => {
     expect(post).toHaveTextContent("80g");
     expect(post).toHaveTextContent("10g to go");
     expect(screen.getByTestId("fuelling-guidance")).toBeInTheDocument();
+  });
+
+  it("offers a log-recovery-meal deep link while post-session fuel is still owed", async () => {
+    const data: SessionFuellingResponse = {
+      workoutId: "w1",
+      date: "2026-06-07",
+      usedStartTime: true,
+      pre: [],
+      post: [],
+      preTotals: ZERO,
+      postTotals: ZERO,
+      target: { preCarbG: 30, postCarbG: 60, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
+      gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
+    };
+    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
+
+    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+
+    const button = await screen.findByTestId("button-log-recovery-meal");
+    button.click();
+    expect(setLocationSpy).toHaveBeenCalledWith("/nutrition?date=2026-06-07&meal=post_workout");
+  });
+
+  it("drops the recovery-meal link once the post-session gap is covered", async () => {
+    const data: SessionFuellingResponse = {
+      workoutId: "w1",
+      date: "2026-06-07",
+      usedStartTime: true,
+      pre: [makeEntry("e1")],
+      post: [makeEntry("e2")],
+      preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
+      postTotals: { calories: 400, protein: 30, carb: 80, fat: 10, fiber: 3 },
+      target: { preCarbG: 30, postCarbG: 80, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
+      gap: { preCarbG: 12, postCarbG: 0, postProteinG: 0 },
+    };
+    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
+
+    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+
+    await screen.findByTestId("fuelling-post-target");
+    expect(screen.queryByTestId("button-log-recovery-meal")).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import type { Food, ParseMealResponse } from "@shared/schema";
-import { MEAL_TYPES } from "@shared/schema/enums";
+import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
 import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Loader2, Plus, ScanLine, Target } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 
@@ -57,6 +57,15 @@ function initialDate(): string {
   return param && isValidYmd(param) ? param : todayStr();
 }
 
+/** Initial meal seed from an optional ?meal= deep-link (the workout sheet's
+ *  "Log recovery meal" links here with post_workout), else null. Seeds the
+ *  meal picker of every log started this visit — arriving with intent to fuel
+ *  a session shouldn't cost a per-food meal correction. */
+function initialMealSeed(): MealType | null {
+  const param = new URLSearchParams(globalThis.location.search).get("meal");
+  return param && (MEAL_TYPES as readonly string[]).includes(param) ? (param as MealType) : null;
+}
+
 /**
  * Nutrition tracking — Phase 1 daily log. Pick a day, see running macro totals,
  * search/quick-add foods, and edit/delete entries. Reached only when the
@@ -66,6 +75,7 @@ export default function Nutrition() {
   useDocumentTitle("Nutrition");
   const { isLoading: authLoading } = useAuth();
   const [date, setDate] = useState(initialDate);
+  const [mealSeed] = useState(initialMealSeed);
   const [dialog, setDialog] = useState<LogDialogState | null>(null);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
@@ -103,8 +113,14 @@ export default function Nutrition() {
   // including one reached from search, not just from the quick-add chips.
   const openCreateDialog = useCallback(
     (food: Food, entryMethod?: "manual" | "barcode") =>
-      setDialog({ mode: "create", food, entryMethod, portionHint: portionMemory(food.id) }),
-    [portionMemory],
+      setDialog({
+        mode: "create",
+        food,
+        entryMethod,
+        portionHint: portionMemory(food.id),
+        mealOverride: mealSeed ?? undefined,
+      }),
+    [portionMemory, mealSeed],
   );
 
   if (authLoading) {
