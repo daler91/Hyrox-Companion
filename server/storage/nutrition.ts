@@ -340,10 +340,18 @@ export class NutritionStorage {
     });
   }
 
-  /** Distinct foods from the user's most recent log entries, newest first (FR-1.4). */
+  /** Distinct foods from the user's log entries, staples first (FR-1.4).
+   *
+   *  Ranked by how often the food was logged in the last 30 days, then by
+   *  most-recently-logged. Pure recency buried the athlete's actual staples
+   *  under whatever was tried once yesterday; frequency-first keeps the
+   *  quick-add chips pointed at what they genuinely eat repeatedly, while
+   *  the recency tiebreak still surfaces new foods when history is thin
+   *  (anything older than the window counts 0 and sorts by recency alone). */
   // (getLastPortions' query lives at module scope as buildLastPortionsQuery so
   // its SQL shape can be pinned — see nutrition.searchShape.test.ts.)
   async getRecentFoods(userId: string, limit = 20): Promise<FoodWithPortionMemory[]> {
+    const stapleCount = sql`count(*) filter (where ${foodLogEntries.loggedAt} >= now() - interval '30 days')`;
     const recent = await db
       .select({
         foodId: foodLogEntries.foodId,
@@ -352,7 +360,7 @@ export class NutritionStorage {
       .from(foodLogEntries)
       .where(eq(foodLogEntries.userId, userId))
       .groupBy(foodLogEntries.foodId)
-      .orderBy(desc(sql`max(${foodLogEntries.loggedAt})`))
+      .orderBy(desc(stapleCount), desc(sql`max(${foodLogEntries.loggedAt})`))
       .limit(limit);
 
     if (recent.length === 0) return [];
