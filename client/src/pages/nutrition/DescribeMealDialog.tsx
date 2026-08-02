@@ -1,5 +1,5 @@
 import type { ParseMealResponse } from "@shared/schema";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import { useAiConsentGate } from "./useAiConsentGate";
  * the AI parses it into food items, and the result is handed to the review
  * sheet (via `onParsed`) — nothing is logged until the user confirms there.
  *
- * Controlled by the caller so any surface (the action row's button, the
+ * Controlled by the caller so any surface (the log-food method sheet, the
  * first-run starter) can open it. Parsing is consent-gated inline: a user who
  * hasn't enabled AI features gets the consent dialog here, and accepting
  * resumes the parse with their text intact.
@@ -115,29 +115,6 @@ export function DescribeMealDialog({
         </DialogContent>
       </Dialog>
       {aiConsentDialog}
-    </>
-  );
-}
-
-/** "Describe a meal" entry point: the action-row button wrapping the dialog. */
-export function DescribeMealButton({
-  onParsed,
-}: {
-  readonly onParsed: (result: ParseMealResponse) => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setOpen(true)}
-        data-testid="button-describe-meal"
-      >
-        <Sparkles className="mr-2 h-4 w-4" /> Describe a meal
-      </Button>
-      <DescribeMealDialog open={open} onOpenChange={setOpen} onParsed={onParsed} />
     </>
   );
 }

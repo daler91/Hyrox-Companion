@@ -17,8 +17,12 @@ import { useAiConsentGate } from "./useAiConsentGate";
  */
 export function SnapMealButton({
   onParsed,
+  size = "sm",
+  className,
 }: {
   readonly onParsed: (result: ParseMealResponse) => void;
+  readonly size?: "sm" | "default";
+  readonly className?: string;
 }) {
   const parse = useParseMealPhoto();
   const { requireAiConsent, aiConsentDialog } = useAiConsentGate();
@@ -26,7 +30,8 @@ export function SnapMealButton({
   return (
     <>
       <ImageCaptureButton
-        size="sm"
+        size={size}
+        className={className}
         label="Snap a meal"
         tooltip="Snap a meal — we'll identify the foods and estimate portions for you to review before logging."
         disabled={parse.isPending}

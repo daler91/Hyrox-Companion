@@ -18,8 +18,12 @@ import { useAiConsentGate } from "./useAiConsentGate";
  */
 export function ScanLabelButton({
   onExtracted,
+  size = "sm",
+  className,
 }: {
   readonly onExtracted: (result: ParseLabelResponse) => void;
+  readonly size?: "sm" | "default";
+  readonly className?: string;
 }) {
   const parse = useParseNutritionLabel();
   const { toast } = useToast();
@@ -28,7 +32,8 @@ export function ScanLabelButton({
   return (
     <>
       <ImageCaptureButton
-        size="sm"
+        size={size}
+        className={className}
         label="Scan label"
         tooltip="Scan a nutrition label — we'll read the printed values for you to review before saving."
         disabled={parse.isPending}

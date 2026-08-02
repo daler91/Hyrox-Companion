@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
 
-import { DescribeMealButton } from "./DescribeMealButton";
+import { DescribeMealDialog } from "./DescribeMealDialog";
 
 vi.mock("@/lib/api", () => ({
   api: { nutrition: { parseMealText: vi.fn() }, preferences: { update: vi.fn() } },
@@ -38,25 +38,27 @@ const PARSED: ParseMealResponse = {
   ],
 };
 
-function renderButton(onParsed: (r: ParseMealResponse) => void) {
+function renderDialog(onParsed: (r: ParseMealResponse) => void, onOpenChange = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const ui: ReactNode = <DescribeMealButton onParsed={onParsed} />;
+  const ui: ReactNode = (
+    <DescribeMealDialog open onOpenChange={onOpenChange} onParsed={onParsed} />
+  );
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return { onOpenChange };
 }
 
-describe("DescribeMealButton", () => {
+describe("DescribeMealDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState.aiCoachEnabled = true;
   });
 
-  it("opens a dialog, parses the typed meal, and hands the result to onParsed", async () => {
+  it("parses the typed meal and hands the result to onParsed", async () => {
     const user = userEvent.setup();
     vi.mocked(api.nutrition.parseMealText).mockResolvedValue(PARSED);
     const onParsed = vi.fn();
-    renderButton(onParsed);
+    renderDialog(onParsed);
 
-    await user.click(screen.getByTestId("button-describe-meal"));
     await user.type(screen.getByTestId("input-describe-meal"), "2 eggs");
     await user.click(screen.getByTestId("button-parse-meal"));
 
@@ -64,10 +66,8 @@ describe("DescribeMealButton", () => {
     await waitFor(() => expect(onParsed).toHaveBeenCalledWith(PARSED));
   });
 
-  it("keeps the parse button disabled until text is entered", async () => {
-    const user = userEvent.setup();
-    renderButton(vi.fn());
-    await user.click(screen.getByTestId("button-describe-meal"));
+  it("keeps the parse button disabled until text is entered", () => {
+    renderDialog(vi.fn());
     expect(screen.getByTestId("button-parse-meal")).toBeDisabled();
   });
 
@@ -77,9 +77,8 @@ describe("DescribeMealButton", () => {
     vi.mocked(api.preferences.update).mockResolvedValue({} as never);
     vi.mocked(api.nutrition.parseMealText).mockResolvedValue(PARSED);
     const onParsed = vi.fn();
-    renderButton(onParsed);
+    renderDialog(onParsed);
 
-    await user.click(screen.getByTestId("button-describe-meal"));
     await user.type(screen.getByTestId("input-describe-meal"), "2 eggs");
     await user.click(screen.getByTestId("button-parse-meal"));
 
@@ -97,9 +96,8 @@ describe("DescribeMealButton", () => {
   it("keeps the dialog and typed text when consent is declined", async () => {
     const user = userEvent.setup();
     authState.aiCoachEnabled = false;
-    renderButton(vi.fn());
+    renderDialog(vi.fn());
 
-    await user.click(screen.getByTestId("button-describe-meal"));
     await user.type(screen.getByTestId("input-describe-meal"), "2 eggs");
     await user.click(screen.getByTestId("button-parse-meal"));
     await user.click(screen.getByRole("button", { name: "Not now" }));
@@ -116,9 +114,8 @@ describe("DescribeMealButton", () => {
       items: [],
     });
     const onParsed = vi.fn();
-    renderButton(onParsed);
+    renderDialog(onParsed);
 
-    await user.click(screen.getByTestId("button-describe-meal"));
     await user.type(screen.getByTestId("input-describe-meal"), "asdf");
     await user.click(screen.getByTestId("button-parse-meal"));
 

@@ -1,6 +1,6 @@
 import type { Food, ParseMealResponse } from "@shared/schema";
 import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
-import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Loader2, Plus, ScanLine, Target } from "lucide-react";
+import { ChevronLeft, ChevronRight, CopyPlus, Loader2 } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,11 @@ import {
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
-import { DescribeMealButton, DescribeMealDialog } from "./nutrition/DescribeMealButton";
+import { DescribeMealDialog } from "./nutrition/DescribeMealDialog";
 import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
 import { FirstRunStarter } from "./nutrition/FirstRunStarter";
 import { FoodSearch } from "./nutrition/FoodSearch";
+import { LogFoodActions } from "./nutrition/LogFoodActions";
 import { type LogDialogState, LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
 import { MealTargetDialog, type MealTargetDialogState } from "./nutrition/MealTargetDialog";
@@ -35,8 +36,6 @@ import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
-import { ScanLabelButton } from "./nutrition/ScanLabelButton";
-import { SnapMealButton } from "./nutrition/SnapMealButton";
 import { TargetsDialog } from "./nutrition/TargetsDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
@@ -292,43 +291,15 @@ export default function Nutrition() {
         <FoodSearch onSelect={openCreateDialog} />
         <QuickAddBar onSelect={openCreateDialog} date={date} />
 
-        <div className="flex flex-wrap gap-2">
-          <DescribeMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })} />
-          <SnapMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })} />
-          <ScanLabelButton onExtracted={(r) => setCustomFood({ mode: "create", prefill: r })} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBarcodeOpen(true)}
-            data-testid="button-scan-barcode"
-          >
-            <ScanLine className="mr-2 h-4 w-4" /> Scan barcode
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCustomFood({ mode: "create" })}
-            data-testid="button-new-custom-food"
-          >
-            <Plus className="mr-2 h-4 w-4" /> Custom food
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRecipe({ open: true, id: null })}
-            data-testid="button-new-recipe"
-          >
-            <ChefHat className="mr-2 h-4 w-4" /> Recipe
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setTargetsOpen(true)}
-            data-testid="button-edit-targets"
-          >
-            <Target className="mr-2 h-4 w-4" /> Targets
-          </Button>
-        </div>
+        <LogFoodActions
+          onDescribe={() => setDescribeOpen(true)}
+          onScanBarcode={() => setBarcodeOpen(true)}
+          onMealParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })}
+          onLabelExtracted={(r) => setCustomFood({ mode: "create", prefill: r })}
+          onCustomFood={() => setCustomFood({ mode: "create" })}
+          onRecipe={() => setRecipe({ open: true, id: null })}
+          onTargets={() => setTargetsOpen(true)}
+        />
 
         {dayBody}
 
