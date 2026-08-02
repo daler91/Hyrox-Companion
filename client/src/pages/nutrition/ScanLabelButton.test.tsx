@@ -11,10 +11,15 @@ import { compressImage } from "@/lib/image";
 import { ScanLabelButton } from "./ScanLabelButton";
 
 vi.mock("@/lib/api", () => ({
-  api: { nutrition: { parseLabel: vi.fn() } },
-  QUERY_KEYS: {},
+  api: { nutrition: { parseLabel: vi.fn() }, preferences: { update: vi.fn() } },
+  QUERY_KEYS: { authUser: ["/api/v1/auth/user"] },
 }));
 vi.mock("@/lib/image", () => ({ compressImage: vi.fn() }));
+
+const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
+vi.mock("@/hooks/useAuth", () => ({
+  useIsAiCoachEnabled: () => authState.aiCoachEnabled,
+}));
 
 const toastSpy = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: toastSpy }) }));
@@ -66,7 +71,10 @@ async function uploadPhoto() {
 }
 
 describe("ScanLabelButton", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.aiCoachEnabled = true;
+  });
 
   it("compresses the chosen photo, parses it, and hands the result to onExtracted", async () => {
     vi.mocked(api.nutrition.parseLabel).mockResolvedValue(EXTRACTED);
@@ -98,5 +106,25 @@ describe("ScanLabelButton", () => {
       ),
     );
     expect(onExtracted).not.toHaveBeenCalled();
+  });
+
+  it("holds the photo behind the consent dialog and parses it after accepting", async () => {
+    const user = userEvent.setup();
+    authState.aiCoachEnabled = false;
+    vi.mocked(api.preferences.update).mockResolvedValue({} as never);
+    vi.mocked(api.nutrition.parseLabel).mockResolvedValue(EXTRACTED);
+    const onExtracted = vi.fn();
+    renderButton(onExtracted);
+
+    await uploadPhoto();
+
+    await screen.findByRole("button", { name: "Enable AI Coach" });
+    expect(api.nutrition.parseLabel).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Enable AI Coach" }));
+
+    await waitFor(() =>
+      expect(api.nutrition.parseLabel).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg"),
+    );
+    await waitFor(() => expect(onExtracted).toHaveBeenCalledWith(EXTRACTED));
   });
 });

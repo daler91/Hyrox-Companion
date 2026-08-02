@@ -15,47 +15,59 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useParseMealText } from "@/hooks/useNutrition";
 
+import { useAiConsentGate } from "./useAiConsentGate";
+
 /**
- * "Describe a meal" entry point (FR-4.1): the user types a meal in plain English,
- * the AI parses it into food items, and the result is handed to the review sheet
- * (via `onParsed`) — nothing is logged until the user confirms there.
+ * "Describe a meal" dialog (FR-4.1): the user types a meal in plain English,
+ * the AI parses it into food items, and the result is handed to the review
+ * sheet (via `onParsed`) — nothing is logged until the user confirms there.
+ *
+ * Controlled by the caller so any surface (the action row's button, the
+ * first-run starter) can open it. Parsing is consent-gated inline: a user who
+ * hasn't enabled AI features gets the consent dialog here, and accepting
+ * resumes the parse with their text intact.
  */
-export function DescribeMealButton({
+export function DescribeMealDialog({
+  open,
+  onOpenChange,
   onParsed,
 }: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
   readonly onParsed: (result: ParseMealResponse) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  const [noFoodsFound, setNoFoodsFound] = useState(false);
   const parse = useParseMealText();
+  const { requireAiConsent, aiConsentDialog, aiConsentOpen } = useAiConsentGate();
 
   const submit = () => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return;
-    parse.mutate(trimmed, {
-      onSuccess: (result) => {
-        onParsed(result);
-        setOpen(false);
-        setText("");
-      },
-    });
+    setNoFoodsFound(false);
+    requireAiConsent(() =>
+      parse.mutate(trimmed, {
+        onSuccess: (result) => {
+          // An empty parse is a retry, not a result: keep the dialog and the
+          // typed text so the athlete can add detail instead of starting over.
+          if (result.items.length === 0) {
+            setNoFoodsFound(true);
+            return;
+          }
+          onParsed(result);
+          onOpenChange(false);
+          setText("");
+        },
+      }),
+    );
   };
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setOpen(true)}
-        data-testid="button-describe-meal"
-      >
-        <Sparkles className="mr-2 h-4 w-4" /> Describe a meal
-      </Button>
-
       <Dialog
         open={open}
         onOpenChange={(o) => {
-          if (!o && !parse.isPending) setOpen(false);
+          if (!o && !parse.isPending && !aiConsentOpen) onOpenChange(false);
         }}
       >
         <DialogContent data-testid="dialog-describe-meal">
@@ -68,7 +80,10 @@ export function DescribeMealButton({
           </DialogDescription>
           <Textarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setNoFoodsFound(false);
+            }}
             placeholder="e.g. 2 scrambled eggs, a slice of toast with butter, and a black coffee"
             rows={4}
             maxLength={2000}
@@ -77,8 +92,14 @@ export function DescribeMealButton({
             data-testid="input-describe-meal"
           />
           <CharacterCount id="describe-meal-count" value={text} max={2000} />
+          {noFoodsFound && (
+            <p className="text-sm text-amber-600" role="status" data-testid="text-no-foods-found">
+              No foods detected — add a little more detail (amounts and cooking style help) and try
+              again.
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)} disabled={parse.isPending}>
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={parse.isPending}>
               Cancel
             </Button>
             <Button
@@ -93,6 +114,30 @@ export function DescribeMealButton({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {aiConsentDialog}
+    </>
+  );
+}
+
+/** "Describe a meal" entry point: the action-row button wrapping the dialog. */
+export function DescribeMealButton({
+  onParsed,
+}: {
+  readonly onParsed: (result: ParseMealResponse) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(true)}
+        data-testid="button-describe-meal"
+      >
+        <Sparkles className="mr-2 h-4 w-4" /> Describe a meal
+      </Button>
+      <DescribeMealDialog open={open} onOpenChange={setOpen} onParsed={onParsed} />
     </>
   );
 }
