@@ -5,7 +5,7 @@ import type {
   MealType,
   NutritionMacroTotals,
 } from "@shared/schema";
-import { Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { CopyPlus, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -29,6 +29,9 @@ interface MealSectionProps {
   readonly onEditTarget?: (mealType: MealType) => void;
   /** One-tap re-log of this entry (same food, portion and meal) onto today. */
   readonly onLogAgain?: (entry: FoodLogEntryWithNutrition) => void;
+  /** Copy just this meal from the previous day into the viewed day. */
+  readonly onCopyYesterday?: (mealType: MealType) => void;
+  readonly copyYesterdayPending?: boolean;
 }
 
 const ROLE_CAPTION: Record<MealRole, string> = {
@@ -63,6 +66,8 @@ export function MealSection({
   deletingId,
   onEditTarget,
   onLogAgain,
+  onCopyYesterday,
+  copyYesterdayPending,
 }: MealSectionProps) {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0 && !target) return null;
@@ -229,12 +234,25 @@ export function MealSection({
           ))}
         </ul>
       ) : (
-        <p
-          className="mt-1 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"
+        <div
+          className="mt-1 flex min-h-9 items-center justify-between gap-2 rounded-md border border-dashed px-3 py-1.5"
           data-testid={`meal-empty-${mealType}`}
         >
-          Nothing logged yet.
-        </p>
+          <p className="text-xs text-muted-foreground">Nothing logged yet.</p>
+          {onCopyYesterday && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 text-xs"
+              onClick={() => onCopyYesterday(mealType)}
+              disabled={copyYesterdayPending}
+              aria-label={`Copy yesterday's ${label.toLowerCase()}`}
+              data-testid={`button-copy-yesterday-${mealType}`}
+            >
+              <CopyPlus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Copy yesterday&apos;s
+            </Button>
+          )}
+        </div>
       )}
 
       <ConfirmDialog

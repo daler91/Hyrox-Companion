@@ -209,6 +209,18 @@ export default function Nutrition() {
                 mealType: entry.mealType,
               })
             }
+            // Hidden on first run — with no history, there is nothing to copy.
+            onCopyYesterday={
+              isFirstRun
+                ? undefined
+                : (mealType) =>
+                    repeatDay.mutate({
+                      sourceDate: addDays(date, -1),
+                      targetDate: date,
+                      mealType,
+                    })
+            }
+            copyYesterdayPending={repeatDay.isPending}
             onEditTarget={(m) => {
               const t = summary?.mealTargets?.[m];
               if (t) {
