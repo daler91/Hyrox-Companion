@@ -11,17 +11,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   useDeleteLog,
+  useFavorites,
   useNutritionDay,
   useNutritionTargets,
   usePortionMemory,
+  useRecentFoods,
   useRepeatDay,
 } from "@/hooks/useNutrition";
 
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
-import { DescribeMealButton } from "./nutrition/DescribeMealButton";
+import { DescribeMealButton, DescribeMealDialog } from "./nutrition/DescribeMealButton";
 import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
+import { FirstRunStarter } from "./nutrition/FirstRunStarter";
 import { FoodSearch } from "./nutrition/FoodSearch";
 import { type LogDialogState, LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
@@ -74,6 +77,7 @@ export default function Nutrition() {
     result: ParseMealResponse;
     entryMethod: "nl" | "photo";
   } | null>(null);
+  const [describeOpen, setDescribeOpen] = useState(false);
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [mealTargetEdit, setMealTargetEdit] = useState<MealTargetDialogState | null>(null);
 
@@ -83,6 +87,16 @@ export default function Nutrition() {
   const deleteLog = useDeleteLog(date);
   const repeatDay = useRepeatDay(date);
   const portionMemory = usePortionMemory();
+  // First-run detection for the guided starter: an athlete with no recents and
+  // no favourites has never logged, so "Repeat previous day" can only 404.
+  // Both queries are already in flight for the quick-add bar / portion memory.
+  const recentFoods = useRecentFoods();
+  const favoriteFoods = useFavorites();
+  const isFirstRun =
+    recentFoods.isSuccess &&
+    favoriteFoods.isSuccess &&
+    recentFoods.data.length === 0 &&
+    favoriteFoods.data.length === 0;
 
   // Every "log this food" entry point goes through here so a food the athlete
   // has logged before opens pre-filled with the portion they actually use —
@@ -122,6 +136,17 @@ export default function Nutrition() {
     </Button>
   );
 
+  // A first-run athlete gets the guided starter wherever the repeat shortcut
+  // would show — repeating an empty history is the one action that can't work.
+  const firstRunStarter = (
+    <FirstRunStarter
+      onDescribe={() => setDescribeOpen(true)}
+      onScanBarcode={() => setBarcodeOpen(true)}
+      onSetTargets={() => setTargetsOpen(true)}
+      hasTarget={currentTarget !== null}
+    />
+  );
+
   let dayBody: ReactNode;
   if (day.isLoading) {
     dayBody = (
@@ -131,7 +156,9 @@ export default function Nutrition() {
     );
   } else if (isEmpty && !hasMealTargets) {
     // Nothing logged and no targets to plan around — the classic empty prompt.
-    dayBody = (
+    dayBody = isFirstRun ? (
+      firstRunStarter
+    ) : (
       <div
         className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
         data-testid="text-empty-day"
@@ -167,7 +194,12 @@ export default function Nutrition() {
             }}
           />
         ))}
-        {isEmpty && <div className="flex justify-center">{repeatPrevButton}</div>}
+        {isEmpty &&
+          (isFirstRun ? (
+            firstRunStarter
+          ) : (
+            <div className="flex justify-center">{repeatPrevButton}</div>
+          ))}
       </div>
     );
   }
@@ -322,6 +354,12 @@ export default function Nutrition() {
         date={date}
         entryMethod={mealReview?.entryMethod ?? "nl"}
         onClose={() => setMealReview(null)}
+      />
+      {/* Page-level describe dialog so the first-run starter can open it. */}
+      <DescribeMealDialog
+        open={describeOpen}
+        onOpenChange={setDescribeOpen}
+        onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })}
       />
       <TargetsDialog
         open={targetsOpen}
