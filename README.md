@@ -17,7 +17,7 @@
 
   <p>
     <img src="https://img.shields.io/badge/TypeScript-7.0-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 7">
-    <img src="https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 18">
+    <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19">
     <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8">
     <img src="https://img.shields.io/badge/Node.js-%3E%3D20-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=20">
     <img src="https://img.shields.io/badge/PostgreSQL-pgvector-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
@@ -100,7 +100,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Frontend
 
-- **Framework**: React 18, Vite 8, TypeScript 7
+- **Framework**: React 19, Vite 8, TypeScript 7
 - **Styling**: Tailwind CSS 4 with shadcn/ui-style Radix primitives
 - **State management**: TanStack Query for server state and cache invalidation
 - **Routing**: wouter
@@ -147,7 +147,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 ```mermaid
 flowchart TB
     subgraph Client["Client (React SPA)"]
-        UI["Vite + React 18"]
+        UI["Vite + React 19"]
         TQ["TanStack Query"]
         SW["Service Worker / PWA"]
     end

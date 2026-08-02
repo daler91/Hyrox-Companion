@@ -13,7 +13,7 @@ import { queryClient } from "@/lib/queryClient";
 const MAX_PLAN_CSV_BYTES = 200_000;
 
 interface UsePlanImportOptions {
-  fileInputRef?: RefObject<HTMLInputElement>;
+  fileInputRef?: RefObject<HTMLInputElement | null>;
   onPlanImported?: (planId: string) => void;
   onPlanScheduled?: (planId: string) => void;
 }

@@ -9,7 +9,7 @@ import { useCoachingMaterials, useDeleteCoachingMaterial } from "@/hooks/useCoac
 
 interface CoachingMaterialListProps {
   openPrinciplesDialog: () => void;
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
 }
 

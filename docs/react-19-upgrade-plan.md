@@ -1,7 +1,9 @@
 # React 19 Upgrade Plan — `react@18.3.1` → `react@19.2.8`
 
-Status: **planned** — codebase and dependency audit completed 2026-08-01 against `main`.
-All version/peer-range facts below were verified live against the npm registry on that date.
+Status: **Phases 0–1 implemented** (see the upgrade PR); Phase 2 verification in
+progress. Codebase and dependency audit completed 2026-08-01 against `main`; all
+version/peer-range facts below were verified live against the npm registry on
+that date.
 
 ## Purpose
 
