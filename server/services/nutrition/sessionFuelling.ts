@@ -49,9 +49,16 @@ function assemble(
 /**
  * Split a session's surrounding entries into pre/post groups with macro totals.
  *
- * - **Start instant known** (`usedStartTime: true`): `pre` = entries logged in
- *   `[start − PRE_WINDOW, start)`, `post` = entries in `[start, start + POST_WINDOW]`.
- *   The route supplies entries already fetched for that window.
+ * - **Start instant known** (`usedStartTime: true`): entries explicitly tagged
+ *   `pre_workout` / `post_workout` **on the session's day** are attributed by
+ *   their tag; everything else falls to the clock windows — `pre` = entries
+ *   logged in `[start − PRE_WINDOW, start)`, `post` = entries in
+ *   `[start, start + POST_WINDOW]`. Tags outrank the clock because a
+ *   back-logged entry carries a synthetic timestamp (local noon of its day),
+ *   so its clock time says nothing about when it was eaten — while its tag
+ *   says everything. A pre/post tag from a *different* day refers to that
+ *   day's session, so it stays with the window rule. The route supplies the
+ *   window's entries plus the session day's, de-duplicated.
  * - **Start instant null** (`usedStartTime: false`, legacy/manual rows): fall back
  *   to the explicit `pre_workout` / `post_workout` meal tags on the session's day;
  *   the route supplies that day's entries.
@@ -68,6 +75,14 @@ export function computeSessionFuelling(
     const preRows: LogEntryWithFood[] = [];
     const postRows: LogEntryWithFood[] = [];
     for (const entry of entries) {
+      if (entry.logDate === workout.date && entry.mealType === "pre_workout") {
+        preRows.push(entry);
+        continue;
+      }
+      if (entry.logDate === workout.date && entry.mealType === "post_workout") {
+        postRows.push(entry);
+        continue;
+      }
       const t = toInstant(entry.loggedAt)?.getTime();
       if (t === undefined) continue;
       if (t >= startMs - PRE_WINDOW_MS && t < startMs) preRows.push(entry);

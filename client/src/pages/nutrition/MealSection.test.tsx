@@ -85,6 +85,74 @@ describe("MealSection", () => {
     expect(screen.getByText("Banana")).toBeInTheDocument();
   });
 
+  it("fires the log-again callback with the entry, only when a handler is given", async () => {
+    const user = userEvent.setup();
+    const onLogAgain = vi.fn();
+    const { unmount } = render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onLogAgain={onLogAgain}
+      />,
+    );
+    await user.click(screen.getByTestId("button-log-again-e1"));
+    expect(onLogAgain).toHaveBeenCalledWith(ENTRY);
+
+    unmount();
+    render(
+      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={vi.fn()} />,
+    );
+    expect(screen.queryByTestId("button-log-again-e1")).not.toBeInTheDocument();
+  });
+
+  it("offers copy-yesterday on an empty meal only when a handler is given", async () => {
+    const user = userEvent.setup();
+    const onCopyYesterday = vi.fn();
+    const { unmount } = render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[]}
+        target={TARGET}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyYesterday={onCopyYesterday}
+      />,
+    );
+    await user.click(screen.getByTestId("button-copy-yesterday-breakfast"));
+    expect(onCopyYesterday).toHaveBeenCalledWith("breakfast");
+
+    unmount();
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[]}
+        target={TARGET}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("button-copy-yesterday-breakfast")).not.toBeInTheDocument();
+  });
+
+  it("hides copy-yesterday once the meal has entries", () => {
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyYesterday={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("button-copy-yesterday-breakfast")).not.toBeInTheDocument();
+  });
+
   it("fires edit callback on edit click", async () => {
     const onEdit = vi.fn();
     const user = userEvent.setup();

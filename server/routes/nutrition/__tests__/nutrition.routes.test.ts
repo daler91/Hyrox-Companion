@@ -641,19 +641,27 @@ describe("nutrition routes", () => {
         makeRow({ id: "pre", loggedAt: new Date("2026-06-07T11:00:00Z") }),
         makeRow({ id: "post", loggedAt: new Date("2026-06-07T13:00:00Z") }),
       ]);
+      // The day fetch overlaps the window fetch ("pre" appears in both) and
+      // adds a back-logged, noon-stamped entry whose tag names this session.
+      vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([
+        makeRow({ id: "pre", loggedAt: new Date("2026-06-07T11:00:00Z") }),
+        makeRow({ id: "backlogged", mealType: "post_workout", loggedAt: new Date("2026-06-07T00:30:00Z") }),
+      ]);
 
       const res = await request(app).get("/api/v1/nutrition/session-fuelling/w1");
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ workoutId: "w1", date: "2026-06-07", usedStartTime: true });
       expect(res.body.pre).toHaveLength(1);
-      expect(res.body.post).toHaveLength(1);
-      // 4h pre / 6h post windows around the captured start instant.
+      // Window "post" + the tag-attributed back-logged entry, de-duplicated.
+      expect(res.body.post).toHaveLength(2);
+      // 4h pre / 6h post windows around the captured start instant, plus the
+      // session day's entries so same-day pre/post tags are never missed.
       expect(storage.nutrition.listEntriesWithFoodInWindow).toHaveBeenCalledWith(
         "test_user",
         new Date(startedAt.getTime() - 4 * 60 * 60 * 1000),
         new Date(startedAt.getTime() + 6 * 60 * 60 * 1000),
       );
-      expect(storage.nutrition.listEntriesWithFoodForDate).not.toHaveBeenCalled();
+      expect(storage.nutrition.listEntriesWithFoodForDate).toHaveBeenCalledWith("test_user", "2026-06-07");
     });
 
     it("falls back to the day's meal tags when startedAt is null (usedStartTime false)", async () => {

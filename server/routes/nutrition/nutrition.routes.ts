@@ -537,14 +537,26 @@ export function registerNutritionRoutes(router: Router): void {
       const workout = await storage.workouts.getWorkoutLog(req.params.workoutId, userId);
       if (!workout) return sendNotFound(res, "Workout not found");
 
+      // With a real start instant, fetch the clock window PLUS the session
+      // day's entries: a back-logged meal is stamped local noon, which can fall
+      // outside the window even though its pre/post_workout tag names this
+      // session. computeSessionFuelling attributes same-day tags first, then
+      // windows the rest.
       const [user, entries] = await Promise.all([
         storage.users.getUser(userId),
         workout.startedAt
-          ? storage.nutrition.listEntriesWithFoodInWindow(
-              userId,
-              new Date(workout.startedAt.getTime() - PRE_WINDOW_MS),
-              new Date(workout.startedAt.getTime() + POST_WINDOW_MS),
-            )
+          ? Promise.all([
+              storage.nutrition.listEntriesWithFoodInWindow(
+                userId,
+                new Date(workout.startedAt.getTime() - PRE_WINDOW_MS),
+                new Date(workout.startedAt.getTime() + POST_WINDOW_MS),
+              ),
+              storage.nutrition.listEntriesWithFoodForDate(userId, workout.date),
+            ]).then(([windowEntries, dayEntries]) => {
+              const byId = new Map(windowEntries.map((e) => [e.id, e]));
+              for (const e of dayEntries) if (!byId.has(e.id)) byId.set(e.id, e);
+              return [...byId.values()];
+            })
           : storage.nutrition.listEntriesWithFoodForDate(userId, workout.date),
       ]);
 

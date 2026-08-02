@@ -5,7 +5,7 @@ import type {
   MealType,
   NutritionMacroTotals,
 } from "@shared/schema";
-import { Pencil, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { CopyPlus, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -27,6 +27,11 @@ interface MealSectionProps {
   readonly deletingId?: string;
   /** Open the per-meal target override editor (only shown when a target exists). */
   readonly onEditTarget?: (mealType: MealType) => void;
+  /** One-tap re-log of this entry (same food, portion and meal) onto today. */
+  readonly onLogAgain?: (entry: FoodLogEntryWithNutrition) => void;
+  /** Copy just this meal from the previous day into the viewed day. */
+  readonly onCopyYesterday?: (mealType: MealType) => void;
+  readonly copyYesterdayPending?: boolean;
 }
 
 const ROLE_CAPTION: Record<MealRole, string> = {
@@ -60,6 +65,9 @@ export function MealSection({
   onDelete,
   deletingId,
   onEditTarget,
+  onLogAgain,
+  onCopyYesterday,
+  copyYesterdayPending,
 }: MealSectionProps) {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0 && !target) return null;
@@ -167,6 +175,25 @@ export function MealSection({
                 <div className="flex shrink-0 items-center gap-1">
                   <FavoriteStarButton foodId={e.foodId} foodName={e.name} />
 
+                  {onLogAgain && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Log ${e.name} again today`}
+                          onClick={() => onLogAgain(e)}
+                          data-testid={`button-log-again-${e.id}`}
+                        >
+                          <RotateCw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Log again today</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -207,12 +234,25 @@ export function MealSection({
           ))}
         </ul>
       ) : (
-        <p
-          className="mt-1 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"
+        <div
+          className="mt-1 flex min-h-9 items-center justify-between gap-2 rounded-md border border-dashed px-3 py-1.5"
           data-testid={`meal-empty-${mealType}`}
         >
-          Nothing logged yet.
-        </p>
+          <p className="text-xs text-muted-foreground">Nothing logged yet.</p>
+          {onCopyYesterday && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 text-xs"
+              onClick={() => onCopyYesterday(mealType)}
+              disabled={copyYesterdayPending}
+              aria-label={`Copy yesterday's ${label.toLowerCase()}`}
+              data-testid={`button-copy-yesterday-${mealType}`}
+            >
+              <CopyPlus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Copy yesterday&apos;s
+            </Button>
+          )}
+        </div>
       )}
 
       <ConfirmDialog
