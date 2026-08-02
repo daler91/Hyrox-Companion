@@ -1838,9 +1838,6 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateWorkoutRequest"
-              },
               "example": {
                 "date": "2026-03-29",
                 "focus": "conditioning",
@@ -1906,6 +1903,9 @@
                     ]
                   }
                 ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkoutRequest"
               }
             }
           }
@@ -1915,22 +1915,6 @@
             "description": "Workout log created successfully",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Workout log created successfully"
-                    },
-                    "workout": {
-                      "$ref": "#/components/schemas/InsertWorkoutLog"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "workout"
-                  ]
-                },
                 "example": {
                   "message": "Workout log created successfully",
                   "workout": {
@@ -1955,6 +1939,22 @@
                     "avgWatts": null,
                     "sufferScore": null
                   }
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Workout log created successfully"
+                    },
+                    "workout": {
+                      "$ref": "#/components/schemas/InsertWorkoutLog"
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "workout"
+                  ]
                 }
               }
             }
@@ -1983,12 +1983,6 @@
             "description": "A list of workout logs",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/InsertWorkoutLog"
-                  }
-                },
                 "example": [
                   {
                     "date": "2026-03-29",
@@ -2012,7 +2006,13 @@
                     "avgWatts": null,
                     "sufferScore": null
                   }
-                ]
+                ],
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InsertWorkoutLog"
+                  }
+                }
               }
             }
           },
@@ -2044,9 +2044,6 @@
             "description": "The requested workout log",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InsertWorkoutLog"
-                },
                 "example": {
                   "date": "2026-03-29",
                   "focus": "conditioning",
@@ -2068,6 +2065,9 @@
                   "avgCadence": null,
                   "avgWatts": null,
                   "sufferScore": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/InsertWorkoutLog"
                 }
               }
             }
@@ -2099,9 +2099,6 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateWorkoutRequest"
-              },
               "example": {
                 "duration": 52,
                 "rpe": 8,
@@ -2145,6 +2142,9 @@
                     ]
                   }
                 ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkoutRequest"
               }
             }
           }
@@ -2154,9 +2154,6 @@
             "description": "Workout log updated successfully",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InsertWorkoutLog"
-                },
                 "example": {
                   "date": "2026-03-29",
                   "focus": "conditioning",
@@ -2178,6 +2175,9 @@
                   "avgCadence": null,
                   "avgWatts": null,
                   "sufferScore": null
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/InsertWorkoutLog"
                 }
               }
             }
@@ -2253,9 +2253,6 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateUserPreferences"
-              },
               "example": {
                 "weightUnit": "kg",
                 "distanceUnit": "km",
@@ -2267,6 +2264,9 @@
                 "aiCoachEnabled": true,
                 "trainingStyleId": "balanced_default",
                 "onboardingCompleted": true
+              },
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPreferences"
               }
             }
           }
@@ -2276,9 +2276,6 @@
             "description": "Preferences updated successfully",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpdateUserPreferences"
-                },
                 "example": {
                   "weightUnit": "kg",
                   "distanceUnit": "km",
@@ -2290,6 +2287,9 @@
                   "aiCoachEnabled": true,
                   "trainingStyleId": "balanced_default",
                   "onboardingCompleted": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateUserPreferences"
                 }
               }
             }
