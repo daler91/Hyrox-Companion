@@ -36,10 +36,18 @@ describe("Onboarding Wizard", () => {
     cy.contains("What's Your Goal?").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 3 of");
     cy.contains("button", "Continue").click();
+    cy.wait("@savePreferences");
 
-    // Step 4 — Plan
-    cy.contains("Choose Your Path").should("be.visible");
+    // Step 4 — Fuelling (optional; present because the nutrition module is on
+    // by default). Leaving it blank skips without saving anything.
+    cy.contains("Fuel Your Training").should("be.visible");
     cy.getBySel("text-onboarding-step-count").should("contain", "Step 4 of");
+    cy.getBySel("input-fuelling-bodyweight").should("be.visible");
+    cy.contains("button", "Continue").click();
+
+    // Step 5 — Plan
+    cy.contains("Choose Your Path").should("be.visible");
+    cy.getBySel("text-onboarding-step-count").should("contain", "Step 5 of");
     // 8-Week Sample Plan should be the primary CTA now (default button variant).
     cy.getBySel("button-onboarding-sample-plan").should("be.visible");
     cy.getBySel("button-onboarding-generate-plan").should("be.visible");
@@ -52,10 +60,13 @@ describe("Onboarding Wizard", () => {
     cy.wait("@timeline");
     cy.wait("@plans");
 
-    // Walk to the Plan step
+    // Walk to the Plan step (goal saves prefs; the blank fuelling step doesn't)
     cy.contains("button", "Get Started").click();
     cy.contains("button", "Continue").click();
     cy.wait("@savePreferences");
+    cy.contains("button", "Continue").click();
+    cy.wait("@savePreferences");
+    cy.contains("Fuel Your Training").should("be.visible");
     cy.contains("button", "Continue").click();
 
     cy.getBySel("button-onboarding-skip").click();
