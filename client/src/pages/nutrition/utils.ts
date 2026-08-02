@@ -1,4 +1,5 @@
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
+import type { MealType } from "@shared/schema/enums";
 import { MICRO_DISPLAY_DEFS } from "@shared/schema/micros";
 
 const YMD = new Intl.DateTimeFormat("en-CA", {
@@ -28,6 +29,15 @@ export function loggedAtForDate(date: string): string {
   if (date === todayStr()) return new Date().toISOString();
   // Local noon of that date — safely inside the day for any timezone offset.
   return new Date(`${date}T12:00:00`).toISOString();
+}
+
+/** The meal an athlete is most plausibly logging right now, by wall clock. */
+export function defaultMealForNow(): MealType {
+  const hour = new Date().getHours();
+  if (hour < 11) return "breakfast";
+  if (hour < 15) return "lunch";
+  if (hour < 21) return "dinner";
+  return "snack";
 }
 
 const PER_100G = 100;

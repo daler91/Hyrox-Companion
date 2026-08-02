@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useLogMealBatch } from "@/hooks/useNutrition";
 
 import { FoodSearch } from "./FoodSearch";
-import { loggedAtForDate, MEAL_LABELS, previewNutrition } from "./utils";
+import { defaultMealForNow, loggedAtForDate, MEAL_LABELS, previewNutrition } from "./utils";
 
 // A local, editable copy of a parsed item. `food` starts from the server's
 // resolution and can be swapped; unmatched rows (food === null) can't be logged.
@@ -38,11 +38,14 @@ interface ReviewRow {
 }
 
 function toRows(items: ParsedFoodItem[]): ReviewRow[] {
+  // Un-inferred items land in the meal the athlete is most plausibly eating
+  // right now, not a hardcoded "snack" that forces a per-row correction.
+  const fallbackMeal = defaultMealForNow();
   return items.map((item, i) => ({
     key: `${i}-${item.name}`,
     displayAmount: item.displayAmount || item.name,
     quantityG: Math.round(item.quantityG),
-    mealType: item.mealType ?? "snack",
+    mealType: item.mealType ?? fallbackMeal,
     confidence: item.confidence,
     food: item.food,
   }));

@@ -40,6 +40,7 @@ import { MicronutrientPreviewPanel } from "./MicronutrientPreviewPanel";
 import {
   appendUnique,
   buildPreviewMicroRows,
+  defaultMealForNow,
   loggedAtForDate,
   macroEnergyShares,
   MEAL_LABELS,
@@ -63,14 +64,6 @@ export interface UnitOption {
   value: string;
   label: string;
   grams: number;
-}
-
-function defaultMealForNow(): MealType {
-  const hour = new Date().getHours();
-  if (hour < 11) return "breakfast";
-  if (hour < 15) return "lunch";
-  if (hour < 21) return "dinner";
-  return "snack";
 }
 
 /** Parse the add-portion grams field: a positive finite number, else null. */
