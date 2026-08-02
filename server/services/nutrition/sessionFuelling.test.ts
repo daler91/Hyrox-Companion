@@ -94,6 +94,59 @@ describe("computeSessionFuelling — start instant known", () => {
     expect(result.usedStartTime).toBe(true);
     expect(result.pre.map((e) => e.id)).toEqual(["pre"]);
   });
+
+  it("attributes a same-day post_workout tag outside the window (back-logged noon stamp)", () => {
+    // Session at 17:00; recovery meal eaten that evening but logged the next
+    // day, so it carries the synthetic local-noon stamp — before the pre-window
+    // even opens. The tag names this session; it must count as post.
+    const eveningStart = new Date("2026-06-07T17:00:00Z");
+    const rows = [
+      makeRow({
+        id: "backlogged-post",
+        mealType: "post_workout",
+        loggedAt: new Date("2026-06-07T12:00:00Z"),
+      }),
+    ];
+    const result = computeSessionFuelling({ date: "2026-06-07", startedAt: eveningStart }, rows);
+
+    expect(result.usedStartTime).toBe(true);
+    expect(result.post.map((e) => e.id)).toEqual(["backlogged-post"]);
+    expect(result.pre).toHaveLength(0);
+  });
+
+  it("lets a same-day tag outrank the clock window", () => {
+    // Tagged pre_workout but stamped inside the post window: explicit intent wins.
+    const rows = [
+      makeRow({
+        id: "tagged-pre",
+        mealType: "pre_workout",
+        loggedAt: new Date(startMs + 60 * 60 * 1000),
+      }),
+    ];
+    const result = computeSessionFuelling(workout, rows);
+
+    expect(result.pre.map((e) => e.id)).toEqual(["tagged-pre"]);
+    expect(result.post).toHaveLength(0);
+  });
+
+  it("keeps window attribution for a pre/post tag from a different day", () => {
+    // Yesterday's post-workout meal falling inside this session's pre window
+    // (late meal before an after-midnight session): its tag names yesterday's
+    // session, so the clock rules here.
+    const nightStart = new Date("2026-06-08T00:30:00Z");
+    const rows = [
+      makeRow({
+        id: "yesterdays-post",
+        mealType: "post_workout",
+        logDate: "2026-06-07",
+        loggedAt: new Date("2026-06-07T22:00:00Z"),
+      }),
+    ];
+    const result = computeSessionFuelling({ date: "2026-06-08", startedAt: nightStart }, rows);
+
+    expect(result.pre.map((e) => e.id)).toEqual(["yesterdays-post"]);
+    expect(result.post).toHaveLength(0);
+  });
 });
 
 describe("computeSessionFuelling — fallback to meal tags", () => {
