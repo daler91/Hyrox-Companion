@@ -37,6 +37,7 @@ import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
 import { TargetsDialog } from "./nutrition/TargetsDialog";
+import { useQuickLog } from "./nutrition/useQuickLog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
 const EMPTY_TOTALS = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
@@ -96,6 +97,9 @@ export default function Nutrition() {
   const deleteLog = useDeleteLog(date);
   const repeatDay = useRepeatDay(date);
   const portionMemory = usePortionMemory();
+  // "Log again" always lands on today — the athlete is saying "I just ate this
+  // again", not "duplicate it on the day I'm looking at".
+  const todayQuickLog = useQuickLog(todayStr());
   // First-run detection for the guided starter: an athlete with no recents and
   // no favourites has never logged, so "Repeat previous day" can only 404.
   // Both queries are already in flight for the quick-add bar / portion memory.
@@ -197,6 +201,14 @@ export default function Nutrition() {
             onEdit={(entry) => setDialog({ mode: "edit", entry })}
             onDelete={(id) => deleteLog.mutate(id)}
             deletingId={deleteLog.isPending ? deleteLog.variables : undefined}
+            onLogAgain={(entry) =>
+              todayQuickLog.quickLog({
+                foodId: entry.foodId,
+                name: entry.name,
+                quantityG: entry.quantityG,
+                mealType: entry.mealType,
+              })
+            }
             onEditTarget={(m) => {
               const t = summary?.mealTargets?.[m];
               if (t) {

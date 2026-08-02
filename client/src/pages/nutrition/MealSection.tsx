@@ -5,7 +5,7 @@ import type {
   MealType,
   NutritionMacroTotals,
 } from "@shared/schema";
-import { Pencil, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -27,6 +27,8 @@ interface MealSectionProps {
   readonly deletingId?: string;
   /** Open the per-meal target override editor (only shown when a target exists). */
   readonly onEditTarget?: (mealType: MealType) => void;
+  /** One-tap re-log of this entry (same food, portion and meal) onto today. */
+  readonly onLogAgain?: (entry: FoodLogEntryWithNutrition) => void;
 }
 
 const ROLE_CAPTION: Record<MealRole, string> = {
@@ -60,6 +62,7 @@ export function MealSection({
   onDelete,
   deletingId,
   onEditTarget,
+  onLogAgain,
 }: MealSectionProps) {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0 && !target) return null;
@@ -166,6 +169,25 @@ export function MealSection({
               <TooltipProvider>
                 <div className="flex shrink-0 items-center gap-1">
                   <FavoriteStarButton foodId={e.foodId} foodName={e.name} />
+
+                  {onLogAgain && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Log ${e.name} again today`}
+                          onClick={() => onLogAgain(e)}
+                          data-testid={`button-log-again-${e.id}`}
+                        >
+                          <RotateCw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Log again today</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
 
                   <Tooltip>
                     <TooltipTrigger asChild>

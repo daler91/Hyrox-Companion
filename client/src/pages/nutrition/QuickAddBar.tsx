@@ -1,10 +1,8 @@
 import type { Food, FoodWithPortionMemory } from "@shared/schema";
 
-import { ToastAction } from "@/components/ui/toast";
-import { useToast } from "@/hooks/use-toast";
-import { useDeleteLog, useFavorites, useLogFood, useRecentFoods } from "@/hooks/useNutrition";
+import { useFavorites, useRecentFoods } from "@/hooks/useNutrition";
 
-import { loggedAtForDate, MEAL_LABELS } from "./utils";
+import { useQuickLog } from "./useQuickLog";
 
 const MAX_LABEL = 24;
 
@@ -46,8 +44,9 @@ function FoodChipRow<T extends Food>({
  * Favourites log straight away using the portion they were last logged in —
  * these are the athlete's own curated regulars, so the amount is a known
  * quantity and a confirm step is friction with no decision in it. An undo toast
- * covers the mis-tap. Recent chips still open the dialog: that list is
- * automatic, much longer, and a stray tap there is a real logging error.
+ * covers the mis-tap (see useQuickLog). Recent chips still open the dialog:
+ * that list is automatic, much longer, and a stray tap there is a real logging
+ * error.
  *
  * A favourite with no logging history yet has no portion to reuse, so it falls
  * back to the dialog too.
@@ -61,53 +60,27 @@ export function QuickAddBar({
 }) {
   const { data: recent = [] } = useRecentFoods();
   const { data: favorites = [] } = useFavorites();
-  const logFood = useLogFood(date);
-  const deleteLog = useDeleteLog(date);
-  const { toast } = useToast();
+  const { quickLog } = useQuickLog(date);
 
   if (recent.length === 0 && favorites.length === 0) return null;
 
-  const quickLog = (food: FoodWithPortionMemory) => {
+  const quickLogFavorite = (food: FoodWithPortionMemory) => {
     if (food.lastQuantityG == null || food.lastMealType == null) {
       onSelect(food);
       return;
     }
-
-    logFood.mutate(
-      {
-        foodId: food.id,
-        quantityG: food.lastQuantityG,
-        mealType: food.lastMealType,
-        loggedAt: loggedAtForDate(date),
-      },
-      {
-        onSuccess: (result) => {
-          // A queued offline write has no id to undo yet; its own toast already
-          // explains that it will sync.
-          if (result.status !== "saved") return;
-          const entryId = result.data.id;
-          toast({
-            title: "Food logged",
-            description: `${food.name} · ${Math.round(food.lastQuantityG ?? 0)} g · ${MEAL_LABELS[food.lastMealType ?? "snack"]}`,
-            action: (
-              <ToastAction
-                altText={`Undo logging ${food.name}`}
-                onClick={() => deleteLog.mutate(entryId)}
-                data-testid="button-undo-quickadd"
-              >
-                Undo
-              </ToastAction>
-            ),
-          });
-        },
-      },
-    );
+    quickLog({
+      foodId: food.id,
+      name: food.name,
+      quantityG: food.lastQuantityG,
+      mealType: food.lastMealType,
+    });
   };
 
   return (
     <div className="space-y-3">
       {favorites.length > 0 && (
-        <FoodChipRow title="Favorites" foods={favorites} onSelect={quickLog} testid="favorites" />
+        <FoodChipRow title="Favorites" foods={favorites} onSelect={quickLogFavorite} testid="favorites" />
       )}
       {recent.length > 0 && (
         <FoodChipRow title="Recent" foods={recent} onSelect={onSelect} testid="recent" />
