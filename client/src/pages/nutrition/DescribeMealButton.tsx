@@ -1,5 +1,5 @@
 import type { ParseMealResponse } from "@shared/schema";
-import { Sparkles } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -84,8 +84,10 @@ export function DescribeMealButton({
             <Button
               onClick={submit}
               disabled={parse.isPending || text.trim().length === 0}
+              aria-busy={parse.isPending}
               data-testid="button-parse-meal"
             >
+              {parse.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {parse.isPending ? "Reading…" : "Review foods"}
             </Button>
           </DialogFooter>

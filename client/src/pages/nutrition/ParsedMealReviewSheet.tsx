@@ -1,6 +1,6 @@
 import type { Food, ParsedFoodItem, ParseMealResponse } from "@shared/schema";
 import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -255,7 +255,8 @@ function ReviewForm({
           <Button variant="ghost" onClick={onClose} disabled={logBatch.isPending}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!canLog} data-testid="button-log-meal-batch">
+          <Button onClick={submit} disabled={!canLog} aria-busy={logBatch.isPending} data-testid="button-log-meal-batch">
+            {logBatch.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {logBatch.isPending ? "Logging…" : logButtonLabel}
           </Button>
         </div>
