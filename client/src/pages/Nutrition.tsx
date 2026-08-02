@@ -1,6 +1,6 @@
 import type { Food, ParseMealResponse } from "@shared/schema";
 import { MEAL_TYPES } from "@shared/schema/enums";
-import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Plus, ScanLine, Target } from "lucide-react";
+import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Loader2, Plus, ScanLine, Target } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -113,7 +113,12 @@ export default function Nutrition() {
       disabled={repeatDay.isPending}
       data-testid="button-repeat-prev"
     >
-      <CopyPlus className="mr-2 h-4 w-4" /> Repeat previous day
+      {repeatDay.isPending ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+      ) : (
+        <CopyPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+      )}
+      {repeatDay.isPending ? "Repeating…" : "Repeat previous day"}
     </Button>
   );
 
