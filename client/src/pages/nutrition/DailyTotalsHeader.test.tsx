@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { DailyTotalsHeader } from "./DailyTotalsHeader";
 
@@ -71,5 +72,29 @@ describe("DailyTotalsHeader", () => {
     );
     expect(screen.getByTestId("carb-load-note")).toHaveTextContent("+10g race week");
     expect(screen.queryByTestId("protein-recovery-note")).not.toBeInTheDocument();
+  });
+
+  it("offers a set-targets CTA while no target exists", async () => {
+    const user = userEvent.setup();
+    const onSetTargets = vi.fn();
+    render(
+      <DailyTotalsHeader
+        totals={{ calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 }}
+        onSetTargets={onSetTargets}
+      />,
+    );
+    await user.click(screen.getByTestId("button-set-targets-cta"));
+    expect(onSetTargets).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the CTA once a target exists", () => {
+    render(
+      <DailyTotalsHeader
+        totals={{ calories: 1000, protein: 80, carb: 150, fat: 40, fiber: 25 }}
+        effectiveTarget={{ calories: 2000, proteinG: 160, carbG: null, fatG: null, carbDeltaG: 0, baseLoadDeltaG: 0, recoveryDeltaG: 0, preloadDeltaG: 0, proteinDeltaG: 0, utss: 0, scaled: false, reasonCodes: [], explanation: "", phase: null }}
+        onSetTargets={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("button-set-targets-cta")).not.toBeInTheDocument();
   });
 });

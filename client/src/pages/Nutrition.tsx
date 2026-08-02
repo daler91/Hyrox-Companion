@@ -269,6 +269,7 @@ export default function Nutrition() {
         <DailyTotalsHeader
           totals={summary?.totals ?? EMPTY_TOTALS}
           effectiveTarget={summary?.effectiveTarget ?? null}
+          onSetTargets={() => setTargetsOpen(true)}
         />
         <EnergyBalanceCard energy={summary?.energy ?? null} />
 

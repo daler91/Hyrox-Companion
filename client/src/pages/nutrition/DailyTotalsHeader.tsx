@@ -1,5 +1,7 @@
 import type { EffectiveTargetSummary, NutritionMacroTotals } from "@shared/schema";
+import { Target } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { MacroProgressBar } from "./MacroProgressBar";
@@ -44,15 +46,21 @@ function proteinRecoveryNote(effectiveTarget: EffectiveTargetSummary | null): st
 export function DailyTotalsHeader({
   totals,
   effectiveTarget = null,
+  onSetTargets,
 }: {
   readonly totals: NutritionMacroTotals;
   readonly effectiveTarget?: EffectiveTargetSummary | null;
+  /** Opens the targets editor; shown as a CTA while no target exists so the
+   *  bare zeros come with a way to make them mean something. */
+  readonly onSetTargets?: () => void;
 }) {
   const progressByKey = new Map<string, TargetProgressRow>(
     computeTargetProgress(totals, effectiveTarget).map((r) => [r.key, r]),
   );
   const carbNote = carbLoadNote(effectiveTarget);
   const proteinNote = proteinRecoveryNote(effectiveTarget);
+
+  const showSetTargetsCta = effectiveTarget === null && onSetTargets !== undefined;
 
   return (
     <Card data-testid="nutrition-daily-totals">
@@ -103,6 +111,22 @@ export function DailyTotalsHeader({
           );
         })}
       </CardContent>
+      {showSetTargetsCta && (
+        <div className="flex items-center justify-between gap-2 border-t px-4 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            Set daily targets to see progress toward your fuelling goals.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={onSetTargets}
+            data-testid="button-set-targets-cta"
+          >
+            <Target className="mr-2 h-4 w-4" aria-hidden="true" /> Set targets
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
