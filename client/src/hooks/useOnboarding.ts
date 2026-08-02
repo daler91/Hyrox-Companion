@@ -27,7 +27,7 @@ function clearOnboardingForceParam(): void {
 
 export function useOnboarding(
   isNewUser: boolean,
-  fileInputRef: RefObject<HTMLInputElement>,
+  fileInputRef: RefObject<HTMLInputElement | null>,
   options: { aiCoachEnabled?: boolean; onboardingCompleted?: boolean; isAuthUserLoaded?: boolean } = {},
 ) {
   const aiCoachEnabled = options.aiCoachEnabled ?? true;

@@ -41,7 +41,15 @@ import { registerSW } from "virtual:pwa-register";
 const shouldRegisterServiceWorkers =
   !("Cypress" in globalThis) && "serviceWorker" in globalThis.navigator;
 
-createRoot(document.getElementById("root")!).render(
+// React 19 no longer re-throws render errors: uncaught ones go to
+// window.reportError and boundary-caught ones only to console.error, so
+// Sentry must hook the root callbacks to keep capturing them. The handlers
+// no-op until Sentry.init runs (deferred behind the privacy notice, S11).
+createRoot(document.getElementById("root")!, {
+  onUncaughtError: Sentry.reactErrorHandler(),
+  onCaughtError: Sentry.reactErrorHandler(),
+  onRecoverableError: Sentry.reactErrorHandler(),
+}).render(
   <Sentry.ErrorBoundary fallback={FallbackErrorBoundary}>
     <App />
   </Sentry.ErrorBoundary>
