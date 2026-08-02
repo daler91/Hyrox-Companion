@@ -15,9 +15,14 @@
  * limited to users who have a stored result (i.e. who actually use the
  * feature).
  */
-import { ANALYTICS_FEATURES, type AnalyticsFeature } from "@shared/schema";
+import { ANALYTICS_FEATURES, type AnalyticsFeature, type AnalyticsResult } from "@shared/schema";
 
-import { DEFAULT_JOB_OPTIONS, queue, RECOMPUTE_ANALYTICS_QUEUE, type RecomputeAnalyticsJobData } from "../queue";
+import {
+  DEFAULT_JOB_OPTIONS,
+  queue,
+  RECOMPUTE_ANALYTICS_QUEUE,
+  type RecomputeAnalyticsJobData,
+} from "../queue";
 import type { IStorage } from "../storage";
 import { getLocalDateStr, getLocalHour } from "../timezone";
 import { computeStale } from "./analyticsStaleness";
@@ -26,12 +31,15 @@ import { computeStale } from "./analyticsStaleness";
  * For one user at their local midnight, enqueue a recompute job for each feature
  * with a stored result that is stale relative to that feature's anchor (latest
  * workout for training surfaces, latest food-log date for nutrition_insights).
- * Returns the number of jobs enqueued.
+ * `resultsByFeature` is this user's stored rows, preloaded in a single batched
+ * query by the caller (see runAnalyticsRecomputeScan) instead of being fetched
+ * one-by-one here. Returns the number of jobs enqueued.
  */
 async function enqueueStaleRecomputes(
   storage: IStorage,
   userId: string,
   localDate: string,
+  resultsByFeature: ReadonlyMap<AnalyticsFeature, AnalyticsResult>,
 ): Promise<number> {
   // Anchors are fetched lazily and memoized: the workout anchor is shared by
   // three features, and the nutrition query is skipped entirely for users
@@ -56,7 +64,7 @@ async function enqueueStaleRecomputes(
 
   let enqueued = 0;
   for (const feature of ANALYTICS_FEATURES) {
-    const row = await storage.analyticsResults.get(userId, feature);
+    const row = resultsByFeature.get(feature);
     if (!row) continue; // only refresh features the user has actually used
     if (row.recomputedOn === localDate) continue; // already recomputed today (pre-check)
     if (!computeStale(row, await anchorFor(feature))) continue; // up to date → skip
@@ -86,7 +94,10 @@ export async function runAnalyticsRecomputeScan(
   if (userIds.length === 0) return { usersChecked, enqueued };
 
   // Fetch all users in batches to avoid N+1 query issue
-  const usersMap = new Map<string, NonNullable<Awaited<ReturnType<typeof storage.users.getUser>>>>();
+  const usersMap = new Map<
+    string,
+    NonNullable<Awaited<ReturnType<typeof storage.users.getUser>>>
+  >();
   const batchSize = 100;
   for (let i = 0; i < userIds.length; i += batchSize) {
     const batch = userIds.slice(i, i + batchSize);
@@ -96,19 +107,49 @@ export async function runAnalyticsRecomputeScan(
     }
   }
 
-  for (const userId of userIds) {
+  // Narrow to users actually at local midnight before touching
+  // analytics_results at all — most engaged users land in a different hourly
+  // tick, so there's no reason to fetch their rows on this pass.
+  const eligibleUserIds = userIds.filter((userId) => {
+    const user = usersMap.get(userId);
+    return user != null && getLocalHour(now, user.userTimezone) === 0;
+  });
+  usersChecked = eligibleUserIds.length;
+
+  // ⚡ Perf: batch-fetch every eligible user's stored analytics_results rows
+  // (all features) in `IN (...)` queries instead of the previous 4 sequential
+  // per-feature `get()` calls per user. Hundreds of users can share the same
+  // local-midnight hour, so this collapses up to ~4x that many round trips
+  // into ceil(eligibleUserIds.length / 100) batched queries.
+  const resultsByUser = new Map<string, Map<AnalyticsFeature, AnalyticsResult>>();
+  for (let i = 0; i < eligibleUserIds.length; i += batchSize) {
+    const batch = eligibleUserIds.slice(i, i + batchSize);
+    const rows = await storage.analyticsResults.getMany(batch);
+    for (const row of rows) {
+      let byFeature = resultsByUser.get(row.userId);
+      if (!byFeature) {
+        byFeature = new Map();
+        resultsByUser.set(row.userId, byFeature);
+      }
+      byFeature.set(row.feature as AnalyticsFeature, row);
+    }
+  }
+
+  const emptyResults: ReadonlyMap<AnalyticsFeature, AnalyticsResult> = new Map();
+  for (const userId of eligibleUserIds) {
     const user = usersMap.get(userId);
     if (!user) continue;
-    // Only act in the user's local midnight hour (00:00–00:59 local). The
-    // hourly UTC cron lands exactly one tick in this window per day per tz.
-    if (getLocalHour(now, user.userTimezone) !== 0) continue;
-    usersChecked += 1;
 
     // No early return for workout-less users: nutrition_insights anchors on
     // food-log dates, so a user who only logs meals must still recompute.
     // Workout-anchored features naturally skip via computeStale(row, null).
     const localDate = getLocalDateStr(now, user.userTimezone);
-    enqueued += await enqueueStaleRecomputes(storage, userId, localDate);
+    enqueued += await enqueueStaleRecomputes(
+      storage,
+      userId,
+      localDate,
+      resultsByUser.get(userId) ?? emptyResults,
+    );
   }
 
   return { usersChecked, enqueued };
