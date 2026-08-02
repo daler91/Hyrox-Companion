@@ -40,6 +40,7 @@ import { MicronutrientPreviewPanel } from "./MicronutrientPreviewPanel";
 import {
   appendUnique,
   buildPreviewMicroRows,
+  defaultMealForNow,
   loggedAtForDate,
   macroEnergyShares,
   MEAL_LABELS,
@@ -56,6 +57,8 @@ export type LogDialogState =
     entryMethod?: "manual" | "barcode";
     /** Last portion this food was logged in, when we have one (see usePortionMemory). */
     portionHint?: PortionHint;
+    /** Explicit meal intent (e.g. a ?meal= deep-link) — beats the remembered meal. */
+    mealOverride?: MealType;
   }
   | { mode: "edit"; entry: FoodLogEntryWithNutrition };
 
@@ -63,14 +66,6 @@ export interface UnitOption {
   value: string;
   label: string;
   grams: number;
-}
-
-function defaultMealForNow(): MealType {
-  const hour = new Date().getHours();
-  if (hour < 11) return "breakfast";
-  if (hour < 15) return "lunch";
-  if (hour < 21) return "dinner";
-  return "snack";
 }
 
 /** Parse the add-portion grams field: a positive finite number, else null. */
@@ -206,11 +201,12 @@ function initialUnitValue(state: LogDialogState, hasServingSize: boolean): strin
   return hasServingSize ? "__serving" : "g";
 }
 
-/** Initial meal: the meal this food was last logged in, else the time-of-day
- *  default for a new log, else the entry's own meal. */
+/** Initial meal: an explicit override (deep-link intent) first, else the meal
+ *  this food was last logged in, else the time-of-day default for a new log,
+ *  else the entry's own meal. */
 function initialMealType(state: LogDialogState): MealType {
   if (state.mode !== "create") return state.entry.mealType;
-  return state.portionHint?.mealType ?? defaultMealForNow();
+  return state.mealOverride ?? state.portionHint?.mealType ?? defaultMealForNow();
 }
 
 /** Fields that differ by mode — from the picked Food (create) or the existing

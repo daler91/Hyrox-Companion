@@ -162,6 +162,26 @@ describe("LogFoodDialog", () => {
     expect(screen.getByTestId("select-meal-type")).toHaveTextContent("Lunch");
   });
 
+  it("lets an explicit meal override beat the remembered meal", () => {
+    renderWithClient(
+      <LogFoodDialog
+        state={{
+          mode: "create",
+          food: FOOD,
+          portionHint: { quantityG: 140, mealType: "lunch" },
+          mealOverride: "post_workout",
+        }}
+        date="2026-06-07"
+        onClose={vi.fn()}
+      />,
+    );
+
+    // A ?meal= deep-link (e.g. "Log recovery meal") carries explicit intent —
+    // the remembered portion still seeds the amount, but not the meal.
+    expect(screen.getByTestId("input-quantity")).toHaveValue(140);
+    expect(screen.getByTestId("select-meal-type")).toHaveTextContent("Post-workout");
+  });
+
   describe("removing a portion", () => {
     const SLICE: FoodServing = {
       id: "s9",

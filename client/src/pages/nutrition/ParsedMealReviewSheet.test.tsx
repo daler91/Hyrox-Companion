@@ -123,4 +123,17 @@ describe("ParsedMealReviewSheet", () => {
     await user.click(screen.getByTestId("meal-review-remove-0"));
     expect(screen.getByTestId("button-log-meal-batch")).toBeDisabled();
   });
+
+  it("defaults un-inferred items to the time-of-day meal, not snack", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 7, 18, 30));
+    try {
+      renderSheet();
+      // The parser's own inference wins; only the null-mealType row falls back.
+      expect(screen.getByTestId("meal-review-meal-0")).toHaveTextContent("Breakfast");
+      expect(screen.getByTestId("meal-review-meal-1")).toHaveTextContent("Dinner");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

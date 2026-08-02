@@ -1,6 +1,6 @@
 import type { Food, ParseMealResponse } from "@shared/schema";
-import { MEAL_TYPES } from "@shared/schema/enums";
-import { ChefHat, ChevronLeft, ChevronRight, CopyPlus, Loader2, Plus, ScanLine, Target } from "lucide-react";
+import { MEAL_TYPES, type MealType } from "@shared/schema/enums";
+import { ChevronLeft, ChevronRight, CopyPlus, Loader2 } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,18 +11,22 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   useDeleteLog,
+  useFavorites,
   useNutritionDay,
   useNutritionTargets,
   usePortionMemory,
+  useRecentFoods,
   useRepeatDay,
 } from "@/hooks/useNutrition";
 
 import { BarcodeScanner } from "./nutrition/BarcodeScanner";
 import { CustomFoodDialog, type CustomFoodDialogState } from "./nutrition/CustomFoodDialog";
 import { DailyTotalsHeader } from "./nutrition/DailyTotalsHeader";
-import { DescribeMealButton } from "./nutrition/DescribeMealButton";
+import { DescribeMealDialog } from "./nutrition/DescribeMealDialog";
 import { EnergyBalanceCard } from "./nutrition/EnergyBalanceCard";
+import { FirstRunStarter } from "./nutrition/FirstRunStarter";
 import { FoodSearch } from "./nutrition/FoodSearch";
+import { LogFoodActions } from "./nutrition/LogFoodActions";
 import { type LogDialogState, LogFoodDialog } from "./nutrition/LogFoodDialog";
 import { MealSection } from "./nutrition/MealSection";
 import { MealTargetDialog, type MealTargetDialogState } from "./nutrition/MealTargetDialog";
@@ -32,8 +36,6 @@ import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
 import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
-import { ScanLabelButton } from "./nutrition/ScanLabelButton";
-import { SnapMealButton } from "./nutrition/SnapMealButton";
 import { TargetsDialog } from "./nutrition/TargetsDialog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
 
@@ -54,6 +56,15 @@ function initialDate(): string {
   return param && isValidYmd(param) ? param : todayStr();
 }
 
+/** Initial meal seed from an optional ?meal= deep-link (the workout sheet's
+ *  "Log recovery meal" links here with post_workout), else null. Seeds the
+ *  meal picker of every log started this visit — arriving with intent to fuel
+ *  a session shouldn't cost a per-food meal correction. */
+function initialMealSeed(): MealType | null {
+  const param = new URLSearchParams(globalThis.location.search).get("meal");
+  return param && (MEAL_TYPES as readonly string[]).includes(param) ? (param as MealType) : null;
+}
+
 /**
  * Nutrition tracking — Phase 1 daily log. Pick a day, see running macro totals,
  * search/quick-add foods, and edit/delete entries. Reached only when the
@@ -63,6 +74,7 @@ export default function Nutrition() {
   useDocumentTitle("Nutrition");
   const { isLoading: authLoading } = useAuth();
   const [date, setDate] = useState(initialDate);
+  const [mealSeed] = useState(initialMealSeed);
   const [dialog, setDialog] = useState<LogDialogState | null>(null);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
@@ -74,6 +86,7 @@ export default function Nutrition() {
     result: ParseMealResponse;
     entryMethod: "nl" | "photo";
   } | null>(null);
+  const [describeOpen, setDescribeOpen] = useState(false);
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [mealTargetEdit, setMealTargetEdit] = useState<MealTargetDialogState | null>(null);
 
@@ -83,14 +96,30 @@ export default function Nutrition() {
   const deleteLog = useDeleteLog(date);
   const repeatDay = useRepeatDay(date);
   const portionMemory = usePortionMemory();
+  // First-run detection for the guided starter: an athlete with no recents and
+  // no favourites has never logged, so "Repeat previous day" can only 404.
+  // Both queries are already in flight for the quick-add bar / portion memory.
+  const recentFoods = useRecentFoods();
+  const favoriteFoods = useFavorites();
+  const isFirstRun =
+    recentFoods.isSuccess &&
+    favoriteFoods.isSuccess &&
+    recentFoods.data.length === 0 &&
+    favoriteFoods.data.length === 0;
 
   // Every "log this food" entry point goes through here so a food the athlete
   // has logged before opens pre-filled with the portion they actually use —
   // including one reached from search, not just from the quick-add chips.
   const openCreateDialog = useCallback(
     (food: Food, entryMethod?: "manual" | "barcode") =>
-      setDialog({ mode: "create", food, entryMethod, portionHint: portionMemory(food.id) }),
-    [portionMemory],
+      setDialog({
+        mode: "create",
+        food,
+        entryMethod,
+        portionHint: portionMemory(food.id),
+        mealOverride: mealSeed ?? undefined,
+      }),
+    [portionMemory, mealSeed],
   );
 
   if (authLoading) {
@@ -122,6 +151,17 @@ export default function Nutrition() {
     </Button>
   );
 
+  // A first-run athlete gets the guided starter wherever the repeat shortcut
+  // would show — repeating an empty history is the one action that can't work.
+  const firstRunStarter = (
+    <FirstRunStarter
+      onDescribe={() => setDescribeOpen(true)}
+      onScanBarcode={() => setBarcodeOpen(true)}
+      onSetTargets={() => setTargetsOpen(true)}
+      hasTarget={currentTarget !== null}
+    />
+  );
+
   let dayBody: ReactNode;
   if (day.isLoading) {
     dayBody = (
@@ -131,7 +171,9 @@ export default function Nutrition() {
     );
   } else if (isEmpty && !hasMealTargets) {
     // Nothing logged and no targets to plan around — the classic empty prompt.
-    dayBody = (
+    dayBody = isFirstRun ? (
+      firstRunStarter
+    ) : (
       <div
         className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground"
         data-testid="text-empty-day"
@@ -167,7 +209,12 @@ export default function Nutrition() {
             }}
           />
         ))}
-        {isEmpty && <div className="flex justify-center">{repeatPrevButton}</div>}
+        {isEmpty &&
+          (isFirstRun ? (
+            firstRunStarter
+          ) : (
+            <div className="flex justify-center">{repeatPrevButton}</div>
+          ))}
       </div>
     );
   }
@@ -237,49 +284,22 @@ export default function Nutrition() {
         <DailyTotalsHeader
           totals={summary?.totals ?? EMPTY_TOTALS}
           effectiveTarget={summary?.effectiveTarget ?? null}
+          onSetTargets={() => setTargetsOpen(true)}
         />
         <EnergyBalanceCard energy={summary?.energy ?? null} />
 
         <FoodSearch onSelect={openCreateDialog} />
         <QuickAddBar onSelect={openCreateDialog} date={date} />
 
-        <div className="flex flex-wrap gap-2">
-          <DescribeMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })} />
-          <SnapMealButton onParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })} />
-          <ScanLabelButton onExtracted={(r) => setCustomFood({ mode: "create", prefill: r })} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setBarcodeOpen(true)}
-            data-testid="button-scan-barcode"
-          >
-            <ScanLine className="mr-2 h-4 w-4" /> Scan barcode
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCustomFood({ mode: "create" })}
-            data-testid="button-new-custom-food"
-          >
-            <Plus className="mr-2 h-4 w-4" /> Custom food
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRecipe({ open: true, id: null })}
-            data-testid="button-new-recipe"
-          >
-            <ChefHat className="mr-2 h-4 w-4" /> Recipe
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setTargetsOpen(true)}
-            data-testid="button-edit-targets"
-          >
-            <Target className="mr-2 h-4 w-4" /> Targets
-          </Button>
-        </div>
+        <LogFoodActions
+          onDescribe={() => setDescribeOpen(true)}
+          onScanBarcode={() => setBarcodeOpen(true)}
+          onMealParsed={(r) => setMealReview({ result: r, entryMethod: "photo" })}
+          onLabelExtracted={(r) => setCustomFood({ mode: "create", prefill: r })}
+          onCustomFood={() => setCustomFood({ mode: "create" })}
+          onRecipe={() => setRecipe({ open: true, id: null })}
+          onTargets={() => setTargetsOpen(true)}
+        />
 
         {dayBody}
 
@@ -322,6 +342,12 @@ export default function Nutrition() {
         date={date}
         entryMethod={mealReview?.entryMethod ?? "nl"}
         onClose={() => setMealReview(null)}
+      />
+      {/* Page-level describe dialog so the first-run starter can open it. */}
+      <DescribeMealDialog
+        open={describeOpen}
+        onOpenChange={setDescribeOpen}
+        onParsed={(r) => setMealReview({ result: r, entryMethod: "nl" })}
       />
       <TargetsDialog
         open={targetsOpen}

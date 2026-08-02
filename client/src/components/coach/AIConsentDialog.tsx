@@ -37,6 +37,7 @@ export function AIConsentDialog({ open, onAccept, onDecline }: AIConsentDialogPr
                 <li>Training plan details and schedule</li>
                 <li>Performance metrics (RPE, duration, heart rate if synced)</li>
                 <li>Chat messages you send to the coach</li>
+                <li>Meal descriptions and photos you submit for AI food logging</li>
               </ul>
               <div className="flex items-start gap-2 rounded-md bg-muted p-3">
                 <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0" aria-hidden="true" />

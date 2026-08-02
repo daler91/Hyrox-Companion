@@ -1,10 +1,11 @@
 import type { NutritionMacroTotals, NutritionTarget } from "@shared/schema";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   appendUnique,
   buildPreviewMicroRows,
   computeTargetProgress,
+  defaultMealForNow,
   macroEnergyShares,
   previewMicrosScaled,
   projectGoalContribution,
@@ -194,5 +195,34 @@ describe("appendUnique", () => {
   it("returns the SAME reference (no-op) when the key already exists", () => {
     const arr = [{ id: "a" }];
     expect(appendUnique(arr, { id: "a" }, keyOf)).toBe(arr);
+  });
+});
+
+describe("defaultMealForNow", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const at = (hour: number) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 15, hour, 0, 0));
+  };
+
+  it("maps the day into breakfast / lunch / dinner / snack windows", () => {
+    at(8);
+    expect(defaultMealForNow()).toBe("breakfast");
+    at(12);
+    expect(defaultMealForNow()).toBe("lunch");
+    at(18);
+    expect(defaultMealForNow()).toBe("dinner");
+    at(22);
+    expect(defaultMealForNow()).toBe("snack");
+  });
+
+  it("treats each boundary hour as the start of the later meal", () => {
+    at(11);
+    expect(defaultMealForNow()).toBe("lunch");
+    at(15);
+    expect(defaultMealForNow()).toBe("dinner");
+    at(21);
+    expect(defaultMealForNow()).toBe("snack");
   });
 });
