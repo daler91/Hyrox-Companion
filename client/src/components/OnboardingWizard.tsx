@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { useState } from "react";
 
+import { FuellingStep } from "@/components/onboarding/FuellingStep";
 import { GoalStep } from "@/components/onboarding/GoalStep";
 import { getOnboardingGoalLabel } from "@/components/onboarding/onboardingGoals";
 import { OnboardingWizardFooter } from "@/components/onboarding/OnboardingWizardFooter";
@@ -11,7 +12,7 @@ import { UnitsStep } from "@/components/onboarding/UnitsStep";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
 import type { OnboardingCompletionChoice, OnboardingWizardStep } from "@/hooks/onboardingTypes";
-import { useOnboardingWizard } from "@/hooks/useOnboardingWizard";
+import { ONBOARDING_STEPS, useOnboardingWizard } from "@/hooks/useOnboardingWizard";
 
 interface OnboardingWizardProps {
   readonly open: boolean;
@@ -22,6 +23,7 @@ const TITLES: Record<OnboardingWizardStep, string> = {
   welcome: "Welcome to fitai.coach",
   units: "Set Your Preferences",
   goal: "What's Your Goal?",
+  fuelling: "Fuel Your Training",
   plan: "Choose Your Path",
   schedule: "When Do You Start?",
 };
@@ -29,10 +31,10 @@ const DESCS: Record<OnboardingWizardStep, string> = {
   welcome: "Let's get you set up in just a few steps.",
   units: "Choose your measurement units and HYROX race profile.",
   goal: "This helps us tailor your experience.",
+  fuelling: "Get suggested daily nutrition targets from your body profile.",
   plan: "How would you like to start training?",
   schedule: "Pick the first day of your 8-week program.",
 };
-const STEPS: OnboardingWizardStep[] = ["welcome", "units", "goal", "plan", "schedule"];
 
 export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizardProps>) {
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
@@ -64,6 +66,18 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setMafHrDataAvailable,
     startDate,
     setStartDate,
+    bodyweight,
+    setBodyweight,
+    heightCm,
+    setHeightCm,
+    age,
+    setAge,
+    activityLevel,
+    setActivityLevel,
+    weightGoalDirection,
+    setWeightGoalDirection,
+    applyTargets,
+    setApplyTargets,
     handleNext,
     handleSkip,
     handleImportPlan,
@@ -92,7 +106,7 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
       title={TITLES[step]}
       description={DESCS[step]}
       step={step}
-      steps={STEPS}
+      steps={ONBOARDING_STEPS}
       idx={idx}
       total={total}
       footer={
@@ -135,6 +149,26 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           onMafTrendChange={setMafTrend}
           mafHrDataAvailable={mafHrDataAvailable}
           onMafHrDataAvailableChange={setMafHrDataAvailable}
+        />
+      )}
+      {step === "fuelling" && (
+        <FuellingStep
+          fields={{
+            bodyweight,
+            heightCm,
+            age,
+            activityLevel,
+            weightGoalDirection,
+            weightUnit,
+            gender,
+          }}
+          onBodyweightChange={setBodyweight}
+          onHeightCmChange={setHeightCm}
+          onAgeChange={setAge}
+          onActivityLevelChange={setActivityLevel}
+          onWeightGoalDirectionChange={setWeightGoalDirection}
+          applyTargets={applyTargets}
+          onApplyTargetsChange={setApplyTargets}
         />
       )}
       {step === "plan" && (
