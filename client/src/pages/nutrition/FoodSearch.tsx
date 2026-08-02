@@ -37,6 +37,14 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
           type="search"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
+          onKeyDown={(e) => {
+            // Keyboard fast-path: Enter picks the top result (the same one a
+            // tap on the first row would).
+            if (e.key === "Enter" && results.length > 0) {
+              e.preventDefault();
+              onSelect(results[0]);
+            }
+          }}
           placeholder="Search foods (e.g. banana, chicken breast)"
           autoComplete="off"
           className="pl-9"
@@ -84,10 +92,17 @@ export function FoodSearch({ onSelect }: { readonly onSelect: (food: Food) => vo
                     <span className="block truncate text-xs text-muted-foreground">{food.brand}</span>
                   )}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {food.caloriesPer100g == null
-                    ? "—"
-                    : `${Math.round(food.caloriesPer100g)} kcal/100g`}
+                <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                  {/* kcal + protein per 100g: enough to pick between two
+                      similar entries without a dialog round-trip each. */}
+                  <span className="block">
+                    {food.caloriesPer100g == null
+                      ? "—"
+                      : `${Math.round(food.caloriesPer100g)} kcal`}
+                  </span>
+                  {food.proteinPer100g != null && (
+                    <span className="block">{Math.round(food.proteinPer100g)}g protein /100g</span>
+                  )}
                 </span>
               </button>
               <FavoriteStarButton foodId={food.id} foodName={food.name} size="sm" />

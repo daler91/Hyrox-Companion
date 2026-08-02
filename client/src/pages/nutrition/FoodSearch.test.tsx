@@ -54,6 +54,30 @@ describe("FoodSearch", () => {
     );
   });
 
+  it("shows kcal and protein on result rows", async () => {
+    vi.mocked(api.nutrition.search).mockResolvedValue({ results: [BANANA], apiDegraded: false });
+    const user = userEvent.setup();
+    renderWithClient(<FoodSearch onSelect={vi.fn()} />);
+
+    await user.type(screen.getByTestId("input-food-search"), "ban");
+    const row = await screen.findByTestId("result-food-f1");
+    expect(row).toHaveTextContent("kcal");
+    expect(row).toHaveTextContent("protein");
+  });
+
+  it("selects the top result on Enter", async () => {
+    vi.mocked(api.nutrition.search).mockResolvedValue({ results: [BANANA], apiDegraded: false });
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    renderWithClient(<FoodSearch onSelect={onSelect} />);
+
+    await user.type(screen.getByTestId("input-food-search"), "ban");
+    await screen.findByTestId("result-food-f1");
+    await user.type(screen.getByTestId("input-food-search"), "{Enter}");
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "f1" }));
+  });
+
   it("surfaces the cached-results notice when the API is degraded", async () => {
     vi.mocked(api.nutrition.search).mockResolvedValue({ results: [], apiDegraded: true });
     const user = userEvent.setup();
