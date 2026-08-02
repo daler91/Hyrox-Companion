@@ -1,9 +1,13 @@
 # React 19 Upgrade Plan — `react@18.3.1` → `react@19.2.8`
 
-Status: **Phases 0–1 implemented** (see the upgrade PR); Phase 2 verification in
-progress. Codebase and dependency audit completed 2026-08-01 against `main`; all
-version/peer-range facts below were verified live against the npm registry on
-that date.
+Status: **Phases 0–1 merged** (PR #1720, 2026-08-02). **Phase 2 CI verification
+green** on `main` post-merge: Build, Unit Tests (coverage-gated), the full
+Cypress pipeline (build, bundle-check, integration, smoke, e2e), migrations
+check, and security scanners all passed on the merge commit. Remaining Phase 2
+manual smoke items (§5) and the Phase 3 soak apply to the production
+deployment. Follow-up §6.1 (deprecation renames) is implemented. Codebase and
+dependency audit completed 2026-08-01 against `main`; all version/peer-range
+facts below were verified live against the npm registry on that date.
 
 ## Purpose
 
@@ -274,10 +278,10 @@ the count).
 
 Ordered by value/effort; none block the upgrade.
 
-1. **Deprecation renames** (~1h, mechanical): `React.ElementRef` →
-   `React.ComponentRef` (52 sites, 15 ui files), `MutableRefObject` →
-   `RefObject` (15 sites, 6 files — `workout-editor/*`, `useWorkoutVoiceForm`,
-   `VoiceFieldButton`).
+1. **Deprecation renames** — **done** (landed with this status update):
+   `React.ElementRef` → `React.ComponentRef` (52 sites, 15 ui files),
+   `MutableRefObject` → `RefObject` (15 sites, 6 files — `workout-editor/*`,
+   `useWorkoutVoiceForm`, `VoiceFieldButton`).
 2. **Add `<StrictMode>`** at the root (2 lines): the app has never run under
    StrictMode; React 19's dev double-invoking (including ref callbacks on
    mount) will surface latent effect bugs. Land alone, soak in dev for a

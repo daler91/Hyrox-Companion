@@ -6,7 +6,7 @@ import { useVoiceInput } from "@/hooks/useVoiceInput";
 
 interface VoiceFieldButtonProps {
   onTranscript: (text: string) => void;
-  onStopRef?: React.MutableRefObject<(() => void) | null>;
+  onStopRef?: React.RefObject<(() => void) | null>;
   size?: "icon" | "sm" | "default";
   className?: string;
   "data-testid"?: string;

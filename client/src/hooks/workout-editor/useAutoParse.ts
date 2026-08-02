@@ -1,5 +1,5 @@
 import type { StructureBlockInput } from "@shared/schema";
-import type { MutableRefObject } from "react";
+import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
@@ -60,11 +60,11 @@ function parseErrorReason(err: unknown): string {
 }
 
 interface UseAutoParseOptions {
-  blockCounterRef: MutableRefObject<number>;
+  blockCounterRef: RefObject<number>;
   // Live refs owned by useWorkoutEditor so the debounced callback sees the
   // latest merge inputs when it fires (see the comment there).
-  blocksRef: MutableRefObject<string[]>;
-  dataRef: MutableRefObject<Record<string, StructuredExercise>>;
+  blocksRef: RefObject<string[]>;
+  dataRef: RefObject<Record<string, StructuredExercise>>;
   onApply: (
     newBlocks: string[],
     newData: Record<string, StructuredExercise>,

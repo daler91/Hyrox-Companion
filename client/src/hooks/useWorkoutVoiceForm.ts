@@ -13,7 +13,7 @@ export interface EditFormState {
 export function useWorkoutVoiceForm(
   editForm: EditFormState,
   setEditForm: (form: EditFormState) => void,
-  stopAllVoiceRef?: React.MutableRefObject<(() => void) | null>
+  stopAllVoiceRef?: React.RefObject<(() => void) | null>
 ) {
   const { toast } = useToast();
 

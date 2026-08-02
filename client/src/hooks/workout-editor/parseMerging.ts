@@ -1,6 +1,6 @@
 import type { ParsedExercise } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName } from "@shared/schema/exercises";
-import type { MutableRefObject } from "react";
+import type { RefObject } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
@@ -50,7 +50,7 @@ function buildBlockFromParsed(ex: ParsedExercise): ParsedBlockBuild {
   };
 }
 
-export function processParsedExercises(parsed: ParsedExercise[], counterRef: MutableRefObject<number>) {
+export function processParsedExercises(parsed: ParsedExercise[], counterRef: RefObject<number>) {
   const newBlocks: string[] = [];
   const newData: Record<string, StructuredExercise> = {};
 
@@ -100,7 +100,7 @@ function mergeKey(name: string, customLabel: string | null | undefined): string 
  */
 export function mergeParsedWithEdits(
   parsed: ParsedExercise[],
-  counterRef: MutableRefObject<number>,
+  counterRef: RefObject<number>,
   existingBlocks: readonly string[],
   existingData: Readonly<Record<string, StructuredExercise>>,
 ) {

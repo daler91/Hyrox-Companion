@@ -1,11 +1,11 @@
 import type { ParsedExercise } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
-import type { MutableRefObject } from "react";
+import type { RefObject } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 
-export function makeBlockId(name: string, counterRef: MutableRefObject<number>) {
+export function makeBlockId(name: string, counterRef: RefObject<number>) {
   counterRef.current += 1;
   return `${name}__${counterRef.current}`;
 }

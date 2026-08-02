@@ -1,6 +1,6 @@
 import type { StructureBlockInput } from "@shared/schema";
 import { useMutation } from "@tanstack/react-query";
-import type { MutableRefObject } from "react";
+import type { RefObject } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
 import { useToast } from "@/hooks/use-toast";
@@ -28,7 +28,7 @@ interface ParseCopy {
 // Share the post-parse pipeline through a single factory so a future tweak
 // to the merge/replace logic can't drift between the two surfaces.
 function useParseMutationBase<TVariables>(
-  blockCounterRef: MutableRefObject<number>,
+  blockCounterRef: RefObject<number>,
   options: UseParseWorkoutMutationOptions,
   mutationFn: (variables: TVariables) => Promise<ParseWorkoutStructureResponse>,
   copy: ParseCopy,
@@ -68,7 +68,7 @@ function useParseMutationBase<TVariables>(
 }
 
 export function useParseWorkoutMutation(
-  blockCounterRef: MutableRefObject<number>,
+  blockCounterRef: RefObject<number>,
   options: UseParseWorkoutMutationOptions,
 ) {
   return useParseMutationBase<string>(blockCounterRef, options, parseWorkoutText, {
@@ -88,7 +88,7 @@ export type ParseImagePayload = ParseFromImagePayload;
  * source switch doesn't introduce behavioural drift.
  */
 export function useParseWorkoutFromImageMutation(
-  blockCounterRef: MutableRefObject<number>,
+  blockCounterRef: RefObject<number>,
   options: UseParseWorkoutMutationOptions,
 ) {
   return useParseMutationBase<ParseImagePayload>(
