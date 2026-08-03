@@ -59,7 +59,7 @@ function makeStorage(data: FakeData) {
       claimLoggingReminder: vi.fn(async () => data.loggingClaimWins ?? true),
     },
     workouts: {
-      getLatestStartedWorkout: vi.fn(async () => data.latestWorkout),
+      getLatestStartedWorkout: vi.fn(async (_userId: string, _after: Date) => data.latestWorkout),
     },
     nutrition: {
       listEntriesWithFoodInWindow: vi.fn(async () => data.windowEntries ?? []),
