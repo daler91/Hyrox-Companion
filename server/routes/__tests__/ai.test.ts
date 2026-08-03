@@ -41,39 +41,43 @@ vi.mock("../../types", () => ({
   toDateStr: () => "2024-03-10",
 }));
 
-// Mock the storage functions
+// Mock the storage functions.
+// Defaults are passed as vi.fn(impl) — not .mockResolvedValue() — so that the
+// vi.resetAllMocks() in each beforeEach restores them instead of wiping them.
+// A test's own mockResolvedValue/mockImplementation override therefore cannot
+// leak into whichever test happens to run next.
 vi.mock("../../storage", () => ({
   storage: {
     users: {
       // Default getUser returns a consented user so the aiConsentCheck
       // middleware allows routes through. Individual tests can override
       // via vi.mocked(storage.users.getUser).mockResolvedValue(...).
-      getUser: vi.fn().mockResolvedValue({ aiCoachEnabled: true }),
-      getCustomExercises: vi.fn().mockResolvedValue([]),
+      getUser: vi.fn(async () => ({ aiCoachEnabled: true })),
+      getCustomExercises: vi.fn(async () => []),
       getChatMessages: vi.fn(),
       saveChatMessage: vi.fn(),
       clearChatHistory: vi.fn(),
     },
     timeline: {
       getTimeline: vi.fn(),
-      getUpcomingPlannedDays: vi.fn().mockResolvedValue([]),
+      getUpcomingPlannedDays: vi.fn(async () => []),
     },
     plans: {
       getPlanDay: vi.fn(),
       updatePlanDay: vi.fn(),
-      listTrainingPlans: vi.fn().mockResolvedValue([]),
+      listTrainingPlans: vi.fn(async () => []),
     },
     workouts: {
       getExerciseSetsByPlanDay: vi.fn(),
-      listWorkoutLogs: vi.fn().mockResolvedValue([]),
+      listWorkoutLogs: vi.fn(async () => []),
     },
     coaching: {
       listCoachingMaterials: vi.fn(),
-      hasChunksForUser: vi.fn().mockResolvedValue(false),
-      getStoredEmbeddingDimension: vi.fn().mockResolvedValue(3072),
+      hasChunksForUser: vi.fn(async () => false),
+      getStoredEmbeddingDimension: vi.fn(async () => 3072),
     },
     aiUsage: {
-      getDailyTotalCents: vi.fn().mockResolvedValue(0),
+      getDailyTotalCents: vi.fn(async () => 0),
     },
     analyticsResults: {
       get: vi.fn(),
@@ -116,7 +120,7 @@ vi.mock("../../prompts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../prompts")>();
   return {
     ...actual,
-    buildCoachingMaterialsSection: vi.fn().mockReturnValue(""),
+    buildCoachingMaterialsSection: vi.fn(() => ""),
   };
 });
 
@@ -181,7 +185,7 @@ describe("AI route consent compliance", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     app = createTestApp(aiRouter);
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: false });
@@ -201,7 +205,7 @@ describe("GET /api/v1/overview-analysis", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     app = createTestApp(aiRouter);
   });
@@ -273,7 +277,7 @@ describe("POST /api/parse-exercises", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
@@ -424,7 +428,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
   };
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
@@ -514,7 +518,7 @@ describe("POST /api/chat", () => {
 
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
     await resetRouteTestState();
     app = createTestApp(aiRouter);
@@ -565,7 +569,7 @@ describe("POST /api/chat/stream", () => {
 
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
     await resetRouteTestState();
     app = createTestApp(aiRouter);
@@ -631,7 +635,7 @@ describe("Chat History and Messages Routes", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     app = createTestApp(aiRouter);
 
@@ -753,7 +757,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
     await resetRouteTestState();
     app = createTestApp(aiRouter);
@@ -936,7 +940,7 @@ describe("POST /api/timeline/ai-suggestions/apply", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     app = createTestApp(aiRouter);
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "kg" });
@@ -986,7 +990,7 @@ describe("RAG pipeline in chat endpoints", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     await resetRouteTestState();
     app = createTestApp(aiRouter);
 

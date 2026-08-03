@@ -18,9 +18,12 @@ vi.mock("../../clerkAuth", () => ({
   },
 }));
 
-// Mock the getUserId function to return our test user
+// Mock the getUserId function to return our test user. The default is passed
+// as vi.fn(impl) so the vi.resetAllMocks() in beforeEach restores it after a
+// test overrides it (e.g. with a throwing implementation) — a chained
+// .mockReturnValue() default would be wiped by the reset instead.
 vi.mock("../../types", () => ({
-  getUserId: vi.fn().mockReturnValue(TEST_USER_ID),
+  getUserId: vi.fn(() => TEST_USER_ID),
 }));
 
 // Mock the storage functions
@@ -42,7 +45,7 @@ describe("Auth Routes", () => {
   let app: express.Express;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     app = createTestApp(authRouter);
 
   });

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Toaster } from "@/components/ui/toaster";
+import { __resetToastStateForTests } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { BANANA } from "@/test/factories/foodFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
@@ -32,6 +33,10 @@ describe("FavoriteStarButton", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Toasts live in a module-level singleton that survives unmounts; drop any
+    // toast a previous test raised so it can't re-render under this test's
+    // <Toaster /> and trip a not.toBeInTheDocument() assertion.
+    __resetToastStateForTests();
   });
 
   it("stars a food that isn't yet a favourite", async () => {

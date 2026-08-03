@@ -105,7 +105,10 @@ describe("nutrition routes", () => {
   let app: express.Express;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so a mockResolvedValue set by one test
+    // can't leak into the next under a shuffled execution order; the defaults
+    // every test relies on are re-established just below.
+    vi.resetAllMocks();
     clearRateLimitBuckets();
     app = buildApp();
     // Chicago is UTC-5 in June, so an 02:30Z instant is the previous local day.
@@ -958,7 +961,7 @@ describe("nutrition photo meal parsing (FR-4.1)", () => {
   let app: express.Express;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     clearRateLimitBuckets();
     app = buildApp();
   });
@@ -1013,7 +1016,7 @@ describe("nutrition label parsing (label scan)", () => {
   let app: express.Express;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     clearRateLimitBuckets();
     app = buildApp();
   });
