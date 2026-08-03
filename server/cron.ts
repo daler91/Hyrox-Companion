@@ -305,18 +305,22 @@ export function startCron(storage: IStorage): void {
         try {
           const result = await runNutritionReminderCron(storage);
           if (result.remindersSent > 0) {
+            // bearer:disable javascript_lang_logger_leak — logs only send/check
+            // counts (integers) and a static context tag; no PII.
             logger.info(
               { context: "cron", ...result },
               `Nutrition reminders: sent ${result.remindersSent} for ${result.usersChecked} opted-in user(s)`,
             );
           }
         } catch (err) {
+          // bearer:disable javascript_lang_logger_leak — err is a scheduler/DB error, no PII
           logger.error({ context: "cron", err }, "Nutrition reminder cron failed");
         }
       });
     },
     { timezone: "Etc/UTC" },
   );
+  // bearer:disable javascript_lang_logger_leak — static schedule copy only
   logger.info({ context: "cron" }, "Nutrition reminders scheduled: hourly (refuel window + 20:00 local logging nudge)");
 
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
