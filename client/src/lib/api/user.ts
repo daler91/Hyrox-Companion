@@ -36,6 +36,10 @@ export interface UserPreferences {
   emailWeeklySummary: boolean;
   /** Per-type toggle for the next-day missed workout reminder. */
   emailMissedReminder: boolean;
+  /** Opt-in push nudge when post-workout recovery fuel is still owed. */
+  pushRefuelReminder: boolean;
+  /** Opt-in 8pm-local push when nothing has been logged that day. */
+  pushLoggingReminder: boolean;
   /** Whether adherence indicators are shown in timeline/detail UI surfaces. */
   showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;

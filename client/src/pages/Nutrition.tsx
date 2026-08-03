@@ -35,7 +35,7 @@ import { MyFoodsSection } from "./nutrition/MyFoodsSection";
 import { NutritionInsightsPanel } from "./nutrition/NutritionInsightsPanel";
 import { ParsedMealReviewSheet } from "./nutrition/ParsedMealReviewSheet";
 import { QuickAddBar } from "./nutrition/QuickAddBar";
-import { RecipeBuilderDialog } from "./nutrition/RecipeBuilderDialog";
+import { RecipeBuilderDialog, type RecipePrefill } from "./nutrition/RecipeBuilderDialog";
 import { TargetsDialog } from "./nutrition/TargetsDialog";
 import { useQuickLog } from "./nutrition/useQuickLog";
 import { addDays, formatDateLabel, MEAL_LABELS, todayStr } from "./nutrition/utils";
@@ -79,10 +79,11 @@ export default function Nutrition() {
   const [dialog, setDialog] = useState<LogDialogState | null>(null);
   const [barcodeOpen, setBarcodeOpen] = useState(false);
   const [customFood, setCustomFood] = useState<CustomFoodDialogState | null>(null);
-  const [recipe, setRecipe] = useState<{ open: boolean; id: string | null }>({
-    open: false,
-    id: null,
-  });
+  const [recipe, setRecipe] = useState<{
+    open: boolean;
+    id: string | null;
+    prefill?: RecipePrefill | null;
+  }>({ open: false, id: null });
   const [mealReview, setMealReview] = useState<{
     result: ParseMealResponse;
     entryMethod: "nl" | "photo";
@@ -221,6 +222,40 @@ export default function Nutrition() {
                     })
             }
             copyYesterdayPending={repeatDay.isPending}
+            // "My usual breakfast" in one action: seed the recipe builder from
+            // the meal's entries, merging repeats of the same food.
+            onSaveAsRecipe={(mealType) => {
+              const entries = summary?.meals[mealType] ?? [];
+              const byFood = new Map<string, RecipePrefill["ingredients"][number]>();
+              for (const e of entries) {
+                const existing = byFood.get(e.foodId);
+                if (existing) {
+                  byFood.set(e.foodId, {
+                    ...existing,
+                    quantityG: existing.quantityG + e.quantityG,
+                    nutrition: {
+                      calories: existing.nutrition.calories + e.nutrition.calories,
+                      protein: existing.nutrition.protein + e.nutrition.protein,
+                      carb: existing.nutrition.carb + e.nutrition.carb,
+                      fat: existing.nutrition.fat + e.nutrition.fat,
+                      fiber: existing.nutrition.fiber + e.nutrition.fiber,
+                    },
+                  });
+                } else {
+                  byFood.set(e.foodId, {
+                    foodId: e.foodId,
+                    name: e.name,
+                    quantityG: e.quantityG,
+                    nutrition: e.nutrition,
+                  });
+                }
+              }
+              setRecipe({
+                open: true,
+                id: null,
+                prefill: { name: MEAL_LABELS[mealType], ingredients: [...byFood.values()] },
+              });
+            }}
             onEditTarget={(m) => {
               const t = summary?.mealTargets?.[m];
               if (t) {
@@ -359,6 +394,7 @@ export default function Nutrition() {
       <RecipeBuilderDialog
         open={recipe.open}
         recipeId={recipe.id}
+        prefill={recipe.prefill ?? null}
         onClose={() => setRecipe({ open: false, id: null })}
       />
       <ParsedMealReviewSheet

@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Bell, BellOff, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,62 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { api, QUERY_KEYS, type UpdateUserPreferencesPayload, type UserPreferences } from "@/lib/api";
+import { featureFlags } from "@/lib/featureFlags";
+
+/** The two opt-in nutrition push reminders, shown once push is enabled. */
+function NutritionReminderToggles() {
+  const { data: prefs } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
+  const update = useApiMutation<unknown, Error, UpdateUserPreferencesPayload>({
+    mutationFn: (data) => api.preferences.update(data),
+    invalidateQueries: [QUERY_KEYS.preferences],
+    errorToast: "Couldn't update reminder settings",
+  });
+
+  return (
+    <div className="space-y-3 border-t pt-3">
+      <p className="text-sm font-medium">Nutrition reminders</p>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="push-refuel-reminder" className="cursor-pointer text-sm">
+            Post-workout refuel
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            A nudge after a session while recovery carbs and protein are still owed.
+          </p>
+        </div>
+        <Switch
+          id="push-refuel-reminder"
+          checked={prefs?.pushRefuelReminder ?? false}
+          onCheckedChange={(v) => update.mutate({ pushRefuelReminder: v })}
+          disabled={update.isPending || !prefs}
+          data-testid="switch-push-refuel-reminder"
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="push-logging-reminder" className="cursor-pointer text-sm">
+            Evening logging reminder
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            An 8pm nudge on days where nothing has been logged yet.
+          </p>
+        </div>
+        <Switch
+          id="push-logging-reminder"
+          checked={prefs?.pushLoggingReminder ?? false}
+          onCheckedChange={(v) => update.mutate({ pushLoggingReminder: v })}
+          disabled={update.isPending || !prefs}
+          data-testid="switch-push-logging-reminder"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function PushNotificationSection() {
   const { toast } = useToast();
@@ -95,6 +151,8 @@ export function PushNotificationSection() {
             data-testid="switch-push-notifications"
           />
         </div>
+
+        {isSubscribed && featureFlags.nutritionEnabled && <NutritionReminderToggles />}
 
         {isSubscribed && (
           <div className="flex items-center justify-between gap-4 pt-2 border-t">

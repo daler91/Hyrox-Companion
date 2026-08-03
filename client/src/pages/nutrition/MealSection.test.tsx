@@ -139,6 +139,37 @@ describe("MealSection", () => {
     expect(screen.queryByTestId("button-copy-yesterday-breakfast")).not.toBeInTheDocument();
   });
 
+  it("offers save-as-recipe only for meals with two or more entries", async () => {
+    const user = userEvent.setup();
+    const onSaveAsRecipe = vi.fn();
+    const second = { ...ENTRY, id: "e2", name: "Oats" };
+    const { unmount } = render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY, second]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onSaveAsRecipe={onSaveAsRecipe}
+      />,
+    );
+    await user.click(screen.getByTestId("button-save-recipe-breakfast"));
+    expect(onSaveAsRecipe).toHaveBeenCalledWith("breakfast");
+
+    unmount();
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onSaveAsRecipe={onSaveAsRecipe}
+      />,
+    );
+    expect(screen.queryByTestId("button-save-recipe-breakfast")).not.toBeInTheDocument();
+  });
+
   it("hides copy-yesterday once the meal has entries", () => {
     render(
       <MealSection

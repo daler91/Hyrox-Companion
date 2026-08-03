@@ -35,6 +35,7 @@ export type {
   GarminSyncResponse,
   StravaStatus,
   StravaSyncResponse,
+  UpdateUserPreferencesPayload,
   UserPreferences,
 } from "./user";
 export { auth, email, garmin, preferences, strava } from "./user";

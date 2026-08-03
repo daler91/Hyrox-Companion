@@ -18,7 +18,13 @@ import type { UserPreferences } from "@/lib/api";
 export type ActivityLevelValue = "sedentary" | "light" | "moderate" | "active" | "very_active";
 export type WeightGoalDirectionValue = "lose" | "maintain" | "gain";
 
-export type SavePayload = Omit<UserPreferences, "weeklyGoal" | "userTimezone"> & {
+// The nutrition push reminders are excluded: they live on the standalone
+// Push Notifications card with their own immediate-save toggles, so the
+// preferences form neither snapshots nor overwrites them.
+export type SavePayload = Omit<
+  UserPreferences,
+  "weeklyGoal" | "userTimezone" | "pushRefuelReminder" | "pushLoggingReminder"
+> & {
   weeklyGoal: number;
 };
 
@@ -27,6 +33,8 @@ export interface PreferencesSnapshot
     UserPreferences,
     | "weeklyGoal"
     | "userTimezone"
+    | "pushRefuelReminder"
+    | "pushLoggingReminder"
     | "trainingStyleId"
     | "age"
     | "mafAge"

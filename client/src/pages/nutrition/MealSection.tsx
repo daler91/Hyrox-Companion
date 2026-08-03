@@ -5,7 +5,7 @@ import type {
   MealType,
   NutritionMacroTotals,
 } from "@shared/schema";
-import { CopyPlus, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { ChefHat, CopyPlus, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -32,6 +32,8 @@ interface MealSectionProps {
   /** Copy just this meal from the previous day into the viewed day. */
   readonly onCopyYesterday?: (mealType: MealType) => void;
   readonly copyYesterdayPending?: boolean;
+  /** Save this meal's entries as a recipe (shown for meals with 2+ entries). */
+  readonly onSaveAsRecipe?: (mealType: MealType) => void;
 }
 
 const ROLE_CAPTION: Record<MealRole, string> = {
@@ -68,6 +70,7 @@ export function MealSection({
   onLogAgain,
   onCopyYesterday,
   copyYesterdayPending,
+  onSaveAsRecipe,
 }: MealSectionProps) {
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   if (entries.length === 0 && !target) return null;
@@ -101,6 +104,27 @@ export function MealSection({
                 ? `${Math.round(logged.calories)} / ${Math.round(target.calories)} kcal`
                 : `${Math.round(logged.calories)} kcal`}
             </span>
+            {onSaveAsRecipe && entries.length >= 2 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground"
+                      aria-label={`Save ${label.toLowerCase()} as a recipe`}
+                      onClick={() => onSaveAsRecipe(mealType)}
+                      data-testid={`button-save-recipe-${mealType}`}
+                    >
+                      <ChefHat className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Save as recipe</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             {target && onEditTarget && (
               <TooltipProvider>
                 <Tooltip>

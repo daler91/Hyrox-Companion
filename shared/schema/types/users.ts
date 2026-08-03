@@ -28,6 +28,10 @@ export const updateUserPreferencesSchema = z.object({
   // existing users.
   emailWeeklySummary: z.boolean().optional(),
   emailMissedReminder: z.boolean().optional(),
+  // Nutrition push reminders (opt-in; push-only, independent of the email
+  // master toggle — they only fire for users with a push subscription).
+  pushRefuelReminder: z.boolean().optional(),
+  pushLoggingReminder: z.boolean().optional(),
   showAdherenceInsights: z.boolean().optional(),
   aiCoachEnabled: z.boolean().optional(),
   // Conversational plan editing: apply the coach's chat proposals immediately

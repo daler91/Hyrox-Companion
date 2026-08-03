@@ -613,6 +613,12 @@
           "emailMissedReminder": {
             "type": "boolean"
           },
+          "pushRefuelReminder": {
+            "type": "boolean"
+          },
+          "pushLoggingReminder": {
+            "type": "boolean"
+          },
           "showAdherenceInsights": {
             "type": "boolean"
           },
