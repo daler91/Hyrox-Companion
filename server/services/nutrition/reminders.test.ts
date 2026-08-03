@@ -51,12 +51,15 @@ function makeStorage(data: FakeData) {
       getUser: vi.fn(async (id: string) =>
         (data.optedInUsers ?? [makeUser()]).find((u) => u.id === id),
       ),
+      getUsers: vi.fn(async (ids: string[]) =>
+        (data.optedInUsers ?? [makeUser()]).filter((u) => ids.includes(u.id)),
+      ),
       getUsersWithNutritionPushReminders: vi.fn(async () => data.optedInUsers ?? [makeUser()]),
       claimRefuelReminder: vi.fn(async () => data.refuelClaimWins ?? true),
       claimLoggingReminder: vi.fn(async () => data.loggingClaimWins ?? true),
     },
     workouts: {
-      getLatestStartedWorkout: vi.fn(async () => data.latestWorkout),
+      getLatestStartedWorkout: vi.fn(async (_userId: string, _after: Date) => data.latestWorkout),
     },
     nutrition: {
       listEntriesWithFoodInWindow: vi.fn(async () => data.windowEntries ?? []),
@@ -235,7 +238,7 @@ describe("runNutritionReminderCron", () => {
     expect(storage.users.getUsersWithNutritionPushReminders).not.toHaveBeenCalled();
   });
 
-  it("re-fetches each user and counts sent reminders", async () => {
+  it("re-fetches all users in one batched call and counts sent reminders", async () => {
     const user = makeUser();
     const storage = makeStorage({ latestWorkout: REFUEL_WORKOUT, optedInUsers: [user] });
     vi.useFakeTimers();
@@ -245,18 +248,19 @@ describe("runNutritionReminderCron", () => {
       expect(result.usersChecked).toBe(1);
       // Refuel fires (inside window, gap unmet); evening slot doesn't (15:00).
       expect(result.remindersSent).toBe(1);
-      expect(storage.users.getUser).toHaveBeenCalledWith("u1");
+      expect(storage.users.getUsers).toHaveBeenCalledWith(["u1"]);
+      expect(storage.users.getUser).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("keeps processing after a per-user failure", async () => {
+  it("keeps processing the rest after one user's processing throws", async () => {
     const users = [makeUser({ id: "boom" }), makeUser({ id: "u1" })];
     const storage = makeStorage({ latestWorkout: REFUEL_WORKOUT, optedInUsers: users });
-    vi.mocked(storage.users.getUser).mockImplementation(async (id: string) => {
-      if (id === "boom") throw new Error("db down");
-      return users.find((u) => u.id === id);
+    vi.mocked(storage.workouts.getLatestStartedWorkout).mockImplementation(async (userId) => {
+      if (userId === "boom") throw new Error("db down");
+      return REFUEL_WORKOUT;
     });
     vi.useFakeTimers();
     vi.setSystemTime(NOW);

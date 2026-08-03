@@ -171,11 +171,15 @@ export async function runNutritionReminderCron(
   let remindersSent = 0;
   const now = new Date();
 
+  // Re-fetch in one batched query rather than N sequential getUser round trips,
+  // so an opt-out between scan and processing is still respected (the same W4
+  // race the email scheduler guards against) without an O(N) fetch per tick.
+  const freshUsers = await storage.users.getUsers(usersToCheck.map((stale) => stale.id));
+  const freshById = new Map(freshUsers.map((user) => [user.id, user]));
+
   for (const stale of usersToCheck) {
     try {
-      // Re-fetch so an opt-out between scan and processing is respected (the
-      // same W4 race the email scheduler guards against).
-      const user = await storage.users.getUser(stale.id);
+      const user = freshById.get(stale.id);
       if (!user) continue;
       if (await processRefuelReminder(storage, user, now)) remindersSent++;
       if (await processLoggingReminder(storage, user, now)) remindersSent++;
