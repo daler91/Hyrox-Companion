@@ -27,6 +27,19 @@ interface Ingredient {
   per100: NutritionMacroTotals;
 }
 
+/** Seed for creating a recipe from an already-logged meal ("save as recipe"):
+ *  the meal's entries become the starting ingredient list. */
+export interface RecipePrefill {
+  name: string;
+  ingredients: ReadonlyArray<{
+    foodId: string;
+    name: string;
+    quantityG: number;
+    /** The entry's nutrition at `quantityG`, as stored on the log entry. */
+    nutrition: NutritionMacroTotals;
+  }>;
+}
+
 function per100From(food: Food): NutritionMacroTotals {
   return {
     calories: food.caloriesPer100g ?? 0,
@@ -53,26 +66,37 @@ const round1 = (v: number) => Math.round(v * 10) / 10;
 
 function RecipeBuilderForm({
   initial,
+  prefill,
   onClose,
 }: {
   readonly initial: RecipeWithIngredients | null;
+  readonly prefill: RecipePrefill | null;
   readonly onClose: () => void;
 }) {
   const createRecipe = useCreateRecipe();
   const updateRecipe = useUpdateRecipe();
 
-  const [name, setName] = useState(initial?.name ?? "");
+  const [name, setName] = useState(initial?.name ?? prefill?.name ?? "");
   const [servings, setServings] = useState(initial ? String(initial.servings) : "1");
-  const [ingredients, setIngredients] = useState<Ingredient[]>(() =>
-    initial
-      ? initial.ingredients.map((i) => ({
-          foodId: i.foodId,
-          name: i.name,
-          quantityG: i.quantityG,
-          per100: per100FromNutrition(i.nutrition, i.quantityG),
-        }))
-      : [],
-  );
+  const [ingredients, setIngredients] = useState<Ingredient[]>(() => {
+    if (initial) {
+      return initial.ingredients.map((i) => ({
+        foodId: i.foodId,
+        name: i.name,
+        quantityG: i.quantityG,
+        per100: per100FromNutrition(i.nutrition, i.quantityG),
+      }));
+    }
+    if (prefill) {
+      return prefill.ingredients.map((i) => ({
+        foodId: i.foodId,
+        name: i.name,
+        quantityG: i.quantityG,
+        per100: per100FromNutrition(i.nutrition, i.quantityG),
+      }));
+    }
+    return [];
+  });
 
   const isPending = createRecipe.isPending || updateRecipe.isPending;
   const servingsNum = Number(servings);
@@ -260,10 +284,13 @@ function PreviewCell({
 export function RecipeBuilderDialog({
   open,
   recipeId,
+  prefill = null,
   onClose,
 }: {
   readonly open: boolean;
   readonly recipeId: string | null;
+  /** Create-mode seed from a logged meal; ignored when editing an existing recipe. */
+  readonly prefill?: RecipePrefill | null;
   readonly onClose: () => void;
 }) {
   const recipeQuery = useRecipe(open ? recipeId : null);
@@ -281,6 +308,7 @@ export function RecipeBuilderDialog({
           <RecipeBuilderForm
             key={recipeId ?? "create"}
             initial={recipeQuery.data ?? null}
+            prefill={recipeId ? null : prefill}
             onClose={onClose}
           />
         ) : (
