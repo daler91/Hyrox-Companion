@@ -478,7 +478,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eight recurring** scheduled jobs (the daily email check plus seven maintenance/telemetry jobs) and one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **nine recurring** scheduled jobs (the daily email check plus eight maintenance/telemetry jobs) and one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -501,6 +501,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | pg-boss queue-depth telemetry | `*/5 * * * *` UTC | `queueDepthTelemetry` |
 | Structured exercise health rollup | `10 2 * * *` UTC | `structuredExerciseRollup` |
 | Analytics recompute | `5 * * * *` UTC (hourly; fires per-user at local midnight) | `analyticsRecompute` |
+| Nutrition push reminders | `25 * * * *` UTC (hourly; per-user refuel window + 20:00 local logging nudge) | `nutritionReminders` |
 
 #### Analytics Recompute Scan
 

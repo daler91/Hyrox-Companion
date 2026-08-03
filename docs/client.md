@@ -189,6 +189,7 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `WelcomeStep` -- Introduction screen.
 - `UnitsStep` -- Weight and distance unit selection.
 - `GoalStep` -- Fitness goal selection.
+- `FuellingStep` -- Optional body profile (weight, height, age, activity, goal) → suggested nutrition target; shown only when the nutrition module is enabled.
 - `PlanStep` -- Plan choice (sample plan, import CSV, AI-generated, or skip).
 - `ScheduleStep` -- Start date picker for the training plan.
 
