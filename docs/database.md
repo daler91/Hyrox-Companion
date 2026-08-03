@@ -54,6 +54,10 @@ User accounts and preferences.
 | `is_auto_coaching` | `boolean` | default `false` |
 | `last_weekly_summary_at` | `timestamp` | nullable |
 | `last_missed_reminder_at` | `timestamp` | nullable |
+| `push_refuel_reminder` | `boolean` | default `false` — opt-in push nudge for post-workout recovery fuel |
+| `push_logging_reminder` | `boolean` | default `false` — opt-in 20:00-local push nudge when nothing has been logged |
+| `last_refuel_reminder_at` | `timestamp` | nullable |
+| `last_logging_reminder_at` | `timestamp` | nullable |
 | `created_at` | `timestamp` | default `now()` |
 | `updated_at` | `timestamp` | default `now()` |
 

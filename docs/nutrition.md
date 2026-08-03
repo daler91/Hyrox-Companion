@@ -174,9 +174,11 @@ Where fuelling meets the rest of the app.
 - **Session fuelling** (`GET /session-fuelling/:workoutId`, FR-3.1/3.2/3.4) —
   splits the foods around a workout into **pre** (4h before) and **post** (6h
   after) windows with separate totals. When the workout has a real start time
-  (e.g. from Strava/Garmin) it windows by clock time; otherwise it falls back to
-  the explicit `pre_workout` / `post_workout` meal tags. Surfaced in the workout
-  detail sheet via `FuellingAroundSessionPanel`.
+  (e.g. from Strava/Garmin), same-day `pre_workout`/`post_workout` tags are
+  attributed first and the clock windows fill in the rest (a back-logged entry's
+  tag outranks its synthetic local-noon timestamp); with no start time it falls
+  back to the explicit `pre_workout` / `post_workout` meal tags alone. Surfaced
+  in the workout detail sheet via `FuellingAroundSessionPanel`.
 - **Per-meal fuel targets** (on `GET /summary`, `DailySummaryResponse.mealTargets`)
   — the headline nutrition×training integration. The day's effective target is
   distributed **across the day's meals** so the athlete sees the fuel required for
@@ -324,7 +326,8 @@ The page is `client/src/pages/Nutrition.tsx`; data access is centralised in
 
 **Page layout (top → bottom):** date navigator → `DailyTotalsHeader` (calories +
 macros with target progress bars) → `FoodSearch` + `QuickAddBar` (recent/favourite
-chips) → action row (Describe / Snap / Scan / Custom food / Recipe / Targets) →
+chips) → one **Log food** action (`LogFoodActions`, a sheet with Describe / Snap /
+Scan / Label capture rows plus a Custom food / Recipe / Targets row) →
 one `MealSection` per meal → `MicronutrientPanel` → `MyFoodsSection` (manage custom
 foods & recipes) → `NutritionInsightsPanel`.
 
@@ -338,7 +341,8 @@ foods & recipes) → `NutritionInsightsPanel`.
 | `BarcodeScanner` | `BarcodeDetector` camera scan (rear camera) + manual fallback. |
 | `CustomFoodDialog` | Create/edit a custom food (per-100g macros + servings). |
 | `RecipeBuilderDialog` | Search & add ingredients; live per-serving preview. |
-| `DescribeMealButton` | Free-text meal entry → parse → review sheet. |
+| `LogFoodActions` | Single "Log food" button opening a sheet with the capture/create entry points below. |
+| `DescribeMealDialog` | Free-text meal entry → parse → review sheet. |
 | `SnapMealButton` | Photo capture (OS camera / file picker) → vision parse → review sheet. |
 | `ParsedMealReviewSheet` | Adjust/match/remove parsed items before batch logging. |
 | `MicronutrientPanel` | Day's micros vs. RDI, with an empty state when no micro data exists. |
