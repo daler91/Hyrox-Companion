@@ -13,7 +13,7 @@ import {
   workoutStructureSteps,
 } from "@shared/schema";
 import { normalizeExerciseName } from "@shared/schema/exercises";
-import { and, asc, desc, eq, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -294,6 +294,24 @@ export class WorkoutStorage {
       .select()
       .from(workoutLogs)
       .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
+    return log;
+  }
+
+  /** The user's most recent workout with a real start instant at/after `since`
+   *  (refuel-reminder scan; rides idx_workout_logs_user_started_at). */
+  async getLatestStartedWorkout(userId: string, since: Date): Promise<WorkoutLog | undefined> {
+    const [log] = await db
+      .select()
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          isNotNull(workoutLogs.startedAt),
+          gte(workoutLogs.startedAt, since),
+        ),
+      )
+      .orderBy(desc(workoutLogs.startedAt))
+      .limit(1);
     return log;
   }
 

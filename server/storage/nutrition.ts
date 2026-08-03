@@ -643,6 +643,28 @@ export class NutritionStorage {
     return rows.map((r) => ({ ...r.entry, food: r.food }));
   }
 
+  /** True when the user logged anything on `logDate` (reminder gates). */
+  async hasEntriesOnDate(userId: string, logDate: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: foodLogEntries.id })
+      .from(foodLogEntries)
+      .where(and(eq(foodLogEntries.userId, userId), eq(foodLogEntries.logDate, logDate)))
+      .limit(1);
+    return row !== undefined;
+  }
+
+  /** True when the user has logged anything at/after `since` — the "actually
+   *  uses nutrition logging" gate, so reminders never nag lapsed or
+   *  never-started users. */
+  async hasEntriesSince(userId: string, since: Date): Promise<boolean> {
+    const [row] = await db
+      .select({ id: foodLogEntries.id })
+      .from(foodLogEntries)
+      .where(and(eq(foodLogEntries.userId, userId), gte(foodLogEntries.loggedAt, since)))
+      .limit(1);
+    return row !== undefined;
+  }
+
   /**
    * Entries joined to foods whose `loggedAt` instant falls within [from, to],
    * time-ordered. Backs the session-fuelling windows when a workout has a known

@@ -8,6 +8,7 @@ import { logger } from "./logger";
 import { queue } from "./queue";
 import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
 import { embedMissingFoods, pruneDanglingFoodEmbeddings } from "./services/nutrition/foodEmbeddings";
+import { runNutritionReminderCron } from "./services/nutrition/reminders";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
@@ -21,6 +22,7 @@ let structuredExerciseRollupTask: ReturnType<typeof cron.schedule> | null = null
 let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let analyticsRecomputeTask: ReturnType<typeof cron.schedule> | null = null;
 let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
+let nutritionRemindersTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -31,7 +33,7 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_013. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_014. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -46,6 +48,7 @@ export const CRON_LOCK_KEYS = {
   sharedRuntimeCleanup: 42_010_008n,
   analyticsRecompute: 42_010_011n,
   nutritionEmbeddingBackfill: 42_010_012n,
+  nutritionReminders: 42_010_013n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -289,6 +292,33 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Food embedding backfill scheduled: every 30 min (when semantic search enabled)");
 
+  // Nutrition push reminders (post-workout refuel + evening logging nudge).
+  // Ticks hourly; per-user timing (refuel window, 20:00 local evening slot) is
+  // resolved inside the runner, mirroring the analytics-recompute pattern.
+  // No-ops before the lock when the nutrition module is off; push-disabled
+  // deployments no-op inside the runner (isPushEnabled).
+  nutritionRemindersTask = cron.schedule(
+    "25 * * * *",
+    async () => {
+      if (env.NUTRITION_ENABLED !== "true") return;
+      await runCronJobWithLock("nutritionReminders", async () => {
+        try {
+          const result = await runNutritionReminderCron(storage);
+          if (result.remindersSent > 0) {
+            logger.info(
+              { context: "cron", ...result },
+              `Nutrition reminders: sent ${result.remindersSent} for ${result.usersChecked} opted-in user(s)`,
+            );
+          }
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Nutrition reminder cron failed");
+        }
+      });
+    },
+    { timezone: "Etc/UTC" },
+  );
+  logger.info({ context: "cron" }, "Nutrition reminders scheduled: hourly (refuel window + 20:00 local logging nudge)");
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -354,5 +384,9 @@ export async function stopCron(): Promise<void> {
   if (nutritionEmbeddingTask) {
     await nutritionEmbeddingTask.stop();
     nutritionEmbeddingTask = null;
+  }
+  if (nutritionRemindersTask) {
+    await nutritionRemindersTask.stop();
+    nutritionRemindersTask = null;
   }
 }

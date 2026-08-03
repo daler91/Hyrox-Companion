@@ -670,6 +670,44 @@ export class UserStorage {
     return claimed.length > 0;
   }
 
+  /** Post-workout refuel-push counterpart of {@link claimWeeklySummary}. */
+  async claimRefuelReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastRefuelReminderAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastRefuelReminderAt), lt(users.lastRefuelReminderAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Evening logging-push counterpart of {@link claimWeeklySummary}. */
+  async claimLoggingReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastLoggingReminderAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastLoggingReminderAt), lt(users.lastLoggingReminderAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Users who opted into at least one nutrition push reminder. */
+  async getUsersWithNutritionPushReminders(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(or(eq(users.pushRefuelReminder, true), eq(users.pushLoggingReminder, true)));
+  }
+
   async getUsersWithEmailNotifications(): Promise<User[]> {
     return await db
       .select()

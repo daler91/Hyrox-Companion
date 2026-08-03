@@ -118,6 +118,13 @@ export const users = pgTable("users", {
   isAutoCoaching: boolean("is_auto_coaching").default(false),
   lastWeeklySummaryAt: timestamp("last_weekly_summary_at"),
   lastMissedReminderAt: timestamp("last_missed_reminder_at"),
+  // Nutrition push reminders (opt-in, push-only — no email counterpart) and
+  // their send-claim ledgers, same claim-before-send pattern as the email
+  // reminders above.
+  pushRefuelReminder: boolean("push_refuel_reminder").default(false),
+  pushLoggingReminder: boolean("push_logging_reminder").default(false),
+  lastRefuelReminderAt: timestamp("last_refuel_reminder_at"),
+  lastLoggingReminderAt: timestamp("last_logging_reminder_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
