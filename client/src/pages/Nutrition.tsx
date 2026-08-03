@@ -210,6 +210,7 @@ export default function Nutrition() {
                 mealType: entry.mealType,
               })
             }
+            logAgainPending={todayQuickLog.isPending}
             // Hidden on first run — with no history, there is nothing to copy.
             onCopyYesterday={
               isFirstRun

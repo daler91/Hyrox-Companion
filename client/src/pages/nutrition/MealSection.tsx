@@ -5,7 +5,7 @@ import type {
   MealType,
   NutritionMacroTotals,
 } from "@shared/schema";
-import { ChefHat, CopyPlus, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import { ChefHat, CopyPlus, Loader2, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -29,6 +29,8 @@ interface MealSectionProps {
   readonly onEditTarget?: (mealType: MealType) => void;
   /** One-tap re-log of this entry (same food, portion and meal) onto today. */
   readonly onLogAgain?: (entry: FoodLogEntryWithNutrition) => void;
+  /** True while a quick-log mutation is in flight — disables all "Log again" buttons. */
+  readonly logAgainPending?: boolean;
   /** Copy just this meal from the previous day into the viewed day. */
   readonly onCopyYesterday?: (mealType: MealType) => void;
   readonly copyYesterdayPending?: boolean;
@@ -68,6 +70,7 @@ export function MealSection({
   deletingId,
   onEditTarget,
   onLogAgain,
+  logAgainPending,
   onCopyYesterday,
   copyYesterdayPending,
   onSaveAsRecipe,
@@ -207,13 +210,18 @@ export function MealSection({
                           size="icon"
                           aria-label={`Log ${e.name} again today`}
                           onClick={() => onLogAgain(e)}
+                          disabled={logAgainPending}
                           data-testid={`button-log-again-${e.id}`}
                         >
-                          <RotateCw className="h-4 w-4" />
+                          {logAgainPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCw className="h-4 w-4" />
+                          )}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Log again today</p>
+                        <p>{logAgainPending ? "Logging…" : "Log again today"}</p>
                       </TooltipContent>
                     </Tooltip>
                   )}
