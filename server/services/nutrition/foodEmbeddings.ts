@@ -148,20 +148,37 @@ export async function embedMissingFoods(limit = MAX_BATCH): Promise<{ embedded: 
   if (pending.length === 0) return { embedded: 0 };
 
   const vectors = await generateEmbeddings(pending.map((p) => p.text));
-  let embedded = 0;
+  const rows: { id: string; vectorStr: string; hash: string }[] = [];
   for (const [index, item] of pending.entries()) {
     const vector = vectors[index];
     if (!vector || vector.length === 0) continue;
+    rows.push({ id: item.id, vectorStr: `[${vector.join(",")}]`, hash: item.hash });
+  }
+
+  // Upsert every row in a single round trip instead of one query per food:
+  // up to MAX_BATCH (200) sequential INSERTs collapse into one multi-row
+  // VALUES statement, cutting backfill latency from O(N) round trips to O(1).
+  if (rows.length > 0) {
+    const placeholders: string[] = [];
+    const params: unknown[] = [];
+    rows.forEach((row, i) => {
+      const base = i * 4;
+      placeholders.push(
+        `($${base + 1}, $${base + 2}::vector(${EMBEDDING_DIMENSIONS}), $${base + 3}, $${base + 4}, now())`,
+      );
+      params.push(row.id, row.vectorStr, EMBEDDING_MODEL, row.hash);
+    });
     await vectorPool.query(
       `INSERT INTO food_embeddings (food_id, embedding, model, text_hash, updated_at)
-       VALUES ($1, $2::vector(${EMBEDDING_DIMENSIONS}), $3, $4, now())
+       VALUES ${placeholders.join(", ")}
        ON CONFLICT (food_id) DO UPDATE SET
          embedding = EXCLUDED.embedding, model = EXCLUDED.model,
          text_hash = EXCLUDED.text_hash, updated_at = now()`,
-      [item.id, `[${vector.join(",")}]`, EMBEDDING_MODEL, item.hash],
+      params,
     );
-    embedded += 1;
   }
+
+  const embedded = rows.length;
   logger.info(
     { context: "nutrition", embedded, pending: pending.length },
     "Food embedding backfill batch",
