@@ -123,7 +123,7 @@ function ReviewRowCard({
         />
         <span className="text-xs text-muted-foreground">g</span>
         <Select value={row.mealType} onValueChange={(v) => onUpdate({ mealType: v as MealType })}>
-          <SelectTrigger className="flex-1" data-testid={`meal-review-meal-${index}`}>
+          <SelectTrigger className="flex-1" aria-label="Meal" data-testid={`meal-review-meal-${index}`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
