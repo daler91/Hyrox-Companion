@@ -16,7 +16,10 @@ describe("usePushNotifications", () => {
   let mockPushManager: any;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so a mockResolvedValue/mockRejectedValue
+    // set on the module-level apiRequest mock by one test can't leak into the
+    // next when tests run in a shuffled order.
+    vi.resetAllMocks();
 
     originalNavigator = globalThis.navigator;
     originalNotification = globalThis.Notification;
