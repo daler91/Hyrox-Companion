@@ -108,6 +108,21 @@ describe("MealSection", () => {
     expect(screen.queryByTestId("button-log-again-e1")).not.toBeInTheDocument();
   });
 
+  it("disables the log-again button while a quick-log is pending", () => {
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onLogAgain={vi.fn()}
+        logAgainPending
+      />,
+    );
+    expect(screen.getByTestId("button-log-again-e1")).toBeDisabled();
+  });
+
   it("offers copy-yesterday on an empty meal only when a handler is given", async () => {
     const user = userEvent.setup();
     const onCopyYesterday = vi.fn();
