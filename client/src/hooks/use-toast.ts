@@ -159,6 +159,20 @@ function toast({ ...props }: Toast) {
   }
 }
 
+// Exposed for tests to clear the module-level toast state between cases
+// (mirroring __resetHealthCacheForTests in server/bootstrap/health.ts).
+// memoryState outlives React unmounts, so without this a toast raised in one
+// test is still pending its TOAST_REMOVE_DELAY timer and re-renders under the
+// next test's freshly mounted <Toaster />.
+export function __resetToastStateForTests() {
+  for (const timeout of toastTimeouts.values()) {
+    clearTimeout(timeout)
+  }
+  toastTimeouts.clear()
+  listeners.length = 0
+  memoryState = { toasts: [] }
+}
+
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 

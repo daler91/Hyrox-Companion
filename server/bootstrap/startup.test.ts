@@ -1,12 +1,19 @@
 import express from "express";
 import request from "supertest";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { __resetHealthCacheForTests, registerHealthEndpoint } from "./health";
 import { registerShutdownHandlers } from "./lifecycle";
 import { registerProcessErrorHandlers } from "./observability";
 
 describe("bootstrap startup parity", () => {
+  // The probe cache in health.ts is module-level with a 5s TTL, so a healthy
+  // result cached by whichever test runs first would otherwise be served to
+  // every later test regardless of its own probe stubs.
+  beforeEach(() => {
+    __resetHealthCacheForTests();
+  });
+
   it("registers health and reports readiness + degraded", async () => {
     const app = express();
     const state = { isReady: true, startupError: null, startupPhase: "ready", startupBeganAt: Date.now() - 1000 };
@@ -22,7 +29,6 @@ describe("bootstrap startup parity", () => {
     // payload carried vectorSchema, a restore that never built document_chunks
     // / food_embeddings reported a flat `status: "ok"` and the drill in
     // docs/operations/backup-restore.md §6 had nothing to check.
-    __resetHealthCacheForTests();
     const app = express();
     const state = { isReady: true, startupError: null, startupPhase: "ready", startupBeganAt: Date.now() - 1000 };
     registerHealthEndpoint(app, {
