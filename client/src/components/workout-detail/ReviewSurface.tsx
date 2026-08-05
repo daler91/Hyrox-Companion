@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/WorkoutStravaStats";
 import { Button } from "@/components/ui/button";
@@ -148,12 +149,7 @@ export function ReviewSurface({
   const workoutLogId = entry?.workoutLogId ?? null;
   const detail = useWorkoutDetail(workoutLogId);
 
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  useEffect(() => {
-    if (!confirmingDelete) return;
-    const id = setTimeout(() => setConfirmingDelete(false), 3000);
-    return () => clearTimeout(id);
-  }, [confirmingDelete]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { reviewFlag, resolveReview } = useMigrationReview(workoutLogId);
 
@@ -196,28 +192,17 @@ export function ReviewSurface({
     detail.updateNote.mutate(next);
   };
 
-  const handleDeleteClick = () => {
-    if (confirmingDelete) {
-      onDelete?.(entry);
-      return;
-    }
-    setConfirmingDelete(true);
-  };
-
-  const handleSheetOpenChange = (open: boolean) => {
-    if (open) return;
-    // Reset transient UI state on close so reopening the SAME card
-    // doesn't carry an armed delete-confirm across sessions — without
-    // this, a user who armed delete, dismissed the sheet, and
-    // reopened the same workout would delete on the very first tap.
-    setConfirmingDelete(false);
-    onClose();
+  const handleDeleteConfirm = () => {
+    onDelete?.(entry);
+    setDeleteConfirmOpen(false);
   };
 
   return (
     <ResponsiveSheet
       open={!!entry}
-      onOpenChange={handleSheetOpenChange}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
       title={
         <span className="flex flex-wrap items-center gap-2">
           {getStatusBadge(entry.status)}
@@ -273,7 +258,7 @@ export function ReviewSurface({
           distanceUnit={distanceUnit}
           showPlannedDiffs={showAdherenceInsights}
           reviewFlag={reviewFlag}
-          confirmingDelete={confirmingDelete}
+          deleteConfirmOpen={deleteConfirmOpen}
           currentCoachSeedText={currentCoachSeedText}
           timeOfDayMin={workout?.timeOfDayMin ?? null}
           onRpeChange={handleRpeChange}
@@ -282,7 +267,8 @@ export function ReviewSurface({
           onAskCoach={onAskCoach}
           onMarkPlanned={onMarkPlanned}
           onDelete={onDelete}
-          onDeleteClick={handleDeleteClick}
+          onDeleteConfirmOpenChange={setDeleteConfirmOpen}
+          onDeleteConfirm={handleDeleteConfirm}
           onResolveReview={resolveReview}
         />
       </WorkoutCoachLayout>
@@ -321,7 +307,7 @@ interface ReviewDetailsColumnProps {
   readonly distanceUnit: DistanceUnitPreference;
   readonly showPlannedDiffs: boolean;
   readonly reviewFlag: MigrationReviewFlag;
-  readonly confirmingDelete: boolean;
+  readonly deleteConfirmOpen: boolean;
   readonly currentCoachSeedText: string;
   readonly timeOfDayMin: number | null;
   readonly onRpeChange: (next: number | null) => void;
@@ -330,7 +316,8 @@ interface ReviewDetailsColumnProps {
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
-  readonly onDeleteClick: () => void;
+  readonly onDeleteConfirmOpenChange: (open: boolean) => void;
+  readonly onDeleteConfirm: () => void;
   readonly onResolveReview: (action: MigrationReviewAction) => Promise<void>;
 }
 
@@ -348,7 +335,7 @@ function ReviewDetailsColumn({
   distanceUnit,
   showPlannedDiffs,
   reviewFlag,
-  confirmingDelete,
+  deleteConfirmOpen,
   currentCoachSeedText,
   timeOfDayMin,
   onRpeChange,
@@ -357,7 +344,8 @@ function ReviewDetailsColumn({
   onAskCoach,
   onMarkPlanned,
   onDelete,
-  onDeleteClick,
+  onDeleteConfirmOpenChange,
+  onDeleteConfirm,
   onResolveReview,
 }: ReviewDetailsColumnProps) {
   // Read here rather than threading a 25th prop down — it rides on the auth
@@ -416,12 +404,13 @@ function ReviewDetailsColumn({
       <div className="sticky bottom-0 z-10 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <ReviewActionButtons
           entry={entry}
-          confirmingDelete={confirmingDelete}
+          deleteConfirmOpen={deleteConfirmOpen}
           currentCoachSeedText={currentCoachSeedText}
           onAskCoach={onAskCoach}
           onMarkPlanned={onMarkPlanned}
           onDelete={onDelete}
-          onDeleteClick={onDeleteClick}
+          onDeleteConfirmOpenChange={onDeleteConfirmOpenChange}
+          onDeleteConfirm={onDeleteConfirm}
         />
       </div>
     </>
@@ -715,67 +704,77 @@ function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReview
 
 interface ReviewActionButtonsProps {
   readonly entry: TimelineEntry;
-  readonly confirmingDelete: boolean;
+  readonly deleteConfirmOpen: boolean;
   readonly currentCoachSeedText: string;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
-  readonly onDeleteClick: () => void;
+  readonly onDeleteConfirmOpenChange: (open: boolean) => void;
+  readonly onDeleteConfirm: () => void;
 }
 
 function ReviewActionButtons({
   entry,
-  confirmingDelete,
+  deleteConfirmOpen,
   currentCoachSeedText,
   onAskCoach,
   onMarkPlanned,
   onDelete,
-  onDeleteClick,
+  onDeleteConfirmOpenChange,
+  onDeleteConfirm,
 }: ReviewActionButtonsProps) {
-  const deleteButtonVariant = confirmingDelete ? "destructive" : "ghost";
-  const deleteButtonLabel = confirmingDelete ? "Tap again to confirm" : "Delete";
-
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {onAskCoach ? (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => onAskCoach(entry, currentCoachSeedText)}
-          data-testid={`review-ask-coach-${entry.id}`}
-        >
-          <MessageSquare className="mr-2 h-4 w-4" />
-          Ask coach
-        </Button>
-      ) : null}
-      {onMarkPlanned && entry.planDayId ? (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => onMarkPlanned(entry)}
-          data-testid={`review-mark-planned-${entry.id}`}
-        >
-          <RotateCcw className="mr-2 h-4 w-4" />
-          Reopen workout
-        </Button>
-      ) : null}
-      {onDelete ? (
-        <>
+    <>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {onAskCoach ? (
           <Button
             type="button"
-            variant={deleteButtonVariant}
-            onClick={onDeleteClick}
+            variant="outline"
+            onClick={() => onAskCoach(entry, currentCoachSeedText)}
+            data-testid={`review-ask-coach-${entry.id}`}
+          >
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Ask coach
+          </Button>
+        ) : null}
+        {onMarkPlanned && entry.planDayId ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onMarkPlanned(entry)}
+            data-testid={`review-mark-planned-${entry.id}`}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reopen workout
+          </Button>
+        ) : null}
+        {onDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onDeleteConfirmOpenChange(true)}
             data-testid={`review-delete-${entry.id}`}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            {deleteButtonLabel}
+            Delete
           </Button>
-          <span role="status" aria-live="assertive" className="sr-only">
-            {confirmingDelete ? "Tap delete again to confirm removal" : ""}
-          </span>
-        </>
+        ) : null}
+      </div>
+      {onDelete ? (
+        <ConfirmDialog
+          open={deleteConfirmOpen}
+          onOpenChange={onDeleteConfirmOpenChange}
+          title="Delete workout?"
+          description="This workout and all of its data will be permanently removed. This cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={onDeleteConfirm}
+          isDestructive
+          cancelTestId={`review-cancel-delete-${entry.id}`}
+          confirmTestId={`review-confirm-delete-${entry.id}`}
+        />
       ) : null}
-    </div>
+    </>
   );
 }
 
