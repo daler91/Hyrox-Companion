@@ -1,7 +1,8 @@
 import type { TimelineEntry } from "@shared/schema";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
-import { type ComponentProps, useEffect, useState } from "react";
+import { type ComponentProps, useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
@@ -41,26 +42,16 @@ export function SkippedSheet({
   isRenamingTitle = false,
   ...coachProps
 }: SkippedSheetProps) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  useEffect(() => {
-    if (!confirmingDelete) return;
-    const id = setTimeout(() => setConfirmingDelete(false), 3000);
-    return () => clearTimeout(id);
-  }, [confirmingDelete]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const handleSheetOpenChange = (open: boolean) => {
-    if (open) return;
-    setConfirmingDelete(false);
-    onClose();
+    if (!open) onClose();
   };
 
-  const handleDeleteClick = () => {
+  const handleDeleteConfirm = () => {
     if (!entry) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
     onDelete?.(entry);
+    setDeleteConfirmOpen(false);
   };
 
   if (!entry) return null;
@@ -92,12 +83,13 @@ export function SkippedSheet({
       summaryVariant="preview"
       renderActions={(seedText) => (
         <SkippedActions
-          confirmingDelete={confirmingDelete}
+          deleteConfirmOpen={deleteConfirmOpen}
           entry={entry}
           seedText={seedText}
           onAskCoach={onAskCoach}
           onDelete={onDelete}
-          onDeleteClick={handleDeleteClick}
+          onDeleteConfirmOpenChange={setDeleteConfirmOpen}
+          onDeleteConfirm={handleDeleteConfirm}
           onUndoSkip={onUndoSkip}
         />
       )}
@@ -106,12 +98,13 @@ export function SkippedSheet({
 }
 
 interface SkippedActionsProps {
-  readonly confirmingDelete: boolean;
+  readonly deleteConfirmOpen: boolean;
   readonly entry: TimelineEntry;
   readonly seedText: string;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
-  readonly onDeleteClick: () => void;
+  readonly onDeleteConfirmOpenChange: (open: boolean) => void;
+  readonly onDeleteConfirm: () => void;
   readonly onUndoSkip?: (entry: TimelineEntry) => void;
 }
 
@@ -119,12 +112,11 @@ type SkippedAction = ComponentProps<typeof ReadOnlyWorkoutActionGrid>["actions"]
 
 /** An action with no handler is dropped by the grid, which is how gating works. */
 function buildSkippedActions({
-  confirmingDelete,
   entry,
   seedText,
   onAskCoach,
   onDelete,
-  onDeleteClick,
+  onDeleteConfirmOpenChange,
   onUndoSkip,
 }: SkippedActionsProps): SkippedAction[] {
   return [
@@ -144,10 +136,10 @@ function buildSkippedActions({
     },
     {
       icon: Trash2,
-      label: confirmingDelete ? "Tap again to confirm" : "Delete",
-      onClick: onDelete ? onDeleteClick : undefined,
+      label: "Delete",
+      onClick: onDelete ? () => onDeleteConfirmOpenChange(true) : undefined,
       testId: `skipped-delete-${entry.id}`,
-      variant: confirmingDelete ? "destructive" : "ghost",
+      variant: "ghost",
     },
   ];
 }
@@ -156,9 +148,20 @@ function SkippedActions(props: SkippedActionsProps) {
   return (
     <>
       <ReadOnlyWorkoutActionGrid actions={buildSkippedActions(props)} />
-      <span role="status" aria-live="assertive" className="sr-only">
-        {props.confirmingDelete ? "Tap delete again to confirm removal" : ""}
-      </span>
+      {props.onDelete ? (
+        <ConfirmDialog
+          open={props.deleteConfirmOpen}
+          onOpenChange={props.onDeleteConfirmOpenChange}
+          title="Delete workout?"
+          description="This workout will be permanently removed. This cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={props.onDeleteConfirm}
+          isDestructive
+          cancelTestId={`skipped-cancel-delete-${props.entry.id}`}
+          confirmTestId={`skipped-confirm-delete-${props.entry.id}`}
+        />
+      ) : null}
     </>
   );
 }
