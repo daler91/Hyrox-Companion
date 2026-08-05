@@ -446,7 +446,7 @@ function LogFoodForm({
             data-testid="input-quantity"
           />
           <Select value={selectedUnit?.value ?? "g"} onValueChange={handleUnitChange}>
-            <SelectTrigger className="flex-1" data-testid="select-unit">
+            <SelectTrigger className="flex-1" aria-label="Unit" data-testid="select-unit">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
