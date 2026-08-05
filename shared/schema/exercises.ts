@@ -257,6 +257,12 @@ export const MUSCLE_HEAT_MAP_GROUPS = [
 export type HeatMapMuscle = (typeof MUSCLE_HEAT_MAP_GROUPS)[number]["muscle"];
 export type MuscleHeatMapBodyRegion = (typeof MUSCLE_HEAT_MAP_GROUPS)[number]["bodyRegion"];
 
+// ⚡ Bolt: precomputed once — getExerciseHeatMapMuscles() below re-derived this
+// same fixed-order muscle list from MUSCLE_HEAT_MAP_GROUPS on every call (once
+// per exerciseSet in buildMuscleGroupCoverage), even though it never depends
+// on the call's input.
+const MUSCLE_HEAT_MAP_ORDER = MUSCLE_HEAT_MAP_GROUPS.map(({ muscle }) => muscle);
+
 const MAJOR_FULL_BODY_MUSCLES = [
   "chest",
   "shoulders",
@@ -682,7 +688,23 @@ export const EXERCISE_NAME_ALIASES: Record<string, ExerciseName> = {
   devil_presses: "devil_press",
 };
 
+// ⚡ Bolt: normalizeExerciseName is pure, but its real input domain is tiny —
+// a few hundred canonical names/aliases repeated across every set an athlete
+// has ever logged. It sits on the critical path of movement-pattern, muscle
+// heat-map, and race-prediction feature building, each of which calls it once
+// per exerciseSet; a single "all time" Training Overview load can re-run the
+// same char-by-char scan tens of thousands of times for the same handful of
+// strings (e.g. "Back Squat" on every session). Cache by raw input, bounded
+// and FIFO-evicted the same way `mondayCache` above is, since AI-parsed
+// fallback text can occasionally introduce input variety beyond the known
+// alias list.
+const NORMALIZE_EXERCISE_NAME_CACHE_MAX_SIZE = 1000;
+const normalizeExerciseNameCache = new Map<string, ExerciseName | null>();
+
 export function normalizeExerciseName(raw: string): ExerciseName | null {
+  const cached = normalizeExerciseNameCache.get(raw);
+  if (cached !== undefined) return cached;
+
   const lower = raw.trim().toLowerCase();
   let normalized = "";
   let previousWasSeparator = false;
@@ -703,9 +725,22 @@ export function normalizeExerciseName(raw: string): ExerciseName | null {
   }
 
   if (normalized.endsWith("_")) normalized = normalized.slice(0, -1);
-  if (!normalized) return null;
-  if (normalized in EXERCISE_DEFINITIONS) return normalized as ExerciseName;
-  return EXERCISE_NAME_ALIASES[normalized] ?? null;
+
+  let result: ExerciseName | null;
+  if (!normalized) {
+    result = null;
+  } else if (normalized in EXERCISE_DEFINITIONS) {
+    result = normalized as ExerciseName;
+  } else {
+    result = EXERCISE_NAME_ALIASES[normalized] ?? null;
+  }
+
+  normalizeExerciseNameCache.set(raw, result);
+  if (normalizeExerciseNameCache.size > NORMALIZE_EXERCISE_NAME_CACHE_MAX_SIZE) {
+    const oldestKey = normalizeExerciseNameCache.keys().next().value;
+    if (oldestKey !== undefined) normalizeExerciseNameCache.delete(oldestKey);
+  }
+  return result;
 }
 
 /**
@@ -743,7 +778,5 @@ export function getExerciseHeatMapMuscles(exerciseName: string): readonly HeatMa
     for (const muscle of mappedMuscles) muscles.add(muscle);
   }
 
-  return MUSCLE_HEAT_MAP_GROUPS
-    .map(({ muscle }) => muscle)
-    .filter((muscle) => muscles.has(muscle));
+  return MUSCLE_HEAT_MAP_ORDER.filter((muscle) => muscles.has(muscle));
 }
