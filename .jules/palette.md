@@ -32,3 +32,7 @@
 ## 2026-07-20 - Adding Tooltips to header/navigation mobile toggle buttons
 **Learning:** Top-level navigation toggle buttons, like the mobile hamburger menu icon, often rely solely on `aria-label`. While screen-reader accessible, these icon-only buttons can be ambiguous to sighted users who use a mouse on smaller devices (or resized windows).
 **Action:** Consistently ensure that even primary layout and header navigation icon buttons use a complete Tooltip wrap, utilizing a snappy `delayDuration={200}` and `asChild` on Radix buttons, maintaining visual clarity for all users without breaking underlying refs.
+
+## 2026-08-01 - Standardizing Snappier Tooltips
+**Learning:** Found several places where `<TooltipProvider delayDuration={300}>` or `<TooltipProvider delayDuration={200}>` were explicitly set, fighting against the already established 200ms default set in the `TooltipProvider` component in `client/src/components/ui/tooltip.tsx`. This causes scattered hardcoded numbers and potential inconsistencies.
+**Action:** Rely on the `delayDuration` default (200ms) set within the custom `TooltipProvider` wrapper. Remove explicitly passed `delayDuration` props from downstream usages to maintain consistency.

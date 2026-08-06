@@ -102,7 +102,7 @@ export function LandingHeader() {
           <SignInButton mode="modal">
             <Button data-testid="button-login-header" size="sm">Log In</Button>
           </SignInButton>
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

@@ -42,7 +42,7 @@ export function AnnotationList({
     );
   }
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <ul className="space-y-2" data-testid="annotations-list">
         {annotations.map((annotation) => {
           const annotationType = annotation.type as TimelineAnnotationType;

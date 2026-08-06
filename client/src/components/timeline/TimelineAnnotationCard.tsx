@@ -60,7 +60,7 @@ export function TimelineAnnotationCard({
           <p className="mt-1 text-sm text-foreground break-words">{annotation.note}</p>
         ) : null}
       </div>
-      <TooltipProvider delayDuration={300}>
+      <TooltipProvider>
         <div className="flex items-center gap-1 shrink-0">
           <Tooltip>
             <TooltipTrigger asChild>
