@@ -264,9 +264,12 @@ export function registerWorkoutCrudRoutes(router: Router): void {
       }
 
       const [created] = await tx.insert(workoutLogs).values({ ...newWorkout, userId }).returning();
-      for (const id of deleteWorkoutIds) {
-        await tx.delete(workoutLogs).where(and(eq(workoutLogs.id, id), eq(workoutLogs.userId, userId)));
-      }
+      // ⚡ Bolt Performance Optimization: batch the source-workout deletes into a single
+      // `inArray` query instead of one sequential `await` per id (up to 10, per combineWorkoutsSchema's
+      // max(10)). This collapses up to 10 network round trips into 1 inside the open transaction,
+      // shortening how long row/transaction locks on workout_logs are held. Mirrors the same fix
+      // already applied in server/services/bulkDeleteWorkouts.ts.
+      await tx.delete(workoutLogs).where(and(inArray(workoutLogs.id, deleteWorkoutIds), eq(workoutLogs.userId, userId)));
 
       if (skipIds.length) {
         const userPlanIds = tx.select({ id: trainingPlans.id }).from(trainingPlans).where(eq(trainingPlans.userId, userId));
