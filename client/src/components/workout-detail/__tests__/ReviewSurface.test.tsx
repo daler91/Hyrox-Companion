@@ -320,4 +320,43 @@ describe("ReviewSurface", () => {
 
     expect(screen.queryByTestId("input-review-time-of-day")).not.toBeInTheDocument();
   });
+
+  it("hides the delete action when no onDelete handler is wired up", () => {
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} />);
+
+    expect(screen.queryByTestId("review-delete-entry-1")).not.toBeInTheDocument();
+  });
+
+  it("asks for confirmation before deleting, and deletes on confirm", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} onDelete={onDelete} />);
+
+    await user.click(screen.getByTestId("review-delete-entry-1"));
+    // The click only opens the dialog — it must not delete right away.
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("review-confirm-delete-entry-1")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("review-confirm-delete-entry-1"));
+
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: "entry-1" }));
+  });
+
+  it("closes the dialog without deleting when cancelled", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    mockUseWorkoutDetail.mockReturnValue(makeDetail());
+
+    render(<ReviewSurface entry={makeEntry()} onClose={vi.fn()} onDelete={onDelete} />);
+
+    await user.click(screen.getByTestId("review-delete-entry-1"));
+    await user.click(await screen.findByTestId("review-cancel-delete-entry-1"));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("review-confirm-delete-entry-1")).not.toBeInTheDocument();
+  });
 });
