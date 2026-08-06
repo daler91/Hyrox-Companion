@@ -343,4 +343,94 @@ describe('UserStorage', () => {
       );
     });
   });
+
+  describe('claimRefuelReminder', () => {
+    it('wins the claim and stamps lastRefuelReminderAt when the row updates', async () => {
+      const now = new Date('2026-08-06T12:00:00Z');
+      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimRefuelReminder(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+        now,
+      );
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith({ lastRefuelReminderAt: now });
+    });
+
+    it('loses the claim when no row matched (already claimed within the window)', async () => {
+      const returningMock = vi.fn().mockResolvedValue([]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimRefuelReminder(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('claimLoggingReminder', () => {
+    it('wins the claim and stamps lastLoggingReminderAt when the row updates', async () => {
+      const now = new Date('2026-08-06T20:00:00Z');
+      const returningMock = vi.fn().mockResolvedValue([{ id: 'user-1' }]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimLoggingReminder(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+        now,
+      );
+
+      expect(result).toBe(true);
+      expect(setMock).toHaveBeenCalledWith({ lastLoggingReminderAt: now });
+    });
+
+    it('loses the claim when no row matched (already claimed within the window)', async () => {
+      const returningMock = vi.fn().mockResolvedValue([]);
+      const whereMock = vi.fn().mockReturnValue({ returning: returningMock });
+      const setMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.update).mockReturnValue({ set: setMock });
+
+      const result = await userStorage.claimLoggingReminder(
+        'user-1',
+        new Date('2026-08-06T00:00:00Z'),
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getUsersWithNutritionPushReminders', () => {
+    it('returns users opted into either nutrition push reminder', async () => {
+      const optedInUsers = [{ id: 'user-1' }, { id: 'user-2' }];
+      const whereMock = vi.fn().mockResolvedValue(optedInUsers);
+      const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.select).mockReturnValue({ from: fromMock });
+
+      const result = await userStorage.getUsersWithNutritionPushReminders();
+
+      expect(result).toEqual(optedInUsers);
+      expect(fromMock).toHaveBeenCalledWith(users);
+    });
+
+    it('returns an empty list when no one has opted in', async () => {
+      const whereMock = vi.fn().mockResolvedValue([]);
+      const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+      vi.mocked(db.select).mockReturnValue({ from: fromMock });
+
+      const result = await userStorage.getUsersWithNutritionPushReminders();
+
+      expect(result).toEqual([]);
+    });
+  });
 });

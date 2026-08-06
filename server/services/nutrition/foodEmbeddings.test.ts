@@ -1,21 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// `query`/`selectWhere` are referenced inside the hoisted vi.mock factories
-// below, so they must be created via vi.hoisted to exist before the module
-// graph is evaluated. `selectWhere` resolves the main-DB
-// db.select(...).from(...).where(...) chain used by the prune sweep.
-const { query, selectWhere } = vi.hoisted(() => ({ query: vi.fn(), selectWhere: vi.fn() }));
+// `query`/`selectWhere`/`selectLimit` are referenced inside the hoisted
+// vi.mock factories below, so they must be created via vi.hoisted to exist
+// before the module graph is evaluated. `selectWhere` resolves the main-DB
+// db.select(...).from(...).where(...) chain used by the prune sweep;
+// `selectLimit` resolves the db.select(...).from(...).limit(...) chain used
+// by the embed backfill's candidate scan.
+const { query, selectWhere, selectLimit } = vi.hoisted(() => ({
+  query: vi.fn(),
+  selectWhere: vi.fn(),
+  selectLimit: vi.fn(),
+}));
 
 // Stub the I/O-heavy imports so the module loads without real DB / AI / vector infra.
 vi.mock("../../db", () => ({
-  db: { select: () => ({ from: () => ({ where: selectWhere, limit: vi.fn() }) }) },
+  db: { select: () => ({ from: () => ({ where: selectWhere, limit: selectLimit }) }) },
 }));
 vi.mock("../../vectorDb", () => ({ vectorPool: { query } }));
 vi.mock("../../gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072, generateEmbeddings: vi.fn() }));
 vi.mock("../../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
+import { generateEmbeddings } from "../../gemini/client";
 import {
   deleteFoodEmbeddingsByFoodIds,
+  embedMissingFoods,
   foodEmbeddingText,
   pruneDanglingFoodEmbeddings,
   selectFoodsToEmbed,
@@ -123,5 +131,87 @@ describe("pruneDanglingFoodEmbeddings", () => {
 
     expect(result).toEqual({ pruned: 0 });
     expect(selectWhere).not.toHaveBeenCalled();
+  });
+});
+
+describe("embedMissingFoods", () => {
+  beforeEach(() => {
+    query.mockClear();
+    selectLimit.mockClear();
+    vi.mocked(generateEmbeddings).mockReset();
+  });
+
+  it("is a no-op when there are no candidates pending embedding", async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // existing food_id/text_hash pairs
+    selectLimit.mockResolvedValueOnce([]); // no candidate foods
+
+    const result = await embedMissingFoods();
+
+    expect(result).toEqual({ embedded: 0 });
+    expect(generateEmbeddings).not.toHaveBeenCalled();
+    // Only the existing-hashes SELECT ran — no INSERT was attempted.
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("upserts every embedded food in a single multi-row query", async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // no existing hashes — both are pending
+    selectLimit.mockResolvedValueOnce([
+      { id: "a", name: "Banana", brand: null },
+      { id: "b", name: "Apple", brand: null },
+    ]);
+    vi.mocked(generateEmbeddings).mockResolvedValueOnce([
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+    query.mockResolvedValueOnce({ rows: [] }); // the batch INSERT
+
+    const result = await embedMissingFoods();
+
+    expect(result).toEqual({ embedded: 2 });
+    // One round trip for both rows, not one INSERT per food.
+    expect(query).toHaveBeenCalledTimes(2);
+    const [sql, params] = query.mock.calls[1];
+    expect(sql).toContain(
+      "VALUES ($1, $2::vector(3072), $3, $4, now()), ($5, $6::vector(3072), $7, $8, now())",
+    );
+    expect(params).toEqual([
+      "a",
+      "[1,2,3]",
+      "gemini-embedding-001",
+      textHash("Banana"),
+      "b",
+      "[4,5,6]",
+      "gemini-embedding-001",
+      textHash("Apple"),
+    ]);
+  });
+
+  it("skips a food whose generated vector came back empty, counting only the rest", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([
+      { id: "a", name: "Banana", brand: null },
+      { id: "b", name: "Apple", brand: null },
+    ]);
+    // 'a' failed to embed (empty vector); only 'b' should reach the upsert.
+    vi.mocked(generateEmbeddings).mockResolvedValueOnce([[], [4, 5, 6]]);
+    query.mockResolvedValueOnce({ rows: [] });
+
+    const result = await embedMissingFoods();
+
+    expect(result).toEqual({ embedded: 1 });
+    const [, params] = query.mock.calls[1];
+    expect(params).toEqual(["b", "[4,5,6]", "gemini-embedding-001", textHash("Apple")]);
+  });
+
+  it("skips the upsert entirely when every generated vector is empty", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    selectLimit.mockResolvedValueOnce([{ id: "a", name: "Banana", brand: null }]);
+    vi.mocked(generateEmbeddings).mockResolvedValueOnce([[]]);
+
+    const result = await embedMissingFoods();
+
+    expect(result).toEqual({ embedded: 0 });
+    // Only the existing-hashes SELECT ran — no INSERT for an empty row set.
+    expect(query).toHaveBeenCalledTimes(1);
   });
 });
