@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { UtensilsCrossed } from "lucide-react";
 import { useMemo } from "react";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
 
 /**
@@ -48,27 +49,39 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
   if (!hasPre && !hasPost) return null;
 
   return (
-    <span
-      className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground"
-      title={target.explanation}
-      data-testid={`fuelling-target-chip-${entry.id}`}
-    >
-      <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
-      <span className="tabular-nums">
-        Fuel{" "}
-        {hasPre ? (
-          <>
-            ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs before
-          </>
-        ) : null}
-        {hasPre && hasPost ? " · " : null}
-        {hasPost ? (
-          <>
-            ~<span className="font-medium text-foreground">{target.postCarbG}g</span> C +{" "}
-            <span className="font-medium text-foreground">{target.postProteinG}g</span> P after
-          </>
-        ) : null}
-      </span>
-    </span>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label={target.explanation}
+            data-testid={`fuelling-target-chip-${entry.id}`}
+          >
+            <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
+            <span className="tabular-nums">
+              Fuel{" "}
+              {hasPre ? (
+                <>
+                  ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs
+                  before
+                </>
+              ) : null}
+              {hasPre && hasPost ? " · " : null}
+              {hasPost ? (
+                <>
+                  ~<span className="font-medium text-foreground">{target.postCarbG}g</span> C +{" "}
+                  <span className="font-medium text-foreground">{target.postProteinG}g</span> P
+                  after
+                </>
+              ) : null}
+            </span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>{target.explanation}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

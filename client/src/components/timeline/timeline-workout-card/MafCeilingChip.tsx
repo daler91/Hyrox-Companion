@@ -2,6 +2,7 @@ import type { TimelineEntry } from "@shared/schema";
 import { isRunningExerciseName } from "@shared/schema/exercises";
 import { HeartPulse } from "lucide-react";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 
 /**
@@ -24,16 +25,28 @@ export function MafCeilingChip({ entry }: { readonly entry: TimelineEntry }) {
   if (ceiling == null) return null;
   if (!entry.exerciseSets?.some((set) => isRunningExerciseName(set.exerciseName))) return null;
 
+  const explanation = `Your MAF aerobic ceiling is ${ceiling} bpm. Hold at or under it for this run — it's a ceiling to stay below, not a target to chase.`;
+
   return (
-    <span
-      className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground"
-      title={`Your MAF aerobic ceiling is ${ceiling} bpm. Hold at or under it for this run — it's a ceiling to stay below, not a target to chase.`}
-      data-testid={`maf-ceiling-chip-${entry.id}`}
-    >
-      <HeartPulse className="h-3 w-3" aria-hidden="true" />
-      <span className="tabular-nums">
-        MAF ceiling <span className="font-medium text-foreground">{ceiling}</span> bpm
-      </span>
-    </span>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label={explanation}
+            data-testid={`maf-ceiling-chip-${entry.id}`}
+          >
+            <HeartPulse className="h-3 w-3" aria-hidden="true" />
+            <span className="tabular-nums">
+              MAF ceiling <span className="font-medium text-foreground">{ceiling}</span> bpm
+            </span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <p>{explanation}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
