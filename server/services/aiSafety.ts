@@ -10,6 +10,22 @@ const PROHIBITED_MEDICAL_ACTION_PATTERNS = [
   /\btreatment\s+plan\b/i,
 ];
 
+// ⚡ Bolt Performance Optimization:
+// `postProcessSuggestionText` runs per-field (recommendation + rationale) for
+// every suggestion the AI coach returns, so it's a hot path on every coaching
+// response. It used to call `new RegExp(pattern.source, "gi")` inside its loop
+// on every invocation, recompiling the same 6 static patterns from scratch
+// each time. Regex compilation isn't free — parsing/compiling a pattern is
+// measurably slower than reusing a compiled RegExp. Precompiling once at
+// module load and reusing the instances removes that redundant work entirely.
+// Safe to share across calls: `String.replace` resets a global regex's
+// `lastIndex` to 0 before it starts matching, so sequential reuse can't leak
+// state between calls (verified by the "removes repeated prohibited medical
+// phrases" test, which needs the `g` flag to strip more than one match).
+const GLOBAL_PROHIBITED_MEDICAL_ACTION_PATTERNS = PROHIBITED_MEDICAL_ACTION_PATTERNS.map(
+  (pattern) => new RegExp(pattern.source, "gi"),
+);
+
 const RED_FLAG_SYMPTOM_PATTERNS = [
   /chest\s+pain/i,
   /shortness\s+of\s+breath/i,
@@ -37,8 +53,7 @@ const HR_MED_DISCLAIMER =
 
 export function postProcessSuggestionText(text: string): string {
   let output = text;
-  for (const pattern of PROHIBITED_MEDICAL_ACTION_PATTERNS) {
-    const globalPattern = new RegExp(pattern.source, "gi");
+  for (const globalPattern of GLOBAL_PROHIBITED_MEDICAL_ACTION_PATTERNS) {
     output = output.replace(globalPattern, "medical guidance removed");
   }
   return output;
