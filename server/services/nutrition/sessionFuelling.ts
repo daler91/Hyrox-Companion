@@ -47,6 +47,28 @@ function assemble(
 }
 
 /**
+ * Which fuelling window an entry belongs to when the session's start instant is
+ * known — same-day pre/post_workout tags outrank the clock (see
+ * {@link computeSessionFuelling}), everything else falls to the windows.
+ */
+function classifyAgainstStart(
+  entry: LogEntryWithFood,
+  workoutDate: string,
+  startMs: number,
+): "pre" | "post" | null {
+  if (entry.logDate === workoutDate) {
+    if (entry.mealType === "pre_workout") return "pre";
+    if (entry.mealType === "post_workout") return "post";
+  }
+
+  const t = toInstant(entry.loggedAt)?.getTime();
+  if (t === undefined) return null;
+  if (t >= startMs - PRE_WINDOW_MS && t < startMs) return "pre";
+  if (t >= startMs && t <= startMs + POST_WINDOW_MS) return "post";
+  return null;
+}
+
+/**
  * Split a session's surrounding entries into pre/post groups with macro totals.
  *
  * - **Start instant known** (`usedStartTime: true`): entries explicitly tagged
@@ -70,28 +92,21 @@ export function computeSessionFuelling(
   entries: LogEntryWithFood[],
 ): SessionFuelling {
   const start = toInstant(workout.startedAt);
-  if (start) {
-    const startMs = start.getTime();
-    const preRows: LogEntryWithFood[] = [];
-    const postRows: LogEntryWithFood[] = [];
-    for (const entry of entries) {
-      if (entry.logDate === workout.date && entry.mealType === "pre_workout") {
-        preRows.push(entry);
-        continue;
-      }
-      if (entry.logDate === workout.date && entry.mealType === "post_workout") {
-        postRows.push(entry);
-        continue;
-      }
-      const t = toInstant(entry.loggedAt)?.getTime();
-      if (t === undefined) continue;
-      if (t >= startMs - PRE_WINDOW_MS && t < startMs) preRows.push(entry);
-      else if (t >= startMs && t <= startMs + POST_WINDOW_MS) postRows.push(entry);
-    }
-    return assemble(preRows, postRows, true);
+  if (!start) {
+    return assemble(
+      entries.filter((e) => e.mealType === "pre_workout"),
+      entries.filter((e) => e.mealType === "post_workout"),
+      false,
+    );
   }
 
-  const preRows = entries.filter((e) => e.mealType === "pre_workout");
-  const postRows = entries.filter((e) => e.mealType === "post_workout");
-  return assemble(preRows, postRows, false);
+  const startMs = start.getTime();
+  const preRows: LogEntryWithFood[] = [];
+  const postRows: LogEntryWithFood[] = [];
+  for (const entry of entries) {
+    const slot = classifyAgainstStart(entry, workout.date, startMs);
+    if (slot === "pre") preRows.push(entry);
+    else if (slot === "post") postRows.push(entry);
+  }
+  return assemble(preRows, postRows, true);
 }
