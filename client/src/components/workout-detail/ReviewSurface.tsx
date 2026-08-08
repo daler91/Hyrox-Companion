@@ -5,6 +5,7 @@ import {
   Dumbbell,
   Gauge,
   Link2,
+  Loader2,
   MessageSquare,
   RotateCcw,
   Trash2,
@@ -669,32 +670,34 @@ interface MigrationReviewCalloutProps {
 }
 
 function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReviewCalloutProps) {
+  const [resolvingAction, setResolvingAction] = useState<MigrationReviewAction | null>(null);
+
   if (!reviewFlag) return null;
 
-  const handleAccept = () => {
-    onResolveReview("accept").catch(ignoreAsyncError);
+  const handleResolve = (action: MigrationReviewAction) => {
+    setResolvingAction(action);
+    onResolveReview(action)
+      .catch(ignoreAsyncError)
+      .finally(() => setResolvingAction(null));
   };
 
-  const handleEdit = () => {
-    onResolveReview("edit").catch(ignoreAsyncError);
-  };
-
-  const handleReject = () => {
-    onResolveReview("reject").catch(ignoreAsyncError);
-  };
+  const isResolving = resolvingAction !== null;
 
   return (
     <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
       <p className="font-medium">Migration review: {reviewFlag.status}</p>
       {reviewFlag.reason ? <p className="text-muted-foreground">{reviewFlag.reason}</p> : null}
       <div className="mt-2 flex gap-2">
-        <Button size="sm" variant="outline" onClick={handleAccept}>
+        <Button size="sm" variant="outline" onClick={() => handleResolve("accept")} disabled={isResolving}>
+          {resolvingAction === "accept" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
           Accept
         </Button>
-        <Button size="sm" variant="outline" onClick={handleEdit}>
+        <Button size="sm" variant="outline" onClick={() => handleResolve("edit")} disabled={isResolving}>
+          {resolvingAction === "edit" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
           Edited & accept
         </Button>
-        <Button size="sm" variant="ghost" onClick={handleReject}>
+        <Button size="sm" variant="ghost" onClick={() => handleResolve("reject")} disabled={isResolving}>
+          {resolvingAction === "reject" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
           Reject
         </Button>
       </div>
