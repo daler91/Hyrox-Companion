@@ -701,16 +701,21 @@ export const EXERCISE_NAME_ALIASES: Record<string, ExerciseName> = {
 const NORMALIZE_EXERCISE_NAME_CACHE_MAX_SIZE = 1000;
 const normalizeExerciseNameCache = new Map<string, ExerciseName | null>();
 
-export function normalizeExerciseName(raw: string): ExerciseName | null {
-  const cached = normalizeExerciseNameCache.get(raw);
-  if (cached !== undefined) return cached;
+function isAsciiAlphanumeric(char: string): boolean {
+  return (char >= "a" && char <= "z") || (char >= "0" && char <= "9");
+}
 
-  const lower = raw.trim().toLowerCase();
+/**
+ * Snake-case slug of a free-text exercise name: lowercase alphanumerics joined
+ * by single underscores, apostrophes dropped so "farmer's carry" and "farmers
+ * carry" collapse to the same key, and no leading/trailing underscore.
+ */
+function slugifyExerciseName(raw: string): string {
   let normalized = "";
   let previousWasSeparator = false;
 
-  for (const char of lower) {
-    if ((char >= "a" && char <= "z") || (char >= "0" && char <= "9")) {
+  for (const char of raw.trim().toLowerCase()) {
+    if (isAsciiAlphanumeric(char)) {
       normalized += char;
       previousWasSeparator = false;
       continue;
@@ -724,23 +729,34 @@ export function normalizeExerciseName(raw: string): ExerciseName | null {
     }
   }
 
-  if (normalized.endsWith("_")) normalized = normalized.slice(0, -1);
+  return normalized.endsWith("_") ? normalized.slice(0, -1) : normalized;
+}
 
-  let result: ExerciseName | null;
-  if (!normalized) {
-    result = null;
-  } else if (normalized in EXERCISE_DEFINITIONS) {
-    result = normalized as ExerciseName;
-  } else {
-    result = EXERCISE_NAME_ALIASES[normalized] ?? null;
-  }
+/** Resolve a slug to a canonical name, directly or via the alias table. */
+function resolveExerciseSlug(slug: string): ExerciseName | null {
+  if (!slug) return null;
+  if (slug in EXERCISE_DEFINITIONS) return slug as ExerciseName;
+  return EXERCISE_NAME_ALIASES[slug] ?? null;
+}
 
+/** Memoise `raw → result`, FIFO-evicting the oldest key once past the cap. */
+function cacheNormalizedExerciseName(
+  raw: string,
+  result: ExerciseName | null,
+): ExerciseName | null {
   normalizeExerciseNameCache.set(raw, result);
   if (normalizeExerciseNameCache.size > NORMALIZE_EXERCISE_NAME_CACHE_MAX_SIZE) {
     const oldestKey = normalizeExerciseNameCache.keys().next().value;
     if (oldestKey !== undefined) normalizeExerciseNameCache.delete(oldestKey);
   }
   return result;
+}
+
+export function normalizeExerciseName(raw: string): ExerciseName | null {
+  const cached = normalizeExerciseNameCache.get(raw);
+  if (cached !== undefined) return cached;
+
+  return cacheNormalizedExerciseName(raw, resolveExerciseSlug(slugifyExerciseName(raw)));
 }
 
 /**
