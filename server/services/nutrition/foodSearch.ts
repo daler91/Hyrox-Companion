@@ -187,7 +187,13 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   // Gate the live providers to hits that actually match the query (their full-text
   // search is noisy); local is left ungated — it's already name-matched by SQL and
   // holds the user's own custom foods, which must never be filtered out.
-  const gate = (foods: Food[]): Food[] => foods.filter((food) => isRelevantMatch(query, food));
+  // `relevanceScore` isn't free (NFD normalization + several regex/token passes), and
+  // every gated item gets scored again below by `rankByRelevance`; sharing one cache
+  // across both passes computes each live-provider item's score once per search
+  // instead of twice, with no change to which results are gated or how they rank.
+  const scoreCache = new Map<Food, number>();
+  const gate = (foods: Food[]): Food[] =>
+    foods.filter((food) => isRelevantMatch(query, food, scoreCache));
   let merged = mergeFoods([gate(edamam), gate(usda), gate(off), local]);
   // Fallback: if the gate removed everything (an over-strict miss or a typo, and no
   // local hit), show the ungated results rather than a blank screen.
@@ -198,8 +204,9 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   const semantic = await maybeSemanticSearch(query, userId, merged.length);
   if (semantic.length > 0) merged = mergeFoods([merged, semantic]);
   // Rank by match quality (exact → name-prefix → token match), provider order kept
-  // only as a tie-breaker, then cap.
-  const results = rankByRelevance(query, merged).slice(0, MAX_RESULTS);
+  // only as a tie-breaker, then cap. Reuses `scoreCache` so items already scored by
+  // `gate` above aren't rescored here.
+  const results = rankByRelevance(query, merged, scoreCache).slice(0, MAX_RESULTS);
   // Diagnostic: where the merged results came from, so it's clear in the logs
   // which sources are actually contributing hits.
   logger.info(

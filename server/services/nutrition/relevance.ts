@@ -78,8 +78,29 @@ function wordMatches(queryToken: string, word: string): boolean {
  *   0 — otherwise (fails the relevance gate)
  * Only the integer tiers (≥1) pass `isRelevantMatch`; the fractional fuzzy band ranks
  * "did you mean" hits below every real match but above unrelated noise.
+ *
+ * `cache`, when supplied, memoizes the score per food object for the lifetime of a
+ * single search: `foodSearch.ts` scores every live-provider hit once to gate it and
+ * again to rank it, and this function does real work (NFD normalization, several
+ * regex passes, per-token `.some()`/`.every()` scans), so a caller that gates then
+ * ranks the same objects can pass one `Map` through both calls to halve the work
+ * instead of recomputing the identical score twice. Keyed by object identity, which
+ * is safe here because the score is a pure function of `(query, food)` and query is
+ * constant for the duration of one search.
  */
-export function relevanceScore(query: string, food: NamedFood): number {
+export function relevanceScore(
+  query: string,
+  food: NamedFood,
+  cache?: Map<NamedFood, number>,
+): number {
+  const cached = cache?.get(food);
+  if (cached !== undefined) return cached;
+  const score = computeRelevanceScore(query, food);
+  cache?.set(food, score);
+  return score;
+}
+
+function computeRelevanceScore(query: string, food: NamedFood): number {
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) return 0;
   const nameTokens = tokenize(food.name);
@@ -102,8 +123,12 @@ export function relevanceScore(query: string, food: NamedFood): number {
 
 /** Relevance gate: true when every query token is found in the food's name or brand.
  *  Derived from the score so the gate and the ranking can never drift apart. */
-export function isRelevantMatch(query: string, food: NamedFood): boolean {
-  return relevanceScore(query, food) >= 1;
+export function isRelevantMatch(
+  query: string,
+  food: NamedFood,
+  cache?: Map<NamedFood, number>,
+): boolean {
+  return relevanceScore(query, food, cache) >= 1;
 }
 
 /**
@@ -133,10 +158,18 @@ export function expandQuery(query: string): string[] {
  * Stable-sort items by descending relevance to the query. Ties keep the input order
  * (the orchestrator feeds results in provider-priority order), so ranking only
  * reorders when one result is a genuinely better textual match than another.
+ *
+ * Accepts the same optional `cache` as `relevanceScore` so a caller that already
+ * gated these exact items with `isRelevantMatch(query, item, cache)` reuses those
+ * scores here instead of recomputing them.
  */
-export function rankByRelevance<T extends NamedFood>(query: string, items: T[]): T[] {
+export function rankByRelevance<T extends NamedFood>(
+  query: string,
+  items: T[],
+  cache?: Map<NamedFood, number>,
+): T[] {
   return items
-    .map((item, index) => ({ item, index, score: relevanceScore(query, item) }))
+    .map((item, index) => ({ item, index, score: relevanceScore(query, item, cache) }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((entry) => entry.item);
 }
