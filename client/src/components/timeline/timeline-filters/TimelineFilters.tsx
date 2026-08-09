@@ -115,7 +115,7 @@ export default function TimelineFilters({
     <>
       <Card>
         <CardContent className="p-4">
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider>
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-center">
               <PlanSelector
                 plansLoading={plansLoading}

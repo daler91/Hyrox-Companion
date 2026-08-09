@@ -6,8 +6,8 @@ import { TYPE_COLORS, TYPE_LABELS } from "@/components/timeline/annotation-style
 import { AnnotationTypeIcon } from "@/components/timeline/AnnotationTypeIcon";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AnnotationListProps {
@@ -42,7 +42,7 @@ export function AnnotationList({
     );
   }
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <ul className="space-y-2" data-testid="annotations-list">
         {annotations.map((annotation) => {
           const annotationType = annotation.type as TimelineAnnotationType;
