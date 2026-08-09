@@ -109,6 +109,18 @@ export function ChatInput({
             {interimTranscript}
           </div>
         )}
+        {/* Desktop keyboard-shortcut hint — mobile gets the native enterKeyHint
+            cue on the soft keyboard, but desktop users have no equivalent signal
+            that Enter sends and Shift+Enter inserts a newline. Hidden during
+            voice recording and loading to reduce noise. */}
+        {!isListening && !isLoading && (
+          <p
+            className="hidden px-1 pt-0.5 text-[10px] text-muted-foreground/60 md:block"
+            data-testid="text-keyboard-hint"
+          >
+            <kbd className="font-mono">↵</kbd> send · <kbd className="font-mono">⇧↵</kbd> new line
+          </p>
+        )}
       </div>
       <div className="flex flex-col gap-1">
         <VoiceButton
