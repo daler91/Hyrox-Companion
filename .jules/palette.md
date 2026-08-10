@@ -32,3 +32,7 @@
 ## 2026-07-20 - Adding Tooltips to header/navigation mobile toggle buttons
 **Learning:** Top-level navigation toggle buttons, like the mobile hamburger menu icon, often rely solely on `aria-label`. While screen-reader accessible, these icon-only buttons can be ambiguous to sighted users who use a mouse on smaller devices (or resized windows).
 **Action:** Consistently ensure that even primary layout and header navigation icon buttons use a complete Tooltip wrap, utilizing a snappy `delayDuration={200}` and `asChild` on Radix buttons, maintaining visual clarity for all users without breaking underlying refs.
+
+## 2026-08-09 - Enforce 200ms tooltip delay
+**Learning:** The default custom `TooltipProvider` has a globally snappy `delayDuration` of 200ms. Overriding this value locally (e.g., `delayDuration={300}`) breaks consistency and makes UI interactions feel sluggish and unpolished.
+**Action:** Rely on the custom default `TooltipProvider` without specifying `delayDuration` manually unless there is an exceptional and documented reason to override the global standard.
