@@ -10,19 +10,30 @@ import { type DailyUtss, eachDate, toUtssByDate } from "./blockView";
 import { groupByLogDate, type LogEntryWithFood, roundMacros, sumNutrition } from "./rollup";
 
 /**
- * Resolve the target version effective on `date` — the latest one whose
- * effectiveFrom is on or before that day — from a list pre-sorted newest-first.
- * Mirrors storage.getCurrentTarget's rule, but in memory, so a whole range
- * resolves from a single history read. String compare is valid for YYYY-MM-DD.
+ * Build a resolver for "the target version effective on `date`" — the latest
+ * one whose effectiveFrom is on or before that day. Mirrors
+ * storage.getCurrentTarget's rule, but in memory, so a whole range resolves
+ * from a single history read.
+ *
+ * Both call sites below visit dates in ascending order (block-view points and
+ * the `eachDate` range are both ascending), so the applicable target only
+ * ever moves forward. Walking a single pointer through targets sorted
+ * oldest-first — instead of rescanning the full history from the top for
+ * every date — drops resolution from O(days × targets) to O(days + targets).
+ * `createTarget` keeps exactly one row per (user, effectiveFrom), so
+ * effectiveFrom is a strict total order here — no tie-break to preserve.
  */
-function baselineForDate(
-  sortedNewestFirst: NutritionTarget[],
-  date: string,
-): NutritionTarget | null {
-  for (const t of sortedNewestFirst) {
-    if (t.effectiveFrom <= date) return t;
-  }
-  return null;
+function makeBaselineResolver(targets: NutritionTarget[]): (date: string) => NutritionTarget | null {
+  const sortedOldestFirst = [...targets].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : 1));
+  let idx = 0;
+  let current: NutritionTarget | null = null;
+  return (date: string) => {
+    while (idx < sortedOldestFirst.length && sortedOldestFirst[idx].effectiveFrom <= date) {
+      current = sortedOldestFirst[idx];
+      idx++;
+    }
+    return current;
+  };
 }
 
 /** Map a stored target row's periodisation columns to the calculator's config. */
@@ -120,7 +131,7 @@ export function decorateBlockPointsWithOutcomes(
   targets: NutritionTarget[],
   dailyLoads: ReadonlyArray<DailyUtss>,
 ): BlockViewPoint[] {
-  const sortedTargets = [...targets].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
+  const resolveBaseline = makeBaselineResolver(targets);
   const utssByDate = toUtssByDate(dailyLoads);
   const logsByDate = new Map<string, DayOutcomeWorkout[]>();
   for (const log of workoutLogs) {
@@ -130,7 +141,7 @@ export function decorateBlockPointsWithOutcomes(
   }
 
   return points.map((point) => {
-    const baseline = baselineForDate(sortedTargets, point.date);
+    const baseline = resolveBaseline(point.date);
     const dayLogs = logsByDate.get(point.date) ?? [];
     return {
       ...point,
@@ -159,15 +170,12 @@ export function buildFuellingRange(
 ): FuellingDayPoint[] {
   const rowsByDate = groupByLogDate(rows);
   const utssByDate = toUtssByDate(dailyLoads);
-
-  // Newest effectiveFrom first, so the first match for a date is the version in
-  // force on that date.
-  const sortedTargets = [...targets].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
+  const resolveBaseline = makeBaselineResolver(targets);
 
   const points: FuellingDayPoint[] = [];
   for (const date of eachDate(range.from, range.to)) {
     const dayRows = rowsByDate.get(date) ?? [];
-    const baseline = baselineForDate(sortedTargets, date);
+    const baseline = resolveBaseline(date);
     points.push({
       date,
       totals: roundMacros(sumNutrition(dayRows)),
