@@ -17,3 +17,8 @@
 **Vulnerability:** The CSV export mechanism prepend-escaped fields starting with standard formula triggers (`+`, `-`, `=`, `@`, `|`) but failed to catch fields where these triggers were preceded by a tab (`\t`) or carriage return (`\r`), allowing CSV injection filters to be bypassed in spreadsheet software like Excel.
 **Learning:** Spreadsheet applications often strip leading whitespace before evaluating cell contents. This means an attacker can start a field with a tab character followed by an equals sign (`\t=CMD()`), bypassing naive regex checks that only look at the first character, but still triggering formula execution when opened by the victim.
 **Prevention:** Always include `\t` and `\r` in the formula detection regex (`/^[+\-=@|\t\r]/`) when validating or escaping untrusted data for CSV exports.
+
+## 2026-06-25 - Prevent SSRF via DNS Rebinding on Push Notifications
+**Vulnerability:** The web push notification sender relied on URL validation at the time of subscription but did not verify the IP address resolution at the time of sending. This allowed attackers to bypass the initial SSRF guards using DNS rebinding, pointing their endpoint to a private IP when the server subsequently sent a push.
+**Learning:** URLs validated only upon entry can become malicious later due to DNS changes. For outbound webhooks or push notifications, DNS resolution must be checked *immediately before* making the request to ensure the resolved IP does not point to internal infrastructure.
+**Prevention:** Always use `assertResolvedHostIsPublic` right before making an outbound server-to-server request based on an operator-supplied or user-supplied URL to defend against DNS rebinding attacks.
