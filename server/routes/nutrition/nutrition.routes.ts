@@ -890,13 +890,20 @@ export function registerNutritionRoutes(router: Router): void {
     rateLimiter("nutritionRead", 60),
     asyncHandler(async (req: Request, res: Response) => {
       const userId = getUserId(req);
-      const row = await storage.analyticsResults.get(userId, "nutrition_insights");
+      // Fetch the stored row and the staleness anchor concurrently — they read
+      // unrelated tables (analytics_results vs food_log_entries), so there's no
+      // ordering dependency on this "paint instantly on tab open" path. Halves
+      // the DB latency for the common case (row exists) at the cost of one
+      // harmless unused query when a user has no stored insights yet.
+      const [row, latestLogDate] = await Promise.all([
+        storage.analyticsResults.get(userId, "nutrition_insights"),
+        storage.nutrition.getLatestLogDate(userId),
+      ]);
       if (!row) {
         const empty: NutritionInsightsResponse = { insights: null };
         res.json(empty);
         return;
       }
-      const latestLogDate = await storage.nutrition.getLatestLogDate(userId);
       const payload = row.payload as NutritionInsightsResponse;
       const response: NutritionInsightsResponse = {
         ...payload,
