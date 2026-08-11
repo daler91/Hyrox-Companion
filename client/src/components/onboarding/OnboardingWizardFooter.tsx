@@ -24,7 +24,7 @@ export function OnboardingWizardFooter({
     <div className="flex justify-between pt-2">
       {step !== "welcome" && step !== "plan" ? (
         <Button variant="ghost" onClick={onBack} disabled={isSchedulePending}>
-          <ChevronLeft className="h-4 w-4 mr-1" /> Back
+          <ChevronLeft className="h-4 w-4 mr-1" aria-hidden /> Back
         </Button>
       ) : (
         <div />
@@ -35,15 +35,15 @@ export function OnboardingWizardFooter({
           disabled={isSchedulePending}
           data-testid="button-onboarding-start-plan"
         >
-          {isSchedulePending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-          Start Training <ChevronRight className="h-4 w-4 ml-1" />
+          {isSchedulePending && <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden />}
+          Start Training <ChevronRight className="h-4 w-4 ml-1" aria-hidden />
         </Button>
       ) : null}
       {step !== "plan" && step !== "schedule" ? (
         <Button onClick={onNext} disabled={isPrefsPending}>
-          {isPrefsPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+          {isPrefsPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden />}
           {step === "welcome" ? "Get Started" : "Continue"}{" "}
-          <ChevronRight className="h-4 w-4 ml-1" />
+          <ChevronRight className="h-4 w-4 ml-1" aria-hidden />
         </Button>
       ) : null}
     </div>

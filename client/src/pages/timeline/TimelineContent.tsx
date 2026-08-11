@@ -4,11 +4,7 @@ import { format, isToday, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { ChangeEvent } from "react";
 
-import {
-  TimelineDateGroup,
-  TimelineEmptyState,
-  TimelineSkeleton,
-} from "@/components/timeline";
+import { TimelineDateGroup, TimelineEmptyState, TimelineSkeleton } from "@/components/timeline";
 import { Button } from "@/components/ui/button";
 import { useTimelineState } from "@/hooks/useTimelineState";
 
@@ -139,7 +135,7 @@ export function TimelineContent({
           onClick={() => setShowAllPast(true)}
           data-testid="button-show-more-past"
         >
-          <ChevronUp className="h-4 w-4 mr-2" />
+          <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
           Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? "s" : ""}
         </Button>
       )}
@@ -204,7 +200,7 @@ export function TimelineContent({
           onClick={() => setShowAllFuture(true)}
           data-testid="button-show-more-future"
         >
-          <ChevronDown className="h-4 w-4 mr-2" />
+          <ChevronDown className="h-4 w-4 mr-2" aria-hidden />
           Show {hiddenFutureCount} more upcoming workout{hiddenFutureCount > 1 ? "s" : ""}
         </Button>
       )}
