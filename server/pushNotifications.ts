@@ -50,7 +50,7 @@ async function sendToSubscription(
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes("resolves to a private/loopback address")) {
       logger.warn(
-        { subId: sub.id, endpoint: sub.endpoint },
+        { subId: sub.id },
         "[push] Push endpoint resolved to private IP (DNS rebinding). Removing subscription.",
       );
       await storage.push.removeById(sub.id);
