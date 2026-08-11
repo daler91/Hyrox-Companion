@@ -68,5 +68,3 @@ node_modules/
 .pnpm-store/
 node_modules/
 .pnpm-store
-node_modules/
-.pnpm-store
