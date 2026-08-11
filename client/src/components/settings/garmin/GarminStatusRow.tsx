@@ -59,9 +59,9 @@ export function GarminStatusRow({
             data-testid="button-sync-garmin"
           >
             {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
             )}
             <span className="ml-1.5">{isSyncing ? "Syncing…" : "Sync"}</span>
           </Button>
@@ -78,9 +78,9 @@ export function GarminStatusRow({
                   data-testid="button-disconnect-garmin"
                 >
                   {isDisconnecting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Unlink className="h-4 w-4" />
+                    <Unlink className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               </TooltipTrigger>
