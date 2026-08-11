@@ -120,9 +120,17 @@ router.get("/api/v1/race-prediction", isAuthenticated, rateLimiter("race-predict
     const userId = getUserId(req);
     const refresh = req.query.refresh === "1";
     if (!refresh) {
-      const row = await storage.analyticsResults.get(userId, "race_prediction");
+      // Fetch the stored row and the staleness anchor concurrently — they read
+      // unrelated tables (analytics_results vs workout_logs) so there's no
+      // reason to pay two sequential DB round-trips on this "paint instantly on
+      // tab open" path. Firing both unconditionally costs one harmless unused
+      // query on the (rare) no-stored-row-yet branch below, in exchange for
+      // halving the latency on every returning user's request.
+      const [row, latestWorkoutDate] = await Promise.all([
+        storage.analyticsResults.get(userId, "race_prediction"),
+        getLatestWorkoutDate(userId),
+      ]);
       if (row) {
-        const latestWorkoutDate = await getLatestWorkoutDate(userId);
         res.json({
           ...(row.payload as RacePredictionResponse),
           generatedAt: row.generatedAt.toISOString(),

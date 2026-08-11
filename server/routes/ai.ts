@@ -527,12 +527,19 @@ protectedDelete(router, "/api/v1/chat/history", { limiter: rateLimiter("chatHist
 // consent/budget middleware) and persists the fresh result.
 router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const row = await storage.analyticsResults.get(userId, "coach_insights");
+    // Fetch the stored row and the staleness anchor concurrently — they read
+    // unrelated tables (analytics_results vs workout_logs), so there's no
+    // ordering dependency between them on this "paint instantly on tab open"
+    // path. Halves the DB latency for the common case (row exists) at the cost
+    // of one harmless unused query when a user has no stored insights yet.
+    const [row, latestWorkoutDate] = await Promise.all([
+      storage.analyticsResults.get(userId, "coach_insights"),
+      getLatestWorkoutDate(userId),
+    ]);
     if (!row) {
       res.json({ insights: null });
       return;
     }
-    const latestWorkoutDate = await getLatestWorkoutDate(userId);
     const payload = row.payload as CoachInsightsResult;
     res.json({
       ...payload,
@@ -555,12 +562,17 @@ protectedPost(router, "/api/v1/coach-insights", { limiter: rateLimiter("suggesti
 // regenerates (gated by the AI consent/budget middleware) and persists.
 router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const row = await storage.analyticsResults.get(userId, "overview_analysis");
+    // See the coach-insights GET above: row and staleness anchor read
+    // unrelated tables, so fetch them concurrently instead of paying two
+    // sequential DB round-trips on this instant-paint path.
+    const [row, latestWorkoutDate] = await Promise.all([
+      storage.analyticsResults.get(userId, "overview_analysis"),
+      getLatestWorkoutDate(userId),
+    ]);
     if (!row) {
       res.json({ sections: null });
       return;
     }
-    const latestWorkoutDate = await getLatestWorkoutDate(userId);
     const payload = row.payload as OverviewAnalysisResult;
     res.json({
       ...payload,
