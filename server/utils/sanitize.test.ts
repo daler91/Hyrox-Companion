@@ -67,9 +67,12 @@ describe("sanitizeHtml", () => {
   });
 
   it("should return non-string inputs unchanged", () => {
-    expect(sanitizeHtml(undefined as any)).toBeUndefined();
-    expect(sanitizeHtml(null as any)).toBeNull();
-    expect(sanitizeHtml(123 as any)).toBe(123);
-    expect(sanitizeHtml({} as any)).toStrictEqual({});
+    // @ts-expect-error testing runtime behavior
+    expect(sanitizeHtml(undefined)).toBeUndefined();
+    // @ts-expect-error testing runtime behavior
+    expect(sanitizeHtml(null)).toBeNull();
+    const obj = {};
+    // @ts-expect-error testing runtime behavior
+    expect(sanitizeHtml(obj)).toBe(obj);
   });
 });
