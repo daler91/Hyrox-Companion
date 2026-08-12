@@ -70,6 +70,6 @@ describe("sanitizeHtml", () => {
     expect(sanitizeHtml(undefined as any)).toBeUndefined();
     expect(sanitizeHtml(null as any)).toBeNull();
     expect(sanitizeHtml(123 as any)).toBe(123);
-    expect(sanitizeHtml({} as any)).toEqual({});
+    expect(sanitizeHtml({} as any)).toStrictEqual({});
   });
 });
