@@ -36,6 +36,3 @@
 ## 2026-08-09 - Enforce 200ms tooltip delay
 **Learning:** The default custom `TooltipProvider` has a globally snappy `delayDuration` of 200ms. Overriding this value locally (e.g., `delayDuration={300}`) breaks consistency and makes UI interactions feel sluggish and unpolished.
 **Action:** Rely on the custom default `TooltipProvider` without specifying `delayDuration` manually unless there is an exceptional and documented reason to override the global standard.
-## 2026-08-12 - Tooltips for Shared UI Primitives
-**Learning:** When adding tooltips to general-purpose shared UI primitives like DialogClose and SheetClose components in a shadcn/ui library, each instance of the Tooltip requires a local `<TooltipProvider>` to ensure the context is available, even if the primitive is used in many places.
-**Action:** Always include `<TooltipProvider>` alongside `<Tooltip>`, `<TooltipTrigger>`, and `<TooltipContent>` when modifying isolated UI components to prevent context errors.
