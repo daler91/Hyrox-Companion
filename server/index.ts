@@ -282,9 +282,22 @@ app.use(pinoHttp({
 }));
 
 app.use((req, _res, next) => {
-  const r = req as Request & { id?: string; auth?: { userId?: string } };
-  const ctx = { requestId: r.id ?? "", userId: r.auth?.userId };
-  runWithRequestContext(ctx, () => next());
+  const r = req as Request & { id?: string };
+  // Binds requestId only. This middleware is mounted here, at module scope,
+  // but `clerkMiddleware()` is registered much later — inside registerRoutes()
+  // → setupAuth(), below the httpServer.listen() call — so Clerk auth has NOT
+  // run yet at this point in the chain and the caller is genuinely unknowable
+  // here. The previous `req.auth?.userId` read looked like it populated the
+  // context but could never resolve, for two independent reasons: the ordering
+  // above, and the @clerk/express v2 contract change that broke the rate-limit
+  // key (see resolveAuthUserId in server/routeUtils.ts). Dropped rather than
+  // reworked because `RequestContext.userId`'s only reader, getContextLogger(),
+  // currently has no call sites — pino's mixin() deliberately omits userId to
+  // keep PII out of high-volume logs (S2). Wiring it up would mean either
+  // moving this binding below setupAuth (costing /api/v1/health its requestId)
+  // or having isAuthenticated write userId into the live context object; do
+  // that alongside the first real consumer, not speculatively.
+  runWithRequestContext({ requestId: r.id ?? "" }, () => next());
 });
 
 const port = Number.parseInt(env.PORT || "5000", 10);
