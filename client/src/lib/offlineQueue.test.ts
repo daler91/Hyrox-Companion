@@ -141,10 +141,7 @@ describe("offlineQueue", () => {
     enqueueMutation("POST", "/api/v1/nutrition/logs", { foodId: "f1" }, { id: "n1" });
 
     const pending = getPendingMutations();
-    expect(pending.map((m) => m.url)).toEqual([
-      "/api/v1/workouts",
-      "/api/v1/nutrition/logs",
-    ]);
+    expect(pending.map((m) => m.url)).toEqual(["/api/v1/workouts", "/api/v1/nutrition/logs"]);
 
     const syncComplete = vi.fn();
     globalThis.addEventListener(OFFLINE_SYNC_COMPLETE_EVENT, syncComplete);
@@ -208,5 +205,57 @@ describe("offlineQueue", () => {
       }),
     );
     unsubscribe();
+  });
+
+  it("trims the oldest half of the queue and retries on QuotaExceededError", () => {
+    // Fill the queue with some mutations
+    enqueueMutation("POST", "/api/v1/a", { n: "1" }, { id: "1" });
+    enqueueMutation("POST", "/api/v1/a", { n: "2" }, { id: "2" });
+    enqueueMutation("POST", "/api/v1/a", { n: "3" }, { id: "3" });
+    enqueueMutation("POST", "/api/v1/a", { n: "4" }, { id: "4" });
+
+    // Ensure we have 4 mutations
+    expect(getPendingCount()).toBe(4);
+
+    // Mock setItem to throw on the first call, succeed on the second
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+    setItemSpy.mockImplementationOnce(() => {
+      throw new Error("QuotaExceededError");
+    });
+
+    // Trigger a save by enqueuing one more
+    enqueueMutation("POST", "/api/v1/a", { n: "5" }, { id: "5" });
+
+    // The initial queue had 4 items, we added 1, so it became 5.
+    // It failed, trimmed half (Math.floor(5/2) = 2), so we sliced from index 2, keeping the last 3 items.
+    // The last 3 items should be id: "3", "4", "5".
+    expect(setItemSpy).toHaveBeenCalledTimes(2);
+    expect(getPendingCount()).toBe(3);
+    expect(readStoredQueue().map((m) => m.id)).toEqual(["3", "4", "5"]);
+
+    setItemSpy.mockRestore();
+  });
+
+  it("clears the queue completely if saving trimmed queue still throws QuotaExceededError", () => {
+    enqueueMutation("POST", "/api/v1/a", { n: "1" }, { id: "1" });
+    enqueueMutation("POST", "/api/v1/a", { n: "2" }, { id: "2" });
+
+    expect(getPendingCount()).toBe(2);
+
+    // Mock setItem to throw on all calls
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+    setItemSpy.mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+
+    // Trigger a save
+    enqueueMutation("POST", "/api/v1/a", { n: "3" }, { id: "3" });
+
+    // It should have tried twice and then called removeItem
+    expect(setItemSpy).toHaveBeenCalledTimes(2);
+    expect(readStoredQueue()).toEqual([]);
+    expect(getPendingCount()).toBe(0);
+
+    setItemSpy.mockRestore();
   });
 });
