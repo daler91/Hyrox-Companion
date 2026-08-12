@@ -56,7 +56,8 @@ async function sendToSubscription(
     return true;
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes("resolves to a private/loopback address")) {
-      // bearer:disable javascript_lang_logger_leak — subId is a uuid, no secrets
+      // subId is a uuid, no secrets.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         { subId: sub.id },
         "[push] Push endpoint resolved to a private IP (DNS rebinding). Removing subscription.",
