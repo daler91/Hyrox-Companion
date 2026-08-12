@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { type ExerciseAnalyticDay,MiniBarChart } from "@/components/analytics/MiniBarChart";
+import { type ExerciseAnalyticDay, MiniBarChart } from "@/components/analytics/MiniBarChart";
 import { MiniLineChart } from "@/components/analytics/MiniLineChart";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -58,10 +58,27 @@ function computeTrend(
   return "flat";
 }
 
-function TrendArrow({ trend }: Readonly<{ trend: "up" | "down" | "flat" }>) {
-  if (trend === "up") return <TrendingUp className="h-4 w-4 text-green-500 inline ml-1" />;
-  if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-500 inline ml-1" />;
-  return <Minus className="h-4 w-4 text-muted-foreground inline ml-1" />;
+export function TrendArrow({ trend }: Readonly<{ trend: "up" | "down" | "flat" }>) {
+  if (trend === "up")
+    return (
+      <span className="inline-flex items-center ml-1" role="img" aria-label="Trending up">
+        <TrendingUp className="h-4 w-4 text-green-500" aria-hidden="true" />
+        <span className="sr-only">Trending up</span>
+      </span>
+    );
+  if (trend === "down")
+    return (
+      <span className="inline-flex items-center ml-1" role="img" aria-label="Trending down">
+        <TrendingDown className="h-4 w-4 text-red-500" aria-hidden="true" />
+        <span className="sr-only">Trending down</span>
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center ml-1" role="img" aria-label="No change">
+      <Minus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <span className="sr-only">No change</span>
+    </span>
+  );
 }
 
 function summarizeExerciseData(data: ExerciseAnalyticDay[]) {
