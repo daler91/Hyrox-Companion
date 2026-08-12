@@ -67,13 +67,25 @@ vi.mock("express-rate-limit", () => {
   };
 });
 
+// Mirror the real @clerk/express v2 contract: the middleware attaches `req.auth`
+// as a FUNCTION and `getAuth()` calls it, throwing when the middleware never ran.
+// The fixtures below use that shape so the tests fail if the limiter ever goes
+// back to reading `req.auth.userId` as a plain object (which is always
+// undefined at runtime and silently downgrades every limit to IP-keyed).
+vi.mock("@clerk/express", () => ({
+  getAuth: (req: { auth?: unknown }) => {
+    if (typeof req.auth !== "function") throw new Error("clerkMiddleware() has not run");
+    return (req.auth as () => { userId?: string })();
+  },
+}));
+
 import rateLimit from "express-rate-limit";
 
 import { calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,rateLimiter, validateBody } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
 describe("rateLimiter", () => {
-  let req: { auth: { userId: string }; ip: string };
+  let req: { auth: () => { userId: string }; ip: string };
   let res: {
     setHeader: ReturnType<typeof vi.fn>;
     status: ReturnType<typeof vi.fn>;
@@ -90,7 +102,7 @@ describe("rateLimiter", () => {
     (rateLimit as unknown as { __resetStore?: () => void }).__resetStore?.();
 
     req = {
-      auth: { userId: "user123" },
+      auth: () => ({ userId: "user123" }),
       ip: "192.168.1.1",
     };
 
@@ -151,17 +163,22 @@ describe("rateLimiter", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
-  it("distinguishes between different users", () => {
+  // 🛡️ Sentinel regression: both users share ONE ip here, so this only passes
+  // while the key is derived from the authenticated userId via getAuth(). If the
+  // limiter falls back to IP keying, user2's first request is charged to user1's
+  // bucket and gets a 429.
+  it("distinguishes between different users behind the same IP", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
 
     // User 1 requests
     middleware(req, res as Response, next); // 1st request user1 (ok)
     expect(next).toHaveBeenCalledTimes(1);
 
-    // User 2 requests
-    const req2 = { ...req, auth: { userId: "user456" } };
+    // User 2 requests — same req.ip, different authenticated user
+    const req2 = { ...req, auth: () => ({ userId: "user456" }) };
     middleware(req2, res as Response, next); // 1st request user2 (ok)
     expect(next).toHaveBeenCalledTimes(2);
+    expect(res.status).not.toHaveBeenCalled();
 
     // User 1 requests again (blocked)
     middleware(req, res as Response, next); // 2nd request user1 (blocked)

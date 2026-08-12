@@ -1,3 +1,4 @@
+import { getAuth } from "@clerk/express";
 import type { NextFunction,Request, Response } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 
@@ -10,8 +11,26 @@ import { addDaysLocal, getLocalDateStr } from "./timezone";
 
 export const DEFAULT_WINDOW_MS = DEFAULT_RATE_LIMIT_WINDOW_MS;
 
-interface AuthenticatedRequest extends Request {
-  auth?: { userId?: string };
+/**
+ * 🛡️ Sentinel: resolve the authenticated caller for rate-limit bucketing.
+ *
+ * `@clerk/express` v2 attaches `req.auth` as a *function* (`getAuth(req)` is
+ * a wrapper that calls `req.auth(options)`), so reading `req.auth?.userId`
+ * directly always yields `undefined`. That silently downgraded EVERY limit in
+ * the app to IP-keyed: per-user quotas on AI-spend and credential endpoints
+ * were bypassable from a pool of IPs, and users sharing a NAT/CGNAT egress
+ * throttled each other. Always resolve through `getAuth()`.
+ *
+ * `getAuth()` throws when `clerkMiddleware()` has not run (the dev auth-bypass
+ * path boots without Clerk keys), so treat that as "no user" and fall back to
+ * IP keying rather than failing the request.
+ */
+function resolveAuthUserId(req: Request): string | undefined {
+  try {
+    return getAuth(req)?.userId ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // One limiter instance per unique (category, maxRequests, windowMs) combination.
@@ -45,16 +64,13 @@ function buildLimiter(category: string, maxRequests: number, windowMs: number, f
     // Explicit user:/ip: prefixes prevent collision between a userId that
     // happens to equal a client IP (CODEBASE_AUDIT.md §2).
     keyGenerator: (req: Request) => {
-      const authReq = req as AuthenticatedRequest;
-      if (authReq.auth?.userId) return `${category}:user:${authReq.auth.userId}`;
+      const userId = resolveAuthUserId(req);
+      if (userId) return `${category}:user:${userId}`;
       if (req.ip) return `${category}:ip:${req.ip}`;
       return "";
     },
     // Skip rate-limiting entirely when there is no identifier.
-    skip: (req: Request) => {
-      const authReq = req as AuthenticatedRequest;
-      return !authReq.auth?.userId && !req.ip;
-    },
+    skip: (req: Request) => !resolveAuthUserId(req) && !req.ip,
     standardHeaders: true,   // RateLimit-* headers (RFC 6585)
     legacyHeaders: false,     // Disable X-RateLimit-* headers
     handler: (_req: Request, res: Response) => {

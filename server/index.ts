@@ -282,9 +282,18 @@ app.use(pinoHttp({
 }));
 
 app.use((req, _res, next) => {
-  const r = req as Request & { id?: string; auth?: { userId?: string } };
-  const ctx = { requestId: r.id ?? "", userId: r.auth?.userId };
-  runWithRequestContext(ctx, () => next());
+  const r = req as Request & { id?: string };
+  // 🛡️ Sentinel: same root cause as the rate-limit key (server/routeUtils.ts) —
+  // `req.auth` is a function under @clerk/express v2, so `req.auth?.userId` was
+  // always undefined and warn/error logs lost their userId correlation. getAuth()
+  // throws when clerkMiddleware() hasn't run (dev auth bypass), hence the catch.
+  let userId: string | undefined;
+  try {
+    userId = getAuth(req)?.userId ?? undefined;
+  } catch {
+    userId = undefined;
+  }
+  runWithRequestContext({ requestId: r.id ?? "", userId }, () => next());
 });
 
 const port = Number.parseInt(env.PORT || "5000", 10);
