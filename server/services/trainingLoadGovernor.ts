@@ -259,21 +259,6 @@ interface SuggestionRule {
   readonly priority?: WorkoutSuggestion["priority"];
 }
 
-function canApplySuggestionRule(
-  rule: SuggestionRule,
-  restrictions: Set<string>,
-  currentDate: string,
-  workout: UpcomingWorkoutForLoad,
-  usedWorkoutIds: ReadonlySet<string>,
-): boolean {
-  const daysAhead = daysBetween(currentDate, workout.date);
-  return restrictions.has(rule.restrictionId) &&
-    !usedWorkoutIds.has(workout.id) &&
-    daysAhead >= 0 &&
-    daysAhead <= rule.maxDaysAhead &&
-    rule.matches(workout);
-}
-
 function applySuggestionRules(
   summary: TrainingLoadOverview,
   workouts: readonly UpcomingWorkoutForLoad[],
@@ -283,10 +268,28 @@ function applySuggestionRules(
   suggestions: LoadGovernorSuggestion[],
 ): void {
   const restrictions = restrictionIds(summary);
+
+  // Pre-filter rules to only those whose restriction is currently active
+  const applicableRules = rules.filter(rule => restrictions.has(rule.restrictionId));
+  if (applicableRules.length === 0) return;
+
   for (const workout of workouts) {
-    const rule = rules.find((candidate) => canApplySuggestionRule(candidate, restrictions, currentDate, workout, usedWorkoutIds));
-    if (!rule) continue;
-    suggestions.push(buildSuggestion(workout, rule.rationale(summary), rule.restrictionId, rule.mode, rule.priority));
+    if (usedWorkoutIds.has(workout.id)) continue;
+
+    // Calculate daysAhead only once per workout instead of inside the loop
+    const daysAhead = daysBetween(currentDate, workout.date);
+    if (daysAhead < 0) continue;
+
+    let matchedRule: SuggestionRule | undefined;
+    for (const candidate of applicableRules) {
+      if (daysAhead <= candidate.maxDaysAhead && candidate.matches(workout)) {
+        matchedRule = candidate;
+        break;
+      }
+    }
+
+    if (!matchedRule) continue;
+    suggestions.push(buildSuggestion(workout, matchedRule.rationale(summary), matchedRule.restrictionId, matchedRule.mode, matchedRule.priority));
     usedWorkoutIds.add(workout.id);
   }
 }
@@ -299,6 +302,8 @@ function applyOnrampSuggestions(
   suggestions: LoadGovernorSuggestion[],
 ): void {
   const restrictions = restrictionIds(summary);
+  if (!restrictions.has("acwr_onramp")) return;
+
   const rule: SuggestionRule = {
     restrictionId: "acwr_onramp",
     maxDaysAhead: 3,
@@ -311,7 +316,11 @@ function applyOnrampSuggestions(
   let onrampCount = 0;
   for (const workout of workouts) {
     if (onrampCount >= 3) return;
-    if (!canApplySuggestionRule(rule, restrictions, currentDate, workout, usedWorkoutIds)) continue;
+    if (usedWorkoutIds.has(workout.id)) continue;
+
+    const daysAhead = daysBetween(currentDate, workout.date);
+    if (daysAhead < 0 || daysAhead > rule.maxDaysAhead || !rule.matches(workout)) continue;
+
     suggestions.push(buildSuggestion(workout, rule.rationale(summary), rule.restrictionId, rule.mode, rule.priority));
     usedWorkoutIds.add(workout.id);
     onrampCount += 1;
