@@ -30,7 +30,7 @@ jobs:
       # Scan code using Bearer CLI
       - name: Run Report
         id: report
-        uses: bearer/bearer-action@v2
+        uses: bearer/bearer-action@828eeb928ce2f4a7ca5ed57fb8b59508cb8c79bc
         with:
           api-key: ${{ secrets.BEARER_TOKEN }}
           format: sarif
