@@ -67,6 +67,28 @@ describe("GeneratePlanScheduleStep", () => {
     expect(screen.getByText("Select 2 more rest days to continue.")).toBeInTheDocument();
   });
 
+  it("omits the rest-day hint when no rest days are required, even if canProceed is false", () => {
+    // requiredRestDays is 0 whenever the wizard's daysPerWeek is 7 — the
+    // hook that owns canProceed treats that as satisfied regardless of
+    // restDays, so in practice canProceed=false + requiredRestDays=0 only
+    // happens if a future caller wires this prop combination up wrong.
+    // Assert the component still degrades safely: no hint, no dangling
+    // aria-describedby pointing at an element that was never rendered.
+    render(
+      <GeneratePlanScheduleStep
+        {...baseProps}
+        restDays={[]}
+        requiredRestDays={0}
+        dateError={null}
+        canProceed={false}
+      />,
+    );
+
+    expect(screen.queryByText(/more rest day/)).not.toBeInTheDocument();
+    const nextButton = screen.getByRole("button", { name: /next/i });
+    expect(nextButton).not.toHaveAttribute("aria-describedby");
+  });
+
   it("shows no hint and clears aria-describedby once the step can proceed", () => {
     render(
       <GeneratePlanScheduleStep
