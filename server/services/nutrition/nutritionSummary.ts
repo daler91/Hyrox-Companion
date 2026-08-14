@@ -65,34 +65,32 @@ function average(points: BlockViewPoint[], select: (p: BlockViewPoint) => number
   return Math.round(points.reduce((sum, p) => sum + select(p), 0) / points.length);
 }
 
+async function getUserTimezone(userId: string): Promise<string> {
+  const user = await storage.users.getUser(userId);
+  return user?.userTimezone ?? "UTC";
+}
+
 /**
  * Build the structured nutrition summary over the last
  * `NUTRITION_SUMMARY_WINDOW_DAYS` (user-local) days. Mirrors the aggregates the
  * block view and micro panel use, so the coach and the insights panel agree.
  */
 export async function buildNutritionSummary(userId: string): Promise<NutritionSummary> {
-  // ⚡ Bolt Performance Optimization: `user` used to be fetched twice — once here
-  // (via a since-removed getUserTimezone helper) to resolve the local "today", and
-  // again inside the Promise.all below to read weightUnit/age/gender for the load
-  // calc. Both reads return the identical `users` row for the same userId, so the
-  // second one was a pure duplicate DB round-trip on every call. Fetching it once
-  // up front (still required before `to`/`from` can be computed) and reusing it in
-  // the batch drops this from 2 sequential+parallel `getUser` calls to 1.
-  const user = await storage.users.getUser(userId);
-  const tz = user?.userTimezone ?? "UTC";
+  const tz = await getUserTimezone(userId);
   const to = getLocalDateStr(new Date(), tz);
   const from = getLocalDateStr(
     new Date(Date.now() - (NUTRITION_SUMMARY_WINDOW_DAYS - 1) * DAY_MS),
     tz,
   );
 
-  const [rows, workoutLogs, exerciseSets, loadTags, target, todayRows] = await Promise.all([
+  const [rows, workoutLogs, exerciseSets, loadTags, target, todayRows, user] = await Promise.all([
     storage.nutrition.listEntriesWithFoodForDateRange(userId, from, to),
     storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
     storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
     storage.analytics.getExerciseLoadTags(),
     storage.nutrition.getCurrentTarget(userId, to),
     storage.nutrition.listEntriesWithFoodForDate(userId, to),
+    storage.users.getUser(userId),
   ]);
 
   const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {

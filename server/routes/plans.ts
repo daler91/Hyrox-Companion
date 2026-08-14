@@ -294,25 +294,41 @@ router.get(
   rateLimiter("planDaySet", 60),
   asyncHandler(async (req: ExpressRequest<{ dayId: string }, unknown, unknown, { includeStructure?: string }>, res: Response) => {
     const userId = getUserId(req);
-    let sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
-    if (sets === null) {
-      return sendNotFound(res, PLAN_DAY_NOT_FOUND);
-    }
     const includeStructure = req.query.includeStructure === "true";
+
+    let sets;
+    let structureBlocks;
+
     if (!includeStructure) {
+      sets = await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId);
+      if (sets === null) {
+        return sendNotFound(res, PLAN_DAY_NOT_FOUND);
+      }
       res.json(sets);
       return;
     }
-    let structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId);
-    if (structureBlocks === null) {
+
+    // ⚡ Bolt Performance Optimization:
+    // These two reads hit different tables for the same planDayId with no
+    // ordering dependency, so running them sequentially just doubles round-trip latency.
+    // Promise.all halves the wait on this read path.
+    [sets, structureBlocks] = await Promise.all([
+      storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId),
+      storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId),
+    ]);
+
+    if (sets === null || structureBlocks === null) {
       return sendNotFound(res, PLAN_DAY_NOT_FOUND);
     }
+
     if (sets.length === 0 && structureBlocks.length > 0) {
       await deriveMissingPlanDaySetsFromStructure(req.params.dayId, userId);
-      sets = (await storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId)) ?? [];
-      structureBlocks = await storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId) ?? [];
+      [sets, structureBlocks] = await Promise.all([
+        storage.workouts.getExerciseSetsByPlanDay(req.params.dayId, userId),
+        storage.workouts.getWorkoutStructureByPlanDay(req.params.dayId, userId),
+      ]);
     }
-    res.json({ exerciseSets: sets, structureBlocks });
+    res.json({ exerciseSets: sets ?? [], structureBlocks: structureBlocks ?? [] });
   }),
 );
 
