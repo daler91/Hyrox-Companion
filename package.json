@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",
-    "@clerk/express": "^2.1.55",
+    "@clerk/express": "^2.1.56",
     "@clerk/react": "^6.12.10",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -69,7 +69,7 @@
     "@fontsource/geist-sans": "^5.3.0",
     "@fontsource/open-sans": "^5.3.0",
     "@fontsource/space-grotesk": "^5.3.0",
-    "@google/genai": "^2.16.0",
+    "@google/genai": "^2.17.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@radix-ui/react-accordion": "^1.2.20",
     "@radix-ui/react-alert-dialog": "^1.1.23",
@@ -121,7 +121,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.10.1",
     "rehype-sanitize": "^6.0.0",
-    "resend": "^6.19.0",
+    "resend": "^6.20.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "web-push": "^3.6.7",
@@ -447,6 +447,19 @@
     "  cannot update transitive deps for pnpm, so the override is required.",
     "  Remove when minimatch 10.x depends on brace-expansion >=5.0.8.",
     "",
+    "nanoid@^3.3.16 -> ^3.3.18 (SCOPED KEY): fixes GHSA-2v37-7h3g-55p8 / CVE-2026-67213 (High -",
+    "  infinite loop in customAlphabet()/customRandom() when called with size 0, hanging the calling",
+    "  thread; a DoS if an unvalidated, attacker-controlled size reaches either function). Patched in",
+    "  3.3.18. Scoped rather than a bare 'nanoid' key because this repo also carries a direct 6.0.1",
+    "  devDependency (script/decode-text-entities.ts and friends); an unscoped override would silently",
+    "  downgrade that to the 3.x line. The vulnerable copy is nanoid 3.3.17, requested as postcss's",
+    "  ^3.3.16 dependency and reached only through the Vite/Tailwind/Vitest build toolchain (postcss <-",
+    "  vite/@vitejs/plugin-react/@tailwindcss/vite/vite-plugin-pwa/vitest and its coverage/mocker",
+    "  packages) - build-time tooling, not a runtime path, and nothing here calls customAlphabet or",
+    "  customRandom with a caller-controlled size either way. Dependabot cannot update transitive pnpm",
+    "  deps, so the override is required to clear the advisory.",
+    "  Remove when postcss depends on nanoid >=3.3.18.",
+    "",
     "NOT an override, but a rule for this block: never add an unscoped 'typescript' key here.",
     "  Overrides match by requested package name, and the 'typescript7' devDependency is an npm",
     "  alias whose request is also 'typescript' (npm:typescript@7.0.2) - an unscoped key would",
@@ -479,7 +492,8 @@
     "axios": "^1.18.0",
     "body-parser": "^2.3.0",
     "fast-uri": "^3.1.5",
-    "brace-expansion@^5.0.5": "^5.0.9"
+    "brace-expansion@^5.0.5": "^5.0.9",
+    "nanoid@^3.3.16": "^3.3.18"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -556,7 +570,8 @@
       "axios": "^1.18.0",
       "body-parser": "^2.3.0",
       "fast-uri": "^3.1.5",
-      "brace-expansion@^5.0.5": "^5.0.9"
+      "brace-expansion@^5.0.5": "^5.0.9",
+      "nanoid@^3.3.16": "^3.3.18"
     }
   },
   "packageManager": "pnpm@9.12.0",
