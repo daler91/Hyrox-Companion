@@ -33,8 +33,17 @@ export function GeneratePlanGoalStep({
         />
         <CharacterCount id="goal-count" value={goal} max={500} />
       </div>
+      {!canProceed && (
+        <output id="goal-step-hint" className="block text-center text-xs text-muted-foreground">
+          Describe your training goal to continue.
+        </output>
+      )}
       <div className="flex justify-end">
-        <Button onClick={onNext} disabled={!canProceed}>
+        <Button
+          onClick={onNext}
+          disabled={!canProceed}
+          aria-describedby={!canProceed ? "goal-step-hint" : undefined}
+        >
           Next <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
