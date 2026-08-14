@@ -95,17 +95,38 @@ function readValue(n: UsdaNutrient): number | null {
   return null;
 }
 
+type NutrientIndex = Map<string, UsdaNutrient[]>;
+
+// A USDA food response is mapped through ~19 findNutrient() lookups (5 macro
+// fields + 14 MICRO_DEFS), each previously doing its own O(N) linear scan over
+// `foodNutrients` — Foundation foods report 100+ entries, so per food this was
+// O(19*N). Building a nutrientId -> entries index once per food turns every
+// lookup into an O(1) Map.get() (plus O(k) for same-id duplicates, k is
+// almost always 1), dropping the per-food cost to O(N + 19) ≈ O(N).
+function buildNutrientIndex(nutrients: UsdaNutrient[]): NutrientIndex {
+  const index: NutrientIndex = new Map();
+  for (const n of nutrients) {
+    const id = readId(n);
+    const bucket = index.get(id);
+    if (bucket) bucket.push(n);
+    else index.set(id, [n]);
+  }
+  return index;
+}
+
 /** Find the first nutrient matching one of `ids`, optionally unit-filtered. */
 function findNutrient(
-  nutrients: UsdaNutrient[],
+  index: NutrientIndex,
   ids: string[],
   opts: { unit?: string } = {},
 ): number | null {
   for (const id of ids) {
-    const match = nutrients.find(
-      (n) => readId(n) === id && readValue(n) !== null && (!opts.unit || readUnit(n) === opts.unit),
-    );
-    if (match) return readValue(match);
+    const bucket = index.get(id);
+    if (!bucket) continue;
+    for (const n of bucket) {
+      const value = readValue(n);
+      if (value !== null && (!opts.unit || readUnit(n) === opts.unit)) return value;
+    }
   }
   return null;
 }
@@ -116,10 +137,10 @@ function findNutrient(
  * micro's display unit (µg === mcg) with no conversion. Micros absent from this
  * food are omitted (not zeroed).
  */
-function extractMicros(nutrients: UsdaNutrient[]): Record<string, number> | null {
+function extractMicros(index: NutrientIndex): Record<string, number> | null {
   const micros: Record<string, number> = {};
   for (const def of MICRO_DEFS) {
-    const value = findNutrient(nutrients, [def.usdaId], { unit: def.usdaUnit });
+    const value = findNutrient(index, [def.usdaId], { unit: def.usdaUnit });
     if (value !== null && value >= 0) micros[def.key] = value;
   }
   return Object.keys(micros).length > 0 ? micros : null;
@@ -172,18 +193,19 @@ function withLabelFallback(mapped: UsdaFoodMapped, raw: UsdaSearchFood): UsdaFoo
 export function mapUsdaSearchFood(raw: UsdaSearchFood): UsdaFoodMapped | null {
   if (typeof raw.fdcId !== "number" || typeof raw.description !== "string") return null;
   const nutrients = Array.isArray(raw.foodNutrients) ? raw.foodNutrients : [];
+  const index = buildNutrientIndex(nutrients);
   const mapped: UsdaFoodMapped = {
     source: "usda",
     sourceId: String(raw.fdcId),
     name: raw.description,
     brand: raw.brandOwner ?? raw.brandName ?? null,
     servingSizeG: servingToGrams(raw.servingSize, raw.servingSizeUnit),
-    caloriesPer100g: findNutrient(nutrients, ENERGY_KCAL_IDS, { unit: "kcal" }),
-    proteinPer100g: findNutrient(nutrients, [PROTEIN_ID]),
-    carbPer100g: findNutrient(nutrients, [CARB_ID]),
-    fatPer100g: findNutrient(nutrients, [FAT_ID]),
-    fiberPer100g: findNutrient(nutrients, [FIBER_ID]),
-    micros: extractMicros(nutrients),
+    caloriesPer100g: findNutrient(index, ENERGY_KCAL_IDS, { unit: "kcal" }),
+    proteinPer100g: findNutrient(index, [PROTEIN_ID]),
+    carbPer100g: findNutrient(index, [CARB_ID]),
+    fatPer100g: findNutrient(index, [FAT_ID]),
+    fiberPer100g: findNutrient(index, [FIBER_ID]),
+    micros: extractMicros(index),
   };
   return withLabelFallback(mapped, raw);
 }
