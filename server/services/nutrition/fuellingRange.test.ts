@@ -130,6 +130,18 @@ describe("buildFuellingRange", () => {
     expect(days[0].effectiveTarget).toBeNull(); // before the first target
     expect(days[1].effectiveTarget).not.toBeNull();
   });
+
+  it("resolves the same versions regardless of the input array's order", () => {
+    // Callers read target history newest-first (see storage.getTargetHistory),
+    // so the resolver must not assume its input already arrives oldest-first.
+    const targets = [
+      target("2026-06-03", { calories: 2500 }),
+      target("2026-06-01", { calories: 2000 }),
+    ];
+    const days = buildFuellingRange([], [], targets, { from: "2026-06-02", to: "2026-06-03" });
+    expect(days[0].effectiveTarget?.calories).toBe(2000); // 06-02 → 06-01 version
+    expect(days[1].effectiveTarget?.calories).toBe(2500); // 06-03 → 06-03 version
+  });
 });
 
 describe("decorateBlockPointsWithOutcomes", () => {

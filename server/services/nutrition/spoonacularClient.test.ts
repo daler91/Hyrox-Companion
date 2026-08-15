@@ -57,6 +57,51 @@ describe("mapSpoonacularProduct", () => {
     expect(m?.micros?.vitaminA).toBeUndefined(); // IU ≠ mcg → skipped
   });
 
+  // ⚡ Bolt indexed readNutrient's per-nutrient-name scan into a Map built once
+  // per product (buildNutrientIndex). These cover the index-building edge
+  // cases a single-entry-per-name fixture like PRODUCT never exercises:
+  // same-name duplicates bucketing together, a title-only entry (no `name`),
+  // and an entry with neither key.
+  it("indexes same-named nutrients into one bucket and keeps scanning past a unit mismatch", () => {
+    const m = mapSpoonacularProduct({
+      id: 456,
+      title: "Duplicate-Nutrient Product",
+      nutrition: {
+        nutrients: [
+          { name: "Calories", amount: 120, unit: "kcal" },
+          { name: "Protein", amount: 2, unit: "g" },
+          { name: "Carbohydrates", amount: 25, unit: "g" },
+          // Same name (case-insensitive), wrong unit first — must be skipped
+          // in favor of the matching-unit duplicate later in the same bucket.
+          { name: "Fat", amount: 5, unit: "mg" },
+          { name: "FAT", amount: 1, unit: "g" },
+        ],
+        weightPerServing: { amount: 31, unit: "g" },
+      },
+      servings: { number: 1, size: 31, unit: "g" },
+    });
+    expect(m?.fatPer100g).toBeCloseTo((1 * 100) / 31, 4);
+  });
+
+  it("reads a nutrient keyed by title instead of name, and ignores an entry with neither", () => {
+    const m = mapSpoonacularProduct({
+      id: 789,
+      title: "Title-Keyed Nutrient Product",
+      nutrition: {
+        nutrients: [
+          { name: "Calories", amount: 120, unit: "kcal" },
+          { name: "Protein", amount: 2, unit: "g" },
+          { name: "Carbohydrates", amount: 25, unit: "g" },
+          { title: "Fat", amount: 1, unit: "g" }, // no `name` — falls back to `title`
+          { amount: 999, unit: "g" }, // neither `name` nor `title` — skipped, not crashed on
+        ],
+        weightPerServing: { amount: 31, unit: "g" },
+      },
+      servings: { number: 1, size: 31, unit: "g" },
+    });
+    expect(m?.fatPer100g).toBeCloseTo((1 * 100) / 31, 4);
+  });
+
   it("converts an oz serving weight to grams", () => {
     const m = mapSpoonacularProduct({
       id: 1,

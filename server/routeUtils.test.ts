@@ -185,6 +185,24 @@ describe("rateLimiter", () => {
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
+  // Distinct from "uses ip address if userId is missing" below: that request
+  // has no `.auth` at all, so the mocked getAuth() throws (clerkMiddleware()
+  // never ran) and resolveAuthUserId's catch branch supplies the fallback.
+  // Here clerkMiddleware() DID run — req.auth is a function — but the caller
+  // is anonymous, so it resolves to no user object at all (not one with an
+  // undefined userId). That exercises resolveAuthUserId's `getAuth(req)?.userId`
+  // optional-chaining short-circuit rather than its catch block.
+  it("uses ip address when getAuth() resolves no user (anonymous request under running Clerk middleware)", () => {
+    const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
+    const reqAnon = { auth: () => undefined, ip: "10.0.0.2" };
+
+    middleware(reqAnon as unknown as Request, res as Response, next); // 1st request (ok)
+    expect(next).toHaveBeenCalledTimes(1);
+
+    middleware(reqAnon as unknown as Request, res as Response, next); // 2nd request (blocked — same IP bucket)
+    expect(res.status).toHaveBeenCalledWith(429);
+  });
+
   it("uses ip address if userId is missing", () => {
     const middleware = rateLimiter("api", 1, DEFAULT_WINDOW_MS);
     const reqIp = { ip: "10.0.0.1" };

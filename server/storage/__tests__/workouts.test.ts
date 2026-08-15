@@ -1,9 +1,14 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { createMockWorkoutLog } from "../../../test/factories";
 import { db } from "../../db";
 import { WorkoutStorage } from "../workouts";
 
+vi.mock("../shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../shared")>();
+  return { ...actual, queryExerciseSetsWithDates: vi.fn() };
+});
 
 vi.mock("../../db", () => {
   const db: Record<string, unknown> = {
@@ -11,6 +16,7 @@ vi.mock("../../db", () => {
     update: vi.fn(),
     delete: vi.fn(),
     select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue([]) }) }),
+    selectDistinct: vi.fn(),
   };
   // createWorkoutLog and deleteWorkoutLog both wrap their DB calls in a
   // db.transaction(tx => ...) block. The mocked transaction just invokes
@@ -338,5 +344,120 @@ describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18
     );
 
     expect(result).toBeUndefined();
+  });
+});
+
+// ⚡ Bolt drove getExerciseHistory's bounded path from an indexed join instead
+// of a full log scan (see the method's doc comment). The two DB reads are
+// captured through the same where()-spy + PgDialect().sqlToQuery(...).params
+// technique PlanStorage's markMissedPlanDays tests use, so assertions check
+// the actual bound values rather than the shape of the mock chain.
+describe("WorkoutStorage.getExerciseHistory", () => {
+  let storage: WorkoutStorage;
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  function boundParams(clause: unknown): unknown[] {
+    return new PgDialect().sqlToQuery(clause as never).params;
+  }
+
+  it("skips the sets query and returns [] when no session has logged this exercise", async () => {
+    const limitMock = vi.fn().mockResolvedValue([]);
+    vi.mocked(db.selectDistinct).mockReturnValue({
+      from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: () => ({ limit: limitMock }) }) }) }),
+    } as never);
+
+    const result = await storage.getExerciseHistory("user-1", "back_squat", { sessionLimit: 5 });
+
+    expect(result).toEqual([]);
+    expect(limitMock).toHaveBeenCalledWith(5);
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("fetches sets from only the most recent sessions and flattens each with its date", async () => {
+    const recentDates = [{ date: "2026-01-10" }, { date: "2026-01-05" }];
+    vi.mocked(db.selectDistinct).mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ orderBy: () => ({ limit: vi.fn().mockResolvedValue(recentDates) }) }) }),
+      }),
+    } as never);
+
+    const setRow1 = { id: "set-1", workoutLogId: "w-10", exerciseName: "back_squat", sortOrder: 0 };
+    const setRow2 = { id: "set-2", workoutLogId: "w-5", exerciseName: "back_squat", sortOrder: 0 };
+    const rows = [
+      { set: setRow1, date: "2026-01-10" },
+      { set: setRow2, date: "2026-01-05" },
+    ];
+    let capturedWhere: unknown;
+    vi.mocked(db.select).mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({
+          where: (clause: unknown) => {
+            capturedWhere = clause;
+            return { orderBy: vi.fn().mockResolvedValue(rows) };
+          },
+        }),
+      }),
+    } as never);
+
+    const result = await storage.getExerciseHistory("user-1", "back_squat", { sessionLimit: 2 });
+
+    expect(result).toEqual([
+      { ...setRow1, date: "2026-01-10" },
+      { ...setRow2, date: "2026-01-05" },
+    ]);
+    // The second query is filtered to exactly the dates the first query resolved,
+    // not re-scoped to sessionLimit rows or the exercise's full history.
+    expect(boundParams(capturedWhere)).toEqual(
+      expect.arrayContaining(["user-1", "back_squat", "2026-01-10", "2026-01-05"]),
+    );
+  });
+
+  it("resolves an alias to its canonical name before filtering either query", async () => {
+    let firstWhereClause: unknown;
+    let secondWhereClause: unknown;
+    vi.mocked(db.selectDistinct).mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({
+          where: (clause: unknown) => {
+            firstWhereClause = clause;
+            return { orderBy: () => ({ limit: vi.fn().mockResolvedValue([{ date: "2026-01-01" }]) }) };
+          },
+        }),
+      }),
+    } as never);
+    vi.mocked(db.select).mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({
+          where: (clause: unknown) => {
+            secondWhereClause = clause;
+            return { orderBy: vi.fn().mockResolvedValue([]) };
+          },
+        }),
+      }),
+    } as never);
+
+    // "RDL" is a known alias for the canonical exercise name "romanian_deadlift".
+    await storage.getExerciseHistory("user-1", "RDL", { sessionLimit: 3 });
+
+    expect(boundParams(firstWhereClause)).toContain("romanian_deadlift");
+    expect(boundParams(firstWhereClause)).not.toContain("RDL");
+    expect(boundParams(secondWhereClause)).toContain("romanian_deadlift");
+  });
+
+  it("falls back to a full relational scan when no sessionLimit is given", async () => {
+    const { queryExerciseSetsWithDates } = await import("../shared");
+    const unboundedRows = [{ id: "set-1", workoutLogId: "w-1", exerciseName: "back_squat", sortOrder: 0, date: "2026-01-01" }];
+    vi.mocked(queryExerciseSetsWithDates).mockResolvedValue(unboundedRows);
+
+    const result = await storage.getExerciseHistory("user-1", "back_squat");
+
+    expect(result).toEqual(unboundedRows);
+    expect(queryExerciseSetsWithDates).toHaveBeenCalledWith("user-1", { exerciseName: "back_squat" });
+    expect(db.selectDistinct).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
   });
 });
