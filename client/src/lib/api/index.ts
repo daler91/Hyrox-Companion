@@ -101,6 +101,7 @@ export const QUERY_KEYS = {
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
   trainingOverview: ["/api/v1/training-overview"] as const,
+  weeklyReview: (week: string) => ["/api/v1/weekly-review", week] as const,
   overviewAnalysis: ["/api/v1/overview-analysis"] as const,
   racePrediction: ["/api/v1/race-prediction"] as const,
   coachInsights: ["/api/v1/coach-insights"] as const,

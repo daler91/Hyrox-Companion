@@ -1,6 +1,6 @@
 # In-app Weekly Review — scope
 
-**Status.** PR1 and PR2 of 5 landed (§7); the rest is scope. Register entry: recommendation #10 in
+**Status.** PR1–PR3 of 5 landed (§7); the rest is scope. Register entry: recommendation #10 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
 
 **One-line pitch.** A Sunday-night page: what you planned, what you did, what changed, and
@@ -141,20 +141,33 @@ belong to the page (PR3), not to this endpoint.
 
 ---
 
-## 4. Client
+## 4. Client — the page shipped in PR3, the entry points are PR4
 
-**Route.** `/review` in `AuthenticatedRouter` (`client/src/App.tsx:80-88`), wrapped in
-`FeatureErrorBoundaryWrapper` like every other page. Week selection via `useUrlQueryState`
-(`client/src/hooks/useUrlQueryState.ts:43`) so a week is linkable and shareable —
-`/review?week=2026-08-04`.
+**Route.** `/review`, lazy-loaded in `AuthenticatedRouter` and wrapped in
+`FeatureErrorBoundaryWrapper` like every other page. Week selection via `useUrlQueryState`,
+so a week is linkable and shareable — `/review?week=2026-08-04`. **Nothing links to it yet**;
+until PR4 lands it is reachable only by URL.
 
-**Data.** `api.analytics.getWeeklyReview(week)` in `client/src/lib/api/analytics.ts`, a
-`QUERY_KEYS.weeklyReview` entry (`client/src/lib/api/index.ts:88`), and a `useWeeklyReview`
-hook. Past weeks are immutable once the week closes — `staleTime: Infinity` for a completed
-week, normal staleness for the current one. No localStorage snapshot needed (unlike
-`useRacePrediction`); this is not an expensive AI payload.
+**Data.** `api.analytics.getWeeklyReview(week)`, `QUERY_KEYS.weeklyReview(week)`, and the
+`useWeeklyReview` hook. A closed week never changes, so it is cached with
+`staleTime: Infinity` and paging back through the year re-fetches nothing; the in-progress
+week keeps normal staleness. No localStorage snapshot (unlike `useRacePrediction`) — this is
+not an expensive AI payload.
 
-**Entry points, in order of expected traffic.**
+**The client computes the week twice, and the server wins.** The browser knows only its own
+timezone, so `client/src/lib/weekDates.ts` (`mondayOf`, `lastCompletedWeekStart`, mirroring
+the server's `getWeekRangeForDate`) decides which week to _request_. Everything rendered —
+the header range, the prev/next anchor, the in-progress badge — comes from the payload's
+`weekStart` / `isCurrentWeek`. Paging from the requested string instead would skip or repeat
+a week whenever the athlete's stored timezone differs from the browser's.
+
+**Components.** `pages/Review.tsx` composes three pieces under
+`components/review/`: `WeeklyReviewSummary` (the four tiles, reusing `DeltaIndicator`),
+`WeeklyReviewHighlights` (annotations and named PRs), `WeeklyReviewSessions` (what happened
+and what didn't). The adherence tile is suppressed entirely when `hasPlan` is false, and the
+RPE delta is suppressed when either week has no RPE.
+
+**Entry points (PR4), in order of expected traffic.**
 
 1. **The weekly summary email and its push.** `emailScheduler.ts:96` currently sends the push
    to `url: "/analytics"` — a page showing different numbers over a different window. Point
