@@ -256,9 +256,23 @@ async function resolveMealFuelTargets(userId: string, logDate: string, effective
 async function handleDailySummary(req: Request, res: Response): Promise<void> {
   const userId = getUserId(req);
   const { date } = req.query as unknown as DailySummaryQuery;
-  const user = await storage.users.getUser(userId);
-  const logDate = date ?? getLocalDateStr(new Date(), user?.userTimezone ?? "UTC");
-  const rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
+
+  // ⚡ Bolt: Parallelize independent DB reads when the date is provided in the query.
+  let user;
+  let logDate;
+  let rows;
+  if (date) {
+    logDate = date;
+    [user, rows] = await Promise.all([
+      storage.users.getUser(userId),
+      storage.nutrition.listEntriesWithFoodForDate(userId, date),
+    ]);
+  } else {
+    user = await storage.users.getUser(userId);
+    logDate = getLocalDateStr(new Date(), user?.userTimezone ?? "UTC");
+    rows = await storage.nutrition.listEntriesWithFoodForDate(userId, logDate);
+  }
+
   const base = buildDailySummary(logDate, rows);
   const [effectiveTarget, energy] = await Promise.all([
     resolveEffectiveTarget(userId, logDate),
