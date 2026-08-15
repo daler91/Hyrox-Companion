@@ -481,10 +481,19 @@ export class TimelineStorage {
     limit?: number,
     offset?: number,
   ): Promise<TimelineEntry[]> {
-    const today = await this.resolveUserToday(userId);
     const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
 
-    const { scheduledDays, planNameById } = await this.fetchScheduledDays(userId, planId, sqlOverFetch);
+    // ⚡ Bolt Performance Optimization: resolveUserToday (reads `users`) and
+    // fetchScheduledDays (reads `trainingPlans`/`planDays`) touch unrelated
+    // tables and have no data dependency between them — `today` isn't
+    // consumed until buildTimelineEntries below, well after this point. This
+    // is the primary loader behind every Timeline page load and every AI
+    // coach turn (buildAIContext -> getTimeline), so halving these two
+    // sequential round-trips into one is a real win on a very hot path.
+    const [today, { scheduledDays, planNameById }] = await Promise.all([
+      this.resolveUserToday(userId),
+      this.fetchScheduledDays(userId, planId, sqlOverFetch),
+    ]);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
     // W7: planNameById already came from fetchScheduledDays above, so no second
