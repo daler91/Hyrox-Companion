@@ -79,9 +79,9 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
             aria-pressed={isListening}
           >
             {isListening ? (
-              <MicOff className="h-4 w-4" />
+              <MicOff className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <Mic className="h-4 w-4" />
+              <Mic className="h-4 w-4" aria-hidden="true" />
             )}
           </Button>
         </TooltipTrigger>

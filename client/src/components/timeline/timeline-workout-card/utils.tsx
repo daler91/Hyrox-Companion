@@ -37,7 +37,7 @@ export function getStatusBadge(status: string, focus?: string | null) {
         className="bg-amber-500/15 text-amber-700 dark:text-amber-300"
         data-testid="badge-race-day"
       >
-        <Flag className="h-3 w-3 mr-1" />
+        <Flag className="h-3 w-3 mr-1" aria-hidden="true" />
         Race Day
       </Badge>
     );
@@ -46,28 +46,28 @@ export function getStatusBadge(status: string, focus?: string | null) {
     case "completed":
       return (
         <Badge className="bg-success/10 text-success">
-          <CheckCircle2 className="h-3 w-3 mr-1" />
+          <CheckCircle2 className="h-3 w-3 mr-1" aria-hidden="true" />
           Completed
         </Badge>
       );
     case "planned":
       return (
         <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">
-          <Clock className="h-3 w-3 mr-1" />
+          <Clock className="h-3 w-3 mr-1" aria-hidden="true" />
           Planned
         </Badge>
       );
     case "missed":
       return (
         <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">
-          <XCircle className="h-3 w-3 mr-1" />
+          <XCircle className="h-3 w-3 mr-1" aria-hidden="true" />
           Missed
         </Badge>
       );
     case "skipped":
       return (
         <Badge className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
-          <SkipForward className="h-3 w-3 mr-1" />
+          <SkipForward className="h-3 w-3 mr-1" aria-hidden="true" />
           Skipped
         </Badge>
       );

@@ -192,9 +192,9 @@ export function RacePredictorTab() {
           data-testid="race-prediction-retry"
         >
           {isRefreshing ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
+            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
           {isRefreshing ? "Retrying…" : "Retry"}
         </Button>
@@ -241,12 +241,12 @@ export function RacePredictorTab() {
               >
                 {isRefreshing ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
                     Regenerating…
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
+                    <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
                     Regenerate
                   </>
                 )}

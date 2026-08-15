@@ -19,11 +19,11 @@ export function ProgressTab({ dateParams }: ProgressTabProps) {
     <Tabs defaultValue="records" className="w-full">
       <TabsList className="mb-2">
         <TabsTrigger value="records" data-testid="subtab-records">
-          <Trophy className="h-4 w-4 mr-2" />
+          <Trophy className="h-4 w-4 mr-2" aria-hidden="true" />
           Records
         </TabsTrigger>
         <TabsTrigger value="progression" data-testid="subtab-progression">
-          <Activity className="h-4 w-4 mr-2" />
+          <Activity className="h-4 w-4 mr-2" aria-hidden="true" />
           Progression
         </TabsTrigger>
       </TabsList>
