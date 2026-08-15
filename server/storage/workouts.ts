@@ -18,7 +18,7 @@ import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, or, sql } from "dri
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { prescribedSetToLogRow, queryExerciseSetsWithDates, takeMostRecentSessions } from "./shared";
+import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
 
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
 type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
@@ -513,15 +513,53 @@ export class WorkoutStorage {
    * `romanian_deadlift`; unresolvable names fall back to the raw string, which
    * preserves the exact-match behaviour CSV imports and custom labels rely on.
    *
-   * `sessionLimit` bounds *distinct dates*, not rows and not the underlying log
-   * scan. Limiting logs in SQL would be wrong here: the exerciseName filter runs
-   * on the nested relation, so "the 5 most recent logs" is usually 5 logs
-   * containing none of this exercise, and the athlete gets an empty history.
+   * `sessionLimit` bounds *distinct dates*, not rows.
    */
   async getExerciseHistory(userId: string, exerciseName: string, options?: { sessionLimit?: number }): Promise<(ExerciseSet & { date: string })[]> {
     const canonical = normalizeExerciseName(exerciseName) ?? exerciseName;
-    const rows = await queryExerciseSetsWithDates(userId, { exerciseName: canonical });
-    return options?.sessionLimit ? takeMostRecentSessions(rows, options.sessionLimit) : rows;
+    const sessionLimit = options?.sessionLimit;
+    if (!sessionLimit) {
+      // Unbounded callers keep the existing relational scan.
+      return queryExerciseSetsWithDates(userId, { exerciseName: canonical });
+    }
+
+    // ⚡ Bolt Performance Optimization: queryExerciseSetsWithDates applies the
+    // exerciseName filter on the *nested* relation, so even a bounded call used
+    // to fetch every workout_logs row the user owns (up to MAX_WORKOUT_LOGS_PER_QUERY
+    // — 5000 rows) before takeMostRecentSessions() threw almost all of it away.
+    // This is the hottest exercise-history path: opening a workout with N
+    // distinct exercises fires N of these calls in a burst (see the rate-limit
+    // comment on its route). Drive the query from an inner join instead:
+    // first resolve just the `sessionLimit` most recent dates this exercise
+    // was logged (idx_exercise_sets_exercise_name + idx_workout_logs_user_date),
+    // then fetch only those sessions' sets (idx_exercise_sets_workout_sort).
+    // Two small, indexed queries replace one that scanned the athlete's whole
+    // training history — for a staple lift with years of logs, that's a few
+    // rows fetched instead of thousands.
+    const recentDates = await db
+      .selectDistinct({ date: workoutLogs.date })
+      .from(workoutLogs)
+      .innerJoin(exerciseSets, eq(exerciseSets.workoutLogId, workoutLogs.id))
+      .where(and(eq(workoutLogs.userId, userId), eq(exerciseSets.exerciseName, canonical)))
+      .orderBy(desc(workoutLogs.date))
+      .limit(sessionLimit);
+
+    if (recentDates.length === 0) return [];
+
+    const rows = await db
+      .select({ set: exerciseSets, date: workoutLogs.date })
+      .from(exerciseSets)
+      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          eq(exerciseSets.exerciseName, canonical),
+          inArray(workoutLogs.date, recentDates.map((r) => r.date)),
+        ),
+      )
+      .orderBy(desc(workoutLogs.date), asc(exerciseSets.sortOrder));
+
+    return rows.map((r) => ({ ...r.set, date: r.date }));
   }
 
   private getMutationOwnerAdapter(context: MutationOwnerContext): MutationOwnerAdapter {
