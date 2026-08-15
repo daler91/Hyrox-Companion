@@ -6,6 +6,7 @@ import { type PushPayload,sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import { calculatePersonalRecords, countPersonalRecordsInRange } from "./services/analyticsService";
+import { getLocalMondayWeekBoundaries } from "./services/weeklyProgress";
 import type { IStorage } from "./storage";
 import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek } from "./timezone";
 
@@ -45,11 +46,14 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   );
   if (!claimed) return false;
 
-  // "Last week" = the seven calendar days ending yesterday in the user's
-  // local tz, i.e. last Monday through yesterday (Sunday) inclusive.
-  const todayStr = getLocalDateStr(now, tz);
-  const weekEndStr = addDaysLocal(todayStr, -1);
-  const weekStartStr = addDaysLocal(weekEndStr, -6);
+  // "Last week" = the most recently completed Monday→Sunday week in the user's
+  // local tz. Identical to the seven days ending yesterday that this used to
+  // compute inline, because the gate above only lets us get here on a local
+  // Monday — but stated as a week rather than as a trailing window, and shared
+  // with every other weekly surface so they cannot drift apart.
+  const { previous } = getLocalMondayWeekBoundaries(now, tz);
+  const weekStartStr = previous.weekStart;
+  const weekEndStr = previous.weekEnd;
 
   const [stats, timeline, allSets] = await Promise.all([
     storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr),

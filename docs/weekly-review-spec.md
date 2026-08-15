@@ -1,6 +1,6 @@
 # In-app Weekly Review — scope
 
-**Status.** Draft scope, not yet built. Register entry: recommendation #10 in
+**Status.** PR1 of 5 landed (§7); the rest is scope. Register entry: recommendation #10 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
 
 **One-line pitch.** A Sunday-night page: what you planned, what you did, what changed, and
@@ -13,39 +13,43 @@ Wave 0.
 
 ---
 
-## 1. The decision that has to be made first
+## 1. The decision that had to be made first — settled in PR1
 
-**There are two incompatible definitions of "a week" in the codebase.**
+**There are two definitions of "a week" in the codebase.**
 
-| Definition                                 | Where                                                            | Used by                                                                      |
-| ------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| UTC, Monday-anchored                       | `getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`)  | `buildWeeklySummaries` → training overview charts, `weeklyCompletedWorkouts` |
-| Local tz, trailing 7 days ending yesterday | `emailScheduler.ts:53-56` via `getLocalDateStr` + `addDaysLocal` | The weekly summary email and its push                                        |
+| Definition             | Where                                                           | Used by                                                                      |
+| ---------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| UTC, Monday-anchored   | `getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) | `buildWeeklySummaries` → training overview charts, `weeklyCompletedWorkouts` |
+| Local, Monday-anchored | `getLocalMondayWeekBoundaries` (same file, added in PR1)        | The weekly summary email, and the weekly review                              |
 
-They agree only for UTC athletes checking in on a Monday. Ship the review against one of
-them and the page will disagree with the email for most of the world, on a surface whose
-entire job is to be the authoritative weekly number.
+**A correction to the first draft of this spec.** It claimed the email used a trailing
+seven-day window that would disagree with Monday weeks by a day for most of the world. That
+is what the arithmetic at `emailScheduler.ts` looked like in isolation — but the function
+returns early unless `getLocalDayOfWeek(now, tz) === 1`, so it only ever runs on the
+athlete's local Monday, where "the seven days ending yesterday" **is** the local Monday→Sunday
+week that just closed. The email was already right. There was no user-visible bug to fix, and
+PR1 is a de-duplication rather than a repair.
 
-**Recommendation: local-timezone, Monday-anchored.** Monday weeks because that is what plan
-days are aligned to (`plan_days.weekNumber`, and the register's own scheduling notes), and
-local because every athlete-facing date in the product is already local
-(`server/timezone.ts`).
+**Decision: local-timezone, Monday-anchored** for every athlete-facing weekly surface. Monday
+weeks because that is what plan days are aligned to (`plan_days.weekNumber`), and local
+because every athlete-facing date in the product already is (`server/timezone.ts`).
 
-**Migration path.**
+**What PR1 did.**
 
-1. Add `getLocalMondayWeekBoundaries(now: Date, tz: string)` to
-   `server/services/weeklyProgress.ts` beside the existing function. Pure calendar-string
-   math on `getLocalDateStr` + `addDaysLocal`, which is inherently DST-safe — do not do
-   arithmetic on `Date` objects across a DST boundary.
-2. Weekly review uses it from day one.
-3. Switch the weekly summary email to it in the same PR, so email and page always agree.
-   The email's window shifts by 0–1 days for non-UTC athletes; nothing persisted depends on
-   the old window, so this is cosmetic.
-4. **Leave `buildWeeklySummaries` alone for now.** Migrating the overview charts to local
-   weeks changes every historical bar for non-UTC users and deserves its own PR and its own
-   decision. Note it as a known inconsistency in the meantime — a chart binned by UTC weeks
-   next to a review binned by local weeks is defensible; an email and a page that disagree
-   are not.
+1. Added `getDayOfWeekForDateStr(dateStr)` to `server/timezone.ts` — the date-only counterpart
+   of `getLocalDayOfWeek`, since a calendar date falls on the same weekday in every timezone.
+2. Added `getWeekRangeForDate(dateStr)` and `getLocalMondayWeekBoundaries(now, tz)` to
+   `server/services/weeklyProgress.ts`, returning `{ weekStart, weekEnd }` (Monday, Sunday,
+   both inclusive). Pure calendar-string math, so DST-proof by construction. An unusable
+   `users.userTimezone` degrades to UTC via `getLocalDateStrSafe` rather than throwing.
+3. Refactored `processWeeklySummary` onto the shared helper — behaviour-preserving, with the
+   equivalence pinned by a test that reconstructs the old inline arithmetic and asserts it
+   matches, plus window assertions for UTC, Sydney, Los Angeles and Honolulu that the file
+   previously had none of.
+4. **Left `buildWeeklySummaries` on UTC weeks.** Migrating the overview charts changes every
+   historical bar for non-UTC athletes and deserves its own PR and its own decision. A chart
+   binned by UTC weeks next to a review binned by local weeks is a defensible inconsistency;
+   an email and a page that disagree would not have been.
 
 ---
 
@@ -193,16 +197,17 @@ mechanism exists.
 
 ## 7. Delivery
 
-| PR  | Contents                                                                                                         | Size |
-| --- | ---------------------------------------------------------------------------------------------------------------- | ---- |
-| 1   | `getLocalMondayWeekBoundaries` + unit tests (incl. DST + year boundaries); switch the weekly summary email to it | S    |
-| 2   | `weeklyReviewService` + `GET /api/v1/weekly-review` + route tests + `WeeklyReview` wire type                     | M    |
-| 3   | `/review` page, hook, API client, empty/edge states + component tests                                            | M    |
-| 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                         | S    |
-| 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                     | S–M  |
+| PR  | Contents                                                                                                                 | Size | Status |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ---- | ------ |
+| 1   | `getDayOfWeekForDateStr`, `getWeekRangeForDate`, `getLocalMondayWeekBoundaries` + unit tests; email refactored onto them | S    | landed |
+| 2   | `weeklyReviewService` + `GET /api/v1/weekly-review` + route tests + `WeeklyReview` wire type                             | M    | next   |
+| 3   | `/review` page, hook, API client, empty/edge states + component tests                                                    | M    |        |
+| 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                                 | S    |        |
+| 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                             | S–M  |        |
 
-**Total: M.** PR1 stands alone and is worth landing regardless — it fixes a real
-email/page disagreement before the page exists to disagree with.
+**Total: M.** PR1 stood alone: the week helpers are the vocabulary every later PR is written
+in, and the email now shares one definition of "last week" with the page that does not exist
+yet.
 
 **Testing notes.** The week math needs unit tests across DST transitions in both hemispheres,
 year boundaries, and the Sunday `getUTCDay() === 0` case the existing function special-cases.

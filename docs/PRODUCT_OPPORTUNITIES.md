@@ -737,13 +737,11 @@ not read email — has no way to see any of it, and the push that accompanies it
 
 **Why this product.** It is the register's own "built-but-unwired" pattern one more time,
 and the weekly cadence is the one ritual this app can own without an in-session surface. The
-scoping detail that decides the build: **there are two incompatible definitions of a week in
-the tree.** `getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) is UTC
-Monday-anchored and drives `weeklySummaries` in the training overview; the email uses "the
-seven days ending yesterday in the athlete's local timezone"
-(`emailScheduler.ts:53-56`, via `getLocalDateStr` / `addDaysLocal`). Ship the review against
-one of them, and reconcile the other, or the page and the email will disagree by a day for
-most of the world.
+scoping detail that decides the build: **there are two definitions of a week in the tree.**
+`getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) is UTC Monday-anchored and
+drives `weeklySummaries` in the training overview, while the weekly summary email works in
+the athlete's local Monday→Sunday week. Ship the review against one of them knowingly — it
+should be the local one, since it is the athlete-facing definition. Settled in the spec's §1.
 
 **Sketch.** Full scope in [`weekly-review-spec.md`](weekly-review-spec.md).
 

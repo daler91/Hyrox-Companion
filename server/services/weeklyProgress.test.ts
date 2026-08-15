@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getMondayWeekBoundaries } from "./weeklyProgress";
+import { addDaysLocal, getDayOfWeekForDateStr, getLocalDateStrSafe } from "../timezone";
+import {
+  getLocalMondayWeekBoundaries,
+  getMondayWeekBoundaries,
+  getWeekRangeForDate,
+} from "./weeklyProgress";
 
 // 2026-06-15 is a Monday, so every day in 2026-06-15..2026-06-21 belongs to
 // the same Monday-anchored week (Sunday is the last day of that week).
@@ -139,5 +144,114 @@ describe("getMondayWeekBoundaries", () => {
       thisMondayStr: "2024-10-28",
       lastMondayStr: "2024-10-21",
     });
+  });
+});
+
+describe("getWeekRangeForDate", () => {
+  it.each([
+    ["2026-06-15", "Monday"],
+    ["2026-06-16", "Tuesday"],
+    ["2026-06-17", "Wednesday"],
+    ["2026-06-18", "Thursday"],
+    ["2026-06-19", "Friday"],
+    ["2026-06-20", "Saturday"],
+    ["2026-06-21", "Sunday"],
+  ])("anchors %s (%s) to Mon 2026-06-15 through Sun 2026-06-21", (date) => {
+    expect(getWeekRangeForDate(date)).toEqual({
+      weekStart: THIS_MONDAY,
+      weekEnd: "2026-06-21",
+    });
+  });
+
+  it("closes the week on Sunday rather than opening a new one", () => {
+    // The counterpart of getMondayWeekBoundaries' dayOfWeek === 0 branch: a
+    // Sunday belongs to the week that is ending, not the one about to start.
+    expect(getWeekRangeForDate("2026-06-21").weekStart).toBe(THIS_MONDAY);
+    expect(getWeekRangeForDate("2026-06-22").weekStart).toBe("2026-06-22");
+  });
+
+  it("rolls across month, year and leap-day boundaries", () => {
+    // Wed 2026-04-01 sits in the week opening Mon 2026-03-30.
+    expect(getWeekRangeForDate("2026-04-01")).toEqual({
+      weekStart: "2026-03-30",
+      weekEnd: "2026-04-05",
+    });
+    // Fri 2026-01-02 belongs to a week that opened in the previous year.
+    expect(getWeekRangeForDate("2026-01-02")).toEqual({
+      weekStart: "2025-12-29",
+      weekEnd: "2026-01-04",
+    });
+    // Leap day 2024-02-29 (Thursday).
+    expect(getWeekRangeForDate("2024-02-29")).toEqual({
+      weekStart: "2024-02-26",
+      weekEnd: "2024-03-03",
+    });
+  });
+
+  it("spans exactly seven days across both DST transitions", () => {
+    // A week that contains a spring-forward or fall-back must still be seven
+    // calendar days — the failure mode of doing this in Date-object space.
+    expect(getWeekRangeForDate("2026-03-08")).toEqual({
+      weekStart: "2026-03-02",
+      weekEnd: "2026-03-08",
+    });
+    expect(getWeekRangeForDate("2026-11-01")).toEqual({
+      weekStart: "2026-10-26",
+      weekEnd: "2026-11-01",
+    });
+  });
+
+  it("rejects malformed inputs", () => {
+    expect(() => getWeekRangeForDate("2026-6-1")).toThrow();
+  });
+});
+
+describe("getLocalMondayWeekBoundaries", () => {
+  it("returns the current week and the one before it", () => {
+    // Wednesday 2026-06-17, UTC.
+    expect(getLocalMondayWeekBoundaries(new Date("2026-06-17T12:00:00Z"), "UTC")).toEqual({
+      current: { weekStart: THIS_MONDAY, weekEnd: "2026-06-21" },
+      previous: { weekStart: LAST_MONDAY, weekEnd: "2026-06-14" },
+    });
+  });
+
+  it("resolves the week against the athlete's timezone, not the server's", () => {
+    // 23:30 Sunday UTC is already 09:30 Monday in Sydney, so the two athletes
+    // are in different weeks at the same instant. This is the disagreement
+    // getMondayWeekBoundaries cannot express.
+    const instant = new Date("2026-06-14T23:30:00Z");
+    expect(getLocalMondayWeekBoundaries(instant, "Australia/Sydney").current.weekStart).toBe(THIS_MONDAY);
+    expect(getLocalMondayWeekBoundaries(instant, "UTC").current.weekStart).toBe(LAST_MONDAY);
+  });
+
+  it("degrades an unusable timezone to UTC instead of throwing", () => {
+    // A userTimezone can go stale (dropped from tzdata, or written before the
+    // route-layer validator existed); a weekly read must not 500 over it.
+    expect(getLocalMondayWeekBoundaries(new Date("2026-06-17T12:00:00Z"), "Mars/Olympus_Mons")).toEqual(
+      getLocalMondayWeekBoundaries(new Date("2026-06-17T12:00:00Z"), "UTC"),
+    );
+  });
+
+  it("previous week matches the trailing-7-days window the email used to compute inline", () => {
+    // The weekly summary only ever runs on a local Monday, where "the seven
+    // days ending yesterday" and "the week before this one" are the same span.
+    // This equivalence is what makes the email refactor behaviour-preserving.
+    for (const tz of ["UTC", "Australia/Sydney", "America/Los_Angeles", "Pacific/Honolulu"]) {
+      for (const instant of [
+        new Date("2026-06-15T09:00:00Z"),
+        new Date("2026-06-15T23:00:00Z"),
+        new Date("2026-01-05T09:00:00Z"),
+        new Date("2026-03-09T09:00:00Z"),
+      ]) {
+        const todayStr = getLocalDateStrSafe(instant, tz);
+        if (getDayOfWeekForDateStr(todayStr) !== 1) continue; // not a local Monday
+        const weekEndStr = addDaysLocal(todayStr, -1);
+        const weekStartStr = addDaysLocal(weekEndStr, -6);
+        expect(getLocalMondayWeekBoundaries(instant, tz).previous).toEqual({
+          weekStart: weekStartStr,
+          weekEnd: weekEndStr,
+        });
+      }
+    }
   });
 });
