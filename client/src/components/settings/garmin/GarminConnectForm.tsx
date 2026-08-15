@@ -72,12 +72,13 @@ export function GarminConnectForm({
         size="sm"
         onClick={onConnect}
         disabled={!email || !password || isConnecting || garminLoading}
+        aria-busy={isConnecting}
         data-testid="button-connect-garmin"
       >
         {isConnecting ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+          <Loader2 className="h-4 w-4 animate-spin mr-1.5" aria-hidden="true" />
         ) : (
-          <GarminIcon className="h-4 w-4 mr-1.5 text-[#007CC3]" />
+          <GarminIcon className="h-4 w-4 mr-1.5 text-[#007CC3]" aria-hidden="true" />
         )}
         Connect Garmin
       </Button>

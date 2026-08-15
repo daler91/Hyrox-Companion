@@ -283,6 +283,55 @@ describe("plan-day exercise routes", () => {
     expect(storage.plans.getPlanDay).not.toHaveBeenCalled();
   });
 
+  it("returns the raw exercise-set array when includeStructure is omitted", async () => {
+    const sets = [{ id: "set-1", exerciseName: "back_squat" }];
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue(sets as never);
+
+    const response = await request(app).get("/api/v1/plans/days/day-1/sets");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(sets);
+    // The structure table shouldn't be touched on this leaner, no-structure path.
+    expect(storage.workouts.getWorkoutStructureByPlanDay).not.toHaveBeenCalled();
+  });
+
+  it("404s when the plan day is not owned by the user and includeStructure is omitted", async () => {
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue(null);
+
+    const response = await request(app).get("/api/v1/plans/days/day-1/sets");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({ error: "Plan day not found" });
+  });
+
+  it("404s when includeStructure=true and the plan day is not owned by the user", async () => {
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue(null);
+    vi.mocked(storage.workouts.getWorkoutStructureByPlanDay).mockResolvedValue([] as never);
+
+    const response = await request(app).get("/api/v1/plans/days/day-1/sets?includeStructure=true");
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({ error: "Plan day not found" });
+  });
+
+  it("derives sets from structure blocks and re-reads both tables when sets are empty but structure exists", async () => {
+    const { deriveMissingPlanDaySetsFromStructure } = await import("../../services/workoutService");
+    const structureBlocks = [{ id: "block-1", sectionType: "warmup", formatType: "steady", steps: [] }];
+    const derivedSets = [{ id: "set-1", exerciseName: "burpees" }];
+
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDay)
+      .mockResolvedValueOnce([] as never) // first read: no sets yet
+      .mockResolvedValueOnce(derivedSets as never); // re-read after deriving
+    vi.mocked(storage.workouts.getWorkoutStructureByPlanDay).mockResolvedValue(structureBlocks as never);
+
+    const response = await request(app).get("/api/v1/plans/days/day-1/sets?includeStructure=true");
+
+    expect(response.status).toBe(200);
+    expect(deriveMissingPlanDaySetsFromStructure).toHaveBeenCalledWith("day-1", "test_user_id");
+    expect(response.body).toEqual({ exerciseSets: derivedSets, structureBlocks });
+    expect(storage.workouts.getExerciseSetsByPlanDay).toHaveBeenCalledTimes(2);
+  });
+
   it("parses the current plan-day text payload and saves it on success", async () => {
     const { reparsePlanDay } = await import("../../services/workoutService");
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({

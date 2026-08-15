@@ -273,6 +273,83 @@ describe("GET /api/v1/overview-analysis", () => {
   });
 });
 
+describe("GET /api/v1/coach-insights", () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    await resetRouteTestState();
+    app = createTestApp(aiRouter);
+  });
+
+  it("returns { insights: null } when nothing is stored (no AI spend)", async () => {
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue(undefined);
+
+    const response = await request(app).get("/api/v1/coach-insights");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ insights: null });
+    expect(chatWithCoach).not.toHaveBeenCalled();
+  });
+
+  it("returns the stored insights with generatedAt and a stale flag", async () => {
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+      id: "row-1",
+      userId: "test_user_id",
+      feature: "coach_insights",
+      payload: {
+        insights: "You're on track for your 5K goal.",
+        ragInfo: { usedChunks: 0 },
+        generatedAt: "2026-06-01T00:00:00.000Z",
+      },
+      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+      lastWorkoutDateAtGeneration: "2026-06-01",
+      recomputedOn: null,
+      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    // The athlete's latest workout still matches the anchor the analysis was
+    // generated from, so nothing has changed under it. (Leaving this as the
+    // default empty list would model "every workout deleted", which is stale.)
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
+      { date: "2026-06-01" },
+    ] as never);
+
+    const response = await request(app).get("/api/v1/coach-insights");
+
+    expect(response.status).toBe(200);
+    expect(response.body.insights).toContain("on track");
+    expect(response.body.generatedAt).toBe("2026-06-01T00:00:00.000Z");
+    expect(response.body.stale).toBe(false);
+    expect(chatWithCoach).not.toHaveBeenCalled();
+  });
+
+  it("flags the stored insights stale once their anchoring workouts are gone", async () => {
+    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+      id: "row-1",
+      userId: "test_user_id",
+      feature: "coach_insights",
+      payload: {
+        insights: "You're on track for your 5K goal.",
+        ragInfo: { usedChunks: 0 },
+        generatedAt: "2026-06-01T00:00:00.000Z",
+      },
+      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+      lastWorkoutDateAtGeneration: "2026-06-01",
+      recomputedOn: null,
+      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+    // No workouts remain: the analysis describes a history that no longer
+    // exists, which the forward-only compare reported as fresh forever.
+    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([] as never);
+
+    const response = await request(app).get("/api/v1/coach-insights");
+
+    expect(response.status).toBe(200);
+    expect(response.body.stale).toBe(true);
+  });
+});
+
 describe("POST /api/parse-exercises", () => {
   let app: express.Express;
 

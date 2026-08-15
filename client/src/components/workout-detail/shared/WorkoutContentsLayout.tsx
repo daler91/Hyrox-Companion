@@ -1,5 +1,6 @@
 import type { ExerciseSet } from "@shared/schema";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
 import { ParseStatusStrip } from "@/components/workout/ParseStatusStrip";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
@@ -50,7 +51,14 @@ export function WorkoutContentsLayout({
   belowTable,
   structure,
 }: WorkoutContentsLayoutProps) {
-  const exerciseCount = groupExerciseSets(exerciseSets).length;
+  // ⚡ Bolt: memoize the group-and-sort pass on exerciseSets identity. This
+  // sheet re-renders on every keystroke in sibling fields (notes, RPE,
+  // title), and groupExerciseSets does a full array copy + sort + grouping
+  // allocation just to read off `.length` — recomputing it every render was
+  // pure waste since exerciseSets is referentially stable across those
+  // unrelated re-renders. Sibling call sites (ExerciseTable,
+  // StructureBlocksEditor, TimelineWorkoutCard) already do this.
+  const exerciseCount = useMemo(() => groupExerciseSets(exerciseSets).length, [exerciseSets]);
 
   return (
     <div className="space-y-3">

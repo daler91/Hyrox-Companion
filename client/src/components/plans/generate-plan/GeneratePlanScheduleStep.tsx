@@ -155,7 +155,7 @@ export function GeneratePlanScheduleStep({
         </div>
 
         {dateError ? (
-          <p className="text-xs text-destructive" role="alert">
+          <p id="schedule-date-error" className="text-xs text-destructive" role="alert">
             {dateError}
           </p>
         ) : (
@@ -163,11 +163,29 @@ export function GeneratePlanScheduleStep({
         )}
       </div>
 
+      {!canProceed && !dateError && requiredRestDays > 0 && (
+        <output id="schedule-rest-hint" className="block text-center text-xs text-muted-foreground">
+          Select {requiredRestDays - restDays.length} more rest day
+          {requiredRestDays - restDays.length !== 1 ? "s" : ""} to continue.
+        </output>
+      )}
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>
           <ChevronLeft className="mr-1 h-4 w-4" /> Back
         </Button>
-        <Button onClick={onNext} disabled={!canProceed}>
+        <Button
+          onClick={onNext}
+          disabled={!canProceed}
+          aria-describedby={
+            !canProceed
+              ? dateError
+                ? "schedule-date-error"
+                : requiredRestDays > 0
+                  ? "schedule-rest-hint"
+                  : undefined
+              : undefined
+          }
+        >
           Next <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>

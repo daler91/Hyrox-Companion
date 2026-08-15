@@ -114,8 +114,15 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     if (!latest) {
       return sendNotFound(res, "No workouts found");
     }
-    const exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(latest.id);
-    const structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(latest.id);
+    // ⚡ Bolt Performance Optimization:
+    // These two reads hit different tables (exercise_sets, workout_structure_blocks)
+    // for the same workoutLogId with no ordering dependency between them, so running
+    // them sequentially just doubles the round-trip latency for no reason. Promise.all
+    // halves the wait on this hot "latest workout" read path.
+    const [exerciseSets, structureBlocks] = await Promise.all([
+      storage.workouts.getExerciseSetsByWorkoutLog(latest.id),
+      storage.workouts.getWorkoutStructureByWorkoutLog(latest.id),
+    ]);
     res.json({ ...latest, exerciseSets, structureBlocks });
   }));
 
@@ -170,12 +177,18 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     if (!log) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
-    let exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
-    let structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(log.id);
+    // ⚡ Bolt Performance Optimization: same independent-reads pattern as
+    // GET /api/v1/workouts/latest above — parallelize instead of awaiting sequentially.
+    let [exerciseSets, structureBlocks] = await Promise.all([
+      storage.workouts.getExerciseSetsByWorkoutLog(log.id),
+      storage.workouts.getWorkoutStructureByWorkoutLog(log.id),
+    ]);
     if (exerciseSets.length === 0 && structureBlocks.length > 0) {
       await deriveMissingWorkoutSetsFromStructure(log.id, userId);
-      exerciseSets = await storage.workouts.getExerciseSetsByWorkoutLog(log.id);
-      structureBlocks = await storage.workouts.getWorkoutStructureByWorkoutLog(log.id);
+      [exerciseSets, structureBlocks] = await Promise.all([
+        storage.workouts.getExerciseSetsByWorkoutLog(log.id),
+        storage.workouts.getWorkoutStructureByWorkoutLog(log.id),
+      ]);
     }
     res.json({ ...log, exerciseSets, structureBlocks });
   }));

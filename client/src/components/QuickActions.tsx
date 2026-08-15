@@ -13,7 +13,7 @@ interface QuickActionsProps {
 
 export function QuickActions({ actions, onSelect, disabled }: Readonly<QuickActionsProps>) {
   return (
-    <div className="flex flex-wrap gap-2" data-testid="quick-actions">
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Suggested prompts" data-testid="quick-actions">
       {actions.map((action) => (
         <Button
           key={action.id}

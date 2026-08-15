@@ -6,13 +6,7 @@ import { StravaIcon } from "@/components/icons/StravaIcon";
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStravaMutations } from "@/hooks/useStravaMutations";
@@ -36,10 +30,7 @@ function describeStravaStatus(
   return `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`;
 }
 
-export function StravaSection({
-  stravaStatus,
-  stravaLoading,
-}: Readonly<StravaSectionProps>) {
+export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSectionProps>) {
   const mutations = useStravaMutations();
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
@@ -50,12 +41,10 @@ export function StravaSection({
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <Link2 className="h-5 w-5" />
+          <Link2 className="h-5 w-5" aria-hidden="true" />
           Integrations
         </CardTitle>
-        <CardDescription>
-          Connect external services to sync your workouts
-        </CardDescription>
+        <CardDescription>Connect external services to sync your workouts</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-4">
@@ -159,12 +148,14 @@ function ConnectStravaButton({
       size="sm"
       onClick={() => connectStravaMutation.mutate()}
       disabled={connectStravaMutation.isPending || stravaLoading}
+      aria-busy={connectStravaMutation.isPending}
+      aria-label="Connect Strava"
       data-testid="button-connect-strava"
     >
       {connectStravaMutation.isPending ? (
-        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+        <Loader2 className="h-4 w-4 animate-spin mr-1.5" aria-hidden="true" />
       ) : (
-        <StravaIcon className="h-4 w-4 mr-1.5 text-[#FC4C02]" />
+        <StravaIcon className="h-4 w-4 mr-1.5 text-[#FC4C02]" aria-hidden="true" />
       )}
       Connect
     </Button>
@@ -185,12 +176,14 @@ function SyncStravaButton({
         size="sm"
         onClick={() => connectStravaMutation.mutate()}
         disabled={connectStravaMutation.isPending}
+        aria-busy={connectStravaMutation.isPending}
+        aria-label="Reconnect Strava"
         data-testid="button-reconnect-strava"
       >
         {connectStravaMutation.isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         ) : (
-          <StravaIcon className="h-4 w-4 text-[#FC4C02]" />
+          <StravaIcon className="h-4 w-4 text-[#FC4C02]" aria-hidden="true" />
         )}
         <span className="ml-1.5">Reconnect</span>
       </Button>
@@ -202,14 +195,15 @@ function SyncStravaButton({
       size="sm"
       onClick={() => syncStravaMutation.mutate()}
       disabled={syncStravaMutation.isPending}
+      aria-busy={syncStravaMutation.isPending}
       data-testid="button-sync-strava"
     >
       {syncStravaMutation.isPending ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
       ) : (
-        <RefreshCw className="h-4 w-4" />
+        <RefreshCw className="h-4 w-4" aria-hidden="true" />
       )}
-      <span className="ml-1.5">Sync</span>
+      <span className="ml-1.5">{syncStravaMutation.isPending ? "Syncing…" : "Sync"}</span>
     </Button>
   );
 }
@@ -228,13 +222,16 @@ function DisconnectStravaButton({
             size="sm"
             onClick={onRequestDisconnect}
             disabled={disconnectStravaMutation.isPending}
-            aria-label="Disconnect Strava"
+            aria-label={
+              disconnectStravaMutation.isPending ? "Disconnecting Strava…" : "Disconnect Strava"
+            }
+            aria-busy={disconnectStravaMutation.isPending}
             data-testid="button-disconnect-strava"
           >
             {disconnectStravaMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <Unlink className="h-4 w-4" />
+              <Unlink className="h-4 w-4" aria-hidden="true" />
             )}
           </Button>
         </TooltipTrigger>

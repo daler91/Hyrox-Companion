@@ -11,10 +11,18 @@ function buildCoachMessages(
   userMessage: string,
   conversationHistory: Pick<ChatMessage, "role" | "content">[],
 ): TextAiMessage[] {
-  const messages: TextAiMessage[] = conversationHistory.map((msg) => ({
-    role: msg.role === "user" ? "user" : "assistant",
-    content: msg.role === "user" ? `"""\n${msg.content}\n"""` : msg.content,
-  }));
+  const messages: TextAiMessage[] = conversationHistory.map((msg) => {
+    // 🛡️ Sentinel: Sanitize historical conversation turns. Chat persistence
+    // is client-driven, meaning clients can store arbitrary assistant-role
+    // content locally and feed it back to the server. Without sanitization here,
+    // a malicious client could inject system commands into the LLM context via
+    // past turns.
+    const sanitizedContent = sanitizeUserInput(msg.content);
+    return {
+      role: msg.role === "user" ? "user" : "assistant",
+      content: msg.role === "user" ? `"""\n${sanitizedContent}\n"""` : sanitizedContent,
+    };
+  });
 
   messages.push({
     role: "user",
@@ -42,7 +50,8 @@ export async function chatWithCoach(
       userId,
     });
 
-    const textOutput = response.text || "I apologize, but I couldn't generate a response. Please try again.";
+    const textOutput =
+      response.text || "I apologize, but I couldn't generate a response. Please try again.";
     return validateAiOutput(textOutput);
   } catch (error) {
     const classified = classifyAiError(error);

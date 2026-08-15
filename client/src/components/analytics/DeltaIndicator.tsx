@@ -49,7 +49,7 @@ export function DeltaIndicator({
   if (previous === 0) {
     const tip = `Previous period: 0${unit} → Current: ${current}${unit}`;
     return (
-      <TooltipProvider delayDuration={300}>
+      <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <span
@@ -77,7 +77,7 @@ export function DeltaIndicator({
   if (absRaw < 0.5) {
     const tip = `No meaningful change vs previous period (${previous}${unit} → ${current}${unit})`;
     return (
-      <TooltipProvider delayDuration={300}>
+      <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <span
@@ -107,7 +107,7 @@ export function DeltaIndicator({
   const tip = `Previous period: ${previous}${unit} → Current: ${current}${unit}`;
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <span

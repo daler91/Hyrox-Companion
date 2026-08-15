@@ -200,14 +200,34 @@ function servingGrams(product: SpoonacularProduct): number | null {
  *  given, the value is returned ONLY if the nutrient's unit matches it — this is
  *  how the micro reader skips IU-encoded vitamins instead of misconverting them,
  *  and how macros avoid matching a same-named-but-wrong-unit entry. */
+type NutrientIndex = Map<string, SpoonacularNutrient[]>;
+
+// Performance optimization: O(1) look-up map for single-key searches over the same source array to prevent O(19*N) scans per food item.
+function buildNutrientIndex(nutrients: SpoonacularNutrient[]): NutrientIndex {
+  const index: NutrientIndex = new Map();
+  for (const n of nutrients) {
+    const name = (n.name ?? n.title ?? "").trim().toLowerCase();
+    if (!name) continue;
+    const bucket = index.get(name);
+    if (bucket) bucket.push(n);
+    else index.set(name, [n]);
+  }
+  return index;
+}
+
+/** Read a nutrient by exact (case-insensitive) name. When `expectedUnit` is
+ *  given, the value is returned ONLY if the nutrient's unit matches it — this is
+ *  how the micro reader skips IU-encoded vitamins instead of misconverting them,
+ *  and how macros avoid matching a same-named-but-wrong-unit entry. */
 function readNutrient(
-  nutrients: SpoonacularNutrient[],
+  index: NutrientIndex,
   name: string,
   expectedUnit?: string,
 ): number | null {
   const target = name.trim().toLowerCase();
-  for (const n of nutrients) {
-    if ((n.name ?? n.title ?? "").trim().toLowerCase() !== target) continue;
+  const bucket = index.get(target);
+  if (!bucket) return null;
+  for (const n of bucket) {
     const amount = num(n.amount);
     if (amount === null) continue;
     if (expectedUnit && normalizeUnit(n.unit) !== expectedUnit) continue;
@@ -219,11 +239,11 @@ function readNutrient(
 /** Per-100g micros from the per-serving nutrients. Only MICRO_DEFS entries with a
  *  `spoonacularName` are read, and each is accepted only when its reported unit
  *  matches the micro's `unit` (mg/mcg) — so IU-reported vitamins are skipped. */
-function extractMicros(nutrients: SpoonacularNutrient[], grams: number): Record<string, number> | null {
+function extractMicros(index: NutrientIndex, grams: number): Record<string, number> | null {
   const micros: Record<string, number> = {};
   for (const def of MICRO_DEFS) {
     if (!def.spoonacularName) continue;
-    const perServing = readNutrient(nutrients, def.spoonacularName, def.unit);
+    const perServing = readNutrient(index, def.spoonacularName, def.unit);
     if (perServing !== null && perServing >= 0) micros[def.key] = (perServing * 100) / grams;
   }
   return Object.keys(micros).length > 0 ? micros : null;
@@ -240,8 +260,9 @@ export function mapSpoonacularProduct(product: SpoonacularProduct): MappedFood |
   if (grams === null || grams <= 0) return null;
 
   const nutrients = Array.isArray(product.nutrition?.nutrients) ? product.nutrition.nutrients : [];
+  const index = buildNutrientIndex(nutrients);
   const per100 = (nutrientName: string, unit?: string): number | null => {
-    const value = readNutrient(nutrients, nutrientName, unit);
+    const value = readNutrient(index, nutrientName, unit);
     return value === null ? null : (value * 100) / grams;
   };
 
@@ -273,7 +294,7 @@ export function mapSpoonacularProduct(product: SpoonacularProduct): MappedFood |
     carbPer100g,
     fatPer100g,
     fiberPer100g,
-    micros: extractMicros(nutrients, grams),
+    micros: extractMicros(index, grams),
   };
 }
 

@@ -80,7 +80,7 @@ export function RpeSelector({ value, onChange, showLabel = true, compact = false
           })}
         </RadioGroupPrimitive.Root>
         {value !== null && (
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button

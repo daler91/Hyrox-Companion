@@ -1,4 +1,4 @@
-import { MessageSquare,Plus } from "lucide-react";
+import { MessageSquare, Plus } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ export default function FloatingActionButton({
         aria-expanded={coachPanelOpen}
         aria-controls="coach-panel"
       >
-        <MessageSquare className="h-4 w-4" />
+        <MessageSquare className="h-4 w-4" aria-hidden />
         <span>AI Coach</span>
       </Button>
       <Button
@@ -38,7 +38,7 @@ export default function FloatingActionButton({
         onClick={onLogWorkout}
         data-testid="button-log-workout-fab"
       >
-        <Plus className="h-5 w-5" />
+        <Plus className="h-5 w-5" aria-hidden />
         <span>Log Workout</span>
       </Button>
     </div>,

@@ -66,3 +66,9 @@ script/race-benchmarks/output/
 hyrox_results.csv
 node_modules/
 .pnpm-store/
+node_modules/
+.pnpm-store
+node_modules/
+.pnpm-store/
+node_modules/
+.pnpm-store
