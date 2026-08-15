@@ -1,6 +1,6 @@
 # In-app Weekly Review — scope
 
-**Status.** PR1 of 5 landed (§7); the rest is scope. Register entry: recommendation #10 in
+**Status.** PR1 and PR2 of 5 landed (§7); the rest is scope. Register entry: recommendation #10 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
 
 **One-line pitch.** A Sunday-night page: what you planned, what you did, what changed, and
@@ -61,9 +61,11 @@ today unless marked **new**.
 **Header.** Week of Mon 4 Aug – Sun 10 Aug, with prev/next week navigation and a
 "this week so far" state when the requested week is the current one.
 
-**The verdict line.** Sessions completed vs weekly goal (`users.weeklyGoal`, `tables.ts:55`),
-completion rate, streak. Straight from `storage.analytics.getWeeklyStats`
-(`server/storage/analytics.ts:131`) and `calculateStreak`.
+**The verdict line.** Sessions logged vs weekly goal (`users.weeklyGoal`, `tables.ts:55`), and
+— separately — plan days completed out of plan days scheduled. Both come from
+`WeeklyReviewCounts`; see §6.1 for why they are two numbers rather than one rate. Streak is
+not in the payload: it is a full-history read the client already holds from
+`/api/v1/training-overview`.
 
 **Deltas vs the previous week.** Sessions, total duration, average RPE, training load.
 `OverviewStats`/`WeeklySummary` (`shared/schema/types/analytics.ts`) already carry these
@@ -83,13 +85,14 @@ in a chart.
 illness, travel, rest). A week with a logged injury must not be framed as failure. This is
 the same predicate recommendation #2 needs; if #2 ships first, reuse its overlap query.
 
-**PRs this week.** `countPersonalRecordsInRange` (`server/services/analyticsService.ts:143`)
-returns a count today; widen it to return the records themselves (`countPersonalRecordsInRange`
-stays, add `listPersonalRecordsInRange` beside it) so the page can name them. Naming the PR is
-the emotional payload; a number is not.
+**PRs this week.** Named, not counted — naming the PR is the emotional payload.
+`listPersonalRecordsInRange` (PR2, in `weeklyReviewService.ts`) returns the records at the
+same per-metric grain the email's `countPersonalRecordsInRange` counts them; that counter is
+untouched and still serves the email.
 
-**Coldest station.** Reuse `buildStationCoverage` — already on the wire, already rendered by
-`StationRadar.tsx`, so this is a second render of a payload the client can already fetch.
+**Coldest station.** Rendered client-side from `buildStationCoverage`, which the client
+already holds from `/api/v1/training-overview` and already renders in `StationRadar.tsx`. It
+is deliberately absent from the weekly-review payload — see §3.
 
 **Next week's intent. — new.** One free-text line, plus the previous week's intent shown
 back. This is the half that makes it a ritual rather than a report. See §5.
@@ -100,28 +103,39 @@ comparison beyond the immediately previous week.
 
 ---
 
-## 3. Server
+## 3. Server — shipped in PR2
 
-**Endpoint.** `GET /api/v1/weekly-review?week=YYYY-MM-DD`, where `week` is the local Monday.
-Absent → the most recently _completed_ week. Built with `protectedGet`
-(`server/routes/_helpers/protectedRouteBuilder.ts`) and the existing `analytics` rate limiter
-(20/min), matching `/api/v1/training-overview` (`server/routes/analytics.ts:155`).
+**Endpoint.** `GET /api/v1/weekly-review?week=YYYY-MM-DD`, on the `analytics` rate limiter
+(20/min) alongside `/api/v1/training-overview`. `week` accepts **any date inside** the wanted
+week rather than only a Monday — a link to a Wednesday opens that week instead of 400-ing —
+and the week is anchored from it. Absent → the most recently _completed_ week.
 
-**Do not persist it.** `analytics_results.feature` is constrained to four literals
-(`shared/schema/tables.ts:205-206`), so a stored `weekly_review` feature needs a constraint
-migration plus a recompute path plus staleness handling — for a payload assembled from
-queries the email already runs weekly. Compute on read; wrap in `analyticsRouteCache` if the
-timeline query proves heavy.
+`isWeekParamValid` is stricter than the shared `dateStringSchema`, which checks only the
+`YYYY-MM-DD` shape: `2026-02-31` passes that regex and then rolls forward into March, handing
+back a week nobody asked for. Validation round-trips the date components instead, using
+neither `Intl` nor string parsing, both of which throw on the inputs it exists to reject.
 
-**Service.** `server/services/weeklyReviewService.ts`, exporting
-`buildWeeklyReview(userId, weekStart, tz)`. It orchestrates existing storage calls — no new
-SQL if avoidable:
+**Not persisted.** `analytics_results.feature` is constrained to four literals
+(`shared/schema/tables.ts:205-206`), so a stored `weekly_review` feature would need a
+constraint migration plus a recompute path plus staleness handling — for a payload that is
+four bounded queries.
 
-- `storage.analytics.getWeeklyStats(userId, start, end)` — counts and duration
-- `storage.timeline.getTimeline(userId)` — sessions, statuses, skip reasons, focus
-- `storage.analytics.getAllExerciseSetsWithDates(userId)` — PRs (already used by the email)
-- `storage.timelineAnnotations` — overlapping ranges
-- `buildStationCoverage` / training-load overview — coldest station, load delta
+**Service.** `server/services/weeklyReviewService.ts` → `buildWeeklyReview(storage, userId,
+{ now, week })`, reading:
+
+- `storage.analytics.getWorkoutLogsByDateRange` ×2 — this week and the week before
+- `storage.analytics.getPlanDaysByDateRange` ×2 — **new**, see below
+- `storage.analytics.getExerciseSetsForPersonalRecords(userId)` — full history, because a PR
+  means an all-time best; a week-scoped fetch would call every heaviest lift of the week a record
+- `storage.timelineAnnotations.list` — filtered by overlap, not containment
+
+**Two changes from the draft.** `getTimeline(userId)` is not used: unbounded, it hydrates
+exercise sets for the athlete's entire history, and it does not expose `plan_days.skip_reason`
+at all. A purpose-built `getPlanDaysByDateRange` replaces it and `getWeeklyStats` together —
+one indexed range query returning every status plus the skip reason, so the counts all come
+from one source. And **streak and coldest station are not in the payload**: both need
+full-history reads, and the client already holds them from `/api/v1/training-overview`. They
+belong to the page (PR3), not to this endpoint.
 
 **Wire type.** `WeeklyReview` in `shared/schema/types/analytics.ts`, beside `TrainingOverview`.
 
@@ -173,13 +187,16 @@ mechanism exists.
 
 ## 6. Edge cases that will otherwise ship broken
 
-1. **Completion rate can exceed 100%.** `getWeeklyStats` counts `completedCount` from
-   `workout_logs` but `planned`/`missed`/`skipped` from `plan_days`, so ad-hoc sessions with
-   no plan day inflate the numerator against a denominator that never saw them
-   (`total = completed + missed + skipped`, `analytics.ts:131-180`). The email has carried
-   this quietly; a page with a progress bar will not. Either clamp and label, or split
-   "planned sessions completed" from "sessions logged" into two numbers. **Two numbers is the
-   honest answer** and it is also the more useful one.
+1. **Completion rate can exceed 100% — settled in PR2.** `getWeeklyStats` counts
+   `completedCount` from `workout_logs` but `planned`/`missed`/`skipped` from `plan_days`, so
+   ad-hoc sessions with no plan day inflate the numerator against a denominator that never saw
+   them (`total = completed + missed + skipped`, `analytics.ts:131-180`). The email has carried
+   this quietly; a page with a progress bar would not. **Resolved as two numbers, not a rate**:
+   `WeeklyReviewCounts` ships `sessionsLogged` (from `workout_logs`) beside `sessionsPlanned` /
+   `plannedCompleted` / `missed` / `skipped` / `outstanding` (all from `plan_days`), and
+   `plannedCompleted` can never exceed `sessionsPlanned`. The API returns no rate at all; if the
+   page wants one, it computes it from the plan-day pair alone. `getWeeklyStats` itself is
+   untouched — the email reports its counts rather than a rate, so it was never affected.
 2. **The planless athlete.** No plan → `planned`/`missed`/`skipped` are all zero and
    completion rate is meaningless. The page must lead with what was logged, not with a 0%.
 3. **The annotated week.** Injury or illness overlapping the week suppresses the
@@ -200,7 +217,7 @@ mechanism exists.
 | PR  | Contents                                                                                                                 | Size | Status |
 | --- | ------------------------------------------------------------------------------------------------------------------------ | ---- | ------ |
 | 1   | `getDayOfWeekForDateStr`, `getWeekRangeForDate`, `getLocalMondayWeekBoundaries` + unit tests; email refactored onto them | S    | landed |
-| 2   | `weeklyReviewService` + `GET /api/v1/weekly-review` + route tests + `WeeklyReview` wire type                             | M    | next   |
+| 2   | `weeklyReviewService` + `GET /api/v1/weekly-review` + `getPlanDaysByDateRange` + tests + `WeeklyReview` wire type        | M    | landed |
 | 3   | `/review` page, hook, API client, empty/edge states + component tests                                                    | M    |        |
 | 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                                 | S    |        |
 | 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                             | S–M  |        |

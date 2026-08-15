@@ -30,9 +30,13 @@ vi.mock("../../storage", () => ({
       getAllExerciseSetsWithDates: vi.fn(),
       getExerciseSetsForPersonalRecords: vi.fn(),
       getWorkoutLogsByDateRange: vi.fn(),
+      getPlanDaysByDateRange: vi.fn(),
     },
     users: {
       getUser: vi.fn(),
+    },
+    timelineAnnotations: {
+      list: vi.fn(),
     },
   },
 }));
@@ -516,6 +520,69 @@ describe("Analytics Routes", () => {
         counters: [{ day: "2026-05-16", owner_type: "workout", source: "manual", counter_name: "parse_text_succeeded", value: 3 }],
       });
       expect(db.execute).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("GET /api/v1/weekly-review", () => {
+    beforeEach(() => {
+      vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 4, userTimezone: "UTC" });
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getPlanDaysByDateRange).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockResolvedValue([]);
+      vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
+      vi.mocked(calculatePersonalRecords).mockReturnValue({});
+    });
+
+    it("returns the requested week, anchored to its Monday", async () => {
+      // A Thursday resolves to the week that contains it rather than 400-ing.
+      const response = await request(app).get("/api/v1/weekly-review?week=2026-06-18");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        weekStart: "2026-06-15",
+        weekEnd: "2026-06-21",
+        timezone: "UTC",
+        weeklyGoal: 4,
+        hasPlan: false,
+      });
+    });
+
+    it("defaults to the most recently completed week", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-17T12:00:00Z"));
+      try {
+        const response = await request(app).get("/api/v1/weekly-review");
+
+        expect(response.status).toBe(200);
+        expect(response.body.weekStart).toBe("2026-06-08");
+        expect(response.body.isCurrentWeek).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("splits sessions logged from plan completions", async () => {
+      vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+        { id: "wl-1", date: "2026-06-16", focus: "Run", duration: 45, rpe: 6, source: "strava", planDayId: null },
+      ]);
+      vi.mocked(storage.analytics.getPlanDaysByDateRange).mockResolvedValue([
+        { id: "pd-1", date: "2026-06-16", focus: "Run", status: "missed", skipReason: null, planName: "Plan" },
+      ]);
+
+      const response = await request(app).get("/api/v1/weekly-review?week=2026-06-15");
+
+      expect(response.status).toBe(200);
+      expect(response.body.current).toMatchObject({ sessionsLogged: 1, sessionsPlanned: 1, plannedCompleted: 0, missed: 1 });
+      expect(response.body.plannedDays).toHaveLength(1);
+    });
+
+    it("rejects a malformed or impossible week param", async () => {
+      for (const week of ["not-a-date", "2026-6-1", "2026-02-31"]) {
+        const response = await request(app).get(`/api/v1/weekly-review?week=${week}`);
+        expect(response.status).toBe(400);
+        expect(response.body.code).toBe("BAD_REQUEST");
+      }
+      expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
     });
   });
 });
