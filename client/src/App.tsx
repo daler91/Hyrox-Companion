@@ -36,6 +36,7 @@ const Analytics = lazy(() => import("@/pages/Analytics"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Privacy = lazy(() => import("@/pages/Privacy"));
 const Nutrition = lazy(() => import("@/pages/Nutrition"));
+const Review = lazy(() => import("@/pages/Review"));
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
 
@@ -80,6 +81,7 @@ function AuthenticatedRouter() {
         <Route path="/"><FeatureErrorBoundaryWrapper featureName="Timeline"><Timeline /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/log"><FeatureErrorBoundaryWrapper featureName="Log Workout"><LogWorkout /></FeatureErrorBoundaryWrapper></Route>
         <Route path="/analytics"><FeatureErrorBoundaryWrapper featureName="Analytics"><Analytics /></FeatureErrorBoundaryWrapper></Route>
+        <Route path="/review"><FeatureErrorBoundaryWrapper featureName="Weekly Review"><Review /></FeatureErrorBoundaryWrapper></Route>
         {featureFlags.nutritionEnabled && (
           <Route path="/nutrition"><FeatureErrorBoundaryWrapper featureName="Nutrition"><Nutrition /></FeatureErrorBoundaryWrapper></Route>
         )}

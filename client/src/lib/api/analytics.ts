@@ -1,4 +1,4 @@
-import type { OverviewChartKey, PersonalRecord, RacePredictionResponse, TimelineEntry, TrainingOverview } from "@shared/schema";
+import type { OverviewChartKey, PersonalRecord, RacePredictionResponse, TimelineEntry, TrainingOverview, WeeklyReview } from "@shared/schema";
 
 import { rawRequest, typedRequest } from "./client";
 import type { RagInfo } from "./coaching";
@@ -88,6 +88,17 @@ export const analytics = {
 
   exportData: (format: AnalyticsExportFormat) =>
     rawRequest("GET", `/api/v1/export?format=${format}`),
+
+  /**
+   * The athlete's Monday→Sunday week. `week` may be ANY date inside the wanted
+   * week — the server anchors it — and omitting it returns the most recently
+   * completed week.
+   */
+  getWeeklyReview: (week?: string) =>
+    typedRequest<WeeklyReview>(
+      "GET",
+      week ? `/api/v1/weekly-review?week=${week}` : "/api/v1/weekly-review",
+    ),
 } as const;
 
 export const timeline = {
