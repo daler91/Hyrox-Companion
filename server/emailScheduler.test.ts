@@ -424,3 +424,54 @@ describe('claim-before-send ledger', () => {
     expect(payload.url).toBe('/');
   });
 });
+
+describe('weekly summary window', () => {
+  function windowStorage(user: Record<string, unknown>) {
+    const getWeeklyStats = vi.fn().mockResolvedValue({
+      completedCount: 3, plannedCount: 4, missedCount: 1, skippedCount: 0, totalDuration: 180,
+    });
+    return {
+      storage: {
+        users: {
+          getUser: vi.fn().mockResolvedValue(user),
+          claimWeeklySummary: vi.fn().mockResolvedValue(true),
+        },
+        analytics: { getWeeklyStats, getAllExerciseSetsWithDates: vi.fn().mockResolvedValue([]) },
+        timeline: { getTimeline: vi.fn().mockResolvedValue([]) },
+      } as unknown as IStorage,
+      getWeeklyStats,
+    };
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  // Each instant below is a Monday in the athlete's own timezone but a
+  // different UTC calendar day, which is exactly where a UTC-anchored week
+  // would report the wrong seven days.
+  it.each([
+    ['UTC', '2026-07-20T09:00:00Z'],
+    ['Australia/Sydney', '2026-07-19T23:30:00Z'],
+    ['America/Los_Angeles', '2026-07-20T16:00:00Z'],
+    ['Pacific/Honolulu', '2026-07-20T20:00:00Z'],
+  ])('summarises the completed local Mon-Sun week for %s', async (tz, instant) => {
+    const user = makeMockUser({ id: 1, email: 'a@example.com', userTimezone: tz });
+    const { storage, getWeeklyStats } = windowStorage(user);
+
+    const sent = await processWeeklySummary(storage, user as never, new Date(instant));
+
+    expect(sent).toBe(true);
+    expect(getWeeklyStats).toHaveBeenCalledWith(1, '2026-07-13', '2026-07-19');
+  });
+
+  it('passes the same window to the mailer as it queried', async () => {
+    const { sendWeeklySummary } = await import('./email');
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage } = windowStorage(user);
+
+    await processWeeklySummary(storage, user as never, new Date('2026-07-20T09:00:00Z'));
+
+    const [, data] = vi.mocked(sendWeeklySummary).mock.calls[0];
+    expect(data.weekStartDate).toBe('2026-07-13');
+    expect(data.weekEndDate).toBe('2026-07-19');
+  });
+});

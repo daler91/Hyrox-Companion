@@ -104,6 +104,20 @@ export function getLocalHour(instant: Date, tz: string): number {
 }
 
 /**
+ * Parse a YYYY-MM-DD calendar string to the UTC-midnight instant that stands
+ * for it. Date-only space has no timezone, so UTC midnight is just the anchor
+ * every helper below shares — never treat the result as a wall-clock time.
+ */
+function parseDateStrToUtcMs(dateStr: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!match) {
+    throw new Error(`Expected YYYY-MM-DD, got "${dateStr}"`);
+  }
+  const [, yyyy, mm, dd] = match;
+  return Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd));
+}
+
+/**
  * Add `days` (may be negative) to a YYYY-MM-DD string in date-only space —
  * no timezone interpretation needed because the inputs are already calendar
  * dates. DST is irrelevant because a calendar day is a calendar day.
@@ -112,17 +126,24 @@ export function getLocalHour(instant: Date, tz: string): number {
  * shifts that bite `new Date(2024, 2, 10).setDate(...)`.
  */
 export function addDaysLocal(dateStr: string, days: number): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-  if (!match) {
-    throw new Error(`Expected YYYY-MM-DD, got "${dateStr}"`);
-  }
-  const [, yyyy, mm, dd] = match;
-  const utcMs = Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)) + days * 24 * 60 * 60 * 1000;
+  const utcMs = parseDateStrToUtcMs(dateStr) + days * 24 * 60 * 60 * 1000;
   const next = new Date(utcMs);
   const y = next.getUTCFullYear();
   const m = String(next.getUTCMonth() + 1).padStart(2, "0");
   const d = String(next.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+/**
+ * Day-of-week (Sun=0..Sat=6) for a YYYY-MM-DD calendar string.
+ *
+ * Deliberately takes no timezone: a calendar date falls on the same weekday
+ * everywhere, and 2026-08-10 is a Monday in Sydney and in Honolulu alike. This
+ * is the date-only counterpart of {@link getLocalDayOfWeek}, which answers the
+ * different question "what weekday is it *right now* for this athlete".
+ */
+export function getDayOfWeekForDateStr(dateStr: string): DayOfWeek {
+  return new Date(parseDateStrToUtcMs(dateStr)).getUTCDay() as DayOfWeek;
 }
 
 /**

@@ -560,3 +560,262 @@ cards need a real result to be worth sharing.
 the strength of its value. It touches a prompt that already runs in parallel chunks with no
 cross-chunk continuity, and richer prescriptions without a regenerate-a-week escape hatch make
 a bad plan more expensive to escape, not less.
+
+---
+
+# Addendum — 2026-08-15
+
+**What this is.** A second pass over the same product, three weeks and 236 commits later.
+Same rule as the original: every claim below was checked against the code before it was
+written down.
+
+**Constraint applied to this round.** No new device or wearable integrations, and no
+real-time / in-session features. That rules two existing entries out of scope for now:
+**Session Mode (#1)** and **Race Day Mode (bet B)**. They stay on the register as written —
+they are simply not candidates for this round. Everything numbered from 7 / 15 / E below is
+new and did not appear in the 2026-07-25 pass.
+
+## Status delta since 2026-07-25
+
+Verified shipped: quick wins **#1** (`FavoriteStarButton.tsx`), **#2**
+(`timeline/StationRadar.tsx`), **#3** (`workout-detail/exercise-table/LastTimeRow.tsx`),
+**#4** (`timeline-workout-card/MafCeilingChip.tsx`), **#5** (`buildMissedWorkoutPush`,
+`emailScheduler.ts:152`), **#6** (POST plan days), **#10** (`SkipConfirmDialog.tsx` chips +
+`plan_days.skip_reason` with a CHECK constraint), **#12** (`planPhase` on the summary card).
+Wave 0 is essentially done.
+
+Verified still open: recommendations **#1–#6** in full, quick wins **#7, #8, #9, #11, #13,
+#14**, and every bigger bet. Specifically `activeConstraints` appears nowhere in the tree,
+`RaceSegmentPrediction` still carries only `index / kind / exerciseName / label /
+estimatedSeconds / basis / confidence / sampleSize`, and there is still no route that edits
+`raceDate`. **The register's own sequencing still holds** — the items below do not displace
+Wave 1 (Station Report Card) or Wave 1b (injury-aware coaching).
+
+---
+
+### 7. The daily readiness check-in — feed the engine you already built · **H + D** · S–M
+
+**Pitch.** Four taps each morning — slept, sore, stressed, resting HR if you know it — and
+today's session adjusts to the answer.
+
+**The problem.** `decideTrainingState`
+([`server/services/ai/trainingDecisionEngine.ts`](../server/services/ai/trainingDecisionEngine.ts))
+branches on four recovery markers (`:29-33`): a hard stop on
+`illnessFlag || soreness === "high" || restingHrDelta >= 8` (`:75-77`), and a soft load guard
+on `sleepQuality === "poor" || soreness === "medium" || restingHrDelta >= 4` (`:89-91`).
+The only caller supplies them as literals — `server/services/ai/index.ts:321-326` passes
+`sleepQuality: "ok"`, `restingHrDelta: 0`, `illnessFlag: false`, and proxies
+`soreness: rpeTrend.fatigueFlag ? "high" : "low"`.
+
+**Be precise about what that means.** The hard stop _is_ reachable, through exactly one
+route: the RPE-derived fatigue flag, which jumps straight from "low" to "high" with no middle
+setting. The soft guard is unreachable in production — `sleepQuality` is never `"poor"` and
+`soreness` is never `"medium"`, so `S2_SOFT_RECOVERY_GUARD` cannot fire, and
+`restingHrDelta` is dead on both paths. So the engine is not unused; it is running on one
+crude binary input where it was designed for four graded ones.
+
+**Why this product.** The cheapest intelligence on the register: the reasoning, the rationale
+codes, and the downstream consumers are all built and tested. This is the input side, and it
+is a form. It also creates a daily open that is not a workout — the same retention property
+Session Mode has, without an in-session surface, which matters while #1 is out of scope.
+
+**Sketch.** New `daily_checkins` table shaped like `maf_test_results`
+(`tables.ts:1097`): `userId` FK cascade, `checkinDate` date, `sleepQuality`,
+`soreness`, `stress`, `motivation` (all small enums with CHECK constraints, mirroring
+`plan_days.skip_reason`), nullable `restingHr`, nullable `note`, unique on
+`(userId, checkinDate)`. Write the day's row through to the `recoveryMarkers` literal in
+`ai/index.ts:321`, computing `restingHrDelta` against `users.restingHr` as the baseline —
+that column already exists (`tables.ts`) and currently feeds nothing but the AI profile blob.
+Every marker stays optional and every field keeps today's literal as its fallback, so a user
+who never checks in gets exactly current behaviour. Surface: a dismissible card at the top of
+the Timeline, and the answer echoed on the day's session card so the athlete sees the
+adjustment was caused by their input.
+
+**Two guardrails.** Soreness must not silently keep its binary RPE proxy once a real answer
+exists for the day — prefer the athlete's answer, fall back to the flag. And a check-in
+answer of "ill" should create or offer a `timeline_annotations` illness range rather than a
+one-day flag, which is what makes this compose with recommendation #2 instead of competing
+with it.
+
+**Success signal.** % of training days with a check-in; `S2_SOFT_RECOVERY_GUARD` firing at
+all; sessions modified or downgraded following a poor check-in; RPE on the day after a
+"poor sleep" answer.
+
+---
+
+### 8. Coach memory — the durable athlete card · **D** · M
+
+**Pitch.** Tell the coach the things that are true every week — bad left knee, no sled at my
+gym, shift work on Tuesdays, hate burpees — once, and have it remember.
+
+**The problem.** The coach's durable knowledge of the athlete is: the `users` profile row,
+uploaded RAG documents, and per-workout free text. `buildCoachingContext` reaches
+`workout.athleteNote` (`server/prompts/coachingContext.ts:92`) — a note attached to one
+session on one day. There is no place to say something that is true in general, so every
+conversation restarts from the profile row, and the athlete re-types the same caveat into
+chat forever.
+
+**Why this product.** Uploading a PDF is the current answer, and it is the wrong shape for
+"my knee is dodgy" — RAG retrieval is for corpora, not for six sentences that should be in
+every prompt unconditionally. The insertion point already exists and is already shared:
+anything added to `TrainingContext` and rendered by a `coachingContext.ts` builder reaches
+chat, suggestions and auto-coach at once through `aiContextService.ts`.
+
+**Sketch.** `athlete_facts` table: `userId` FK cascade, `fact` text (length-capped),
+`category` (constraint / equipment / preference / schedule / other), `active` boolean,
+`source` (athlete / coach-inferred), `createdAt`. Render as a bounded, sanitized block in
+`coachingContext.ts` beside `buildCurrentDateContext`, hard-capped at N facts so the prompt
+budget stays predictable. Edit surface in Settings; add-from-chat later if it earns it.
+
+**Build the mechanism once.** This is the same "durable athlete constraints in every prompt"
+plumbing that recommendation #2 needs for injuries. Whichever ships first should build
+`buildAthleteConstraints()` generically enough that the other one is a second row of input,
+not a second block.
+
+**One thing not to do.** Do not let the model write facts silently. An inferred fact must be
+proposed and confirmed — the `plan_adjustment_proposals` propose/apply/dismiss pattern
+(`server/routes/planProposals.ts:31/46/65`) is the in-repo precedent — or the athlete card
+becomes a place where a hallucination gets permanent tenure in every prompt.
+
+**Success signal.** % of athletes with ≥1 fact; repeat-caveat rate in chat; coach suggestions
+dismissed for "I can't do that" reasons.
+
+---
+
+### 9. Equipment, location, and swapping a single session · **H + D** · M
+
+**Pitch.** "I'm in a hotel gym with dumbbells and 40 minutes." Get today's session rewritten
+to fit, without touching the rest of the plan.
+
+**The problem.** Two gaps that compound. There is no equipment model: `users`
+(`tables.ts:41-100`) has no equipment or location column, and the entire equipment
+intelligence in the product is one hand-written line in the plan prompt —
+`server/prompts.ts:103`, about substituting sled work. And there is no athlete-initiated
+path to change one session's prescription: `planProposals.ts` exposes pending / apply /
+dismiss (`:31/46/65`) but no create, so proposals only ever originate from auto-coach.
+`POST /api/v1/plans/days` (quick win #6, now shipped) adds a session; nothing rewrites one.
+The athlete's options today are to do the prescribed session, skip it, or regenerate the
+entire plan.
+
+**Why this product.** Travel, a busy gym, and a closed pool are the most common reasons a
+planned session does not happen, and they are all reasons the app can solve rather than
+record. The apply machinery is already transactional and already handles replace and
+rest-conversion (`planAdjustmentService.ts:502`, `:697`) — the missing half is an
+athlete-initiated entry point and a constraint to generate against.
+
+**Sketch.** (1) Equipment as structured profile data: a `users.availableEquipment` text[] or
+a small join table seeded from the station list in `shared/raceConstants.ts`, set during
+onboarding and editable in Settings, rendered into both the plan-generation prompt and the
+swap prompt. (2) A `POST /api/v1/plans/days/:dayId/swap` taking `{ minutes?, equipment?,
+reason? }`, producing a proposal through the existing propose/apply path so the athlete
+reviews before it lands. (3) Reuse the skip-reason chips as the entry point — an athlete
+about to skip for `schedule` is exactly the athlete who wants a 25-minute version.
+
+**Do it deterministically first if AI is off.** `aiCoachEnabled` defaults to `false`
+(`tables.ts:69`), so gate the AI rewrite behind consent and offer a non-AI fallback that
+trims the prescription by dropping accessory work and scaling volume. A feature that only
+works for opted-in users is a feature most new users never see.
+
+**Success signal.** Swaps per athlete per month; skip rate on days offering a swap; % of
+swapped sessions completed.
+
+---
+
+### 10. The in-app weekly review · **H** · M
+
+**Pitch.** A Sunday-night page: what you planned, what you did, what changed, and one thing
+to carry into next week.
+
+**The problem.** The weekly summary exists — it is just locked inside an email.
+`processWeeklySummary` (`server/emailScheduler.ts:40-100`) already assembles completed /
+planned / missed / skipped counts, completion rate, streak, PRs-this-week and total duration
+into `WeeklySummaryData` (`server/emailTemplates.ts:6-17`), off
+`storage.analytics.getWeeklyStats` (`server/storage/analytics.ts:131`) and
+`countPersonalRecordsInRange`. An athlete with `emailWeeklySummary` off — or who simply does
+not read email — has no way to see any of it, and the push that accompanies it deep-links to
+`/analytics`, which shows a different set of numbers over a different window.
+
+**Why this product.** It is the register's own "built-but-unwired" pattern one more time,
+and the weekly cadence is the one ritual this app can own without an in-session surface. The
+scoping detail that decides the build: **there are two definitions of a week in the tree.**
+`getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) is UTC Monday-anchored and
+drives `weeklySummaries` in the training overview, while the weekly summary email works in
+the athlete's local Monday→Sunday week. Ship the review against one of them knowingly — it
+should be the local one, since it is the athlete-facing definition. Settled in the spec's §1.
+
+**Sketch.** Full scope in [`weekly-review-spec.md`](weekly-review-spec.md).
+
+**Success signal.** Weekly review opens per active athlete; % who set a next-week intent;
+completion rate in the week following a review versus a week without one.
+
+---
+
+## Quick wins — second batch
+
+Numbering continues from the table above.
+
+| #   | Name                                               | What changes                                                                                                  | Why it matters                                                                                                                                                                                                                                                            |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15  | **Search your own training history**               | A search field over the timeline matching focus, exercise name and notes, plus RPE/duration filters.          | There is no search over training data anywhere. `placeholder="Search` occurs exactly twice in `client/src` — `FoodSearch.tsx:48` and `ExerciseSelector.tsx:108`. "When did I last do wall balls" is unanswerable in a training log with a full structured exercise table. |
+| 16  | **A plan library that needs no AI**                | Two or three curated HYROX blocks (first-timer, sub-90, sub-70) as seedable templates beside the sample plan. | `aiCoachEnabled` defaults `false` (`tables.ts:69`) and `server/samplePlan.ts` is a single hardcoded array, so a privacy-minded athlete's entire plan choice is one sample plan or a CSV they have to source themselves. Reuses `createPlanDays` end to end.               |
+| 17  | **Block recap when a plan ends**                   | On the last day of a plan, a recap: sessions completed, PRs, load curve, adherence, biggest station gain.     | A 12-week block currently ends with silence. Every number already exists in the training overview and `analytics_results`; this is assembly, no new data, and it is the natural precursor to the share cards deferred in "not recommended" #6.                            |
+| 18  | **Suggest the next target, not just the last one** | Extend the shipped `LastTimeRow` with a suggested load/reps for the next set.                                 | `estimated1RM` is already a tracked PR metric (`personalRecordAchievements.ts:26`), so the progression math exists. Showing last time and stopping leaves the actual decision — what to put on the bar — entirely to the athlete.                                         |
+| 19  | **Hydration and sodium**                           | Water quick-add on the nutrition page; sodium surfaced from the micronutrient data already stored.            | Genuinely absent — the `hydration` hits in the tree are data-hydration counters (`structuredExerciseHealth.ts`), not fluid. Sweat and sodium are race-week questions for this sport, and it is another daily-log hook on the highest-frequency page.                      |
+| 20  | **Show AI usage and limits**                       | A small panel in Settings reading `ai_usage_logs` against the budget the middleware enforces.                 | `aiUsageLogs` (`tables.ts:986`) has zero client references. When a budget gate trips, the athlete sees a feature that appears broken rather than one that is rate-limited.                                                                                                |
+
+---
+
+## Bigger bets — second batch
+
+### E. The coach seat · **D** · L
+
+Let a real coach see an athlete's log, leave notes, and adjust the plan.
+
+**The case.** Nothing in the 40-table schema models a second person: the only `role` columns
+are `chat_messages.role` and the structured-block `step_role`. Every query in
+`server/storage/` is scoped by a single `userId`, which is the right foundation but means
+sharing is not a UI change, it is an authorization model. This is also the only idea on the
+register with acquisition upside rather than pure retention — one coach brings a squad.
+
+**What must be true first.** A settled consent story. The privacy posture is currently
+"AI off by default, processors enumerated on the privacy page"; adding a human viewer is a
+different category of disclosure, needs revocation, and needs an audit trail. Start with a
+read-only, revocable, expiring share of the timeline and analytics before contemplating a
+coach who can write.
+
+### F. Localization · **D** · L
+
+**The case.** No i18n of any kind — no library, no locale, no message catalogue. HYROX's
+deepest markets are German-speaking, and the app already does the genuinely hard half of
+localization correctly: kg/lb and km/mi are first-class through `shared/unitConversion.ts`
+and per-user unit preferences. The remaining work is mechanical but wide — every string in
+`client/src`, plus the email templates, plus a decision about whether AI-generated coaching
+text is translated or generated in-language (it should be generated in-language; translating
+a coach note reads like a translated coach note).
+
+**Sequence it after the product stops moving weekly.** Extracting strings from surfaces that
+are still being redesigned pays the cost twice.
+
+---
+
+## Corrections to the 2026-07-25 pass
+
+Recorded rather than dropped, per the method note at the top.
+
+1. **"Repeat yesterday's meals" was proposed internally and already exists.**
+   `useRepeatDay` (`client/src/hooks/useNutrition.ts:190`) posts to
+   `/api/v1/nutrition/logs/repeat` and is wired into `Nutrition.tsx`. Do not rebuild it.
+2. **`decideTrainingState` is not dead code.** Its hard-stop path fires today via the
+   RPE-derived fatigue flag. Only the soft-recovery guard and `restingHrDelta` are
+   unreachable. Item #7 above is worded against the precise version.
+3. **Quick win #10 shipped further than described.** `plan_days.skip_reason` carries a CHECK
+   constraint and the chips are live in `SkipConfirmDialog.tsx`, so the "capture a skip
+   reason" signal now exists in the data — what is still missing is anything that _reads_
+   it. Recommendation #2 and item #9 are both consumers.
+4. **A new stored analytics feature is not free.** `analytics_results.feature` is constrained
+   to four literals (`tables.ts:205-206`), so any new persisted-and-recomputed surface needs a
+   constraint migration, not just a new row.
+5. **Line references in the first pass have drifted** — `maf_test_results` is now at
+   `tables.ts:1097`, and the push call sites cited as `emailScheduler.ts:93,136,166` are now
+   `:96,:136,:152`. The first pass's text is left verbatim; check symbol names rather than
+   line numbers when following its references.

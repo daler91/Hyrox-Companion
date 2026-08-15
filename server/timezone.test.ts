@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, isValidTimezone } from "./timezone";
+import { addDaysLocal, getDayOfWeekForDateStr, getLocalDateStr, getLocalDayOfWeek, isValidTimezone } from "./timezone";
 
 describe("getLocalDayOfWeek", () => {
   it("returns the same day for UTC as Date.getDay()", () => {
@@ -83,5 +83,41 @@ describe("isValidTimezone", () => {
     expect(isValidTimezone(undefined)).toBe(false);
     expect(isValidTimezone(null)).toBe(false);
     expect(isValidTimezone(123)).toBe(false);
+  });
+});
+
+describe("getDayOfWeekForDateStr", () => {
+  it("matches getLocalDayOfWeek for the same calendar day", () => {
+    // 2026-06-15 was a Monday, 2026-06-21 the Sunday closing that week.
+    expect(getDayOfWeekForDateStr("2026-06-15")).toBe(1);
+    expect(getDayOfWeekForDateStr("2026-06-21")).toBe(0);
+    expect(getLocalDayOfWeek(new Date("2026-06-15T12:00:00Z"), "UTC")).toBe(1);
+  });
+
+  it("is timezone-independent — a date falls on one weekday everywhere", () => {
+    // The instant-based helper disagrees across zones near midnight; the
+    // date-only one cannot, which is the whole reason it exists.
+    const instant = new Date("2026-06-14T23:30:00Z");
+    expect(getLocalDayOfWeek(instant, "Australia/Sydney")).toBe(1);
+    expect(getLocalDayOfWeek(instant, "UTC")).toBe(0);
+    expect(getDayOfWeekForDateStr("2026-06-14")).toBe(0);
+  });
+
+  it("is unaffected by the process timezone", () => {
+    const originalTz = process.env.TZ;
+    try {
+      process.env.TZ = "Pacific/Kiritimati";
+      const east = getDayOfWeekForDateStr("2024-02-29");
+      process.env.TZ = "Etc/GMT+12";
+      expect(getDayOfWeekForDateStr("2024-02-29")).toBe(east);
+      expect(east).toBe(4); // leap day 2024 was a Thursday
+    } finally {
+      process.env.TZ = originalTz;
+    }
+  });
+
+  it("rejects malformed inputs", () => {
+    expect(() => getDayOfWeekForDateStr("not-a-date")).toThrow();
+    expect(() => getDayOfWeekForDateStr("2026/01/01")).toThrow();
   });
 });
