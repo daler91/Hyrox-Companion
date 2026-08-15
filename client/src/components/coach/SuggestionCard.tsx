@@ -95,7 +95,7 @@ export function SuggestionCard({ suggestion, ragInfo, onApply, onDismiss, isAppl
           disabled={isApplying}
           data-testid={`button-dismiss-${suggestion.workoutId}`}
         >
-          <XIcon className="h-3 w-3 mr-1" />
+          <XIcon className="h-3 w-3 mr-1" aria-hidden="true" />
           Dismiss
         </Button>
       </div>

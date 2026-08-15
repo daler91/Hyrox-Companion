@@ -22,7 +22,7 @@ export function ExportDataCard() {
             }}
             data-testid="button-export-csv"
           >
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            <FileSpreadsheet className="h-4 w-4 mr-2" aria-hidden="true" />
             Export as CSV
           </Button>
           <Button
@@ -32,7 +32,7 @@ export function ExportDataCard() {
             }}
             data-testid="button-export-json"
           >
-            <FileJson className="h-4 w-4 mr-2" />
+            <FileJson className="h-4 w-4 mr-2" aria-hidden="true" />
             Export as JSON
           </Button>
         </div>

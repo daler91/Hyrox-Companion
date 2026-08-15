@@ -252,7 +252,7 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
           </p>
           <Button variant="outline" asChild>
             <Link href="/log" data-testid="button-log-workout-from-breakdown">
-              <Dumbbell className="h-4 w-4 mr-2" />
+              <Dumbbell className="h-4 w-4 mr-2" aria-hidden="true" />
               Log a Workout
             </Link>
           </Button>
