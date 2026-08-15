@@ -57,6 +57,58 @@ export class AnalyticsStorage {
     return logs;
   }
 
+  /**
+   * Every plan day scheduled inside [from, to], in any status.
+   *
+   * The weekly review needs all four statuses from one source: counting
+   * completions from `workout_logs` while counting the denominator from
+   * `plan_days` is what lets a completion rate exceed 100% for an athlete who
+   * trains off-plan (see getWeeklyStats, which the email tolerates because it
+   * reports the counts rather than a rate). `skipReason` rides along because
+   * this is its first read anywhere in the product.
+   *
+   * User-scoped in SQL via the parent plan, like getMissedWorkoutsForDate, so
+   * it stays an indexed lookup over one athlete's plans.
+   */
+  async getPlanDaysByDateRange(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<{ id: string; date: string; focus: string; status: string; skipReason: string | null; planName: string | null }[]> {
+    const days = await db
+      .select({
+        id: planDays.id,
+        scheduledDate: planDays.scheduledDate,
+        focus: planDays.focus,
+        status: planDays.status,
+        skipReason: planDays.skipReason,
+        planName: trainingPlans.name,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          gte(planDays.scheduledDate, from),
+          lte(planDays.scheduledDate, to),
+        ),
+      );
+
+    return days
+      // scheduledDate is nullable in the schema (an unscheduled plan day), but
+      // the range predicate above cannot match a NULL — the filter is for the
+      // type, not for the data.
+      .filter((d): d is typeof d & { scheduledDate: string } => d.scheduledDate !== null)
+      .map((d) => ({
+        id: d.id,
+        date: d.scheduledDate,
+        focus: d.focus,
+        status: d.status ?? "planned",
+        skipReason: d.skipReason,
+        planName: d.planName,
+      }));
+  }
+
   async getMissedWorkoutsForDate(userId: string, date: string): Promise<{ planDayId: string; date: string; focus: string; mainWorkout: string; planName?: string }[]> {
     // Scoped to the plan owner in SQL via the join, not in memory: this runs
     // once per user per day (one send-missed-reminder job each), so filtering

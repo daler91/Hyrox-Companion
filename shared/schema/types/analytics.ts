@@ -1,6 +1,8 @@
 ﻿// Analytics — Training Overview types
+import type { PlanDaySkipReason } from "../enums";
 import type { HeatMapMuscle, MovementPattern, MuscleHeatMapBodyRegion } from "../exercises";
 import type { RagInfo } from "./ai";
+import type { PersonalRecordMetric } from "./workouts";
 
 export interface WeeklySummary {
   weekStart: string; // YYYY-MM-DD (Monday)
@@ -287,4 +289,115 @@ export interface RacePredictionResponse {
   };
   /** ISO timestamp the prediction was generated. */
   generatedAt: string;
+}
+
+// Analytics — Weekly Review
+//
+// The wire shape behind `GET /api/v1/weekly-review`. Everything is scoped to a
+// single Monday→Sunday week in the athlete's own timezone (see
+// `server/services/weeklyProgress.ts` and docs/weekly-review-spec.md §1).
+
+/** One session logged inside the week, plan-linked or ad-hoc. */
+export interface WeeklyReviewSession {
+  workoutLogId: string;
+  date: string;
+  focus: string;
+  durationMin: number | null;
+  rpe: number | null;
+  source: string;
+  /** Null for an ad-hoc session that was never on the plan. */
+  planDayId: string | null;
+  /**
+   * Adherence snapshot, present only where the session was logged against a
+   * prescription. `addedSetCount`/`removedSetCount` are the coaching signal —
+   * what the athlete actually changed — not just how close they landed.
+   */
+  compliancePct: number | null;
+  matchedSetCount: number | null;
+  addedSetCount: number | null;
+  removedSetCount: number | null;
+}
+
+/** A plan day in the week that did NOT become a logged session. */
+export interface WeeklyReviewPlannedDay {
+  planDayId: string;
+  date: string;
+  focus: string;
+  status: "planned" | "missed" | "skipped";
+  /** Why it was skipped, when the athlete volunteered it. */
+  skipReason: PlanDaySkipReason | null;
+  planName: string | null;
+}
+
+/**
+ * The week's counts.
+ *
+ * `sessionsLogged` and `plannedCompleted` are deliberately separate numbers
+ * rather than one completion rate: sessions are counted from `workout_logs`
+ * and plan days from `plan_days`, so an athlete who trains off-plan can log
+ * more sessions than they had scheduled. A single rate over those two sources
+ * exceeds 100% in that case (docs/weekly-review-spec.md §6.1).
+ */
+export interface WeeklyReviewCounts {
+  /** Sessions logged in the week, whether or not they were planned. */
+  sessionsLogged: number;
+  /** Plan days scheduled in the week, in any status. */
+  sessionsPlanned: number;
+  /** Plan days that reached `completed`. Never exceeds `sessionsPlanned`. */
+  plannedCompleted: number;
+  missed: number;
+  skipped: number;
+  /** Still `planned` — the in-progress week, or a past week not yet swept. */
+  outstanding: number;
+  totalDurationMin: number;
+  avgRpe: number | null;
+}
+
+/** Change against the week before. Null where one side has nothing to compare. */
+export interface WeeklyReviewDeltas {
+  sessionsLogged: number;
+  totalDurationMin: number;
+  avgRpe: number | null;
+}
+
+/** An all-time best first achieved inside the week. */
+export interface WeeklyReviewPersonalRecord {
+  exerciseName: string;
+  customLabel: string | null;
+  category: string;
+  metric: PersonalRecordMetric;
+  value: number;
+  date: string;
+  workoutLogId: string;
+}
+
+/** An injury/illness/travel/rest range overlapping the week. */
+export interface WeeklyReviewAnnotation {
+  id: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  note: string | null;
+}
+
+export interface WeeklyReview {
+  /** Monday, YYYY-MM-DD. */
+  weekStart: string;
+  /** Sunday, inclusive. */
+  weekEnd: string;
+  /** The timezone the week was resolved in — UTC when the athlete's is unusable. */
+  timezone: string;
+  /** True when the week is still running, so totals read as "so far". */
+  isCurrentWeek: boolean;
+  /** The athlete's sessions-per-week target (`users.weeklyGoal`). */
+  weeklyGoal: number;
+  /** False when the week held no plan days at all — no completion framing applies. */
+  hasPlan: boolean;
+  current: WeeklyReviewCounts;
+  previous: WeeklyReviewCounts;
+  deltas: WeeklyReviewDeltas;
+  sessions: WeeklyReviewSession[];
+  plannedDays: WeeklyReviewPlannedDay[];
+  personalRecords: WeeklyReviewPersonalRecord[];
+  annotations: WeeklyReviewAnnotation[];
 }

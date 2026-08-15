@@ -13,6 +13,7 @@ import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } 
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { addCalendarDays, assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
+import { buildWeeklyReview, isWeekParamValid } from "../services/weeklyReviewService";
 import { storage } from "../storage";
 import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { getUserId } from "../types";
@@ -88,6 +89,25 @@ function requireInternalAnalyticsSecret(req: ExpressRequest, res: Response, next
   }
   next();
 }
+
+type WeekQuery = { week?: string };
+type WeekReq = ExpressRequest<Record<string, never>, unknown, unknown, WeekQuery>;
+
+// The athlete's own Monday→Sunday week. `?week=` accepts any date inside the
+// wanted week (see resolveReviewWeek) and defaults to the last completed one.
+// Not persisted and not AI-gated: it is four bounded queries over data the
+// weekly summary email already reads once a week.
+router.get("/api/v1/weekly-review", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: WeekReq, res: Response) => {
+    const userId = getUserId(req);
+    const { week } = req.query;
+
+    if (week !== undefined && !isWeekParamValid(week)) {
+      res.status(400).json({ error: "Invalid 'week' date format", code: "BAD_REQUEST" });
+      return;
+    }
+
+    res.json(await buildWeeklyReview(storage, userId, { week }));
+  }));
 
 router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
