@@ -1,5 +1,7 @@
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema";
 
+import { sanitizeUserInput } from "../utils/sanitize";
+
 export interface PromptExerciseSet {
   readonly exerciseName: string;
   readonly customLabel?: string | null;
@@ -29,8 +31,12 @@ const BOGUS_LABEL_RE = /^\d+\s*[xX]?$/;
 function getExerciseLabel(exerciseName: string, customLabel?: string | null): string {
   const trimmed = customLabel?.trim();
   if (trimmed) {
-    if (exerciseName === "custom" || exerciseName.startsWith("custom:")) return trimmed;
-    if (!BOGUS_LABEL_RE.test(trimmed)) return trimmed;
+    // customLabel is free-text user input (exercise_sets.custom_label) that flows
+    // into the AI coach system prompt via formatExerciseSetsForPrompt — sanitize to
+    // prevent prompt injection (breaking out of <user_input> XML delimiters).
+    const safe = sanitizeUserInput(trimmed);
+    if (exerciseName === "custom" || exerciseName.startsWith("custom:")) return safe;
+    if (!BOGUS_LABEL_RE.test(trimmed)) return safe;
   }
   if (exerciseName.startsWith("custom:")) return exerciseName.slice(7);
   return EXERCISE_DEFINITIONS[exerciseName as ExerciseName]?.label || exerciseName;
@@ -50,9 +56,10 @@ function groupExerciseSets(sets: readonly PromptExerciseSet[]): ExerciseGroup[] 
   let currentGroup: ExerciseGroup | null = null;
 
   for (const set of sortSets(sets)) {
-    const key = set.exerciseName === "custom" && set.customLabel
-      ? `custom:${set.customLabel}`
-      : set.exerciseName;
+    const key =
+      set.exerciseName === "custom" && set.customLabel
+        ? `custom:${set.customLabel}`
+        : set.exerciseName;
     if (key !== currentKey) {
       currentGroup = {
         exerciseName: set.exerciseName,
@@ -68,7 +75,10 @@ function groupExerciseSets(sets: readonly PromptExerciseSet[]): ExerciseGroup[] 
   return groups;
 }
 
-function sameValue<T>(sets: readonly PromptExerciseSet[], pick: (set: PromptExerciseSet) => T): boolean {
+function sameValue<T>(
+  sets: readonly PromptExerciseSet[],
+  pick: (set: PromptExerciseSet) => T,
+): boolean {
   if (sets.length <= 1) return true;
   const first = pick(sets[0]);
   return sets.every((set) => pick(set) === first);
@@ -86,9 +96,13 @@ function formatSetMeasurements(set: PromptExerciseSet, options: FormatOptions): 
   const parts: string[] = [];
   if (set.reps != null) parts.push(`${set.reps} reps`);
   if (set.weight != null) parts.push(`${formatNumber(set.weight)} ${options.weightUnit || "kg"}`);
-  if (set.distance != null) parts.push(`${formatNumber(set.distance)}${distanceSuffix(options.distanceUnit)}`);
+  if (set.distance != null)
+    parts.push(`${formatNumber(set.distance)}${distanceSuffix(options.distanceUnit)}`);
   if (set.time != null) parts.push(`${formatNumber(set.time)} min`);
-  if (set.notes?.trim()) parts.push(`note: ${set.notes.trim()}`);
+  // set.notes is free-text user input (exercise_sets.notes) that flows into the
+  // AI coach system prompt via formatExerciseSetsForPrompt — sanitize to prevent
+  // prompt injection (same pattern as workout.notes/athleteNote in coachingContext.ts).
+  if (set.notes?.trim()) parts.push(`note: ${sanitizeUserInput(set.notes.trim())}`);
   return parts.join(", ");
 }
 
@@ -103,11 +117,19 @@ function formatGroup(group: ExerciseGroup, options: FormatOptions): string {
   const allSameDistance = sameValue(sets, (set) => set.distance);
   const allSameTime = sameValue(sets, (set) => set.time);
   const allSameNotes = sameValue(sets, (set) => set.notes?.trim() || null);
-  const canCollapse = sets.length > 1 && allSameReps && allSameWeight && allSameDistance && allSameTime && allSameNotes;
+  const canCollapse =
+    sets.length > 1 &&
+    allSameReps &&
+    allSameWeight &&
+    allSameDistance &&
+    allSameTime &&
+    allSameNotes;
 
   if (canCollapse) {
     const measurements = formatSetMeasurements(first, options);
-    return measurements ? `${name}: ${sets.length} sets x ${measurements}` : `${name}: ${sets.length} sets`;
+    return measurements
+      ? `${name}: ${sets.length} sets x ${measurements}`
+      : `${name}: ${sets.length} sets`;
   }
 
   if (sets.length === 1) {
@@ -117,7 +139,9 @@ function formatGroup(group: ExerciseGroup, options: FormatOptions): string {
 
   const setParts = sets.map((set) => {
     const measurements = formatSetMeasurements(set, options);
-    return measurements ? `set ${set.setNumber ?? "?"}: ${measurements}` : `set ${set.setNumber ?? "?"}`;
+    return measurements
+      ? `set ${set.setNumber ?? "?"}: ${measurements}`
+      : `set ${set.setNumber ?? "?"}`;
   });
   return `${name}: ${setParts.join("; ")}`;
 }
