@@ -77,6 +77,9 @@ export function WeeklyReviewSummary({ review }: { readonly review: WeeklyReview 
           sub={[
             current.missed > 0 ? `${current.missed} missed` : null,
             current.skipped > 0 ? `${current.skipped} skipped` : null,
+            // Same wording as the timeline's badge for these days. Deliberately
+            // its own phrase, never folded into "missed" — the split is the point.
+            current.excused > 0 ? `${current.excused} not counted` : null,
             current.outstanding > 0 ? `${current.outstanding} to go` : null,
           ]
             .filter(Boolean)

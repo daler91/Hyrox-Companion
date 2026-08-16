@@ -13,6 +13,7 @@
  * payload that is four bounded queries.
  */
 
+import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
 import type {
   PersonalRecord,
   PersonalRecordMetric,
@@ -27,7 +28,7 @@ import type {
 } from "@shared/schema";
 
 import type { IStorage } from "../storage";
-import { addDaysLocal, isValidTimezone } from "../timezone";
+import { addDaysLocal, getLocalDateStrSafe, isValidTimezone } from "../timezone";
 import { calculatePersonalRecords } from "./analyticsService";
 import { getLocalMondayWeekBoundaries, getWeekRangeForDate, type LocalWeekRange } from "./weeklyProgress";
 
@@ -63,8 +64,25 @@ function averageRpe(logs: WorkoutLogRow[]): number | null {
   return Math.round((rpes.reduce((sum, rpe) => sum + rpe, 0) / rpes.length) * 10) / 10;
 }
 
-function buildCounts(logs: WorkoutLogRow[], planDays: PlanDayRow[]): WeeklyReviewCounts {
-  const byStatus = (status: string) => planDays.filter((d) => d.status === status).length;
+/**
+ * A day held out of `missed` by a declared absence. Excused days can sit in the
+ * DB under either status: `missed` when the nightly sweep ran before the
+ * athlete logged the annotation, `planned` when it ran after (the sweep skips
+ * covered days). The rule has to catch both, and it is the same rule the
+ * timeline's "Not counted" badge applies — shared so they cannot disagree.
+ */
+function isExcusedDay(day: PlanDayRow, ranges: readonly AbsenceRange[], today: string): boolean {
+  return isExcusedFromMissed(day.status, day.date, today, isDateExcused(day.date, ranges));
+}
+
+function buildCounts(
+  logs: WorkoutLogRow[],
+  planDays: PlanDayRow[],
+  ranges: readonly AbsenceRange[],
+  today: string,
+): WeeklyReviewCounts {
+  const byStatus = (status: string) =>
+    planDays.filter((d) => d.status === status && !isExcusedDay(d, ranges, today)).length;
   return {
     sessionsLogged: logs.length,
     sessionsPlanned: planDays.length,
@@ -72,6 +90,7 @@ function buildCounts(logs: WorkoutLogRow[], planDays: PlanDayRow[]): WeeklyRevie
     missed: byStatus("missed"),
     skipped: byStatus("skipped"),
     outstanding: byStatus("planned"),
+    excused: planDays.filter((d) => isExcusedDay(d, ranges, today)).length,
     totalDurationMin: logs.reduce((sum, l) => sum + (l.duration ?? 0), 0),
     avgRpe: averageRpe(logs),
   };
@@ -112,7 +131,11 @@ function buildSessions(logs: WorkoutLogRow[]): WeeklyReviewSession[] {
  * The plan days that did not become sessions. Completed days are omitted on
  * purpose — they are already in `sessions`, with far more detail.
  */
-function buildPlannedDays(planDays: PlanDayRow[]): WeeklyReviewPlannedDay[] {
+function buildPlannedDays(
+  planDays: PlanDayRow[],
+  ranges: readonly AbsenceRange[],
+  today: string,
+): WeeklyReviewPlannedDay[] {
   return planDays
     .filter((day) => UNCOMPLETED_STATUSES.has(day.status))
     .map((day) => ({
@@ -122,6 +145,7 @@ function buildPlannedDays(planDays: PlanDayRow[]): WeeklyReviewPlannedDay[] {
       status: day.status as WeeklyReviewPlannedDay["status"],
       skipReason: (day.skipReason as PlanDaySkipReason | null) ?? null,
       planName: day.planName,
+      excused: isExcusedDay(day, ranges, today),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -210,8 +234,16 @@ export async function buildWeeklyReview(
     storage.weeklyReviews.getIntents(userId, [week.weekStart, prior.weekStart]),
   ]);
 
-  const current = buildCounts(logs, planDays);
-  const previous = buildCounts(priorLogs, priorPlanDays);
+  // The athlete's own calendar date. Only days already in the past can be
+  // excused (a booked absence next week has excused nothing yet), and for the
+  // default review — last week — every day qualifies; today only matters when
+  // the athlete is looking at the in-progress week.
+  const today = getLocalDateStrSafe(now, tz);
+  // The raw list, not the week-filtered `annotations` payload below: excusal is
+  // a per-day containment test, so pre-filtering buys nothing — and the PRIOR
+  // week's counts need ranges that overlap that week, not this one.
+  const current = buildCounts(logs, planDays, annotations, today);
+  const previous = buildCounts(priorLogs, priorPlanDays, annotations, today);
 
   return {
     weekStart: week.weekStart,
@@ -224,7 +256,7 @@ export async function buildWeeklyReview(
     previous,
     deltas: buildDeltas(current, previous),
     sessions: buildSessions(logs),
-    plannedDays: buildPlannedDays(planDays),
+    plannedDays: buildPlannedDays(planDays, annotations, today),
     personalRecords: listPersonalRecordsInRange(
       calculatePersonalRecords(prSets),
       week.weekStart,

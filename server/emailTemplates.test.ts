@@ -31,6 +31,7 @@ describe("email generation", () => {
     plannedCount: 4,
     missedCount: 1,
     skippedCount: 0,
+    excusedCount: 0,
     completionRate: 75,
     currentStreak: 2,
     prsThisWeek: 1,
@@ -126,6 +127,25 @@ describe("email generation", () => {
       const { html } = buildWeeklySummaryEmail(baseUser, data);
       expect(html).toContain("Perfect week — no missed sessions! Keep it up!");
       expect(html).not.toContain("You missed");
+    });
+
+    it("does NOT cheer 'perfect week' at an athlete whose week was an absence", () => {
+      // Zero missed only because an injury window held the days out of the
+      // count — celebrating that reads as not having listened.
+      const data = { ...baseData, missedCount: 0, excusedCount: 3 };
+      const { html } = buildWeeklySummaryEmail(baseUser, data);
+      expect(html).not.toContain("Perfect week");
+      expect(html).not.toContain("You missed");
+      expect(html).toContain(
+        "3 planned sessions fell inside an injury, illness, travel or rest window you logged — not counted as missed.",
+      );
+    });
+
+    it("notes the excused sessions alongside real misses, singular", () => {
+      const data = { ...baseData, missedCount: 1, excusedCount: 1 };
+      const { html } = buildWeeklySummaryEmail(baseUser, data);
+      expect(html).toContain("You missed 1 session this week. Don't worry");
+      expect(html).toContain("1 planned session fell inside an injury, illness, travel or rest window");
     });
 
     it("shows missed message when missedCount > 0", () => {

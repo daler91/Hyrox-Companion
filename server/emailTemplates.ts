@@ -8,6 +8,12 @@ export interface WeeklySummaryData {
   plannedCount: number;
   missedCount: number;
   skippedCount: number;
+  /**
+   * Days a declared absence (injury/illness/travel/rest annotation) held out
+   * of `missedCount`. Out of the completion-rate denominator too — the week
+   * the athlete spent injured is not a week of failures.
+   */
+  excusedCount: number;
   completionRate: number;
   currentStreak: number;
   prsThisWeek: number;
@@ -90,14 +96,26 @@ export function buildWeeklySummaryEmail(
       </div>`
       : "";
 
-  let missedSessionsMessage =
-    '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
+  // Three tones, in priority order: real misses get the gentle nudge, an
+  // absence-only week gets a neutral acknowledgement (cheering "Perfect week!
+  // Keep it up! 💪" at someone who spent it injured reads as not having
+  // listened), and only a genuinely clean week gets the celebration.
+  const excusedNote =
+    data.excusedCount > 0
+      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${data.excusedCount === 1 ? "" : "s"} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
+      : "";
+  let missedSessionsMessage: string;
   if (data.missedCount > 0) {
     let missedSuffix = "s";
     if (data.missedCount === 1) {
       missedSuffix = "";
     }
-    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>`;
+    missedSessionsMessage = `<p style="font-size:14px;color:#64748b;margin-top:16px;">You missed ${data.missedCount} session${missedSuffix} this week. Don't worry — consistency over perfection!</p>${excusedNote}`;
+  } else if (data.excusedCount > 0) {
+    missedSessionsMessage = excusedNote;
+  } else {
+    missedSessionsMessage =
+      '<p style="font-size:14px;color:#16a34a;margin-top:16px;font-weight:600;">Perfect week — no missed sessions! Keep it up! 💪</p>';
   }
 
   const html = `<!DOCTYPE html>

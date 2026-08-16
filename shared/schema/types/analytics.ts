@@ -327,6 +327,13 @@ export interface WeeklyReviewPlannedDay {
   /** Why it was skipped, when the athlete volunteered it. */
   skipReason: PlanDaySkipReason | null;
   planName: string | null;
+  /**
+   * The day sits inside a declared absence (injury/illness/travel/rest) that
+   * is what kept it out of "missed" — same rule as the timeline's badge
+   * (`isExcusedFromMissed`). `status` stays the stored value; this flag says
+   * how to read it.
+   */
+  excused: boolean;
 }
 
 /**
@@ -349,6 +356,12 @@ export interface WeeklyReviewCounts {
   skipped: number;
   /** Still `planned` — the in-progress week, or a past week not yet swept. */
   outstanding: number;
+  /**
+   * Days a declared absence held out of `missed` (`isExcusedFromMissed`).
+   * These leave `missed` and `outstanding` entirely — a week the athlete spent
+   * injured must not be scored as a week of failures they already explained.
+   */
+  excused: number;
   totalDurationMin: number;
   avgRpe: number | null;
 }

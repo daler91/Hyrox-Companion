@@ -225,7 +225,7 @@ describe("buildWeeklyReview", () => {
 
     // The completed day is already in `sessions` with far more detail.
     expect(review.plannedDays).toEqual([
-      { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "12-week build" },
+      { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "12-week build", excused: false },
     ]);
   });
 
@@ -323,6 +323,112 @@ describe("buildWeeklyReview", () => {
 
     expect(review.weeklyGoal).toBe(5);
     expect(review.timezone).toBe("UTC");
+  });
+});
+
+describe("buildWeeklyReview — declared absences", () => {
+  // Covers the whole reviewed week (Mon 08 → Sun 14) and beyond.
+  const injury = { id: "a1", startDate: "2026-06-01", endDate: "2026-06-30", type: "injury", note: "Achilles" };
+
+  it("moves a stored-missed day inside an absence out of `missed` into `excused`", async () => {
+    // The realistic order of events: the sweep stamped the week `missed`, and
+    // the athlete logged the injury afterwards.
+    const storage = storageFor({
+      planDays: [planDay({ id: "pd-1", date: "2026-06-10", status: "missed" })],
+      annotations: [injury],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.current).toMatchObject({ missed: 0, excused: 1 });
+  });
+
+  it("moves a sweep-skipped planned day out of `outstanding` into `excused`", async () => {
+    // Post-#1797 the sweep leaves covered days `planned`; a past week must not
+    // report them as "still to do".
+    const storage = storageFor({
+      planDays: [planDay({ id: "pd-1", date: "2026-06-10", status: "planned" })],
+      annotations: [injury],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.current).toMatchObject({ outstanding: 0, excused: 1 });
+  });
+
+  it("leaves what the athlete actually did alone", async () => {
+    const storage = storageFor({
+      logs: [log()],
+      planDays: [
+        planDay({ id: "pd-1", date: "2026-06-10", status: "completed" }),
+        planDay({ id: "pd-2", date: "2026-06-11", status: "skipped", skipReason: "injured" }),
+      ],
+      annotations: [injury],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.current).toMatchObject({ plannedCompleted: 1, skipped: 1, excused: 0 });
+  });
+
+  it("does not excuse a missed day the absence does not cover", async () => {
+    const storage = storageFor({
+      planDays: [planDay({ id: "pd-1", date: "2026-06-10", status: "missed" })],
+      annotations: [{ ...injury, startDate: "2026-06-12", endDate: "2026-06-13" }],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.current).toMatchObject({ missed: 1, excused: 0 });
+  });
+
+  it("flags the excused day in plannedDays so the row can read 'Not counted'", async () => {
+    const storage = storageFor({
+      planDays: [
+        planDay({ id: "pd-1", date: "2026-06-10", status: "missed", focus: "Long Run" }),
+        planDay({ id: "pd-2", date: "2026-06-13", status: "missed", focus: "Intervals" }),
+      ],
+      annotations: [{ ...injury, startDate: "2026-06-09", endDate: "2026-06-11" }],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.plannedDays).toEqual([
+      expect.objectContaining({ planDayId: "pd-1", status: "missed", excused: true }),
+      expect.objectContaining({ planDayId: "pd-2", status: "missed", excused: false }),
+    ]);
+  });
+
+  it("applies the same rule to the comparison week's counts", async () => {
+    // The prior week is Mon 01 → Sun 07; an absence there must not make last
+    // week's delta read as a recovery from failure.
+    const storage = storageFor({
+      priorPlanDays: [planDay({ id: "pd-p", date: "2026-06-03", status: "missed" })],
+      annotations: [{ ...injury, startDate: "2026-06-01", endDate: "2026-06-05" }],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.previous).toMatchObject({ missed: 0, excused: 1 });
+  });
+
+  it("splits the in-progress week on today: past covered days excused, future ones still to come", async () => {
+    // Requesting the current week (Mon 15 → Sun 21; today is Wed 17). The
+    // range-keyed fixture returns `planDays` only for LAST_WEEK, so the
+    // current week's days ride in via `priorPlanDays`.
+    const storage = storageFor({
+      priorPlanDays: [
+        planDay({ id: "pd-past", date: "2026-06-16", status: "planned" }),
+        planDay({ id: "pd-future", date: "2026-06-19", status: "planned" }),
+      ],
+      annotations: [{ id: "a2", startDate: "2026-06-15", endDate: "2026-06-21", type: "travel", note: null }],
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY, week: "2026-06-17" });
+
+    // Yesterday inside the travel range is excused; Friday hasn't been missed
+    // yet — it is simply still planned.
+    expect(review.current).toMatchObject({ excused: 1, outstanding: 1 });
   });
 });
 
