@@ -294,10 +294,12 @@ export default function Settings() {
             mafConsistencyInput={draft.mafConsistencyInput}
             mafTrendInput={draft.mafTrendInput}
             mafHrDataAvailableInput={draft.mafHrDataAvailableInput}
+            mafInjuryIllnessInput={draft.mafInjuryIllnessInput}
             onMafAgeInputChange={(v) => updateField("mafAgeInput", v)}
             onMafConsistencyInputChange={(v) => updateField("mafConsistencyInput", v)}
             onMafTrendInputChange={(v) => updateField("mafTrendInput", v)}
             onMafHrDataAvailableInputChange={(v) => updateField("mafHrDataAvailableInput", v)}
+            onMafInjuryIllnessInputChange={(v) => updateField("mafInjuryIllnessInput", v)}
             styleAuditEntries={styleAuditEntries}
           />
           <WorkoutReviewCard

@@ -156,6 +156,38 @@ describe("Settings MAF style switch", () => {
     });
   }, 10_000);
 
+  it("lets a healed athlete clear the injury flag that costs 10 bpm of ceiling", async () => {
+    // The flag was written once at onboarding and permanently subtracted 10 bpm
+    // from the MAF ceiling: usePreferencesForm read it back from the stored
+    // preferences and never included it in the save payload, so no edit could
+    // change it. A resolved injury has to be un-settable.
+    const qc = new QueryClient();
+    seedSettings(qc, {
+      ...defaultSettings(),
+      trainingStyleId: "maf_method",
+      mafAge: 39,
+      mafConsistency: "moderate",
+      mafTrend: "flat",
+      mafHrDataAvailable: true,
+      mafInjuryIllnessMedication: true,
+    });
+    vi.mocked(settingsHarness.updatePreferences).mockResolvedValue({});
+
+    renderSettings(qc);
+    await goToSettingsTab("training");
+
+    fireEvent.click(await screen.findByTestId("button-maf-setup"));
+    await chooseSelectOption("Injury, illness or medication", "No");
+    fireEvent.click(screen.getByRole("button", { name: "Save MAF setup" }));
+    fireEvent.click(await screen.findByTestId("button-save-settings"));
+
+    await waitFor(() => {
+      expect(settingsHarness.updatePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ mafInjuryIllnessMedication: false }),
+      );
+    });
+  }, 10_000);
+
   it("reruns onboarding through the forced URL without changing durable completion", async () => {
     const qc = new QueryClient();
     seedSettings(qc, {

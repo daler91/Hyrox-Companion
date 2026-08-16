@@ -17,6 +17,8 @@ vi.mock("../storage", () => ({
       insertChunks: vi.fn(),
       replaceChunks: vi.fn(),
       searchChunksByEmbedding: vi.fn(),
+      listPrincipleMaterialIds: vi.fn(),
+      listChunksForMaterials: vi.fn(),
     },
   },
 }));
@@ -237,6 +239,10 @@ describe("embedCoachingMaterial", () => {
 describe("retrieveRelevantChunks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no pinned principles, so the existing cases below exercise the
+    // unpinned search path unchanged.
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue([]);
+    vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([]);
   });
 
   it("should embed query and search for similar chunks", async () => {
@@ -261,6 +267,77 @@ describe("retrieveRelevantChunks", () => {
     await retrieveRelevantChunks("u1", "query", 3);
 
     expect(storage.coaching.searchChunksByEmbedding).toHaveBeenCalledWith("u1", [0.1], 3);
+  });
+
+
+  it("pins the athlete's stated principles ahead of the semantic results", async () => {
+    // Without the pin, "no sled at my gym" only reaches the coach when the
+    // query happens to embed near it.
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue(["m-principles"]);
+    vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([
+      { id: "p1", materialId: "m-principles", userId: "u1", content: "no sled at my gym", chunkIndex: 0, embedding: null, createdAt: new Date() },
+    ]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m1", userId: "u1", content: "semantic hit", chunkIndex: 0, embedding: null, createdAt: new Date() },
+    ]);
+
+    const result = await retrieveRelevantChunks("u1", "pin-order query");
+
+    expect(result[0]).toBe("no sled at my gym");
+    expect(result).toContain("semantic hit");
+  });
+
+  it("keeps the total at topK, so prompt size and cost do not change", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue(["m-principles"]);
+    vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([
+      { id: "p1", materialId: "m-principles", userId: "u1", content: "p1", chunkIndex: 0, embedding: null, createdAt: new Date() },
+      { id: "p2", materialId: "m-principles", userId: "u1", content: "p2", chunkIndex: 1, embedding: null, createdAt: new Date() },
+    ]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue(
+      Array.from({ length: 6 }, (_v, i) => ({
+        id: `c${i}`, materialId: "m1", userId: "u1", content: `c${i}`, chunkIndex: i, embedding: null, createdAt: new Date(),
+      })),
+    );
+
+    const result = await retrieveRelevantChunks("u1", "topk-budget query");
+
+    expect(result).toHaveLength(6);
+    expect(result.slice(0, 2)).toEqual(["p1", "p2"]);
+  });
+
+  it("caps the pin so a long document pasted as principles cannot crowd out the search", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue(["m-principles"]);
+    vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([]);
+
+    await retrieveRelevantChunks("u1", "pin-cap query");
+
+    expect(storage.coaching.listChunksForMaterials).toHaveBeenCalledWith("u1", ["m-principles"], 3);
+  });
+
+  it("does not repeat a chunk the search also returned", async () => {
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue(["m-principles"]);
+    const pinnedChunk = { id: "p1", materialId: "m-principles", userId: "u1", content: "no sled", chunkIndex: 0, embedding: null, createdAt: new Date() };
+    vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([pinnedChunk]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([pinnedChunk]);
+
+    const result = await retrieveRelevantChunks("u1", "dedupe query");
+
+    expect(result).toEqual(["no sled"]);
+  });
+
+  it("degrades to an unpinned search when the principles read fails", async () => {
+    // A failure here must not take down the chat turn.
+    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
+    vi.mocked(storage.coaching.listPrincipleMaterialIds).mockRejectedValue(new Error("vector db down"));
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([
+      { id: "c1", materialId: "m1", userId: "u1", content: "semantic hit", chunkIndex: 0, embedding: null, createdAt: new Date() },
+    ]);
+
+    await expect(retrieveRelevantChunks("u1", "degrade query")).resolves.toEqual(["semantic hit"]);
   });
 
   it("should propagate errors to caller", async () => {

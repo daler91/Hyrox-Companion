@@ -1,6 +1,7 @@
 import type {
   MafConsistencyInput,
   MafHrDataAvailableInput,
+  MafInjuryIllnessInput,
   MafTrendInput,
 } from "@/components/settings/TrainingStyleSection";
 import type { UserPreferences } from "@/lib/api";
@@ -107,6 +108,7 @@ export interface PreferencesDraft {
   mafConsistencyInput: MafConsistencyInput;
   mafTrendInput: MafTrendInput;
   mafHrDataAvailableInput: MafHrDataAvailableInput;
+  mafInjuryIllnessInput: MafInjuryIllnessInput;
 }
 
 export function ageInputToSnapshot(value: string): number | null {
@@ -159,6 +161,7 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   mafConsistencyInput: "",
   mafTrendInput: "",
   mafHrDataAvailableInput: "",
+  mafInjuryIllnessInput: "",
 };
 
 export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
@@ -190,6 +193,7 @@ export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
     mafConsistency: draft.mafConsistencyInput || null,
     mafTrend: draft.mafTrendInput || null,
     mafHrDataAvailable: mafHrDataAvailableInputToSnapshot(draft.mafHrDataAvailableInput),
+    mafInjuryIllnessMedication: mafHrDataAvailableInputToSnapshot(draft.mafInjuryIllnessInput),
   };
 }
 
@@ -225,6 +229,7 @@ export function preferencesToDraft(preferences: UserPreferences): PreferencesDra
     mafConsistencyInput: preferences.mafConsistency ?? "",
     mafTrendInput: preferences.mafTrend ?? "",
     mafHrDataAvailableInput: mafHrDataAvailableToInput(preferences.mafHrDataAvailable),
+    mafInjuryIllnessInput: mafHrDataAvailableToInput(preferences.mafInjuryIllnessMedication),
   };
 }
 
@@ -257,6 +262,7 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
     mafConsistencyInput: snapshot.mafConsistency ?? "",
     mafTrendInput: snapshot.mafTrend ?? "",
     mafHrDataAvailableInput: mafHrDataAvailableToInput(snapshot.mafHrDataAvailable),
+    mafInjuryIllnessInput: mafHrDataAvailableToInput(snapshot.mafInjuryIllnessMedication),
   };
 }
 
@@ -289,6 +295,11 @@ export function preferencesToSnapshot(preferences: UserPreferences): Preferences
     mafConsistency: preferences.mafConsistency ?? null,
     mafTrend: preferences.mafTrend ?? null,
     mafHrDataAvailable: preferences.mafHrDataAvailable ?? null,
+    // Normalised to null like every other nullable flag: draftToSnapshot
+    // produces null for an unanswered input, and an undefined baseline here
+    // makes the form dirty on load — which silently turns every in-app link
+    // into an unsaved-changes prompt.
+    mafInjuryIllnessMedication: preferences.mafInjuryIllnessMedication ?? null,
   };
 }
 
@@ -321,6 +332,7 @@ export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot
     mafConsistency: payload.mafConsistency ?? null,
     mafTrend: payload.mafTrend ?? null,
     mafHrDataAvailable: payload.mafHrDataAvailable ?? null,
+    mafInjuryIllnessMedication: payload.mafInjuryIllnessMedication ?? null,
   };
 }
 
@@ -354,5 +366,6 @@ export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayloa
     mafConsistency: snapshot.mafConsistency,
     mafTrend: snapshot.mafTrend,
     mafHrDataAvailable: snapshot.mafHrDataAvailable,
+    mafInjuryIllnessMedication: snapshot.mafInjuryIllnessMedication,
   };
 }

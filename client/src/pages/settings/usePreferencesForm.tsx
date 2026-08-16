@@ -156,6 +156,10 @@ export function usePreferencesForm() {
     const mafConsistency = draft.mafConsistencyInput || null;
     const mafTrend = draft.mafTrendInput || null;
     const mafHrDataAvailable = mafHrDataAvailableInputToSnapshot(draft.mafHrDataAvailableInput);
+    // Read from the DRAFT, not from the stored preferences. Feeding the saved
+    // value back in is what made this flag permanent: it was written once at
+    // onboarding, costs 10 bpm of MAF ceiling, and no save could ever change it.
+    const mafInjuryIllnessMedication = mafHrDataAvailableInputToSnapshot(draft.mafInjuryIllnessInput);
     const hasValidMafInputs =
       mafAge != null && mafAge >= 16 && mafAge <= 99 && Boolean(mafConsistency) && Boolean(mafTrend);
 
@@ -176,7 +180,7 @@ export function usePreferencesForm() {
     const styleChanged = draft.trainingStyleId !== committedStyleId;
     const maf = draft.trainingStyleId === "maf_method" && hasValidMafInputs ? calculateMafHr({
       age: mafAge,
-      injuryIllnessMedication: Boolean(preferences?.mafInjuryIllnessMedication),
+      injuryIllnessMedication: Boolean(mafInjuryIllnessMedication),
       consistency: mafConsistency!,
       trend: mafTrend!,
     }) : null;
@@ -221,10 +225,11 @@ export function usePreferencesForm() {
       mafConsistency,
       mafTrend,
       mafHrDataAvailable,
+      mafInjuryIllnessMedication,
       mafHr: draft.trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && draft.trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
-  }, [saveMutation, draft, preferences?.mafInjuryIllnessMedication, toast]);
+  }, [saveMutation, draft, toast]);
 
   const mafAgeValue = ageInputToSnapshot(draft.mafAgeInput);
   const hasRequiredMafInputs =

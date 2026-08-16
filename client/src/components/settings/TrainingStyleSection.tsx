@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,8 @@ import {
 
 export type MafConsistencyInput = "" | "low" | "moderate" | "high";
 export type MafTrendInput = "" | "improving" | "flat" | "declining";
+/** Tri-state like MafHrDataAvailableInput: "" means "not answered". */
+export type MafInjuryIllnessInput = "" | "yes" | "no";
 export type MafHrDataAvailableInput = "" | "yes" | "no";
 
 export interface StyleAuditEntry {
@@ -65,9 +68,11 @@ interface TrainingStyleSectionProps {
   readonly mafConsistencyInput: MafConsistencyInput;
   readonly mafTrendInput: MafTrendInput;
   readonly mafHrDataAvailableInput: MafHrDataAvailableInput;
+  readonly mafInjuryIllnessInput: MafInjuryIllnessInput;
   readonly onMafAgeInputChange: (value: string) => void;
   readonly onMafConsistencyInputChange: (value: MafConsistencyInput) => void;
   readonly onMafTrendInputChange: (value: MafTrendInput) => void;
+  readonly onMafInjuryIllnessInputChange: (value: MafInjuryIllnessInput) => void;
   readonly onMafHrDataAvailableInputChange: (value: MafHrDataAvailableInput) => void;
   readonly styleAuditEntries: readonly StyleAuditEntry[];
 }
@@ -91,10 +96,12 @@ export function TrainingStyleSection({
   mafConsistencyInput,
   mafTrendInput,
   mafHrDataAvailableInput,
+  mafInjuryIllnessInput,
   onMafAgeInputChange,
   onMafConsistencyInputChange,
   onMafTrendInputChange,
   onMafHrDataAvailableInputChange,
+  onMafInjuryIllnessInputChange,
   styleAuditEntries,
 }: Readonly<TrainingStyleSectionProps>) {
   const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
@@ -109,6 +116,8 @@ export function TrainingStyleSection({
   const [draftMafTrendInput, setDraftMafTrendInput] = useState<MafTrendInput>(mafTrendInput);
   const [draftMafHrDataAvailableInput, setDraftMafHrDataAvailableInput] =
     useState<MafHrDataAvailableInput>(mafHrDataAvailableInput);
+  const [draftMafInjuryIllnessInput, setDraftMafInjuryIllnessInput] =
+    useState<MafInjuryIllnessInput>(mafInjuryIllnessInput);
 
   const applyTrainingStyle = (styleId: string) => {
     onTrainingStyleIdChange(styleId);
@@ -121,6 +130,7 @@ export function TrainingStyleSection({
     setDraftMafConsistencyInput(mafConsistencyInput);
     setDraftMafTrendInput(mafTrendInput);
     setDraftMafHrDataAvailableInput(mafHrDataAvailableInput);
+    setDraftMafInjuryIllnessInput(mafInjuryIllnessInput);
     setMafSetupError(null);
     setMafSetupOpen(true);
   };
@@ -198,6 +208,21 @@ export function TrainingStyleSection({
                 scored against it, so keep easy runs at or under it.
               </p>
             </div>
+          )}
+          {trainingStyleId === "maf_method" && (
+            // The dialog was previously reachable only while SWITCHING to MAF,
+            // and only when required inputs were missing — so an athlete
+            // already on MAF could never revisit these answers, which is how
+            // the injury flag became permanent.
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              data-testid="button-maf-setup"
+              onClick={openMafSetup}
+            >
+              Edit MAF setup
+            </Button>
           )}
         </CardContent>
       </Card>
@@ -312,6 +337,26 @@ export function TrainingStyleSection({
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="maf-injury-illness-select">
+                Injury, illness or medication
+              </Label>
+              {/* Editable here because it costs 10 bpm of MAF ceiling
+                  (shared/maf.ts) and was previously write-once at onboarding —
+                  a healed injury capped the athlete's zones permanently. */}
+              <Select
+                value={draftMafInjuryIllnessInput}
+                onValueChange={(value: MafInjuryIllnessInput) => setDraftMafInjuryIllnessInput(value)}
+              >
+                <SelectTrigger id="maf-injury-illness-select" data-testid="select-maf-injury-illness">
+                  <SelectValue placeholder="Injury, illness or medication (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Yes — lowers the ceiling by 10 bpm</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="maf-hr-data-available-select">HR data available</Label>
               <Select
                 value={draftMafHrDataAvailableInput}
@@ -351,14 +396,14 @@ export function TrainingStyleSection({
                   return;
                 }
                 setMafSetupError(null);
-                if (!pendingStyleId) {
-                  return;
-                }
                 onMafAgeInputChange(String(parsedAge));
                 onMafConsistencyInputChange(draftMafConsistencyInput);
                 onMafTrendInputChange(draftMafTrendInput);
                 onMafHrDataAvailableInputChange(draftMafHrDataAvailableInput);
-                applyTrainingStyle(pendingStyleId);
+                onMafInjuryIllnessInputChange(draftMafInjuryIllnessInput);
+                // Only a style SWITCH has a pending id to apply; editing the
+                // setup of the style already in use just saves the answers.
+                if (pendingStyleId) applyTrainingStyle(pendingStyleId);
                 setMafSetupOpen(false);
               }}
             >
