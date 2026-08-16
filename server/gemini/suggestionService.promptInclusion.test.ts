@@ -486,6 +486,28 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     expect(prompt).not.toContain("ATHLETE CONSTRAINTS");
   });
 
+  it("still states the constraints for an athlete with NO logged workouts", () => {
+    // The zero-workout early return is the path taken by someone who has just
+    // declared an injury in the plan wizard and gone straight to the chat —
+    // the most likely person in the app to have constraints, and the one this
+    // would silently have skipped.
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({
+        totalWorkouts: 0,
+        trainingConstraints: "FINGERPRINT_NEW_ATHLETE_CONSTRAINT",
+      }),
+    );
+
+    expect(prompt).toContain("hasn't logged any training data yet");
+    expect(prompt).toContain("FINGERPRINT_NEW_ATHLETE_CONSTRAINT");
+  });
+
+  it("does not add an empty constraints block when there is no context at all", () => {
+    const prompt = buildSystemPrompt(undefined);
+
+    expect(prompt).not.toContain("ATHLETE CONSTRAINTS");
+  });
+
   it("includes the fuelling section in the suggestions prompt when nutrition context is present", () => {
     const prompt = buildSuggestionsPrompt(
       createMockTrainingContext({ nutrition: NUTRITION_CTX }),

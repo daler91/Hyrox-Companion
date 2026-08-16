@@ -533,6 +533,12 @@ export function buildSystemPrompt(
     let prompt =
       BASE_SYSTEM_PROMPT +
       `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
+    // Constraints still apply with zero logged workouts — more so, if anything.
+    // An athlete who has just told the plan wizard "recovering from knee
+    // surgery" and gone straight to the chat is the single most likely person
+    // to have declared something, and this early return is the path they take.
+    const noDataConstraints = trainingContext ? formatAthleteConstraints(trainingContext) : "";
+    if (noDataConstraints) prompt += `\n\n${noDataConstraints}`;
     const materialsSection =
       retrievedChunks && retrievedChunks.length > 0
         ? buildRetrievedChunksSection(retrievedChunks)
