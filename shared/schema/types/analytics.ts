@@ -400,4 +400,11 @@ export interface WeeklyReview {
   plannedDays: WeeklyReviewPlannedDay[];
   personalRecords: WeeklyReviewPersonalRecord[];
   annotations: WeeklyReviewAnnotation[];
+  /** What the athlete said they wanted from this week. Null until they write one. */
+  intent: string | null;
+  /**
+   * The intent they set for the week before, shown back at the top of this
+   * review. Recall is the whole value — nothing scores the week against it.
+   */
+  previousIntent: string | null;
 }

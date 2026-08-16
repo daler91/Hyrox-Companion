@@ -23,6 +23,7 @@ import {
   trainingPlans,
   users,
   userTrainingStyle,
+  weeklyReviews,
   workoutLogs,
 } from "./tables";
 
@@ -57,6 +58,9 @@ describe("user-owned tables cascade on DELETE", () => {
     mafProfile,
     mafTestResults,
     mafWorkoutAnalysis,
+    // The athlete's own words about their training week — user-authored content
+    // that must leave with them.
+    weeklyReviews,
   } as const;
 
   // Tables that are user-scoped transitively through a parent table rather

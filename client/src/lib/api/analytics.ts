@@ -99,6 +99,14 @@ export const analytics = {
       "GET",
       week ? `/api/v1/weekly-review?week=${week}` : "/api/v1/weekly-review",
     ),
+
+  /** Set (or clear, with null) the athlete's intent for `week`. */
+  setWeeklyReviewIntent: (week: string, intent: string | null) =>
+    typedRequest<{ weekStart: string; intent: string | null }>(
+      "POST",
+      "/api/v1/weekly-review/intent",
+      { week, intent },
+    ),
 } as const;
 
 export const timeline = {

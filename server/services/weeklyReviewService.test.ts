@@ -50,6 +50,7 @@ interface StorageFixture {
   priorPlanDays?: ReturnType<typeof planDay>[];
   annotations?: Record<string, unknown>[];
   user?: Record<string, unknown> | null;
+  intents?: Map<string, string | null>;
 }
 
 function storageFor(fixture: StorageFixture = {}) {
@@ -79,6 +80,7 @@ function storageFor(fixture: StorageFixture = {}) {
       getExerciseSetsForPersonalRecords: vi.fn().mockResolvedValue([]),
     },
     timelineAnnotations: { list: vi.fn().mockResolvedValue(annotations) },
+    weeklyReviews: { getIntents: vi.fn().mockResolvedValue(fixture.intents ?? new Map()) },
   } as unknown as IStorage;
 }
 
@@ -321,5 +323,47 @@ describe("buildWeeklyReview", () => {
 
     expect(review.weeklyGoal).toBe(5);
     expect(review.timezone).toBe("UTC");
+  });
+});
+
+describe("buildWeeklyReview — intent", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns this week's intent to edit and last week's to show back", async () => {
+    const storage = storageFor({
+      intents: new Map([
+        [LAST_WEEK.start, "three runs, and actually take the rest day"],
+        ["2026-06-01", "get the sled work in"],
+      ]),
+    });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.intent).toBe("three runs, and actually take the rest day");
+    expect(review.previousIntent).toBe("get the sled work in");
+  });
+
+  it("asks for both weeks in one round trip", async () => {
+    const storage = storageFor();
+
+    await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(storage.weeklyReviews.getIntents).toHaveBeenCalledWith("u1", [LAST_WEEK.start, "2026-06-01"]);
+  });
+
+  it("is null on both sides when the athlete has never written one", async () => {
+    const review = await buildWeeklyReview(storageFor(), "u1", { now: WEDNESDAY });
+
+    expect(review.intent).toBeNull();
+    expect(review.previousIntent).toBeNull();
+  });
+
+  it("treats a cleared intent as absent rather than empty", async () => {
+    // The row survives a clear (updatedAt stays meaningful), holding null.
+    const storage = storageFor({ intents: new Map([[LAST_WEEK.start, null]]) });
+
+    const review = await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
+
+    expect(review.intent).toBeNull();
   });
 });

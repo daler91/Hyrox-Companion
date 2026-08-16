@@ -1,4 +1,5 @@
-﻿import { chatMessages } from "../tables";
+﻿import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
+import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
@@ -14,6 +15,20 @@ export const dateStringSchema = z
   .string()
   .max(10)
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
+
+/**
+ * Body for `POST /api/v1/weekly-review/intent`. `week` is any date inside the
+ * target week — the handler anchors it to the Monday, exactly as the review's
+ * GET does with `?week=`. A null or blank intent clears the week's line.
+ */
+export const weeklyReviewIntentSchema = z.object({
+  week: dateStringSchema,
+  intent: z
+    .string()
+    .max(WEEKLY_REVIEW_INTENT_MAX_LENGTH, `Intent must be ${WEEKLY_REVIEW_INTENT_MAX_LENGTH} characters or less`)
+    .nullable()
+    .optional(),
+});
 
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),

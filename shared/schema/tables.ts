@@ -837,6 +837,39 @@ export const timelineAnnotations = pgTable(
   ],
 );
 
+/**
+ * The athlete's intent for a week — one line they write on the weekly review
+ * and see again at the top of the next one.
+ *
+ * One row per (user, week), keyed on the local Monday the review itself is
+ * keyed on, so the upsert has a natural conflict target and a week can never
+ * hold two competing intents. Deliberately NOT scored against what actually
+ * happened: the value is the recall, and grading an athlete against their own
+ * aspiration is how a ritual becomes a chore.
+ */
+export const weeklyReviews = pgTable(
+  "weekly_reviews",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Monday of the week this intent belongs to, in the athlete's local calendar. */
+    weekStart: date("week_start").notNull(),
+    intent: text("intent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // The unique index is the only one needed: it enforces one intent per week
+  // AND serves every read, since both the upsert and the review's two lookups
+  // (this week, the week before) query on exactly this (user, week) prefix.
+  (table) => [uniqueIndex("uq_weekly_reviews_user_week").on(table.userId, table.weekStart)],
+);
+
+export type WeeklyReviewRow = typeof weeklyReviews.$inferSelect;
+
 // Custom exercises saved by users for AI recognition
 export const customExercises = pgTable(
   "custom_exercises",
