@@ -1,13 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Dumbbell, TrendingUp } from "lucide-react";
-import { useMemo,useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 
 import { ExerciseProgressionCharts } from "@/components/analytics/ExerciseProgressionCharts";
 import { type ExerciseAnalyticDay } from "@/components/analytics/MiniBarChart";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription,CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { api } from "@/lib/api";
 import { getExerciseLabel } from "@/lib/exerciseUtils";
@@ -26,7 +33,7 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const dLabel = distanceUnit === "km" ? "m" : "ft";
 
-  const { data: rawPRs } = useQuery<Record<string, RawPREntry>>({
+  const { data: rawPRs, isLoading: prsLoading } = useQuery<Record<string, RawPREntry>>({
     queryKey: ["/api/v1/personal-records", dateParams],
     queryFn: () => api.analytics.getPersonalRecords(dateParams),
     // ⚡ Perf: kill rapid tab-toggle refetches but auto-heal after 5 min in
@@ -46,9 +53,14 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     }));
   }, [rawPRs]);
 
-  const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<Record<string, ExerciseAnalyticDay[]>>({
+  const { data: allAnalytics, isLoading: analyticsLoading } = useQuery<
+    Record<string, ExerciseAnalyticDay[]>
+  >({
     queryKey: ["/api/v1/exercise-analytics", dateParams],
-    queryFn: () => api.analytics.getExerciseAnalytics(dateParams) as Promise<Record<string, ExerciseAnalyticDay[]>>,
+    queryFn: () =>
+      api.analytics.getExerciseAnalytics(dateParams) as Promise<
+        Record<string, ExerciseAnalyticDay[]>
+      >,
     // ⚡ Perf: see note above on personal-records query.
     staleTime: 5 * 60 * 1000,
   });
@@ -65,11 +77,16 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {availableExercises.length === 0 ? (
+        {prsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <LoadingSpinner iconClassName="h-6 w-6" />
+          </div>
+        ) : availableExercises.length === 0 ? (
           <div className="text-center py-8 space-y-3" data-testid="text-no-progression">
             <Activity className="h-10 w-10 mx-auto text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">
-              Your exercise progression lines appear here once you&apos;ve logged a few structured workouts — weights, reps, and times across sessions.
+              Your exercise progression lines appear here once you&apos;ve logged a few structured
+              workouts — weights, reps, and times across sessions.
             </p>
             <Button variant="outline" asChild>
               <Link href="/log" data-testid="button-log-workout-from-progression">
@@ -79,30 +96,33 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
             </Button>
           </div>
         ) : (
-        <>
-        <div className="mb-6">
-          <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
-            <SelectTrigger data-testid="select-exercise-progression" aria-label="Select an exercise to view progression">
-              <SelectValue placeholder="Select an exercise..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableExercises.map((e) => (
-                <SelectItem key={e.value} value={e.value}>
-                  {e.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          <>
+            <div className="mb-6">
+              <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
+                <SelectTrigger
+                  data-testid="select-exercise-progression"
+                  aria-label="Select an exercise to view progression"
+                >
+                  <SelectValue placeholder="Select an exercise..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableExercises.map((e) => (
+                    <SelectItem key={e.value} value={e.value}>
+                      {e.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <ExerciseProgressionCharts
-          selectedExercise={selectedExercise}
-          allAnalytics={allAnalytics}
-          analyticsLoading={analyticsLoading}
-          weightLabel={weightLabel}
-          dLabel={dLabel}
-        />
-        </>
+            <ExerciseProgressionCharts
+              selectedExercise={selectedExercise}
+              allAnalytics={allAnalytics}
+              analyticsLoading={analyticsLoading}
+              weightLabel={weightLabel}
+              dLabel={dLabel}
+            />
+          </>
         )}
       </CardContent>
     </Card>
