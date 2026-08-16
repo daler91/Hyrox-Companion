@@ -537,7 +537,7 @@ export function buildSystemPrompt(
     // An athlete who has just told the plan wizard "recovering from knee
     // surgery" and gone straight to the chat is the single most likely person
     // to have declared something, and this early return is the path they take.
-    const noDataConstraints = trainingContext ? formatAthleteConstraints(trainingContext) : "";
+    const noDataConstraints = formatAthleteConstraints(trainingContext);
     if (noDataConstraints) prompt += `\n\n${noDataConstraints}`;
     const materialsSection =
       retrievedChunks && retrievedChunks.length > 0

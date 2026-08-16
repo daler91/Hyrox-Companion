@@ -44,7 +44,14 @@ function currentAbsenceGuidance(current: CoachAbsence[]): string {
     : `Plan around this. Sessions inside this range are not the athlete failing to train.`;
 }
 
-export function formatAthleteConstraints(context: TrainingContext): string {
+/**
+ * Tolerates a missing context for the same reason it tolerates an empty one:
+ * "this athlete has declared nothing to render" and "there is no athlete
+ * context at all" both mean no block, and making the caller branch on that
+ * distinction bought nothing.
+ */
+export function formatAthleteConstraints(context?: TrainingContext): string {
+  if (!context) return "";
   const lines: string[] = [];
 
   const constraints = context.trainingConstraints?.trim();
