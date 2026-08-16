@@ -2,11 +2,12 @@ import {
   type ExerciseLoadTag,
   exerciseLoadTags,
   planDays,
+  timelineAnnotations,
   trainingPlans,
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, desc, eq, gte, lte, type SQL,sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, notExists,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
@@ -119,6 +120,13 @@ export class AnalyticsStorage {
     // `id` rides along so the missed-workout push can deep link straight to
     // the session (`/?workout=<planDayId>`) instead of dumping the athlete on
     // the timeline root.
+    //
+    // Nothing is sent for a date the athlete has declared an absence over. The
+    // sweep already leaves those days `planned`, but the check is repeated here
+    // rather than inferred from that: an annotation written *after* the sweep
+    // ran finds the day already stored as `missed`, and "you missed yesterday's
+    // session" is the worst possible thing to email someone on day two of an
+    // injury they have already logged.
     const days = await db
       .select({
         id: planDays.id,
@@ -134,6 +142,18 @@ export class AnalyticsStorage {
           eq(trainingPlans.userId, userId),
           eq(planDays.scheduledDate, date),
           eq(planDays.status, "missed"),
+          notExists(
+            db
+              .select({ one: sql`1` })
+              .from(timelineAnnotations)
+              .where(
+                and(
+                  eq(timelineAnnotations.userId, userId),
+                  lte(timelineAnnotations.startDate, date),
+                  gte(timelineAnnotations.endDate, date),
+                ),
+              ),
+          ),
         ),
       );
     return days.map((d) => ({

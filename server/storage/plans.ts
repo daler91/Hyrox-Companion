@@ -4,13 +4,14 @@ import {
   type InsertTrainingPlan,
   type PlanDay,
   planDays,
+  timelineAnnotations,
   type TrainingPlan,
   trainingPlans,
   type TrainingPlanWithDays,
   type UpdatePlanDay,
   users,
 } from "@shared/schema";
-import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, lte, notExists, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
@@ -428,6 +429,13 @@ export class PlanStorage {
    * is computed in JS rather than with `AT TIME ZONE u.user_timezone`: that form
    * raises `invalid value for parameter TimeZone` on a single unrecognised name
    * and would abort the sweep for every other athlete with it.
+   *
+   * Days inside a declared absence are left alone. An athlete who has written
+   * "injured, 12–19 Aug" on their timeline has already accounted for that week;
+   * writing `missed` across it is the app telling them they failed at something
+   * they told us about first. Because those days keep their `planned` status,
+   * the decision stays reversible — delete the annotation and the next sweep
+   * marks them missed as it always would have.
    */
   async markMissedPlanDays(): Promise<number> {
     const zones = await db.selectDistinct({ tz: users.userTimezone }).from(users);
@@ -449,6 +457,23 @@ export class PlanStorage {
             eq(planDays.status, "planned"),
             lt(planDays.scheduledDate, today),
             inArray(planDays.planId, zonePlanIds),
+            notExists(
+              // Correlated on the plan's owner rather than on plan_days
+              // directly — plan_days carries no user_id, so the annotation has
+              // to be reached through training_plans. Uses
+              // idx_timeline_annotations_user_range.
+              db
+                .select({ one: sql`1` })
+                .from(timelineAnnotations)
+                .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
+                .where(
+                  and(
+                    eq(timelineAnnotations.userId, trainingPlans.userId),
+                    lte(timelineAnnotations.startDate, planDays.scheduledDate),
+                    gte(timelineAnnotations.endDate, planDays.scheduledDate),
+                  ),
+                ),
+            ),
           ),
         )
         .returning({ id: planDays.id });

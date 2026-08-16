@@ -106,6 +106,16 @@ export type TimelineEntry = {
   date: string;
   type: "planned" | "logged";
   status: WorkoutStatus;
+  /**
+   * This planned day sits inside an absence the athlete declared on their
+   * timeline (injury, illness, travel, rest). Derived per request from
+   * `timeline_annotations`, never stored — deleting the annotation drops it.
+   *
+   * `status` is already held at `planned` for these days rather than `missed`,
+   * so this exists to let the card say *why* a past date is not red instead of
+   * showing a bare "Planned" on a day that has been and gone.
+   */
+  excused?: boolean;
   focus: string;
   mainWorkout: string;
   accessory: string | null;

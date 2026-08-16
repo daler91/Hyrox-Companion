@@ -542,7 +542,7 @@ function TimelineCardHeader({
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
-      {getStatusBadge(entry.status, entry.focus)}
+      {getStatusBadge(entry.status, entry.focus, entry.excused)}
       {isPending && (
         <Badge
           variant="outline"

@@ -206,7 +206,7 @@ export function ReviewSurface({
       }}
       title={
         <span className="flex flex-wrap items-center gap-2">
-          {getStatusBadge(entry.status)}
+          {getStatusBadge(entry.status, undefined, entry.excused)}
           <EditableWorkoutTitle
             title={displayEntry.focus}
             fallbackTitle="Workout"

@@ -1,8 +1,10 @@
+import { type AbsenceRange, isDateExcused } from "@shared/absence";
 import {
   type ExerciseSet,
   exerciseSets,
   type PlanDay,
   planDays,
+  timelineAnnotations,
   type TimelineEntry,
   trainingPlans,
   users,
@@ -40,16 +42,54 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   };
 }
 
+/**
+ * `isExcused` — the day falls inside an absence the athlete declared. It
+ * outranks both the stored `missed` and the past-date comparison, and it has to
+ * outrank the stored one: an annotation is almost always written *after* the
+ * fact, by which point the nightly sweep has already stamped `missed` across
+ * the week. Suppressing only the fresh case would fix nothing for the athlete
+ * who logs their injury on the way back from the physio.
+ *
+ * This is a read-time derivation, exactly like the race-day override — the
+ * plan_day is never rewritten, so `missed → planned` stays forbidden as a WRITE
+ * and deleting the annotation restores the old reading immediately.
+ *
+ * `completed` and `skipped` still win. If the athlete trained anyway that is
+ * real, and an explicit skip is a decision they made themselves.
+ */
 function calculatePlanDayStatus(
   dayStatus: string | null,
   scheduledDate: string,
   today: string,
+  isExcused: boolean,
 ): WorkoutStatus {
   if (dayStatus === "skipped") return "skipped";
   if (dayStatus === "completed") return "completed";
+  if (isExcused) return "planned";
   if (dayStatus === "missed") return "missed";
   if (scheduledDate < today) return "missed";
   return "planned";
+}
+
+/**
+ * Whether the declared absence is what is holding this day out of `missed` —
+ * the only case where the card should say so.
+ *
+ * Deliberately narrower than `isExcused` itself. A day the athlete completed or
+ * explicitly skipped during an injury week keeps its own badge, because those
+ * are things they did rather than things that were forgiven; and a *future* day
+ * inside a booked travel range is simply still planned, with nothing yet to
+ * excuse.
+ */
+function isExcusedFromMissed(
+  dayStatus: string | null,
+  scheduledDate: string,
+  today: string,
+  isExcused: boolean,
+): boolean {
+  if (!isExcused) return false;
+  if (dayStatus === "skipped" || dayStatus === "completed") return false;
+  return dayStatus === "missed" || scheduledDate < today;
 }
 
 function createLinkedWorkoutEntry(
@@ -88,13 +128,19 @@ function createPlannedDayEntry(
   row: { planName: string; planId: string },
   today: string,
   override: RaceDayOverride | null,
+  isExcused: boolean,
 ): TimelineEntry {
-  const status = calculatePlanDayStatus(day.status, scheduledDate, today);
+  const status = calculatePlanDayStatus(day.status, scheduledDate, today, isExcused);
   return {
     id: `plan-${day.id}`,
     date: scheduledDate,
     type: "planned",
     status: status,
+    // Carried separately from `status` so the card can say *why* this past day
+    // is not red, instead of showing a bare "Planned" on a date that has been
+    // and gone. Omitted rather than sent false so the field stays absent from
+    // every ordinary day's payload.
+    excused: isExcusedFromMissed(day.status, scheduledDate, today, isExcused) || undefined,
     focus: override ? override.focus : day.focus,
     mainWorkout: override ? override.mainWorkout : day.mainWorkout,
     accessory: override ? override.accessory : day.accessory,
@@ -378,6 +424,23 @@ export class TimelineStorage {
     return getLocalDateStrSafe(new Date(), user?.userTimezone);
   }
 
+  /**
+   * The athlete's declared absences — just the two date columns, since that is
+   * all the status derivation needs. Unbounded by date on purpose: an athlete
+   * accumulates a handful of these a year, so a range predicate would cost more
+   * in query planning than it saves in rows, and the timeline's own window can
+   * reach arbitrarily far back.
+   */
+  private async fetchAbsences(userId: string): Promise<AbsenceRange[]> {
+    return db
+      .select({
+        startDate: timelineAnnotations.startDate,
+        endDate: timelineAnnotations.endDate,
+      })
+      .from(timelineAnnotations)
+      .where(eq(timelineAnnotations.userId, userId));
+  }
+
   private computeSqlOverFetch(limit?: number, offset?: number): number | undefined {
     // Keep pagination pressure in SQL first; in-memory slicing only finalizes
     // the merged multi-source ordering. The 3x is correctness headroom for the
@@ -433,6 +496,7 @@ export class TimelineStorage {
     standaloneWorkouts: WorkoutLog[],
     today: string,
     planNameById: Map<string, string>,
+    absences: AbsenceRange[],
   ): { entries: TimelineEntry[]; suppressedPlanDayIds: Set<string> } {
     const entries: TimelineEntry[] = [];
     const suppressedPlanDayIds = new Set<string>();
@@ -463,6 +527,7 @@ export class TimelineStorage {
             { planName: row.planName, planId: row.planId },
             today,
             override,
+            isDateExcused(day.scheduledDate, absences),
           ),
         );
       }
@@ -490,9 +555,13 @@ export class TimelineStorage {
     // is the primary loader behind every Timeline page load and every AI
     // coach turn (buildAIContext -> getTimeline), so halving these two
     // sequential round-trips into one is a real win on a very hot path.
-    const [today, { scheduledDays, planNameById }] = await Promise.all([
+    //
+    // fetchAbsences joins the same wave for the same reason: it reads a third
+    // unrelated table and is not consumed until buildTimelineEntries either.
+    const [today, { scheduledDays, planNameById }, absences] = await Promise.all([
       this.resolveUserToday(userId),
       this.fetchScheduledDays(userId, planId, sqlOverFetch),
+      this.fetchAbsences(userId),
     ]);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
 
@@ -514,6 +583,7 @@ export class TimelineStorage {
       standaloneWorkouts,
       today,
       planNameById,
+      absences,
     );
     // Window BEFORE hydrating: attachExerciseSets fans out four batch reads keyed
     // by entry ids, so hydrating the full over-fetched merge (offset + 3x limit
