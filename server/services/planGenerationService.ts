@@ -18,6 +18,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
+import { sanitizeUserInput } from "../utils/sanitize";
 import { calculateTrainingLoad, toIsoDate } from "./trainingLoadService";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
@@ -125,7 +126,9 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
   }
 
   if (input.injuries) {
-    lines.push(`- Injuries/Limitations: ${input.injuries} (avoid exercises that aggravate these)`);
+    // Sanitised like every other free-text interpolation in the prompt builders
+    // (see server/prompts/coachingContext.ts) — this one was the exception.
+    lines.push(`- Injuries/Limitations: ${sanitizeUserInput(input.injuries)} (avoid exercises that aggravate these)`);
   }
 
   if (input.restDays && input.restDays.length > 0) {

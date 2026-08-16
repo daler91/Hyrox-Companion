@@ -18,6 +18,7 @@ export function mockEnabledUser(storage: StorageMock) {
     distanceUnit: "km",
     userTimezone: "UTC",
     weeklyGoal: null,
+  trainingConstraints: null,
     mealSchedule: null,
     emailNotifications: null,
     emailWeeklySummary: null,

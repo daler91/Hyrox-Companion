@@ -60,6 +60,9 @@ export const updateUserPreferencesSchema = z.object({
   activityLevel: z.enum(["sedentary", "light", "moderate", "active", "very_active"]).nullable().optional(),
   weightGoalDirection: z.enum(["lose", "maintain", "gain"]).nullable().optional(),
   weightGoalRateKgPerWeek: z.number().nonnegative().max(2).nullable().optional(),
+  // Durable injuries/limitations, seeded from the plan generator's textarea.
+  // Same 500-char bound as generatePlanInputSchema.injuries, which feeds it.
+  trainingConstraints: z.string().max(500).nullable().optional(),
   mafAge: z.number().int().min(16).max(99).nullable().optional(),
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),

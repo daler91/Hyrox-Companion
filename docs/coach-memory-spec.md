@@ -1,6 +1,6 @@
 # Coach memory — the durable athlete card
 
-**Status.** Scope only, nothing built. Register entry: recommendation #8 in
+**Status.** **Path A shipped** (§1). Paths B and C are scope. Register entry: recommendation #8 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before costing this** — two
 load-bearing claims in that register entry are wrong, and they were mine.
 
@@ -71,7 +71,24 @@ with no new capture surface.
 **Path C — the full athlete card (M–L).** New `athlete_facts` table, Settings CRUD, four render
 sites, review dates, safety-corpus split. §2 onward specs this.
 
-**Recommendation: A, then B, then C.** Path C's own centre of gravity is the write path — an
+**Path A is now built.** `users.training_constraints` (migration `0086`), written on every
+plan generation from the wizard's textarea, prefilled back into it, editable and clearable in
+Settings → Injuries & Limitations, and the interpolation is sanitised. Two semantics worth
+knowing:
+
+- **Presence is authoritative.** The client now always sends `injuries`, even empty, and an
+  empty string writes `null`. Omitting the field when blank would make "I cleared the box"
+  indistinguishable from "this client never sends one", so a resolved injury could never be
+  forgotten — the exact `maf_injury_illness_medication` failure in §2.
+- **The remembered value is a prefill, not a fallback.** The server never substitutes the
+  stored constraints into a generation request that omitted them. Reviving text the athlete
+  deleted is the staleness bug, not a convenience.
+
+What Path A deliberately does **not** do: reach chat, auto-coach, or any prompt other than plan
+generation. That is Paths B and C, and it is the honest boundary — this is one durable string
+in the one prompt that already asked for it.
+
+**Recommendation for what remains: B, then C.** Path C's own centre of gravity is the write path — an
 empty facts table makes the whole feature worthless — and A is the cheapest honest measurement
 of whether that table will ever be non-empty. B outranks C in the register's own scoring. If C
 ships first and nobody writes a fact, we will have built a Settings list nobody visits to feed

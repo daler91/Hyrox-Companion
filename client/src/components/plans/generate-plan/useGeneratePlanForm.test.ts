@@ -83,7 +83,12 @@ describe("generate plan form helpers", () => {
     expect(validation.dateError).toBeNull();
   });
 
-  it("omits optional fields when they are blank", () => {
+  it("omits blank optional fields, but always sends injuries", () => {
+    // injuries is deliberately NOT omitted when empty: the server treats its
+    // presence as authoritative and an empty string clears the athlete's
+    // remembered constraints. Omitting it would make "I cleared the box"
+    // indistinguishable from "this client never sends the field", so a resolved
+    // injury could never be forgotten.
     expect(
       buildGeneratePlanInput({
         goal: "Race prep",
@@ -103,7 +108,27 @@ describe("generate plan form helpers", () => {
       startDate: VALID_START,
       endDate: VALID_END,
       endDateIsRaceDate: true,
+      injuries: "",
     });
+  });
+
+  it("prefills the injuries box from the athlete's remembered constraints", () => {
+    const { result } = renderHook(() =>
+      useGeneratePlanForm({ initialConstraints: "Bad left knee" }),
+    );
+
+    expect(result.current.injuries).toBe("Bad left knee");
+  });
+
+  it("re-seeds the remembered constraints on reset rather than blanking them", () => {
+    const { result } = renderHook(() =>
+      useGeneratePlanForm({ initialConstraints: "Bad left knee" }),
+    );
+
+    act(() => result.current.setInjuries("Something else"));
+    act(() => result.current.resetForm());
+
+    expect(result.current.injuries).toBe("Bad left knee");
   });
 
   it("uses and resets onboarding initial values", () => {
