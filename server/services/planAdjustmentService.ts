@@ -556,11 +556,26 @@ async function revalidateProposalChanges(
 }> {
   const liveDays = new Map<string, LivePlanDay>();
   const staleChanges: Array<{ planDayId: string; dayLabel: string }> = [];
+
+  // ⚡ Bolt Performance Optimization:
+  // Replaced M sequential N+1 Promise.all query pairs inside the loop with two
+  // concurrent batched queries outside the loop.
+  // This reduces the database round trips to a constant 2 instead of 2 * M.
+  const dayIds = [...new Set(changes.map((c) => c.planDayId))];
+  const [days, setsByDay] = await Promise.all([
+    storage.plans.getPlanDaysByIds(dayIds, userId),
+    storage.workouts.getExerciseSetsByPlanDays(dayIds, userId),
+  ]);
+
+  const daysMap = new Map(days.map((d) => [d.id, d]));
+
   for (const change of changes) {
-    const [day, sets] = await Promise.all([
-      storage.plans.getPlanDay(change.planDayId, userId),
-      storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
-    ]);
+    const day = daysMap.get(change.planDayId);
+    // getPlanDaysByIds already applies the ownership join, so if the day is missing
+    // here, it either doesn't exist or doesn't belong to the user. We do not use the absence
+    // in setsByDay to infer ownership.
+    const sets = day ? setsByDay.get(change.planDayId) ?? [] : null;
+
     const live: LivePlanDay | null =
       day && sets !== null && day.status === "planned" ? { day, sets } : null;
     if (!live || fingerprintLiveDay(live) !== change.baseline.fingerprint) {

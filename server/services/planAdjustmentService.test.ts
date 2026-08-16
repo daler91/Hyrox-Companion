@@ -331,8 +331,8 @@ describe("applyPlanAdjustmentProposal", () => {
     const day = planDayRow({ mainWorkout: "SOMETHING EDITED MEANWHILE" });
     const change = enrichedChange(planDayRow()); // baseline fingerprint from the ORIGINAL day
     vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(day);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([[day.id, []]]));
 
     const result = await applyPlanAdjustmentProposal("user-1", "prop-1");
 
@@ -358,10 +358,11 @@ describe("applyPlanAdjustmentProposal", () => {
       }),
     ];
     vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow(changes));
-    vi.mocked(storage.plans.getPlanDay).mockImplementation(async (dayId: string) =>
-      (dayId === "day-1" ? day1 : day2),
-    );
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day1, day2]);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([
+      [day1.id, []],
+      [day2.id, []],
+    ]));
     vi.mocked(storage.users.getUser).mockResolvedValue({
       weightUnit: "kg",
       distanceUnit: "km",
@@ -404,8 +405,8 @@ describe("applyPlanAdjustmentProposal", () => {
       baseline: { ...enrichedChange(day).baseline, fingerprint: fingerprintFor(day, sets) },
     });
     vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(day);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue(sets as never);
+    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([[day.id, sets as never]]));
     vi.mocked(storage.users.getUser).mockResolvedValue({
       weightUnit: "kg",
       distanceUnit: "km",
@@ -435,8 +436,8 @@ describe("applyPlanAdjustmentProposal", () => {
       baseline: { ...enrichedChange(day).baseline, fingerprint: fingerprintFor(day, sets) },
     });
     vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
-    vi.mocked(storage.plans.getPlanDay).mockResolvedValue(day);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue(sets as never);
+    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([[day.id, sets as never]]));
     vi.mocked(storage.users.getUser).mockResolvedValue({
       weightUnit: "kg",
       distanceUnit: "km",
