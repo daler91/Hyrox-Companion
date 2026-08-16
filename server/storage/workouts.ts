@@ -800,6 +800,31 @@ export class WorkoutStorage {
       .orderBy(asc(exerciseSets.sortOrder));
   }
 
+  // ⚡ Bolt Performance Optimization: batched sibling of getExerciseSetsByPlanDay(),
+  // for callers enriching several plan days in one pass (e.g. an AI plan-adjustment
+  // proposal touching a handful of upcoming sessions). One inner join across
+  // exercise_sets -> plan_days -> training_plans (all on indexed FK columns)
+  // replaces one ownsPlanDay() + one select per day, dropping 2N sequential
+  // round trips to 1. Keyed by planDayId so callers can look up each day's sets
+  // in O(1) instead of filtering the combined result per day.
+  async getExerciseSetsByPlanDays(planDayIds: string[], userId: string): Promise<Map<string, ExerciseSet[]>> {
+    const byDay = new Map<string, ExerciseSet[]>();
+    if (planDayIds.length === 0) return byDay;
+    const rows = await db
+      .select({ set: exerciseSets })
+      .from(exerciseSets)
+      .innerJoin(planDays, eq(exerciseSets.planDayId, planDays.id))
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(and(inArray(exerciseSets.planDayId, planDayIds), eq(trainingPlans.userId, userId)))
+      .orderBy(asc(exerciseSets.sortOrder));
+    for (const { set } of rows) {
+      const existing = byDay.get(set.planDayId as string);
+      if (existing) existing.push(set);
+      else byDay.set(set.planDayId as string, [set]);
+    }
+    return byDay;
+  }
+
   async addExerciseSetToPlanDay(
     planDayId: string,
     set: NormalizedSetCreateInput,

@@ -212,6 +212,21 @@ export class PlanStorage {
     return planDay;
   }
 
+  // ⚡ Bolt Performance Optimization: batched sibling of getPlanDay(), for
+  // callers that resolve several plan days at once (e.g. enrichProposedChanges
+  // enriching every day an AI plan-adjustment proposal touches). A single
+  // inner join against training_plans expresses ownership directly instead of
+  // one getPlanDay() round trip per id, dropping N sequential reads to 1.
+  async getPlanDaysByIds(dayIds: string[], userId: string): Promise<PlanDay[]> {
+    if (dayIds.length === 0) return [];
+    const rows = await db
+      .select({ day: planDays })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(and(inArray(planDays.id, dayIds), eq(trainingPlans.userId, userId)));
+    return rows.map((r) => r.day);
+  }
+
   async deletePlanDay(dayId: string, userId: string): Promise<boolean> {
     const existingDay = await this.getPlanDay(dayId, userId);
     if (!existingDay) return false;
