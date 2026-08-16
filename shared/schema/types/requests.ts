@@ -1,4 +1,5 @@
-﻿import { chatMessages } from "../tables";
+﻿import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "../../weeklyReview";
+import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
@@ -24,7 +25,7 @@ export const weeklyReviewIntentSchema = z.object({
   week: dateStringSchema,
   intent: z
     .string()
-    .max(280, "Intent must be 280 characters or less")
+    .max(WEEKLY_REVIEW_INTENT_MAX_LENGTH, `Intent must be ${WEEKLY_REVIEW_INTENT_MAX_LENGTH} characters or less`)
     .nullable()
     .optional(),
 });

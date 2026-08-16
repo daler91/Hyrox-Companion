@@ -1,4 +1,7 @@
-import { WEEKLY_REVIEW_INTENT_MAX_LENGTH, type WeeklyReview } from "@shared/schema";
+import type { WeeklyReview } from "@shared/schema";
+// Value import, so it must come from a leaf module rather than the schema
+// barrel — the barrel would pull drizzle into the client bundle.
+import { WEEKLY_REVIEW_INTENT_MAX_LENGTH } from "@shared/weeklyReview";
 import { Quote } from "lucide-react";
 import { useState } from "react";
 

@@ -408,6 +408,3 @@ export interface WeeklyReview {
    */
   previousIntent: string | null;
 }
-
-/** Longest intent accepted, matching the textarea's counter. */
-export const WEEKLY_REVIEW_INTENT_MAX_LENGTH = 280;
