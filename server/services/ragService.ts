@@ -284,6 +284,9 @@ async function listPinnedPrincipleChunks(userId: string, limit: number) {
     const materialIds = await storage.coaching.listPrincipleMaterialIds(userId);
     return await storage.coaching.listChunksForMaterials(userId, materialIds, limit);
   } catch (err) {
+    // userId is an opaque uuid and err is a DB/connection failure from the
+    // two-step read; neither carries the athlete's material content.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err, userId }, "[rag] Failed to load pinned principle chunks — falling back to search only");
     return [];
   }
@@ -330,6 +333,9 @@ export async function retrieveRelevantChunks(
 
   const queryEmbedding = await generateEmbedding(query);
   trackEmbeddingUsage(userId, 1);
+  // An opaque uuid and three counts. The query text and the retrieved chunk
+  // contents are deliberately never logged.
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ userId, queryDim: queryEmbedding.length, topK, pinned: pinned.length }, "[rag] Searching chunks by embedding");
   // Over-fetch by the pinned count so dedupe cannot leave us short of topK.
   const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
