@@ -198,13 +198,16 @@ export async function buildWeeklyReview(
   const { week, isCurrentWeek } = resolveReviewWeek(now, tz, options.week);
   const prior = getWeekRangeForDate(addDaysLocal(week.weekStart, -7));
 
-  const [logs, planDays, priorLogs, priorPlanDays, prSets, annotations] = await Promise.all([
+  const [logs, planDays, priorLogs, priorPlanDays, prSets, annotations, intents] = await Promise.all([
     storage.analytics.getWorkoutLogsByDateRange(userId, week.weekStart, week.weekEnd),
     storage.analytics.getPlanDaysByDateRange(userId, week.weekStart, week.weekEnd),
     storage.analytics.getWorkoutLogsByDateRange(userId, prior.weekStart, prior.weekEnd),
     storage.analytics.getPlanDaysByDateRange(userId, prior.weekStart, prior.weekEnd),
     storage.analytics.getExerciseSetsForPersonalRecords(userId),
     storage.timelineAnnotations.list(userId),
+    // Both weeks in one round trip — this week's intent to edit, last week's
+    // to show back.
+    storage.weeklyReviews.getIntents(userId, [week.weekStart, prior.weekStart]),
   ]);
 
   const current = buildCounts(logs, planDays);
@@ -228,6 +231,8 @@ export async function buildWeeklyReview(
       week.weekEnd,
     ),
     annotations: buildAnnotations(annotations, week),
+    intent: intents.get(week.weekStart) ?? null,
+    previousIntent: intents.get(prior.weekStart) ?? null,
   };
 }
 

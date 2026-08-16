@@ -13,6 +13,7 @@ import { PushStorage } from "./push";
 import { TimelineStorage } from "./timeline";
 import { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import { UserStorage } from "./users";
+import { WeeklyReviewsStorage } from "./weeklyReviews";
 import { WorkoutStorage } from "./workouts";
 
 export type { IStorage } from "./IStorage";
@@ -35,4 +36,5 @@ export const storage: IStorage = {
   mafTests: new MafTestStorage(),
   consent: new ConsentStorage(),
   nutrition: new NutritionStorage(),
+  weeklyReviews: new WeeklyReviewsStorage(),
 };

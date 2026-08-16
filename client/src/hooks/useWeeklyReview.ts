@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { addDays, mondayOf, todayLocalDateStr } from "@/lib/weekDates";
 
@@ -28,5 +29,20 @@ export function useWeeklyReview(week?: string) {
     staleTime: isCurrentWeek ? 60_000 : Infinity,
     gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: isCurrentWeek,
+  });
+}
+
+/**
+ * Save (or clear) the intent for `weekStart`.
+ *
+ * Invalidates that week's review so the saved line comes back from the server
+ * rather than being assumed locally — and so next week's review, which reads
+ * this same row as `previousIntent`, is not left holding a stale copy.
+ */
+export function useSetWeeklyReviewIntent(weekStart: string) {
+  return useApiMutation<{ weekStart: string; intent: string | null }, Error, string | null>({
+    mutationFn: (intent) => api.analytics.setWeeklyReviewIntent(weekStart, intent),
+    invalidateQueries: [QUERY_KEYS.weeklyReview(weekStart)],
+    errorToast: "Couldn't save your note for next week.",
   });
 }

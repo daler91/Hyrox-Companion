@@ -1,22 +1,25 @@
 import crypto from "node:crypto";
 
-import { dateStringSchema, type RacePredictionResponse, type WorkoutLog } from "@shared/schema";
+import { dateStringSchema, type RacePredictionResponse, weeklyReviewIntentSchema, type WorkoutLog } from "@shared/schema";
 import { sql } from "drizzle-orm";
-import { type NextFunction, type Request as ExpressRequest, type Response,Router } from "express";
+import { type NextFunction, type Request as ExpressRequest, type Request, type Response,Router } from "express";
+import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { db } from "../db";
 import { env } from "../env";
 import { reqLogger } from "../logger";
-import { asyncHandler, rateLimiter } from "../routeUtils";
+import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { addCalendarDays, assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
+import { getWeekRangeForDate } from "../services/weeklyProgress";
 import { buildWeeklyReview, isWeekParamValid } from "../services/weeklyReviewService";
 import { storage } from "../storage";
 import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { getUserId } from "../types";
+import { protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
 
@@ -108,6 +111,29 @@ router.get("/api/v1/weekly-review", isAuthenticated, rateLimiter("analytics", 20
 
     res.json(await buildWeeklyReview(storage, userId, { week }));
   }));
+
+// Write (or clear) the athlete's intent for a week. Keyed on the same week the
+// review is keyed on, so the row the GET reads back is the row this wrote.
+// POST rather than PUT despite being an idempotent upsert: the repo has no PUT
+// routes and the route-builder/compliance test only knows post/patch/delete.
+protectedPost(
+  router,
+  "/api/v1/weekly-review/intent",
+  { limiter: rateLimiter("analytics", 20), middleware: [validateBody(weeklyReviewIntentSchema)] },
+  async (req: Request<Record<string, never>, unknown, z.infer<typeof weeklyReviewIntentSchema>>, res: Response) => {
+    const userId = getUserId(req);
+    const { week, intent } = req.body;
+
+    // Anchor to the Monday rather than trusting the client to send one: the
+    // unique index is on (user_id, week_start), so a mid-week date would open
+    // a second row for a week that must only ever hold one intent.
+    const { weekStart } = getWeekRangeForDate(week);
+    const trimmed = intent?.trim() ?? "";
+    const row = await storage.weeklyReviews.setIntent(userId, weekStart, trimmed === "" ? null : trimmed);
+
+    res.json({ weekStart: row.weekStart, intent: row.intent });
+  },
+);
 
 router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);

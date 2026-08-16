@@ -15,6 +15,20 @@ export const dateStringSchema = z
   .max(10)
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a valid date in YYYY-MM-DD format");
 
+/**
+ * Body for `POST /api/v1/weekly-review/intent`. `week` is any date inside the
+ * target week — the handler anchors it to the Monday, exactly as the review's
+ * GET does with `?week=`. A null or blank intent clears the week's line.
+ */
+export const weeklyReviewIntentSchema = z.object({
+  week: dateStringSchema,
+  intent: z
+    .string()
+    .max(280, "Intent must be 280 characters or less")
+    .nullable()
+    .optional(),
+});
+
 export const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z

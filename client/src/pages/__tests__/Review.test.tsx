@@ -8,6 +8,7 @@ import Review from "../Review";
 
 const mocks = vi.hoisted(() => ({
   getWeeklyReview: vi.fn(),
+  setWeeklyReviewIntent: vi.fn(),
   setWeek: vi.fn(),
   week: "2026-06-08",
 }));
@@ -16,7 +17,14 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    api: { ...actual.api, analytics: { ...actual.api.analytics, getWeeklyReview: mocks.getWeeklyReview } },
+    api: {
+      ...actual.api,
+      analytics: {
+        ...actual.api.analytics,
+        getWeeklyReview: mocks.getWeeklyReview,
+        setWeeklyReviewIntent: mocks.setWeeklyReviewIntent,
+      },
+    },
   };
 });
 
@@ -45,6 +53,8 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
     plannedDays: [],
     personalRecords: [],
     annotations: [],
+    intent: null,
+    previousIntent: null,
     ...overrides,
   };
 }
@@ -80,6 +90,7 @@ describe("Review page", () => {
     vi.clearAllMocks();
     mocks.week = "2026-06-08";
     mocks.getWeeklyReview.mockResolvedValue(review());
+    mocks.setWeeklyReviewIntent.mockResolvedValue({ weekStart: "2026-06-08", intent: "three runs" });
   });
 
   it("shows the week it renders, not the week that was requested", async () => {
@@ -227,5 +238,62 @@ describe("Review page", () => {
 
     await waitFor(() => expect(screen.getByTestId("weekly-review-error")).toBeInTheDocument());
     expect(screen.getByTestId("weekly-review-retry")).toBeInTheDocument();
+  });
+
+  describe("next week's intent", () => {
+    it("shows last week's line back, without scoring the week against it", async () => {
+      mocks.getWeeklyReview.mockResolvedValue(
+        review({ previousIntent: "get the sled work in", intent: null }),
+      );
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId("weekly-review-previous-intent")).toBeInTheDocument());
+      expect(screen.getByTestId("weekly-review-previous-intent")).toHaveTextContent("get the sled work in");
+      // Recall is the whole feature; there is no verdict on whether they did it.
+      expect(screen.queryByText(/you (did|didn't|failed)/i)).not.toBeInTheDocument();
+    });
+
+    it("omits the callback entirely when there was no previous intent", async () => {
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId("weekly-review-intent")).toBeInTheDocument());
+      expect(screen.queryByTestId("weekly-review-previous-intent")).not.toBeInTheDocument();
+    });
+
+    it("saves what the athlete types", async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId("weekly-review-intent-input")).toBeInTheDocument());
+      await user.type(screen.getByTestId("weekly-review-intent-input"), "three runs");
+      await user.click(screen.getByTestId("weekly-review-intent-save"));
+
+      expect(mocks.setWeeklyReviewIntent).toHaveBeenCalledWith("2026-06-08", "three runs");
+    });
+
+    it("keeps Save inert until the line actually changes", async () => {
+      const user = userEvent.setup();
+      mocks.getWeeklyReview.mockResolvedValue(review({ intent: "three runs" }));
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId("weekly-review-intent-save")).toBeInTheDocument());
+      expect(screen.getByTestId("weekly-review-intent-save")).toBeDisabled();
+
+      await user.type(screen.getByTestId("weekly-review-intent-input"), " and a swim");
+      expect(screen.getByTestId("weekly-review-intent-save")).toBeEnabled();
+    });
+
+    it("lets the athlete clear a saved intent", async () => {
+      const user = userEvent.setup();
+      mocks.getWeeklyReview.mockResolvedValue(review({ intent: "three runs" }));
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId("weekly-review-intent-input")).toBeInTheDocument());
+      await user.clear(screen.getByTestId("weekly-review-intent-input"));
+      // Emptying a saved line is a real edit, so Save has to stay live for it.
+      await user.click(screen.getByTestId("weekly-review-intent-save"));
+
+      expect(mocks.setWeeklyReviewIntent).toHaveBeenCalledWith("2026-06-08", null);
+    });
   });
 });

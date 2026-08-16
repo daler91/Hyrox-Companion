@@ -12,6 +12,7 @@ import type { PushStorage } from "./push";
 import type { TimelineStorage } from "./timeline";
 import type { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import type { UserStorage } from "./users";
+import type { WeeklyReviewsStorage } from "./weeklyReviews";
 import type { WorkoutStorage } from "./workouts";
 
 /**
@@ -42,4 +43,5 @@ export interface IStorage {
   mafTests: MafTestStorage;
   consent: ConsentStorage;
   nutrition: NutritionStorage;
+  weeklyReviews: WeeklyReviewsStorage;
 }

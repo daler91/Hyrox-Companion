@@ -1,6 +1,6 @@
 # In-app Weekly Review — scope
 
-**Status.** PR1–PR4 of 5 landed (§7); only the intent capture (§5) is left. Register entry: recommendation #10 in
+**Status.** All five PRs landed (§7). The feature is complete as scoped. Register entry: recommendation #10 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
 
 **One-line pitch.** A Sunday-night page: what you planned, what you did, what changed, and
@@ -94,8 +94,8 @@ untouched and still serves the email.
 already holds from `/api/v1/training-overview` and already renders in `StationRadar.tsx`. It
 is deliberately absent from the weekly-review payload — see §3.
 
-**Next week's intent. — new.** One free-text line, plus the previous week's intent shown
-back. This is the half that makes it a ritual rather than a report. See §5.
+**Next week's intent.** One free-text line, plus the previous week's intent shown back.
+This is the half that makes it a ritual rather than a report. See §5.
 
 **Out of scope for v1.** Nutrition/fuelling for the week (needs its own weekly aggregation
 and doubles the surface), AI narrative summary, image export / share card, multi-week
@@ -189,17 +189,35 @@ RPE delta is suppressed when either week has no RPE.
 
 ---
 
-## 5. Intent capture (v1.1, ship close behind)
+## 5. Intent capture — shipped in PR5
 
-**Table.** `weekly_reviews`: `userId` FK cascade, `weekStart` date, `intent` text
-(length-capped), `viewedAt`, `createdAt`, unique on `(userId, weekStart)`. Shaped like
-`maf_test_results` (`tables.ts:1097`) — the in-repo precedent for a typed per-user
-result row keyed to a date.
+**Table.** `weekly_reviews`: `userId` FK cascade, `weekStart` date, `intent` text, timestamps,
+unique on `(userId, weekStart)` (migration `0085_military_red_shift.sql`). That unique index
+is the table's only index — it enforces one intent per week _and_ serves every read, since the
+upsert and both review lookups all query on exactly that prefix. `viewedAt` from the draft was
+dropped: nothing was going to read it.
+
+**Write path.** `POST /api/v1/weekly-review/intent` with `{ week, intent }`. POST rather than
+PUT despite being an idempotent upsert — the repo has no PUT routes and the route
+builder/compliance test only know post/patch/delete. The handler anchors `week` to its Monday
+exactly as the GET does, because the unique index is on the Monday and a mid-week date taken
+at face value would open a second row for a week that must hold one. Storage uses
+`onConflictDoUpdate` on that index, so two tabs saving at once resolve to one row rather than
+racing into a duplicate-key error.
+
+A blank intent clears the row's text rather than deleting the row: "I wrote nothing" and "I
+cleared what I wrote" are the same thing to the athlete, and keeping the row keeps `updatedAt`
+meaningful.
 
 **Behaviour.** One line, optional, editable all week. Shown back at the top of the _next_
 review ("Last week you said: get three runs in"). No scoring, no self-assessment against it —
 the value is the recall, and grading an athlete against their own aspiration is how a ritual
 becomes a chore.
+
+**Client.** `WeeklyReviewIntent` is keyed on the week by its caller, so paging remounts it and
+re-seeds the draft from that week's saved intent — the same remount-instead-of-effect pattern
+`SkipConfirmDialog` uses for its draft skip reason. Save stays live for an emptied box, since
+clearing a saved line is a real edit.
 
 **Reaches the coach for free.** If item #8 (coach memory) ships, the current intent is a
 natural durable fact with a one-week lifetime. Do not wire it into prompts before that

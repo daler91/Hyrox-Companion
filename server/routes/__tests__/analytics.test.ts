@@ -38,6 +38,10 @@ vi.mock("../../storage", () => ({
     timelineAnnotations: {
       list: vi.fn(),
     },
+    weeklyReviews: {
+      getIntents: vi.fn(),
+      setIntent: vi.fn(),
+    },
   },
 }));
 
@@ -530,6 +534,7 @@ describe("Analytics Routes", () => {
       vi.mocked(storage.analytics.getPlanDaysByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockResolvedValue([]);
       vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
+      vi.mocked(storage.weeklyReviews.getIntents).mockResolvedValue(new Map());
       vi.mocked(calculatePersonalRecords).mockReturnValue({});
     });
 
@@ -583,6 +588,54 @@ describe("Analytics Routes", () => {
         expect(response.body.code).toBe("BAD_REQUEST");
       }
       expect(storage.analytics.getWorkoutLogsByDateRange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /api/v1/weekly-review/intent", () => {
+    beforeEach(() => {
+      vi.mocked(storage.weeklyReviews.setIntent).mockImplementation((_userId, weekStart, intent) =>
+        Promise.resolve({ id: "wr-1", userId: "test_user_id", weekStart, intent, createdAt: new Date(), updatedAt: new Date() }),
+      );
+    });
+
+    it("anchors the week to its Monday before writing", async () => {
+      // The unique index is on (user_id, week_start): a mid-week date taken at
+      // face value would open a second row for a week that must hold one.
+      const response = await request(app)
+        .post("/api/v1/weekly-review/intent")
+        .send({ week: "2026-06-18", intent: "three runs" });
+
+      expect(response.status).toBe(200);
+      expect(storage.weeklyReviews.setIntent).toHaveBeenCalledWith("test_user_id", "2026-06-15", "three runs");
+    });
+
+    it("stores a blank intent as null so the week reads as unset", async () => {
+      const response = await request(app)
+        .post("/api/v1/weekly-review/intent")
+        .send({ week: "2026-06-15", intent: "   " });
+
+      expect(response.status).toBe(200);
+      expect(storage.weeklyReviews.setIntent).toHaveBeenCalledWith("test_user_id", "2026-06-15", null);
+    });
+
+    it("trims surrounding whitespace", async () => {
+      await request(app)
+        .post("/api/v1/weekly-review/intent")
+        .send({ week: "2026-06-15", intent: "  three runs  " });
+
+      expect(storage.weeklyReviews.setIntent).toHaveBeenCalledWith("test_user_id", "2026-06-15", "three runs");
+    });
+
+    it("rejects a malformed week and an over-long intent", async () => {
+      const badWeek = await request(app).post("/api/v1/weekly-review/intent").send({ week: "nope", intent: "x" });
+      expect(badWeek.status).toBe(400);
+
+      const tooLong = await request(app)
+        .post("/api/v1/weekly-review/intent")
+        .send({ week: "2026-06-15", intent: "x".repeat(281) });
+      expect(tooLong.status).toBe(400);
+
+      expect(storage.weeklyReviews.setIntent).not.toHaveBeenCalled();
     });
   });
 });

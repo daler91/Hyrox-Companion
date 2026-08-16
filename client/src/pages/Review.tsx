@@ -1,6 +1,7 @@
 import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { WeeklyReviewHighlights } from "@/components/review/WeeklyReviewHighlights";
+import { WeeklyReviewIntent } from "@/components/review/WeeklyReviewIntent";
 import { WeeklyReviewSessions } from "@/components/review/WeeklyReviewSessions";
 import { WeeklyReviewSummary } from "@/components/review/WeeklyReviewSummary";
 import { Badge } from "@/components/ui/badge";
@@ -109,6 +110,9 @@ export default function Review() {
         <div className="space-y-6" data-testid="weekly-review">
           <WeeklyReviewSummary review={review} />
           <WeeklyReviewHighlights review={review} />
+          {/* Keyed on the week so paging re-seeds the draft from that week's
+              saved intent instead of carrying the previous one over. */}
+          <WeeklyReviewIntent key={review.weekStart} review={review} />
           {review.sessions.length === 0 && review.plannedDays.length === 0 ? (
             <EmptyWeek isCurrentWeek={review.isCurrentWeek} />
           ) : (
