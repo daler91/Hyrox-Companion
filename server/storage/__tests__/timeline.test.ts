@@ -1,4 +1,4 @@
-import { workoutLogs } from "@shared/schema";
+import { timelineAnnotations,workoutLogs } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
@@ -26,6 +26,7 @@ vi.mock("../../storage", () => ({ storage: {} }));
 // Rows the mocked `db.select(...)` chains resolve to, set per test.
 let linkedRows: unknown[] = [];
 let standaloneRows: unknown[] = [];
+let absenceRows: unknown[] = [];
 
 // A chainable Drizzle-style query stub. Each builder method returns a real
 // Promise (augmented with the builder methods), so `await query` uses the
@@ -45,6 +46,7 @@ function selectStub(): SelectChain {
   let dynamic = false;
   const resolveRows = (): unknown[] => {
     if (table === workoutLogs) return dynamic ? standaloneRows : linkedRows;
+    if (table === timelineAnnotations) return absenceRows;
     return []; // exercise_sets and anything else
   };
   const make = (): SelectChain => {
@@ -103,6 +105,7 @@ describe("TimelineStorage race-day derivation", () => {
     vi.clearAllMocks();
     linkedRows = [];
     standaloneRows = [];
+    absenceRows = [];
     storage = new TimelineStorage(workoutStorage as never);
     vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
       { id: "plan-1", name: "Plan", raceDate: RACE },
@@ -210,6 +213,7 @@ describe("TimelineStorage standalone workout plan association", () => {
     vi.clearAllMocks();
     linkedRows = [];
     standaloneRows = [];
+    absenceRows = [];
     storage = new TimelineStorage(workoutStorage as never);
     vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
       { id: "plan-1", name: "Plan One", raceDate: null },
@@ -264,6 +268,7 @@ describe("TimelineStorage windowed hydration", () => {
     vi.clearAllMocks();
     linkedRows = [];
     standaloneRows = [];
+    absenceRows = [];
     storage = new TimelineStorage(workoutStorage as never);
     vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([] as never);
     vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
@@ -306,6 +311,7 @@ describe("TimelineStorage athlete-local today", () => {
     vi.clearAllMocks();
     linkedRows = [];
     standaloneRows = [];
+    absenceRows = [];
     storage = new TimelineStorage(workoutStorage as never);
     vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
       { id: "plan-1", name: "Plan", raceDate: null },
@@ -360,5 +366,129 @@ describe("TimelineStorage athlete-local today", () => {
     // which is the correct degradation. The read must not throw.
     const entries = await storage.getTimeline("user-1");
     expect(entries.find((e) => e.date === "2026-07-20")!.status).toBe("missed");
+  });
+});
+
+describe("TimelineStorage declared absences", () => {
+  let storage: TimelineStorage;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    linkedRows = [];
+    standaloneRows = [];
+    absenceRows = [];
+    storage = new TimelineStorage(workoutStorage as never);
+    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
+      { id: "plan-1", name: "Plan", raceDate: null },
+    ] as never);
+    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00Z")); // today = 2026-07-21 UTC
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const injuryWeek = [{ startDate: "2026-07-13", endDate: "2026-07-19" }];
+
+  it("does not read a past day inside a declared absence as missed", async () => {
+    absenceRows = injuryWeek;
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-hurt", "2026-07-15"),
+    ] as never);
+
+    const [entry] = await storage.getTimeline("user-1");
+
+    expect(entry.status).toBe("planned");
+    expect(entry.excused).toBe(true);
+  });
+
+  it("un-reads a day the sweep already stamped missed before the annotation existed", async () => {
+    // The realistic order of events: the athlete gets hurt, the nightly sweep
+    // writes `missed` all week, and only afterwards do they log the injury.
+    absenceRows = injuryWeek;
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-hurt", "2026-07-15", { status: "missed" }),
+    ] as never);
+
+    const [entry] = await storage.getTimeline("user-1");
+
+    expect(entry.status).toBe("planned");
+    expect(entry.excused).toBe(true);
+  });
+
+  it("still marks a past day OUTSIDE the absence as missed", async () => {
+    absenceRows = injuryWeek;
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-before", "2026-07-12"),
+      planDay("d-after", "2026-07-20"),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byDate = (d: string) => entries.find((e) => e.date === d)!;
+
+    // The boundaries are inclusive, so the days either side of the range are
+    // genuinely outside it and stay missed.
+    expect(byDate("2026-07-12").status).toBe("missed");
+    expect(byDate("2026-07-12").excused).toBeUndefined();
+    expect(byDate("2026-07-20").status).toBe("missed");
+  });
+
+  it("covers the first and last day of the range", async () => {
+    absenceRows = injuryWeek;
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-first", "2026-07-13"),
+      planDay("d-last", "2026-07-19"),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+
+    expect(entries.every((e) => e.excused === true)).toBe(true);
+  });
+
+  it("leaves a completed or explicitly skipped day showing what the athlete did", async () => {
+    absenceRows = injuryWeek;
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-trained", "2026-07-15", { status: "completed" }),
+      planDay("d-skipped", "2026-07-16", { status: "skipped" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byDate = (d: string) => entries.find((e) => e.date === d)!;
+
+    // Training through an injury week is still training, and an explicit skip
+    // is a decision they made — neither gets overwritten with "not counted".
+    expect(byDate("2026-07-15").status).toBe("completed");
+    expect(byDate("2026-07-15").excused).toBeUndefined();
+    expect(byDate("2026-07-16").status).toBe("skipped");
+    expect(byDate("2026-07-16").excused).toBeUndefined();
+  });
+
+  it("does not mark a FUTURE day inside a booked absence as excused", async () => {
+    // Travel booked for next week. Nothing has been missed yet, so the day is
+    // simply still planned — there is nothing to forgive.
+    absenceRows = [{ startDate: "2026-07-27", endDate: "2026-07-31" }];
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-away", "2026-07-28"),
+    ] as never);
+
+    const [entry] = await storage.getTimeline("user-1");
+
+    expect(entry.status).toBe("planned");
+    expect(entry.excused).toBeUndefined();
+  });
+
+  it("leaves every day alone for an athlete with no annotations", async () => {
+    absenceRows = [];
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-past", "2026-07-15"),
+    ] as never);
+
+    const [entry] = await storage.getTimeline("user-1");
+
+    expect(entry.status).toBe("missed");
+    expect(entry.excused).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 import { RACE_DAY_FOCUS } from "@shared/raceDay";
 import type { PersonalRecord } from "@shared/schema";
-import { CheckCircle2, Clock, Flag, SkipForward, XCircle } from "lucide-react";
+import { CalendarOff,CheckCircle2, Clock, Flag, SkipForward, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { GroupedExercise } from "@/lib/exerciseUtils";
@@ -30,7 +30,7 @@ export function isRaceDayEntry(focus: string | null | undefined): boolean {
   return (focus ?? "").trim().toLowerCase() === RACE_DAY_FOCUS.toLowerCase();
 }
 
-export function getStatusBadge(status: string, focus?: string | null) {
+export function getStatusBadge(status: string, focus?: string | null, excused?: boolean) {
   if (isRaceDayEntry(focus)) {
     return (
       <Badge
@@ -39,6 +39,21 @@ export function getStatusBadge(status: string, focus?: string | null) {
       >
         <Flag className="h-3 w-3 mr-1" aria-hidden="true" />
         Race Day
+      </Badge>
+    );
+  }
+  // The athlete logged an injury/illness/travel/rest range over this date. The
+  // annotation card sitting directly above says which, so this only has to say
+  // that the session isn't being counted against them — a past day reading a
+  // plain "Planned" would look like the app had simply lost track.
+  if (excused) {
+    return (
+      <Badge
+        className="bg-muted text-muted-foreground"
+        data-testid="badge-excused"
+      >
+        <CalendarOff className="h-3 w-3 mr-1" aria-hidden="true" />
+        Not counted
       </Badge>
     );
   }

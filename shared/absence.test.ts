@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+
+import { isDateExcused } from "./absence";
+
+describe("isDateExcused", () => {
+  const injury = { startDate: "2026-07-13", endDate: "2026-07-19" };
+
+  it("covers the range inclusive of both ends", () => {
+    expect(isDateExcused("2026-07-13", [injury])).toBe(true);
+    expect(isDateExcused("2026-07-16", [injury])).toBe(true);
+    expect(isDateExcused("2026-07-19", [injury])).toBe(true);
+  });
+
+  it("excludes the days either side", () => {
+    expect(isDateExcused("2026-07-12", [injury])).toBe(false);
+    expect(isDateExcused("2026-07-20", [injury])).toBe(false);
+  });
+
+  it("covers a single-day range", () => {
+    const oneDay = { startDate: "2026-07-13", endDate: "2026-07-13" };
+    expect(isDateExcused("2026-07-13", [oneDay])).toBe(true);
+    expect(isDateExcused("2026-07-14", [oneDay])).toBe(false);
+  });
+
+  it("matches any of several ranges, overlapping or not", () => {
+    const ranges = [
+      injury,
+      { startDate: "2026-08-01", endDate: "2026-08-05" },
+      { startDate: "2026-08-03", endDate: "2026-08-09" },
+    ];
+    expect(isDateExcused("2026-08-04", ranges)).toBe(true); // in both later ranges
+    expect(isDateExcused("2026-08-08", ranges)).toBe(true);
+    expect(isDateExcused("2026-07-25", ranges)).toBe(false); // in none
+  });
+
+  it("is false with no ranges at all", () => {
+    expect(isDateExcused("2026-07-16", [])).toBe(false);
+  });
+
+  it("compares across month and year boundaries", () => {
+    // The lexical comparison is only equivalent to a chronological one because
+    // the components are zero-padded and ordered widest-first — worth pinning,
+    // since a "2026-7-3"-shaped date would silently compare wrong.
+    const newYear = { startDate: "2026-12-28", endDate: "2027-01-04" };
+    expect(isDateExcused("2026-12-31", [newYear])).toBe(true);
+    expect(isDateExcused("2027-01-01", [newYear])).toBe(true);
+    expect(isDateExcused("2027-01-05", [newYear])).toBe(false);
+    expect(isDateExcused("2026-12-27", [newYear])).toBe(false);
+  });
+});

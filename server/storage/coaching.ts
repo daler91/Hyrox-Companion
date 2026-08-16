@@ -139,6 +139,48 @@ export class CoachingStorage {
     }
   }
 
+  /**
+   * Ids of the athlete's `principles` materials — the short, always-true
+   * guidance they typed into Settings, as opposed to uploaded documents.
+   *
+   * Read from the MAIN database on purpose. `document_chunks` lives in
+   * `vectorPool`, which is a separate Neon instance whenever
+   * VECTOR_DATABASE_URL is set (`server/vectorDb.ts`), so the obvious
+   * chunks-join-materials query would work in single-DB mode and fail in the
+   * split deployment.
+   */
+  async listPrincipleMaterialIds(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ id: coachingMaterials.id })
+      .from(coachingMaterials)
+      .where(and(eq(coachingMaterials.userId, userId), eq(coachingMaterials.type, "principles")))
+      .orderBy(coachingMaterials.createdAt);
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Chunks belonging to `materialIds`, oldest chunk first, capped.
+   *
+   * Scoped by user id as well as material id: the caller resolved those ids
+   * from a different database, so this must not take them on trust.
+   */
+  async listChunksForMaterials(
+    userId: string,
+    materialIds: string[],
+    limit: number,
+  ): Promise<DocumentChunk[]> {
+    if (materialIds.length === 0 || limit <= 0) return [];
+    const result = await vectorPool.query<DocumentChunk>(
+      `SELECT id, material_id AS "materialId", user_id AS "userId", content, chunk_index AS "chunkIndex", created_at AS "createdAt"
+       FROM document_chunks
+       WHERE user_id = $1 AND material_id = ANY($2::varchar[])
+       ORDER BY created_at, chunk_index
+       LIMIT $3`,
+      [userId, materialIds, limit],
+    );
+    return result.rows;
+  }
+
   async searchChunksByEmbedding(
     userId: string,
     queryEmbedding: number[],

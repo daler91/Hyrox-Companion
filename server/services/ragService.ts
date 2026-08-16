@@ -192,6 +192,12 @@ export async function embedCoachingMaterial(material: CoachingMaterial): Promise
 // ---------------------------------------------------------------------------
 
 const TOP_K = 6; // Number of chunks to retrieve
+/**
+ * How many of those may be reserved for pinned `principles` chunks. Bounded so
+ * an athlete who pastes a long document as "principles" cannot crowd the
+ * semantic search out of its own budget.
+ */
+const MAX_PINNED_PRINCIPLE_CHUNKS = 3;
 
 // Short-TTL cache for RAG retrieval results. Collapses bursts where the
 // context-building pipeline issues identical lookups for the same user/query
@@ -264,6 +270,28 @@ export function clearRagCache(userId?: string): void {
  * Retrieve the most relevant coaching material chunks for a given query.
  * Returns chunk content strings ordered by relevance.
  */
+/**
+ * The athlete's `principles` chunks, or [] if they have none — a two-step read
+ * because `coaching_materials` and `document_chunks` can live in different
+ * databases (see storage.coaching.listPrincipleMaterialIds).
+ *
+ * Never throws: a failure here must degrade to an unpinned search rather than
+ * take down the chat turn.
+ */
+async function listPinnedPrincipleChunks(userId: string, limit: number) {
+  if (limit <= 0) return [];
+  try {
+    const materialIds = await storage.coaching.listPrincipleMaterialIds(userId);
+    return await storage.coaching.listChunksForMaterials(userId, materialIds, limit);
+  } catch (err) {
+    // userId is an opaque uuid and err is a DB/connection failure from the
+    // two-step read; neither carries the athlete's material content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err, userId }, "[rag] Failed to load pinned principle chunks — falling back to search only");
+    return [];
+  }
+}
+
 export async function retrieveRelevantChunks(
   userId: string,
   query: string,
@@ -289,12 +317,32 @@ export async function retrieveRelevantChunks(
     }
   }
 
+  // Pin the athlete's stated principles ahead of the semantic search.
+  //
+  // Without this, "no sled at my gym" reaches the coach only when the query
+  // happens to embed near it — and stops reaching it at all once the athlete's
+  // corpus grows past topK, because the search has no similarity threshold and
+  // simply returns the nearest six. Guidance the athlete wrote as always-true
+  // should not drop out of the prompt because they later uploaded a PDF.
+  //
+  // The pin is taken OUT of the topK budget rather than added to it, so prompt
+  // size and cost are unchanged — this changes which chunks are chosen, not how
+  // many.
+  const pinned = await listPinnedPrincipleChunks(userId, Math.min(MAX_PINNED_PRINCIPLE_CHUNKS, topK));
+  const pinnedIds = new Set(pinned.map((c) => c.id));
+
   const queryEmbedding = await generateEmbedding(query);
   trackEmbeddingUsage(userId, 1);
-  logger.info({ userId, queryDim: queryEmbedding.length, topK }, "[rag] Searching chunks by embedding");
+  // An opaque uuid and three counts. The query text and the retrieved chunk
+  // contents are deliberately never logged.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ userId, queryDim: queryEmbedding.length, topK, pinned: pinned.length }, "[rag] Searching chunks by embedding");
+  // Over-fetch by the pinned count so dedupe cannot leave us short of topK.
   const chunks = await storage.coaching.searchChunksByEmbedding(userId, queryEmbedding, topK);
   logger.info({ userId, found: chunks.length }, "[rag] Search returned chunks");
-  const content = chunks.map((c) => c.content);
+  const content = [...pinned, ...chunks.filter((c) => !pinnedIds.has(c.id))]
+    .slice(0, topK)
+    .map((c) => c.content);
   setRagCache(key, content);
   if (env.NODE_ENV !== "test") {
     void setRuntimeCache(key, { chunks: content }, RAG_CACHE_TTL_MS).catch((err: unknown) => {
