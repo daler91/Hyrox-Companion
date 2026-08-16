@@ -28,8 +28,8 @@ const dbMockState = vi.hoisted(() => {
 vi.mock("../storage", () => ({
   storage: {
     users: { getUser: vi.fn() },
-    workouts: { getExerciseSetsByPlanDay: vi.fn() },
-    plans: { getPlanDay: vi.fn(), updatePlanDay: vi.fn() },
+    workouts: { getExerciseSetsByPlanDay: vi.fn(), getExerciseSetsByPlanDays: vi.fn() },
+    plans: { getPlanDay: vi.fn(), getPlanDaysByIds: vi.fn(), updatePlanDay: vi.fn() },
     timeline: { getUpcomingPlannedDays: vi.fn() },
     planProposals: { create: vi.fn(), getById: vi.fn(), getPending: vi.fn(), resolve: vi.fn() },
   },
@@ -206,10 +206,10 @@ describe("createPlanAdjustmentProposal", () => {
         },
       ],
     });
-    vi.mocked(storage.plans.getPlanDay).mockImplementation(async (dayId: string) =>
-      planDayRow({ id: dayId }),
+    vi.mocked(storage.plans.getPlanDaysByIds).mockImplementation(async (dayIds: string[]) =>
+      dayIds.map((id) => planDayRow({ id })),
     );
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDay).mockResolvedValue([]);
+    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map());
 
     const result = await createPlanAdjustmentProposal(input);
 
