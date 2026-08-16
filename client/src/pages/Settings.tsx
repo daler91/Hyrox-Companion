@@ -13,6 +13,7 @@ import { BodyCompositionCard } from "@/components/settings/preferences/BodyCompo
 import { EmailNotificationsCard } from "@/components/settings/preferences/EmailNotificationsCard";
 import { HealthMetricsCard } from "@/components/settings/preferences/HealthMetricsCard";
 import { NutritionPreferencesCard } from "@/components/settings/preferences/NutritionPreferencesCard";
+import { TrainingConstraintsCard } from "@/components/settings/preferences/TrainingConstraintsCard";
 import { TrainingGoalsCard } from "@/components/settings/preferences/TrainingGoalsCard";
 import { UnitsPreferencesCard } from "@/components/settings/preferences/UnitsPreferencesCard";
 import { WorkoutReviewCard } from "@/components/settings/preferences/WorkoutReviewCard";
@@ -275,6 +276,13 @@ export default function Settings() {
             weeklyGoal={draft.weeklyGoal}
             onWeeklyGoalChange={(v) => {
               updateField("weeklyGoal", v);
+            }}
+          />
+
+          <TrainingConstraintsCard
+            trainingConstraints={draft.trainingConstraints}
+            onTrainingConstraintsChange={(v) => {
+              updateField("trainingConstraints", v);
             }}
           />
           <TrainingStyleSection

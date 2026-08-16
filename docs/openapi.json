@@ -732,6 +732,11 @@
             "minimum": 0,
             "maximum": 2
           },
+          "trainingConstraints": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
           "mafAge": {
             "type": "integer",
             "nullable": true,

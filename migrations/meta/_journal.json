@@ -603,6 +603,13 @@
       "when": 1786839415610,
       "tag": "0085_military_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1786850294440,
+      "tag": "0086_big_shadowcat",
+      "breakpoints": true
     }
   ]
 }

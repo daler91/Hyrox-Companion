@@ -53,6 +53,7 @@ vi.mock("../../storage", () => ({
     users: {
       getUser: vi.fn(),
       getCustomExercises: vi.fn(),
+      updateUserPreferences: vi.fn(),
     },
   },
 }));
@@ -207,6 +208,40 @@ describe("POST /api/v1/plans/generate", () => {
       "plan-generation",
       expect.objectContaining({ planId: "plan-1", userId: "test_user_id" }),
     );
+  });
+
+  it("remembers the athlete's injuries on their profile", async () => {
+    // The generator has always asked for this and always discarded it, so every
+    // regeneration asked again.
+    await request(app)
+      .post("/api/v1/plans/generate")
+      .send({ ...generatePlanPayload, injuries: "  Recovering from knee injury  " });
+
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+      trainingConstraints: "Recovering from knee injury",
+    });
+  });
+
+  it("forgets them when the athlete clears the box", async () => {
+    // A resolved constraint has to be forgettable. Storing "" or skipping the
+    // write would leave a healed injury shaping every future plan.
+    await request(app)
+      .post("/api/v1/plans/generate")
+      .send({ ...generatePlanPayload, injuries: "   " });
+
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+      trainingConstraints: null,
+    });
+  });
+
+  it("leaves the profile untouched when the field is absent", async () => {
+    // An older client that never sends the field must not clear what the
+    // athlete already told us.
+    const { injuries: _omitted, ...withoutInjuries } = { ...generatePlanPayload, injuries: "x" };
+
+    await request(app).post("/api/v1/plans/generate").send(withoutInjuries);
+
+    expect(storage.users.updateUserPreferences).not.toHaveBeenCalled();
   });
 
   it("returns 409 and does not enqueue a job when a generation is already in flight (W13)", async () => {

@@ -175,7 +175,19 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
         code: "PLAN_GENERATION_IN_PROGRESS",
       });
     }
-    const stub = await createPendingPlan(req.body as GeneratePlanInput, userId);
+    const input = req.body as GeneratePlanInput;
+
+    // Remember the athlete's injuries/limitations on their profile. The
+    // generator has always asked for this and always thrown it away, so every
+    // regeneration asked for it again. Presence is authoritative: an empty
+    // string means the athlete cleared the box, and a resolved constraint must
+    // be forgettable, so it writes null rather than being skipped.
+    if (typeof input.injuries === "string") {
+      const trimmed = input.injuries.trim();
+      await storage.users.updateUserPreferences(userId, { trainingConstraints: trimmed === "" ? null : trimmed });
+    }
+
+    const stub = await createPendingPlan(input, userId);
     await sendJobNoRetry("plan-generation", { planId: stub.id, userId, input: req.body });
     return res.status(202).json(stub);
   });

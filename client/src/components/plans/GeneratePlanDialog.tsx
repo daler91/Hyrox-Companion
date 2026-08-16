@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/useAuth";
 import { useGeneratePlan } from "@/hooks/usePlanGeneration";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +50,10 @@ export function GeneratePlanDialog({
   initialGoal,
   initialStartDate,
 }: GeneratePlanDialogProps) {
+  // The athlete's remembered injuries/limitations, so the box arrives prefilled.
+  const { user } = useAuth();
   const form = useGeneratePlanForm({
+    initialConstraints: user?.trainingConstraints ?? "",
     initialGoal,
     initialStartDate,
   });

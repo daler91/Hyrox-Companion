@@ -65,6 +65,13 @@ export interface GeneratePlanFormValues {
 export interface GeneratePlanFormOptions {
   readonly initialGoal?: string;
   readonly initialStartDate?: string;
+  /**
+   * The athlete's remembered injuries/limitations, prefilled into the box so
+   * they are not retyped on every regeneration. Passed in rather than read from
+   * `useAuth` here, so this hook stays free of query context — same reason
+   * `initialGoal` is a parameter.
+   */
+  readonly initialConstraints?: string;
 }
 
 /**
@@ -117,7 +124,10 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
       ? { restDays: values.restDays as GeneratePlanInput["restDays"] }
       : {}),
     ...(values.focusAreas.length > 0 ? { focusAreas: values.focusAreas } : {}),
-    ...(values.injuries ? { injuries: values.injuries } : {}),
+    // Always sent, even empty: the server treats presence as authoritative and
+    // an empty string clears the remembered constraints. Omitting it would make
+    // a cleared box indistinguishable from an older client that never sent one.
+    injuries: values.injuries,
   };
 }
 
@@ -137,7 +147,11 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const [endDateIsRaceDate, setEndDateIsRaceDate] = useState(true);
   const [restDays, setRestDays] = useState<string[]>(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
-  const [injuries, setInjuries] = useState("");
+  // Prefilled from the athlete's remembered constraints so they do not retype
+  // them on every regeneration; clearing the box and generating clears the
+  // profile, which is how a resolved injury is forgotten.
+  const rememberedConstraints = options.initialConstraints ?? "";
+  const [injuries, setInjuries] = useState(rememberedConstraints);
 
   const resetForm = () => {
     setStep(0);
@@ -149,7 +163,7 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
     setEndDateIsRaceDate(true);
     setRestDays(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
     setFocusAreas([]);
-    setInjuries("");
+    setInjuries(rememberedConstraints);
   };
 
   const toggleFocus = (value: string) => {

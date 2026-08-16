@@ -108,6 +108,19 @@ export const users = pgTable("users", {
   // Target rate of weight change in kg/week (canonical). Magnitude only; the
   // sign comes from weightGoalDirection. null ⇒ treated as 0 (maintain).
   weightGoalRateKgPerWeek: real("weight_goal_rate_kg_per_week"),
+  // The athlete's durable injuries and limitations, in their own words.
+  //
+  // Named for what it holds rather than for the field that feeds it: the plan
+  // generator's one-shot `injuries` textarea is the capture point, but the same
+  // sentence covers equipment and scheduling limits ("no sled at my gym"). It
+  // was previously interpolated into the generation prompt and discarded, so
+  // every regeneration asked the athlete to type it again.
+  //
+  // Cleared to null when the athlete empties the box — a constraint that has
+  // resolved must be forgettable, which is exactly what
+  // maf_injury_illness_medication (write-once at onboarding, permanently -10bpm,
+  // no way to un-set) gets wrong.
+  trainingConstraints: text("training_constraints"),
   mafAge: integer("maf_age"),
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
   mafConsistency: text("maf_consistency"),

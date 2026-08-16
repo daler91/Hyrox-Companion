@@ -203,6 +203,9 @@ export function usePreferencesForm() {
       weightGoalDirection: (draft.weightGoalDirection || null) as WeightGoalDirectionValue | null,
       weightGoalRateKgPerWeek: draft.weightGoalRateKgPerWeek,
       weeklyGoal: Number.parseInt(draft.weeklyGoal, 10),
+      // Emptied box clears the remembered constraints — a resolved injury has
+      // to be forgettable, not just editable.
+      trainingConstraints: draft.trainingConstraints.trim() || null,
       mealSchedule: draft.mealSchedule,
       emailNotifications: draft.emailNotifications,
       emailWeeklySummary: draft.emailWeeklySummary,

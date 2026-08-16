@@ -819,3 +819,19 @@ Recorded rather than dropped, per the method note at the top.
    `tables.ts:1097`, and the push call sites cited as `emailScheduler.ts:93,136,166` are now
    `:96,:136,:152`. The first pass's text is left verbatim; check symbol names rather than
    line numbers when following its references.
+6. **Item #8's "the insertion point already exists and is already shared" is wrong.** There are
+   three prompt assemblers, not one: `buildSystemPrompt` (chat, chat/stream, coach insights),
+   `buildPromptDataSections` in `server/gemini/suggestionService.ts` (auto-coach suggestions,
+   review notes, conversational plan adjustment), and `buildGenerationPrompt` in
+   `planGenerationService.ts` (plan generation, which never sees `TrainingContext`). Only
+   `server/prompts.ts` imports the `coachingContext.ts` builders; `suggestionService.ts` takes
+   `relativeDayLabel` from it and nothing else. A builder added there reaches chat and coach
+   insights only. #8 is a four-render-site wiring job, not a one-line insertion — re-price it,
+   and note the same correction applies to #2, which cites the same shared insertion point.
+7. **Item #8 overstates the RAG gap.** "Uploading a PDF is the wrong shape for six sentences" is
+   right as a principle and wrong about this implementation: Settings → Coaching Knowledge
+   already takes free-text "training principles", and retrieval has no similarity threshold —
+   `TOP_K = 6` with a 600-char chunk size means a short facts corpus is already in every chat
+   and suggestion prompt unconditionally. The real gaps are narrower: RAG never reaches plan
+   generation, its inclusion stops being guaranteed past six chunks, and none of it is
+   structured or expirable. Full analysis in [`coach-memory-spec.md`](coach-memory-spec.md).

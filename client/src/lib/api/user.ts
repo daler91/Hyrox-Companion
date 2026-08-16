@@ -28,6 +28,8 @@ export interface UserPreferences {
   /** IANA timezone name (e.g. "America/Chicago"). Auto-detected on first sign-in. */
   userTimezone: string;
   weeklyGoal: number;
+  /** Durable injuries/limitations, seeded from the plan generator's textarea. */
+  trainingConstraints: string | null;
   /** Meals-per-day preset (3/4/5) the per-meal fuel targets are split across. */
   mealSchedule?: 3 | 4 | 5;
   /** Master email toggle — when false, no emails are sent regardless of sub-toggles. */

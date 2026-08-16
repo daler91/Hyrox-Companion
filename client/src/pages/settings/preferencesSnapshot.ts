@@ -49,8 +49,11 @@ export interface PreferencesSnapshot
     | "activityLevel"
     | "weightGoalDirection"
     | "weightGoalRateKgPerWeek"
+    | "trainingConstraints"
   > {
   weeklyGoal: string;
+  /** Empty string rather than null, so the textarea stays controlled. */
+  trainingConstraints: string;
   mealSchedule: 3 | 4 | 5;
   division: string;
   gender: string;
@@ -90,6 +93,8 @@ export interface PreferencesDraft {
   weightGoalDirection: string;
   weightGoalRateKgPerWeek: number | null;
   weeklyGoal: string;
+  /** Empty string rather than null, so the textarea stays controlled. */
+  trainingConstraints: string;
   mealSchedule: 3 | 4 | 5;
   emailNotifications: boolean;
   emailWeeklySummary: boolean;
@@ -141,6 +146,7 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   weightGoalDirection: "",
   weightGoalRateKgPerWeek: null,
   weeklyGoal: "5",
+  trainingConstraints: "",
   mealSchedule: 4,
   emailNotifications: false,
   emailWeeklySummary: false,
@@ -157,6 +163,7 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
 
 export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
   return {
+    trainingConstraints: draft.trainingConstraints,
     weightUnit: draft.weightUnit,
     distanceUnit: draft.distanceUnit,
     division: draft.division,
@@ -191,6 +198,7 @@ export const DEFAULT_PREFERENCES_SNAPSHOT: PreferencesSnapshot =
 
 export function preferencesToDraft(preferences: UserPreferences): PreferencesDraft {
   return {
+    trainingConstraints: preferences.trainingConstraints ?? "",
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
     division: preferences.division || "open",
@@ -222,6 +230,7 @@ export function preferencesToDraft(preferences: UserPreferences): PreferencesDra
 
 export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft {
   return {
+    trainingConstraints: snapshot.trainingConstraints,
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,
@@ -253,6 +262,7 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
 
 export function preferencesToSnapshot(preferences: UserPreferences): PreferencesSnapshot {
   return {
+    trainingConstraints: preferences.trainingConstraints ?? "",
     weightUnit: preferences.weightUnit || "kg",
     distanceUnit: preferences.distanceUnit || "km",
     division: preferences.division || "open",
@@ -284,6 +294,7 @@ export function preferencesToSnapshot(preferences: UserPreferences): Preferences
 
 export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
   return {
+    trainingConstraints: payload.trainingConstraints ?? "",
     weightUnit: payload.weightUnit,
     distanceUnit: payload.distanceUnit,
     division: payload.division ?? "open",
@@ -315,6 +326,8 @@ export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot
 
 export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {
   return {
+    // Empty box clears the remembered constraints rather than storing "".
+    trainingConstraints: snapshot.trainingConstraints.trim() || null,
     weightUnit: snapshot.weightUnit,
     distanceUnit: snapshot.distanceUnit,
     division: snapshot.division,
