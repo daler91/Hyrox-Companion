@@ -21,6 +21,7 @@ import {
   TimelineHeader,
   TimelineSummaryCard,
   TimelineTodayIndicator,
+  WeeklyReviewPrompt,
 } from "@/components/timeline";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/ui/PageContainer";
@@ -385,6 +386,8 @@ export default function Timeline() {
               bulkDeleteMode={bulkDeleteMode}
               onBulkDeleteModeChange={handleBulkDeleteModeChange}
             />
+
+            <WeeklyReviewPrompt />
 
             <TimelineSummaryCard selectedPlanId={selectedPlanId} />
 

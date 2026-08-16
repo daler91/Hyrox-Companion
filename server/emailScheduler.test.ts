@@ -463,6 +463,18 @@ describe('weekly summary window', () => {
     expect(getWeeklyStats).toHaveBeenCalledWith(1, '2026-07-13', '2026-07-19');
   });
 
+  it('deep-links the push into the review for the week it just summarised', async () => {
+    const { sendPushToUser } = await import('./pushNotifications');
+    const user = makeMockUser({ id: 1, email: 'a@example.com' });
+    const { storage } = windowStorage(user);
+
+    await processWeeklySummary(storage, user as never, new Date('2026-07-20T09:00:00Z'));
+
+    // Not /analytics: that page is scoped to its own range picker, so it shows
+    // a different set of numbers than the notification just quoted.
+    expect(vi.mocked(sendPushToUser).mock.calls[0][1].url).toBe('/review?week=2026-07-13');
+  });
+
   it('passes the same window to the mailer as it queried', async () => {
     const { sendWeeklySummary } = await import('./email');
     const user = makeMockUser({ id: 1, email: 'a@example.com' });

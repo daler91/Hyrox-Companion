@@ -97,7 +97,9 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   void sendPushToUser(user.id, {
     title: "Weekly Training Summary",
     body: `You completed ${summaryData.completedCount} workouts this week (${summaryData.completionRate}% completion rate).`,
-    url: "/analytics",
+    // The review of THIS week, not /analytics — which shows a different set of
+    // numbers over a different window than the notification just quoted.
+    url: `/review?week=${encodeURIComponent(weekStartStr)}`,
   });
 
   return sent;

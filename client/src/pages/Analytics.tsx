@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, subDays } from "date-fns";
 import {
   BarChart3,
+  CalendarCheck,
   Download,
   FileJson,
   FileSpreadsheet,
@@ -15,6 +16,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 
 import { CategoryBreakdownTab } from "@/components/analytics/CategoryBreakdownTab";
 import { CoachInsightsTab } from "@/components/analytics/CoachInsightsTab";
@@ -131,6 +133,17 @@ export default function Analytics() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* A link rather than a tab: the review is scoped to one Monday-Sunday
+              week while this page is scoped to the range picker beside it, and a
+              fixed-window surface living inside a variable-window page is how you
+              get "why do these two numbers disagree". */}
+          <Button variant="outline" asChild data-testid="link-weekly-review">
+            <Link href="/review">
+              <CalendarCheck className="h-4 w-4 mr-2" aria-hidden="true" />
+              Weekly review
+            </Link>
+          </Button>
+
           <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
             <SelectTrigger
               className="w-36"
