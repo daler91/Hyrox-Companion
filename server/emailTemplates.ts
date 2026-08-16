@@ -142,7 +142,7 @@ ${data.currentStreak > 0 ? `
     ${missedSessionsMessage}
 
     <div style="text-align:center;margin-top:24px;">
-      <a href="${getAppUrl()}" class="cta">View Your Timeline</a>
+      <a href="${getAppUrl()}/review?week=${encodeURIComponent(data.weekStartDate)}" class="cta">See your week in review</a>
     </div>
   </div>
   <div class="footer">

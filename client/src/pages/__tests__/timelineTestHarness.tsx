@@ -76,6 +76,7 @@ vi.mock("@/components/timeline", () => ({
   CoachReviewingIndicator: () => <div />,
   AnnotationsDialog: () => <div />,
   BulkDeleteControls: () => <div />,
+  WeeklyReviewPrompt: () => <div />,
 }));
 vi.mock("@/components/workout-detail/LogSheet", () => ({ LogSheet: (props: { entry: TimelineEntry | null }) => harnessState.logSheetImpl(props) }));
 vi.mock("@/components/workout-detail/PreviewSheet", () => ({ PreviewSheet: () => null }));

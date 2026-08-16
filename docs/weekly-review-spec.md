@@ -1,6 +1,6 @@
 # In-app Weekly Review — scope
 
-**Status.** PR1–PR3 of 5 landed (§7); the rest is scope. Register entry: recommendation #10 in
+**Status.** PR1–PR4 of 5 landed (§7); only the intent capture (§5) is left. Register entry: recommendation #10 in
 [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md).
 
 **One-line pitch.** A Sunday-night page: what you planned, what you did, what changed, and
@@ -145,8 +145,7 @@ belong to the page (PR3), not to this endpoint.
 
 **Route.** `/review`, lazy-loaded in `AuthenticatedRouter` and wrapped in
 `FeatureErrorBoundaryWrapper` like every other page. Week selection via `useUrlQueryState`,
-so a week is linkable and shareable — `/review?week=2026-08-04`. **Nothing links to it yet**;
-until PR4 lands it is reachable only by URL.
+so a week is linkable and shareable — `/review?week=2026-08-04`.
 
 **Data.** `api.analytics.getWeeklyReview(week)`, `QUERY_KEYS.weeklyReview(week)`, and the
 `useWeeklyReview` hook. A closed week never changes, so it is cached with
@@ -167,15 +166,25 @@ a week whenever the athlete's stored timezone differs from the browser's.
 and what didn't). The adherence tile is suppressed entirely when `hasPlan` is false, and the
 RPE delta is suppressed when either week has no RPE.
 
-**Entry points (PR4), in order of expected traffic.**
+**Entry points — shipped in PR4**, in order of expected traffic.
 
-1. **The weekly summary email and its push.** `emailScheduler.ts:96` currently sends the push
-   to `url: "/analytics"` — a page showing different numbers over a different window. Point
-   both at `/review?week=…`. Cheapest, highest-intent traffic there is.
-2. **A Timeline banner**, appearing Sunday evening through Tuesday local, dismissible, once
-   per week. Slots above `TimelineSummaryCard` (`client/src/pages/Timeline.tsx:389`).
-3. **A link from the Analytics overview tab.** A link, not a tab: the review is week-scoped
-   while Analytics is range-scoped (`?range=90`), and putting a fixed-window surface inside a
+1. **The weekly summary email and its push.** Both now land on `/review?week=<weekStart>` —
+   the review of the week they are about. The CTA read "View Your Timeline" and went to the
+   app root (the week _ahead_), and the push went to `/analytics`, which is scoped to its own
+   range picker and so quotes different numbers than the notification the athlete just tapped.
+   Cheapest, highest-intent traffic there is.
+2. **A Timeline prompt**, above `TimelineSummaryCard`, Sunday evening (17:00 local) through
+   Tuesday, dismissible. `client/src/lib/weeklyReviewPrompt.ts` holds the logic, injectable
+   `now` and all, so the window is unit-tested rather than clock-dependent.
+
+   The week it offers is always "the week you just trained", which hands over at Sunday
+   midnight: on Sunday evening that is the week closing tonight, from Monday it is the week
+   that closed. Both resolve to the **same Monday**, which is what makes one dismissal hold
+   across the whole window and then lapse for the next week — no extra bookkeeping, and the
+   dismissal key is just `(userId, weekStart)`.
+
+3. **A link from the Analytics header.** A link, not a tab: the review is week-scoped while
+   Analytics is range-scoped (`?range=90`), and putting a fixed-window surface inside a
    variable-window page invites exactly the "why do these disagree" confusion §1 is about.
 
 ---

@@ -21,3 +21,4 @@ export { default as TimelineSkeleton } from "./TimelineSkeleton";
 export { TimelineSummaryCard } from "./TimelineSummaryCard";
 export { TimelineTodayIndicator } from "./TimelineTodayIndicator";
 export type { FilterStatus, WorkoutSuggestion } from "./types";
+export { WeeklyReviewPrompt } from "./WeeklyReviewPrompt";

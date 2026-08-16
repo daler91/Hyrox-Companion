@@ -179,6 +179,7 @@ vi.mock("@/components/timeline", () => ({
   SchedulePlanDialog: () => <div />,
   SkipConfirmDialog: () => <div />,
   BulkDeleteControls: () => <div />,
+  WeeklyReviewPrompt: () => <div />,
 }));
 
 vi.mock("@/components/workout-detail/LogSheet", () => ({

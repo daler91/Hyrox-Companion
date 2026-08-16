@@ -74,6 +74,17 @@ describe("email generation", () => {
       expect(html).toContain("Hey John, here's how your week went:");
     });
 
+    it("sends the CTA to the review for the week it summarises", () => {
+      // The old CTA landed on the timeline root, which shows the week ahead
+      // rather than the one the email is about. Production always passes a
+      // YYYY-MM-DD weekStartDate (the shared fixture's "Oct 1" is a display
+      // string), and that is what the link has to carry.
+      const data = { ...baseData, weekStartDate: "2026-07-13", weekEndDate: "2026-07-19" };
+      const { html } = buildWeeklySummaryEmail(baseUser, data);
+      expect(html).toContain("/review?week=2026-07-13");
+      expect(html).toContain("See your week in review");
+    });
+
     it("uses the email prefix if firstName is missing", () => {
       const user = { ...baseUser, firstName: null };
       const { html } = buildWeeklySummaryEmail(user, baseData);
