@@ -61,20 +61,21 @@ export function formatAthleteConstraints(context?: TrainingContext): string {
     );
   }
 
-  const absences = context.absences ?? [];
-  const current = absences.filter((a) => a.active);
   // `active` was computed against the athlete's own today upstream, so an
   // inactive range only has to be split on which side of today it sits. With
-  // no currentDate to compare against, everything inactive reads as past —
-  // describing a finished absence is harmless, whereas announcing a past one
-  // as "upcoming" would have the coach program around a date that has gone.
-  const today = context.currentDate ?? "";
-  const upcoming = today
-    ? absences.filter((a) => !a.active && a.startDate > today)
-    : [];
-  const recent = absences.filter(
-    (a) => !a.active && (!today || a.startDate <= today),
-  );
+  // no currentDate to compare against, everything inactive falls through to
+  // past — describing a finished absence is harmless, whereas announcing a
+  // past one as "upcoming" would have the coach program around a date that has
+  // already gone.
+  const today = context.currentDate;
+  const current: CoachAbsence[] = [];
+  const upcoming: CoachAbsence[] = [];
+  const recent: CoachAbsence[] = [];
+  for (const absence of context.absences ?? []) {
+    if (absence.active) current.push(absence);
+    else if (today && absence.startDate > today) upcoming.push(absence);
+    else recent.push(absence);
+  }
 
   if (current.length > 0) {
     lines.push(`CURRENTLY AFFECTED: ${current.map(formatRange).join("; ")}`);
