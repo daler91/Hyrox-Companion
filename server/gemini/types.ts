@@ -1,6 +1,26 @@
-import type { CoachNoteInputs, RaceReadiness, TrainingLoadOverview } from "@shared/schema";
+import type {
+  CoachNoteInputs,
+  RaceReadiness,
+  TimelineAnnotationType,
+  TrainingLoadOverview,
+} from "@shared/schema";
 
 import type { PromptExerciseSet } from "../prompts/exerciseSetFormatter";
+
+/**
+ * A dated absence the athlete declared on their timeline, near enough to the
+ * present that the coach should reason about it.
+ */
+export interface CoachAbsence {
+  startDate: string;
+  endDate: string;
+  type: TimelineAnnotationType;
+  note?: string | null;
+  /** The range covers the athlete's today — they are in it right now. */
+  active: boolean;
+  /** `injury` or `illness`, as opposed to the circumstantial travel/rest. */
+  medical: boolean;
+}
 
 /**
  * Compact summary of an athlete's MAF test history for the coaching context.
@@ -82,6 +102,18 @@ export interface TrainingContext {
    * a day behind for far-offset users.
    */
   currentDate?: string;
+  /**
+   * The athlete's standing constraints in their own words — the injuries and
+   * limitations captured by the plan wizard and editable in Settings. Always
+   * true until they clear it, unlike the dated `absences` below.
+   */
+  trainingConstraints?: string | null;
+  /**
+   * Declared absences overlapping the window the coach reasons about. Dated,
+   * and they expire on their own; a healed injury stops being mentioned without
+   * the athlete having to remember to delete it.
+   */
+  absences?: CoachAbsence[];
   /** Persisted MAF aerobic heart-rate ceiling (bpm) from the user profile, when set. */
   mafHr?: number | null;
   /** MAF test history/trend summary; present only for MAF-method athletes. */

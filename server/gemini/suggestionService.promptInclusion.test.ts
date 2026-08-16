@@ -24,6 +24,26 @@ function kitchenSinkContext(): TrainingContext {
     currentStreak: 11,
     completedWorkouts: 41,
     weeklyGoal: 6,
+    currentDate: "2026-04-20",
+    trainingConstraints: "FINGERPRINT_STANDING_CONSTRAINT",
+    absences: [
+      {
+        startDate: "2026-04-18",
+        endDate: "2026-04-24",
+        type: "injury",
+        note: "FINGERPRINT_ABSENCE_NOTE",
+        active: true,
+        medical: true,
+      },
+      {
+        startDate: "2026-05-02",
+        endDate: "2026-05-06",
+        type: "travel",
+        note: "FINGERPRINT_UPCOMING_TRAVEL",
+        active: false,
+        medical: false,
+      },
+    ],
     exerciseBreakdown: {
       FINGERPRINT_EXERCISE_SKIERG: 9,
       "Wall Balls": 3,
@@ -110,6 +130,17 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       "FINGERPRINT_GOAL_SUB90",
       "FINGERPRINT_RAG_CHUNK\nZone 2 guidance body",
     );
+
+    // Athlete constraints — the standing limitations and the dated absences.
+    // This is the path that rewrites upcoming sessions, so an injury the
+    // athlete declared has to be in front of the model before it decides.
+    expect(prompt).toContain("FINGERPRINT_STANDING_CONSTRAINT");
+    expect(prompt).toContain("FINGERPRINT_ABSENCE_NOTE");
+    expect(prompt).toContain("FINGERPRINT_UPCOMING_TRAVEL");
+    expect(prompt).toContain("CURRENTLY AFFECTED");
+    // Specifically the constraints block's own line — "UPCOMING" alone would
+    // be satisfied by the unrelated "UPCOMING WORKOUTS" header.
+    expect(prompt).toContain("UPCOMING: Travel, 2026-05-02 to 2026-05-06");
 
     // Header signals
     expect(prompt).toContain("FINGERPRINT_GOAL_SUB90");
@@ -398,9 +429,12 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
 
     const idx = (needle: string) => prompt.indexOf(needle);
 
-    // Athlete data -> coaching analysis -> upcoming -> RAG -> closing
+    // Athlete data -> constraints -> coaching analysis -> upcoming -> RAG -> closing
     expect(idx("ATHLETE'S TRAINING DATA")).toBeGreaterThanOrEqual(0);
-    expect(idx("COACHING ANALYSIS")).toBeGreaterThan(idx("ATHLETE'S TRAINING DATA"));
+    // Constraints sit ahead of the analysis on purpose: a declared injury
+    // changes how every number after it should be read.
+    expect(idx("ATHLETE CONSTRAINTS")).toBeGreaterThan(idx("ATHLETE'S TRAINING DATA"));
+    expect(idx("COACHING ANALYSIS")).toBeGreaterThan(idx("ATHLETE CONSTRAINTS"));
     expect(idx("UPCOMING WORKOUTS")).toBeGreaterThan(idx("COACHING ANALYSIS"));
     expect(idx("FINGERPRINT_RAG_CHUNK")).toBeGreaterThan(idx("UPCOMING WORKOUTS"));
     expect(idx("Analyze the coaching analysis")).toBeGreaterThan(idx("FINGERPRINT_RAG_CHUNK"));
@@ -417,6 +451,40 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     highLoadDays: [{ date: "2026-04-15", utss: 95, calories: 2100, proteinG: 130 }],
     lowMicros: ["Iron 32%"],
   };
+
+  it("puts the athlete's constraints and declared absences in the CHAT prompt too", () => {
+    // The two assemblers are separate code paths. Both share the renderer, and
+    // this is the assertion that keeps the conversational coach from being the
+    // one surface that still doesn't know the athlete is injured.
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({
+        totalWorkouts: 20,
+        currentDate: "2026-04-20",
+        trainingConstraints: "FINGERPRINT_CHAT_CONSTRAINT",
+        absences: [
+          {
+            startDate: "2026-04-18",
+            endDate: "2026-04-24",
+            type: "injury",
+            note: "FINGERPRINT_CHAT_ABSENCE",
+            active: true,
+            medical: true,
+          },
+        ],
+      }),
+    );
+
+    expect(prompt).toContain("--- ATHLETE CONSTRAINTS ---");
+    expect(prompt).toContain("FINGERPRINT_CHAT_CONSTRAINT");
+    expect(prompt).toContain("FINGERPRINT_CHAT_ABSENCE");
+    expect(prompt).toContain("do not treat the sessions inside this range as non-compliance");
+  });
+
+  it("leaves the chat prompt unchanged for an athlete who has declared nothing", () => {
+    const prompt = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 20 }));
+
+    expect(prompt).not.toContain("ATHLETE CONSTRAINTS");
+  });
 
   it("includes the fuelling section in the suggestions prompt when nutrition context is present", () => {
     const prompt = buildSuggestionsPrompt(

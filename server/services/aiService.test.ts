@@ -31,6 +31,9 @@ vi.mock("../storage", () => ({
       getAllExerciseSetsWithDates: vi.fn(),
       getExerciseLoadTags: vi.fn(),
     },
+    timelineAnnotations: {
+      list: vi.fn(),
+    },
   },
 }));
 
@@ -40,6 +43,7 @@ describe("buildTrainingContext", () => {
     vi.useFakeTimers();
     vi.mocked(storage.users.getUser).mockResolvedValue(undefined);
     vi.mocked(storage.timeline.getUpcomingPlannedDays).mockResolvedValue([]);
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
     vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
     vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
     vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
@@ -66,6 +70,10 @@ describe("buildTrainingContext", () => {
       completionRate: 0,
       currentStreak: 0,
       currentDate: "2026-01-15",
+      // An athlete with no declared constraints or absences: present but empty,
+      // so the prompt renderer self-suppresses.
+      trainingConstraints: null,
+      absences: [],
       mafHr: null,
       weeklyGoal: undefined,
       recentWorkouts: [],

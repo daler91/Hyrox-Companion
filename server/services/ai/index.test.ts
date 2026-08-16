@@ -58,6 +58,7 @@ vi.mock("../../storage", () => ({
       getExerciseLoadTags: vi.fn(),
     },
     mafTests: { listTestResults: vi.fn(), listWorkoutAnalysis: vi.fn() },
+    timelineAnnotations: { list: vi.fn() },
   },
 }));
 
@@ -153,6 +154,7 @@ beforeEach(() => {
   vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
   vi.mocked(storage.mafTests.listTestResults).mockResolvedValue([]);
   vi.mocked(storage.mafTests.listWorkoutAnalysis).mockResolvedValue([]);
+  vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -604,5 +606,153 @@ describe("buildTrainingContext", () => {
 
     expect(ctx.coachingInsights?.neglectedPatterns).toBeUndefined();
     expect(ctx.coachingInsights?.neglectedMuscles).toBeUndefined();
+  });
+});
+
+describe("buildTrainingContext declared absences", () => {
+  function annotation(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "ann-1",
+      userId: USER_ID,
+      startDate: "2026-06-10",
+      endDate: "2026-06-20",
+      type: "injury",
+      note: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    } as never;
+  }
+
+  it("carries the athlete's standing constraints through from their profile", async () => {
+    vi.mocked(storage.users.getUser).mockResolvedValue(
+      makeUser({ trainingConstraints: "No sled at my gym." }),
+    );
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.trainingConstraints).toBe("No sled at my gym.");
+  });
+
+  it("reports empty rather than absent for an athlete who has declared nothing", async () => {
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.trainingConstraints).toBeNull();
+    expect(ctx.absences).toEqual([]);
+  });
+
+  it("marks a range covering today as active, and flags the medical ones", async () => {
+    // TODAY is 2026-06-15.
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type: "injury" }),
+      annotation({ id: "ann-2", startDate: "2026-06-01", endDate: "2026-06-05", type: "travel" }),
+    ]);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.absences).toHaveLength(2);
+    const injury = ctx.absences!.find((a) => a.type === "injury")!;
+    const travel = ctx.absences!.find((a) => a.type === "travel")!;
+    expect(injury.active).toBe(true);
+    expect(injury.medical).toBe(true);
+    expect(travel.active).toBe(false);
+    expect(travel.medical).toBe(false);
+  });
+
+  it("keeps a long-running injury that started before the lookback window", async () => {
+    // Overlap, not containment: this started 100 days ago and is STILL running,
+    // which makes it the most important one to surface, not the least.
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ startDate: "2026-03-07", endDate: "2026-07-01" }),
+    ]);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.absences).toHaveLength(1);
+    expect(ctx.absences![0].active).toBe(true);
+  });
+
+  it("drops ranges that are wholly outside the window either side", async () => {
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ id: "old", startDate: "2025-01-01", endDate: "2025-01-10" }),
+      annotation({ id: "far", startDate: "2027-01-01", endDate: "2027-01-10" }),
+    ]);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.absences).toEqual([]);
+  });
+
+  it("caps how many absences reach the prompt, newest first", async () => {
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue(
+      Array.from({ length: 12 }, (_, i) =>
+        annotation({
+          id: `ann-${i}`,
+          startDate: `2026-06-${String(i + 1).padStart(2, "0")}`,
+          endDate: `2026-06-${String(i + 1).padStart(2, "0")}`,
+        }),
+      ),
+    );
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    expect(ctx.absences).toHaveLength(8);
+    expect(ctx.absences![0].startDate).toBe("2026-06-12");
+  });
+
+  // The decision engine is mocked in this file, so these assert on what it is
+  // ASKED — the wiring this change owns. That illnessFlag then produces a hard
+  // recovery stop is the engine's own contract, covered in
+  // trainingDecisionEngine.test.ts.
+  function illnessFlagPassedToEngine(): boolean {
+    return decideMock.mock.calls[0][0].recoveryMarkers.illnessFlag ?? false;
+  }
+
+  it("raises the recovery flag during a declared injury", async () => {
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type: "injury" }),
+    ]);
+
+    await buildTrainingContext(USER_ID);
+
+    // Hardcoded false before this, so a declared injury left the engine
+    // happily permitting intensity.
+    expect(illnessFlagPassedToEngine()).toBe(true);
+  });
+
+  it("raises it for a declared illness too", async () => {
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type: "illness" }),
+    ]);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(illnessFlagPassedToEngine()).toBe(true);
+  });
+
+  it("does NOT raise it for travel or a planned rest block", async () => {
+    // Being away from your gym is not a recovery state. Treating it as one
+    // would drop the athlete into reset_repair for a business trip.
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type: "travel" }),
+      annotation({ id: "ann-2", startDate: "2026-06-12", endDate: "2026-06-18", type: "rest" }),
+    ]);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(illnessFlagPassedToEngine()).toBe(false);
+  });
+
+  it("does NOT raise it for an injury that has already ended", async () => {
+    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
+      annotation({ startDate: "2026-05-01", endDate: "2026-05-10", type: "injury" }),
+    ]);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    // It still reaches the prompt as context for the dip, but it no longer gates.
+    expect(ctx.absences).toHaveLength(1);
+    expect(ctx.absences![0].active).toBe(false);
+    expect(illnessFlagPassedToEngine()).toBe(false);
   });
 });

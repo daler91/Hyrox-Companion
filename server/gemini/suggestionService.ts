@@ -4,6 +4,7 @@ import { z } from "zod";
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { SUGGESTIONS_PROMPT } from "../prompts";
+import { formatAthleteConstraints } from "../prompts/athleteConstraints";
 import { formatCoachingAnalysis } from "../prompts/coachingAnalysis";
 import { relativeDayLabel } from "../prompts/coachingContext";
 import {
@@ -246,6 +247,10 @@ export function buildPromptDataSections(
 
   const sections = [
     ...header,
+    // Immediately after the header, ahead of the history: this is the path that
+    // rewrites upcoming sessions, so a declared injury has to be in front of
+    // the model before it decides what next week looks like.
+    formatAthleteConstraints(trainingContext),
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
     formatPerformanceStats(trainingContext.structuredExerciseStats),
     formatRecentWorkouts(trainingContext),

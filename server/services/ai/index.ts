@@ -1,7 +1,7 @@
 import type { TrainingLoadOverview } from "@shared/schema";
 
 import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
-import type { TrainingContext } from "../../gemini/index";
+import type { CoachAbsence, TrainingContext } from "../../gemini/index";
 import { logger } from "../../logger";
 import { calculateStreak } from "../../routeUtils";
 import { storage } from "../../storage";
@@ -34,11 +34,66 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How far either side of today a declared absence stays worth telling the coach
+ * about. Backwards matches the load-history window, so a range that explains a
+ * dip the coach can still see is still explained; forwards is long enough to
+ * catch booked travel before it is programmed over.
+ */
+const ABSENCE_LOOKBACK_DAYS = 70;
+const ABSENCE_LOOKAHEAD_DAYS = 28;
+/** Hard cap, so an athlete with a long annotation history can't bloat the prompt. */
+const MAX_ABSENCES_IN_CONTEXT = 8;
+
 function addDays(date: string, delta: number): string {
   // ⚡ Bolt Performance Optimization:
   // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
   const timestamp = Date.parse(`${date}T00:00:00Z`) + delta * DAY_MS;
   return new Date(timestamp).toISOString().split("T")[0];
+}
+
+/**
+ * The declared absences near enough to today for the coach to reason about,
+ * newest first and capped.
+ *
+ * Overlap, not containment: an injury that started three months ago and is
+ * still running is the single most important one to surface, and a containment
+ * test would drop it for starting too long ago.
+ */
+function selectAbsencesForContext(
+  annotations: readonly {
+    startDate: string;
+    endDate: string;
+    type: string;
+    note: string | null;
+  }[],
+  today: string,
+): CoachAbsence[] {
+  const from = addDays(today, -ABSENCE_LOOKBACK_DAYS);
+  const to = addDays(today, ABSENCE_LOOKAHEAD_DAYS);
+  return annotations
+    .filter((a) => a.startDate <= to && a.endDate >= from)
+    .sort((a, b) => b.startDate.localeCompare(a.startDate))
+    .slice(0, MAX_ABSENCES_IN_CONTEXT)
+    .map((a) => ({
+      startDate: a.startDate,
+      endDate: a.endDate,
+      type: a.type as CoachAbsence["type"],
+      note: a.note,
+      active: a.startDate <= today && today <= a.endDate,
+      medical: a.type === "injury" || a.type === "illness",
+    }));
+}
+
+/**
+ * An injury or illness the athlete says they are in RIGHT NOW.
+ *
+ * Travel and planned rest are deliberately excluded: being away from your gym
+ * is not a recovery state, and counting it as one would drop the athlete into
+ * reset_repair for a business trip.
+ */
+function hasActiveMedicalAbsence(absences: readonly CoachAbsence[]): boolean {
+  return absences.some((a) => a.active && a.medical);
 }
 
 function mapTestTrendDirection(
@@ -242,6 +297,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     loadWorkoutLogs,
     loadExerciseSets,
     loadTags,
+    annotations,
   ] = await Promise.all([
     // Bound to recent history: this internal caller has no caller-supplied
     // limit, so an unbounded getTimeline() would hydrate the user's entire
@@ -253,7 +309,14 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     storage.analytics.getWorkoutLogsByDateRange(userId, loadHistoryStart, today),
     storage.analytics.getAllExerciseSetsWithDates(userId, loadHistoryStart, today),
     storage.analytics.getExerciseLoadTags(),
+    // Unbounded by date: an athlete accumulates a handful of these a year, so
+    // the windowing is done in selectAbsencesForContext rather than paying for
+    // a range predicate. Same reasoning as TimelineStorage.fetchAbsences.
+    storage.timelineAnnotations.list(userId),
   ]);
+
+  const absences = selectAbsencesForContext(annotations, today);
+  const activeMedicalAbsence = hasActiveMedicalAbsence(absences);
 
   const {
     completedWorkouts,
@@ -322,7 +385,13 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       sleepQuality: "ok",
       soreness: rpeTrend.fatigueFlag ? "high" : "low",
       restingHrDelta: 0,
-      illnessFlag: false,
+      // Was hardcoded false, which meant the decision engine had a field for
+      // exactly this and nothing ever set it — an athlete could declare an
+      // injury and still be told intensity was permitted. This drives a hard
+      // recovery stop (phase reset_repair), the same lever the fatigue flag
+      // above already pulls via `soreness`, and it clears itself when the
+      // declared range ends.
+      illnessFlag: activeMedicalAbsence,
     },
   });
 
@@ -411,6 +480,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     completionRate,
     currentStreak,
     currentDate: today,
+    // Unconditional, like mafHr below and the recent/upcoming arrays: the
+    // renderer already self-suppresses on empty, so a conditional spread here
+    // would buy nothing but branches.
+    trainingConstraints: user?.trainingConstraints ?? null,
+    absences,
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),
     weeklyGoal: user?.weeklyGoal ?? undefined,

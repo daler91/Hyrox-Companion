@@ -1,6 +1,7 @@
 import { exerciseNames } from "@shared/schema/exercises";
 
 import type { TrainingContext } from "./gemini/types";
+import { formatAthleteConstraints } from "./prompts/athleteConstraints";
 import { formatCoachingAnalysis } from "./prompts/coachingAnalysis";
 import {
   buildCurrentDateContext,
@@ -543,6 +544,11 @@ export function buildSystemPrompt(
   let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
 
   contextSection += buildCurrentDateContext(trainingContext);
+  // Ahead of the stats on purpose: an injury the athlete declared changes how
+  // every number below should be read, so the coach needs it before it sees a
+  // completion rate to be disappointed by.
+  const constraintsSection = formatAthleteConstraints(trainingContext);
+  if (constraintsSection) contextSection += `\n${constraintsSection}\n`;
   contextSection += buildOverallStats(trainingContext);
   contextSection += buildExerciseFocus(trainingContext);
   contextSection += buildStructuredPerformance(trainingContext);
