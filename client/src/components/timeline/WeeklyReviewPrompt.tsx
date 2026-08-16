@@ -4,6 +4,7 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { dismissPrompt, getWeeklyReviewPrompt, isPromptDismissed } from "@/lib/weeklyReviewPrompt";
 
@@ -34,7 +35,9 @@ export function WeeklyReviewPrompt() {
           <CalendarCheck className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <p className="font-medium">
-              {prompt.isWrappingUp ? "Your training week is wrapping up" : "Last week is ready to review"}
+              {prompt.isWrappingUp
+                ? "Your training week is wrapping up"
+                : "Last week is ready to review"}
             </p>
             <p className="text-sm text-muted-foreground">
               {prompt.isWrappingUp
@@ -48,18 +51,25 @@ export function WeeklyReviewPrompt() {
           <Button asChild size="sm" data-testid="weekly-review-prompt-open">
             <Link href={`/review?week=${prompt.weekStart}`}>Open review</Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Dismiss weekly review prompt"
-            data-testid="weekly-review-prompt-dismiss"
-            onClick={() => {
-              dismissPrompt(userId, prompt.weekStart);
-              setDismissed(true);
-            }}
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Dismiss weekly review prompt"
+                  data-testid="weekly-review-prompt-dismiss"
+                  onClick={() => {
+                    dismissPrompt(userId, prompt.weekStart);
+                    setDismissed(true);
+                  }}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Dismiss prompt</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>

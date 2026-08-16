@@ -39,3 +39,6 @@
 ## 2026-08-09 - Enforce 200ms tooltip delay
 **Learning:** The default custom `TooltipProvider` has a globally snappy `delayDuration` of 200ms. Overriding this value locally (e.g., `delayDuration={300}`) breaks consistency and makes UI interactions feel sluggish and unpolished.
 **Action:** Rely on the custom default `TooltipProvider` without specifying `delayDuration` manually unless there is an exceptional and documented reason to override the global standard.
+## 2025-02-18 - Isolated Icon Tooltip Context
+**Learning:** When adding tooltips to icon-only buttons (`size="icon"`) in isolated components or specific areas that aren't globally wrapped, it's critical to include a local `<TooltipProvider>` along with `<Tooltip>`, `<TooltipTrigger asChild>`, and `<TooltipContent>`. Missing the provider causes the tooltip context to be unavailable.
+**Action:** Always ensure that `<TooltipProvider>` is present around the `<Tooltip>` for isolated elements like prompt dismiss buttons to guarantee accessibility and proper rendering.
