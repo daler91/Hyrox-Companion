@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isDateExcused } from "./absence";
+import { isDateExcused, isExcusedFromMissed } from "./absence";
 
 describe("isDateExcused", () => {
   const injury = { startDate: "2026-07-13", endDate: "2026-07-19" };
@@ -46,5 +46,37 @@ describe("isDateExcused", () => {
     expect(isDateExcused("2027-01-01", [newYear])).toBe(true);
     expect(isDateExcused("2027-01-05", [newYear])).toBe(false);
     expect(isDateExcused("2026-12-27", [newYear])).toBe(false);
+  });
+});
+
+describe("isExcusedFromMissed", () => {
+  const TODAY = "2026-08-16";
+
+  it("is false when the day is not inside any declared absence", () => {
+    expect(isExcusedFromMissed("missed", "2026-08-10", TODAY, false)).toBe(false);
+    expect(isExcusedFromMissed("planned", "2026-08-10", TODAY, false)).toBe(false);
+  });
+
+  it("excuses a stored missed day — the sweep ran before the annotation existed", () => {
+    expect(isExcusedFromMissed("missed", "2026-08-10", TODAY, true)).toBe(true);
+  });
+
+  it("excuses a past day still planned — the sweep skipped it for the annotation", () => {
+    expect(isExcusedFromMissed("planned", "2026-08-10", TODAY, true)).toBe(true);
+    expect(isExcusedFromMissed(null, "2026-08-10", TODAY, true)).toBe(true);
+  });
+
+  it("never excuses what the athlete actually did", () => {
+    // Training through an injury week is still training, and an explicit skip
+    // is a decision they made — neither gets rewritten as "not counted".
+    expect(isExcusedFromMissed("completed", "2026-08-10", TODAY, true)).toBe(false);
+    expect(isExcusedFromMissed("skipped", "2026-08-10", TODAY, true)).toBe(false);
+  });
+
+  it("does not excuse a future day inside a booked absence", () => {
+    // Nothing has been missed yet — the day is simply still planned. Today
+    // itself is the same: the session can still happen.
+    expect(isExcusedFromMissed("planned", "2026-08-20", TODAY, true)).toBe(false);
+    expect(isExcusedFromMissed("planned", TODAY, TODAY, true)).toBe(false);
   });
 });

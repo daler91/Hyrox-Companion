@@ -31,3 +31,28 @@ export interface AbsenceRange {
 export function isDateExcused(date: string, ranges: readonly AbsenceRange[]): boolean {
   return ranges.some((range) => range.startDate <= date && date <= range.endDate);
 }
+
+/**
+ * Whether a declared absence is what is holding this plan day out of "missed"
+ * — the only case a surface should report as excused.
+ *
+ * Deliberately narrower than `isDateExcused` itself. A day the athlete
+ * completed or explicitly skipped during an injury week keeps its own status,
+ * because those are things they did rather than things that were forgiven; and
+ * a *future* day inside a booked travel range is simply still planned, with
+ * nothing yet to excuse.
+ *
+ * One rule, shared by the timeline's status derivation and the weekly review's
+ * counts, so a day can never read "Not counted" on one surface and "Missed" on
+ * the other.
+ */
+export function isExcusedFromMissed(
+  dayStatus: string | null,
+  scheduledDate: string,
+  today: string,
+  isExcused: boolean,
+): boolean {
+  if (!isExcused) return false;
+  if (dayStatus === "skipped" || dayStatus === "completed") return false;
+  return dayStatus === "missed" || scheduledDate < today;
+}

@@ -1,4 +1,7 @@
-import { type AbsenceRange, isDateExcused } from "@shared/absence";
+// isExcusedFromMissed lives in the shared leaf module so the weekly review's
+// counts apply the identical rule — a day must never read "Not counted" here
+// and "Missed" there.
+import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
 import {
   type ExerciseSet,
   exerciseSets,
@@ -69,27 +72,6 @@ function calculatePlanDayStatus(
   if (dayStatus === "missed") return "missed";
   if (scheduledDate < today) return "missed";
   return "planned";
-}
-
-/**
- * Whether the declared absence is what is holding this day out of `missed` —
- * the only case where the card should say so.
- *
- * Deliberately narrower than `isExcused` itself. A day the athlete completed or
- * explicitly skipped during an injury week keeps its own badge, because those
- * are things they did rather than things that were forgiven; and a *future* day
- * inside a booked travel range is simply still planned, with nothing yet to
- * excuse.
- */
-function isExcusedFromMissed(
-  dayStatus: string | null,
-  scheduledDate: string,
-  today: string,
-  isExcused: boolean,
-): boolean {
-  if (!isExcused) return false;
-  if (dayStatus === "skipped" || dayStatus === "completed") return false;
-  return dayStatus === "missed" || scheduledDate < today;
 }
 
 function createLinkedWorkoutEntry(

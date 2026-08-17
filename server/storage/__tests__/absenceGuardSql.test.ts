@@ -1,5 +1,5 @@
 import { planDays, timelineAnnotations, trainingPlans, users } from "@shared/schema";
-import { and, eq, gte, inArray, lt, lte, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, gte, inArray, lt, lte, notExists, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -107,6 +107,52 @@ describe("declared-absence guards", () => {
     // knows whose day it is asking about.
     expect(dialect.sqlToQuery(query.getSQL()).params).toEqual(
       expect.arrayContaining([userId, date, "missed", userId, date, date]),
+    );
+  });
+
+  it("correlates the weekly email's excused count to each plan day's own date", () => {
+    // getWeeklyStats' excused split (analytics.ts). Positive EXISTS this time:
+    // an uncorrelated version would excuse every day of everyone's week off a
+    // single annotation anywhere, silently deflating missed counts to zero.
+    const userId = "user-1";
+
+    const query = db
+      .select({
+        status: planDays.status,
+        count: sql<number>`cast(count(*) as int)`,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          sql`${planDays.scheduledDate} >= ${"2026-07-13"}`,
+          sql`${planDays.scheduledDate} <= ${"2026-07-19"}`,
+          inArray(planDays.status, ["planned", "missed"]),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(timelineAnnotations)
+              .where(
+                and(
+                  eq(timelineAnnotations.userId, userId),
+                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
+                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
+                ),
+              ),
+          ),
+        ),
+      )
+      .groupBy(planDays.status);
+
+    const rendered = render(query as never);
+    expect(rendered).toContain("exists");
+    // Correlated on the OUTER plan_days row's own date, per day.
+    expect(rendered).toContain(
+      `"timeline_annotations"."start_date" <= "plan_days"."scheduled_date"`,
+    );
+    expect(rendered).toContain(
+      `"timeline_annotations"."end_date" >= "plan_days"."scheduled_date"`,
     );
   });
 });

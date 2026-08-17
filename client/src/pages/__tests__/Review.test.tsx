@@ -42,11 +42,11 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
     hasPlan: true,
     current: {
       sessionsLogged: 3, sessionsPlanned: 4, plannedCompleted: 3,
-      missed: 1, skipped: 0, outstanding: 0, totalDurationMin: 180, avgRpe: 7,
+      missed: 1, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 180, avgRpe: 7,
     },
     previous: {
       sessionsLogged: 2, sessionsPlanned: 4, plannedCompleted: 2,
-      missed: 2, skipped: 0, outstanding: 0, totalDurationMin: 120, avgRpe: 6,
+      missed: 2, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 120, avgRpe: 6,
     },
     deltas: { sessionsLogged: 1, totalDurationMin: 60, avgRpe: 1 },
     sessions: [],
@@ -118,7 +118,7 @@ describe("Review page", () => {
       review({
         current: {
           sessionsLogged: 4, sessionsPlanned: 1, plannedCompleted: 1,
-          missed: 0, skipped: 0, outstanding: 0, totalDurationMin: 240, avgRpe: 6,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 240, avgRpe: 6,
         },
       }),
     );
@@ -135,7 +135,7 @@ describe("Review page", () => {
         hasPlan: false,
         current: {
           sessionsLogged: 2, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, totalDurationMin: 90, avgRpe: 6,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 90, avgRpe: 6,
         },
       }),
     );
@@ -153,7 +153,7 @@ describe("Review page", () => {
           { id: "a1", type: "injury", startDate: "2026-05-25", endDate: "2026-06-20", note: "Achilles" },
         ],
         plannedDays: [
-          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan" },
+          { planDayId: "pd-9", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan", excused: false },
         ],
       }),
     );
@@ -164,11 +164,34 @@ describe("Review page", () => {
     expect(screen.getByText(/aren't a shortfall/i)).toBeInTheDocument();
   });
 
+  it("reads an excused day as 'Not counted', never 'Missed'", async () => {
+    // Same wording as the timeline's badge for the same day — the two surfaces
+    // share the rule (isExcusedFromMissed) and must tell the same story.
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({
+        current: {
+          sessionsLogged: 1, sessionsPlanned: 3, plannedCompleted: 1,
+          missed: 0, skipped: 0, outstanding: 0, excused: 2, totalDurationMin: 60, avgRpe: 6,
+        },
+        plannedDays: [
+          { planDayId: "pd-e", date: "2026-06-10", focus: "Long Run", status: "missed", skipReason: null, planName: "Plan", excused: true },
+        ],
+      }),
+    );
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review-excused-pd-e")).toBeInTheDocument());
+    expect(screen.getByTestId("weekly-review-excused-pd-e")).toHaveTextContent("Not counted");
+    expect(screen.getByTestId("weekly-review-planned-pd-e")).not.toHaveTextContent("Missed");
+    // The adherence tile splits them out rather than folding them into missed.
+    expect(screen.getByTestId("weekly-review-adherence")).toHaveTextContent("2 not counted");
+  });
+
   it("names the skip reason next to what did not happen", async () => {
     mocks.getWeeklyReview.mockResolvedValue(
       review({
         plannedDays: [
-          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "Plan" },
+          { planDayId: "pd-2", date: "2026-06-11", focus: "Sled Push", status: "skipped", skipReason: "injured", planName: "Plan", excused: false },
         ],
       }),
     );
@@ -194,11 +217,11 @@ describe("Review page", () => {
         hasPlan: false,
         current: {
           sessionsLogged: 0, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, totalDurationMin: 0, avgRpe: null,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 0, avgRpe: null,
         },
         previous: {
           sessionsLogged: 0, sessionsPlanned: 0, plannedCompleted: 0,
-          missed: 0, skipped: 0, outstanding: 0, totalDurationMin: 0, avgRpe: null,
+          missed: 0, skipped: 0, outstanding: 0, excused: 0, totalDurationMin: 0, avgRpe: null,
         },
         deltas: { sessionsLogged: 0, totalDurationMin: 0, avgRpe: null },
       }),

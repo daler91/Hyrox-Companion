@@ -7,7 +7,7 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, desc, eq, gte, lte, notExists,type SQL,sql } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, lte, notExists,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
@@ -200,7 +200,13 @@ export class AnalyticsStorage {
     }));
   }
 
-  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; totalDuration: number }> {
+  /**
+   * The weekly summary email's counts (its only caller — `processWeeklySummary`
+   * reports the most recently COMPLETED week, which the excused split below
+   * relies on: with every day of the week in the past, "held out of missed by a
+   * declared absence" collapses to annotation coverage, no today needed).
+   */
+  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; excusedCount: number; totalDuration: number }> {
     const [logs] = await db
       .select({
         completedCount: sql<number>`cast(count(*) as int)`,
@@ -231,6 +237,43 @@ export class AnalyticsStorage {
       )
       .groupBy(planDays.status);
 
+    // Days a declared absence holds out of "missed" — the same rule as the
+    // weekly review's counts and the timeline's "Not counted" badge. They can
+    // sit under either status: `missed` when the sweep ran before the athlete
+    // logged the annotation, `planned` when it ran after (the sweep skips
+    // covered days). Grouped by status so each can be subtracted from the
+    // bucket the raw counts put it in. "You missed 3 sessions this week" on
+    // the Monday after an injury the athlete already logged is the exact
+    // email this exists to prevent.
+    const excusedRows = await db
+      .select({
+        status: planDays.status,
+        count: sql<number>`cast(count(*) as int)`,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          sql`${planDays.scheduledDate} >= ${weekStart}`,
+          sql`${planDays.scheduledDate} <= ${weekEnd}`,
+          inArray(planDays.status, ["planned", "missed"]),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(timelineAnnotations)
+              .where(
+                and(
+                  eq(timelineAnnotations.userId, userId),
+                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
+                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
+                ),
+              ),
+          ),
+        ),
+      )
+      .groupBy(planDays.status);
+
     const completedCount = logs?.completedCount || 0;
     const totalDuration = logs?.totalDuration || 0;
 
@@ -248,6 +291,16 @@ export class AnalyticsStorage {
       }
     }
 
-    return { completedCount, plannedCount, missedCount, skippedCount, totalDuration };
+    let excusedCount = 0;
+    for (const row of excusedRows) {
+      excusedCount += row.count;
+      if (row.status === 'missed') {
+        missedCount -= row.count;
+      } else {
+        plannedCount -= row.count;
+      }
+    }
+
+    return { completedCount, plannedCount, missedCount, skippedCount, excusedCount, totalDuration };
   }
 }

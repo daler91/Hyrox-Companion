@@ -80,6 +80,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     plannedCount: stats.plannedCount,
     missedCount: stats.missedCount,
     skippedCount: stats.skippedCount,
+    excusedCount: stats.excusedCount,
     completionRate: total > 0 ? Math.round((stats.completedCount / total) * 100) : 0,
     currentStreak: streak,
     prsThisWeek,

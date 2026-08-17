@@ -70,7 +70,21 @@ function PlannedDayRow({ day }: { readonly day: WeeklyReview["plannedDays"][numb
         <p className="font-medium text-muted-foreground">{day.focus}</p>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <Badge variant="outline">{STATUS_LABELS[day.status]}</Badge>
+        {day.excused ? (
+          // The day sits inside a declared absence — same wording as the
+          // timeline's badge, and it replaces the status label so an excused
+          // week never reads "Missed" here. The highlights card above names
+          // which absence.
+          <Badge
+            variant="outline"
+            className="text-muted-foreground"
+            data-testid={`weekly-review-excused-${day.planDayId}`}
+          >
+            Not counted
+          </Badge>
+        ) : (
+          <Badge variant="outline">{STATUS_LABELS[day.status]}</Badge>
+        )}
         {day.skipReason && (
           <Badge variant="secondary" data-testid={`weekly-review-skip-reason-${day.planDayId}`}>
             {SKIP_REASON_LABELS[day.skipReason]}
