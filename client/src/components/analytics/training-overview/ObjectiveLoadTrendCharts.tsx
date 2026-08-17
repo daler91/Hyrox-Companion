@@ -1,4 +1,5 @@
-import type { HrZone, TrainingLoadOverview } from "@shared/schema";
+import type { HrZone, TrainingLoadOverview, TrainingLoadTrendPoint } from "@shared/schema";
+import { useMemo } from "react";
 
 import { CHART_CARD_CLASS } from "../chartConstants";
 import { MiniLineChart } from "../MiniLineChart";
@@ -20,6 +21,14 @@ const HR_ZONE_LABELS: Record<HrZone, string> = {
   z5: "VO2max",
 };
 
+// ⚡ Fully static — hoisted so it keeps the same reference across renders,
+// letting MultiLineChart's React.memo skip re-rendering the fitness chart
+// when its sibling `data` prop is unchanged (see below).
+const FITNESS_SERIES = [
+  { valueKey: "chronicEwma", color: "green", label: "Fitness (chronic)" },
+  { valueKey: "acuteEwma", color: "amber", label: "Fatigue (acute)" },
+];
+
 /**
  * Surfaces the objective-load signals that are computed server-side but were not
  * yet charted: power TSS and hrTSS (the objective counterparts to the subjective
@@ -37,23 +46,45 @@ export function ObjectiveLoadTrendCharts({
 }: Readonly<{ trainingLoad: TrainingLoadOverview; explanation?: string }>) {
   const { trend } = trainingLoad;
 
-  const hasHrTss = trend.filter((p) => p.hrTss != null).length >= MIN_POINTS;
-  const hasTss = trend.filter((p) => p.tss != null).length >= MIN_POINTS;
-  const fitnessData = trend.filter((p) => p.chronicEwma != null && p.acuteEwma != null);
-  const strainData = trend.filter((p) => p.strain != null);
+  // ⚡ Single pass over `trend` (was 4 separate .filter() calls) computed inside
+  // useMemo so `fitnessData`/`strainData` keep a stable reference across renders
+  // when `trend` hasn't changed — required for MultiLineChart's React.memo (which
+  // does a shallow prop comparison) to actually skip its expensive Recharts
+  // re-render instead of seeing "new array" on every parent re-render.
+  const { hasHrTss, hasTss, fitnessData, strainData } = useMemo(() => {
+    let hrTssCount = 0;
+    let tssCount = 0;
+    const fitness: TrainingLoadTrendPoint[] = [];
+    const strain: TrainingLoadTrendPoint[] = [];
+    for (const p of trend) {
+      if (p.hrTss != null) hrTssCount++;
+      if (p.tss != null) tssCount++;
+      if (p.chronicEwma != null && p.acuteEwma != null) fitness.push(p);
+      if (p.strain != null) strain.push(p);
+    }
+    return {
+      hasHrTss: hrTssCount >= MIN_POINTS,
+      hasTss: tssCount >= MIN_POINTS,
+      fitnessData: fitness,
+      strainData: strain,
+    };
+  }, [trend]);
 
   const showObjective = hasHrTss || hasTss;
   const showFitness = fitnessData.length >= MIN_POINTS;
   const showStrain = strainData.length >= MIN_POINTS;
   const showZones = hasHrTss && trainingLoad.hrZones.length > 0;
 
-  if (!showObjective && !showFitness && !showStrain) return null;
+  const objectiveSeries = useMemo(
+    () => [
+      { valueKey: "utss", color: "primary", label: "UTSS (subjective)" },
+      ...(hasHrTss ? [{ valueKey: "hrTss", color: "purple", label: "hrTSS (HR)" }] : []),
+      ...(hasTss ? [{ valueKey: "tss", color: "blue", label: "Power TSS (est.)" }] : []),
+    ],
+    [hasHrTss, hasTss],
+  );
 
-  const objectiveSeries = [
-    { valueKey: "utss", color: "primary", label: "UTSS (subjective)" },
-    ...(hasHrTss ? [{ valueKey: "hrTss", color: "purple", label: "hrTSS (HR)" }] : []),
-    ...(hasTss ? [{ valueKey: "tss", color: "blue", label: "Power TSS (est.)" }] : []),
-  ];
+  if (!showObjective && !showFitness && !showStrain) return null;
 
   return (
     <div className="space-y-6" data-testid="objective-load-trend-charts">
@@ -124,10 +155,7 @@ export function ObjectiveLoadTrendCharts({
         <MultiLineChart
           data={fitnessData}
           xKey="date"
-          series={[
-            { valueKey: "chronicEwma", color: "green", label: "Fitness (chronic)" },
-            { valueKey: "acuteEwma", color: "amber", label: "Fatigue (acute)" },
-          ]}
+          series={FITNESS_SERIES}
           label="Fitness & Fatigue"
           valueFormatter={formatLoad}
           testId="multi-line-chart-fitness-fatigue"
