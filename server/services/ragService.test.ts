@@ -131,7 +131,9 @@ describe("embedCoachingMaterial", () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so implementations set by one test
+    // cannot leak into the next under shuffled execution order.
+    vi.resetAllMocks();
   });
 
   it("should replace existing chunks with new ones", async () => {
@@ -238,11 +240,14 @@ describe("embedCoachingMaterial", () => {
 
 describe("retrieveRelevantChunks", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks) so a mockResolvedValue/mockImplementation
+    // set by one test cannot leak into the next under shuffled execution order.
+    vi.resetAllMocks();
     // Default: no pinned principles, so the existing cases below exercise the
     // unpinned search path unchanged.
     vi.mocked(storage.coaching.listPrincipleMaterialIds).mockResolvedValue([]);
     vi.mocked(storage.coaching.listChunksForMaterials).mockResolvedValue([]);
+    vi.mocked(storage.coaching.searchChunksByEmbedding).mockResolvedValue([]);
   });
 
   it("should embed query and search for similar chunks", async () => {
