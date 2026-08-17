@@ -258,13 +258,12 @@ mechanism exists.
 | --- | ------------------------------------------------------------------------------------------------------------------------ | ---- | ------ |
 | 1   | `getDayOfWeekForDateStr`, `getWeekRangeForDate`, `getLocalMondayWeekBoundaries` + unit tests; email refactored onto them | S    | landed |
 | 2   | `weeklyReviewService` + `GET /api/v1/weekly-review` + `getPlanDaysByDateRange` + tests + `WeeklyReview` wire type        | M    | landed |
-| 3   | `/review` page, hook, API client, empty/edge states + component tests                                                    | M    |        |
-| 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                                 | S    |        |
-| 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                             | S–M  |        |
+| 3   | `/review` page, hook, API client, empty/edge states + component tests                                                    | M    | landed |
+| 4   | Entry points: email CTA, push deep link, Timeline banner, Analytics link                                                 | S    | landed |
+| 5   | v1.1 — `weekly_reviews` table, intent capture, carry-forward                                                             | S–M  | landed |
 
 **Total: M.** PR1 stood alone: the week helpers are the vocabulary every later PR is written
-in, and the email now shares one definition of "last week" with the page that does not exist
-yet.
+in, and the email now shares one definition of "last week" with the page.
 
 **Testing notes.** The week math needs unit tests across DST transitions in both hemispheres,
 year boundaries, and the Sunday `getUTCDay() === 0` case the existing function special-cases.

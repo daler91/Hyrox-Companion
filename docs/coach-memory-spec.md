@@ -1,8 +1,11 @@
 # Coach memory — the durable athlete card
 
-**Status.** **Path A shipped** (§1). Paths B and C are scope. Register entry: recommendation #8 in
-[`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before costing this** — two
-load-bearing claims in that register entry are wrong, and they were mine.
+**Status.** **Path A shipped** (§1), and so has the `timeline_annotations` slice of Path B —
+declared absences now reach the chat and suggestion prompts through
+`formatAthleteConstraints` (`server/prompts/athleteConstraints.ts`). The `skip_reason` and
+`mafInjuryIllnessMedication` inputs, and Path C, are still scope. Register entry:
+recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before
+costing this** — two load-bearing claims in that register entry are wrong, and they were mine.
 
 **One-line pitch.** Tell the coach the things that are true every week — bad left knee, no sled
 at my gym, shift work on Tuesdays — once, and have it remember.
