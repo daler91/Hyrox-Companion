@@ -556,13 +556,19 @@ async function revalidateProposalChanges(
 }> {
   const liveDays = new Map<string, LivePlanDay>();
   const staleChanges: Array<{ planDayId: string; dayLabel: string }> = [];
+
+  const dayIds = [...new Set(changes.map((c) => c.planDayId))];
+  const [days, setsByDay] = await Promise.all([
+    storage.plans.getPlanDaysByIds(dayIds, userId),
+    storage.workouts.getExerciseSetsByPlanDays(dayIds, userId),
+  ]);
+  const dayById = new Map(days.map((d) => [d.id, d]));
+
   for (const change of changes) {
-    const [day, sets] = await Promise.all([
-      storage.plans.getPlanDay(change.planDayId, userId),
-      storage.workouts.getExerciseSetsByPlanDay(change.planDayId, userId),
-    ]);
+    const day = dayById.get(change.planDayId);
+    const sets = setsByDay.get(change.planDayId) ?? [];
     const live: LivePlanDay | null =
-      day && sets !== null && day.status === "planned" ? { day, sets } : null;
+      day && day.status === "planned" ? { day, sets } : null;
     if (!live || fingerprintLiveDay(live) !== change.baseline.fingerprint) {
       staleChanges.push({ planDayId: change.planDayId, dayLabel: change.dayLabel });
       continue;
