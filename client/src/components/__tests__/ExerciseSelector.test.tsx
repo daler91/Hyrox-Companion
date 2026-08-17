@@ -18,16 +18,22 @@ function setup() {
 }
 
 describe("ExerciseSelector", () => {
-  it("filters exercises by displayed label and keeps the EMOM helper visible", async () => {
-    const { search, user } = setup();
+  it(
+    "filters exercises by displayed label and keeps the EMOM helper visible",
+    async () => {
+      const { search, user } = setup();
 
-    await user.type(search, "sled push");
+      await user.type(search, "sled push");
 
-    expect(screen.getByTestId("exercise-selector-emom-help")).toHaveTextContent("EMOM is configured");
-    expect(screen.getByTestId("button-exercise-sled_push")).toHaveTextContent("Sled Push");
-    expect(screen.queryByTestId("button-exercise-back_squat")).not.toBeInTheDocument();
-    expect(screen.queryByText("Strength")).not.toBeInTheDocument();
-  }, INTERACTION_TIMEOUT_MS);
+      expect(screen.getByTestId("exercise-selector-emom-help")).toHaveTextContent(
+        "EMOM is configured",
+      );
+      expect(screen.getByTestId("button-exercise-sled_push")).toHaveTextContent("Sled Push");
+      expect(screen.queryByTestId("button-exercise-back_squat")).not.toBeInTheDocument();
+      expect(screen.queryByText("Strength")).not.toBeInTheDocument();
+    },
+    INTERACTION_TIMEOUT_MS,
+  );
 
   it("filters exercises by canonical key", async () => {
     const { search, user } = setup();
@@ -42,7 +48,9 @@ describe("ExerciseSelector", () => {
     const { search, user } = setup();
 
     await user.type(search, "db bench");
-    expect(screen.getByTestId("button-exercise-dumbbell_bench_press")).toHaveTextContent("Dumbbell Bench Press");
+    expect(screen.getByTestId("button-exercise-dumbbell_bench_press")).toHaveTextContent(
+      "Dumbbell Bench Press",
+    );
     expect(screen.queryByTestId("button-exercise-back_squat")).not.toBeInTheDocument();
 
     await user.clear(search);
@@ -59,13 +67,30 @@ describe("ExerciseSelector", () => {
 
     await user.type(search, "not a movement");
 
-    expect(screen.getByTestId("exercise-selector-empty")).toHaveTextContent("No matching exercises");
+    const emptyState = screen.getByTestId("exercise-selector-empty");
+    expect(emptyState).toHaveTextContent(/No exercises match/);
+    expect(emptyState).toHaveTextContent("not a movement");
     expect(screen.queryByTestId("button-exercise-back_squat")).not.toBeInTheDocument();
 
-    await user.clear(search);
+    // Use the "Clear search" link in the empty state to reset
+    await user.click(screen.getByTestId("exercise-selector-empty-clear"));
+    expect(screen.getByTestId("button-exercise-bike_erg")).toBeInTheDocument();
+
     await user.type(search, "bikeerg");
     await user.click(screen.getByTestId("button-exercise-bike_erg"));
 
     expect(onToggle).toHaveBeenCalledWith("bike_erg");
+  });
+
+  it("clears search via the inline clear button", async () => {
+    const { search, user } = setup();
+
+    await user.type(search, "sled");
+    expect(screen.getByTestId("exercise-selector-search-clear")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("exercise-selector-search-clear"));
+    expect(search).toHaveValue("");
+    // All exercises should be visible again
+    expect(screen.getByTestId("button-exercise-back_squat")).toBeInTheDocument();
   });
 });

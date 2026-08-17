@@ -1,6 +1,10 @@
 import type { ExerciseCategory } from "@shared/schema";
-import { EXERCISE_DEFINITIONS, EXERCISE_NAME_ALIASES, type ExerciseName } from "@shared/schema/exercises";
-import { Plus, Search } from "lucide-react";
+import {
+  EXERCISE_DEFINITIONS,
+  EXERCISE_NAME_ALIASES,
+  type ExerciseName,
+} from "@shared/schema/exercises";
+import { Plus, Search, X } from "lucide-react";
 import React from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,28 +31,49 @@ const categoryOrder: ExerciseCategory[] = ["functional", "running", "strength", 
 // Move static array allocation and filtering outside of the component.
 // This prevents O(N) object entries allocation and O(N) array filtering
 // from running on every single render of the ExerciseSelector.
-const exercisesByCategory = categoryOrder.map(cat => ({
+const exercisesByCategory = categoryOrder.map((cat) => ({
   category: cat,
   label: selectorCategoryLabels[cat],
-  exercises: (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
-    .filter(([name, def]) => def.category === cat && name !== "emom"),
+  exercises: (
+    Object.entries(EXERCISE_DEFINITIONS) as [
+      ExerciseName,
+      (typeof EXERCISE_DEFINITIONS)[ExerciseName],
+    ][]
+  ).filter(([name, def]) => def.category === cat && name !== "emom"),
 }));
 
 function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
-const exerciseAliasesByName = Object.entries(EXERCISE_NAME_ALIASES).reduce<Partial<Record<ExerciseName, string[]>>>(
-  (aliasesByName, [alias, exerciseName]) => {
-    aliasesByName[exerciseName] = [...(aliasesByName[exerciseName] ?? []), alias, alias.replaceAll("_", " ")];
-    return aliasesByName;
-  },
-  {},
-);
+const exerciseAliasesByName = Object.entries(EXERCISE_NAME_ALIASES).reduce<
+  Partial<Record<ExerciseName, string[]>>
+>((aliasesByName, [alias, exerciseName]) => {
+  aliasesByName[exerciseName] = [
+    ...(aliasesByName[exerciseName] ?? []),
+    alias,
+    alias.replaceAll("_", " "),
+  ];
+  return aliasesByName;
+}, {});
 
-const exerciseSearchTokens = (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseName, typeof EXERCISE_DEFINITIONS[ExerciseName]][])
-  .reduce<Record<ExerciseName, string[]>>((tokensByName, [name, def]) => {
-    const rawTokens = [name, name.replaceAll("_", " "), def.label, ...(exerciseAliasesByName[name] ?? [])];
+const exerciseSearchTokens = (
+  Object.entries(EXERCISE_DEFINITIONS) as [
+    ExerciseName,
+    (typeof EXERCISE_DEFINITIONS)[ExerciseName],
+  ][]
+).reduce<Record<ExerciseName, string[]>>(
+  (tokensByName, [name, def]) => {
+    const rawTokens = [
+      name,
+      name.replaceAll("_", " "),
+      def.label,
+      ...(exerciseAliasesByName[name] ?? []),
+    ];
     const tokens = new Set<string>();
 
     for (const rawToken of rawTokens) {
@@ -60,14 +85,27 @@ const exerciseSearchTokens = (Object.entries(EXERCISE_DEFINITIONS) as [ExerciseN
 
     tokensByName[name] = [...tokens];
     return tokensByName;
-  }, {} as Record<ExerciseName, string[]>);
+  },
+  {} as Record<ExerciseName, string[]>,
+);
 
-function exerciseMatchesSearch(name: ExerciseName, searchTerm: string, compactSearchTerm: string): boolean {
+function exerciseMatchesSearch(
+  name: ExerciseName,
+  searchTerm: string,
+  compactSearchTerm: string,
+): boolean {
   if (!searchTerm) return true;
-  return exerciseSearchTokens[name].some((token) => token.includes(searchTerm) || token.includes(compactSearchTerm));
+  return exerciseSearchTokens[name].some(
+    (token) => token.includes(searchTerm) || token.includes(compactSearchTerm),
+  );
 }
 
-export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDuplicates = false }: Readonly<ExerciseSelectorProps>) {
+export function ExerciseSelector({
+  selectedExercises,
+  onToggle,
+  onAdd,
+  allowDuplicates = false,
+}: Readonly<ExerciseSelectorProps>) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const selectedCounts = React.useMemo(() => {
     const counts: Partial<Record<ExerciseName, number>> = {};
@@ -87,7 +125,9 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
     // during fast-typing searches in the Exercise Selector.
     const result = [];
     for (const group of exercisesByCategory) {
-      const filtered = group.exercises.filter(([name]) => exerciseMatchesSearch(name, searchTerm, compactSearchTerm));
+      const filtered = group.exercises.filter(([name]) =>
+        exerciseMatchesSearch(name, searchTerm, compactSearchTerm),
+      );
       if (filtered.length > 0) {
         result.push({ ...group, exercises: filtered });
       }
@@ -100,7 +140,10 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
   return (
     <div className="space-y-4" data-testid="exercise-selector">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
         <Input
           type="search"
           value={searchQuery}
@@ -109,18 +152,45 @@ export function ExerciseSelector({ selectedExercises, onToggle, onAdd, allowDupl
           enterKeyHint="search"
           aria-label="Search exercises"
           autoComplete="off"
-          className="pl-9"
+          className="pl-9 pr-9"
           data-testid="exercise-selector-search"
         />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Clear search"
+            data-testid="exercise-selector-search-clear"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        )}
       </div>
 
-      <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground" data-testid="exercise-selector-emom-help">
+      <div
+        className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+        data-testid="exercise-selector-emom-help"
+      >
         EMOM is configured as a block, not a single exercise.
       </div>
 
       {filteredExercisesByCategory.length === 0 && (
-        <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground" role="status" aria-live="polite" data-testid="exercise-selector-empty">
-          No matching exercises
+        <div
+          className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+          data-testid="exercise-selector-empty"
+        >
+          No exercises match &ldquo;{searchQuery}&rdquo;
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="ml-1.5 inline-flex items-center gap-1 rounded-sm text-primary underline underline-offset-2 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-testid="exercise-selector-empty-clear"
+          >
+            Clear search
+          </button>
         </div>
       )}
 
