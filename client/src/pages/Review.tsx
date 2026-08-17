@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { useWeeklyReview } from "@/hooks/useWeeklyReview";
@@ -69,27 +70,47 @@ export default function Review() {
               In progress
             </Badge>
           )}
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Previous week"
-            data-testid="weekly-review-prev"
-            onClick={() => setWeek(addDays(anchor, -7))}
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Next week"
-            data-testid="weekly-review-next"
-            // The current week is the last one worth opening — there is nothing
-            // to review in a week that has not started.
-            disabled={isAtCurrentWeek}
-            onClick={() => setWeek(addDays(anchor, 7))}
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Previous week"
+                  data-testid="weekly-review-prev"
+                  onClick={() => setWeek(addDays(anchor, -7))}
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Previous week</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Next week"
+                    data-testid="weekly-review-next"
+                    // The current week is the last one worth opening — there is nothing
+                    // to review in a week that has not started.
+                    disabled={isAtCurrentWeek}
+                    onClick={() => setWeek(addDays(anchor, 7))}
+                  >
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Next week</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
