@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
-import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
+import { syncPlanDayStatusesFromWorkouts } from "../storage/planDayStatus";
 
 export const BULK_DELETE_WORKOUTS_NOT_FOUND = "One or more workouts were not found";
 
@@ -42,18 +42,18 @@ export async function bulkDeleteWorkouts({
   return db.transaction(async (tx) => {
     const sourceWorkouts = workoutLogIds.length
       ? await tx
-        .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })
-        .from(workoutLogs)
-        .where(and(inArray(workoutLogs.id, workoutLogIds), eq(workoutLogs.userId, userId)))
+          .select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId })
+          .from(workoutLogs)
+          .where(and(inArray(workoutLogs.id, workoutLogIds), eq(workoutLogs.userId, userId)))
       : [];
     assertAllTargetsMatched(sourceWorkouts.length, workoutLogIds.length);
 
     const ownedPlanDays = planDayIds.length
       ? await tx
-        .select({ id: planDays.id })
-        .from(planDays)
-        .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
-        .where(and(inArray(planDays.id, planDayIds), eq(trainingPlans.userId, userId)))
+          .select({ id: planDays.id })
+          .from(planDays)
+          .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+          .where(and(inArray(planDays.id, planDayIds), eq(trainingPlans.userId, userId)))
       : [];
     assertAllTargetsMatched(ownedPlanDays.length, planDayIds.length);
 
@@ -70,14 +70,11 @@ export async function bulkDeleteWorkouts({
           .map((workout) => workout.planDayId)
           .filter((planDayId): planDayId is string => Boolean(planDayId)),
       );
-      // Sequential on purpose: these share the single transaction connection
-      // (`tx`), so Promise.all here would throw "another query is already in
-      // progress". The set is bounded by the workouts being deleted; the path
-      // to fewer round-trips is a bulk-update variant of
-      // syncPlanDayStatusFromWorkouts (accepting an id array), not concurrency.
-      for (const planDayId of linkedPlanDayIds) {
-        await syncPlanDayStatusFromWorkouts(planDayId, userId, tx);
-      }
+      // Batched: one SELECT FOR UPDATE + one grouped COUNT + up to two
+      // UPDATEs total, instead of that same trio repeated once per linked
+      // plan_day. Still runs on the single transaction connection (`tx`), so
+      // this is a round-trip-count win, not a concurrency one.
+      await syncPlanDayStatusesFromWorkouts([...linkedPlanDayIds], userId, tx);
     }
 
     if (planDayIds.length) {
