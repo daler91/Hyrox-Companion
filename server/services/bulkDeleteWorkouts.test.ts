@@ -1,12 +1,13 @@
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
-import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
+import { syncPlanDayStatusesFromWorkouts } from "../storage/planDayStatus";
 import {
   BULK_DELETE_WORKOUTS_NOT_FOUND,
   bulkDeleteWorkouts,
-  isBulkDeleteWorkoutsNotFoundError} from "./bulkDeleteWorkouts";
+  isBulkDeleteWorkoutsNotFoundError,
+} from "./bulkDeleteWorkouts";
 
 // Mock dependencies
 vi.mock("../db", () => {
@@ -18,7 +19,7 @@ vi.mock("../db", () => {
 });
 
 vi.mock("../storage/planDayStatus", () => ({
-  syncPlanDayStatusFromWorkouts: vi.fn(),
+  syncPlanDayStatusesFromWorkouts: vi.fn(),
 }));
 
 describe("bulkDeleteWorkouts", () => {
@@ -78,7 +79,7 @@ describe("bulkDeleteWorkouts", () => {
       const workoutLogIds = ["w1", "w2"];
       const sourceWorkouts = [
         { id: "w1", planDayId: "pd1" },
-        { id: "w2", planDayId: "pd2" }
+        { id: "w2", planDayId: "pd2" },
       ];
 
       mockTx.where.mockResolvedValueOnce(sourceWorkouts);
@@ -93,43 +94,47 @@ describe("bulkDeleteWorkouts", () => {
         deletedCount: 2,
       });
 
-      expect(syncPlanDayStatusFromWorkouts).toHaveBeenCalledTimes(2);
-      expect(syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("pd1", userId, mockTx);
-      expect(syncPlanDayStatusFromWorkouts).toHaveBeenCalledWith("pd2", userId, mockTx);
+      expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledTimes(1);
+      expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledWith(
+        expect.arrayContaining(["pd1", "pd2"]),
+        userId,
+        mockTx,
+      );
     });
 
     it("throws AppError if source workouts count mismatch", async () => {
       const workoutLogIds = ["w1", "w2"];
-      const sourceWorkouts = [
-        { id: "w1", planDayId: "pd1" }
-      ];
+      const sourceWorkouts = [{ id: "w1", planDayId: "pd1" }];
 
       mockTx.where.mockResolvedValueOnce(sourceWorkouts);
 
-      await expect(bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds: [] }))
-        .rejects.toThrowError(new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404));
+      await expect(
+        bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds: [] }),
+      ).rejects.toThrowError(
+        new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404),
+      );
     });
 
     it("throws AppError if workout deletion row count mismatch", async () => {
       const workoutLogIds = ["w1", "w2"];
       const sourceWorkouts = [
         { id: "w1", planDayId: "pd1" },
-        { id: "w2", planDayId: "pd2" }
+        { id: "w2", planDayId: "pd2" },
       ];
 
       mockTx.where.mockResolvedValueOnce(sourceWorkouts);
       mockTx.where.mockResolvedValueOnce({ rowCount: 1 });
 
-      await expect(bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds: [] }))
-        .rejects.toThrowError(new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404));
+      await expect(
+        bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds: [] }),
+      ).rejects.toThrowError(
+        new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404),
+      );
     });
 
     it("successfully deletes plan days", async () => {
       const planDayIds = ["pd1", "pd2"];
-      const ownedPlanDays = [
-        { id: "pd1" },
-        { id: "pd2" }
-      ];
+      const ownedPlanDays = [{ id: "pd1" }, { id: "pd2" }];
 
       // First is the select query for ownedPlanDays
       mockTx.where.mockResolvedValueOnce(ownedPlanDays);
@@ -151,7 +156,7 @@ describe("bulkDeleteWorkouts", () => {
       mockTx.where
         .mockReset()
         .mockResolvedValueOnce(ownedPlanDays) // await ownedPlanDays query
-        .mockReturnValueOnce(mockTx)          // sync userPlanIds builder
+        .mockReturnValueOnce(mockTx) // sync userPlanIds builder
         .mockResolvedValueOnce({ rowCount: 2 }); // await deleted query
 
       const result = await bulkDeleteWorkouts({ userId, workoutLogIds: [], planDayIds });
@@ -166,31 +171,32 @@ describe("bulkDeleteWorkouts", () => {
 
     it("throws AppError if owned plan days count mismatch", async () => {
       const planDayIds = ["pd1", "pd2"];
-      const ownedPlanDays = [
-        { id: "pd1" }
-      ];
+      const ownedPlanDays = [{ id: "pd1" }];
 
       mockTx.where.mockResolvedValueOnce(ownedPlanDays);
 
-      await expect(bulkDeleteWorkouts({ userId, workoutLogIds: [], planDayIds }))
-        .rejects.toThrowError(new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404));
+      await expect(
+        bulkDeleteWorkouts({ userId, workoutLogIds: [], planDayIds }),
+      ).rejects.toThrowError(
+        new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404),
+      );
     });
 
     it("throws AppError if plan day deletion row count mismatch", async () => {
       const planDayIds = ["pd1", "pd2"];
-      const ownedPlanDays = [
-        { id: "pd1" },
-        { id: "pd2" }
-      ];
+      const ownedPlanDays = [{ id: "pd1" }, { id: "pd2" }];
 
       mockTx.where
         .mockReset()
         .mockResolvedValueOnce(ownedPlanDays) // await ownedPlanDays query
-        .mockReturnValueOnce(mockTx)          // sync userPlanIds builder
+        .mockReturnValueOnce(mockTx) // sync userPlanIds builder
         .mockResolvedValueOnce({ rowCount: 1 }); // await deleted query
 
-      await expect(bulkDeleteWorkouts({ userId, workoutLogIds: [], planDayIds }))
-        .rejects.toThrowError(new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404));
+      await expect(
+        bulkDeleteWorkouts({ userId, workoutLogIds: [], planDayIds }),
+      ).rejects.toThrowError(
+        new AppError(ErrorCode.NOT_FOUND, BULK_DELETE_WORKOUTS_NOT_FOUND, 404),
+      );
     });
 
     it("successfully deletes both workouts and plan days", async () => {
@@ -202,9 +208,9 @@ describe("bulkDeleteWorkouts", () => {
       mockTx.where
         .mockReset()
         .mockResolvedValueOnce(sourceWorkouts) // await sourceWorkouts query
-        .mockResolvedValueOnce(ownedPlanDays)  // await ownedPlanDays query
+        .mockResolvedValueOnce(ownedPlanDays) // await ownedPlanDays query
         .mockResolvedValueOnce({ rowCount: 1 }) // await workouts deleted query
-        .mockReturnValueOnce(mockTx)           // sync userPlanIds builder
+        .mockReturnValueOnce(mockTx) // sync userPlanIds builder
         .mockResolvedValueOnce({ rowCount: 1 }); // await planDays deleted query
 
       const result = await bulkDeleteWorkouts({ userId, workoutLogIds, planDayIds });
@@ -214,7 +220,8 @@ describe("bulkDeleteWorkouts", () => {
         deletedPlanDayIds: ["pd2"],
         deletedCount: 2,
       });
-      expect(syncPlanDayStatusFromWorkouts).toHaveBeenCalledTimes(1);
+      expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledTimes(1);
+      expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledWith(["pd1"], userId, mockTx);
     });
   });
 });
