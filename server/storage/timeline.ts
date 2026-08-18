@@ -123,6 +123,9 @@ function createPlannedDayEntry(
     // and gone. Omitted rather than sent false so the field stays absent from
     // every ordinary day's payload.
     excused: isExcusedFromMissed(day.status, scheduledDate, today, isExcused) || undefined,
+    // Only meaningful on skipped days; carried so the coach can distinguish an
+    // ill/injured skip from a schedule one. Omitted when never set.
+    skipReason: (day.skipReason as TimelineEntry["skipReason"]) ?? undefined,
     focus: override ? override.focus : day.focus,
     mainWorkout: override ? override.mainWorkout : day.mainWorkout,
     accessory: override ? override.accessory : day.accessory,

@@ -11,6 +11,7 @@ import {
   formatExerciseSetsForPrompt,
   type PromptExerciseSet,
 } from "../prompts/exerciseSetFormatter";
+import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
 import { sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
@@ -251,6 +252,7 @@ export function buildPromptDataSections(
     // rewrites upcoming sessions, so a declared injury has to be in front of
     // the model before it decides what next week looks like.
     formatAthleteConstraints(trainingContext),
+    formatMafContext(trainingContext),
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
     formatPerformanceStats(trainingContext.structuredExerciseStats),
     formatRecentWorkouts(trainingContext),

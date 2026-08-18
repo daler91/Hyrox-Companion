@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { makeExerciseSet as makeSet, makeTimelineEntry as makeEntry } from "./testFixtures";
 import {
   calculateTrainingStats,
+  collectRecentSkips,
   collectRecentWorkouts,
   getExerciseBreakdown,
   getStructuredExerciseStats,
@@ -369,5 +370,40 @@ describe("getStructuredExerciseStats", () => {
     ]);
     expect(stats?.[BACK_SQUAT]?.count).toBe(3);
     expect(stats?.[BACK_SQUAT]?.avgReps).toBe(13);
+  });
+});
+
+describe("collectRecentSkips", () => {
+  it("collects only skipped days whose reason the athlete volunteered", () => {
+    const skips = collectRecentSkips([
+      makeEntry({ status: SKIPPED, date: "2026-01-10", focus: "Intervals", skipReason: "injured" }),
+      // Reasonless skip: the athlete chose not to explain — no coaching signal.
+      makeEntry({ status: SKIPPED, date: "2026-01-11", focus: "Long Run" }),
+      makeEntry({ status: COMPLETED, date: "2026-01-12", focus: "Strength" }),
+      makeEntry({ status: MISSED, date: "2026-01-13", focus: "Tempo" }),
+    ]);
+
+    expect(skips).toEqual([{ date: "2026-01-10", focus: "Intervals", reason: "injured" }]);
+  });
+
+  it("returns newest first, capped at five", () => {
+    const skips = collectRecentSkips(
+      Array.from({ length: 8 }, (_, i) =>
+        makeEntry({
+          status: SKIPPED,
+          date: `2026-01-${String(i + 1).padStart(2, "0")}`,
+          skipReason: "schedule",
+        }),
+      ),
+    );
+
+    expect(skips).toHaveLength(5);
+    expect(skips![0].date).toBe("2026-01-08");
+    expect(skips![4].date).toBe("2026-01-04");
+  });
+
+  it("is empty when nothing was skipped with a reason", () => {
+    expect(collectRecentSkips([makeEntry({ status: COMPLETED, date: "2026-01-10" })])).toEqual([]);
+    expect(collectRecentSkips([])).toEqual([]);
   });
 });

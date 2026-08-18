@@ -11,6 +11,7 @@ import {
   buildStructuredPerformance,
   buildUpcomingWorkouts,
 } from "./prompts/coachingContext";
+import { formatMafContext } from "./prompts/mafContext";
 import {
   buildCoachingMaterialsSection,
   buildRetrievedChunksSection,
@@ -539,6 +540,10 @@ export function buildSystemPrompt(
     // to have declared something, and this early return is the path they take.
     const noDataConstraints = formatAthleteConstraints(trainingContext);
     if (noDataConstraints) prompt += `\n\n${noDataConstraints}`;
+    // A MAF athlete's ceiling is set at onboarding, before any workout exists —
+    // the day-one chat should already coach to it.
+    const noDataMaf = trainingContext ? formatMafContext(trainingContext) : "";
+    if (noDataMaf) prompt += `\n\n${noDataMaf}`;
     const materialsSection =
       retrievedChunks && retrievedChunks.length > 0
         ? buildRetrievedChunksSection(retrievedChunks)
@@ -555,6 +560,8 @@ export function buildSystemPrompt(
   // completion rate to be disappointed by.
   const constraintsSection = formatAthleteConstraints(trainingContext);
   if (constraintsSection) contextSection += `\n${constraintsSection}\n`;
+  const mafSection = formatMafContext(trainingContext);
+  if (mafSection) contextSection += `\n${mafSection}\n`;
   contextSection += buildOverallStats(trainingContext);
   contextSection += buildExerciseFocus(trainingContext);
   contextSection += buildStructuredPerformance(trainingContext);

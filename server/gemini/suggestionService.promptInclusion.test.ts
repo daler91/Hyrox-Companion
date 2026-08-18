@@ -25,6 +25,14 @@ function kitchenSinkContext(): TrainingContext {
     completedWorkouts: 41,
     weeklyGoal: 6,
     currentDate: "2026-04-20",
+    mafHr: 137,
+    mafTrend: {
+      testCount: 4,
+      lastTestDaysAgo: 12,
+      latestClassification: "mostly_compliant",
+      latestCompliancePct: 87,
+      complianceTrend: "improving",
+    },
     trainingConstraints: "FINGERPRINT_STANDING_CONSTRAINT",
     absences: [
       {
@@ -99,6 +107,9 @@ function kitchenSinkContext(): TrainingContext {
           detail: "no progress in 3 weeks",
         },
       ],
+      recentSkips: [
+        { date: "2026-04-16", focus: "FINGERPRINT_SKIPPED_FOCUS", reason: "injured" },
+      ],
     },
   });
 }
@@ -141,6 +152,16 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     // Specifically the constraints block's own line — "UPCOMING" alone would
     // be satisfied by the unrelated "UPCOMING WORKOUTS" header.
     expect(prompt).toContain("UPCOMING: Travel, 2026-05-02 to 2026-05-06");
+
+    // MAF method — the ceiling and test cadence. These two fields sat on
+    // TrainingContext rendered by NEITHER assembler until formatMafContext.
+    expect(prompt).toContain("Aerobic ceiling: 137 bpm");
+    expect(prompt).toContain("MAF tests: 4 logged");
+
+    // Athlete-stated skip reasons — invisible to the coach before recentSkips.
+    expect(prompt).toContain("RECENT SKIPS");
+    expect(prompt).toContain("FINGERPRINT_SKIPPED_FOCUS");
+    expect(prompt).toContain("(injured)");
 
     // Header signals
     expect(prompt).toContain("FINGERPRINT_GOAL_SUB90");
@@ -484,6 +505,58 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
     const prompt = buildSystemPrompt(createMockTrainingContext({ totalWorkouts: 20 }));
 
     expect(prompt).not.toContain("ATHLETE CONSTRAINTS");
+  });
+
+  it("puts the MAF ceiling and skip reasons in the CHAT prompt too", () => {
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({
+        totalWorkouts: 20,
+        mafHr: 141,
+        mafTrend: {
+          testCount: 2,
+          lastTestDaysAgo: 40,
+          latestClassification: "compliant",
+          latestCompliancePct: 95,
+          complianceTrend: "flat",
+        },
+        coachingInsights: {
+          rpeTrend: "stable",
+          fatigueFlag: false,
+          undertrainingFlag: false,
+          stationGaps: [],
+          progressionFlags: [],
+          recentSkips: [{ date: "2026-04-15", focus: "FINGERPRINT_CHAT_SKIP", reason: "ill" }],
+        },
+      }),
+    );
+
+    expect(prompt).toContain("Aerobic ceiling: 141 bpm");
+    // 40 days since the last test → the cadence nudge fires.
+    expect(prompt).toContain("over 28 days old");
+    expect(prompt).toContain("FINGERPRINT_CHAT_SKIP");
+    expect(prompt).toContain("(ill)");
+  });
+
+  it("coaches a day-one MAF athlete to the ceiling before any workout exists", () => {
+    // The ceiling is set at onboarding; the zero-workout early return is
+    // exactly the prompt a brand-new MAF athlete's first chat goes through.
+    const prompt = buildSystemPrompt(
+      createMockTrainingContext({
+        totalWorkouts: 0,
+        mafHr: 137,
+        mafTrend: {
+          testCount: 0,
+          lastTestDaysAgo: null,
+          latestClassification: null,
+          latestCompliancePct: null,
+          complianceTrend: "insufficient_data",
+        },
+      }),
+    );
+
+    expect(prompt).toContain("hasn't logged any training data yet");
+    expect(prompt).toContain("Aerobic ceiling: 137 bpm");
+    expect(prompt).toContain("suggest a baseline test");
   });
 
   it("still states the constraints for an athlete with NO logged workouts", () => {

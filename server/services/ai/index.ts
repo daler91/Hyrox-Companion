@@ -27,6 +27,7 @@ import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutri
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
+  collectRecentSkips,
   collectRecentWorkouts,
   getExerciseBreakdown,
   getStructuredExerciseStats,
@@ -413,6 +414,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const coachingInsights: TrainingContext["coachingInsights"] = {
     ...rpeTrend,
     stationGaps,
+    // Unconditional like its neighbours; the renderer self-suppresses on empty.
+    recentSkips: collectRecentSkips(timeline),
     planPhase,
     weeklyVolume,
     progressionFlags,

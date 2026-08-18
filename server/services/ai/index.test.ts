@@ -19,6 +19,7 @@ import { buildNextSessionFuelling, buildNutritionTrainingContext } from "./nutri
 import { decideTrainingState } from "./trainingDecisionEngine";
 import {
   calculateTrainingStats,
+  collectRecentSkips,
   collectRecentWorkouts,
   getExerciseBreakdown,
   getStructuredExerciseStats,
@@ -43,6 +44,7 @@ vi.mock("./nutritionContext", () => ({
 vi.mock("./trainingDecisionEngine", () => ({ decideTrainingState: vi.fn() }));
 vi.mock("./trainingStats", () => ({
   calculateTrainingStats: vi.fn(),
+  collectRecentSkips: vi.fn(),
   collectRecentWorkouts: vi.fn(),
   getExerciseBreakdown: vi.fn(),
   getStructuredExerciseStats: vi.fn(),
@@ -127,6 +129,7 @@ beforeEach(() => {
   statsMock.mockReturnValue(makeStats());
   breakdownMock.mockReturnValue({});
   recentMock.mockReturnValue([]);
+  vi.mocked(collectRecentSkips).mockReturnValue([]);
   structuredMock.mockReturnValue(undefined);
   streakMock.mockReturnValue(0);
   rpeMock.mockReturnValue(makeRpe());

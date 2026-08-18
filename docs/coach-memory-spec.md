@@ -1,8 +1,11 @@
 # Coach memory — the durable athlete card
 
-**Status.** **Path A shipped** (§1). Paths B and C are scope. Register entry: recommendation #8 in
-[`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before costing this** — two
-load-bearing claims in that register entry are wrong, and they were mine.
+**Status.** **Paths A and B shipped**; the §5 collisions are closed and the prompt-wiring
+remainder (skip reasons, absences → plan generation, MAF context) has landed. **Path C — the
+athlete-facts card itself (§2–§6) — is the open scope**, gated on the §7 measurement:
+run `pnpm tsx script/coach-memory-usage.ts` against production before deciding. Register entry:
+recommendation #8 in [`PRODUCT_OPPORTUNITIES.md`](PRODUCT_OPPORTUNITIES.md). **Read §0 before
+costing this** — two load-bearing claims in that register entry are wrong, and they were mine.
 
 **One-line pitch.** Tell the coach the things that are true every week — bad left knee, no sled
 at my gym, shift work on Tuesdays — once, and have it remember.

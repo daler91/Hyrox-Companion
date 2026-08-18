@@ -1,4 +1,4 @@
-import { computePlanWeeks } from "@shared/dateUtils";
+import { addDaysToISODate, computePlanWeeks } from "@shared/dateUtils";
 import {
   exerciseSets,
   exerciseSetSchema,
@@ -100,7 +100,75 @@ function buildGenerationUnitLines(unitPreferences: Required<UnitPreferences>): s
   ];
 }
 
-export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>, startLoadPosture?: string | null): string {
+/** A declared absence mapped onto the plan's own week/day coordinates. */
+export interface GenerationAbsence {
+  /** Fully rendered prompt line, athlete note already sanitised. */
+  line: string;
+  /** First and last PLAN WEEK the absence touches, for chunk filtering. */
+  startWeek: number;
+  endWeek: number;
+}
+
+const ABSENCE_TYPE_LABELS: Record<string, string> = {
+  injury: "Injury",
+  illness: "Illness",
+  travel: "Travel",
+  rest: "Planned rest",
+};
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Map the athlete's declared absences onto the plan being generated.
+ *
+ * The model thinks in "Week N, Tuesday", not in dates — its output has no date
+ * field at all — so date ranges are translated server-side using the same
+ * anchoring `schedulePlan` will apply afterwards: week 1 is the Monday-anchored
+ * week containing the start date, Monday first. Doing the arithmetic here keeps
+ * it deterministic and testable instead of asking the model to convert dates.
+ *
+ * Absences that miss the plan window entirely (including anything wholly in
+ * the past) drop out via the overlap test.
+ */
+export function buildGenerationAbsences(
+  annotations: readonly { startDate: string; endDate: string; type: string; note: string | null }[],
+  planStartDate: string,
+  totalWeeks: number,
+): GenerationAbsence[] {
+  const startDayOfWeek = new Date(`${planStartDate}T00:00:00Z`).getUTCDay();
+  const mondayOffset = startDayOfWeek === 0 ? -6 : 1 - startDayOfWeek;
+  const weekOneMonday = addDaysToISODate(planStartDate, mondayOffset);
+  const windowEnd = addDaysToISODate(weekOneMonday, totalWeeks * 7 - 1);
+
+  const weekOneMondayMs = Date.parse(`${weekOneMonday}T00:00:00Z`);
+  const planCoordinate = (date: string) => {
+    const offset = Math.round((Date.parse(`${date}T00:00:00Z`) - weekOneMondayMs) / MS_PER_DAY);
+    return { week: Math.floor(offset / 7) + 1, dayName: DAY_NAMES[offset % 7] };
+  };
+
+  return annotations
+    .filter((a) => a.startDate <= windowEnd && a.endDate >= weekOneMonday)
+    .map((a) => {
+      // Coordinates come from the clamped overlap so a range that started
+      // before the plan reads as "from week 1 Monday", not week -3.
+      const from = planCoordinate(a.startDate < weekOneMonday ? weekOneMonday : a.startDate);
+      const to = planCoordinate(a.endDate > windowEnd ? windowEnd : a.endDate);
+      const label = ABSENCE_TYPE_LABELS[a.type] ?? a.type;
+      const span =
+        from.week === to.week && from.dayName === to.dayName
+          ? `week ${from.week} ${from.dayName}`
+          : `week ${from.week} ${from.dayName} through week ${to.week} ${to.dayName}`;
+      const note = a.note?.trim();
+      const noteSuffix = note ? ` — "${sanitizeUserInput(note)}"` : "";
+      return {
+        line: `- ${label}, ${a.startDate} to ${a.endDate} (plan ${span})${noteSuffix}`,
+        startWeek: from.week,
+        endWeek: to.week,
+      };
+    });
+}
+
+export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range: WeekRange, unitPreferences: Required<UnitPreferences>, startLoadPosture?: string | null, absences?: readonly GenerationAbsence[]): string {
   const weeksInChunk = range.endWeek - range.startWeek + 1;
   const lines: string[] = [
     `Generate ${formatWeekRange(range)} of a ${input.totalWeeks}-week training plan with ${input.daysPerWeek} training days per week.`,
@@ -137,6 +205,20 @@ export function buildGenerationPrompt(input: NormalizedGeneratePlanInput, range:
 
   // Current load posture only calibrates the opening week, so attach it to the
   // chunk that contains week 1; later chunks follow the normal phase structure.
+  // Only the absences touching THIS chunk's weeks: each chunk is its own model
+  // call, and telling it about a week it isn't generating is prompt noise.
+  const chunkAbsences = (absences ?? []).filter(
+    (a) => a.startWeek <= range.endWeek && a.endWeek >= range.startWeek,
+  );
+  if (chunkAbsences.length > 0) {
+    lines.push(
+      ``,
+      `DECLARED ABSENCES (athlete-logged dates they will not train normally):`,
+      ...chunkAbsences.map((a) => a.line),
+      `Schedule rest days or easy/portable sessions across those days — never key sessions. After an injury or illness range, keep the first sessions back conservative.`,
+    );
+  }
+
   if (range.startWeek === 1 && startLoadPosture) {
     lines.push(``, `CURRENT LOAD POSTURE:`, `- ${startLoadPosture}`);
   }
@@ -338,9 +420,10 @@ async function generatePlanChunk(
   range: WeekRange,
   unitPreferences: Required<UnitPreferences>,
   startLoadPosture: string | null,
+  absences: readonly GenerationAbsence[],
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
-  const prompt = buildGenerationPrompt(input, range, unitPreferences, startLoadPosture);
+  const prompt = buildGenerationPrompt(input, range, unitPreferences, startLoadPosture, absences);
   const label = `planGeneration:w${range.startWeek}-${range.endWeek}`;
 
   const response = await generateJsonText({
@@ -363,11 +446,12 @@ async function generatePlanDays(
   userId: string,
   unitPreferences: Required<UnitPreferences>,
   startLoadPosture: string | null,
+  absences: readonly GenerationAbsence[],
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
   const dayChunks = await Promise.all(
-    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences, startLoadPosture, signal)),
+    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences, startLoadPosture, absences, signal)),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {
@@ -512,7 +596,18 @@ export async function executePlanGeneration(
       distanceUnit: standardizeDistanceUnit(user?.distanceUnit),
     };
     const startLoadPosture = await computeStartLoadPosture(userId, user);
-    const days = await generatePlanDays(normalized, userId, unitPreferences, startLoadPosture, signal);
+    // Declared absences inside the plan window, so the generator schedules
+    // around a booked travel week instead of programming straight over it.
+    // startDate is absent only for a legacy queued job (same guard as
+    // scheduling below) — with no calendar anchor there is nothing to map.
+    const absences = normalized.startDate
+      ? buildGenerationAbsences(
+          await storage.timelineAnnotations.list(userId),
+          normalized.startDate,
+          normalized.totalWeeks,
+        )
+      : [];
+    const days = await generatePlanDays(normalized, userId, unitPreferences, startLoadPosture, absences, signal);
 
     // Plan days and their structured exercise sets are written inside a single
     // transaction so a failure in any step rolls the whole insertion back.
