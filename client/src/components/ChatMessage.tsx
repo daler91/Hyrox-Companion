@@ -27,7 +27,7 @@ export const ChatMessage = memo(function ChatMessage({ role, content, timestamp,
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`} data-testid={`message-${role}`}>
       <Avatar className="h-8 w-8 flex-shrink-0">
         <AvatarFallback className={isUser ? "bg-primary text-primary-foreground" : "bg-secondary"}>
-          {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+          {isUser ? <User className="h-4 w-4" aria-hidden="true" /> : <Bot className="h-4 w-4" aria-hidden="true" />}
         </AvatarFallback>
       </Avatar>
       <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[80%]`}>

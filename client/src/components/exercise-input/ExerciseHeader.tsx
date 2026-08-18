@@ -31,7 +31,7 @@ export function ExerciseHeader({ displayLabel, blockLabel, setCount, exerciseNam
             className={`text-[10px] ${getConfidenceClasses(confidence)}`}
             data-testid={`badge-confidence-${exerciseName}`}
           >
-            {confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" />}
+            {confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" aria-hidden="true" />}
             AI {confidence}%
           </Badge>
         )}
