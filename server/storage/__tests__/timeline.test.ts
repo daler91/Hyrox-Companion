@@ -491,4 +491,18 @@ describe("TimelineStorage declared absences", () => {
     expect(entry.status).toBe("missed");
     expect(entry.excused).toBeUndefined();
   });
+
+  it("threads the volunteered skip reason onto the entry, and omits it otherwise", async () => {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([
+      planDay("d-skip", "2026-07-15", { status: "skipped", skipReason: "injured" }),
+      planDay("d-plain", "2026-07-16", { status: "skipped" }),
+    ] as never);
+
+    const entries = await storage.getTimeline("user-1");
+    const byDate = (d: string) => entries.find((e) => e.date === d)!;
+
+    // This is what collectRecentSkips reads to tell the coach WHY.
+    expect(byDate("2026-07-15").skipReason).toBe("injured");
+    expect(byDate("2026-07-16").skipReason).toBeUndefined();
+  });
 });

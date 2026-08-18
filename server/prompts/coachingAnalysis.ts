@@ -254,12 +254,34 @@ function formatAthleteGoal(planGoal: string | undefined): string | null {
  * Assemble the full COACHING ANALYSIS block from the pre-computed insights.
  * Every sub-block self-suppresses when its signal is unremarkable.
  */
+const SKIP_REASON_PROMPT_LABELS: Record<string, string> = {
+  ill: "ill",
+  injured: "injured",
+  schedule: "schedule conflict",
+  low_energy: "low energy",
+};
+
+/**
+ * The skips the athlete explained, and what to do with the two medical ones.
+ * Self-suppresses when nothing was volunteered — a reasonless skip carries no
+ * coaching signal and is not re-litigated here.
+ */
+function formatRecentSkips(recentSkips: CoachingInsights["recentSkips"]): string {
+  if (!recentSkips || recentSkips.length === 0) return "";
+  const items = recentSkips
+    .map((s) => `${s.date} ${s.focus} (${SKIP_REASON_PROMPT_LABELS[s.reason] ?? s.reason})`)
+    .join("; ");
+  return `RECENT SKIPS (athlete-stated reasons): ${items}. Treat ill/injured skips as recovery signals to program around — not as compliance failures to nudge about.`;
+}
+
 export function formatCoachingAnalysis(insights: CoachingInsights, planGoal?: string): string {
   const lines: string[] = [
     `--- COACHING ANALYSIS ---`,
     formatRpeTrend(insights),
     formatStationGaps(insights.stationGaps),
   ];
+
+  pushBlock(lines, formatRecentSkips(insights.recentSkips));
 
   pushBlock(lines, formatLoadGovernor(insights.loadGovernor));
   pushBlock(lines, formatDecisionTree(insights.decisionTree));

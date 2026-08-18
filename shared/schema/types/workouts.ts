@@ -1,4 +1,4 @@
-﻿import type { WorkoutStatus } from "../enums";
+﻿import type { PlanDaySkipReason, WorkoutStatus } from "../enums";
 import { customExercises, exerciseLoadTags, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { CoachNoteInputs } from "./plans";
@@ -116,6 +116,12 @@ export type TimelineEntry = {
    * showing a bare "Planned" on a day that has been and gone.
    */
   excused?: boolean;
+  /**
+   * Why a skipped day was skipped, when the athlete volunteered it. Threaded
+   * from `plan_days.skip_reason` so the coach's context can tell an
+   * ill/injured skip (a recovery signal to train around) from a schedule one.
+   */
+  skipReason?: PlanDaySkipReason | null;
   focus: string;
   mainWorkout: string;
   accessory: string | null;

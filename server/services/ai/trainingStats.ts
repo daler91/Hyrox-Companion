@@ -59,6 +59,34 @@ export function getExerciseBreakdown(timeline: TimelineEntry[]): Record<string, 
   return breakdown;
 }
 
+const MAX_RECENT_SKIPS = 5;
+
+/**
+ * The skipped days whose reason the athlete volunteered, newest first, capped.
+ *
+ * Skipped days never enter `recentWorkouts` (it collects completions only), so
+ * before this the coach saw an aggregate skip count and nothing else — the
+ * athlete could tap "injured" on the skip dialog and the reason reached no
+ * prompt. Reasonless skips stay out: the athlete chose not to explain, and a
+ * bare "skipped Tuesday" line adds nudge-fuel without coaching signal.
+ */
+export function collectRecentSkips(
+  timeline: TimelineEntry[],
+): NonNullable<TrainingContext["coachingInsights"]>["recentSkips"] {
+  return timeline
+    .filter(
+      (entry): entry is TimelineEntry & { date: string } =>
+        entry.status === "skipped" && Boolean(entry.date) && entry.skipReason != null,
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, MAX_RECENT_SKIPS)
+    .map((entry) => ({
+      date: entry.date,
+      focus: entry.focus || "",
+      reason: entry.skipReason as NonNullable<TimelineEntry["skipReason"]>,
+    }));
+}
+
 export function collectRecentWorkouts(timeline: TimelineEntry[]): TrainingContext["recentWorkouts"] {
   const recent: TrainingContext["recentWorkouts"] = [];
   for (const entry of timeline) {

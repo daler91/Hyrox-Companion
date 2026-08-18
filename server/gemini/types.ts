@@ -1,5 +1,6 @@
 import type {
   CoachNoteInputs,
+  PlanDaySkipReason,
   RaceReadiness,
   TimelineAnnotationType,
   TrainingLoadOverview,
@@ -186,6 +187,17 @@ export interface TrainingContext {
       goal: number;
       trend: "increasing" | "stable" | "decreasing";
     };
+    /**
+     * Recent skips whose reason the athlete volunteered, newest first, capped.
+     * The reasons are a CHECK-constrained enum, not free text, so carrying
+     * them here cannot leak athlete prose into the persisted
+     * `ai_inputs_used` audit that hand-flattens this object.
+     */
+    recentSkips?: Array<{
+      date: string;
+      focus: string;
+      reason: PlanDaySkipReason;
+    }>;
     // Canonical training-load summary (shared with the analytics tab). Kept as a
     // direct reference so the coaching prompt context never drifts from the
     // source-of-truth shape in shared/schema.
