@@ -286,6 +286,9 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   // to the model call this context feeds.
   const user = await storage.users.getUser(userId);
   const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  // Read once: the gap suppression and the context payload both want it, and a
+  // second optional-chain would put this function back over its complexity budget.
+  const trainingConstraints = user?.trainingConstraints ?? null;
   const loadHistoryStart = addDays(today, -70);
   // Build the (optional) fuelling slice concurrently with the training reads; it
   // short-circuits to undefined when nutrition is off or the athlete has no data.
@@ -344,7 +347,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }
 
   const rpeTrend = computeRpeTrend(recentWorkouts);
-  const stationGaps = computeExerciseGaps(timeline);
+  const stationGaps = computeExerciseGaps(timeline, trainingConstraints);
   const weeklyGoal = user?.weeklyGoal ?? 0;
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)
@@ -483,7 +486,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     // Unconditional, like mafHr below and the recent/upcoming arrays: the
     // renderer already self-suppresses on empty, so a conditional spread here
     // would buy nothing but branches.
-    trainingConstraints: user?.trainingConstraints ?? null,
+    trainingConstraints,
     absences,
     mafHr: user?.mafHr ?? null,
     ...(mafTrend ? { mafTrend } : {}),

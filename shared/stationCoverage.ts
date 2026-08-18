@@ -102,6 +102,46 @@ export function stationsForFreeText(text: string): CoverageStation[] {
   return [...found];
 }
 
+/**
+ * Stations an athlete's standing constraints plausibly rule out ("no sled at
+ * my gym", "can't do burpees — wrist").
+ *
+ * Broader than `stationsForFreeText` on purpose: focus text names workouts
+ * ("Sled Push + Wall Balls"), constraints name equipment or movements in
+ * prose, so bare equipment nouns must match — and a mention of "sled" rules
+ * out both sled stations at once. Word-boundary regexes, not substrings:
+ * "skipping" must not read as SkiErg.
+ *
+ * The failure modes are deliberately asymmetric. A false match merely stops
+ * the coach's gap nag for a station the athlete brought up themselves — the
+ * station still exists in their constraints text, which the model sees. A
+ * miss leaves the prompt contradicting itself: "EXERCISE GAPS: sled_push
+ * (NEVER TRAINED — CRITICAL)" in the same context as "no sled at my gym".
+ */
+const CONSTRAINT_STATION_PATTERNS: readonly (readonly [RegExp, readonly CoverageStation[]])[] = [
+  [/\bsleds?\b/i, ["sled_push", "sled_pull"]],
+  [/\bski[\s-]?ergs?\b/i, ["skierg"]],
+  [/\brow(?:ing|ers?|s)?\b/i, ["rowing"]],
+  [/\bwall\s*balls?\b/i, ["wall_balls"]],
+  [/\bsandbags?\b/i, ["sandbag_lunges"]],
+  [/\blunges?\b/i, ["sandbag_lunges"]],
+  [/\bburpees?\b/i, ["burpee_broad_jump"]],
+  [/\bfarmers?\b|\bcarr(?:y|ies)\b/i, ["farmers_carry"]],
+  [/\brun(?:ning|s|ners?)?\b/i, ["running"]],
+];
+
+/** Stations the constraints text rules out, or [] for empty/absent text. */
+export function stationsRuledOutByConstraints(text: string | null | undefined): CoverageStation[] {
+  if (!text) return [];
+  const found = new Set<CoverageStation>();
+  for (const [pattern, stations] of CONSTRAINT_STATION_PATTERNS) {
+    if (pattern.test(text)) {
+      for (const station of stations) found.add(station);
+    }
+  }
+  return [...found];
+}
+
 /** Display name for a station. "running" is not an exercise, so it is spelled out. */
 export function stationLabel(station: CoverageStation): string {
   if (station === "running") return "Running";

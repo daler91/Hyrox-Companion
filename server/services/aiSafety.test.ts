@@ -82,4 +82,34 @@ describe("aiSafety", () => {
     expect(safety.redFlagDetected).toBe(false);
   });
 
+  it("fires the HR-medication disclaimer from the athlete's standing constraints", () => {
+    // "on beta blockers" typed into Injuries & Limitations sits in every
+    // prompt; the deterministic disclaimer must fire from the same text or the
+    // app looks like it was told and ignored it (coach-memory-spec §5.2).
+    const safety = analyzeSafetySignals(
+      { ...baseTrainingContext, trainingConstraints: "On beta blockers for blood pressure" },
+      [{ id: "w1", date: "2026-05-02", focus: "run", mainWorkout: "zone 3", notes: "" }],
+    );
+
+    expect(safety.hrMedicationDetected).toBe(true);
+    expect(safety.redFlagDetected).toBe(false);
+  });
+
+  it("never red-flags from the standing constraints, only from dated workout text", () => {
+    // A red flag REPLACES every suggestion with an escalation. A durable
+    // constraint mentioning past chest pain has no end date — feeding it to
+    // the red-flag scan would brick auto-coach forever.
+    const safety = analyzeSafetySignals(
+      { ...baseTrainingContext, trainingConstraints: "History of chest pain in 2024, cleared by cardiologist" },
+      [{ id: "w1", date: "2026-05-02", focus: "run", mainWorkout: "easy", notes: "" }],
+    );
+
+    expect(safety.redFlagDetected).toBe(false);
+    // The same words in a dated athlete note still escalate.
+    const dated = analyzeSafetySignals(
+      { ...baseTrainingContext, recentWorkouts: [{ date: "2026-05-01", focus: "run", mainWorkout: "easy", status: "done", athleteNote: "chest pain on the last rep" }] },
+      [],
+    );
+    expect(dated.redFlagDetected).toBe(true);
+  });
 });

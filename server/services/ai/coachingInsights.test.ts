@@ -355,6 +355,27 @@ describe("computeExerciseGaps", () => {
     expect(gaps.skierg).toBe(5);
   });
 
+  it("drops stations the athlete's standing constraints rule out", () => {
+    // The gap computation has no equipment model; without this it renders
+    // "sled_push (NEVER TRAINED — CRITICAL)" into the same prompt whose
+    // constraints say "no sled at my gym" — every week, forever.
+    const gaps = computeExerciseGaps([], "No sled at my gym. Recovering from wrist injury, no burpees.");
+    const stations = gaps.map((g) => g.station);
+
+    expect(stations).not.toContain("sled_push");
+    expect(stations).not.toContain("sled_pull");
+    expect(stations).not.toContain("burpee_broad_jump");
+    // Everything the constraints don't mention still reports its gap.
+    expect(stations).toContain("skierg");
+    expect(stations).toContain("wall_balls");
+  });
+
+  it("suppresses nothing for empty or absent constraints", () => {
+    expect(computeExerciseGaps([], "")).toHaveLength(ALL_STATIONS.length);
+    expect(computeExerciseGaps([], null)).toHaveLength(ALL_STATIONS.length);
+    expect(computeExerciseGaps([])).toHaveLength(ALL_STATIONS.length);
+  });
+
   it("records a zero-day gap for something trained today", () => {
     const gaps = gapsByStation([
       makeEntry({ date: TODAY, exerciseSets: [makeSet({ exerciseName: "sled_push" })] }),

@@ -7,6 +7,7 @@ import {
   stationForExerciseName,
   stationLabel,
   stationsForFreeText,
+  stationsRuledOutByConstraints,
 } from "./stationCoverage";
 
 describe("stationForExerciseName", () => {
@@ -153,5 +154,40 @@ describe("buildStationCoverage", () => {
   it("ignores sources with no date", () => {
     const coverage = buildStationCoverage([{ date: "", exerciseNames: ["rowing"] }], today);
     expect(coverage.find((c) => c.station === "rowing")?.lastTrained).toBeNull();
+  });
+});
+
+describe("stationsRuledOutByConstraints", () => {
+  it("matches equipment nouns in prose, not just workout names", () => {
+    // "no sled at my gym" contains neither "sled push" nor "sled pull" — the
+    // focus-text keywords would miss it. One sled mention rules out both.
+    expect(stationsRuledOutByConstraints("No sled at my gym")).toEqual(
+      expect.arrayContaining(["sled_push", "sled_pull"]),
+    );
+    expect(stationsRuledOutByConstraints("can't do burpees, bad wrist")).toEqual([
+      "burpee_broad_jump",
+    ]);
+    expect(stationsRuledOutByConstraints("gym has no rower or ski erg")).toEqual(
+      expect.arrayContaining(["rowing", "skierg"]),
+    );
+    expect(stationsRuledOutByConstraints("avoid lunges (knee)")).toEqual(["sandbag_lunges"]);
+  });
+
+  it("respects word boundaries", () => {
+    // "skipping" must not read as SkiErg, "friend" must not read as anything.
+    expect(stationsRuledOutByConstraints("avoid skipping rope")).toEqual([]);
+    expect(stationsRuledOutByConstraints("training with a friend")).toEqual([]);
+  });
+
+  it("returns nothing for empty or absent text", () => {
+    expect(stationsRuledOutByConstraints("")).toEqual([]);
+    expect(stationsRuledOutByConstraints(null)).toEqual([]);
+    expect(stationsRuledOutByConstraints(undefined)).toEqual([]);
+  });
+
+  it("catches running injuries phrased as prose", () => {
+    expect(stationsRuledOutByConstraints("no running until the stress fracture heals")).toEqual([
+      "running",
+    ]);
   });
 });
