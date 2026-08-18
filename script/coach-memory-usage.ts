@@ -46,13 +46,18 @@ async function main(): Promise<void> {
   // A report script for a human at a terminal — console, not the pino logger.
   console.log("\nCoach memory — capture-surface usage (decision input for Path C)\n");
   for (const row of result.rows) {
+    // Static metric labels and aggregate integer counts from the query above —
+    // no per-user data ever reaches a row here.
+    // bearer:disable javascript_lang_logger_leak
     console.log(`  ${row.metric.padEnd(48)} ${row.users}`);
   }
-  console.log("");
   process.exit(0);
 }
 
 main().catch((err: unknown) => {
+  // A DB/connection failure from a read-only admin script, printed to the
+  // operator's own terminal so they can fix their DATABASE_URL.
+  // bearer:disable javascript_lang_logger_leak
   console.error("coach-memory-usage failed:", err);
   process.exit(1);
 });
