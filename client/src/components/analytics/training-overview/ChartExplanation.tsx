@@ -31,7 +31,7 @@ export function ChartExplanation({ explanation }: ChartExplanationProps) {
         aria-expanded={open}
         data-testid="chart-explanation-toggle"
       >
-        <Sparkles className="h-4 w-4 shrink-0" />
+        <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span>What this means for you</span>
         <ChevronDown
           className={`ml-auto h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
