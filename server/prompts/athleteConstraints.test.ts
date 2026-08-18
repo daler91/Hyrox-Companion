@@ -51,6 +51,22 @@ describe("formatAthleteConstraints", () => {
     expect(out).toContain("always apply");
   });
 
+  it("states that constraints outrank the computed signals", () => {
+    // The gap suppression is keyword-based and the other computed signals have
+    // no equipment model at all; the precedence line covers what it misses.
+    const out = formatAthleteConstraints(context({ trainingConstraints: "No sled at my gym." }));
+
+    expect(out).toContain("the constraints win — program a substitute");
+  });
+
+  it("does not add the precedence line for absences alone", () => {
+    // Absences are dated, not standing rules — nothing for a computed signal
+    // to conflict with once the range has passed.
+    const out = formatAthleteConstraints(context({ absences: [absence()] }));
+
+    expect(out).not.toContain("constraints win");
+  });
+
   it("tells the coach both halves of what to do about a current injury", () => {
     const out = formatAthleteConstraints(
       context({

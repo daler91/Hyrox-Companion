@@ -59,6 +59,14 @@ export function formatAthleteConstraints(context?: TrainingContext): string {
     lines.push(
       `STANDING CONSTRAINTS (the athlete's own words — these always apply): ${sanitizeUserInput(constraints)}`,
     );
+    // Belt to the suppression's braces: computeExerciseGaps drops stations the
+    // constraints rule out, but that matching is keyword-based and the other
+    // computed signals (coverage stats, progression flags) have no equipment
+    // model at all. Stating the precedence costs one line and covers whatever
+    // the keywords miss.
+    lines.push(
+      `If any computed signal elsewhere in this context (exercise gaps, station coverage, progression flags) conflicts with these constraints, the constraints win — program a substitute, not the excluded work.`,
+    );
   }
 
   // `active` was computed against the athlete's own today upstream, so an

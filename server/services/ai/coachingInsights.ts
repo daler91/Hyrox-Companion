@@ -1,4 +1,8 @@
-import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
+import {
+  buildStationCoverage,
+  type StationCoverageSource,
+  stationsRuledOutByConstraints,
+} from "@shared/stationCoverage";
 
 import type { TrainingContext } from "../../gemini/index";
 import { toDateStr } from "../../types";
@@ -55,8 +59,19 @@ export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"
  * and had drifted from the copy behind the analytics payload badly enough that
  * the two reported different gaps for the same station. The shape and the
  * exported name are unchanged; every downstream consumer is untouched.
+ *
+ * Stations the athlete's standing constraints rule out are dropped entirely.
+ * The gap computation has no equipment model, so without this it renders
+ * "sled_push (NEVER TRAINED — CRITICAL)" into the same prompt whose
+ * constraints block says "no sled at my gym" — a contradiction the model has
+ * to resolve on every single turn (coach-memory-spec §5.1). The suppression is
+ * coach-side only: the analytics coverage card keeps showing every station,
+ * because the athlete's own view of their history is data, not a nag.
  */
-export function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
+export function computeExerciseGaps(
+  timeline: TimelineEntry[],
+  trainingConstraints?: string | null,
+): NonNullable<TrainingContext["coachingInsights"]>["stationGaps"] {
   const sources: StationCoverageSource[] = [];
 
   for (const entry of timeline) {
@@ -68,10 +83,13 @@ export function computeExerciseGaps(timeline: TimelineEntry[]): NonNullable<Trai
     });
   }
 
-  return buildStationCoverage(sources, toDateStr()).map(({ station, daysSince }) => ({
-    station,
-    daysSinceLastTrained: daysSince,
-  }));
+  const ruledOut = new Set(stationsRuledOutByConstraints(trainingConstraints));
+  return buildStationCoverage(sources, toDateStr())
+    .filter(({ station }) => !ruledOut.has(station))
+    .map(({ station, daysSince }) => ({
+      station,
+      daysSinceLastTrained: daysSince,
+    }));
 }
 
 export function computeWeeklyVolume(

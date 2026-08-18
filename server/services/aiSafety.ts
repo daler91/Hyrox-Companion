@@ -90,11 +90,23 @@ export function analyzeSafetySignals(trainingContext: TrainingContext, upcomingW
   redFlagDetected: boolean;
   hrMedicationDetected: boolean;
 } {
-  const blob = collectSafetySignalCorpus(trainingContext, upcomingWorkouts);
+  const datedBlob = collectSafetySignalCorpus(trainingContext, upcomingWorkouts);
+
+  // The athlete's standing constraints join the MEDICATION scan only. That
+  // disclaimer appends and is idempotent, so a durable "on beta blockers"
+  // keeping it permanently applied is exactly right — whereas the same text
+  // sitting in every prompt while the deterministic disclaimer never fires
+  // would make the app look like it was told and ignored it.
+  //
+  // Deliberately NOT in the red-flag corpus: a red flag REPLACES every
+  // suggestion with an escalation, and a durable constraint mentioning past
+  // chest pain would brick auto-coach forever. Red flags stay on dated workout
+  // text, which ages out of the context on its own (coach-memory-spec §5.2).
+  const medicationBlob = `${datedBlob}\n${trainingContext.trainingConstraints ?? ""}`;
 
   return {
-    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(blob)),
-    hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(blob)),
+    redFlagDetected: RED_FLAG_SYMPTOM_PATTERNS.some((p) => p.test(datedBlob)),
+    hrMedicationDetected: HR_MEDICATION_PATTERNS.some((p) => p.test(medicationBlob)),
   };
 }
 
