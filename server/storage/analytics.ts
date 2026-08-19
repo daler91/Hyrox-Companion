@@ -14,7 +14,33 @@ import { logger } from "../logger";
 import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
 
 export class AnalyticsStorage {
+  // ⚡ Bolt Performance Optimization: exercise_load_tags is static reference
+  // data (per-exercise biomechanical multipliers, keyed by exerciseName) with
+  // no runtime write path anywhere in the app — it's only ever populated by a
+  // migration, so it cannot go stale for the life of this process. Despite
+  // that, every AI coach-turn context build, nutrition daily-load calc (x2),
+  // race prediction, plan generation, and the training overview loader each
+  // fire their own unfiltered `SELECT * FROM exercise_load_tags` on every
+  // call — often several of those on the very same request. Caching the
+  // in-flight promise (not just the resolved value) means the first caller
+  // after a cold start pays one query and every concurrent/later caller in
+  // this process reuses it instead of issuing a fresh round trip. A failed
+  // fetch clears the cache so a transient DB error doesn't pin a rejection
+  // forever. Callers only ever read the array (see calculateTrainingLoad's
+  // `readonly ExerciseLoadTag[]` param), so sharing one reference is safe.
+  private loadTagsCache: Promise<ExerciseLoadTag[]> | null = null;
+
   async getExerciseLoadTags(): Promise<ExerciseLoadTag[]> {
+    this.loadTagsCache ??= this.fetchExerciseLoadTags();
+    try {
+      return await this.loadTagsCache;
+    } catch (err) {
+      this.loadTagsCache = null;
+      throw err;
+    }
+  }
+
+  private async fetchExerciseLoadTags(): Promise<ExerciseLoadTag[]> {
     return await db.select().from(exerciseLoadTags);
   }
 
