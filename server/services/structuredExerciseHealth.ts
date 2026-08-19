@@ -113,7 +113,8 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   const currentPct = Number(wow?.current_pct ?? 0);
   const prevPct = Number(wow?.prev_pct ?? 0);
   if (prevPct > 0 && currentPct > prevPct * 1.1) {
-    // bearer:disable javascript_lang_logger_leak - static context strings and percentage counts, no PII
+    // static context strings and percentage counts, no PII
+    // bearer:disable javascript_lang_logger_leak
     logger.warn(
       { context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day },
       "Legacy-only percentage rose >10% week-over-week",
@@ -127,7 +128,8 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   `);
   const rejectedTotal = Number(rejectedWrites.rows[0]?.total ?? 0);
   if (rejectedTotal >= 20) {
-    // bearer:disable javascript_lang_logger_leak - static context strings and aggregate count, no PII
+    // static context strings and aggregate count, no PII
+    // bearer:disable javascript_lang_logger_leak
     logger.warn(
       { context: "health-alert", event: "rejected_text_only_write_spike", day, rejectedTotal },
       "Rejected text-only writes spiked; verify non-legacy clients are sending exercise_sets",
