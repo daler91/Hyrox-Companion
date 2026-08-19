@@ -58,12 +58,6 @@ export function resolveReviewWeek(
   return { week, isCurrentWeek: week.weekStart === current.weekStart };
 }
 
-function averageRpe(logs: WorkoutLogRow[]): number | null {
-  const rpes = logs.map((l) => l.rpe).filter((rpe): rpe is number => typeof rpe === "number");
-  if (rpes.length === 0) return null;
-  return Math.round((rpes.reduce((sum, rpe) => sum + rpe, 0) / rpes.length) * 10) / 10;
-}
-
 /**
  * A day held out of `missed` by a declared absence. Excused days can sit in the
  * DB under either status: `missed` when the nightly sweep ran before the
@@ -81,18 +75,60 @@ function buildCounts(
   ranges: readonly AbsenceRange[],
   today: string,
 ): WeeklyReviewCounts {
-  const byStatus = (status: string) =>
-    planDays.filter((d) => d.status === status && !isExcusedDay(d, ranges, today)).length;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced multiple `.filter()` scans and chained array methods
+  // (`.map().filter().reduce()`) with single-pass `for...of` loops.
+  // This eliminates intermediate array allocations, avoids multiple O(N) iterations,
+  // and reduces memory overhead when building weekly summaries.
+  let plannedCompleted = 0;
+  let missed = 0;
+  let skipped = 0;
+  let outstanding = 0;
+  let excused = 0;
+
+  for (const d of planDays) {
+    if (isExcusedDay(d, ranges, today)) {
+      excused++;
+      continue;
+    }
+    switch (d.status) {
+      case "completed":
+        plannedCompleted++;
+        break;
+      case "missed":
+        missed++;
+        break;
+      case "skipped":
+        skipped++;
+        break;
+      case "planned":
+        outstanding++;
+        break;
+    }
+  }
+
+  let totalDurationMin = 0;
+  let rpeSum = 0;
+  let rpeCount = 0;
+
+  for (const l of logs) {
+    if (l.duration != null) totalDurationMin += l.duration;
+    if (typeof l.rpe === "number") {
+      rpeSum += l.rpe;
+      rpeCount++;
+    }
+  }
+
   return {
     sessionsLogged: logs.length,
     sessionsPlanned: planDays.length,
-    plannedCompleted: byStatus("completed"),
-    missed: byStatus("missed"),
-    skipped: byStatus("skipped"),
-    outstanding: byStatus("planned"),
-    excused: planDays.filter((d) => isExcusedDay(d, ranges, today)).length,
-    totalDurationMin: logs.reduce((sum, l) => sum + (l.duration ?? 0), 0),
-    avgRpe: averageRpe(logs),
+    plannedCompleted,
+    missed,
+    skipped,
+    outstanding,
+    excused,
+    totalDurationMin,
+    avgRpe: rpeCount === 0 ? null : Math.round((rpeSum / rpeCount) * 10) / 10,
   };
 }
 
