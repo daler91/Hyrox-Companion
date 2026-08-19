@@ -6,9 +6,29 @@ import { logger } from "../logger";
 
 type OwnerType = "workout_log" | "plan_day";
 type SourceType = "manual" | "voice" | "photo" | "import";
-type CounterName = "text_only_rows_detected" | "auto_hydration_attempted" | "auto_hydration_succeeded" | "auto_hydration_failed" | "manual_fix_completed" | "rejected_text_only_write" | "parse_text_attempted" | "parse_text_succeeded" | "parse_text_failed" | "parse_photo_attempted" | "parse_photo_succeeded" | "parse_photo_failed" | "structured_blocks_fallback" | "structured_blocks_accepted";
+type CounterName =
+  | "text_only_rows_detected"
+  | "auto_hydration_attempted"
+  | "auto_hydration_succeeded"
+  | "auto_hydration_failed"
+  | "manual_fix_completed"
+  | "rejected_text_only_write"
+  | "parse_text_attempted"
+  | "parse_text_succeeded"
+  | "parse_text_failed"
+  | "parse_photo_attempted"
+  | "parse_photo_succeeded"
+  | "parse_photo_failed"
+  | "structured_blocks_fallback"
+  | "structured_blocks_accepted";
 
-export async function incrementStructuredExerciseCounter(ownerType: OwnerType, source: SourceType, counterName: CounterName, amount = 1, day: string | null = null): Promise<void> {
+export async function incrementStructuredExerciseCounter(
+  ownerType: OwnerType,
+  source: SourceType,
+  counterName: CounterName,
+  amount = 1,
+  day: string | null = null,
+): Promise<void> {
   await db.execute(sql`
     insert into structured_exercise_health_counters (day, owner_type, source, counter_name, value, updated_at)
     values (coalesce(${day}::date, current_date), ${ownerType}, ${source}, ${counterName}, ${amount}, now())
@@ -18,7 +38,14 @@ export async function incrementStructuredExerciseCounter(ownerType: OwnerType, s
 }
 
 export async function runStructuredExerciseDailyRollup(day: string): Promise<void> {
-  const rowResult = await db.execute<{ total_rows: number; structured_rows: number; legacy_only_rows: number; legacy_workout_rows: number; legacy_plan_rows: number; failed_hydration_backlog: number }>(sql`
+  const rowResult = await db.execute<{
+    total_rows: number;
+    structured_rows: number;
+    legacy_only_rows: number;
+    legacy_workout_rows: number;
+    legacy_plan_rows: number;
+    failed_hydration_backlog: number;
+  }>(sql`
     with owners as (
       select 'workout_log'::text as owner_type, wl.id as owner_id, wl.date as owner_day,
              case when wl.source in ('strava','garmin') then 'import' when wl.source in ('voice','photo') then wl.source else 'manual' end as source,
@@ -49,17 +76,27 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   const legacyOnly = Number(row?.legacy_only_rows ?? 0);
   const legacyPct = total > 0 ? legacyOnly / total : 0;
 
-  await db.insert(structuredExerciseHealthDailyRollups).values({
-    day,
-    totalRows: total,
-    structuredRows: Number(row?.structured_rows ?? 0),
-    legacyOnlyRows: legacyOnly,
-    failedHydrationBacklog: Number(row?.failed_hydration_backlog ?? 0),
-    legacyOnlyPct: legacyPct,
-  }).onConflictDoUpdate({
-    target: structuredExerciseHealthDailyRollups.day,
-    set: { totalRows: total, structuredRows: Number(row?.structured_rows ?? 0), legacyOnlyRows: legacyOnly, failedHydrationBacklog: Number(row?.failed_hydration_backlog ?? 0), legacyOnlyPct: legacyPct, updatedAt: new Date() },
-  });
+  await db
+    .insert(structuredExerciseHealthDailyRollups)
+    .values({
+      day,
+      totalRows: total,
+      structuredRows: Number(row?.structured_rows ?? 0),
+      legacyOnlyRows: legacyOnly,
+      failedHydrationBacklog: Number(row?.failed_hydration_backlog ?? 0),
+      legacyOnlyPct: legacyPct,
+    })
+    .onConflictDoUpdate({
+      target: structuredExerciseHealthDailyRollups.day,
+      set: {
+        totalRows: total,
+        structuredRows: Number(row?.structured_rows ?? 0),
+        legacyOnlyRows: legacyOnly,
+        failedHydrationBacklog: Number(row?.failed_hydration_backlog ?? 0),
+        legacyOnlyPct: legacyPct,
+        updatedAt: new Date(),
+      },
+    });
 
   const wowResult = await db.execute<{ current_pct: number; prev_pct: number }>(sql`
     with current_week as (
@@ -76,7 +113,10 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   const currentPct = Number(wow?.current_pct ?? 0);
   const prevPct = Number(wow?.prev_pct ?? 0);
   if (prevPct > 0 && currentPct > prevPct * 1.1) {
-    logger.warn({ context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day }, "Legacy-only percentage rose >10% week-over-week");
+    logger.warn(
+      { context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day },
+      "Legacy-only percentage rose >10% week-over-week",
+    );
   }
 
   const rejectedWrites = await db.execute<{ total: number }>(sql`
@@ -86,10 +126,17 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
   `);
   const rejectedTotal = Number(rejectedWrites.rows[0]?.total ?? 0);
   if (rejectedTotal >= 20) {
-    logger.warn({ context: "health-alert", event: "rejected_text_only_write_spike", day, rejectedTotal }, "Rejected text-only writes spiked; verify non-legacy clients are sending exercise_sets");
+    logger.warn(
+      { context: "health-alert", event: "rejected_text_only_write_spike", day, rejectedTotal },
+      "Rejected text-only writes spiked; verify non-legacy clients are sending exercise_sets",
+    );
   }
 
-  const legacyBreakdown = await db.execute<{ owner_type: OwnerType; source: SourceType; legacy_count: number }>(sql`
+  const legacyBreakdown = await db.execute<{
+    owner_type: OwnerType;
+    source: SourceType;
+    legacy_count: number;
+  }>(sql`
     with owners as (
       select 'workout_log'::text as owner_type, wl.date as owner_day,
              case when wl.source in ('strava','garmin') then 'import' when wl.source in ('voice','photo') then wl.source else 'manual' end as source,
@@ -118,11 +165,22 @@ export async function runStructuredExerciseDailyRollup(day: string): Promise<voi
       and counter_name = 'text_only_rows_detected'
   `);
 
-  for (const item of legacyBreakdown.rows) {
-    if ((item.legacy_count ?? 0) <= 0) continue;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced N+1 sequential INSERTs inside a loop with a single batched multi-row
+  // INSERT to reduce DB round trips and connection latency overhead.
+  const validItems = legacyBreakdown.rows.filter((item) => (item.legacy_count ?? 0) > 0);
+  if (validItems.length > 0) {
+    const valuesSql = sql.join(
+      validItems.map(
+        (item) =>
+          sql`(${day}::date, ${item.owner_type}, ${item.source}, 'text_only_rows_detected', ${item.legacy_count}, now())`,
+      ),
+      sql`, `,
+    );
+
     await db.execute(sql`
       insert into structured_exercise_health_counters (day, owner_type, source, counter_name, value, updated_at)
-      values (${day}::date, ${item.owner_type}, ${item.source}, 'text_only_rows_detected', ${item.legacy_count}, now())
+      values ${valuesSql}
       on conflict (day, owner_type, source, counter_name)
       do update set value = excluded.value, updated_at = now()
     `);
