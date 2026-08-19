@@ -1,22 +1,27 @@
 import type { ExerciseSet } from "@shared/schema";
-import { History } from "lucide-react";
-import { useMemo } from "react";
+import { History, TrendingUp } from "lucide-react";
+import { type ReactNode, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useExerciseHistory } from "@/hooks/useExerciseHistory";
 import type { PatchExerciseSetPayload } from "@/lib/api";
 
+import { formatPrescription, type Prescription } from "../../exercise-row/formatPrescription";
 import { buildUseLastPatches, pickLastSession, summariseLastSession } from "./lastSession";
+import { buildUseNextPatches, type NextTarget, suggestNextTarget } from "./nextTarget";
 
 /**
  * "Last time: 4 × 8 reps · 80 kg" under the exercise's current prescription,
- * with a one-tap fill.
+ * with a one-tap fill — and, where the estimated-1RM maths has footing, a
+ * "Next: 4 × 9 reps · 80 kg" suggestion with its own fill.
  *
  * The endpoint behind this has existed, tested and rate-limited, with zero call
  * sites — so progressive overload got no assistance at the exact moment the
  * decision is made, at the rack. It sits on the collapsed header rather than
  * inside the expanded editor for the same reason: needing a tap to see last
- * week's numbers defeats the point.
+ * week's numbers defeats the point. The suggestion line closes the remaining
+ * gap: showing last time and stopping still left the actual decision — what to
+ * put on the bar — entirely to the athlete.
  *
  * Renders nothing while loading and nothing when there's no history. No
  * skeleton: a placeholder flickering on every row of every session is worse
@@ -56,6 +61,11 @@ export function LastTimeRow({
     [lastSession, exerciseName, category, weightUnit, distanceUnit],
   );
 
+  const nextTarget = useMemo(
+    () => (lastSession ? suggestNextTarget(lastSession.sets, { category, weightUnit }) : null),
+    [lastSession, category, weightUnit],
+  );
+
   if (!lastSession || !prescription) return null;
 
   const handleUseLast = () => {
@@ -64,15 +74,112 @@ export function LastTimeRow({
     }
   };
 
+  const handleUseNext = () => {
+    if (!nextTarget) return;
+    for (const { setId, patch } of buildUseNextPatches(currentSets, nextTarget)) {
+      onUpdateSet(setId, patch);
+    }
+  };
+
+  // Both fills write into the set editor, so both wait for the row to be open.
+  const fillable = showUseLast && currentSets.length > 0;
+
   return (
-    <div
-      className="flex items-center gap-2 px-3 pb-2 text-xs text-muted-foreground sm:px-4"
-      data-testid={`last-time-${exerciseName}`}
-    >
-      <History className="h-3 w-3 shrink-0" aria-hidden />
+    <div className="flex flex-col gap-1 px-3 pb-2 sm:px-4">
+      <PrescriptionLine
+        icon={<History className="h-3 w-3 shrink-0" aria-hidden />}
+        label="Last time"
+        prescription={prescription}
+        srText={`Last time: ${prescription.aria}`}
+        testId={`last-time-${exerciseName}`}
+        action={
+          fillable
+            ? { label: "Use last", testId: `use-last-${exerciseName}`, onClick: handleUseLast }
+            : undefined
+        }
+      />
+      {nextTarget && (
+        <NextTargetLine
+          exerciseName={exerciseName}
+          target={nextTarget}
+          weightUnit={weightUnit}
+          action={
+            fillable
+              ? { label: "Use next", testId: `use-next-${exerciseName}`, onClick: handleUseNext }
+              : undefined
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function NextTargetLine({
+  exerciseName,
+  target,
+  weightUnit,
+  action,
+}: {
+  readonly exerciseName: string;
+  readonly target: NextTarget;
+  readonly weightUnit: "kg" | "lb";
+  readonly action?: LineAction;
+}) {
+  const prescription = formatPrescription({
+    setCount: target.setCount,
+    metricValue: target.reps,
+    metricSuffix: "reps",
+    metricVaries: false,
+    weightValue: target.weight,
+    weightUnit,
+    weightVaries: false,
+    hasWeight: true,
+  });
+  const stepUnit = target.step.field === "reps" ? "rep" : weightUnit;
+  const stepText = `+${target.step.amount} ${stepUnit}`;
+
+  return (
+    <PrescriptionLine
+      icon={<TrendingUp className="h-3 w-3 shrink-0" aria-hidden />}
+      label="Next"
+      prescription={prescription}
+      badge={stepText}
+      srText={`Suggested next: ${prescription.aria}, up ${target.step.amount} ${stepUnit} on last time`}
+      testId={`next-target-${exerciseName}`}
+      action={action}
+    />
+  );
+}
+
+interface LineAction {
+  readonly label: string;
+  readonly testId: string;
+  readonly onClick: () => void;
+}
+
+function PrescriptionLine({
+  icon,
+  label,
+  prescription,
+  badge,
+  srText,
+  testId,
+  action,
+}: {
+  readonly icon: ReactNode;
+  readonly label: string;
+  readonly prescription: Prescription;
+  readonly badge?: string;
+  readonly srText: string;
+  readonly testId: string;
+  readonly action?: LineAction;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid={testId}>
+      {icon}
       {/* The glyphs are decorative; the grammatical form goes to screen readers. */}
       <span aria-hidden className="min-w-0 truncate tabular-nums">
-        Last time:{" "}
+        {label}:{" "}
         {prescription.visual.map((segment, index) => (
           <span key={segment.separator ?? `sets-${index}`}>
             {segment.separator === "times" ? " × " : null}
@@ -81,17 +188,25 @@ export function LastTimeRow({
           </span>
         ))}
       </span>
-      <span className="sr-only">Last time: {prescription.aria}</span>
-      {showUseLast && currentSets.length > 0 && (
+      {badge && (
+        <span
+          aria-hidden
+          className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+        >
+          {badge}
+        </span>
+      )}
+      <span className="sr-only">{srText}</span>
+      {action && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
           className="h-6 shrink-0 px-2 text-xs"
-          onClick={handleUseLast}
-          data-testid={`use-last-${exerciseName}`}
+          onClick={action.onClick}
+          data-testid={action.testId}
         >
-          Use last
+          {action.label}
         </Button>
       )}
     </div>

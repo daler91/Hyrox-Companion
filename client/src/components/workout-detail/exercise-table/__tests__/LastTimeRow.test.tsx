@@ -6,9 +6,9 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
-import type { ExerciseSetWithDate } from "@/lib/api/exercises";
 
 import { LastTimeRow } from "../LastTimeRow";
+import { makeLoggedSet as set } from "./exerciseSetFixture";
 
 vi.mock("@/lib/api", () => ({
   api: { exercises: { getHistory: vi.fn() } },
@@ -21,23 +21,6 @@ vi.mock("@/lib/api", () => ({
     ],
   },
 }));
-
-function set(overrides: Partial<ExerciseSetWithDate> = {}): ExerciseSetWithDate {
-  return {
-    id: "set-1",
-    exerciseName: "back_squat",
-    category: "strength",
-    setNumber: 1,
-    date: "2026-06-01",
-    workoutLogId: "w-old",
-    customLabel: null,
-    reps: 8,
-    weight: 80,
-    distance: null,
-    time: null,
-    ...overrides,
-  } as ExerciseSetWithDate;
-}
 
 function renderRow(ui: ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -128,5 +111,64 @@ describe("LastTimeRow", () => {
 
     await screen.findByTestId("last-time-back_squat");
     expect(screen.queryByTestId("use-last-back_squat")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("use-next-back_squat")).not.toBeInTheDocument();
+  });
+
+  it("suggests the next target alongside last time", async () => {
+    vi.mocked(api.exercises.getHistory).mockResolvedValue([
+      set({ id: "a", date: "2026-06-10", setNumber: 1 }),
+      set({ id: "b", date: "2026-06-10", setNumber: 2 }),
+    ]);
+
+    row();
+
+    // 80 kg × 8 progresses by the gentler overload: a rep, not a plate.
+    expect(await screen.findByTestId("next-target-back_squat")).toHaveTextContent(
+      "Next: 2 × 9 reps · 80 kg",
+    );
+    expect(screen.getByText("+1 rep")).toBeInTheDocument();
+  });
+
+  it("tells screen readers what the suggestion changes", async () => {
+    vi.mocked(api.exercises.getHistory).mockResolvedValue([set({ date: "2026-06-10" })]);
+
+    row();
+
+    await screen.findByTestId("next-target-back_squat");
+    expect(
+      screen.getByText("Suggested next: 1 set of 9 reps at 80 kg, up 1 rep on last time"),
+    ).toBeInTheDocument();
+  });
+
+  it("fills every current set with the suggested target on request", async () => {
+    vi.mocked(api.exercises.getHistory).mockResolvedValue([
+      set({ id: "l1", date: "2026-06-10", setNumber: 1 }),
+      set({ id: "l2", date: "2026-06-10", setNumber: 2 }),
+    ]);
+    const props = row({
+      currentSets: [
+        set({ id: "c1", reps: null, weight: null }),
+        set({ id: "c2", reps: null, weight: null }),
+      ] as ExerciseSet[],
+      showUseLast: true,
+    });
+
+    await userEvent.click(await screen.findByTestId("use-next-back_squat"));
+
+    expect(props.onUpdateSet).toHaveBeenCalledWith("c1", { reps: 9, weight: 80 });
+    expect(props.onUpdateSet).toHaveBeenCalledWith("c2", { reps: 9, weight: 80 });
+  });
+
+  it("keeps the last-time line but drops the suggestion when the maths has no footing", async () => {
+    // A pyramid has no single prescription to progress.
+    vi.mocked(api.exercises.getHistory).mockResolvedValue([
+      set({ id: "a", date: "2026-06-10", setNumber: 1, weight: 80 }),
+      set({ id: "b", date: "2026-06-10", setNumber: 2, weight: 90 }),
+    ]);
+
+    row();
+
+    await screen.findByTestId("last-time-back_squat");
+    expect(screen.queryByTestId("next-target-back_squat")).not.toBeInTheDocument();
   });
 });

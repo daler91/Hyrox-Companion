@@ -1,26 +1,8 @@
 import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import type { ExerciseSetWithDate } from "@/lib/api/exercises";
-
 import { buildUseLastPatches, pickLastSession, summariseLastSession } from "../lastSession";
-
-function set(overrides: Partial<ExerciseSetWithDate> = {}): ExerciseSetWithDate {
-  return {
-    id: "set-1",
-    exerciseName: "back_squat",
-    category: "strength",
-    setNumber: 1,
-    date: "2026-06-01",
-    workoutLogId: "w1",
-    customLabel: null,
-    reps: 8,
-    weight: 80,
-    distance: null,
-    time: null,
-    ...overrides,
-  } as ExerciseSetWithDate;
-}
+import { makeLoggedSet as set } from "./exerciseSetFixture";
 
 const SQUAT = { exerciseName: "back_squat", category: "strength", weightUnit: "kg" } as const;
 
