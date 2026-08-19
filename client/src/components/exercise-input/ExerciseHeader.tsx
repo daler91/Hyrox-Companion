@@ -1,5 +1,7 @@
-import { AlertTriangle,X } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -19,35 +21,71 @@ function getConfidenceClasses(confidence: number): string {
   return "bg-red-500/10 text-red-600 dark:text-red-400";
 }
 
-export function ExerciseHeader({ displayLabel, blockLabel, setCount, exerciseName, confidence, onRemove }: ExerciseHeaderProps) {
+export function ExerciseHeader({
+  displayLabel,
+  blockLabel,
+  setCount,
+  exerciseName,
+  confidence,
+  onRemove,
+}: ExerciseHeaderProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   return (
-    <div className="flex items-center justify-between gap-2 mb-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <h4 className="font-semibold">{displayLabel}{blockLabel ? ` ${blockLabel}` : ""}</h4>
-        <span className="text-xs text-muted-foreground">{setCount} {setCount === 1 ? "set" : "sets"}</span>
-        {confidence != null && confidence < 90 && (
-          <Badge
-            variant="secondary"
-            className={`text-[10px] ${getConfidenceClasses(confidence)}`}
-            data-testid={`badge-confidence-${exerciseName}`}
-          >
-            {confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" aria-hidden="true" />}
-            AI {confidence}%
-          </Badge>
-        )}
+    <>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h4 className="font-semibold">
+            {displayLabel}
+            {blockLabel ? ` ${blockLabel}` : ""}
+          </h4>
+          <span className="text-xs text-muted-foreground">
+            {setCount} {setCount === 1 ? "set" : "sets"}
+          </span>
+          {confidence != null && confidence < 90 && (
+            <Badge
+              variant="secondary"
+              className={`text-[10px] ${getConfidenceClasses(confidence)}`}
+              data-testid={`badge-confidence-${exerciseName}`}
+            >
+              {confidence < 60 && <AlertTriangle className="h-3 w-3 mr-0.5" aria-hidden="true" />}
+              AI {confidence}%
+            </Badge>
+          )}
+        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setConfirmOpen(true)}
+                data-testid={`button-remove-${exerciseName}`}
+                aria-label={`Remove ${displayLabel}`}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Remove exercise</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exerciseName}`} aria-label={`Remove ${displayLabel}`}>
-              <X className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Remove exercise</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Remove ${displayLabel}?`}
+        description={`This will remove ${setCount} ${setCount === 1 ? "set" : "sets"} of logged data for this exercise.`}
+        confirmText="Remove"
+        onConfirm={() => {
+          onRemove();
+          setConfirmOpen(false);
+        }}
+        isDestructive
+        confirmTestId={`button-confirm-remove-${exerciseName}`}
+        cancelTestId={`button-cancel-remove-${exerciseName}`}
+      />
+    </>
   );
 }
