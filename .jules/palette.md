@@ -46,3 +46,6 @@
 ## 2024-08-20 - Disabled Button Tooltips
 **Learning:** Radix UI's `TooltipTrigger` combined with `asChild` fails to show tooltips on disabled elements because they receive `pointer-events: none`.
 **Action:** When applying tooltips to buttons that can be disabled, wrap the `<Button>` in a `<span>` with `tabIndex={disabled ? 0 : -1}` to ensure the tooltip remains accessible and functional on hover/focus even when the button is disabled.
+## 2024-08-20 - Non-interactive span tabIndex
+**Learning:** Using `tabIndex={0}` on a `<span>` wrapper for disabled button tooltips violates SonarCloud accessibility rules ("tabIndex should only be declared on interactive elements") because spans are not semantically interactive.
+**Action:** Use `tabIndex={disabled ? 0 : undefined}` (so it has no tabIndex when not disabled, and the inner button handles focus natively), OR ensure the `span` has an appropriate `role` attribute if it must be focusable.
