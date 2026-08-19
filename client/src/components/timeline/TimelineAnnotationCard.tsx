@@ -80,7 +80,7 @@ export function TimelineAnnotationCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <span tabIndex={isDeleting ? 0 : undefined}>
+              <span tabIndex={isDeleting ? 0 : undefined} role={isDeleting ? "button" : undefined} aria-disabled={isDeleting ? true : undefined}>
                 <Button
                   variant="ghost"
                   size="icon"

@@ -49,3 +49,6 @@
 ## 2024-08-20 - Non-interactive span tabIndex
 **Learning:** Using `tabIndex={0}` on a `<span>` wrapper for disabled button tooltips violates SonarCloud accessibility rules ("tabIndex should only be declared on interactive elements") because spans are not semantically interactive.
 **Action:** Use `tabIndex={disabled ? 0 : undefined}` (so it has no tabIndex when not disabled, and the inner button handles focus natively), OR ensure the `span` has an appropriate `role` attribute if it must be focusable.
+## 2024-08-20 - Disabled Tooltips and SonarCloud
+**Learning:** Adding `tabIndex` to a `<span>` to support tooltips on disabled buttons triggers a SonarCloud warning: "`tabIndex` should only be declared on interactive elements".
+**Action:** When wrapping a disabled button in a `span` for tooltips, conditionally add `role="button"` and `aria-disabled="true"` to satisfy accessibility linters, OR rely solely on conditionally rendering `tabIndex={undefined}` when the button is active so the span is only treated as interactive when absolutely necessary.

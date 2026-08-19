@@ -1,0 +1,11 @@
+--- client/src/components/timeline/TimelineAnnotationCard.tsx
++++ client/src/components/timeline/TimelineAnnotationCard.tsx
+@@ -82,7 +82,7 @@
+
+           <Tooltip>
+             <TooltipTrigger asChild>
+-              <span tabIndex={isDeleting ? 0 : undefined}>
++              <span tabIndex={isDeleting ? 0 : undefined} role="button" aria-disabled="true">
+                 <Button
+                   variant="ghost"
+                   size="icon"
