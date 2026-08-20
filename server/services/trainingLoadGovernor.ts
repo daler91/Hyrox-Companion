@@ -20,9 +20,8 @@ function workoutText(workout: UpcomingWorkoutForLoad): string {
   return [workout.focus, workout.mainWorkout, workout.accessory ?? "", workout.notes ?? ""].join(" ").toLowerCase();
 }
 
-function hasExercise(workout: UpcomingWorkoutForLoad, names: readonly string[]): boolean {
-  const nameSet = new Set(names);
-  return Boolean(workout.exerciseDetails?.some((exercise) => nameSet.has(exercise.exerciseName)));
+function hasExercise(workout: UpcomingWorkoutForLoad, names: ReadonlySet<string>): boolean {
+  return Boolean(workout.exerciseDetails?.some((exercise) => names.has(exercise.exerciseName)));
 }
 
 function isRunningWorkout(workout: UpcomingWorkoutForLoad): boolean {
@@ -33,34 +32,53 @@ function isStrengthWorkout(workout: UpcomingWorkoutForLoad): boolean {
   return Boolean(workout.exerciseDetails?.some((exercise) => exercise.category === "strength")) || /\b(squat|deadlift|lunge|leg press|sled|strength)\b/.test(workoutText(workout));
 }
 
+// ⚡ Bolt Performance Optimization: these exercise-name lists are matched against
+// on every upcoming workout, for every load-governor suggestion rule (up to a
+// few hundred `hasExercise` calls per `buildLoadGovernorSuggestions` run - see
+// applySuggestionRules/applyOnrampSuggestions below). Hoisting them to
+// module-scope Sets means the Set is built once at import time instead of once
+// per call, cutting the throwaway array + Set allocations that were happening
+// on every single predicate check.
+const HIGH_TAX_STRENGTH_EXERCISES = new Set([
+  "deadlift",
+  "romanian_deadlift",
+  "good_morning",
+  "back_squat",
+  "front_squat",
+  "leg_press",
+  "lunges",
+  "bulgarian_split_squat",
+  "sled_push",
+  "sandbag_lunges",
+]);
+const HIGH_INTENSITY_RUN_EXERCISES = new Set([
+  "interval_run",
+  "hill_repeats",
+  "tempo_run",
+  "fartlek_run",
+  "sprints",
+  "treadmill_intervals",
+]);
+const BRAKING_RUN_EXERCISES = new Set(["long_run"]);
+const PLYO_OR_SPEED_EXERCISES = new Set(["box_jumps", "burpee_broad_jump", "jump_rope"]);
+
 function isHighTaxStrengthWorkout(workout: UpcomingWorkoutForLoad): boolean {
   return isStrengthWorkout(workout) &&
-    (hasExercise(workout, [
-      "deadlift",
-      "romanian_deadlift",
-      "good_morning",
-      "back_squat",
-      "front_squat",
-      "leg_press",
-      "lunges",
-      "bulgarian_split_squat",
-      "sled_push",
-      "sandbag_lunges",
-    ]) ||
+    (hasExercise(workout, HIGH_TAX_STRENGTH_EXERCISES) ||
       /\b(heavy|max|1rm|90%|failure|amrap|high[-\s]?volume|hard|threshold)\b/.test(workoutText(workout)));
 }
 
 function isHighIntensityRun(workout: UpcomingWorkoutForLoad): boolean {
-  return hasExercise(workout, ["interval_run", "hill_repeats", "tempo_run", "fartlek_run", "sprints", "treadmill_intervals"]) ||
+  return hasExercise(workout, HIGH_INTENSITY_RUN_EXERCISES) ||
     /\b(sprint|interval|track|hill|threshold|tempo|zone\s*[45]|z[45]|race pace)\b/.test(workoutText(workout));
 }
 
 function isBrakingRun(workout: UpcomingWorkoutForLoad): boolean {
-  return hasExercise(workout, ["long_run"]) || /\b(downhill|long run|road run|hard descent)\b/.test(workoutText(workout));
+  return hasExercise(workout, BRAKING_RUN_EXERCISES) || /\b(downhill|long run|road run|hard descent)\b/.test(workoutText(workout));
 }
 
 function isPlyoOrSpeed(workout: UpcomingWorkoutForLoad): boolean {
-  return isHighIntensityRun(workout) || hasExercise(workout, ["box_jumps", "burpee_broad_jump", "jump_rope"]);
+  return isHighIntensityRun(workout) || hasExercise(workout, PLYO_OR_SPEED_EXERCISES);
 }
 
 function firstRunExercise(workout: UpcomingWorkoutForLoad): PromptExerciseForLoad | undefined {
