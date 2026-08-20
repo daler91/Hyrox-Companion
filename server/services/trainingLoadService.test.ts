@@ -394,9 +394,12 @@ describe("trainingLoadService", () => {
     expect(today?.acuteEwma).toBe(today?.chronicEwma);
     expect(today?.tsb).toBe(0);
     expect(overview.tsb).toBe(0);
-    // Identical days ⇒ zero day-to-day variance ⇒ monotony undefined (N/A).
-    expect(overview.monotony).toBeNull();
-    expect(overview.monotonyZone).toBe("ok");
+    // Identical days ⇒ zero day-to-day variance ⇒ monotony DIVERGES, and that is
+    // the maximum-risk pattern Foster's metric exists to detect. It is reported
+    // at MONOTONY_CEILING rather than as null; a null here used to be classified
+    // "ok", which silenced every warning surface at once (audit C1).
+    expect(overview.monotony).toBe(10);
+    expect(overview.monotonyZone).toBe("high_risk");
   });
 
   it("reports negative TSB on an acute spike and positive TSB after a rest gap", () => {
@@ -536,11 +539,34 @@ describe("trainingLoadService", () => {
   });
 
   it("classifies Foster monotony zones at the documented thresholds", () => {
-    expect(monotonyZone(null)).toBe("ok");
+    // null = the week carried no load, so monotony is 0/0. That is "unknown",
+    // never "ok" — an absent measurement must not be styled or reasoned about
+    // as a healthy one (audit C1).
+    expect(monotonyZone(null)).toBe("unknown");
     expect(monotonyZone(1.0)).toBe("ok");
     expect(monotonyZone(1.7)).toBe("elevated");
     expect(monotonyZone(2.0)).toBe("elevated"); // boundary: >2.0 is high risk
     expect(monotonyZone(2.5)).toBe("high_risk");
+  });
+
+  it("withholds monotony until the athlete has a full 7-day window of history", () => {
+    // The trailing window reads absent days as rest, so before day 7 a monotony
+    // would be computed almost entirely from days that predate the athlete.
+    const currentDate = "2026-05-22";
+    const { dailyLoads } = calculateTrainingLoad([log({ date: "2026-05-19", duration: 60, rpe: 7 })], [], [], {
+      currentDate,
+    });
+    const today = dailyLoads.find((d) => d.date === currentDate);
+
+    expect(today?.monotony).toBeNull();
+    expect(today?.strain).toBeNull();
+  });
+
+  it("returns no HR zone table when resting HR is above max HR", () => {
+    // Mirrors the guard hrReserveRatio already applies; without it the reserve
+    // goes negative and an inverted zone table renders as fact.
+    expect(hrZoneBoundaries({ restingHr: 190, maxHr: 150 })).toEqual([]);
+    expect(hrZoneBoundaries({ restingHr: 50, maxHr: 190 })).toHaveLength(5);
   });
 
   it("produces finite monotony/strain for a varied week", () => {

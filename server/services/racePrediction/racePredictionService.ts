@@ -91,14 +91,31 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const READINESS_WINDOW_DAYS = 90;
 
 /**
+ * Acute EWMA below this is not a taper, it is an absence of training: there is no
+ * form to read. Steady daily training converges acute to the daily UTSS itself
+ * (tens of points), and even 2–3 sessions a week holds it well above this floor,
+ * so the threshold only catches athletes who have effectively stopped.
+ */
+const MIN_ACUTE_UTSS_FOR_FORM = 5;
+
+/**
  * Map current Training Stress Balance (Form) to a race-readiness band + taper
  * guidance. TSB is chronic − acute EWMA (positive = rested, negative = fatigued).
  * This annotates the prediction only — the finish-time estimate already assumes a
  * rested race day, so readiness never modifies the predicted time.
+ *
+ * `acuteLoad` (today's acute EWMA) is what distinguishes a taper from detraining;
+ * omit it only where recent load genuinely isn't available.
  */
-export function computeRaceReadiness(tsb: number | null): RaceReadiness {
-  if (tsb == null) {
+export function computeRaceReadiness(tsb: number | null, acuteLoad?: number | null): RaceReadiness {
+  // A large positive TSB has two very different causes: a deliberate taper from a
+  // high base, and simply not training. Both collapse acute load below chronic,
+  // so TSB alone cannot tell "sharp" from "detrained" — and it used to call the
+  // detrained athlete "peaked" (audit C3). Recent load is what separates them.
+  if (tsb == null || (acuteLoad != null && acuteLoad < MIN_ACUTE_UTSS_FOR_FORM)) {
     return {
+      // Null, not the computed figure: "insufficient_data" already means there is
+      // no form to read, so surfacing a number invites the UI to render one.
       tsb: null,
       status: "insufficient_data",
       guidance:
@@ -174,7 +191,7 @@ async function loadRaceReadiness(
         ftp: user?.ftp ?? null,
       },
     });
-    return computeRaceReadiness(overview.tsb);
+    return computeRaceReadiness(overview.tsb, overview.acuteAvg);
   } catch {
     // Readiness is a non-critical annotation, so any failure falls back to
     // "insufficient data". We log a static message with no variables — Bearer

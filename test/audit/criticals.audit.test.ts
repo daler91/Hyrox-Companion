@@ -8,6 +8,7 @@
  */
 import { calculateMafHr, metersPerSecond } from "@shared/maf";
 import {
+  ABSOLUTE_CALORIE_FLOOR,
   calculateNutritionTarget,
   defaultPeriodizationConfig,
   effectiveTarget,
@@ -95,58 +96,52 @@ function totalReferenceSeconds(reference: RaceReference): number {
   return runs + stations + reference.transitionTotalSeconds;
 }
 
-describe("C1 — Foster monotony is unreportable for perfectly uniform training", () => {
+describe("C1 — Foster monotony for perfectly uniform training (FIXED)", () => {
   /**
-   * C1(a) — the null-guard face.
-   * `computeMonotonyStrain` returns null when SD is 0, conflating "no training"
-   * with "perfectly identical daily load" (unbounded monotony, maximum risk).
-   * CURRENT:  monotony null → monotonyZone "ok" → every warning surface silent
-   * INTENDED: a capped high value classified "high_risk"
-   * RETIRE:   replace with `expect(monotonyZone(today.monotony)).toBe("high_risk")`.
+   * C1 — FIXED. `computeMonotonyStrain` now separates the two SD = 0 cases and
+   * computes variance two-pass, so identical daily load is reported at
+   * MONOTONY_CEILING and classified high_risk regardless of the magnitude of
+   * the values. Previously RPE 5 (66 UTSS/day) cancelled to exactly 0 and
+   * scored monotony null → zone "ok", while RPE 7 (94.8 UTSS/day) left a
+   * ~1.3e-6 residue and scored 70,289,952.98 — the same pattern, two absurd
+   * answers, chosen by a float bit pattern.
    */
-  it("[BUG C1a] reports an identical 60-min RPE-5 session every day as monotony null / zone ok", () => {
-    const today = loadToday(identicalDailyTraining(5, 60, 40));
-
-    expect(today.utss).toBe(66);
-    expect(today.monotony).toBeNull();
-    expect(today.strain).toBeNull();
-    // The null is then classified as healthy, not as unknown.
-    expect(monotonyZone(today.monotony)).toBe("ok");
-  });
-
-  /**
-   * C1(b) — the float-cancellation face, same expression.
-   * `variance = sumSq/n - mean*mean` is the unstable one-pass form. For seven
-   * IDENTICAL values it cancels to exactly 0 at most magnitudes (66 above) but
-   * leaves a ~1.3e-6 residue at others, producing an absurd finite monotony.
-   * 94.8 UTSS/day is a 60-minute session at RPE 7 — an ordinary day.
-   * CURRENT:  monotony 70,289,952.98 / strain 46,644,412,797.5
-   * INTENDED: the same capped high value as C1a — identical input must not
-   *           produce two different answers based on a float bit pattern.
-   * RETIRE:   together with C1a; a two-pass variance fixes both.
-   */
-  it("[BUG C1b] reports an identical 60-min RPE-7 session every day as monotony ~7e7", () => {
-    const today = loadToday(identicalDailyTraining(7, 60, 40));
-
-    expect(today.utss).toBe(94.8);
-    expect(today.monotony).toBe(70289952.98);
-    expect(today.strain).toBe(46644412797.5);
-  });
-
-  /**
-   * The invariant C1 violates. Passes today because the assertion inside fails.
-   * RETIRE: when this reports "expected to fail, but passed", drop `.fails`.
-   */
-  it.fails("[INTENT C1] identical daily load is maximum monotony, however it is scored", () => {
+  it("scores identical daily load as maximum monotony, at any magnitude", () => {
     const rpe5 = loadToday(identicalDailyTraining(5, 60, 40));
     const rpe7 = loadToday(identicalDailyTraining(7, 60, 40));
+
+    // The two magnitudes that used to diverge now agree.
+    expect(rpe5.utss).toBe(66);
+    expect(rpe7.utss).toBe(94.8);
+    expect(rpe5.monotony).toBe(rpe7.monotony);
 
     expect(monotonyZone(rpe5.monotony)).toBe("high_risk");
     expect(monotonyZone(rpe7.monotony)).toBe("high_risk");
   });
 
-  /** A varied week is scored correctly — the control that proves the metric works at all. */
-  it("scores a varied week correctly (control, not a bug)", () => {
+  /** Strain stays on a human scale instead of reaching 4.7e10. */
+  it("keeps strain finite and legible for uniform load", () => {
+    const today = loadToday(identicalDailyTraining(7, 60, 40));
+
+    expect(today.strain).not.toBeNull();
+    expect(today.strain!).toBeLessThan(10_000);
+  });
+
+  /**
+   * The other half of the split: a week with no load at all is genuinely
+   * undefined (0/0), and must read "unknown" rather than the healthy "ok" it
+   * used to be classified as.
+   */
+  it("reports a week with no training as unknown, not ok", () => {
+    const today = loadToday([log({ date: shiftDate(TODAY, -60), duration: 60, rpe: 7 })]);
+
+    expect(today.utss).toBe(0);
+    expect(today.monotony).toBeNull();
+    expect(monotonyZone(null)).toBe("unknown");
+  });
+
+  /** A varied week is scored normally — the control that the metric still works. */
+  it("scores a varied week correctly (control)", () => {
     const varied = [10, 6, 12, 0, 9, 11, 7].map((minutes, i) =>
       log({ id: `log-${i}`, date: shiftDate(TODAY, -i), duration: minutes * 6, rpe: 7 }),
     );
@@ -157,7 +152,7 @@ describe("C1 — Foster monotony is unreportable for perfectly uniform training"
   });
 });
 
-describe("C2 — MAF aerobic ceiling falls 11 bpm on the 65th birthday", () => {
+describe("C2 — MAF aerobic ceiling across the age-65 boundary (FIXED)", () => {
   const healthyImprovingAthlete = {
     injuryIllnessMedication: false,
     consistency: "high",
@@ -165,77 +160,94 @@ describe("C2 — MAF aerobic ceiling falls 11 bpm on the 65th birthday", () => {
   } as const;
 
   /**
-   * C2 — `age >= 65` is evaluated above the consistency/trend branch and applies
-   * -5, pre-empting the +5 the athlete has earned. Maffetone's published 65+
-   * exception runs the other way: up to +10 for category (d) athletes.
-   * CURRENT:  age 64 → 121 bpm, age 65 → 110 bpm
-   * INTENDED: age 65 → >= 120 bpm (base 115 + 5, optionally up to +10 more)
-   * RETIRE:   assert the ceiling never drops by more than 1 bpm per year of age.
+   * C2 — FIXED. The `age >= 65` branch no longer sits above the consistency/trend
+   * checks and no longer applies -5. The athlete keeps the category they earned,
+   * and 65+ adds a clinician-check warning instead of a silent penalty.
+   * Maffetone's 65+ exception is an upward allowance ("up to 10 beats may have to
+   * be added"), and it is discretionary — so it is surfaced, not auto-applied.
    */
-  it("[BUG C2] drops the ceiling 11 bpm between age 64 and 65", () => {
+  it("no longer drops the ceiling 11 bpm between age 64 and 65", () => {
     const at64 = calculateMafHr({ ...healthyImprovingAthlete, age: 64 });
     const at65 = calculateMafHr({ ...healthyImprovingAthlete, age: 65 });
 
     expect(at64.ceiling).toBe(121);
-    expect(at64.adjustment).toBe(5);
+    expect(at65.ceiling).toBe(120); // was 110
+    expect(at64.ceiling - at65.ceiling).toBe(1);
 
-    expect(at65.ceiling).toBe(110);
-    expect(at65.adjustment).toBe(-5);
-    expect(at65.reasonCodes).toContain("age_over_65_conservative_default");
-
-    expect(at64.ceiling - at65.ceiling).toBe(11);
+    expect(at65.adjustment).toBe(5);
+    expect(at65.reasonCodes).toContain("age_over_65_clinician_check");
   });
 
   /**
-   * The invariant C2 violates: ageing one year may lower the ceiling by the one
-   * beat that `180 - age` accounts for, never by more.
-   * RETIRE: when this reports "expected to fail, but passed", drop `.fails`.
+   * Was `it.fails` — the invariant C2 violated. Now a permanent guard: no single
+   * year of age may cost more than the one beat `180 - age` accounts for.
    */
-  it.fails("[INTENT C2] one year of age never costs more than 1 bpm of ceiling", () => {
+  it("one year of age never costs more than 1 bpm of ceiling", () => {
     for (let age = 17; age < 99; age++) {
       const younger = calculateMafHr({ ...healthyImprovingAthlete, age });
       const older = calculateMafHr({ ...healthyImprovingAthlete, age: age + 1 });
       expect(younger.ceiling - older.ceiling).toBeLessThanOrEqual(1);
     }
   });
+
+  /** The conservative branches are untouched — this was never about softening them. */
+  it("still applies the full -10 for injury, illness or medication", () => {
+    const result = calculateMafHr({
+      ...healthyImprovingAthlete,
+      age: 70,
+      injuryIllnessMedication: true,
+    });
+    expect(result.adjustment).toBe(-10);
+  });
 });
 
-describe("C3 — Form/TSB skips the history gate that ACWR respects", () => {
+describe("C3 — Form/TSB and the history gate (FIXED)", () => {
   /**
-   * C3 — `day.tsb` is assigned before the `ratioFrom` gate, so it is non-null
-   * from the athlete's first logged day. Chronic EWMA decays far slower than
-   * acute, so any layoff produces a large positive TSB, which reads as "peaked".
-   * CURRENT:  one workout 20 days ago → tsb +26.7 → readiness "peaked"
-   * INTENDED: tsb null until the ACWR baseline exists → "insufficient_data"
-   * RETIRE:   assert `today.tsb` is null and readiness is "insufficient_data".
+   * C3 — FIXED in two places, because the gate alone was not enough.
+   *  1. `day.tsb` is now assigned BELOW the `ratioFrom` gate, so Form is
+   *     withheld for the same first 14 days as ACWR.
+   *  2. `computeRaceReadiness` now takes acute load. The gate alone does not
+   *     cover this athlete — their one workout is 20 days old, i.e. past the
+   *     gate — so TSB is legitimately computed and still large and positive.
+   *     Acute load is what separates a taper from having simply stopped.
    */
-  it("[BUG C3] calls an athlete with one workout 20 days ago race-ready", () => {
+  it("no longer calls an athlete with one workout 20 days ago race-ready", () => {
     const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: 60, rpe: 7 })]);
 
-    // The athlete has trained once, three weeks ago. ACWR reads that correctly:
+    // Past the 14-day gate, so ACWR and TSB are both computed...
     expect(today.acwr).toBe(0.01);
     expect(today.zone).toBe("undertraining");
-
-    // Form, from the same data, says the opposite — and confidently.
-    expect(today.tsb).not.toBeNull();
     expect(today.tsb).toBeGreaterThan(15);
 
-    const readiness = computeRaceReadiness(today.tsb);
-    expect(readiness.status).toBe("peaked");
-    expect(readiness.guidance).toContain("ideal for race day");
+    // ...but acute load has collapsed, so there is no form to read.
+    expect(today.acuteEwma!).toBeLessThan(5);
+    const readiness = computeRaceReadiness(today.tsb, today.acuteEwma);
+    expect(readiness.status).toBe("insufficient_data");
+    expect(readiness.tsb).toBeNull();
   });
 
-  /**
-   * The invariant C3 violates: two signals derived from the same history must
-   * not contradict each other. An athlete the load model calls "undertraining"
-   * cannot simultaneously be peaked for a race.
-   * RETIRE: when this reports "expected to fail, but passed", drop `.fails`.
-   */
-  it.fails("[INTENT C3] an undertrained athlete is never reported as peaked", () => {
+  /** The invariant: the two signals must never contradict each other. */
+  it("never reports an undertrained athlete as peaked", () => {
     const today = loadToday([log({ date: shiftDate(TODAY, -20), duration: 60, rpe: 7 })]);
 
     expect(today.zone).toBe("undertraining");
-    expect(computeRaceReadiness(today.tsb).status).not.toBe("peaked");
+    expect(computeRaceReadiness(today.tsb, today.acuteEwma).status).not.toBe("peaked");
+  });
+
+  /** Form is withheld entirely inside the 14-day window, as ACWR already was. */
+  it("withholds Form until the ACWR baseline exists", () => {
+    const today = loadToday([log({ date: shiftDate(TODAY, -3), duration: 60, rpe: 7 })]);
+
+    expect(today.acwr).toBeNull();
+    expect(today.zone).toBe("insufficient_data");
+    expect(today.tsb).toBeNull();
+  });
+
+  /** A genuine taper — real recent load, positive Form — still reads as peaked. */
+  it("still reports a real taper as peaked (control)", () => {
+    const readiness = computeRaceReadiness(20, 45);
+    expect(readiness.status).toBe("peaked");
+    expect(readiness.tsb).toBe(20);
   });
 });
 
@@ -284,16 +296,15 @@ describe("C4 — ageing past the top benchmark cohort predicts a faster race", (
   });
 });
 
-describe("C5 — periodisation breaches the calorie safety floor", () => {
+describe("C5 — periodisation and the calorie safety floor (FIXED)", () => {
   /**
-   * C5 — the 1200/1500 kcal floor is enforced in `calculateNutritionTarget` and
-   * never re-checked in `effectiveTargetWindowed`, so load-scaling can carry the
-   * effective target below it silently — no warning, empty reasonCodes.
-   * CURRENT:  baseline 1418 kcal (floor untriggered) → rest day 1158 kcal
-   * INTENDED: the effective target is floored too, with a reason code
-   * RETIRE:   assert `restDay.calories >= 1200` and a floor reason code is present.
+   * C5 — FIXED. `effectiveTargetWindowed` now bounds how far the carb delta may
+   * go negative so the load-scaled target cannot fall below the safety floor,
+   * and emits `effective_calorie_floor_applied` when that bound binds. The bound
+   * is applied to carbs rather than to `calories` directly so the returned
+   * calories and macros stay reconciled.
    */
-  it("[BUG C5] carries a 55 kg athlete's rest-day target below the 1200 kcal floor", () => {
+  it("holds a 55 kg athlete's rest-day target at the floor, and says so", () => {
     const baseline = calculateNutritionTarget({
       bodyweightKg: 55,
       heightCm: 162,
@@ -323,10 +334,43 @@ describe("C5 — periodisation breaches the calorie safety floor", () => {
       config,
     );
 
-    expect(restDay.calories).toBe(1158);
-    expect(restDay.calories).toBeLessThan(1200);
-    // Silently: nothing tells the athlete a safety bound was crossed.
-    expect(restDay.reasonCodes).toEqual([]);
+    // Previously 1158 kcal — below the floor — with an empty reasonCodes array.
+    expect(restDay.calories).toBe(ABSOLUTE_CALORIE_FLOOR);
+    expect(restDay.reasonCodes).toContain("effective_calorie_floor_applied");
+
+    // Calories and macros still reconcile: carbs were the lever, not a bare bump.
+    const fromMacros = restDay.proteinG! * 4 + restDay.carbG! * 4 + restDay.fatG! * 9;
+    expect(fromMacros).toBeCloseTo(restDay.calories!, 0);
+  });
+
+  /** A day that never approaches the floor is untouched. */
+  it("leaves a well-fed athlete's scaling alone (control)", () => {
+    const baseline = calculateNutritionTarget({
+      bodyweightKg: 80,
+      heightCm: 182,
+      ageYears: 30,
+      sex: "male",
+      activityLevel: "active",
+      goalDirection: "maintain",
+      goalRateKgPerWeek: 0,
+    });
+    const config: PeriodizationConfig = {
+      enabled: true,
+      ...defaultPeriodizationConfig(baseline.carbG, 0),
+    };
+    const restDay = effectiveTarget(
+      {
+        calories: baseline.calories,
+        proteinG: baseline.proteinG,
+        carbG: baseline.carbG,
+        fatG: baseline.fatG,
+      },
+      0,
+      config,
+    );
+
+    expect(restDay.calories!).toBeGreaterThan(ABSOLUTE_CALORIE_FLOOR);
+    expect(restDay.reasonCodes).not.toContain("effective_calorie_floor_applied");
   });
 });
 
