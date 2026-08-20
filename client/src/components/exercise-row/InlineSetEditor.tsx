@@ -298,18 +298,20 @@ const SetRow = memo(function SetRow({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onDelete}
-                disabled={!canDelete}
-                aria-label={`Remove set ${set.setNumber}`}
-                className="size-7 text-muted-foreground disabled:opacity-40"
-                data-testid={`button-remove-set-${set.id}`}
-              >
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </Button>
+              <span tabIndex={!canDelete ? 0 : -1}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onDelete}
+                  disabled={!canDelete}
+                  aria-label={`Remove set ${set.setNumber}`}
+                  className="size-7 text-muted-foreground disabled:opacity-40"
+                  data-testid={`button-remove-set-${set.id}`}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </span>
             </TooltipTrigger>
             <TooltipContent>
               <p>Remove set</p>
