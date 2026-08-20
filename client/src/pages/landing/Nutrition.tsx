@@ -18,7 +18,11 @@ function MacroBar({ label, value, target, unit, width }: MacroBarProps) {
       <div className="flex items-baseline justify-between">
         <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
         <span className="text-[11px] tabular-nums text-muted-foreground">
-          {value}<span className="text-muted-foreground/60">/{target}{unit}</span>
+          {value}
+          <span className="text-muted-foreground">
+            /{target}
+            {unit}
+          </span>
         </span>
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -35,7 +39,10 @@ function NutritionMockup() {
       role="img"
       aria-label="Preview of the nutrition day view showing calories and macros logged against training-aware targets, with an AI-parsed meal"
     >
-      <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-[0_24px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-accent/20 overflow-hidden" aria-hidden="true">
+      <div
+        className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-[0_24px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-accent/20 overflow-hidden"
+        aria-hidden="true"
+      >
         <div className="px-4 py-3 border-b border-border/40 flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-red-400/60" />
           <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
@@ -63,7 +70,9 @@ function NutritionMockup() {
 
           <div className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
             <Sparkles className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-            <span className="text-xs text-muted-foreground">Carbs scaled up for today&apos;s high training load</span>
+            <span className="text-xs text-muted-foreground">
+              Carbs scaled up for today&apos;s high training load
+            </span>
           </div>
 
           <div className="rounded-lg border border-border/40 p-3 space-y-2">
@@ -73,7 +82,9 @@ function NutritionMockup() {
                 <Sparkles className="h-2.5 w-2.5 mr-0.5" /> AI parsed
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Oats, banana &amp; a scoop of whey · 540 kcal</p>
+            <p className="text-xs text-muted-foreground">
+              Oats, banana &amp; a scoop of whey · 540 kcal
+            </p>
           </div>
         </div>
       </div>
