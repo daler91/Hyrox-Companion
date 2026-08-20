@@ -255,12 +255,38 @@ describe("Review page", () => {
     expect(mocks.setWeek).toHaveBeenCalledWith("2026-05-25");
   });
 
+  it("pages forward a week from the week the server resolved", async () => {
+    const user = userEvent.setup();
+    mocks.getWeeklyReview.mockResolvedValue(
+      review({ weekStart: "2026-06-01", weekEnd: "2026-06-07", isCurrentWeek: false }),
+    );
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review")).toBeInTheDocument());
+    await user.click(screen.getByTestId("weekly-review-next"));
+
+    expect(mocks.setWeek).toHaveBeenCalledWith("2026-06-08");
+  });
+
   it("offers a retry when the week fails to load", async () => {
     mocks.getWeeklyReview.mockRejectedValue(new Error("boom"));
     renderPage();
 
     await waitFor(() => expect(screen.getByTestId("weekly-review-error")).toBeInTheDocument());
     expect(screen.getByTestId("weekly-review-retry")).toBeInTheDocument();
+  });
+
+  it("re-fetches the week when retry is clicked after a failed load", async () => {
+    const user = userEvent.setup();
+    mocks.getWeeklyReview.mockRejectedValueOnce(new Error("boom"));
+    mocks.getWeeklyReview.mockResolvedValueOnce(review());
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review-error")).toBeInTheDocument());
+    await user.click(screen.getByTestId("weekly-review-retry"));
+
+    await waitFor(() => expect(screen.getByTestId("weekly-review")).toBeInTheDocument());
+    expect(mocks.getWeeklyReview).toHaveBeenCalledTimes(2);
   });
 
   describe("next week's intent", () => {
