@@ -115,7 +115,7 @@ export function ChatInput({
             voice recording and loading to reduce noise. */}
         {!isListening && !isLoading && (
           <p
-            className="hidden px-1 pt-0.5 text-[10px] text-muted-foreground/60 md:block"
+            className="hidden px-1 pt-0.5 text-[10px] text-muted-foreground md:block"
             data-testid="text-keyboard-hint"
           >
             <kbd className="font-mono">↵</kbd> send · <kbd className="font-mono">⇧↵</kbd> new line

@@ -106,7 +106,7 @@ export function FuellingCorrelationCard({
                 testId="fuelling-correlation-compliance"
               />
             )}
-            <p className="text-[11px] text-muted-foreground/70">
+            <p className="text-[11px] text-muted-foreground">
               {result.eligibleDays} training days compared (carb target hit = ≥{result.carbHitPct}%
               of that day's target). Association, not causation.
             </p>
