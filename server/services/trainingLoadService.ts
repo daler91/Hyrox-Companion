@@ -667,12 +667,15 @@ const MONOTONY_CEILING = 10;
 function computeMonotonyStrain(
   days: Map<string, DailyTrainingLoad>,
   endDate: string,
+  /** First date whose trailing 7-day window lies wholly inside the athlete's history. */
+  availableFrom: string | null,
 ): { monotony: number | null; strain: number | null } {
-  // ⚡ Bolt Performance Optimization:
-  // Consolidated intermediate array allocation and multiple `reduce()` calls into a
-  // single `for` loop to compute the `sum` and values simultaneously without
-  // allocating a `values` array. This eliminates intermediate array creation,
-  // avoids multiple O(N) iterations, and reduces memory allocation overhead.
+  if (availableFrom == null || endDate < availableFrom) return { monotony: null, strain: null };
+
+  // The window is collected once into `values` and read twice (mean, then squared
+  // deviations). The array is what makes the two-pass variance above possible; on
+  // a fixed 7-element window its allocation cost is not worth trading for the
+  // one-pass form's cancellation.
   const count = 7;
   const values: number[] = [];
   let total = 0;
@@ -758,14 +761,9 @@ function applyLoadDynamics(
     day.acuteEwma = round(acute, 1);
     day.chronicEwma = round(chronic, 1);
 
-    if (monotonyFrom != null && date >= monotonyFrom) {
-      const { monotony, strain } = computeMonotonyStrain(days, date);
-      day.monotony = monotony;
-      day.strain = strain;
-    } else {
-      day.monotony = null;
-      day.strain = null;
-    }
+    const { monotony, strain } = computeMonotonyStrain(days, date, monotonyFrom);
+    day.monotony = monotony;
+    day.strain = strain;
 
     // TSB ("Form") is gated by the SAME history requirement as ACWR. It used to
     // be assigned above this check, so it was non-null from the athlete's very
