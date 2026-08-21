@@ -223,7 +223,7 @@ function buildSupplementaryInsights(params: {
   );
 
   // Deterministic race-day form readiness from TSB — free (no AI call).
-  const raceReadiness = computeRaceReadiness(loadGovernor.tsb);
+  const raceReadiness = computeRaceReadiness(loadGovernor.tsb, loadGovernor.acuteAvg);
 
   return {
     ...(personalRecords.length > 0 ? { personalRecords } : {}),

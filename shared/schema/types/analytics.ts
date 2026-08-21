@@ -27,7 +27,11 @@ export type LoadGovernorVector =
 
 // Foster training-monotony band. "high_risk" (>2.0) is a strong overtraining /
 // illness predictor; "elevated" (1.5–2.0) is an early warning.
-export type TrainingMonotonyZone = "ok" | "elevated" | "high_risk";
+// "unknown" is NOT a safe reading — it means the week carried no load at all, so
+// monotony (mean ÷ SD) is genuinely undefined. It is deliberately separate from
+// "ok" so a missing measurement can never be styled or reasoned about as a
+// healthy one. See docs/CALCULATION_AUDIT_2026-08-20.md C1.
+export type TrainingMonotonyZone = "unknown" | "ok" | "elevated" | "high_risk";
 
 // Karvonen %HRR heart-rate zones (Z1 recovery → Z5 VO2max/anaerobic). Derived
 // from resting/max HR on the same HRR axis the load model already uses.

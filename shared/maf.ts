@@ -30,13 +30,6 @@ export function calculateMafHr(input: MafInput): MafResult {
   } else if (input.injuryIllnessMedication) {
     adjustment = -10;
     reasonCodes.push("injury_illness_medication", "adjustment_-10");
-  } else if (input.age >= 65) {
-    // S1: Maffetone applies the conservative adjustment from 65, not 66, so the
-    // boundary is inclusive — otherwise a healthy 65-year-old falls through to
-    // the consistency/trend branch and can be handed +5.
-    adjustment = -5;
-    warning = "Athletes aged 65 and older should confirm with clinician; conservative default applied.";
-    reasonCodes.push("age_over_65_conservative_default", "adjustment_-5");
   } else if (input.consistency === "low" || input.trend === "declining") {
     adjustment = -5;
     reasonCodes.push("low_consistency_or_declining_trend", "adjustment_-5");
@@ -45,6 +38,24 @@ export function calculateMafHr(input: MafInput): MafResult {
   } else {
     adjustment = 5;
     reasonCodes.push("high_consistency_and_improving_trend", "adjustment_+5");
+  }
+
+  // Age 65+ adds a clinician check, but does NOT override the category above.
+  //
+  // This branch used to sit above the consistency/trend checks and force -5, so a
+  // healthy, consistently-improving athlete lost 11 bpm of ceiling on their 65th
+  // birthday: 64 → 121, 65 → 110 (audit C2). It cited Maffetone, but his published
+  // 180-Formula has no age penalty at all — his stated 65+ exception runs the other
+  // way, allowing up to 10 beats to be ADDED for category (d) athletes.
+  //
+  // That extra allowance is discretionary in the source ("may have to be added"),
+  // so it is deliberately not applied automatically here; the athlete keeps the
+  // category they earned, and the warning routes the individualisation to a
+  // clinician rather than inventing a number.
+  if (input.age >= 65 && adjustment !== -10) {
+    warning =
+      "Athletes aged 65 and older: Maffetone allows an individual upward adjustment — confirm your ceiling with a clinician.";
+    reasonCodes.push("age_over_65_clinician_check");
   }
 
   const ceiling = base + adjustment;

@@ -39,6 +39,9 @@ const ZONE_CLASSES: Record<LoadGovernorAcwrZone, string> = {
 };
 
 const MONOTONY_ZONE_CLASSES: Record<TrainingMonotonyZone, string> = {
+  // Muted, not neutral: "unknown" is an absent measurement (a week with no load),
+  // and must not read like the healthy "ok" it used to be reported as.
+  unknown: "text-muted-foreground",
   ok: "text-foreground",
   elevated: "text-amber-600 dark:text-amber-400",
   high_risk: "text-red-600 dark:text-red-400",

@@ -23,6 +23,41 @@ path is, not by how dramatic the failure looks.
 
 ---
 
+## Remediation status (updated 2026-08-20)
+
+**Phase 0 — characterisation tests.** Landed. `test/audit/` pins the behaviour of every C-tier
+finding, with a header on each test naming the finding ID, the current value, the intended value,
+and how to retire it. See [`test/audit/README.md`](../test/audit/README.md). The tests are green,
+not red: a knowingly-red suite would break the repo's gates and train people to ignore it, so
+characterisation tests assert what the code does now (and turn red when a fix lands), while
+`it.fails()` intent tests state the invariant and turn red with "expected to fail, but passed".
+
+**Phase 2 — safety guards.** Landed for C1, C2, C3, C5, M9 and L8.
+
+| #   | Fix                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | `computeMonotonyStrain` separates the two SD = 0 cases and computes variance two-pass. Uniform load reports at `MONOTONY_CEILING` (10) and classifies `high_risk`; only a week with no load at all is null. `TrainingMonotonyZone` gained an `"unknown"` member so an absent measurement can never be styled or reasoned about as a healthy one.                        |
+| C2  | The `age >= 65` branch no longer sits above the consistency/trend checks and no longer applies −5. The athlete keeps the category they earned (65 → 120 bpm, was 110) and 65+ adds a clinician-check warning. Maffetone's upward allowance is discretionary in the source, so it is surfaced rather than auto-applied.                                                  |
+| C3  | `day.tsb` moved below the `ratioFrom` gate, so Form is withheld for the same first 14 days as ACWR. That alone was **not** enough — an athlete whose single workout is 20 days old is past the gate — so `computeRaceReadiness` now also takes acute load and returns `insufficient_data` below `MIN_ACUTE_UTSS_FOR_FORM`. A real taper still reads "peaked".           |
+| C5  | `effectiveTargetWindowed` bounds how far the carb delta may go negative so the load-scaled target cannot fall below `ABSOLUTE_CALORIE_FLOOR`, and emits `effective_calorie_floor_applied`. Bounding carbs rather than raising `calories` keeps calories and macros reconciled. The inverted `carbs_floored` condition noted in the register is fixed in the same block. |
+| M9  | Monotony gained its own 7-day history gate (`MONOTONY_WINDOW_DAYS`), separate from ACWR's 14. Tying it to ACWR's window was too strict — monotony needs 7 days, not 14.                                                                                                                                                                                                 |
+| L8  | `hrZoneBoundaries` mirrors the `hrMax <= hrRest` guard `hrReserveRatio` already had, returning no table rather than an inverted one.                                                                                                                                                                                                                                    |
+
+Existing tests that asserted the buggy values were **inverted, not preserved**:
+`trainingLoadService.test.ts` (uniform-load monotony null → 10, `monotonyZone(null)` "ok" →
+"unknown") and `shared/maf.test.ts` (the age-65 −5 assertion). This is the case Phase 0 exists to
+make visible.
+
+**Still open in Phase 2:** M6 and L9. Both need a product decision rather than a code fix — M6
+requires collecting Maffetone's actual categories (2+ years injury-free, colds/flu, allergies) in
+onboarding instead of a bare "Low/Moderate/High", and L9's under-16 handling is entangled with the
+same screen and with the 16–99 validation that currently makes the branch unreachable.
+
+**Not yet started:** Phases 1, 3, 4, 5, 6, and C4, C6, C7 — note C4 (the age-cohort fallback) is
+not covered by any of the six root causes below and needs its own fix.
+
+---
+
 ## How to read this
 
 Every finding carries a **verification tier**:

@@ -40,6 +40,15 @@ export const DEFAULT_FAT_G_PER_KG = 1.0;
 const CALORIE_FLOOR_FEMALE = 1200;
 const CALORIE_FLOOR_DEFAULT = 1500;
 
+/**
+ * The floor that applies to every athlete regardless of profile. The effective
+ * (training-load-scaled) target enforces this rather than the per-sex floor
+ * above, because a stored `nutrition_targets` row carries neither sex nor the
+ * floor its baseline was created under — see `PeriodizationConfig.calorieFloor`
+ * for how a caller that does know supplies the exact one.
+ */
+export const ABSOLUTE_CALORIE_FLOOR = CALORIE_FLOOR_FEMALE;
+
 function roundKcal(n: number): number {
   return Math.round(n);
 }
@@ -193,6 +202,12 @@ export interface PeriodizationConfig {
   phaseAware?: boolean;
   /** Cap on the positive carb delta (g) so adjustments can't compound absurdly. */
   maxCarbDeltaG?: number;
+  /**
+   * Lower bound (kcal) for the load-scaled daily target. Omitted ⇒
+   * {@link ABSOLUTE_CALORIE_FLOOR}. Supply the athlete's own per-sex floor where
+   * it is known; a stored target row is not enough to derive it.
+   */
+  calorieFloor?: number;
 }
 
 /**
@@ -428,8 +443,30 @@ export function effectiveTargetWindowed(
   const rawSum = baseLoad.raw + recovery.raw + preload.raw;
   const cap = config.maxCarbDeltaG ?? Number.POSITIVE_INFINITY;
   if (cap !== Number.POSITIVE_INFINITY && rawSum > cap) reasonCodes.push("carb_delta_capped");
-  const appliedDelta = Math.max(-base.carbG, Math.min(cap, rawSum));
-  if (appliedDelta < rawSum && rawSum < 0) reasonCodes.push("carbs_floored");
+  // Two lower bounds constrain how far the carb delta may go negative:
+  //   - carbs themselves cannot go below zero;
+  //   - the day's calories cannot fall below the safety floor. That floor was
+  //     enforced when the baseline was created and then never re-checked here, so
+  //     load-scaling could carry a 55 kg athlete's rest day to 1158 kcal — under
+  //     the 1200 bound, with no warning and an empty reasonCodes array (audit C5).
+  // Bounding the carb delta (rather than raising `calories` on its own) keeps the
+  // returned calories and macros reconciled, since carbs are the lever used
+  // throughout this function.
+  const zeroCarbBound = -base.carbG;
+  const calorieFloorBound =
+    base.calories == null
+      ? Number.NEGATIVE_INFINITY
+      : ((config.calorieFloor ?? ABSOLUTE_CALORIE_FLOOR) - base.calories - proteinDeltaG * KCAL_PER_G_PROTEIN) /
+        KCAL_PER_G_CARB;
+
+  const desiredDelta = Math.min(cap, rawSum);
+  const appliedDelta = Math.max(Math.max(zeroCarbBound, calorieFloorBound), desiredDelta);
+  if (appliedDelta > desiredDelta) {
+    // Report whichever bound actually bound. The previous condition here was
+    // inverted (`appliedDelta < rawSum && rawSum < 0`), so carbs could be floored
+    // at zero with no transparency code emitted at all.
+    reasonCodes.push(calorieFloorBound >= zeroCarbBound ? "effective_calorie_floor_applied" : "carbs_floored");
+  }
   const scale = rawSum !== 0 ? appliedDelta / rawSum : 0;
 
   const baseLoadDeltaG = round1(baseLoad.raw * scale);

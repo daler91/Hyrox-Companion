@@ -22,11 +22,30 @@ describe("calculateMafHr", () => {
     expect(result.warning).toMatch(/Under-16/);
   });
 
-  it("applies the conservative -5 at exactly age 65, not +5 (S1 boundary)", () => {
+  it("keeps the earned category at age 65 and adds a clinician check, not a penalty", () => {
     const result = calculateMafHr({ age: 65, injuryIllnessMedication: false, consistency: "high", trend: "improving" });
-    expect(result.adjustment).toBe(-5);
-    expect(result.ceiling).toBe(110); // base 180-65=115, -5 = 110
-    expect(result.reasonCodes).toContain("age_over_65_conservative_default");
+    // base 180-65=115, category (d) +5 = 120. This branch used to force -5 and
+    // return 110, costing a healthy athlete 11 bpm on their birthday (audit C2).
+    expect(result.adjustment).toBe(5);
+    expect(result.ceiling).toBe(120);
+    expect(result.reasonCodes).toContain("high_consistency_and_improving_trend");
+    expect(result.reasonCodes).toContain("age_over_65_clinician_check");
+    expect(result.warning).toContain("clinician");
+  });
+
+  it("does not soften the injury/illness/medication adjustment for a 65+ athlete", () => {
+    const result = calculateMafHr({ age: 70, injuryIllnessMedication: true, consistency: "high", trend: "improving" });
+    expect(result.adjustment).toBe(-10);
+    expect(result.reasonCodes).not.toContain("age_over_65_clinician_check");
+  });
+
+  it("never drops the ceiling by more than a year of age across any boundary", () => {
+    const profile = { injuryIllnessMedication: false, consistency: "high", trend: "improving" } as const;
+    for (let age = 16; age < 99; age++) {
+      const younger = calculateMafHr({ ...profile, age });
+      const older = calculateMafHr({ ...profile, age: age + 1 });
+      expect(younger.ceiling - older.ceiling).toBeLessThanOrEqual(1);
+    }
   });
 });
 

@@ -116,8 +116,10 @@ export interface DailyTrainingLoad {
   // Training Stress Balance / "Form" = chronicEwma − acuteEwma. Positive ⇒
   // fresh/rested, negative ⇒ fatigued. Null until the EWMAs are seeded.
   tsb: number | null;
-  // Foster monotony (mean ÷ population SD of the trailing 7-day UTSS) and
-  // strain (weekly UTSS × monotony). Null when SD is 0 (identical/all-rest week).
+  // Foster monotony (mean ÷ population SD of the trailing 7-day UTSS) and strain
+  // (weekly UTSS × monotony). Null only when the week carried no load at all, or
+  // before the athlete has 7 days of history; uniform load reports at the
+  // MONOTONY_CEILING rather than as null.
   monotony: number | null;
   strain: number | null;
   // Display-only objective load, accumulated in parallel to UTSS — never feeds
@@ -445,6 +447,10 @@ export function estimateLthr(athlete?: AthleteLoadContext): number {
 export function hrZoneBoundaries(athlete?: AthleteLoadContext): HrZoneBoundary[] {
   const hrRest = resolveHrRest(athlete);
   const hrMax = resolveHrMax(athlete);
+  // Same guard `hrReserveRatio` already applies. Without it, a resting HR entered
+  // above max produced a negative reserve and an inverted zone table rendered as
+  // fact; an empty table correctly shows nothing instead (audit L8).
+  if (hrMax <= hrRest) return [];
   const reserve = hrMax - hrRest;
   return HR_ZONES.map((zone, i) => {
     const minHrr = HR_ZONE_FLOORS[i];
@@ -628,40 +634,65 @@ const CHRONIC_LAMBDA = 2 / (28 + 1); // ≈ 0.069
 // Foster monotony classification. Monotony > 2.0 is a well-known overtraining /
 // illness predictor; 1.5–2.0 is an early-warning band.
 export function monotonyZone(monotony: number | null): TrainingMonotonyZone {
-  if (monotony == null) return "ok";
+  if (monotony == null) return "unknown";
   if (monotony > 2) return "high_risk";
   if (monotony >= 1.5) return "elevated";
   return "ok";
 }
 
+// Monotony diverges as the week's load flattens (mean ÷ SD → ∞ at SD = 0), so it
+// is reported at this ceiling instead. 5× the 2.0 high-risk threshold: far enough
+// above the band to be unambiguous, small enough to render and to keep strain
+// (weekly load × monotony) on a human scale.
+const MONOTONY_CEILING = 10;
+
 // Foster monotony (mean ÷ population SD of the trailing 7 days of UTSS) and
 // strain (weekly UTSS × monotony). Population SD (÷n over the fixed 7-day
-// window) keeps a single hard day in an otherwise-easy week finite. When SD is 0
-// (every day identical, including an all-rest week) monotony is undefined, so we
-// return null and the UI shows N/A rather than Infinity.
+// window) keeps a single hard day in an otherwise-easy week finite.
+//
+// SD = 0 arises from two situations that mean OPPOSITE things, and conflating
+// them is what made this metric silent for the athletes it exists to protect:
+//   - every day zero (no training): mean is 0 too, so monotony is 0/0 — genuinely
+//     undefined. Reported as null → zone "unknown".
+//   - every day identical and non-zero: monotony is unbounded. That is the single
+//     strongest overtraining pattern Foster's metric detects, so it is reported at
+//     MONOTONY_CEILING → zone "high_risk".
+//
+// Variance is two-pass on purpose. The one-pass `sumSq/n − mean²` form cancels
+// catastrophically once the week's values are identical or near-identical, and
+// which way it lands depends on the magnitude of the values: 66 UTSS/day cancelled
+// to exactly 0 (silently "ok"), while 94.8 UTSS/day — a 60-minute RPE-7 session —
+// left a ~1.3e-6 residue and scored monotony 70,289,952.98 against a threshold of
+// 2.0. Same training pattern, two absurd answers, chosen by a float bit pattern.
 function computeMonotonyStrain(
   days: Map<string, DailyTrainingLoad>,
   endDate: string,
+  /** First date whose trailing 7-day window lies wholly inside the athlete's history. */
+  availableFrom: string | null,
 ): { monotony: number | null; strain: number | null } {
-  // ⚡ Bolt Performance Optimization:
-  // Consolidated intermediate array allocation and multiple `reduce()` calls into a
-  // single `for` loop to compute the `sum` and values simultaneously without
-  // allocating a `values` array. This eliminates intermediate array creation,
-  // avoids multiple O(N) iterations, and reduces memory allocation overhead.
-  let total = 0;
-  let sumSq = 0;
+  if (availableFrom == null || endDate < availableFrom) return { monotony: null, strain: null };
+
+  // The window is collected once into `values` and read twice (mean, then squared
+  // deviations). The array is what makes the two-pass variance above possible; on
+  // a fixed 7-element window its allocation cost is not worth trading for the
+  // one-pass form's cancellation.
   const count = 7;
+  const values: number[] = [];
+  let total = 0;
   for (let offset = 0; offset < count; offset++) {
     const v = days.get(addDays(endDate, -offset))?.utss ?? 0;
+    values.push(v);
     total += v;
-    sumSq += v * v;
   }
   const mean = total / count;
-  const variance = sumSq / count - mean * mean;
-  // Due to floating point precision, variance could be very slightly negative
-  const sd = Math.sqrt(Math.max(0, variance));
-  if (sd === 0) return { monotony: null, strain: null };
-  const monotony = round(mean / sd, 2);
+  // No load at all this week: monotony is undefined, not low and not high.
+  if (mean === 0) return { monotony: null, strain: null };
+
+  let sumSquaredDeviation = 0;
+  for (const v of values) sumSquaredDeviation += (v - mean) * (v - mean);
+  const sd = Math.sqrt(Math.max(0, sumSquaredDeviation / count));
+
+  const monotony = sd === 0 ? MONOTONY_CEILING : Math.min(round(mean / sd, 2), MONOTONY_CEILING);
   return { monotony, strain: round(total * monotony, 1) };
 }
 
@@ -683,6 +714,13 @@ export function resolveAcwrZone(acwr: number | null, chronicAvg: number): LoadGo
 // inflating ACWR (e.g. 18 steady days read ≈1.0, not "danger").
 const ACWR_MIN_HISTORY_DAYS = 14;
 
+// Monotony reads a trailing 7-day window and treats absent days as rest, so it
+// needs the whole window to lie inside the athlete's own history. Until then an
+// athlete was handed a monotony and a strain computed almost entirely from days
+// that predate them — one logged workout scored monotony 0.41 (audit M9). This
+// is deliberately its own gate: monotony needs 7 days, not ACWR's 14.
+const MONOTONY_WINDOW_DAYS = 7;
+
 // Single forward pass: maintain running acute/chronic EWMAs and derive ACWR,
 // zone, TSB (chronic − acute, "Form"), and Foster monotony/strain for each day.
 function applyLoadDynamics(
@@ -692,14 +730,12 @@ function applyLoadDynamics(
   firstLogDate: string | null,
 ): void {
   const ratioFrom = firstLogDate ? addDays(firstLogDate, ACWR_MIN_HISTORY_DAYS - 1) : null;
+  const monotonyFrom = firstLogDate ? addDays(firstLogDate, MONOTONY_WINDOW_DAYS - 1) : null;
   let acute: number | null = null;
   let chronic: number | null = null;
 
   for (const date of dateRange(start, end)) {
     const day = getOrCreateDay(days, date);
-    const { monotony, strain } = computeMonotonyStrain(days, date);
-    day.monotony = monotony;
-    day.strain = strain;
 
     // Pre-history: no baseline to seed from yet.
     if (firstLogDate == null || date < firstLogDate) {
@@ -708,6 +744,8 @@ function applyLoadDynamics(
       day.acuteEwma = null;
       day.chronicEwma = null;
       day.tsb = null;
+      day.monotony = null;
+      day.strain = null;
       continue;
     }
 
@@ -722,13 +760,23 @@ function applyLoadDynamics(
     }
     day.acuteEwma = round(acute, 1);
     day.chronicEwma = round(chronic, 1);
-    day.tsb = round(chronic - acute, 1);
 
+    const { monotony, strain } = computeMonotonyStrain(days, date, monotonyFrom);
+    day.monotony = monotony;
+    day.strain = strain;
+
+    // TSB ("Form") is gated by the SAME history requirement as ACWR. It used to
+    // be assigned above this check, so it was non-null from the athlete's very
+    // first logged day — and because chronic decays far slower than acute, any
+    // gap produces a large positive Form that reads as "peaked". One workout was
+    // enough to be told you were sharp for race day (audit C3).
     if (ratioFrom == null || date < ratioFrom) {
       day.acwr = null;
       day.zone = "insufficient_data";
+      day.tsb = null;
       continue;
     }
+    day.tsb = round(chronic - acute, 1);
     const acwr = chronic > 0 ? round(acute / chronic, 2) : null;
     day.acwr = acwr;
     day.zone = resolveAcwrZone(acwr, chronic);

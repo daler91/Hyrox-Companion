@@ -5,6 +5,12 @@
     "shared/**/*",
     "server/**/*",
     "script/**/*",
+    // Root-level test helpers and suites. Previously these were only in the
+    // program by accident — `test/factories.ts` is pulled in because server
+    // tests import it — so a test file nothing imports (e.g. test/audit/*)
+    // failed to parse under the type-aware rules. Include the directory
+    // explicitly so every file in it is linted on its own merits.
+    "test/**/*",
     "vitest.integration.setup.ts",
     "vitest.config.ts"
   ],
