@@ -115,7 +115,12 @@ function serializePreferences(user: {
 
 router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
-    const user = await storage.users.getUser(userId);
+    // ⚡ Bolt Performance Optimization: fetched active plan concurrently with user preferences
+    const [user, activePlan] = await Promise.all([
+      storage.users.getUser(userId),
+      storage.plans.getActivePlan(userId)
+    ]);
+
     if (!user) {
       return sendNotFound(res, "User not found");
     }
@@ -129,7 +134,6 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     // plans, so we gate the hint on the returned plan actually covering today
     // — users between plans should see the "no active plan" shape (null/false).
     const weeklyGoal = user.weeklyGoal ?? 5;
-    const activePlan = await storage.plans.getActivePlan(userId);
     const today = new Date().toISOString().split("T")[0];
     const planCoversToday =
       activePlan?.startDate != null &&
