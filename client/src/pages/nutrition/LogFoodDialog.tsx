@@ -506,9 +506,13 @@ function LogFoodForm({
                 size="sm"
                 onClick={handleAddPortion}
                 disabled={!canAddPortion || addServing.isPending}
+                aria-busy={addServing.isPending}
                 data-testid="button-save-portion"
               >
-                Add
+                {addServing.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                )}
+                {addServing.isPending ? "Adding…" : "Add"}
               </Button>
             </div>
           </div>
