@@ -10,7 +10,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
 import { getStatusBadge } from "@/components/timeline/timeline-workout-card/utils";
@@ -70,6 +70,12 @@ type MigrationReviewAction = "accept" | "reject" | "edit";
 type WorkoutDetailState = ReturnType<typeof useWorkoutDetail>;
 type WeightUnit = "kg" | "lb";
 type DistanceUnitPreference = ReturnType<typeof useUnitPreferences>["distanceUnit"];
+
+// Stable empty-array reference so the "no exercise sets yet" fallback below
+// doesn't allocate a fresh `[]` every render — a fresh literal would defeat
+// the useMemo dependency check on `currentCoachSeedText` just as surely as
+// a fresh object would.
+const EMPTY_EXERCISE_SETS: ExerciseSet[] = [];
 
 function useMigrationReview(workoutLogId: string | null) {
   const [reviewFlag, setReviewFlag] = useState<MigrationReviewFlag>(null);
@@ -154,23 +160,44 @@ export function ReviewSurface({
 
   const { reviewFlag, resolveReview } = useMigrationReview(workoutLogId);
 
-  if (!entry) return null;
-
   // The cached workout from useWorkoutDetail is the source of truth
   // for RPE / notes / sets — entry.* may lag while the timeline cache
   // refetches after a mutation. Falling back to entry.* keeps the
   // surface populated during the very first paint before
   // workoutQuery resolves.
   const workout = detail.workout;
+  const focusOverride = workout?.focus;
+  const sourceExerciseSets = workout?.exerciseSets ?? entry?.exerciseSets ?? EMPTY_EXERCISE_SETS;
+
+  // ⚡ Bolt Performance Optimization: buildWorkoutCoachSeedMessage() copies,
+  // sorts, and groups exerciseSets — the exact same grouping work
+  // ExerciseTable already memoizes one level down via useMemo. This is the
+  // app's highest-traffic detail sheet: every debounced set edit, RPE
+  // change, note save, or unrelated UI toggle (delete-confirm, coach panel)
+  // re-renders ReviewSurface, and this call was unconditional in the render
+  // body, so it redid the grouping on renders where the "Ask coach" seed
+  // text is never even read. `entry`/`focusOverride`/`sourceExerciseSets`
+  // stay reference-stable across renders that don't actually change the
+  // underlying data (react-query cache identity + the stable empty-array
+  // fallback above), so this collapses to once per real data change instead
+  // of once per render. Hooks must run unconditionally, so this reads
+  // straight off `entry` rather than the post-early-return `displayEntry`.
+  const currentCoachSeedText = useMemo(() => {
+    if (!entry) return "";
+    const seedEntry = focusOverride ? { ...entry, focus: focusOverride } : entry;
+    return buildWorkoutCoachSeedMessage(seedEntry, sourceExerciseSets);
+  }, [entry, focusOverride, sourceExerciseSets]);
+
+  if (!entry) return null;
+
   const displayEntry = workout?.focus ? { ...entry, focus: workout.focus } : entry;
-  const exerciseSets = workout?.exerciseSets ?? entry.exerciseSets ?? [];
+  const exerciseSets = sourceExerciseSets;
   const structureBlocks = workout?.structureBlocks ?? entry.structureBlocks ?? [];
   const rpe = workout?.rpe ?? entry.rpe ?? null;
   const notes = workout?.notes ?? entry.notes ?? null;
 
   const isStrava = entry.source === "strava";
   const canEditActuals = !isStrava && !!workoutLogId;
-  const currentCoachSeedText = buildWorkoutCoachSeedMessage(displayEntry, exerciseSets);
   const sheetContentClassName = getReviewSheetContentClassName(coachChatOpen);
   const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
@@ -688,16 +715,37 @@ function MigrationReviewCallout({ reviewFlag, onResolveReview }: MigrationReview
       <p className="font-medium">Migration review: {reviewFlag.status}</p>
       {reviewFlag.reason ? <p className="text-muted-foreground">{reviewFlag.reason}</p> : null}
       <div className="mt-2 flex gap-2">
-        <Button size="sm" variant="outline" onClick={() => handleResolve("accept")} disabled={isResolving}>
-          {resolvingAction === "accept" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleResolve("accept")}
+          disabled={isResolving}
+        >
+          {resolvingAction === "accept" && (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+          )}
           Accept
         </Button>
-        <Button size="sm" variant="outline" onClick={() => handleResolve("edit")} disabled={isResolving}>
-          {resolvingAction === "edit" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleResolve("edit")}
+          disabled={isResolving}
+        >
+          {resolvingAction === "edit" && (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+          )}
           Edited & accept
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => handleResolve("reject")} disabled={isResolving}>
-          {resolvingAction === "reject" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => handleResolve("reject")}
+          disabled={isResolving}
+        >
+          {resolvingAction === "reject" && (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+          )}
           Reject
         </Button>
       </div>
