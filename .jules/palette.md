@@ -42,3 +42,6 @@
 ## 2026-08-18 - Tooltip for WeeklyReviewPrompt Dismiss Button
 **Learning:** The "Dismiss" button on prompt banners, even when clear to screen readers via aria-label, needs a text tooltip for sighted mouse users relying on visual hover context.
 **Action:** When wrapping an icon-only button like `X` with a tooltip in a complex layout like a `CardContent` header, ensure `TooltipProvider` wraps locally to guarantee context.
+## 2024-05-15 - Tooltips on disabled buttons
+**Learning:** Radix UI disables pointer events on disabled elements, which breaks tooltips for disabled buttons.
+**Action:** Wrap disabled trigger elements in a `<span>` with `tabIndex={disabled ? 0 : -1}` to ensure the tooltip continues to fire and remains keyboard accessible.
