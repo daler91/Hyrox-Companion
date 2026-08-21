@@ -106,9 +106,18 @@ export function registerHealthEndpoint(app: Express, deps: {
   // where a restart can legitimately retry boot (e.g. DB unreachable at boot).
   // Point the platform's restart healthcheck at THIS, and use /api/v1/health
   // (readiness, below) only for load-balancer traffic gating.
+  // Both /health and /health/live are mounted before auth (platform probes
+  // hit them with no credentials — see the module-level comment in
+  // index.ts), so their responses are readable by anyone on the internet.
+  // `startupState.startupError` is a raw `Error.message` from wherever boot
+  // failed (e.g. a Postgres driver error), which can contain internal
+  // hostnames/ports or DB usernames — the full text is already captured
+  // server-side via `logger.fatal({ err, phase })` in index.ts, so the
+  // public response only needs the (fixed, non-sensitive) failed phase, not
+  // the raw message.
   app.get("/api/v1/health/live", (_req, res) => {
     if (deps.state.startupError) {
-      res.status(503).json({ status: "startup_failed", message: deps.state.startupError, timestamp: Date.now() });
+      res.status(503).json({ status: "startup_failed", phase: deps.state.startupPhase, timestamp: Date.now() });
       return;
     }
     res.json({ status: "alive", uptimeMs: Date.now() - deps.state.startupBeganAt, timestamp: Date.now() });
@@ -120,7 +129,7 @@ export function registerHealthEndpoint(app: Express, deps: {
   app.get("/api/v1/health", (_req, res) => {
     const uptimeMs = Date.now() - deps.state.startupBeganAt;
     if (deps.state.startupError) {
-      res.status(503).json({ status: "error", error: "startup_error", phase: deps.state.startupPhase, uptimeMs, message: deps.state.startupError, timestamp: Date.now() });
+      res.status(503).json({ status: "error", error: "startup_error", phase: deps.state.startupPhase, uptimeMs, timestamp: Date.now() });
       return;
     }
     if (!deps.state.isReady) {

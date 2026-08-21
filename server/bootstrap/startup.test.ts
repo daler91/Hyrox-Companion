@@ -71,6 +71,30 @@ describe("bootstrap startup parity", () => {
     expect(failedRes.body.status).toBe("startup_failed");
   });
 
+  it("never leaks the raw startup error message to unauthenticated callers", async () => {
+    // Both endpoints are mounted before auth (platform probes hit them with
+    // no credentials), so `startupError` — a raw Error.message that can
+    // contain internal hostnames, ports, or DB usernames — must never appear
+    // in the public JSON body. Only the fixed, non-sensitive phase name may.
+    const rawMessage = "connect ECONNREFUSED 10.0.4.12:5432 password authentication failed for user \"app_admin\"";
+    const state = { isReady: false, startupError: rawMessage, startupPhase: "db_maintenance", startupBeganAt: Date.now() };
+
+    const liveApp = express();
+    registerHealthEndpoint(liveApp, { state, probeDatabase: async () => true, probeVectorDatabase: async () => true });
+    const liveRes = await request(liveApp).get("/api/v1/health/live");
+    expect(liveRes.status).toBe(503);
+    expect(JSON.stringify(liveRes.body)).not.toContain(rawMessage);
+    expect(liveRes.body.message).toBeUndefined();
+
+    const readyApp = express();
+    registerHealthEndpoint(readyApp, { state, probeDatabase: async () => true, probeVectorDatabase: async () => true });
+    const readyRes = await request(readyApp).get("/api/v1/health");
+    expect(readyRes.status).toBe(503);
+    expect(JSON.stringify(readyRes.body)).not.toContain(rawMessage);
+    expect(readyRes.body.message).toBeUndefined();
+    expect(readyRes.body.phase).toBe("db_maintenance");
+  });
+
   it("registers process error handlers, sets startup error, and exits after flushing (C2)", async () => {
     let uncaught: ((e: Error) => void) | undefined;
     let unhandled: ((e: unknown) => void) | undefined;
