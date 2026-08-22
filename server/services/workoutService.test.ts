@@ -310,8 +310,11 @@ describe("classifyWorkoutCompliance", () => {
 });
 
 describe("resolveStructureStepTimeTarget", () => {
-  it("uses durationSeconds when no explicit targetTime is present", () => {
-    expect(resolveStructureStepTimeTarget({ durationSeconds: 45 })).toBe(45);
+  it("converts durationSeconds to minutes when no explicit targetTime is present", () => {
+    // INVERTED (audit C7). This asserted `.toBe(45)` -- a 45-second step landing
+    // in a minutes column as 45 minutes, a 60x error the test certified as
+    // correct. exercise_sets.time is minutes; 45s is 0.75min.
+    expect(resolveStructureStepTimeTarget({ durationSeconds: 45 })).toBe(0.75);
   });
 
   it("prefers explicit targetTime over durationSeconds", () => {

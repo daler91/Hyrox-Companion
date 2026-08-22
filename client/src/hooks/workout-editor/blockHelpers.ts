@@ -1,6 +1,7 @@
 import type { ParsedExercise } from "@shared/schema";
 import { EXERCISE_DEFINITIONS } from "@shared/schema/exercises";
 import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
+import { formatMinutes, minutes } from "@shared/units";
 import type { MutableRefObject } from "react";
 
 import type { StructuredExercise } from "@/components/ExerciseInput";
@@ -78,7 +79,7 @@ function formatExerciseSummary(ex: StructuredExercise, weightUnit: string, dista
 
   if (allSame && firstSet.weight) parts.push(`${firstSet.weight}${weightUnit}`);
   if (firstSet.distance) parts.push(getWorkoutDistanceDisplay(firstSet.distance, distanceUnit).text);
-  if (firstSet.time) parts.push(`${firstSet.time}min`);
+  if (firstSet.time) parts.push(formatMinutes(minutes(firstSet.time)));
 
   return `${name}: ${parts.join(", ") || "completed"}`;
 }

@@ -29,7 +29,7 @@ export function WorkoutPrescriptionSummary({ entry }: WorkoutPrescriptionSummary
     : [];
 
   const hasStructuredPrescription = groupedExercises.length > 0;
-  const structuredText = serializeWorkoutStructure(entry.exerciseSets);
+  const structuredText = serializeWorkoutStructure(entry.exerciseSets, { distanceUnit });
   const hasMainWorkout = !hasStructuredPrescription && Boolean(entry.mainWorkout);
 
   return (

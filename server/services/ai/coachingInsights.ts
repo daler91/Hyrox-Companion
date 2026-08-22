@@ -3,6 +3,7 @@ import {
   type StationCoverageSource,
   stationsRuledOutByConstraints,
 } from "@shared/stationCoverage";
+import { formatMinutes, minutes } from "@shared/units";
 
 import type { TrainingContext } from "../../gemini/index";
 import { toDateStr } from "../../types";
@@ -153,32 +154,46 @@ function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array
   return history;
 }
 
-function analyzeWeightProgression(exercise: string, values: number[]): ProgressionFlag | null {
+/**
+ * `weightUnit` is required, not defaulted.
+ *
+ * `exercise_sets.weight` is stored in the athlete's OWN unit (the S5 sentinel in
+ * unitConversion.ts), so these details used to interpolate a hardcoded "kg" over
+ * a pounds athlete's numbers and hand the coaching model loads inflated 2.2x
+ * (audit M8). `buildPersonalRecordSummaries` in ai/index.ts already threads the
+ * real unit through for the same reason; this follows it.
+ */
+function analyzeWeightProgression(exercise: string, values: number[], weightUnit: string): ProgressionFlag | null {
   if (values.length < 3) return null;
   const recent3 = values.slice(-3);
   if (recent3.every(w => w === recent3[0])) {
-    return { exercise, flag: "plateau", detail: `Weight stuck at ${recent3[0]}kg for last ${recent3.length} sessions` };
+    return { exercise, flag: "plateau", detail: `Weight stuck at ${recent3[0]}${weightUnit} for last ${recent3.length} sessions` };
   }
   if (recent3[2] > recent3[0]) {
-    return { exercise, flag: "progressing", detail: `Weight increased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` };
+    return { exercise, flag: "progressing", detail: `Weight increased from ${recent3[0]}${weightUnit} to ${recent3[2]}${weightUnit} over last 3 sessions` };
   }
   if (recent3[2] < recent3[0]) {
-    return { exercise, flag: "regressing", detail: `Weight decreased from ${recent3[0]}kg to ${recent3[2]}kg over last 3 sessions` };
+    return { exercise, flag: "regressing", detail: `Weight decreased from ${recent3[0]}${weightUnit} to ${recent3[2]}${weightUnit} over last 3 sessions` };
   }
   return null;
 }
 
+// `values` are exercise_sets.time, i.e. MINUTES, and may be fractional now that
+// seconds-valued step targets are converted on the way in (audit C7) -- so these
+// render through formatMinutes rather than pasting a "min" suffix on a raw
+// number that could read "0.75min".
 function analyzeTimeProgression(exercise: string, values: number[]): ProgressionFlag | null {
   if (values.length < 3) return null;
   const recent3 = values.slice(-3);
+  const asText = (v: number) => formatMinutes(minutes(v));
   if (recent3.every(t => Math.abs(t - recent3[0]) < 0.1)) {
-    return { exercise, flag: "plateau", detail: `Time stuck at ${recent3[0]}min for last ${recent3.length} sessions` };
+    return { exercise, flag: "plateau", detail: `Time stuck at ${asText(recent3[0])} for last ${recent3.length} sessions` };
   }
   if (recent3[2] < recent3[0]) {
-    return { exercise, flag: "progressing", detail: `Time improved from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` };
+    return { exercise, flag: "progressing", detail: `Time improved from ${asText(recent3[0])} to ${asText(recent3[2])} over last 3 sessions` };
   }
   if (recent3[2] > recent3[0]) {
-    return { exercise, flag: "regressing", detail: `Time worsened from ${recent3[0]}min to ${recent3[2]}min over last 3 sessions` };
+    return { exercise, flag: "regressing", detail: `Time worsened from ${asText(recent3[0])} to ${asText(recent3[2])} over last 3 sessions` };
   }
   return null;
 }
@@ -194,7 +209,7 @@ function extractWeightsAndTimes(history: Array<{ maxWeight?: number; bestTime?: 
   return { weights, times };
 }
 
-export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
+export function computeProgressionFlags(timeline: TimelineEntry[], weightUnit: string): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
   const exerciseHistory = collectExerciseHistory(timeline);
   const flags: ProgressionFlag[] = [];
 
@@ -207,7 +222,7 @@ export function computeProgressionFlags(timeline: TimelineEntry[]): NonNullable<
 
     const { weights, times } = extractWeightsAndTimes(history);
 
-    const weightFlag = analyzeWeightProgression(exercise, weights);
+    const weightFlag = analyzeWeightProgression(exercise, weights, weightUnit);
     if (weightFlag) { flags.push(weightFlag); continue; }
 
     const timeFlag = analyzeTimeProgression(exercise, times);

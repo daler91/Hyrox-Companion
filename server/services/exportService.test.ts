@@ -110,7 +110,11 @@ describe('exportService - generateCSV', () => {
     ];
     const storage = createMockStorage(timeline, exerciseSets, { weightUnit: 'lbs', distanceUnit: 'miles' });
     const csv = await generateCSV(mockUserId, storage);
-    expect(csv).toContain('Reps,Weight (lbs),Distance (m)');
+    // INVERTED (audit H16). This asserted 'Distance (m)' for a fixture that
+    // explicitly sets distanceUnit 'miles' -- exercise_sets.distance stores FEET
+    // for that athlete, so the export was handing them feet under a metres
+    // header. The weight column next to it was already preference-aware.
+    expect(csv).toContain('Reps,Weight (lbs),Distance (ft)');
   });
 
   it('should correctly escape quotes, commas, and newlines in text fields', async () => {

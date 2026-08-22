@@ -98,6 +98,9 @@ function formatSetMeasurements(set: PromptExerciseSet, options: FormatOptions): 
   if (set.weight != null) parts.push(`${formatNumber(set.weight)} ${options.weightUnit || "kg"}`);
   if (set.distance != null)
     parts.push(`${formatNumber(set.distance)}${distanceSuffix(options.distanceUnit)}`);
+  // exercise_sets.time is minutes and this module is the prompt formatter, so
+  // the suffix belongs here. Fractional values (a 45-second step is 0.75, audit
+  // C7) read fine as "0.75 min" for a model.
   if (set.time != null) parts.push(`${formatNumber(set.time)} min`);
   // set.notes is free-text user input (exercise_sets.notes) that flows into the
   // AI coach system prompt via formatExerciseSetsForPrompt — sanitize to prevent

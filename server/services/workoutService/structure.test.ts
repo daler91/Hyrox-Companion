@@ -106,8 +106,14 @@ describe("resolveStructureStepTimeTarget", () => {
     expect(resolveStructureStepTimeTarget(targets({ time: 45 }))).toBe(45);
   });
 
-  it("falls back to durationSeconds (passthrough key)", () => {
-    expect(resolveStructureStepTimeTarget(targets({ durationSeconds: 120 }))).toBe(120);
+  it("converts durationSeconds into the column's minutes", () => {
+    // Not a passthrough: durationSeconds is seconds, exercise_sets.time is
+    // minutes. 120s == 2min (audit C7).
+    expect(resolveStructureStepTimeTarget(targets({ durationSeconds: 120 }))).toBe(2);
+  });
+
+  it("keeps a sub-minute step as a fraction rather than rounding it away", () => {
+    expect(resolveStructureStepTimeTarget(targets({ durationSeconds: 45 }))).toBe(0.75);
   });
 
   it("prefers targetTime over time and durationSeconds", () => {

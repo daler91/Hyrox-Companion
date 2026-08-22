@@ -22,6 +22,7 @@ import { describe, expect, it } from "vitest";
 import { computeRaceReadiness } from "../../server/services/racePrediction/racePredictionService";
 import { calculateTrainingLoad, monotonyZone } from "../../server/services/trainingLoadService";
 import { resolveStructureStepTimeTarget } from "../../server/services/workoutService/structure";
+import { minutes, minutesToSeconds, unitless } from "../../shared/units";
 
 const TODAY = "2026-06-30";
 
@@ -432,16 +433,14 @@ describe("C7 / H1 — seconds written into columns the app reads as minutes", ()
    * "duration in seconds") and its value reaches `exercise_sets.time` verbatim.
    * That column is minutes: `plannedSessionEstimate` reads it as wall-clock
    * minutes and `workoutStructureSummary` renders it as `${set.time}min`.
-   * CURRENT:  a 45-second step is stored as 45, i.e. 45 minutes (60x)
-   * INTENDED: convert to minutes on the way in, or make the column's unit explicit
-   * RETIRE:   assert the resolved target is 0.75 (minutes) for a 45-second step.
-   *
-   * NOTE: server/services/workoutService.test.ts:313 asserts this same
-   * passthrough as correct behaviour. That test must be INVERTED, not kept,
-   * when C7 is fixed.
+   * RETIRED 2026-08-22 (Phase 1). `resolveStructureStepTimeTarget` now converts
+   * the seconds-valued key on the way in, and `server/services/workoutService.test.ts`
+   * has been inverted off the 60x passthrough it used to certify. Kept as a
+   * regression guard: the two keys must not be coalesced again.
    */
-  it("[BUG C7] passes a seconds-valued step target straight through to a minutes column", () => {
-    expect(resolveStructureStepTimeTarget({ durationSeconds: 45 })).toBe(45);
+  it("[FIXED C7] converts a seconds-valued step target into the minutes column", () => {
+    expect(resolveStructureStepTimeTarget({ durationSeconds: 45 })).toBe(0.75);
+    // targetTime is already minutes and must NOT be divided.
     expect(resolveStructureStepTimeTarget({ targetTime: 30, durationSeconds: 45 })).toBe(30);
   });
 
@@ -449,16 +448,17 @@ describe("C7 / H1 — seconds written into columns the app reads as minutes", ()
    * H1 — the same class of error, second instance. `mafTestService` assigns
    * `workout_logs.duration` (documented MINUTES) to `MafTestMetrics.durationSeconds`
    * (documented canonical seconds), so every MAF pace is 60x too fast.
-   * CURRENT:  a 10 km run logged as 60 (minutes) reads as 166.67 m/s
-   * INTENDED: 2.78 m/s (10000 m / 3600 s)
-   * RETIRE:   multiply by 60 at the assignment, then assert 2.78.
+   * RETIRED 2026-08-22 (Phase 1). `mafTestService` now converts the minutes
+   * column to seconds at the assignment. Kept as a regression guard on the
+   * conversion itself: a 10 km run logged as 60 minutes must read 2.78 m/s.
    */
-  it("[BUG H1] derives MAF pace from minutes while treating the value as seconds", () => {
-    const asStored = metersPerSecond(10_000, 60); // 60 == minutes, stored into a seconds field
-    const truth = metersPerSecond(10_000, 60 * 60);
+  it("[FIXED H1] derives MAF pace from a duration converted to real seconds", () => {
+    const loggedMinutes = 60;
+    const asStored = metersPerSecond(10_000, unitless(minutesToSeconds(minutes(loggedMinutes))));
 
-    expect(asStored).toBeCloseTo(166.667, 3);
-    expect(truth).toBeCloseTo(2.778, 3);
-    expect(asStored! / truth!).toBeCloseTo(60, 6);
+    expect(asStored).toBeCloseTo(2.778, 3);
+    // The pre-fix value, for the record: passing the minutes across unconverted
+    // read 166.67 m/s -- 60x too fast, and a 0:06/km pace on the MAF trend.
+    expect(metersPerSecond(10_000, loggedMinutes)).toBeCloseTo(166.667, 3);
   });
 });

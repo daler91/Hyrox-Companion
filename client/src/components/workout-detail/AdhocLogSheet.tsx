@@ -349,7 +349,7 @@ export function AdhocLogSheet({ open, onClose }: AdhocLogSheetProps) {
         return Promise.reject(new Error("Please add at least one exercise or describe your workout."));
       }
 
-      const summary = hasStructured ? serializeWorkoutStructure(exerciseSets) : null;
+      const summary = hasStructured ? serializeWorkoutStructure(exerciseSets, { distanceUnit }) : null;
       return api.workouts.create({
         title: trimmedTitle,
         date,

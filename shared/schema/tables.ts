@@ -517,9 +517,25 @@ export const exerciseSets = pgTable(
     // original prescription so the athlete can edit actuals without losing plan
     // context.
     reps: integer("reps"),
+    // UNITS (see docs/adr-units.md). These three do not share a convention, and
+    // leaving that undocumented is what produced three separate 60x errors and
+    // two mislabelled renders (audit C7, H1, H2, H16, M8, L1):
+    //
+    //   weight   — the athlete's OWN unit at write time (kg or lbs), NOT
+    //              canonical. Never compare across a preference change; never
+    //              render with a hardcoded suffix. See the S5 sentinel in
+    //              shared/unitConversion.ts.
+    //   distance — likewise the athlete's own STORED unit: metres for a km
+    //              athlete, FEET for a miles athlete (getStoredDistanceUnit).
+    //   time     — MINUTES, canonical for every athlete. Fractional values are
+    //              expected: a 45-second step target is 0.75. Anything arriving
+    //              in seconds must be converted at the boundary
+    //              (shared/units.ts secondsToMinutes), never assigned across.
     weight: real("weight"),
     distance: real("distance"),
     time: real("time"),
+    // Planned counterparts snapshot the prescription and carry the SAME units
+    // as the actuals above.
     plannedReps: integer("planned_reps"),
     plannedWeight: real("planned_weight"),
     plannedDistance: real("planned_distance"),

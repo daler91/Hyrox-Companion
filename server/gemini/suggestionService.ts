@@ -1,4 +1,6 @@
 import type { CoachNoteInputs, WorkoutSuggestion } from "@shared/schema";
+import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { formatMinutes, minutes } from "@shared/units";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
@@ -99,6 +101,7 @@ function formatExerciseFrequency(breakdown: Record<string, number>): string {
 
 function formatExerciseStatLine(
   exercise: string,
+  distanceUnit: string,
   stats: {
     count: number;
     maxWeight?: number;
@@ -109,18 +112,19 @@ function formatExerciseStatLine(
 ): string {
   const parts = [`- ${exercise}: trained ${stats.count}x`];
   if (stats.maxWeight) parts.push(`max weight: ${stats.maxWeight}`);
-  if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}m`);
-  if (stats.bestTime) parts.push(`best time: ${stats.bestTime}min`);
+  // Stored distance follows the athlete's preference, not metres (audit H16).
+  if (stats.maxDistance) parts.push(`max distance: ${stats.maxDistance}${getStoredDistanceUnit(distanceUnit)}`);
+  if (stats.bestTime) parts.push(`best time: ${formatMinutes(minutes(stats.bestTime))}`);
   if (stats.avgReps) parts.push(`avg reps: ${stats.avgReps}`);
   return parts.join(", ");
 }
 
-function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"]): string {
+function formatPerformanceStats(stats: TrainingContext["structuredExerciseStats"], distanceUnit: string): string {
   if (!stats || Object.keys(stats).length === 0) return "";
   return (
     "\nExercise performance stats:\n" +
     Object.entries(stats)
-      .map(([ex, s]) => formatExerciseStatLine(ex, s))
+      .map(([ex, s]) => formatExerciseStatLine(ex, distanceUnit, s))
       .join("\n") +
     "\n"
   );
@@ -138,7 +142,7 @@ function formatRecentWorkout(
   let line = `- ${workout.date}${relativeDayLabel(workout.date, trainingContext.currentDate)}: ${sanitizeUserInput(workout.focus)} - ${workoutDetails}`;
   const meta: string[] = [];
   if (workout.rpe != null) meta.push(`RPE: ${workout.rpe}`);
-  if (workout.duration != null) meta.push(`Duration: ${workout.duration}min`);
+  if (workout.duration != null) meta.push(`Duration: ${formatMinutes(minutes(workout.duration))}`);
   if (meta.length > 0) line += ` (${meta.join(", ")})`;
   if (workout.athleteNote?.trim()) line += ` | Athlete note: ${sanitizeUserInput(workout.athleteNote.trim())}`;
   return line;
@@ -254,7 +258,7 @@ export function buildPromptDataSections(
     formatAthleteConstraints(trainingContext),
     formatMafContext(trainingContext),
     formatExerciseFrequency(trainingContext.exerciseBreakdown),
-    formatPerformanceStats(trainingContext.structuredExerciseStats),
+    formatPerformanceStats(trainingContext.structuredExerciseStats, trainingContext.distanceUnit ?? "km"),
     formatRecentWorkouts(trainingContext),
   ];
 

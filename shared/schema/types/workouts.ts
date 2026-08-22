@@ -2,6 +2,17 @@
 import { customExercises, exerciseLoadTags, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { CoachNoteInputs } from "./plans";
+
+/**
+ * Upper bound for the MINUTES-valued set fields (`time`, `plannedTime`,
+ * `targetTime`) — 24 hours, which no single set exceeds.
+ *
+ * These carried `max(86_400)` — seconds in a day — copied from the genuinely
+ * seconds-valued fields further down this file. In a minutes column that
+ * permits a 60-day set, so the bound could never catch a seconds value written
+ * into a minutes field, which is exactly the error that shipped (audit C7, H1).
+ */
+export const SET_TIME_MAX_MINUTES = 1_440;
 // Workout log types and schemas
 // Reject workout dates more than 24h in the future. A 24h grace window lets
 // Strava/Garmin activities that straddle midnight in the user's timezone
@@ -239,14 +250,14 @@ export const exerciseSetSchema = withBlockStepPairing(
       reps: z.number().min(1).max(10_000).optional().nullable(),
       weight: z.number().min(0).max(2_000).optional().nullable(),
       distance: z.number().min(0).max(1_000_000).optional().nullable(),
-      time: z.number().min(0).max(86_400).optional().nullable(),
+      time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
       // Planned (prescribed) values, captured at log creation. Optional so
       // ad-hoc logs without a prescription can simply omit them. plannedReps
       // tightened to match reps for consistency.
       plannedReps: z.number().min(1).max(10_000).optional().nullable(),
       plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
       plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-      plannedTime: z.number().min(0).max(86_400).optional().nullable(),
+      plannedTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
       ...setStructureMetadataFieldsOptional,
       notes: z.string().max(1000).optional().nullable(),
     })
@@ -263,11 +274,11 @@ export const incomingExerciseSchema = withBlockStepPairing(
       reps: z.number().min(1).max(10_000).optional().nullable(),
       weight: z.number().min(0).max(2_000).optional().nullable(),
       distance: z.number().min(0).max(1_000_000).optional().nullable(),
-      time: z.number().min(0).max(86_400).optional().nullable(),
+      time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
       plannedReps: z.number().min(0).max(10_000).optional().nullable(),
       plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
       plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-      plannedTime: z.number().min(0).max(86_400).optional().nullable(),
+      plannedTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
       ...setStructureMetadataFieldsOptional,
       confidence: z.number().min(0).max(100).optional().nullable(),
       notes: z.string().max(1000).optional().nullable(),
@@ -300,11 +311,11 @@ export const structureStepTypeSchema = z.enum(["work", "rest", "transition"]);
 const structureStepTargetsSchema = z
   .object({
     targetReps: z.number().int().min(0).max(10_000).optional().nullable(),
-    targetTime: z.number().min(0).max(86_400).optional().nullable(),
+    targetTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
     targetDistance: z.number().min(0).max(1_000_000).optional().nullable(),
     targetWeight: z.number().min(0).max(2_000).optional().nullable(),
     reps: z.number().int().min(0).max(10_000).optional().nullable(),
-    time: z.number().min(0).max(86_400).optional().nullable(),
+    time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
     distance: z.number().min(0).max(1_000_000).optional().nullable(),
     weight: z.number().min(0).max(2_000).optional().nullable(),
   })
@@ -530,7 +541,7 @@ const measurableSetFields = {
   reps: z.number().int().min(1).max(10_000).nullable().optional(),
   weight: z.number().min(0).max(2_000).nullable().optional(),
   distance: z.number().min(0).max(1_000_000).nullable().optional(),
-  time: z.number().min(0).max(86_400).nullable().optional(),
+  time: z.number().min(0).max(SET_TIME_MAX_MINUTES).nullable().optional(),
   ...setStructureMetadataFieldsOptional,
   notes: z.string().max(1000).nullable().optional(),
 };

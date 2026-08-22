@@ -64,7 +64,7 @@ describe("recordMafTestFromWorkout", () => {
 
   it("writes the test + a compliance analysis atomically when HR is present", async () => {
     getUser.mockResolvedValue(mafUser);
-    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: 150, maxHeartrate: 165 });
+    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 30, avgHeartrate: 150, maxHeartrate: 165 });
 
     const result = await recordMafTestFromWorkout("u1", "w1", { notes: "5k test" });
 
@@ -83,7 +83,7 @@ describe("recordMafTestFromWorkout", () => {
 
   it("writes the test with no analysis when the workout has no HR data", async () => {
     getUser.mockResolvedValue(mafUser);
-    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: null, maxHeartrate: null });
+    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 30, avgHeartrate: null, maxHeartrate: null });
 
     const result = await recordMafTestFromWorkout("u1", "w1");
 
@@ -117,9 +117,15 @@ describe("recordMafTestFromWorkout", () => {
     expect(result.created).toBe(true);
   });
 
+  // NOTE: `duration` on a workout_logs fixture is MINUTES, so a 30-minute MAF
+  // test is `duration: 30` and reaches MafTestMetrics as 1800 seconds. These
+  // fixtures used to read `duration: 1800` -- 30 hours in the column's real unit
+  // -- because the service passed the value straight across without converting
+  // (audit H1). The expected `durationSeconds` is unchanged; only the input was
+  // wrong, and it now exercises the conversion.
   it("lets a manual field override the workout value while omitted fields fall back", async () => {
     getUser.mockResolvedValue(mafUser);
-    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: 150, maxHeartrate: 165, distanceMeters: 5000 });
+    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 30, avgHeartrate: 150, maxHeartrate: 165, distanceMeters: 5000 });
 
     // Only avg HR supplied: it overrides 150; max/duration/distance fall back.
     await recordMafTestFromWorkout("u1", "w1", { metrics: { avgHeartRate: 140 } });
@@ -134,7 +140,7 @@ describe("recordMafTestFromWorkout", () => {
 
   it("is idempotent: returns the existing record and writes nothing when already tagged", async () => {
     getUser.mockResolvedValue(mafUser);
-    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: 150, maxHeartrate: 165 });
+    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 30, avgHeartrate: 150, maxHeartrate: 165 });
     getTestResultByWorkoutLogId.mockResolvedValue({ id: "t-existing", userId: "u1" });
     getWorkoutAnalysisByWorkoutLogId.mockResolvedValue({ id: "a-existing", userId: "u1", workoutLogId: "w1" });
 
@@ -148,7 +154,7 @@ describe("recordMafTestFromWorkout", () => {
 
   it("returns an existing test with null analysis when the original run had no HR", async () => {
     getUser.mockResolvedValue(mafUser);
-    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 1800, avgHeartrate: 150, maxHeartrate: 165 });
+    getWorkoutLog.mockResolvedValue({ id: "w1", duration: 30, avgHeartrate: 150, maxHeartrate: 165 });
     getTestResultByWorkoutLogId.mockResolvedValue({ id: "t-existing", userId: "u1" });
     getWorkoutAnalysisByWorkoutLogId.mockResolvedValue(undefined);
 

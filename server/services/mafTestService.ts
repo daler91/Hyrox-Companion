@@ -1,4 +1,5 @@
 import { computeMafCompliance, type MafTestMetrics } from "@shared/maf";
+import { minutes, minutesToSeconds, unitless } from "@shared/units";
 
 import { AppError, ErrorCode } from "../errors";
 import { storage } from "../storage";
@@ -127,7 +128,14 @@ export async function recordMafTestFromWorkout(
     userId,
     workout.id,
     {
-      durationSeconds: workout.duration ?? null,
+      // workout_logs.duration is MINUTES (see docs/adr-units.md); MafTestMetrics
+      // wants canonical seconds. This used to assign the minutes value straight
+      // across, so every auto-pulled MAF pace was 60x too fast -- a 10 km run in
+      // 60 minutes read as 0:06/km instead of 6:00/km, breaking the trend the
+      // MAF test exists to produce (audit H1). The manual override below is
+      // already seconds and is not touched.
+      durationSeconds:
+        workout.duration == null ? null : unitless(minutesToSeconds(minutes(workout.duration))),
       distanceMeters: workout.distanceMeters ?? null,
       avgHeartRate: workout.avgHeartrate ?? null,
       maxHeartRate: workout.maxHeartrate ?? null,

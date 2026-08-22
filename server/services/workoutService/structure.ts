@@ -10,6 +10,7 @@ import {
   workoutStructureBlocks,
   workoutStructureSteps,
 } from "@shared/schema";
+import { seconds, secondsToMinutes, unitless } from "@shared/units";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "../../db";
@@ -86,8 +87,24 @@ function stringTarget(targets: StructureBlockInput["steps"][number]["targets"], 
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+/**
+ * Resolve a structure step's time target into `exercise_sets.time`, which is
+ * MINUTES (see docs/adr-units.md).
+ *
+ * These three keys do not share a unit. `targetTime` and `time` are minutes,
+ * matching the column and the athlete-facing "Time (min)" input. `durationSeconds`
+ * is seconds -- the structure editor's field is labelled "Sec" and carries
+ * `aria-label="... duration in seconds"`. All three used to be coalesced by a
+ * single `numericTarget` call and returned verbatim, so a 45-second transition
+ * entered the column as 45 MINUTES and `plannedSessionEstimate` added 45 minutes
+ * of planned work to the session (audit C7).
+ */
 export function resolveStructureStepTimeTarget(targets: StructureBlockInput["steps"][number]["targets"]): number | null {
-  return numericTarget(targets, "targetTime", "time", "durationSeconds");
+  const targetMinutes = numericTarget(targets, "targetTime", "time");
+  if (targetMinutes != null) return targetMinutes;
+
+  const targetSeconds = numericTarget(targets, "durationSeconds");
+  return targetSeconds == null ? null : unitless(secondsToMinutes(seconds(targetSeconds)));
 }
 
 function isWorkStep(step: StructureBlockInput["steps"][number]): boolean {

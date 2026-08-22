@@ -1,4 +1,5 @@
 import { dayDiff } from "@shared/dateUtils";
+import { formatMinutes, minutes } from "@shared/units";
 
 import type { TrainingContext } from "../gemini/types";
 import { sanitizeUserInput } from "../utils/sanitize";
@@ -69,7 +70,7 @@ export function buildStructuredPerformance(trainingContext: TrainingContext): st
     let line = `\n- ${exercise}: trained ${stats.count}x`;
     if (stats.maxWeight) line += `, max weight: ${stats.maxWeight}`;
     if (stats.maxDistance) line += `, max distance: ${stats.maxDistance}`;
-    if (stats.bestTime) line += `, best time: ${stats.bestTime}min`;
+    if (stats.bestTime) line += `, best time: ${formatMinutes(minutes(stats.bestTime))}`;
     if (stats.avgReps) line += `, avg reps: ${stats.avgReps}`;
     section += line;
   }

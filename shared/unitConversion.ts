@@ -1,3 +1,5 @@
+import { METRES_PER_MILE } from "./units";
+
 export type WeightUnit = "kg" | "lbs";
 export type DistanceUnit = "km" | "miles";
 export type StoredDistanceUnit = "m" | "ft";
@@ -49,10 +51,15 @@ export interface WorkoutDistanceDisplay {
  */
 
 const KG_TO_LBS = 2.20462;
-const KM_TO_MILES = 0.621371;
+// Miles<->metres is defined ONCE, in shared/units.ts, and everything else on
+// this axis is derived from it. These used to be two independent literals --
+// METERS_PER_MILE = 1609.34 and KM_TO_MILES = 0.621371, whose reciprocal is
+// 1609.3445 -- so `miles -> metres` gave a different answer depending on which
+// function you routed through (audit L6).
+const METERS_PER_MILE = METRES_PER_MILE;
+const KM_TO_MILES = 1000 / METERS_PER_MILE;
 const M_TO_FT = 3.28084;
 const FEET_PER_MILE = 5280;
-const METERS_PER_MILE = 1609.34;
 const CLEAN_KILOMETER_TOLERANCE_METERS = 0.5;
 
 export const WEIGHT_UNIT_ALIASES: Record<string, WeightUnit> = {
