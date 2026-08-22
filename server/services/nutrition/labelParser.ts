@@ -41,13 +41,36 @@ const rawMacroSetSchema = z
   .nullable()
   .catch(null);
 
+/**
+ * Fold however the model spelled the energy unit onto the two the schema knows.
+ *
+ * `z.enum(["kcal", "kJ"])` is exact and case-sensitive, and the `.catch("kcal")`
+ * behind it turns every near-miss into kcal silently — so a label the model read
+ * as `"kj"` was recorded as kcal, overstating the food by 4.184x. The clamp
+ * downstream does not catch it: only values past 1000 kcal/100g are trimmed, so
+ * anything under ~240 kcal/100g of real energy passes straight through
+ * (audit M18).
+ *
+ * `"Cal"` is included on purpose: a US nutrition label's capital-C Calorie is a
+ * kilocalorie, and that is what the model transcribes from the panel.
+ */
+function normalizeEnergyUnit(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "kj" || normalized === "kilojoules" || normalized === "kilojoule") return "kJ";
+  if (normalized === "kcal" || normalized === "cal" || normalized === "calories" || normalized === "calorie") {
+    return "kcal";
+  }
+  return value;
+}
+
 const rawLabelSchema = z.object({
   productName: z.string().trim().min(1).max(200).nullable().catch(null),
   brand: z.string().trim().min(1).max(200).nullable().catch(null),
   servingSizeText: z.string().trim().min(1).max(120).nullable().catch(null),
   servingSizeG: z.number().positive().max(SERVING_SIZE_G_MAX).nullable().catch(null),
   servingsPerContainer: z.number().positive().max(10_000).nullable().catch(null),
-  energyUnit: z.enum(["kcal", "kJ"]).catch("kcal"),
+  energyUnit: z.preprocess(normalizeEnergyUnit, z.enum(["kcal", "kJ"])).catch("kcal"),
   per100g: rawMacroSetSchema,
   perServing: rawMacroSetSchema,
   confidence: z.number().min(0).max(100).catch(50),

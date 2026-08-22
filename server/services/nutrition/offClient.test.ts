@@ -50,6 +50,100 @@ describe("mapOffProduct", () => {
     expect(m?.fiberPer100g).toBe(2.1);
   });
 
+  it("reads energy from the kJ field when that is all the product carries", () => {
+    // Only energy-kcal_100g was read, so an EU product publishing energy solely
+    // in kJ cached with calories = null — and scaleNutrition treats a null
+    // per-100g value as zero, so the athlete logged it as 0 kcal (audit M19).
+    const m = mapOffProduct("1", {
+      product_name: "Galettes de riz",
+      completeness: 0.8,
+      nutriments: { "energy-kj_100g": 1550, proteins_100g: 8 },
+    });
+
+    // 1550 kJ x 0.239 = 370.5 kcal
+    expect(m?.caloriesPer100g).toBeCloseTo(370.5, 1);
+  });
+
+  it("falls back to OFF's generic energy_100g, which is also kJ", () => {
+    const m = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.8,
+      nutriments: { energy_100g: 1550 },
+    });
+
+    expect(m?.caloriesPer100g).toBeCloseTo(370.5, 1);
+  });
+
+  it("prefers an explicit kcal field over the kJ one", () => {
+    const m = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.8,
+      nutriments: { "energy-kcal_100g": 372, "energy-kj_100g": 1550 },
+    });
+
+    expect(m?.caloriesPer100g).toBe(372);
+  });
+
+  it("admits a low-completeness product whose only energy value is in kJ", () => {
+    // The acceptance gate asked for a kcal field a kJ-only product was never
+    // going to have, so it judged these on completeness alone.
+    const m = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.1,
+      nutriments: { "energy-kj_100g": 1550 },
+    });
+
+    expect(m).not.toBeNull();
+    expect(m?.caloriesPer100g).toBeCloseTo(370.5, 1);
+  });
+
+  it("does not treat a millilitre serving_quantity as grams", () => {
+    // 250 ml of a drink was stored as a 250 g serving (audit M20). Without a
+    // density there is nothing to convert, so it falls through to the
+    // serving_size text and then to null.
+    const m = mapOffProduct("1", {
+      product_name: "Orange juice",
+      completeness: 0.8,
+      serving_quantity: 250,
+      serving_quantity_unit: "ml",
+      nutriments: { "energy-kcal_100g": 45 },
+    });
+
+    expect(m?.servingSizeG).toBeNull();
+  });
+
+  it("still uses serving_quantity when the unit says grams or is absent", () => {
+    const withUnit = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.8,
+      serving_quantity: 30,
+      serving_quantity_unit: "g",
+      nutriments: { "energy-kcal_100g": 100 },
+    });
+    const withoutUnit = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.8,
+      serving_quantity: 30,
+      nutriments: { "energy-kcal_100g": 100 },
+    });
+
+    expect(withUnit?.servingSizeG).toBe(30);
+    expect(withoutUnit?.servingSizeG).toBe(30);
+  });
+
+  it("reads grams from serving_size text when the quantity is in millilitres", () => {
+    const m = mapOffProduct("1", {
+      product_name: "X",
+      completeness: 0.8,
+      serving_quantity: 250,
+      serving_quantity_unit: "ml",
+      serving_size: "260 g",
+      nutriments: { "energy-kcal_100g": 45 },
+    });
+
+    expect(m?.servingSizeG).toBe(260);
+  });
+
   it("rejects a low-completeness product that also lacks calories", () => {
     expect(
       mapOffProduct("1", {
