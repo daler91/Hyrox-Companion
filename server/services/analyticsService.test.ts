@@ -1,3 +1,4 @@
+import { EXERCISE_DEFINITIONS } from "@shared/schema";
 import { afterEach, describe, expect,it, vi } from "vitest";
 
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeAdherencePct, computeOverviewStats, countPersonalRecordsInRange } from "./analyticsService";
@@ -117,6 +118,68 @@ describe("calculatePersonalRecords", () => {
     ];
     const prs = calculatePersonalRecords(sets);
     expect(prs["amrap"].bestTime).toBeUndefined();
+  });
+
+  // audit H4. PRs bucket on `custom:<label>` but the longer-is-better lookup
+  // used `exerciseName`, which is the literal "custom" for these sets — so a
+  // custom hold got the faster-is-better rule and a SHORTER hold was recorded
+  // as the athlete's best, while the built-in `plank` above handled the
+  // identical sets correctly.
+  it("tracks a CUSTOM-labelled hold as longest-is-best, like its built-in twin", () => {
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "Plank", category: "strength", time: 60, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "custom", customLabel: "Plank", category: "strength", time: 120, date: "2026-01-15", workoutLogId: "w2" }),
+      makeSet({ exerciseName: "custom", customLabel: "Plank", category: "strength", time: 90, date: "2026-01-20", workoutLogId: "w3" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["custom:Plank"].bestTime).toEqual({ value: 120, date: "2026-01-15", workoutLogId: "w2" });
+  });
+
+  it("resolves a custom label through the alias table, not just an exact key", () => {
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "Side Planks", category: "strength", time: 45, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "custom", customLabel: "Side Planks", category: "strength", time: 20, date: "2026-01-15", workoutLogId: "w2" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["custom:Side Planks"].bestTime?.value).toBe(45);
+  });
+
+  it("keeps faster-is-better for a custom label that names no known exercise", () => {
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "Sled Push 50m", category: "functional", time: 40, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "custom", customLabel: "Sled Push 50m", category: "functional", time: 32, date: "2026-01-15", workoutLogId: "w2" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["custom:Sled Push 50m"].bestTime?.value).toBe(32);
+  });
+
+  it("does not record a bestTime PR for a custom-labelled AMRAP either", () => {
+    const sets = [
+      makeSet({ exerciseName: "custom", customLabel: "AMRAP", category: "conditioning", time: 1200, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "custom", customLabel: "AMRAP", category: "conditioning", time: 600, date: "2026-01-15", workoutLogId: "w2" }),
+    ];
+    const prs = calculatePersonalRecords(sets);
+    expect(prs["custom:AMRAP"].bestTime).toBeUndefined();
+  });
+
+  // Guards the derivation itself: the longer-is-better set is computed from the
+  // catalogue's `fields`, so a hold added to the catalogue is covered without
+  // anyone remembering to update a second list.
+  it("treats every catalogue exercise recorded as sets+time as longest-is-best", () => {
+    const holds = Object.entries(EXERCISE_DEFINITIONS)
+      .filter(([, definition]) => {
+        const fields = definition.fields as readonly string[];
+        return fields.length === 2 && fields.includes("sets") && fields.includes("time");
+      })
+      .map(([name]) => name);
+    expect(holds.length).toBeGreaterThan(0);
+    for (const name of holds) {
+      const prs = calculatePersonalRecords([
+        makeSet({ exerciseName: name, category: "strength", time: 60, date: "2026-01-10", workoutLogId: "w1" }),
+        makeSet({ exerciseName: name, category: "strength", time: 30, date: "2026-01-15", workoutLogId: "w2" }),
+      ]);
+      expect(prs[name].bestTime?.value, `${name} should keep the LONGER hold`).toBe(60);
+    }
   });
 
   it("tracks maxDistance PR", () => {

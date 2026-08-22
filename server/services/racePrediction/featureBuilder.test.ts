@@ -76,6 +76,40 @@ describe("buildRacePredictionFeatures", () => {
     expect(features.deterministicFinishSeconds).toBe(expectedBenchmarkFinish("open", "male"));
   });
 
+  // audit H12. The set schema permits `time: 0` (z.number().min(0)), and the
+  // projection guarded null and non-finite but not zero — so one untimed set
+  // contributed a 0-second split, which then won `bestSeconds` outright and
+  // dragged the median down. A 0 is "not timed", not "instant".
+  it("drops a set logged with time 0 instead of projecting a 0-second split", () => {
+    const features = buildRacePredictionFeatures(
+      [
+        set("run_1k", { time: 4, date: "2026-05-20" }), // 240s
+        set("run_1k", { time: 5, date: "2026-05-22" }), // 300s
+        set("run_1k", { time: 0, date: "2026-05-24" }), // never timed
+      ],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+
+    expect(features.runFeature.sampleSize).toBe(2);
+    expect(features.runFeature.bestSeconds).toBe(240);
+    expect(features.runFeature.medianSeconds).toBe(270);
+  });
+
+  it("drops a negative time the same way", () => {
+    const features = buildRacePredictionFeatures(
+      [
+        set("run_1k", { time: 4, date: "2026-05-20" }),
+        set("run_1k", { time: -3, date: "2026-05-22" }),
+      ],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+
+    expect(features.runFeature.sampleSize).toBe(1);
+    expect(features.runFeature.bestSeconds).toBe(240);
+  });
+
   it("uses logged run_1k median (in seconds) for run legs", () => {
     const features = buildRacePredictionFeatures(
       [

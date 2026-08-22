@@ -10,10 +10,15 @@ export interface NextTarget {
   readonly setCount: number;
   readonly reps: number;
   readonly weight: number;
-  /** The single thing that moved versus last session, for the "+1 rep" badge. */
+  /**
+   * The single thing that moved versus last session, for the "+1 rep" badge —
+   * or `repeat`, when last session's prescription was not completed and the
+   * target is to go again rather than to progress.
+   */
   readonly step:
     | { readonly field: "reps"; readonly amount: 1 }
-    | { readonly field: "weight"; readonly amount: number };
+    | { readonly field: "weight"; readonly amount: number }
+    | { readonly field: "repeat" };
 }
 
 // Same bounds as the estimated-1RM PR metric in
@@ -23,6 +28,16 @@ const EPLEY_MIN_REPS = 2;
 const EPLEY_MAX_REPS = 10;
 
 const WEIGHT_INCREMENT: Readonly<Record<"kg" | "lb", number>> = { kg: 2.5, lb: 5 };
+
+// Fallback step for when the standard one above breaks the gain cap: the
+// fractional plates a commercial gym stocks. Tried ONLY after the standard step
+// has been rejected, so the ordinary reps-vs-weight crossover is unchanged and
+// this can only speak where the function used to be silent.
+//
+// Without it, a beginner at 3x10 with anything at or under 25 kg got no
+// suggestion at all, ever — reps are capped at 10, so only the weight step
+// remained and it always breached the cap (audit L3).
+const SMALL_WEIGHT_INCREMENT: Readonly<Record<"kg" | "lb", number>> = { kg: 1.25, lb: 2.5 };
 
 // A plate jump on a very light implement at the rep ceiling can leap the
 // estimated 1RM by 20%+. Past this fraction the suggestion would be a
@@ -49,16 +64,36 @@ function roundWeight(value: number): number {
  * already uses. At the 10-rep ceiling only the plate step remains, so reps
  * build to 10 and then weight moves.
  *
+ * A session that did not complete its prescription is NOT progressed from: the
+ * target is that same prescription again. Overloading on top of a miss is how
+ * the suggestion used to answer "you were given 3x5 @ 100 kg and managed 3
+ * reps" with "next time do 102.5" (audit H5).
+ *
  * Returns null — no suggestion rather than a bad one — when the maths has no
  * footing: non-strength work, missing or varying weight/reps, sets outside
- * the 2–10 rep Epley range, or an implement so light the smallest available
- * step would jump the estimate by more than 10%.
+ * the 2–10 rep Epley range, or an implement so light that even the smallest
+ * step stocked would jump the estimate by more than 10%.
  */
 export function suggestNextTarget(
   lastSets: readonly ExerciseSet[],
   args: { readonly category: string; readonly weightUnit: "kg" | "lb" },
 ): NextTarget | null {
   if (args.category !== "strength") return null;
+
+  // Before the uniformity gate below, deliberately. The commonest way to miss a
+  // prescription is for the last set to drop (5/5/4), which makes the LOGGED
+  // reps vary — and repeating a prescription needs no Epley maths, only a
+  // prescription that was uniform. Gating this on uniform performance would
+  // have gone silent on exactly the sessions it exists to catch.
+  const unmet = unmetPrescription(lastSets);
+  if (unmet) {
+    return {
+      setCount: lastSets.length,
+      reps: unmet.reps,
+      weight: roundWeight(unmet.weight),
+      step: { field: "repeat" },
+    };
+  }
 
   const uniformity = computeUniformity(lastSets);
   const { weight, reps } = uniformity;
@@ -67,26 +102,77 @@ export function suggestNextTarget(
   }
   if (weight <= 0 || reps < EPLEY_MIN_REPS || reps > EPLEY_MAX_REPS) return null;
 
-  const increment = WEIGHT_INCREMENT[args.weightUnit];
-  const lastE1rm = epley(weight, reps);
+  return progressFrom(lastSets.length, weight, reps, args.weightUnit);
+}
 
-  const weightGain = epley(weight + increment, reps) - lastE1rm;
-  const repsGain = reps < EPLEY_MAX_REPS ? epley(weight, reps + 1) - lastE1rm : null;
+/**
+ * Last session's prescription, when the athlete was given one and fell short of
+ * it on any set. Null when nothing was prescribed (an ad-hoc log), when the
+ * prescription was not uniform across the sets, or when it was met.
+ *
+ * `plannedReps`/`plannedWeight` sit on the very rows this function already
+ * reads. Not looking at them is what let a failed session read as a completed
+ * one (audit H5).
+ */
+function unmetPrescription(
+  sets: readonly ExerciseSet[],
+): { readonly reps: number; readonly weight: number } | null {
+  let plannedReps: number | null = null;
+  let plannedWeight: number | null = null;
+  let fellShort = false;
+
+  for (const set of sets) {
+    if (set.plannedReps == null || set.plannedWeight == null) return null;
+    plannedReps ??= set.plannedReps;
+    plannedWeight ??= set.plannedWeight;
+    // A prescription that differs set to set is not one target to repeat.
+    if (set.plannedReps !== plannedReps || set.plannedWeight !== plannedWeight) return null;
+    if ((set.reps ?? 0) < set.plannedReps || (set.weight ?? 0) < set.plannedWeight) fellShort = true;
+  }
+
+  if (!fellShort || plannedReps == null || plannedWeight == null) return null;
+  if (plannedWeight <= 0) return null;
+  return { reps: plannedReps, weight: plannedWeight };
+}
+
+/**
+ * The gentlest overload that still beats last session's estimated 1RM.
+ *
+ * Both gains are computed algebraically rather than as a difference of two
+ * Epley products. Epley is linear in each argument, so +1 rep is worth
+ * `weight / 30` and +one step is worth `step * (1 + reps / 30)` exactly.
+ * Subtracting two products instead drifted 2.7e-15 high and decided the
+ * suppression threshold at exactly 25.0 kg on float representation alone
+ * (audit L2).
+ */
+function progressFrom(
+  setCount: number,
+  weight: number,
+  reps: number,
+  weightUnit: "kg" | "lb",
+): NextTarget | null {
+  const increment = WEIGHT_INCREMENT[weightUnit];
+  const cap = epley(weight, reps) * MAX_E1RM_GAIN_FRACTION;
+
+  const repsGain = reps < EPLEY_MAX_REPS ? weight / 30 : null;
+  const weightGain = increment * (1 + reps / 30);
 
   if (repsGain != null && repsGain < weightGain) {
-    return {
-      setCount: lastSets.length,
-      reps: reps + 1,
-      weight,
-      step: { field: "reps", amount: 1 },
-    };
+    return { setCount, reps: reps + 1, weight, step: { field: "reps", amount: 1 } };
   }
-  if (weightGain > lastE1rm * MAX_E1RM_GAIN_FRACTION) return null;
+
+  // Standard step first so the reps-vs-weight crossover above is untouched;
+  // the smaller step is only ever reached once the standard one is rejected.
+  const step = [increment, SMALL_WEIGHT_INCREMENT[weightUnit]].find(
+    (candidate) => candidate * (1 + reps / 30) <= cap,
+  );
+  if (step == null) return null;
+
   return {
-    setCount: lastSets.length,
+    setCount,
     reps,
-    weight: roundWeight(weight + increment),
-    step: { field: "weight", amount: increment },
+    weight: roundWeight(weight + step),
+    step: { field: "weight", amount: step },
   };
 }
 
