@@ -271,7 +271,11 @@ describe("Production Smoke Test", { timeout: 90_000 }, () => {
           notes: "Smoke test workout",
           duration: 30,
           rpe: 6,
-          exercises: [{ exerciseName: "Run", category: "running", sets: [{ setNumber: 1, distance: 5000, time: 1800 }] }],
+          // `time` on a set is MINUTES (docs/adr-units.md), so a 5 km run inside
+          // this 30-minute workout is 30, not 1800. The seconds-shaped value was
+          // rejected once the bound was tightened from max(86_400) -- 60 days in
+          // a minutes column -- to SET_TIME_MAX_MINUTES (audit C7).
+          exercises: [{ exerciseName: "Run", category: "running", sets: [{ setNumber: 1, distance: 5000, time: 30 }] }],
         }),
       });
       expect(res.status).toBe(200);
