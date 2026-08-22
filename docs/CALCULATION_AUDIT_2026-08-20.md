@@ -23,7 +23,7 @@ path is, not by how dramatic the failure looks.
 
 ---
 
-## Remediation status (updated 2026-08-20)
+## Remediation status (updated 2026-08-22)
 
 **Phase 0 — characterisation tests.** Landed. `test/audit/` pins the behaviour of every C-tier
 finding, with a header on each test naming the finding ID, the current value, the intended value,
@@ -53,7 +53,34 @@ requires collecting Maffetone's actual categories (2+ years injury-free, colds/f
 onboarding instead of a bare "Low/Moderate/High", and L9's under-16 handling is entangled with the
 same screen and with the 16–99 validation that currently makes the branch unreachable.
 
-**Not yet started:** Phases 1, 3, 4, 5, 6, and C4, C6, C7 — note C4 (the age-cohort fallback) is
+**Phase 1 — units.** Landed for C7, H1, H2, H16, M8 and L6, with
+[`docs/adr-units.md`](adr-units.md) as the durable contract and `shared/units.ts` as the mechanism.
+
+| #   | Fix                                                                                                                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C7  | `resolveStructureStepTimeTarget` stopped coalescing `targetTime`/`time` (minutes) with `durationSeconds` (seconds) into one verbatim number. Seconds now convert at the boundary, so a 45-second transition stores 0.75 min rather than 45 min.                                                                        |
+| H1  | `mafTestService` converts `workout_logs.duration` (minutes) to canonical seconds before it reaches `MafTestMetrics.durationSeconds`. Auto-pulled MAF pace was 60× too fast; a 10 km hour-long run read 0:06/km.                                                                                                        |
+| H2  | `WeeklyReviewHighlights` renders `bestTime` through `formatMinutes` instead of `formatSecondsToMmSs` (a 12-minute best showed "0:12"), and takes the athlete's weight and distance preference instead of hardcoding "kg"/"m".                                                                                          |
+| H16 | `serializeWorkoutStructure` now **requires** the distance preference. It appended "m" unconditionally while a miles athlete's rows store feet, so a 400 m carry rendered "1312m". Same fix applied to the CSV export header, the AI personal-record summaries, and the Gemini stat lines.                             |
+| M8  | `computeProgressionFlags` requires the athlete's weight unit. It interpolated "kg" over a pounds athlete's loads, reaching the coaching model inflated 2.2×.                                                                                                                                                          |
+| L6  | `METRES_PER_MILE` is defined once in `shared/units.ts`; `unitConversion.ts` derives `KM_TO_MILES` from it rather than carrying a second literal that disagreed by 2.5 ppm.                                                                                                                                            |
+
+Three contracts that advertised the wrong unit were corrected alongside: the set-level zod bound
+(`max(86_400)` — seconds in a day — became `SET_TIME_MAX_MINUTES`, since the old bound permitted a
+60-day set and so could never catch a seconds value in a minutes field), the OpenAPI examples
+(`{ distance: 1000, time: 210 }` advertised seconds to every API consumer), and the `exercise_sets`
+column comments, which now state that `weight` and `distance` are **not** canonical.
+
+`workoutService.test.ts`, `structure.test.ts`, `mafTestService.test.ts` and `exportService.test.ts`
+all contained assertions certifying these bugs and were **inverted**. The MAF fixtures were
+seconds-shaped (`duration: 1800` — 30 hours in a minutes column) precisely because the code never
+converted; correcting the input left every expected output unchanged.
+
+**Still open in Phase 1:** L4 and L1. L4 (canonicalise stored weights, or warn at the preference
+toggle) is a product call about existing athletes' data and is recorded as explicitly undecided in
+the ADR. L1 (advice that changes with display units) follows from the same undecided question.
+
+**Not yet started:** Phases 3, 4, 5, 6, and C4, C6 — note C4 (the age-cohort fallback) is
 not covered by any of the six root causes below and needs its own fix.
 
 ---

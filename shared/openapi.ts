@@ -17,14 +17,18 @@ export const registry = new OpenAPIRegistry();
 // Realistic Hyrox-specific examples for Swagger UI "Try it out"
 // ---------------------------------------------------------------------------
 
+// `time` on a set is MINUTES (see docs/adr-units.md), so these examples are
+// fractional: a 42-second sled push is 0.7. They used to read 42 / 45 / 48 and
+// 210 -- seconds values -- which advertised the wrong unit to every API consumer
+// reading the docs, against a column the app reads as minutes (audit C7).
 const EXAMPLE_EXERCISE_SLED_PUSH = {
   exerciseName: "Sled Push",
   category: "conditioning",
   numSets: 3,
   sets: [
-    { setNumber: 1, distance: 50, time: 42, notes: "Smooth pace" },
-    { setNumber: 2, distance: 50, time: 45 },
-    { setNumber: 3, distance: 50, time: 48 },
+    { setNumber: 1, distance: 50, time: 0.7, notes: "Smooth pace — 42s" },
+    { setNumber: 2, distance: 50, time: 0.75 },
+    { setNumber: 3, distance: 50, time: 0.8 },
   ],
 };
 
@@ -44,8 +48,8 @@ const EXAMPLE_EXERCISE_ROWING = {
   category: "conditioning",
   numSets: 1,
   distance: 1000,
-  time: 210,
-  sets: [{ setNumber: 1, distance: 1000, time: 210 }],
+  time: 3.5,
+  sets: [{ setNumber: 1, distance: 1000, time: 3.5 }],
 };
 
 const EXAMPLE_CREATE_WORKOUT = {

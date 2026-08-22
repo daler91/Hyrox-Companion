@@ -1,4 +1,6 @@
 import type { GarminConnection,StravaConnection } from "@shared/schema";
+import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { formatMinutes, minutes } from "@shared/units";
 
 import type { IStorage } from "../storage";
 
@@ -27,7 +29,10 @@ interface StructureSetLike {
   time?: number | null;
 }
 
-function structuredSummary(sets: StructureSetLike[] | null | undefined): string | null {
+function structuredSummary(
+  sets: StructureSetLike[] | null | undefined,
+  distanceUnit: string,
+): string | null {
   if (sets == null || sets.length === 0) return null;
   const byBlock = new Map<string, StructureSetLike[]>();
   let legacySegment = 0;
@@ -68,12 +73,12 @@ function structuredSummary(sets: StructureSetLike[] | null | undefined): string 
       if (s.distance == null) {
         // no-op
       } else {
-        targetParts.push(`${s.distance}m`);
+        targetParts.push(`${s.distance}${getStoredDistanceUnit(distanceUnit)}`);
       }
       if (s.time == null) {
         // no-op
       } else {
-        targetParts.push(`${s.time}min`);
+        targetParts.push(formatMinutes(minutes(s.time)));
       }
       const targets = targetParts.join(" · ");
       if (targets.length === 0) return label;
@@ -255,7 +260,7 @@ function escapeCsv(val: string | null | undefined): string {
   return CSV_QUOTABLE_CHARACTERS.test(escaped) ? `"${escaped}"` : escaped;
 }
 
-function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
+function generateTimelineCsvRows(timeline: TimelineEntry[], distanceUnit: string): string[] {
   const rows: string[] = [];
   for (const entry of timeline) {
     rows.push([
@@ -263,7 +268,7 @@ function generateTimelineCsvRows(timeline: TimelineEntry[]): string[] {
       escapeCsv(entry.type),
       escapeCsv(entry.status),
       escapeCsv(entry.focus),
-      escapeCsv(structuredSummary(entry.exerciseSets) ?? entry.mainWorkout),
+      escapeCsv(structuredSummary(entry.exerciseSets, distanceUnit) ?? entry.mainWorkout),
       escapeCsv(entry.accessory),
       escapeCsv(entry.notes),
       entry.duration == null ? "" : String(entry.duration),
@@ -300,17 +305,20 @@ export async function generateCSV(userId: string, storage: IStorage): Promise<st
   ]);
 
   const csvRows = ["Date,Type,Status,Focus,Main Workout,Accessory,Notes,Duration,RPE"];
-  csvRows.push(...generateTimelineCsvRows(timeline));
+  csvRows.push(...generateTimelineCsvRows(timeline, user?.distanceUnit ?? "km"));
 
   if (allExerciseSets.length > 0) {
     const workoutLogTitles = buildWorkoutLogTitles(timeline);
     // W26 — label the Weight column with the user's stored unit so the spreadsheet
-    // export is self-describing. Distance on exercise sets is stored in metres.
+    // export is self-describing. Distance needs the same treatment: it is stored
+    // in the athlete's OWN unit, so a miles athlete's feet were exported under a
+    // "(m)" header (audit H16). The comment here used to assert metres outright.
     const weightUnit = user?.weightUnit ?? "kg";
+    const distanceLabel = getStoredDistanceUnit(user?.distanceUnit ?? "km");
     csvRows.push(
       "",
       "--- EXERCISE SETS (Per-Set Data) ---",
-      `Date,Workout,Exercise,Category,Set #,Reps,Weight (${weightUnit}),Distance (m),Time (min),Notes`,
+      `Date,Workout,Exercise,Category,Set #,Reps,Weight (${weightUnit}),Distance (${distanceLabel}),Time (min),Notes`,
       ...generateExerciseSetsCsvRows(allExerciseSets, workoutLogTitles)
     );
   }

@@ -418,13 +418,50 @@ describe("computeExerciseGaps", () => {
   });
 });
 
+// computeProgressionFlags now requires the athlete's weight unit (audit M8).
+// Most cases below are unit-agnostic, so they go through a kg-fixed helper; the
+// lbs behaviour is asserted explicitly at the end of this block.
+const flagsInKg = (timeline: Parameters<typeof computeProgressionFlags>[0]) =>
+  computeProgressionFlags(timeline, "kg");
+
+describe("computeProgressionFlags — weight unit labelling (audit M8)", () => {
+  const threeRisingSessions = [
+    weightEntry("2026-06-01", 100),
+    weightEntry("2026-06-05", 105),
+    weightEntry("2026-06-10", 110),
+  ];
+
+  it("labels a lbs athlete's loads in lbs, not kg", () => {
+    const [flag] = computeProgressionFlags(threeRisingSessions, "lbs");
+    expect(flag.detail).toBe("Weight increased from 100lbs to 110lbs over last 3 sessions");
+    expect(flag.detail).not.toContain("kg");
+  });
+
+  it("labels a kg athlete's identical numbers in kg", () => {
+    const [flag] = computeProgressionFlags(threeRisingSessions, "kg");
+    expect(flag.detail).toBe("Weight increased from 100kg to 110kg over last 3 sessions");
+  });
+
+  it("labels a plateau in the athlete's own unit", () => {
+    const [flag] = computeProgressionFlags(
+      [
+        weightEntry("2026-06-01", 225),
+        weightEntry("2026-06-05", 225),
+        weightEntry("2026-06-10", 225),
+      ],
+      "lbs",
+    );
+    expect(flag.detail).toBe("Weight stuck at 225lbs for last 3 sessions");
+  });
+});
+
 describe("computeProgressionFlags", () => {
   it("returns no flags for an empty timeline", () => {
-    expect(computeProgressionFlags([])).toEqual([]);
+    expect(flagsInKg([])).toEqual([]);
   });
 
   it("flags an exercise trained only once as new", () => {
-    const flags = computeProgressionFlags([weightEntry("2026-06-10", 100)]);
+    const flags = flagsInKg([weightEntry("2026-06-10", 100)]);
     expect(flags).toEqual([
       { exercise: BACK_SQUAT, flag: "new", detail: "Only trained once (2026-06-10)" },
     ]);
@@ -432,12 +469,12 @@ describe("computeProgressionFlags", () => {
 
   it("does not flag an exercise with two weight sessions (needs three)", () => {
     expect(
-      computeProgressionFlags([weightEntry("2026-06-08", 100), weightEntry("2026-06-10", 105)]),
+      flagsInKg([weightEntry("2026-06-08", 100), weightEntry("2026-06-10", 105)]),
     ).toEqual([]);
   });
 
   it("flags a weight plateau across the last three sessions", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       weightEntry("2026-06-01", 100),
       weightEntry("2026-06-05", 100),
       weightEntry("2026-06-10", 100),
@@ -453,7 +490,7 @@ describe("computeProgressionFlags", () => {
 
   it("flags rising weight as progressing using date-sorted sessions", () => {
     // Provided out of order; the function sorts by date ascending.
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       weightEntry("2026-06-10", 110),
       weightEntry("2026-06-01", 100),
       weightEntry("2026-06-05", 105),
@@ -468,7 +505,7 @@ describe("computeProgressionFlags", () => {
   });
 
   it("flags falling weight as regressing", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       weightEntry("2026-06-01", 110),
       weightEntry("2026-06-05", 105),
       weightEntry("2026-06-10", 100),
@@ -480,7 +517,7 @@ describe("computeProgressionFlags", () => {
   });
 
   it("handles multiple sessions sharing the same date in the sort", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       weightEntry("2026-06-05", 100),
       weightEntry("2026-06-05", 105),
       weightEntry("2026-06-10", 110),
@@ -492,7 +529,7 @@ describe("computeProgressionFlags", () => {
   });
 
   it("only considers the most recent three weight sessions", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       weightEntry("2026-06-01", 50),
       weightEntry("2026-06-05", 100),
       weightEntry("2026-06-08", 100),
@@ -502,7 +539,7 @@ describe("computeProgressionFlags", () => {
   });
 
   it("falls back to time progression when there is no weight data", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       timeEntry("2026-06-01", 40),
       timeEntry("2026-06-05", 35),
       timeEntry("2026-06-10", 30),
@@ -517,7 +554,7 @@ describe("computeProgressionFlags", () => {
   });
 
   it("flags a time plateau within the 0.1min tolerance", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       timeEntry("2026-06-01", 30),
       timeEntry("2026-06-05", 30),
       timeEntry("2026-06-10", 30),
@@ -528,7 +565,7 @@ describe("computeProgressionFlags", () => {
   });
 
   it("flags worsening time as regressing", () => {
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       timeEntry("2026-06-01", 30),
       timeEntry("2026-06-05", 35),
       timeEntry("2026-06-10", 40),
@@ -541,7 +578,7 @@ describe("computeProgressionFlags", () => {
 
   it("emits no flag when the latest time equals the oldest (non-monotonic)", () => {
     expect(
-      computeProgressionFlags([
+      flagsInKg([
         timeEntry("2026-06-01", 30),
         timeEntry("2026-06-05", 35),
         timeEntry("2026-06-10", 30),
@@ -551,7 +588,7 @@ describe("computeProgressionFlags", () => {
 
   it("emits no flag when the latest weight equals the oldest (non-monotonic)", () => {
     expect(
-      computeProgressionFlags([
+      flagsInKg([
         weightEntry("2026-06-01", 100),
         weightEntry("2026-06-05", 110),
         weightEntry("2026-06-10", 100),
@@ -567,7 +604,7 @@ describe("computeProgressionFlags", () => {
           makeSet({ exerciseName: BACK_SQUAT, weight: 100, time: date === "2026-06-10" ? 30 : 40 }),
         ],
       });
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       entry("2026-06-01"),
       entry("2026-06-05"),
       entry("2026-06-10"),
@@ -590,7 +627,7 @@ describe("computeProgressionFlags", () => {
           makeSet({ exerciseName: BACK_SQUAT, weight, setNumber: i + 1 }),
         ),
       });
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       session("2026-06-01", [80, 100]),
       session("2026-06-05", [90, 100]),
       session("2026-06-10", [100, 120]),
@@ -610,7 +647,7 @@ describe("computeProgressionFlags", () => {
           makeSet({ exerciseName: "rowing", time, setNumber: i + 1 }),
         ),
       });
-    const flags = computeProgressionFlags([
+    const flags = flagsInKg([
       session("2026-06-01", [50, 40]),
       session("2026-06-05", [45, 40]),
       session("2026-06-10", [40, 30]),

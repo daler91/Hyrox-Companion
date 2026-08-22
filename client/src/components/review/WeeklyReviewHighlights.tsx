@@ -1,9 +1,11 @@
 import type { PersonalRecordMetric, WeeklyReview } from "@shared/schema";
+import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { formatMinutes, minutes } from "@shared/units";
 import { HeartPulse, Plane, Stethoscope, Trophy, Umbrella } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatSecondsToMmSs } from "@/lib/statsUtils";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 
 const METRIC_LABELS: Record<PersonalRecordMetric, string> = {
   maxWeight: "Heaviest",
@@ -19,10 +21,27 @@ const ANNOTATION_ICONS: Record<string, typeof Plane> = {
   rest: Umbrella,
 };
 
-function formatRecordValue(record: WeeklyReview["personalRecords"][number]): string {
-  if (record.metric === "bestTime") return formatSecondsToMmSs(record.value);
-  if (record.metric === "maxDistance") return `${record.value} m`;
-  return `${record.value} kg`;
+/**
+ * Render a PR value in the unit it is actually stored in.
+ *
+ * Every branch here used to assume a unit the column does not guarantee:
+ *
+ *   - `bestTime` came from `exercise_sets.time`, which is MINUTES, and went to
+ *     `formatSecondsToMmSs` -- a 12-minute best rendered as "0:12" (audit H2).
+ *   - `maxDistance` and the weight metrics are stored in the athlete's OWN
+ *     display unit, not a canonical one (the S5 sentinel in unitConversion.ts),
+ *     so a miles-preference athlete's feet were labelled "m" and a lbs-preference
+ *     athlete's pounds were labelled "kg".
+ */
+function formatRecordValue(
+  record: WeeklyReview["personalRecords"][number],
+  units: { weightLabel: string; distanceUnit: "km" | "miles" },
+): string {
+  if (record.metric === "bestTime") return formatMinutes(minutes(record.value));
+  if (record.metric === "maxDistance") {
+    return `${record.value} ${getStoredDistanceUnit(units.distanceUnit)}`;
+  }
+  return `${record.value} ${units.weightLabel}`;
 }
 
 /**
@@ -34,6 +53,7 @@ function formatRecordValue(record: WeeklyReview["personalRecords"][number]): str
  * so before it says anything else about volume.
  */
 export function WeeklyReviewHighlights({ review }: { readonly review: WeeklyReview }) {
+  const { weightLabel, distanceUnit } = useUnitPreferences();
   const { personalRecords, annotations } = review;
   if (personalRecords.length === 0 && annotations.length === 0) return null;
 
@@ -87,7 +107,9 @@ export function WeeklyReviewHighlights({ review }: { readonly review: WeeklyRevi
                   </span>
                   <span className="flex items-center gap-2 whitespace-nowrap">
                     <Badge variant="outline">{METRIC_LABELS[record.metric]}</Badge>
-                    <span className="tabular-nums">{formatRecordValue(record)}</span>
+                    <span className="tabular-nums">
+                      {formatRecordValue(record, { weightLabel, distanceUnit })}
+                    </span>
                   </span>
                 </li>
               ))}

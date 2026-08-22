@@ -1,6 +1,7 @@
 import type { ExerciseSet } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
 import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
+import { formatMinutes, minutes } from "@shared/units";
 
 import { type StructuredExercise } from "@/components/ExerciseInput";
 
@@ -135,7 +136,7 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
   }
 
   if (firstSet.distance) parts.push(getWorkoutDistanceDisplay(firstSet.distance, distanceUnit).text);
-  if (firstSet.time) parts.push(`${firstSet.time}min`);
+  if (firstSet.time) parts.push(formatMinutes(minutes(firstSet.time)));
 
   return parts.length > 0 ? `${name} ${parts.join(" ")}` : name;
 }

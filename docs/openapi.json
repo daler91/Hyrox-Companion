@@ -192,7 +192,7 @@
             "type": "number",
             "nullable": true,
             "minimum": 0,
-            "maximum": 86400
+            "maximum": 1440
           },
           "plannedReps": {
             "type": "number",
@@ -216,7 +216,7 @@
             "type": "number",
             "nullable": true,
             "minimum": 0,
-            "maximum": 86400
+            "maximum": 1440
           },
           "blockId": {
             "type": "string",
@@ -1095,7 +1095,7 @@
                       "type": "number",
                       "nullable": true,
                       "minimum": 0,
-                      "maximum": 86400
+                      "maximum": 1440
                     },
                     "plannedReps": {
                       "type": "number",
@@ -1119,7 +1119,7 @@
                       "type": "number",
                       "nullable": true,
                       "minimum": 0,
-                      "maximum": 86400
+                      "maximum": 1440
                     },
                     "blockId": {
                       "type": "string",
@@ -1236,7 +1236,7 @@
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 86400
+                            "maximum": 1440
                           },
                           "plannedReps": {
                             "type": "number",
@@ -1260,7 +1260,7 @@
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 86400
+                            "maximum": 1440
                           },
                           "blockId": {
                             "type": "string",
@@ -1556,7 +1556,7 @@
                       "type": "number",
                       "nullable": true,
                       "minimum": 0,
-                      "maximum": 86400
+                      "maximum": 1440
                     },
                     "plannedReps": {
                       "type": "number",
@@ -1580,7 +1580,7 @@
                       "type": "number",
                       "nullable": true,
                       "minimum": 0,
-                      "maximum": 86400
+                      "maximum": 1440
                     },
                     "blockId": {
                       "type": "string",
@@ -1697,7 +1697,7 @@
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 86400
+                            "maximum": 1440
                           },
                           "plannedReps": {
                             "type": "number",
@@ -1721,7 +1721,7 @@
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 86400
+                            "maximum": 1440
                           },
                           "blockId": {
                             "type": "string",
@@ -1867,18 +1867,18 @@
                       {
                         "setNumber": 1,
                         "distance": 50,
-                        "time": 42,
-                        "notes": "Smooth pace"
+                        "time": 0.7,
+                        "notes": "Smooth pace — 42s"
                       },
                       {
                         "setNumber": 2,
                         "distance": 50,
-                        "time": 45
+                        "time": 0.75
                       },
                       {
                         "setNumber": 3,
                         "distance": 50,
-                        "time": 48
+                        "time": 0.8
                       }
                     ]
                   },
@@ -1904,12 +1904,12 @@
                     "category": "conditioning",
                     "numSets": 1,
                     "distance": 1000,
-                    "time": 210,
+                    "time": 3.5,
                     "sets": [
                       {
                         "setNumber": 1,
                         "distance": 1000,
-                        "time": 210
+                        "time": 3.5
                       }
                     ]
                   }
@@ -2123,18 +2123,18 @@
                       {
                         "setNumber": 1,
                         "distance": 50,
-                        "time": 42,
-                        "notes": "Smooth pace"
+                        "time": 0.7,
+                        "notes": "Smooth pace — 42s"
                       },
                       {
                         "setNumber": 2,
                         "distance": 50,
-                        "time": 45
+                        "time": 0.75
                       },
                       {
                         "setNumber": 3,
                         "distance": 50,
-                        "time": 48
+                        "time": 0.8
                       }
                     ]
                   },
@@ -2143,12 +2143,12 @@
                     "category": "conditioning",
                     "numSets": 1,
                     "distance": 1000,
-                    "time": 210,
+                    "time": 3.5,
                     "sets": [
                       {
                         "setNumber": 1,
                         "distance": 1000,
-                        "time": 210
+                        "time": 3.5
                       }
                     ]
                   }

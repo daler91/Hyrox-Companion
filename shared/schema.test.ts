@@ -1,9 +1,11 @@
 import { describe, expect,it } from "vitest";
 
 import {
+  exercisesPayloadSchema,
   generatePlanInputSchema,
   importPlanRequestSchema,
   parseExercisesFromImageRequestSchema,
+  SET_TIME_MAX_MINUTES,
   updateWorkoutLogSchema,
 } from "./schema";
 
@@ -159,5 +161,34 @@ describe("workout log manual distance/heart-rate bounds", () => {
   it("rejects a negative distance and accepts a valid one", () => {
     expect(updateWorkoutLogSchema.safeParse({ distanceMeters: -1 }).success).toBe(false);
     expect(updateWorkoutLogSchema.safeParse({ distanceMeters: 5000 }).success).toBe(true);
+  });
+});
+
+describe("set time bounds are minutes-shaped (audit C7)", () => {
+  const run = (time: number) =>
+    exercisesPayloadSchema.safeParse([
+      { exerciseName: "Run", category: "running", sets: [{ setNumber: 1, distance: 5000, time }] },
+    ]);
+
+  it("accepts a realistic session length in minutes", () => {
+    expect(run(30).success).toBe(true);
+  });
+
+  it("accepts a sub-minute step target, which the column now stores as a fraction", () => {
+    // A 45-second structure step converts to 0.75 on the way in.
+    expect(run(0.75).success).toBe(true);
+  });
+
+  it("rejects a seconds-shaped value for the same session", () => {
+    // 1800 is 30 minutes in seconds, but 30 HOURS in this column. The bound used
+    // to be max(86_400) -- seconds in a day -- which permitted a 60-day set and
+    // so could never catch a seconds value written into a minutes field.
+    expect(run(1800).success).toBe(false);
+  });
+
+  it("bounds a set at 24 hours", () => {
+    expect(SET_TIME_MAX_MINUTES).toBe(1_440);
+    expect(run(SET_TIME_MAX_MINUTES).success).toBe(true);
+    expect(run(SET_TIME_MAX_MINUTES + 1).success).toBe(false);
   });
 });

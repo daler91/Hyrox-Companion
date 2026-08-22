@@ -17,6 +17,7 @@ import type {
   PlannedSessionEstimateResponse,
   StructureBlockInput,
 } from "@shared/schema";
+import { formatMinutes, minutes } from "@shared/units";
 import { z } from "zod";
 
 import { generateJsonText } from "../../ai/providers";
@@ -94,7 +95,7 @@ function buildPrompt(
     const time = s.plannedTime ?? s.time;
     const reps = s.plannedReps ?? s.reps;
     if (dist) parts.push(`${dist}${distLabel}`);
-    if (time) parts.push(`${time}min`);
+    if (time) parts.push(formatMinutes(minutes(time)));
     if (reps) parts.push(`${reps} reps`);
     return `- ${parts.join(" ")}`;
   });

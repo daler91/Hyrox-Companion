@@ -1,4 +1,6 @@
 import type { TrainingLoadOverview } from "@shared/schema";
+import { getStoredDistanceUnit } from "@shared/unitConversion";
+import { formatMinutes, minutes } from "@shared/units";
 
 import { AI_CONTEXT_TIMELINE_LIMIT } from "../../constants";
 import type { CoachAbsence, TrainingContext } from "../../gemini/index";
@@ -130,9 +132,28 @@ const COVERAGE_NEGLECT_DAYS = 10;
  * model can anchor progressive overload, then fills with distance/time bests.
  * Capped to keep the prompt bounded.
  */
+/**
+ * The athlete's stored units, defaulted once.
+ *
+ * `exercise_sets.weight` and `.distance` are stored in the athlete's own unit,
+ * so anything rendering them needs both (audit H16, M8). Resolving them here
+ * keeps the defaults in one place and off `buildTrainingContext`'s complexity
+ * budget, which they had pushed over the lint ceiling.
+ */
+function resolveUnitPreferences(user: { weightUnit?: string | null; distanceUnit?: string | null } | undefined): {
+  weightUnit: string;
+  distanceUnit: string;
+} {
+  return {
+    weightUnit: user?.weightUnit || "kg",
+    distanceUnit: user?.distanceUnit || "km",
+  };
+}
+
 function buildPersonalRecordSummaries(
   prs: ReturnType<typeof calculatePersonalRecords>,
   weightUnit: string,
+  distanceUnit: string,
 ): Array<{ exercise: string; metric: string; display: string }> {
   const entries: Array<{ exercise: string; metric: string; display: string; sort: number }> = [];
   for (const [key, pr] of Object.entries(prs)) {
@@ -142,9 +163,12 @@ function buildPersonalRecordSummaries(
     } else if (pr.maxWeight) {
       entries.push({ exercise, metric: "weight", display: `max weight ${pr.maxWeight.value}${weightUnit}`, sort: pr.maxWeight.value });
     } else if (pr.bestTime) {
-      entries.push({ exercise, metric: "time", display: `best time ${pr.bestTime.value}min`, sort: 0 });
+      entries.push({ exercise, metric: "time", display: `best time ${formatMinutes(minutes(pr.bestTime.value))}`, sort: 0 });
     } else if (pr.maxDistance) {
-      entries.push({ exercise, metric: "distance", display: `max distance ${pr.maxDistance.value}m`, sort: 0 });
+      // Stored distance is metres for a km athlete and FEET for a miles athlete,
+      // so the label has to follow the preference the way weightUnit already
+      // does two lines up (audit H16).
+      entries.push({ exercise, metric: "distance", display: `max distance ${pr.maxDistance.value}${getStoredDistanceUnit(distanceUnit)}`, sort: 0 });
     }
   }
   // Weighted lifts first (highest load = most overload-relevant), capped to 8.
@@ -187,14 +211,15 @@ function buildSupplementaryInsights(params: {
   loadGovernor: TrainingLoadOverview;
   totalWorkouts: number;
   weightUnit: string;
+  distanceUnit: string;
   today: string;
 }): Partial<NonNullable<TrainingContext["coachingInsights"]>> {
-  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, today } =
+  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, today } =
     params;
 
   // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
   const personalRecordMap = calculatePersonalRecords(loadExerciseSets);
-  const personalRecords = buildPersonalRecordSummaries(personalRecordMap, weightUnit);
+  const personalRecords = buildPersonalRecordSummaries(personalRecordMap, weightUnit, distanceUnit);
   const prsThisWeek = countPersonalRecordsInRange(personalRecordMap, addDays(today, -7), today);
 
   // Plan adherence over the window.
@@ -354,8 +379,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)
     : undefined;
   const weeklyVolume = weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal) : undefined;
-  const progressionFlags = computeProgressionFlags(timeline);
-  const weightUnit = user?.weightUnit || "kg";
+  const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
+  const progressionFlags = computeProgressionFlags(timeline, weightUnit);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
     weightUnit,
@@ -408,6 +433,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     loadGovernor,
     totalWorkouts,
     weightUnit,
+    distanceUnit,
     today,
   });
 
