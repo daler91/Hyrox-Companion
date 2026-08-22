@@ -261,9 +261,19 @@ const emptyWeek = (): WeekAccumulator => ({
  * athlete's own first and last logged week.
  */
 function zeroFillWeeks(weekMap: Map<string, WeekAccumulator>, period?: { from?: string; to?: string }): void {
-  const observed = Array.from(weekMap.keys()).sort();
-  const fromMonday = period?.from ? getMonday(period.from) : observed[0];
-  const toMonday = period?.to ? getMonday(period.to) : observed[observed.length - 1];
+  // Scan for the two ends rather than sorting for them: only the min and max
+  // are wanted, and a bare `.sort()` on strings is a UTF-16 code-unit sort with
+  // no comparator, which SonarCloud flags as a reliability bug (S2871). The
+  // comparisons below are still string comparisons, which is exact here because
+  // `getMonday` yields fixed-width most-significant-first `YYYY-MM-DD`.
+  let earliestObserved: string | undefined;
+  let latestObserved: string | undefined;
+  for (const weekStart of weekMap.keys()) {
+    if (earliestObserved == null || weekStart < earliestObserved) earliestObserved = weekStart;
+    if (latestObserved == null || weekStart > latestObserved) latestObserved = weekStart;
+  }
+  const fromMonday = period?.from ? getMonday(period.from) : earliestObserved;
+  const toMonday = period?.to ? getMonday(period.to) : latestObserved;
   if (!fromMonday || !toMonday || fromMonday > toMonday) return;
   for (const weekStart of mondaysBetween(fromMonday, toMonday)) {
     if (!weekMap.has(weekStart)) weekMap.set(weekStart, emptyWeek());
