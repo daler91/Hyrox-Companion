@@ -10,6 +10,14 @@ export interface WeeklySummary {
   totalDuration: number; // minutes
   avgRpe: number | null;
   categoryBreakdown: Record<string, number>;
+  // Denominators, carried so period-level aggregates can pool rather than
+  // average averages. `totalDuration` only sums the workouts that RECORDED a
+  // duration, so dividing it by `workoutCount` halves the answer for an athlete
+  // who records inconsistently (audit H8); and a period RPE built as the plain
+  // mean of `avgRpe` lets a one-session week outweigh a six-session one
+  // (audit H9). Weeks with no training are present with zero counts.
+  workoutsWithDuration: number;
+  rpeCount: number;
 }
 
 export type LoadGovernorAcwrZone =

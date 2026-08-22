@@ -80,7 +80,40 @@ converted; correcting the input left every expected output unchanged.
 toggle) is a product call about existing athletes' data and is recorded as explicitly undecided in
 the ADR. L1 (advice that changes with display units) follows from the same undecided question.
 
-**Not yet started:** Phases 3, 4, 5, 6, and C4, C6 — note C4 (the age-cohort fallback) is
+**Phase 3 — denominators and windows.** Landed for H6, H7, H8, H9, H10, M5, M10, M12, L11 and L12.
+`shared/ratio.ts` holds `pooledRatio` / `weightedMean` / `pooledPercentage`, and every ratio touched
+here now goes through them.
+
+| #   | Before → after                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H7  | "Avg / Week" divided by the weeks that CONTAIN a workout, so it could never fall below 1.0. Train 3×, rest three weeks, train 3× reported **3.0**; it now zero-fills the range and reports **1.2**.                                                                                 |
+| M10 | The same missing weeks were deleted from the bar chart. That five-week span produced **2** bars; it now produces **5**, three of them zero.                                                                                                                                          |
+| H8  | "Avg Duration" summed duration only where recorded but divided by every workout. Ten workouts, five with 60 min → **30 min**; now **60**. `duration = 0` is also no longer treated as missing.                                                                                       |
+| H9  | "Avg RPE" was the unweighted mean of weekly means. One RPE-10 session plus six RPE-4 sessions → **7.0**; weighting by rated-session count gives **4.9**.                                                                                                                            |
+| H6  | The weekly email divided `workout_logs` completions by (those + plan-day misses + plan-day skips). An athlete with no plan was emailed **100%**, captioned "3 of 3 planned sessions". The rate is now plan days completed ÷ plan days due, and is **withheld entirely** when nothing was due. |
+| H10 | "Avg Adherence" divided by the sessions the athlete LOGGED, so skipping removed sessions from its own denominator: one 90% session out of five due read **90%**. Now over due sessions → **18%**. Withheld when nothing was due.                                                     |
+| M5  | The Coach Panel "Rate" scored TODAY's not-yet-done session as a failure, and counted declared absences as failures. Today is now excluded symmetrically (a day is not scored until it is over) and excused days are skipped. Returns null, not 0%, before anything has come due.      |
+| M12 | `countPrSets` measured a set against an all-time max that INCLUDED the set, using `>=`, so repeating last week's 120 kg was reported as a fresh PR. The baseline now excludes the workout being scored and the test is a strict `>`, matching `updateMaxWeight`.                      |
+| L12 | `fetchBlockAvgRpe`'s window ran ±14 days (29 days, not 28) and averaged in sessions logged AFTER the workout, so an old record's stat changed every time it was opened. Now a trailing 28 days ending at the workout.                                                                 |
+
+**A correction to M12 as registered.** The register says the set "always counts itself". That
+overstates it: because the workout is inside its own baseline, the comparison cannot distinguish a
+new best from a tie — a genuine PR and a repeat of the previous best both satisfy `>=`. A *lighter*
+session still correctly failed. The bug is real; its shape is "ties count as PRs", not "everything
+counts".
+
+**L11 is only partly closed.** The panels said "N mapped sets analyzed" where N sums a per-category
+set count, so a set training three patterns was counted three times — an athlete who logged 120 sets
+was told 312 were analysed. The label now says "pattern assignments" / "muscle assignments", which is
+what the number actually is. Reporting the *distinct* count of sets that mapped to at least one
+category would need a new server-side field: the client only receives per-category aggregates. That
+is left as follow-up work.
+
+**L12 is lower severity than registered.** `getWorkoutHistoryStats` is fetched by `useWorkoutDetail`
+on every workout-detail open, but no component reads `blockAvgRpe`, `prSetCount` or `lastSameFocus`.
+Nothing renders it today; it is fixed so a future consumer does not inherit a retroactive statistic.
+
+**Not yet started:** Phases 4, 5, 6, and C4, C6 — note C4 (the age-cohort fallback) is
 not covered by any of the six root causes below and needs its own fix.
 
 ---

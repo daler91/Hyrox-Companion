@@ -7,7 +7,7 @@ interface CoachPanelStatsProps {
     workoutsThisWeek: number;
     completedThisWeek: number;
     plannedUpcoming: number;
-    completionRate: number;
+    completionRate: number | null;
     currentStreak: number;
   };
 }
@@ -22,7 +22,20 @@ export function CoachPanelStats({ stats }: Readonly<CoachPanelStatsProps>) {
       <StatBadge icon={Activity} value={stats.workoutsThisWeek} label="Week" color="text-primary" ariaLabel={`${stats.workoutsThisWeek} workouts this week`} />
       <StatBadge icon={Target} value={stats.completedThisWeek} label="Done" color="text-green-500" ariaLabel={`${stats.completedThisWeek} completed this week`} />
       <StatBadge icon={Calendar} value={stats.plannedUpcoming} label="Next" color="text-blue-500" ariaLabel={`${stats.plannedUpcoming} upcoming planned`} />
-      <StatBadge icon={TrendingUp} value={`${stats.completionRate}%`} label="Rate" color="text-orange-500" ariaLabel={`${stats.completionRate}% completion rate`} />
+      <StatBadge
+        icon={TrendingUp}
+        // An em dash rather than "0%" when nothing has come due yet: a new
+        // athlete has no completion rate, and 0% reads as total failure
+        // (audit M5).
+        value={stats.completionRate == null ? "\u2014" : `${stats.completionRate}%`}
+        label="Rate"
+        color="text-orange-500"
+        ariaLabel={
+          stats.completionRate == null
+            ? "Completion rate not available yet"
+            : `${stats.completionRate}% all-time completion rate`
+        }
+      />
       <StatBadge icon={Flame} value={stats.currentStreak} label="Streak" color="text-red-500" ariaLabel={`${stats.currentStreak} day streak`} />
     </section>
   );

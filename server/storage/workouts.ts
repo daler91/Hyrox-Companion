@@ -13,7 +13,7 @@ import {
   workoutStructureSteps,
 } from "@shared/schema";
 import { normalizeExerciseName } from "@shared/schema/exercises";
-import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -91,12 +91,19 @@ function setTargetsForStructureMirror(row: ExerciseSet): Record<string, unknown>
   return Object.keys(targets).length > 0 ? targets : null;
 }
 
-// Count distinct exercises in a logged workout whose best weight matches the
-// user's all-time max for that exercise. "Conservative PR" — we only credit
-// exercises that include a weighted set; running/time/distance PRs are not
-// counted here. Extracted as a pure function so the storage method stays
-// within Sonar's cognitive-complexity ceiling.
-function countPrSets(
+// Count distinct exercises in a logged workout that BEAT the user's previous
+// best weight for that exercise. "Conservative PR" — we only credit exercises
+// that include a weighted set; running/time/distance PRs are not counted here.
+// Extracted as a pure function so the storage method stays within Sonar's
+// cognitive-complexity ceiling.
+//
+// `maxByExercise` must be the athlete's best EXCLUDING this workout. It used to
+// include it, and the test was `>=`, so the comparison could not tell a new
+// best from a tie: the set was measured against a maximum it was itself inside,
+// and repeating last week's 120 kg was reported as a fresh PR (audit M12).
+// `analyticsService.updateMaxWeight` has always used a strict `>`; these two PR
+// paths disagreed.
+export function countPrSets(
   workoutSets: Array<{ exerciseName: string; weight: number | null }>,
   maxByExercise: Map<string, number | null>,
 ): number {
@@ -104,8 +111,11 @@ function countPrSets(
   let prs = 0;
   for (const s of workoutSets) {
     if (s.weight == null || counted.has(s.exerciseName)) continue;
-    const max = maxByExercise.get(s.exerciseName);
-    if (max != null && s.weight >= max) {
+    const previousBest = maxByExercise.get(s.exerciseName);
+    // No prior best means this is the athlete's first weighted attempt at the
+    // movement, which is a baseline rather than a record — unchanged from the
+    // previous behaviour, where the `max != null` guard did the same job.
+    if (previousBest != null && s.weight > previousBest) {
       prs++;
       counted.add(s.exerciseName);
     }
@@ -890,6 +900,8 @@ export class WorkoutStorage {
         and(
           eq(workoutLogs.userId, userId),
           inArray(exerciseSets.exerciseName, exerciseNames),
+          // Exclude the workout being scored from its own baseline (audit M12).
+          ne(exerciseSets.workoutLogId, workoutLogId),
         ),
       )
       .groupBy(exerciseSets.exerciseName);
@@ -898,6 +910,21 @@ export class WorkoutStorage {
     return countPrSets(thisWorkoutSets, maxByExercise);
   }
 
+  /**
+   * Average RPE across the 4-week block LEADING UP TO this workout.
+   *
+   * The window used to run `currentDate - 14 days` to `currentDate + 14 days`,
+   * which was two separate problems (audit L12). It spanned 29 days rather than
+   * 28, and it averaged in sessions logged AFTER the workout being viewed — so
+   * the figure attached to a given day kept changing as the athlete trained on,
+   * and the same historical record showed a different number each time it was
+   * opened. A trailing window is fixed the moment the workout is logged.
+   *
+   * NOTE: nothing in the client currently renders this. `useWorkoutDetail`
+   * fetches `/history` and exposes it, but no component reads `blockAvgRpe`,
+   * `prSetCount` or `lastSameFocus`. Fixed anyway so a future consumer does not
+   * inherit a retroactive statistic.
+   */
   private async fetchBlockAvgRpe(currentDate: string, userId: string): Promise<number | null> {
     const [rpe] = await db
       .select({ avg: sql<number | null>`avg(${workoutLogs.rpe})` })
@@ -906,8 +933,8 @@ export class WorkoutStorage {
         and(
           eq(workoutLogs.userId, userId),
           isNotNull(workoutLogs.rpe),
-          sql`${workoutLogs.date} >= (${currentDate}::date - INTERVAL '14 days')`,
-          sql`${workoutLogs.date} <= (${currentDate}::date + INTERVAL '14 days')`,
+          sql`${workoutLogs.date} > (${currentDate}::date - INTERVAL '28 days')`,
+          sql`${workoutLogs.date} <= ${currentDate}`,
         ),
       );
     return rpe?.avg == null ? null : Math.round(Number(rpe.avg) * 10) / 10;

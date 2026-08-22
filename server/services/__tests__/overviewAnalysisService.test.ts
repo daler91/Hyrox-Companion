@@ -58,6 +58,9 @@ function weekly(overrides: Partial<WeeklySummary> = {}): WeeklySummary {
     totalDuration: 180,
     avgRpe: 7,
     categoryBreakdown: {},
+    // Denominators for the period-level pooled aggregates (audit H8, H9).
+    workoutsWithDuration: 3,
+    rpeCount: 3,
     ...overrides,
   };
 }

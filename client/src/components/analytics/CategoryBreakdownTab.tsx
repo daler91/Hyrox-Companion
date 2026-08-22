@@ -163,6 +163,7 @@ function MovementPatternCoverageCard({
           nextFocusTestId="movement-pattern-next-focus"
           testId="movement-pattern-analysis"
           totalSets={analysis.totalSets}
+          unitLabel={{ singular: "pattern assignment", plural: "pattern assignments" }}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3" data-testid="movement-pattern-coverage-grid">
           {patterns.map((pattern) => {

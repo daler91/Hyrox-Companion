@@ -31,6 +31,9 @@ vi.mock("../../storage", () => ({
       getExerciseSetsForPersonalRecords: vi.fn(),
       getWorkoutLogsByDateRange: vi.fn(),
       getPlanDaysByDateRange: vi.fn(),
+      // Denominator for "Avg Adherence" (audit H10). Defaults to 0 so the
+      // existing cases, which have no plan, keep exercising the no-plan path.
+      getDueSessionCount: vi.fn().mockResolvedValue(0),
     },
     users: {
       getUser: vi.fn(),

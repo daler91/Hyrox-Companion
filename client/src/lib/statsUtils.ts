@@ -1,3 +1,4 @@
+import { pooledPercentage, roundOrNull } from "@shared/ratio";
 import type { TimelineEntry } from "@shared/schema";
 
 import {
@@ -11,7 +12,12 @@ export interface TrainingStats {
   workoutsThisWeek: number;
   completedThisWeek: number;
   plannedUpcoming: number;
-  completionRate: number;
+  /**
+   * All-time completion rate over days that have finished, as a percentage.
+   * `null` when nothing has come due yet — a brand-new athlete has no rate,
+   * and rendering that as 0% reads as total failure rather than "no data".
+   */
+  completionRate: number | null;
 }
 
 export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
@@ -29,8 +35,8 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
   let completedThisWeek = 0;
   let totalThisWeek = 0;
   let plannedUpcoming = 0;
-  let totalPastAndToday = 0;
-  let completedPastAndTodayCount = 0;
+  let totalElapsed = 0;
+  let completedElapsedCount = 0;
 
   for (const entry of timeline) {
     // Check if in current week
@@ -46,11 +52,19 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
       plannedUpcoming++;
     }
 
-    // Past and today entries
-    if (entry.date <= todayStr) {
-      totalPastAndToday++;
+    // Days that have actually finished. Two exclusions, both of which used to
+    // count as failures (audit M5):
+    //
+    //   - TODAY. The window was `<= todayStr`, so a session the athlete still
+    //     has all evening to do was already scored against them. Opening the
+    //     app in the morning dropped their rate.
+    //   - Days inside a declared absence. `excused` is exactly the flag the
+    //     timeline uses to explain why a past date is not red; a week spent
+    //     injured is not a week of failures.
+    if (entry.date < todayStr && !entry.excused) {
+      totalElapsed++;
       if (entry.status === "completed") {
-        completedPastAndTodayCount++;
+        completedElapsedCount++;
       }
     }
   }
@@ -59,7 +73,7 @@ export function calculateStats(timeline: TimelineEntry[]): TrainingStats {
     workoutsThisWeek: totalThisWeek,
     completedThisWeek,
     plannedUpcoming,
-    completionRate: totalPastAndToday > 0 ? Math.round((completedPastAndTodayCount / totalPastAndToday) * 100) : 0,
+    completionRate: roundOrNull(pooledPercentage(completedElapsedCount, totalElapsed), 0),
   };
 }
 

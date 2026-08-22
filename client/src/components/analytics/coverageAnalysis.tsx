@@ -238,6 +238,7 @@ export function CoverageAnalysisPanel({
   nextFocusTestId,
   testId,
   totalSets,
+  unitLabel,
 }: Readonly<{
   balances: readonly BalanceAnalysis[];
   balanceGridClassName: string;
@@ -247,6 +248,15 @@ export function CoverageAnalysisPanel({
   nextFocusTestId: string;
   testId: string;
   totalSets: number;
+  /**
+   * What one unit of `totalSets` is. Both panels sum a PER-CATEGORY set count,
+   * and a single set maps to several patterns (and several muscles), so the sum
+   * counts that set once per category it trains. Calling the result "mapped
+   * sets" told an athlete who logged 120 sets that 312 were analysed (audit
+   * L11). The number is a real quantity — assignments, not sets — so it is
+   * labelled as one.
+   */
+  unitLabel: { singular: string; plural: string };
 }>) {
   return (
     <div className="space-y-3" data-testid={testId}>
@@ -261,7 +271,7 @@ export function CoverageAnalysisPanel({
         ))}
       </div>
       <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm" data-testid={nextFocusTestId}>
-        <span className="font-semibold">{formatCount(totalSets, "mapped set", "mapped sets")} analyzed. </span>
+        <span className="font-semibold">{formatCount(totalSets, unitLabel.singular, unitLabel.plural)} analyzed. </span>
         <span className="text-muted-foreground">{nextFocus}</span>
       </div>
     </div>

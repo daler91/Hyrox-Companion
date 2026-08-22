@@ -61,6 +61,27 @@ export function computePreviousWindow(from?: string, to?: string): { from: strin
   };
 }
 
+/**
+ * The window to count due plan sessions over. Uses the selected range when
+ * there is one; otherwise the span of the athlete's own logs, so "all time"
+ * still gets a real denominator instead of none.
+ */
+function resolveAdherenceWindow(
+  from: string | undefined,
+  to: string | undefined,
+  workoutLogs: readonly { date: string }[],
+): { from: string; to: string } | null {
+  if (from && to) return { from, to };
+  if (workoutLogs.length === 0) return null;
+  let earliest = workoutLogs[0].date;
+  let latest = workoutLogs[0].date;
+  for (const log of workoutLogs) {
+    if (log.date < earliest) earliest = log.date;
+    if (log.date > latest) latest = log.date;
+  }
+  return { from: from ?? earliest, to: to ?? latest };
+}
+
 type RangeFetcher<T> = (userId: string, from?: string, to?: string) => Promise<T>;
 
 /** Pluggable data sources so the route can inject its coalescing caches. */
@@ -109,7 +130,26 @@ export async function assembleTrainingOverview(
     fetchers.exerciseSets(userId, loadHistoryStart, loadCurrentDate),
   ]);
 
+  // "Avg Adherence" divides by the sessions the athlete was DUE, so the count
+  // has to come from plan_days rather than from the logs themselves (audit
+  // H10). With no selected window ("all time") the athlete's own logged span
+  // is used, mirroring how the weekly rollup zero-fills.
+  const adherenceWindow = resolveAdherenceWindow(from, to, workoutLogs);
+  const [dueSessionCount, previousDueSessionCount] = await Promise.all([
+    adherenceWindow
+      ? storage.analytics.getDueSessionCount(userId, adherenceWindow.from, adherenceWindow.to, loadCurrentDate)
+      : Promise.resolve(undefined),
+    previousWindow
+      ? storage.analytics.getDueSessionCount(userId, previousWindow.from, previousWindow.to, loadCurrentDate)
+      : Promise.resolve(undefined),
+  ]);
+
   return calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs, {
+    // Pass the selected window through so rest weeks at either end of it are
+    // counted rather than dropped (audit H7, M10).
+    period: { ...(from ? { from } : {}), ...(to ? { to } : {}) },
+    ...(dueSessionCount != null ? { dueSessionCount } : {}),
+    ...(previousDueSessionCount != null ? { previousDueSessionCount } : {}),
     weeklyGoal: user?.weeklyGoal ?? 5,
     loadTags,
     trainingLoadInput: {
