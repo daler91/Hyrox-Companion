@@ -249,7 +249,12 @@ describe("effectiveTargetWindowed (past + future training)", () => {
       { ...loadCfg, phaseAware: true },
     );
     expect(raceWeek.preloadDeltaG).toBe(50); // 0.25 × 200
-    expect(raceWeek.carbDeltaG).toBe(10); // −40 base + 50 race-week
+    // INVERTED 2026-08-22 (audit M17). This asserted 10 — "−40 base + 50
+    // race-week" — which is the defect written down as the expectation: a race
+    // week whose reduced volume eats four fifths of its own carb load. Training
+    // less during race week is the POINT and must not be charged against carbs.
+    expect(raceWeek.baseLoadDeltaG).toBe(0);
+    expect(raceWeek.carbDeltaG).toBe(50);
     expect(raceWeek.reasonCodes).toContain("race_week");
 
     const taper = effectiveTargetWindowed(
@@ -259,6 +264,53 @@ describe("effectiveTargetWindowed (past + future training)", () => {
     );
     expect(taper.baseLoadDeltaG).toBe(85); // (100−50)×2 = 100, damped ×0.85
     expect(taper.reasonCodes).toContain("taper");
+  });
+
+  it("never nets a race-week CUT for an athlete who correctly rested (audit M17)", () => {
+    // The sharpest case: rested all week, so no recovery credit to offset the
+    // base-load penalty. At a steeper carb-per-UTSS slope this delivered 287.5 g
+    // against a 350 g baseline the day before the race — an 18% cut, from the
+    // carb-loading feature.
+    const steep: PeriodizationConfig = {
+      ...loadCfg,
+      carbGramsPerUtss: 5,
+      phaseAware: true,
+      recoveryEnabled: true,
+    };
+    const r = effectiveTargetWindowed(
+      base,
+      { ...emptyWindow(0), recentLoads: [0, 0, 0, 0, 0, 0, 0], acuteEwma: 0, phase: "race_week" },
+      steep,
+    );
+
+    expect(r.baseLoadDeltaG).toBe(0);
+    expect(r.carbG).toBeGreaterThan(base.carbG);
+    expect(r.carbDeltaG).toBe(50); // the race-week load, intact
+  });
+
+  it("still lets a HARD race-week day add carbs on top of the load", () => {
+    // The floor only stops the drop from subtracting; a genuinely hard session
+    // during race week is still fuelled.
+    const r = effectiveTargetWindowed(
+      base,
+      { ...emptyWindow(100), phase: "race_week" },
+      { ...loadCfg, phaseAware: true },
+    );
+
+    expect(r.baseLoadDeltaG).toBe(100); // (100−50)×2, undamped
+    expect(r.carbDeltaG).toBe(150); // plus the 50 g race-week load
+  });
+
+  it("leaves the taper alone — its damp is documented as positive-only", () => {
+    // Recorded rather than changed: TAPER_LOAD_DAMP's own doc says it damps
+    // POSITIVE deltas, so a light taper day is scored exactly like a light build
+    // day. Whether a taper should also soften the reduction is a methodology
+    // call, not a bug (audit M17).
+    const light = { ...emptyWindow(30) };
+    const taper = effectiveTargetWindowed(base, { ...light, phase: "taper" }, { ...loadCfg, phaseAware: true });
+    const build = effectiveTargetWindowed(base, { ...light, phase: "build" }, { ...loadCfg, phaseAware: true });
+
+    expect(taper.carbG).toBe(build.carbG);
   });
 
   it("caps the combined carb delta and keeps components summing to the total", () => {
