@@ -558,6 +558,16 @@ async function generatePlanDays(
     // generation. The absolute kg say nothing about whether the PROMPT is asking
     // for jumps that are too big — the percentage is the whole signal. Bounded
     // to five so a long plan cannot emit a very large log line.
+    //
+    // What is left is two static strings, a plan length, a count, and up to five
+    // EXERCISE names with week numbers and a percentage. Bearer raises this rule
+    // on the shape rather than the content — it fires on a fixed enum in
+    // recomputeAnalyticsDispatch and on pure row counts in keyRotation — so it is
+    // suppressed here, the same way structuredExerciseHealth suppresses it on an
+    // identically shaped counter warning. Nothing may follow the rule id on the
+    // directive line: Bearer splits the rest of the line into the rule-id list,
+    // so a trailing justification silently no-ops the suppression.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn(
       {
         context: "plan-generation",
