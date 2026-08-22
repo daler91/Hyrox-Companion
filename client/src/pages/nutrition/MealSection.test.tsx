@@ -31,6 +31,8 @@ const ENTRY: FoodLogEntryWithNutrition = {
   quantityG: 118,
   mealType: "breakfast",
   entryMethod: "manual",
+  // Per-100g source for the entry, the raw input the server scales (audit M22).
+  per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
   nutrition: { calories: 105, protein: 1.3, carb: 27, fat: 0.4, fiber: 3.1 },
 };
 

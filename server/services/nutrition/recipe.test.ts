@@ -9,6 +9,7 @@ function food(over: Partial<RecipeIngredientWithFood["food"]> = {}) {
     carbPer100g: 20,
     fatPer100g: 5,
     fiberPer100g: 2,
+    micros: null,
     ...over,
   };
 }
@@ -33,10 +34,47 @@ describe("computeRecipeFood", () => {
     expect(r.caloriesPer100g).toBe(0);
   });
 
+  it("aggregates ingredient micronutrients instead of discarding them (audit M21)", () => {
+    // The backing food was written with no `micros` at all, so a recipe of
+    // USDA-enriched ingredients logged as containing zero micronutrients while
+    // the same ingredients logged individually carried theirs.
+    const r = computeRecipeFood(
+      [
+        { food: food({ micros: { sodium: 400, iron: 2 } }), quantityG: 100 },
+        { food: food({ micros: { sodium: 200, calcium: 50 } }), quantityG: 100 },
+      ],
+      2,
+    );
+
+    // 400 + 200 = 600 mg over 200 g -> 300 mg per 100 g.
+    expect(r.micros).toEqual({ sodium: 300, iron: 1, calcium: 25 });
+  });
+
+  it("scales micros by ingredient quantity, not by ingredient count", () => {
+    const r = computeRecipeFood(
+      [
+        { food: food({ micros: { sodium: 100 } }), quantityG: 300 },
+        { food: food({ micros: { sodium: 100 } }), quantityG: 100 },
+      ],
+      1,
+    );
+
+    expect(r.micros).toEqual({ sodium: 100 });
+  });
+
+  it("leaves micros null when no ingredient carries any", () => {
+    // null, not {} — an empty object would read as "measured and found to
+    // contain none", which is a different claim.
+    const r = computeRecipeFood([{ food: food(), quantityG: 100 }], 1);
+
+    expect(r.micros).toBeNull();
+  });
+
   it("guards against zero total grams", () => {
     const r = computeRecipeFood([], 2);
     expect(r.totalGrams).toBe(0);
     expect(r.caloriesPer100g).toBeNull();
+    expect(r.micros).toBeNull();
     expect(r.servingSizeG).toBeNull();
   });
 });

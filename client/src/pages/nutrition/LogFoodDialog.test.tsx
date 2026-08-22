@@ -248,6 +248,8 @@ describe("LogFoodDialog", () => {
       quantityG: 100,
       mealType: "breakfast",
       entryMethod: "manual",
+      // Per-100g source for the entry, the raw input the server scales (audit M22).
+      per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
       nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
     };
     const user = userEvent.setup();
@@ -295,6 +297,8 @@ describe("LogFoodDialog", () => {
         quantityG,
         mealType: "breakfast",
         entryMethod: "manual",
+        // Per-100g source for the entry, the raw input the server scales (audit M22).
+        per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
         nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
       };
     }

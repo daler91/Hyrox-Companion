@@ -31,6 +31,8 @@ function makeEntry(id: string): FoodLogEntryWithNutrition {
     quantityG: 100,
     mealType: "pre_workout",
     entryMethod: "manual",
+    // Per-100g source for the entry, the raw input the server scales (audit M22).
+    per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
     nutrition: { calories: 100, protein: 10, carb: 20, fat: 5, fiber: 2 },
   };
 }

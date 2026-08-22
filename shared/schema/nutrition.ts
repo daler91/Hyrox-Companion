@@ -1,5 +1,6 @@
 import type { EnergyBalanceSummary } from "../energyBalance";
 import type { MealFuelTargets } from "../mealFuelling";
+import type { Per100gMacros } from "../nutritionScaling";
 import type { SessionFuellingTarget } from "../sessionFuellingTargets";
 import type { MicroUnit } from "./micros";
 import { type Food, FOOD_ENTRY_METHODS, type FoodServing, MEAL_TYPES, type MealType, type NutritionTarget } from "./tables";
@@ -199,6 +200,16 @@ export interface FoodLogEntryWithNutrition {
   mealType: MealType;
   entryMethod: string;
   nutrition: NutritionMacroTotals;
+  /**
+   * The backing food's per-100g values — the same raw input the server scaled to
+   * produce `nutrition`.
+   *
+   * Carried so the client can re-derive totals with the identical function
+   * instead of re-scaling `nutrition`, which is already rounded. Doing the latter
+   * made the edit preview disagree with what was stored, and made meal cards fail
+   * to add up to the day header (audit M22).
+   */
+  per100g: Per100gMacros;
 }
 
 /** The target in force for a given day, after any training-load periodisation. */
