@@ -253,6 +253,29 @@ and server apply the identical function to the identical inputs, so they agree b
 than by two implementations staying in step. `rollup` re-exports it, so every server call site is
 unchanged.
 
+### M14 and M15 — landed 2026-08-22
+
+| #   | Before → after                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M14 | `testCount` counted the FETCHED array, and both callers took the hidden `limit = 20` default — so an athlete with 63 logged MAF tests was told they had 20. Counted in SQL now, with the fetch limits made explicit and raised to 200. |
+| M14 | The compliance trend compared the newest analysis against `scored[0]` — the oldest row *in that 20-row page*. The baseline therefore slid forward with every new test: an athlete who improved sharply and then held steady watched "improving" decay to "flat" with no change in their training. Anchored to a trailing 180-day window instead. |
+| M15 | The duration estimate returned block timing alone the moment ANY block carried it, discarding every per-set estimate — so a session with a timed 10-minute warm-up and twenty untimed working sets was estimated at **10 minutes**. Block minutes and unattached-set minutes are now added. |
+| M15 | Both duration bounds were applied silently, so a four-hour session and a three-hour one both read "180" with nothing to tell them apart. The estimate now carries `clamped`. |
+
+**Why 180 days for the M14 baseline.** MAF tests are typically repeated every four to six weeks, so a
+90-day window yields two or three points to trend across — thin for a comparison that already needs
+5 percentage points of movement before it calls a direction. Half a year gives four to six and is
+still recognisably "recent". Comparing against the athlete's all-time first test would be equally
+stable but would keep crediting a beginner's first month years later. The window length is a policy
+choice; the *defect* was that the baseline moved with logging volume rather than with time.
+
+**The M15 fix is deliberately conservative.** Sets carrying a `blockId` are inside a timed block's
+minutes already, so only unattached sets add time. But a session whose sets carry NO `blockId` at all
+cannot be told apart from one whose sets *are* the block's content — so where there is no linkage
+anywhere, blocks keep winning exactly as before rather than risk double-counting. An existing test
+(`"lets structure-block timing win over a distance set"`) covers precisely that shape and still
+passes; it was not inverted, because it is not certifying a bug.
+
 ### M11 — verified, NOT fixed: needs an architecture decision
 
 Logged nutrition is derived by joining `food_log_entries` (which stores only `food_id` and

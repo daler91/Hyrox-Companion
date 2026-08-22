@@ -84,6 +84,52 @@ describe("summarizeMafTrend", () => {
     expect(result.complianceTrend).toBe("flat");
   });
 
+  it("keeps the same baseline as more tests are logged (audit M14)", () => {
+    // The baseline used to be the oldest row in a 20-row fetch, so it slid
+    // forward with every new test: an athlete who improved sharply and then held
+    // steady watched "improving" decay to "flat" with no change in training.
+    const early = analysis("2026-02-01T00:00:00Z", 60, "over_ceiling");
+    const later = analysis("2026-05-01T00:00:00Z", 90, "compliant");
+
+    const withTwo = summarizeMafTrend([], [early, later], NOW);
+    // Twenty more recent, steady analyses — enough to have pushed `early` out of
+    // any row-capped window.
+    const filler = Array.from({ length: 20 }, (_, i) =>
+      analysis(`2026-05-${String(2 + i).padStart(2, "0")}T00:00:00Z`, 90, "compliant"),
+    );
+    const withMany = summarizeMafTrend([], [early, later, ...filler], NOW);
+
+    expect(withTwo.complianceTrend).toBe("improving");
+    expect(withMany.complianceTrend).toBe("improving");
+  });
+
+  it("drops a baseline that has aged out of the window", () => {
+    // Anchored to time: a reading from before the window is not the baseline,
+    // however few rows there are.
+    const result = summarizeMafTrend(
+      [],
+      [
+        analysis("2025-06-01T00:00:00Z", 40, "over_ceiling"), // ~1 year before NOW
+        analysis("2026-05-01T00:00:00Z", 90, "compliant"),
+      ],
+      NOW,
+    );
+
+    expect(result.complianceTrend).toBe("insufficient_data");
+    expect(result.latestCompliancePct).toBe(90);
+  });
+
+  it("reports the athlete's real test count, not the fetched page size", () => {
+    // `tests` is a bounded fetch, so counting it told anyone with more than
+    // twenty logged tests that they had exactly twenty.
+    const page = Array.from({ length: 20 }, (_, i) =>
+      test(`2026-05-${String(1 + i).padStart(2, "0")}T00:00:00Z`),
+    );
+
+    expect(summarizeMafTrend(page, [], NOW).testCount).toBe(20);
+    expect(summarizeMafTrend(page, [], NOW, { totalTestCount: 63 }).testCount).toBe(63);
+  });
+
   it("orders by createdAt regardless of input order and ignores unscored analyses", () => {
     const result = summarizeMafTrend(
       [],

@@ -346,7 +346,7 @@ export interface PlannedSessionEstimateResponse {
   /** Short human rationale when AI refined the estimate, else null. */
   rationale: string | null;
   /** Where the duration came from, for UI transparency. */
-  source: "structure" | "sets" | "none";
+  source: "structure" | "sets" | "structure_and_sets" | "none";
   /** true when AI adjusted the deterministic+personalized value (vs pure heuristic). */
   refined: boolean;
 }

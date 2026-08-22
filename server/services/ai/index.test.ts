@@ -59,7 +59,7 @@ vi.mock("../../storage", () => ({
       getAllExerciseSetsWithDates: vi.fn(),
       getExerciseLoadTags: vi.fn(),
     },
-    mafTests: { listTestResults: vi.fn(), listWorkoutAnalysis: vi.fn() },
+    mafTests: { listTestResults: vi.fn(), listWorkoutAnalysis: vi.fn(), countTestResults: vi.fn() },
     timelineAnnotations: { list: vi.fn() },
   },
 }));
@@ -157,6 +157,7 @@ beforeEach(() => {
   vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
   vi.mocked(storage.mafTests.listTestResults).mockResolvedValue([]);
   vi.mocked(storage.mafTests.listWorkoutAnalysis).mockResolvedValue([]);
+  vi.mocked(storage.mafTests.countTestResults).mockResolvedValue(0);
   vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([]);
 });
 
@@ -326,7 +327,11 @@ describe("buildTrainingContext", () => {
 
     const ctx = await buildTrainingContext(USER_ID);
 
-    expect(storage.mafTests.listTestResults).toHaveBeenCalledWith(USER_ID);
+    // Asserts the LIMIT, not just the user: the default was a silent 20, which
+    // truncated both the count and the trend's history (audit M14).
+    expect(storage.mafTests.listTestResults).toHaveBeenCalledWith(USER_ID, 200);
+    expect(storage.mafTests.listWorkoutAnalysis).toHaveBeenCalledWith(USER_ID, 200);
+    expect(storage.mafTests.countTestResults).toHaveBeenCalledWith(USER_ID);
     expect(summarizeMafTrend).toHaveBeenCalled();
     expect(ctx.mafTrend).toEqual({ testCount: 2 });
   });

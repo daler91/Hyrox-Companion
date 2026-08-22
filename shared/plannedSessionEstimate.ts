@@ -46,6 +46,15 @@ export interface PlannedSessionSet {
   distance?: number | null;
   /** Canonical exercise key (e.g. "recovery_run") or human label; normalized internally. */
   exerciseName?: string | null;
+  /**
+   * The structure block this set belongs to, when it belongs to one.
+   *
+   * Load-bearing for the duration estimate: a set inside a timed block is already
+   * counted by that block's minutes, so only UNATTACHED sets add time on top.
+   * Without it the estimator could not tell the two apart and simply threw every
+   * set away as soon as one block carried timing (audit M15).
+   */
+  blockId?: string | null;
 }
 
 export interface PlannedSessionEstimateInput {
@@ -67,7 +76,13 @@ export interface PlannedSessionEstimate {
   /** Estimated intensity (RPE 1–10) inferred from block formats or set exercises, or null. */
   rpe: number | null;
   /** Where the duration estimate came from, for UI transparency. */
-  source: "structure" | "sets" | "none";
+  source: "structure" | "sets" | "structure_and_sets" | "none";
+  /**
+   * True when the estimate hit MIN_DURATION_MIN or MAX_DURATION_MIN, so the
+   * number shown is a bound rather than a measurement. It used to clamp
+   * silently, and a four-hour session and a three-hour one both read "180".
+   */
+  clamped: boolean;
 }
 
 const MIN_DURATION_MIN = 10;
@@ -310,31 +325,46 @@ function setsRpe(sets: readonly PlannedSessionSet[]): number | null {
   return max;
 }
 
-/** Estimated duration (min) + its source: structured block timing when present, else
- *  summed per-set estimates, else none. Clamped to the sane range. */
+/**
+ * Estimated duration (min), its source, and whether a bound was hit.
+ *
+ * Block timing and per-set estimates are ADDED, not chosen between. The old code
+ * returned block timing alone the moment any block carried it, so a session with
+ * a timed 10-minute warm-up and twenty untimed strength sets was estimated at ten
+ * minutes (audit M15).
+ *
+ * Sets carrying a `blockId` are skipped when blocks contributed, because a set
+ * inside a timed block is already inside that block's minutes — adding it again
+ * would double-count. Sets with no block are the ones nothing else accounts for.
+ */
 function estimateDuration(
   blocks: readonly PlannedSessionBlock[],
   sets: readonly PlannedSessionSet[],
   distanceUnit: string | null | undefined,
   runPaceRatio: number,
-): { durationMin: number | null; source: PlannedSessionEstimate["source"] } {
+): { durationMin: number | null; source: PlannedSessionEstimate["source"]; clamped: boolean } {
   let blockTotal = 0;
   for (const b of blocks) blockTotal += blockMinutes(b);
-  if (blockTotal > 0) {
-    return {
-      durationMin: clamp(Math.round(blockTotal), MIN_DURATION_MIN, MAX_DURATION_MIN),
-      source: "structure",
-    };
-  }
-  if (sets.length > 0) {
-    let setTimeMin = 0;
-    for (const s of sets) setTimeMin += setMinutes(s, distanceUnit, runPaceRatio);
-    return {
-      durationMin: clamp(Math.round(setTimeMin), MIN_DURATION_MIN, MAX_DURATION_MIN),
-      source: "sets",
-    };
-  }
-  return { durationMin: null, source: "none" };
+
+  // Only trust "no blockId means unattached" when the data demonstrably USES block
+  // linkage. A session whose sets carry no blockId at all may simply predate it,
+  // or be an AI structure whose sets ARE the block's content — there adding the
+  // sets on top would double-count, so blocks keep winning exactly as before.
+  const setsAreLinked = sets.some((s) => s.blockId != null);
+  const countable = blockTotal > 0 && setsAreLinked ? sets.filter((s) => s.blockId == null) : [];
+  const contributing = blockTotal > 0 ? countable : sets;
+  let setTotal = 0;
+  for (const s of contributing) setTotal += setMinutes(s, distanceUnit, runPaceRatio);
+
+  const total = blockTotal + setTotal;
+  if (total <= 0) return { durationMin: null, source: "none", clamped: false };
+
+  const rounded = Math.round(total);
+  const durationMin = clamp(rounded, MIN_DURATION_MIN, MAX_DURATION_MIN);
+  let source: PlannedSessionEstimate["source"] = "sets";
+  if (blockTotal > 0) source = setTotal > 0 ? "structure_and_sets" : "structure";
+
+  return { durationMin, source, clamped: durationMin !== rounded };
 }
 
 /** Block-derived session RPE: the hardest "main" block format, else the hardest of
@@ -358,12 +388,12 @@ export function estimatePlannedSession(input: PlannedSessionEstimateInput): Plan
   const runPaceRatio = normalizeRunPaceRatio(input.runPaceRatio);
 
   // Duration: prefer structured block timing, else estimate from sets.
-  const { durationMin, source } = estimateDuration(blocks, sets, distanceUnit, runPaceRatio);
+  const { durationMin, source, clamped } = estimateDuration(blocks, sets, distanceUnit, runPaceRatio);
 
   // Intensity: hardest "main" block format, else hardest of any block, else from sets.
   const rpe = blocksRpe(blocks) ?? setsRpe(sets);
 
-  return { durationMin, rpe, source };
+  return { durationMin, rpe, source, clamped };
 }
 
 /** Assumed session RPE when a planned day carries no usable intensity signal. */

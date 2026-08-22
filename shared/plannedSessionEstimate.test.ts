@@ -4,7 +4,7 @@ import { estimatePlannedDayUtss, estimatePlannedSession } from "./plannedSession
 
 describe("estimatePlannedSession", () => {
   it("returns nulls when there are no blocks or sets", () => {
-    expect(estimatePlannedSession({})).toEqual({ durationMin: null, rpe: null, source: "none" });
+    expect(estimatePlannedSession({})).toEqual({ durationMin: null, rpe: null, source: "none", clamped: false });
   });
 
   it("sums explicit block durations and infers RPE from the hardest main block", () => {
@@ -200,6 +200,66 @@ describe("estimatePlannedSession", () => {
     expect(e.source).toBe("structure");
     expect(e.durationMin).toBe(20);
     expect(e.rpe).toBe(5); // block format wins over the set RPE
+  });
+
+  it("adds sets that belong to no block instead of throwing them away (audit M15)", () => {
+    // A timed 10-minute warm-up block plus strength sets nothing else accounts
+    // for. The estimate used to return the warm-up's length and call it the
+    // session: ten minutes for a session with twenty working sets in it.
+    const e = estimatePlannedSession({
+      structureBlocks: [{ sectionType: "warmup", formatType: "steady", durationMinutes: 10 }],
+      exerciseSets: [
+        { exerciseName: "back_squat", blockId: null, plannedReps: 5 },
+        { exerciseName: "back_squat", blockId: null, plannedReps: 5 },
+        { exerciseName: "bench_press", blockId: "b1", plannedReps: 5 },
+      ],
+    });
+
+    expect(e.source).toBe("structure_and_sets");
+    // 10 (block) + 2 unattached sets x 3 min; the b1 set is inside the block.
+    expect(e.durationMin).toBe(16);
+  });
+
+  it("does not double-count sets that live inside a timed block", () => {
+    const e = estimatePlannedSession({
+      structureBlocks: [{ sectionType: "main", formatType: "steady", durationMinutes: 30 }],
+      exerciseSets: [
+        { exerciseName: "back_squat", blockId: "b1", plannedReps: 5 },
+        { exerciseName: "back_squat", blockId: "b1", plannedReps: 5 },
+      ],
+    });
+
+    expect(e.source).toBe("structure");
+    expect(e.durationMin).toBe(30);
+  });
+
+  it("keeps blocks winning when no set carries block linkage at all", () => {
+    // Legacy or AI structures may have no blockId anywhere. There "unattached"
+    // cannot be distinguished from "the block's own content", so adding the sets
+    // would double-count and the old behaviour is the safe one.
+    const e = estimatePlannedSession({
+      structureBlocks: [{ sectionType: "main", formatType: "steady", timeCapMinutes: 20 }],
+      exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+    });
+
+    expect(e.source).toBe("structure");
+    expect(e.durationMin).toBe(20);
+  });
+
+  it("says when the estimate is a clamp rather than a measurement", () => {
+    // Both bounds used to be applied silently, so a four-hour session and a
+    // three-hour one both read "180" with nothing to distinguish them.
+    const long = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "long_run", plannedDistance: 60000 }],
+    });
+    const normal = estimatePlannedSession({
+      structureBlocks: [{ sectionType: "main", formatType: "steady", durationMinutes: 45 }],
+    });
+
+    expect(long.durationMin).toBe(180);
+    expect(long.clamped).toBe(true);
+    expect(normal.durationMin).toBe(45);
+    expect(normal.clamped).toBe(false);
   });
 
   it("clamps a very long distance run to the max", () => {
