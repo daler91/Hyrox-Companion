@@ -64,6 +64,12 @@ export function OnboardingWizardFrame({
           className="sr-only"
           aria-label={`Step ${idx + 1} of ${total}`}
         />
+        {/* Live region announces step transitions to screen readers.
+            Initial content is not read (aria-live only fires on changes),
+            so this complements — not duplicates — the sr-only title text. */}
+        <span role="status" aria-live="polite" className="sr-only">
+          Step {idx + 1} of {total}: {title}
+        </span>
         <div className="flex gap-1 mb-2" aria-hidden="true">
           {Array.from({ length: total }).map((_, i) => (
             <div
