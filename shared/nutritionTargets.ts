@@ -330,6 +330,16 @@ function computeBaseLoad(
   reference: number,
 ): { raw: number; reason: string | null } {
   let raw = (window.dayUtss - reference) * slope;
+  // Race week: training volume is DOWN by design, and that drop must not be
+  // charged against the athlete's carbs — arriving glycogen-loaded is the entire
+  // point of the week. Unfloored, this penalty could cancel the race-week load
+  // outright: an athlete who had correctly rested all week (so no recovery
+  // credit either) came out at 347.5 g against a 350 g baseline the day before
+  // their race, and at a steeper carb-per-UTSS slope, 287.5 g — an 18% CUT
+  // delivered by the carb-loading feature (audit M17).
+  if (config.phaseAware && window.phase === "race_week" && raw < 0) {
+    return { raw: 0, reason: null };
+  }
   if (config.phaseAware && window.phase === "taper" && raw > 0) {
     raw *= TAPER_LOAD_DAMP;
     return { raw, reason: "taper" };

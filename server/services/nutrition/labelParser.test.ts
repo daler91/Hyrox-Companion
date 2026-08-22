@@ -103,6 +103,43 @@ describe("parseNutritionLabel", () => {
     expect(result.warnings).toContain("Energy was printed in kJ and converted to kcal.");
   });
 
+  it("reads a lowercase 'kj' as kilojoules instead of silently calling it kcal", async () => {
+    // z.enum is case-sensitive and the .catch behind it folded every near-miss to
+    // "kcal", so a label the model transcribed as "kj" was stored 4.184x too high.
+    // 601 kcal/100g of real energy is not caught by the 1000 kcal/100g clamp
+    // either — only the most extreme cases trip that (audit M18).
+    aiJson({
+      ...PER_100G_LABEL,
+      energyUnit: "kj",
+      per100g: { ...PER_100G_LABEL.per100g, calories: 2514 },
+    });
+
+    const result = await parseNutritionLabel("ZmFrZQ==", "image/jpeg", "u1");
+    expect(result.suggestion?.caloriesPer100g).toBeCloseTo(600.9, 1);
+    expect(result.warnings).toContain("Energy was printed in kJ and converted to kcal.");
+  });
+
+  it("accepts the other spellings a label panel actually uses", async () => {
+    // A US panel's capital-C "Calorie" is a kilocalorie. The kcal spellings blow
+    // past the 1000 kcal/100g clamp and are blanked, which is the clamp doing its
+    // job — what matters is that they were NOT divided by 4.184.
+    const cases = [
+      { unit: "KJ", isKilojoules: true },
+      { unit: "kilojoules", isKilojoules: true },
+      { unit: "Cal", isKilojoules: false },
+      { unit: "KCAL", isKilojoules: false },
+    ] as const;
+
+    for (const { unit, isKilojoules } of cases) {
+      aiJson({ ...PER_100G_LABEL, energyUnit: unit, per100g: { ...PER_100G_LABEL.per100g, calories: 2514 } });
+      const result = await parseNutritionLabel("ZmFrZQ==", "image/jpeg", "u1");
+      const calories = result.suggestion?.caloriesPer100g;
+
+      if (isKilojoules) expect(calories, unit).toBeCloseTo(600.9, 1);
+      else expect(calories, unit).toBeNull();
+    }
+  });
+
   it("derives per-100g from a per-serving-only label when the serving weight is printed", async () => {
     aiJson({
       ...PER_100G_LABEL,

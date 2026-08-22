@@ -11,7 +11,12 @@ import { typedRequest } from "./client";
 
 /** A logged set plus its parent workout's date — what the history endpoint has
  *  always returned, though the declared type here used to say otherwise. */
-export type ExerciseSetWithDate = ExerciseSet & { date: string };
+export type ExerciseSetWithDate = ExerciseSet & {
+  date: string;
+  /** Minutes from local midnight of the parent log — separates two sessions
+   *  logged on the same day (audit M13). Null when the log captured no time. */
+  timeOfDayMin?: number | null;
+};
 
 export interface ParseFromImagePayload {
   readonly imageBase64: string;

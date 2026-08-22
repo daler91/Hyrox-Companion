@@ -23,20 +23,50 @@ export function pickLastSession(
   history: readonly ExerciseSetWithDate[],
   excludeWorkoutLogId?: string | null,
 ): LastSession | null {
+  const candidates = history.filter(
+    (set) => !(excludeWorkoutLogId && set.workoutLogId === excludeWorkoutLogId),
+  );
+
   let latest: string | null = null;
-  for (const set of history) {
-    if (excludeWorkoutLogId && set.workoutLogId === excludeWorkoutLogId) continue;
+  for (const set of candidates) {
     if (!latest || set.date > latest) latest = set.date;
   }
-  if (!latest) return null;
+  if (latest == null) return null;
 
-  const sets = history.filter(
-    (set) =>
-      set.date === latest && !(excludeWorkoutLogId && set.workoutLogId === excludeWorkoutLogId),
-  );
+  // One WORKOUT LOG, not one date. Selecting on the date alone merged every
+  // session logged that day, so an athlete who trained twice saw both sessions'
+  // sets as a single "Last time" — doubling the volume shown, and doubling what
+  // "Next" then progressed from (audit M13).
+  const onLatestDate = candidates.filter((set) => set.date === latest);
+  const lastLogId = latestWorkoutLogId(onLatestDate);
+  const sets = onLatestDate.filter((set) => set.workoutLogId === lastLogId);
   if (sets.length === 0) return null;
 
   return { date: latest, sets: [...sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)) };
+}
+
+/**
+ * Which of the day's logs is the later session.
+ *
+ * `timeOfDayMin` is the only thing separating two same-day logs; a log that
+ * never captured a time sorts before one that did, and when neither has a time
+ * the last log encountered wins. That last case is a genuine coin-toss — the
+ * payload carries nothing else to order them by — but picking ONE session is
+ * right regardless of which, because merging two never was.
+ */
+function latestWorkoutLogId(setsOnOneDate: readonly ExerciseSetWithDate[]): string | null {
+  let bestId: string | null = null;
+  let bestTime = -1;
+  let seen = false;
+  for (const set of setsOnOneDate) {
+    const time = set.timeOfDayMin ?? -1;
+    if (!seen || time >= bestTime) {
+      bestId = set.workoutLogId ?? null;
+      bestTime = time;
+      seen = true;
+    }
+  }
+  return bestId;
 }
 
 /**

@@ -42,7 +42,7 @@ const CHART_TITLES: Record<OverviewChartKey, string> = {
 
 // Fixed system instruction. Teaches the model what each metric means so the
 // per-chart readings are correct, and pins the strict-JSON output contract.
-const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
+export const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
   "You are a HYROX performance coach. The athlete is looking at charts on their training Overview dashboard and wants to understand, in plain language, what each chart is telling THEM specifically.",
   "",
   "You will receive a JSON object describing the charts that are currently on screen and the athlete's actual numbers for each. For every chart key present in the input, write a short reading (2-3 sentences) that:",
@@ -57,7 +57,8 @@ const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
   "- Monotony (Foster): >2.0 flags overtraining/illness risk from too-samey training; variety lowers it.",
   "- Strain (Foster) = weekly load × monotony; high strain with high monotony is the risky combination.",
   "- Fitness (chronic EWMA) vs Fatigue (acute EWMA): fitness above fatigue and rising is a good base; fatigue spiking above fitness means a hard block.",
-  "- hrTSS / Power TSS are objective load (from HR / power); UTSS is subjective (from RPE). They should broadly agree.",
+  "- UTSS is this app's own training-load unit. It prefers heart rate, then power, then the athlete's RPE — so it is NOT a purely subjective measure, and a session with HR data barely uses RPE at all.",
+  "- hrTSS / Power TSS are separate objective loads shown for reference only; they never feed UTSS and sit on a different scale, so do not tell the athlete they should agree or read a gap between them as an inconsistency.",
   "- Weekly Workouts vs the weekly goal shows consistency against target; RPE/Duration trends show how hard and how long sessions are trending; the consistency heatmap + streak show training regularity.",
   "",
   'Respond with STRICT JSON only, shaped exactly as: {"sections": {"<chartKey>": "<reading>"}}. Use ONLY the chart keys present in the input. Do not add commentary outside the JSON.',

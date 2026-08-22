@@ -6,7 +6,7 @@ import type {
 } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { buildOverviewChartFacts } from "../overviewAnalysisService";
+import { buildOverviewChartFacts, OVERVIEW_ANALYSIS_SYSTEM_PROMPT } from "../overviewAnalysisService";
 
 function trendPoint(overrides: Partial<TrainingLoadTrendPoint> = {}): TrainingLoadTrendPoint {
   return {
@@ -137,5 +137,24 @@ describe("buildOverviewChartFacts", () => {
     expect(facts.trainingLoad).toBeUndefined();
     expect(facts.weeklyWorkouts).toBeDefined();
     expect(facts.consistency).toBeDefined();
+  });
+});
+
+describe("the metric reference the model is given (audit M27)", () => {
+  it("does not tell the model UTSS is subjective", () => {
+    // calculateCardioStressScore tries heart rate FIRST, then power, and only
+    // then RPE — so a session with HR data barely uses RPE at all. The prompt
+    // called UTSS "subjective (from RPE)", and the model repeated that to the
+    // athlete as fact.
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).not.toMatch(/UTSS is subjective/i);
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/heart rate, then power, then/i);
+  });
+
+  it("does not tell the model hrTSS and UTSS should agree", () => {
+    // They are on different scales and hrTSS never feeds UTSS — the load service
+    // says so in its own comment. Inviting the model to reconcile them produced
+    // readings about an "inconsistency" that is by design.
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).not.toMatch(/should broadly agree/i);
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/never feed UTSS/i);
   });
 });

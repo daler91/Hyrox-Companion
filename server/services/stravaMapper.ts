@@ -50,12 +50,39 @@ function formatDuration(seconds: number): string {
   return `${minutes}m`;
 }
 
+/** Thermodynamic conversion. Correct for FOOD energy, which is already metabolic. */
+const KCAL_PER_KJ = 0.239;
+
+/**
+ * Gross mechanical efficiency of cycling — the share of metabolic energy that
+ * leaves the body as work at the pedals. Trained cyclists sit around 20-25%.
+ */
+const CYCLING_GROSS_EFFICIENCY = 0.24;
+
+/**
+ * Kilocalories burned per kilojoule of WORK RECORDED BY A POWER METER.
+ *
+ * Strava's `kilojoules` is mechanical work (rides only), not energy expenditure.
+ * Converting it with the thermodynamic factor alone gives that work restated in
+ * kcal and ignores how inefficiently the body produced it, which understated a
+ * ride's expenditure by about 4x (audit M16). Dividing by efficiency first is
+ * what makes it an expenditure:
+ *
+ *   1 kJ of work / 0.24 = 4.17 kJ metabolic -> 4.17 x 0.239 = 0.996 kcal
+ *
+ * The two factors very nearly cancel, which is why "1 kJ of work is about
+ * 1 kcal burned" is the standard cycling convention. Derived here rather than
+ * written as 1 so the near-cancellation reads as arithmetic and not as a claim
+ * that kJ and kcal are the same unit.
+ */
+const KCAL_PER_KJ_OF_WORK = KCAL_PER_KJ / CYCLING_GROSS_EFFICIENCY;
+
 function getCalories(activity: StravaActivity): number | null {
   if (activity.calories) {
     return Math.round(activity.calories);
   }
   if (activity.kilojoules) {
-    return Math.round(activity.kilojoules * 0.239);
+    return Math.round(activity.kilojoules * KCAL_PER_KJ_OF_WORK);
   }
   return null;
 }

@@ -728,8 +728,18 @@ export function monotonyZone(monotony: number | null): TrainingMonotonyZone {
 const MONOTONY_CEILING = 10;
 
 // Foster monotony (mean ÷ population SD of the trailing 7 days of UTSS) and
-// strain (weekly UTSS × monotony). Population SD (÷n over the fixed 7-day
-// window) keeps a single hard day in an otherwise-easy week finite.
+// strain (weekly UTSS × monotony).
+//
+// UNRESOLVED (audit M26): this uses POPULATION SD (÷n). The stated reason used to
+// be that it "keeps a single hard day in an otherwise-easy week finite", and that
+// reason is simply wrong — both conventions are finite for any week that is not
+// perfectly flat, and the SD = 0 case below is what actually handles flatness.
+// The real consequence is that ÷n instead of ÷(n−1) makes SD smaller and so
+// monotony uniformly larger, by sqrt(7/6) = 8.0%, measured against a 2.0
+// threshold taken from Foster's literature. Whether that threshold assumes the
+// sample SD could not be established from primary sources here, and switching
+// would move every athlete's monotony zone, so it is left as-is and flagged
+// rather than changed on a guess.
 //
 // SD = 0 arises from two situations that mean OPPOSITE things, and conflating
 // them is what made this metric silent for the athletes it exists to protect:

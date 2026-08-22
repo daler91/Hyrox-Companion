@@ -59,6 +59,15 @@ export function prescribedSetToLogRow(
 export type LoggedExerciseSetWithDate = Omit<ExerciseSet, "workoutLogId"> & {
   workoutLogId: string;
   date: string;
+  /**
+   * Minutes from local midnight of the parent log, when recorded.
+   *
+   * Carried alongside the date because `date` alone cannot separate two sessions
+   * logged on the SAME day, and consumers wanting "the last session" were
+   * merging them (audit M13). Optional: null on logs that never captured a time,
+   * and absent on rows built before this was selected.
+   */
+  timeOfDayMin?: number | null;
 };
 
 // Upper bound on the number of workoutLogs rows a single analytics query
@@ -87,7 +96,7 @@ export async function queryExerciseSetsWithDates(
 
   const logs = await db.query.workoutLogs.findMany({
     where: and(...conditions),
-    columns: { id: true, date: true },
+    columns: { id: true, date: true, timeOfDayMin: true },
     with: {
       exerciseSets: filters?.exerciseName
         ? { where: (es, { eq: innerEq }) => innerEq(es.exerciseName, filters.exerciseName!) }
@@ -107,7 +116,7 @@ export async function queryExerciseSetsWithDates(
   const result: LoggedExerciseSetWithDate[] = [];
   for (const log of logs) {
     for (const set of log.exerciseSets) {
-      result.push({ ...set, workoutLogId: log.id, date: log.date });
+      result.push({ ...set, workoutLogId: log.id, date: log.date, timeOfDayMin: log.timeOfDayMin });
     }
   }
   return result;

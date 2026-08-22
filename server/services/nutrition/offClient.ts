@@ -19,11 +19,11 @@ import { num } from "./utils";
 const OFF_PRODUCT_URL = "https://world.openfoodfacts.org/api/v2/product";
 const OFF_SEARCH_URL = "https://world.openfoodfacts.org/cgi/search.pl";
 const OFF_FIELDS =
-  "code,product_name,brands,nutriments,serving_quantity,serving_size,completeness,status,status_verbose";
+  "code,product_name,brands,nutriments,serving_quantity,serving_quantity_unit,serving_size,completeness,status,status_verbose";
 // Search returns the same product shape, keyed by `code` (the barcode) which
 // becomes the cached food's sourceId; status fields are product-lookup only.
 const OFF_SEARCH_FIELDS =
-  "code,product_name,brands,nutriments,serving_quantity,serving_size,completeness";
+  "code,product_name,brands,nutriments,serving_quantity,serving_quantity_unit,serving_size,completeness";
 // OFF's text-search endpoint is rate-limited far more tightly than product
 // lookups (~10 req/min/IP), so keep the page small and cache every hit.
 const OFF_SEARCH_PAGE_SIZE = 20;
@@ -32,11 +32,18 @@ const OFF_TIMEOUT_MS = 8_000;
 // energy value, a product is too sparse to trust (see isAcceptableOffProduct).
 const OFF_MIN_COMPLETENESS = 0.5;
 
+/** Food energy in kJ is already metabolisable, so kJ -> kcal is a pure conversion. */
+const KCAL_PER_KJ = 0.239;
+
 // First custom User-Agent in the codebase (OFF policy: AppName/Version (contact)).
 const OFF_USER_AGENT = `HyroxCompanion/1.0 (${env.APP_URL ?? "https://fitai.coach"})`;
 
 interface OffNutriments {
   "energy-kcal_100g"?: number;
+  // OFF publishes energy in kJ too, and for a great many EU products that is the
+  // ONLY energy field present (audit M19).
+  "energy-kj_100g"?: number;
+  energy_100g?: number;
   proteins_100g?: number;
   carbohydrates_100g?: number;
   fat_100g?: number;
@@ -48,6 +55,8 @@ interface OffProduct {
   product_name?: string;
   brands?: string;
   serving_quantity?: number | string;
+  /** Unit of `serving_quantity` — "g", "ml", … Absent on older entries. */
+  serving_quantity_unit?: string;
   serving_size?: string;
   // OFF data-quality score in [0,1]; gates the lowest-quality entries.
   completeness?: number | string;
@@ -59,16 +68,51 @@ interface OffResponse {
   product?: OffProduct;
 }
 
-/** Grams from `serving_quantity` (number) or the leading number of a "30 g" `serving_size`. */
+/**
+ * Grams from `serving_quantity` (number) or the leading number of a "30 g"
+ * `serving_size`.
+ *
+ * `serving_quantity` was read as grams whatever its unit, so a 250 ml drink was
+ * stored as a 250 g serving (audit M20). It is only grams when
+ * `serving_quantity_unit` says so — a millilitre needs a density this client
+ * does not have, so those fall through to the `serving_size` text, which the
+ * regex already restricts to an explicit "g", and then to null. An absent unit
+ * is treated as grams, which is what OFF's older entries mean by it.
+ */
 function parseServingGrams(product: OffProduct): number | null {
-  const quantity = num(product.serving_quantity);
-  if (quantity !== null && quantity > 0) return quantity;
+  const unit = product.serving_quantity_unit?.trim().toLowerCase();
+  if (unit == null || unit === "" || unit === "g") {
+    const quantity = num(product.serving_quantity);
+    if (quantity !== null && quantity > 0) return quantity;
+  }
   const match = /^([\d.]+)\s*g\b/i.exec(product.serving_size ?? "");
   if (match) {
     const grams = Number(match[1]);
     if (Number.isFinite(grams) && grams > 0) return grams;
   }
   return null;
+}
+
+/**
+ * Energy per 100 g in kcal, from whichever field the product actually carries.
+ *
+ * Only `energy-kcal_100g` was read, so a product publishing energy solely in kJ
+ * — the norm across the EU — cached with `calories = null` and then logged as
+ * **0 kcal**, because `scaleNutrition` treats a null per-100g value as zero. The
+ * acceptance gate below admits exactly those products whenever completeness is
+ * decent or unknown, so nothing else stopped them (audit M19).
+ *
+ * Here 0.239 is the right factor and needs no efficiency term: a label's kJ is
+ * already metabolisable food energy, so this is a pure unit conversion. (Contrast
+ * `stravaMapper`, where the kJ is mechanical work and the conversion is not.)
+ */
+function offCaloriesPer100g(nutriments: OffNutriments): number | null {
+  const kcal = num(nutriments["energy-kcal_100g"]);
+  if (kcal !== null) return kcal;
+  // `energy_100g` is OFF's generic energy field and is expressed in kJ.
+  const kilojoules = num(nutriments["energy-kj_100g"]) ?? num(nutriments.energy_100g);
+  if (kilojoules === null || kilojoules <= 0) return null;
+  return Math.round(kilojoules * KCAL_PER_KJ * 10) / 10;
 }
 
 /**
@@ -95,7 +139,10 @@ function extractMicros(nutriments: OffNutriments): Record<string, number> | null
  * numbers afterwards.
  */
 function isAcceptableOffProduct(product: OffProduct): boolean {
-  if (num(product.nutriments?.["energy-kcal_100g"]) !== null) return true;
+  // Same notion of "has an energy value" the mapper uses, so a kJ-only product
+  // is judged on the energy it actually carries rather than on a kcal field it
+  // was never going to have (audit M19).
+  if (offCaloriesPer100g(product.nutriments ?? {}) !== null) return true;
   const completeness = num(product.completeness);
   return completeness === null || completeness >= OFF_MIN_COMPLETENESS;
 }
@@ -111,7 +158,7 @@ export function mapOffProduct(code: string, product: OffProduct): MappedFood | n
     name,
     brand: product.brands?.split(",")[0]?.trim() || null,
     servingSizeG: parseServingGrams(product),
-    caloriesPer100g: num(n["energy-kcal_100g"]),
+    caloriesPer100g: offCaloriesPer100g(n),
     proteinPer100g: num(n.proteins_100g),
     carbPer100g: num(n.carbohydrates_100g),
     fatPer100g: num(n.fat_100g),

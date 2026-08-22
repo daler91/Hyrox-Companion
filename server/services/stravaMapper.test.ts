@@ -182,12 +182,25 @@ describe("mapStravaActivityToWorkout", () => {
     expect(result.planDayId).toBeNull();
   });
 
-  it("handles calories from kilojoules", () => {
+  it("treats kilojoules as WORK, not as energy expenditure (audit M16)", () => {
+    // Strava's kilojoules is mechanical work from a power meter. Converting it
+    // with the thermodynamic 0.239 kcal/kJ alone restates that work in kcal and
+    // ignores the ~24% efficiency with which the body produced it, so a 500 kJ
+    // ride recorded 120 kcal instead of ~498 — a 4x understatement feeding
+    // straight into energy balance.
     const result = mapStravaActivityToWorkout(
       makeActivity({ kilojoules: 500, calories: undefined }),
       "user-1",
     );
-    expect(result.calories).toBeGreaterThan(0);
+    expect(result.calories).toBe(498);
+  });
+
+  it("prefers Strava's own calories over deriving them from work", () => {
+    const result = mapStravaActivityToWorkout(
+      makeActivity({ kilojoules: 500, calories: 640 }),
+      "user-1",
+    );
+    expect(result.calories).toBe(640);
   });
 
   it("treats activity at 101m as distance-based", () => {
@@ -302,12 +315,15 @@ describe("mapStravaActivityToWorkout branch coverage", () => {
   });
 
   it("handles calories 0 and kilojoules 1", () => {
-    // calories: activity.calories || activity.kilojoules ? Math.round((activity.calories || 0) || (activity.kilojoules || 0) * 0.239) : null
+    // INVERTED 2026-08-22 (audit M16). This asserted 0, because 1 kJ x 0.239
+    // rounds to nothing — which is the bug, not the intent: kilojoules is
+    // mechanical work and became an expenditure only after dividing by the ~24%
+    // efficiency that produced it. 1 kJ of work is ~1 kcal burned.
     const result = mapStravaActivityToWorkout(
       makeActivity({ calories: 0, kilojoules: 1 }),
       "user-1"
     );
-    expect(result.calories).toBe(0); // 1 * 0.239 = 0.239 -> round to 0
+    expect(result.calories).toBe(1);
   });
 });
 
