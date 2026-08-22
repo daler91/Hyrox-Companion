@@ -223,6 +223,51 @@ They do not: the allowlist was exactly the set of catalogue exercises whose `fie
 custom-label half alone. The list is now *derived* from those fields rather than written out a second
 time, so it cannot drift when a hold is added, but the drift had not happened yet.
 
+## The M tier (updated 2026-08-22)
+
+Landed for M13, M16, M17, M18, M19, M20 and M27.
+
+| #   | Before → after                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M13 | `pickLastSession` selected on the DATE, so an athlete who trained twice in a day saw both logs merged into one "Last time" — 4×5 where they did 2×5 twice — and `suggestNextTarget` then overloaded on top of the doubled session. It now picks one workout log, ordered by `workout_logs.timeOfDayMin`, which the history query had to start carrying. |
+| M16 | Strava's `kilojoules` is MECHANICAL WORK and was converted with the thermodynamic 0.239 kcal/kJ alone, ignoring the ~24% efficiency that produced it: a 500 kJ ride recorded **120 kcal instead of ~498**. |
+| M17 | Race-week carb-loading could net a CUT — 347.5 g against a 350 g baseline, or 287.5 g at a steeper slope — for an athlete who had correctly rested, because the base-load penalty for training below the reference had no recovery credit to offset it. |
+| M18 | `z.enum(["kcal","kJ"])` is case-sensitive and `.catch("kcal")` swallowed every near-miss, so a label read as `"kj"` stored energy **4.184× too high**. Unit is now normalised first, including a US panel's capital-C "Calorie". |
+| M19 | An Open Food Facts product publishing energy only in kJ — the EU norm — cached `calories = null` and logged as **0 kcal**, and the acceptance gate admitted exactly those products because it asked for a kcal field they would never have. |
+| M20 | `serving_quantity` was read as grams whatever its unit, so a 250 ml drink became a 250 g serving. |
+| M27 | The AI system prompt told the model "UTSS is subjective (from RPE)" and that UTSS and hrTSS "should broadly agree". Both are false — HR is the FIRST branch of UTSS, and hrTSS never feeds it — and the model repeated them to athletes as fact. |
+
+**A correction to M17 as registered.** The register says "race-week and taper carb-loading actually
+cut carbs". Race week *adds* carbs in the ordinary case (378.6 g against a 350 g baseline for an
+athlete tapering down from hard training) because the recovery term credits the drop in recent load.
+The cut is real only for an athlete who has ALREADY rested through race week, where there is no
+recovery credit to offset the base-load penalty. That is a narrower population than the register
+implies, but a worse one: it is precisely the athlete who tapered correctly.
+
+**The taper half of M17 is NOT changed.** `TAPER_LOAD_DAMP`'s own comment says it damps POSITIVE
+deltas, so a light taper day scores exactly like a light build day and the damp only ever fires on a
+hard taper day. That is documented intent working as written. Whether a taper should also soften the
+*reduction* is a methodology call, and it is left open rather than flipped silently.
+
+**M25 is not fixed.** Confirmed real: `rpeFactor` for strength is `1.18^max(0, rpe − 6)`, which is
+exactly 1.000 for every RPE at or below 6, while the cardio branch uses `0.6 + (rpe/10)²·2` and is
+monotonic across the whole range. So a strength deload at RPE 4 scores identically to the same
+tonnage at RPE 6, and the two curves in the same file never reconcile. The `max(0, …)` is explicit
+and therefore deliberate, but carries no comment saying why. Changing it moves UTSS for every
+sub-RPE-6 strength set, and with it every governor threshold and ACWR baseline — the same
+recalibration constraint as H20 and M2.
+
+**M26 is not fixed, and its stated rationale was wrong.** Monotony uses population SD (÷n). The
+comment justified that as keeping "a single hard day in an otherwise-easy week finite", which is
+simply not true: both conventions are finite for any week that is not perfectly flat, and the SD = 0
+branch is what actually handles flatness. The real effect is that ÷n rather than ÷(n−1) makes SD
+smaller and monotony uniformly larger by sqrt(7/6) = **8.0%**, measured against a 2.0 threshold taken
+from Foster. Whether that threshold assumes the sample SD **could not be established from primary
+sources in this environment**, and switching would move every athlete's monotony zone, so the
+convention is left alone and the false rationale in the comment is replaced with this.
+
+---
+
 **A correction to H20 as registered.** It says UTSS "differs by ~2×" depending on whether the athlete
 typed their sets in. The ratio is not fixed: swept across plausible sessions it runs from **23.7×**
 (one light set) to **0.32×** (30 heavy sets). ~2× is where a moderate 5×5 @ 100 kg lands, which is
