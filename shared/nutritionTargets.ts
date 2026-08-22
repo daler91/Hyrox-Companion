@@ -527,6 +527,12 @@ function buildEffectiveTargetExplanation(d: {
  * grams of carbs. 25 ≈ a light-but-real daily training load.
  */
 const MIN_REFERENCE_UTSS = 25;
+/**
+ * Stand-in daily load for an athlete with no training history yet. Named so it
+ * cannot be mistaken for a measurement: it used to be a bare `50` inline, and
+ * because the call site passed 0, EVERY athlete silently got it (audit C6).
+ */
+const ASSUMED_REFERENCE_UTSS = 50;
 
 /** The persisted shape of a recommended periodisation config (see DB columns on
  *  nutrition_targets). The adaptive knobs default ON so enabling periodisation
@@ -540,6 +546,13 @@ export interface DefaultPeriodizationConfig {
   preloadDaysAhead: number;
   phaseAware: boolean;
   maxCarbDeltaG: number;
+  /**
+   * Whether `referenceUtss` came from the athlete's own training history or is
+   * the ASSUMED_REFERENCE_UTSS placeholder. The UI is expected to render this:
+   * an assumed constant presented as personalisation is exactly what made C6
+   * invisible for every athlete.
+   */
+  referenceBasis: "measured" | "assumed";
 }
 
 /**
@@ -553,9 +566,17 @@ export interface DefaultPeriodizationConfig {
  */
 export function defaultPeriodizationConfig(
   baselineCarbG: number,
-  recentAvgDailyUtss: number,
+  recentAvgDailyUtss: number | null,
 ): DefaultPeriodizationConfig {
-  const rawReference = recentAvgDailyUtss > 0 ? recentAvgDailyUtss : 50;
+  // `recentAvgDailyUtss` is the athlete's typical daily load — the 28-day
+  // chronic EWMA. The only call site used to hardcode 0, so `rawReference`
+  // always fell through to ASSUMED_REFERENCE_UTSS and every athlete got the
+  // same 50 (audit C6). A real logged session measures ~10-30 UTSS in this
+  // model, so a reference of 50 told most athletes to CUT carbs on days they
+  // had actually trained: at 70 kg with a 351.5 g baseline, a UTSS-30 session
+  // scored 281.5 g, i.e. −70 g on a training day.
+  const hasRealLoad = recentAvgDailyUtss != null && recentAvgDailyUtss > 0;
+  const rawReference = hasRealLoad ? recentAvgDailyUtss : ASSUMED_REFERENCE_UTSS;
   const referenceUtss = round1(Math.max(MIN_REFERENCE_UTSS, rawReference));
   const carbGramsPerUtss = round1((baselineCarbG / referenceUtss) * 0.5);
   return {
@@ -569,5 +590,9 @@ export function defaultPeriodizationConfig(
     phaseAware: true,
     // Cap the combined positive delta so carbs can't exceed ~1.75× baseline.
     maxCarbDeltaG: round1(baselineCarbG * 0.75),
+    // Provenance, so the UI can say the reference is a placeholder rather than
+    // presenting an assumed constant as the athlete's own calibration (the
+    // root cause behind C6 and the rest of the fallback findings).
+    referenceBasis: hasRealLoad ? "measured" : "assumed",
   };
 }

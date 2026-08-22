@@ -3,7 +3,7 @@ import {
   calculateNutritionTarget,
   defaultPeriodizationConfig,
 } from "@shared/nutritionTargets";
-import type { NutritionTarget } from "@shared/schema";
+import type { NutritionTarget, TrainingOverview } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { Calculator, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -44,6 +44,13 @@ function TargetsForm({
 }) {
   const setTarget = useSetTarget();
   const { data: profile } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
+  // The athlete's typical daily load — the 28-day chronic EWMA — is what the
+  // periodisation reference is supposed to be built from. The call below used
+  // to hardcode 0, so every athlete got the same assumed 50 UTSS and most were
+  // told to cut carbs on days they had trained (audit C6).
+  const { data: overview } = useQuery<TrainingOverview>({
+    queryKey: QUERY_KEYS.trainingOverview,
+  });
   const { values, setValues, setField, parsed, valid } = useMacroTargetForm(current);
   const [periodize, setPeriodize] = useState<boolean>(current?.periodizationEnabled ?? false);
   // Adapt to PAST (recovery) + FUTURE (carb pre-load / taper / race week) training.
@@ -54,6 +61,12 @@ function TargetsForm({
   const [calcNote, setCalcNote] = useState<string | null>(null);
 
   const canCalculate = canCalculateFromProfile(profile);
+  // Null rather than 0 when the overview has not loaded or the athlete has no
+  // history: `defaultPeriodizationConfig` distinguishes "no data" from "no
+  // load" and flags the placeholder it falls back to.
+  const recentAvgDailyUtss = overview?.trainingLoad?.chronicAvg ?? null;
+  const referenceIsAssumed =
+    periodize && (recentAvgDailyUtss == null || recentAvgDailyUtss <= 0);
 
   const calculate = () => {
     if (!canCalculate) return;
@@ -83,7 +96,7 @@ function TargetsForm({
     // Periodisation only makes sense with a carb baseline to scale.
     const scaling = periodize && parsed.carbG != null;
     const useAdaptive = scaling && adaptive;
-    const cfg = defaultPeriodizationConfig(parsed.carbG ?? 0, 0);
+    const cfg = defaultPeriodizationConfig(parsed.carbG ?? 0, recentAvgDailyUtss);
     // Preserve an existing calibration where present; otherwise seed from defaults.
     const referenceUtss =
       current?.periodizationEnabled && current.referenceUtss != null
@@ -172,6 +185,17 @@ function TargetsForm({
           aria-label="Scale carbs by training load"
         />
       </div>
+
+      {referenceIsAssumed && (
+        <p
+          className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"
+          data-testid="periodize-reference-assumed"
+        >
+          You have no logged training yet, so this starts from a typical daily load rather than
+          your own. It will read as a normal training day until you have some history — log a few
+          sessions and re-open this dialog to calibrate it.
+        </p>
+      )}
 
       {periodize && (
         <div className="flex items-center justify-between gap-4 rounded-md border p-3">

@@ -15,6 +15,8 @@
  */
 import { type CohortBenchmark, RACE_BENCHMARKS } from "./raceBenchmarks.generated";
 import {
+  type AgeBand,
+  CANONICAL_AGE_BANDS,
   cohortKey,
   type Division,
   type Gender,
@@ -257,6 +259,41 @@ export interface ResolvedRaceReference {
  * An age cohort is only used when the generated artifact has it (i.e. it cleared
  * the sample gate); otherwise we fall back to all ages with ageGroupAssumed=true.
  */
+/**
+ * The nearest age band that actually has a cohort for this division+gender.
+ *
+ * `deriveAgeGroupFromAge` produces bands up to 80-84, but the generated dataset
+ * runs out at 60-64 for open male (earlier for pro). A miss used to fall through
+ * to `getRaceReference(div, gender)` — the ALL-AGES roll-up, which is dominated
+ * by 25-39-year-olds and is therefore FASTER than any masters cohort. Ageing out
+ * of the table made the predictor think the athlete had got quicker: at 62 the
+ * 60-64 cohort predicted 96:08, and at 67 the all-ages roll-up predicted 86:21
+ * — 9:47 faster, for being five years older (audit C4).
+ *
+ * Searching outward from the requested band keeps the athlete on real cohort
+ * data. On an equal-distance tie the OLDER band wins: an athlete past the end of
+ * the table should never be handed a faster reference than the last real cohort
+ * near them.
+ */
+function nearestAvailableBand(
+  div: Division,
+  gender: Gender,
+  band: AgeBand,
+): AgeBand | null {
+  const index = CANONICAL_AGE_BANDS.indexOf(band);
+  if (index < 0) return null;
+  const has = (candidate: AgeBand) => RACE_BENCHMARKS[cohortKey(div, gender, candidate)] != null;
+  if (has(band)) return band;
+
+  for (let distance = 1; distance < CANONICAL_AGE_BANDS.length; distance++) {
+    const older = CANONICAL_AGE_BANDS[index + distance];
+    if (older && has(older)) return older;
+    const younger = CANONICAL_AGE_BANDS[index - distance];
+    if (younger && has(younger)) return younger;
+  }
+  return null;
+}
+
 export function resolveRaceReference(
   division: string | null | undefined,
   storedGender: StoredGender,
@@ -267,14 +304,20 @@ export function resolveRaceReference(
   if (storedGender === "male" || storedGender === "female") {
     const band = normalizeAgeGroup(ageGroup);
     if (band) {
-      const cohort = RACE_BENCHMARKS[cohortKey(div, storedGender, band)];
-      if (cohort) {
+      const resolvedBand = nearestAvailableBand(div, storedGender, band);
+      const cohort = resolvedBand
+        ? RACE_BENCHMARKS[cohortKey(div, storedGender, resolvedBand)]
+        : undefined;
+      if (cohort && resolvedBand) {
         return {
           division: div,
           resolvedGender: storedGender,
           genderAssumed: false,
-          resolvedAgeGroup: band,
-          ageGroupAssumed: false,
+          resolvedAgeGroup: resolvedBand,
+          // True when we had to clamp to a neighbouring band, so the UI can say
+          // which cohort the prediction actually rests on rather than implying
+          // the athlete's own band was measured.
+          ageGroupAssumed: resolvedBand !== band,
           reference: buildReferenceFromCohort(div, storedGender, cohort),
         };
       }

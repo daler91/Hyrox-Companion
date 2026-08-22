@@ -137,8 +137,23 @@ describe("resolveRaceReference — age group", () => {
     expect(resolved.ageGroupAssumed).toBe(false);
   });
 
-  it("falls back to all ages for an unknown/too-thin age band", () => {
+  it("clamps a band with no cohort to the nearest one that has data", () => {
+    // INVERTED (audit C4). This asserted a fall-through to the ALL-AGES
+    // reference, which is dominated by 25-39-year-olds and is therefore faster
+    // than any masters cohort — so ageing out of the table made the predictor
+    // think the athlete had got quicker (a 67-year-old came out 9:47 faster
+    // than at 62). 80-84 is a real band with no cohort behind it; it now
+    // resolves to 60-64, the oldest cohort that exists.
     const resolved = resolveRaceReference("open", "male", "80-84");
+    expect(resolved.resolvedAgeGroup).toBe("60-64");
+    expect(resolved.ageGroupAssumed).toBe(true);
+    expect(resolved.reference).not.toBe(getRaceReference("open", "male"));
+  });
+
+  it("still falls back to all ages when the band itself is unparseable", () => {
+    // A malformed label is a different case from a real-but-empty band: there
+    // is no neighbour to clamp toward, so the roll-up is the honest answer.
+    const resolved = resolveRaceReference("open", "male", "not-a-band");
     expect(resolved.resolvedAgeGroup).toBeNull();
     expect(resolved.ageGroupAssumed).toBe(true);
     expect(resolved.reference).toBe(getRaceReference("open", "male"));
