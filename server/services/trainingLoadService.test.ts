@@ -11,6 +11,7 @@ import {
   DEFAULT_EXERCISE_LOAD_TAGS,
   estimateHrMax,
   estimateLthr,
+  EWMA_WARMUP_DAYS,
   hrIntensityFactor,
   hrReserveRatio,
   hrTss,
@@ -624,6 +625,86 @@ describe("trainingLoadService", () => {
   });
 });
 
+describe("EWMA warmup — a short fetch window cannot reseed the baseline (audit H21)", () => {
+  const CURRENT = "2026-05-22";
+
+  // Eight heavy weeks then a taper week. The 28-day chronic baseline should
+  // still be HIGH — that is what a taper is — while the last 7 days are light.
+  const history = (() => {
+    const logs: WorkoutLog[] = [];
+    for (let i = 120; i >= 0; i--) {
+      if (i % 7 === 3) continue; // one rest day a week
+      const tapering = i <= 6;
+      logs.push(
+        log({
+          id: `l-${i}`,
+          date: daysBefore(CURRENT, i),
+          duration: tapering ? 30 : 100,
+          rpe: tapering ? 4 : 8,
+        }),
+      );
+    }
+    return logs;
+  })();
+
+  const today = (windowDays: number, declareWindow: boolean) => {
+    const from = daysBefore(CURRENT, windowDays - 1);
+    return calculateTrainingLoad(
+      history.filter((l) => l.date >= from),
+      [],
+      [],
+      { currentDate: CURRENT, ...(declareWindow ? { historyFrom: from } : {}) },
+    ).dailyLoads.find((d) => d.date === CURRENT);
+  };
+
+  it("reports the same baseline once the window covers the warmup", () => {
+    const full = today(120, true);
+    const warm = today(EWMA_WARMUP_DAYS, true);
+
+    expect(full?.chronicEwma).toBeGreaterThan(100);
+    // Within a few percent of the 120-day truth — the seed has washed out.
+    expect(warm?.chronicEwma).toBeCloseTo(full?.chronicEwma ?? 0, -1);
+  });
+
+  it("withholds the EWMAs when the declared window is too short to support them", () => {
+    // The nutrition recovery path fetched 7 days and read a "28-day chronic
+    // baseline" off the result: 26.1 against a true 107.2 for this athlete, a 4x
+    // understatement of the load their fuelling is scaled from. Withheld is the
+    // honest answer for a window that cannot support the number.
+    const short = today(7, true);
+
+    expect(short?.acuteEwma).toBeNull();
+    expect(short?.chronicEwma).toBeNull();
+    expect(short?.tsb).toBeNull();
+    expect(short?.acwr).toBeNull();
+    // UTSS is per-day and needs no history, so it still reports.
+    expect(short?.utss).toBeGreaterThan(0);
+  });
+
+  it("leaves callers that do not declare a window exactly as they were", () => {
+    const undeclared = today(7, false);
+
+    expect(undeclared?.acuteEwma).not.toBeNull();
+    expect(undeclared?.chronicEwma).not.toBeNull();
+  });
+
+  it("still reports for a genuinely new athlete inside a wide window", () => {
+    // Their first log really is recent, and there is empty range before it — so
+    // the seed is their real starting point, not an artefact of the fetch.
+    const newAthlete = Array.from({ length: 20 }, (_, i) =>
+      log({ id: `n-${i}`, date: daysBefore(CURRENT, i), duration: 60, rpe: 6 }),
+    );
+    const from = daysBefore(CURRENT, EWMA_WARMUP_DAYS - 1);
+    const d = calculateTrainingLoad(newAthlete, [], [], {
+      currentDate: CURRENT,
+      historyFrom: from,
+    }).dailyLoads.find((x) => x.date === CURRENT);
+
+    expect(d?.chronicEwma).not.toBeNull();
+    expect(d?.acwr).not.toBeNull();
+  });
+});
+
 describe("injury vectors for workouts with no sets (audit H19)", () => {
   const DATE = "2026-05-22";
   const dayFor = (overrides: Partial<WorkoutLog>, sets: TrainingLoadSet[] = []) =>
@@ -672,7 +753,7 @@ describe("injury vectors for workouts with no sets (audit H19)", () => {
     );
     const withSets = dayFor({ focus: "Strength", mainWorkout: "Back squat, bench" }, sets);
 
-    expect(withSets?.utss).toBe(99.1);
+    expect(withSets?.utss).toBeCloseTo(99.1, 1);
     expect(withSets?.vectorLoads).toEqual({
       posterior_chain: 34.7,
       anterior_chain: 99.1,

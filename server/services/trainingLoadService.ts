@@ -695,6 +695,23 @@ function dateRange(start: string, end: string): string[] {
 const ACUTE_LAMBDA = 2 / (7 + 1); // 0.25
 const CHRONIC_LAMBDA = 2 / (28 + 1); // ≈ 0.069
 
+/**
+ * Logged history the EWMAs need behind them before their values mean what their
+ * names say.
+ *
+ * Both are seeded at the first log the CALLER passed, so a short fetch window
+ * silently reseeds them: the nutrition recovery path fetched 7 days and read a
+ * "28-day chronic baseline" off the result. For an athlete tapering after eight
+ * heavy weeks that reported 26.1 against a true 107.2 — a 4x understatement of
+ * the baseline their fuelling targets are scaled from, at exactly the moment
+ * fuelling matters most (audit H21).
+ *
+ * Two chronic windows. The seed's weight decays as (1 - CHRONIC_LAMBDA)^n, so it
+ * still carries ~13% at 28 days and under 2% at 56 — the point where the answer
+ * stops depending on where the caller happened to start looking.
+ */
+export const EWMA_WARMUP_DAYS = 56;
+
 // Foster monotony classification. Monotony > 2.0 is a well-known overtraining /
 // illness predictor; 1.5–2.0 is an early-warning band.
 export function monotonyZone(monotony: number | null): TrainingMonotonyZone {
@@ -1234,7 +1251,18 @@ export function calculateTrainingLoad(
   workoutLogs: readonly WorkoutLog[],
   exerciseSets: readonly TrainingLoadSet[],
   loadTags: readonly ExerciseLoadTagInput[] | readonly ExerciseLoadTag[] = [],
-  options: { currentDate?: string; weightUnit?: string; athlete?: AthleteLoadContext } = {},
+  options: {
+    currentDate?: string;
+    weightUnit?: string;
+    athlete?: AthleteLoadContext;
+    /**
+     * The date the caller actually fetched `workoutLogs` from. Supply it and the
+     * EWMA-derived values are withheld when the window is too short to support
+     * them, rather than reported from a seed the window itself created (H21).
+     * Omitted, behaviour is unchanged.
+     */
+    historyFrom?: string;
+  } = {},
 ): TrainingLoadComputation {
   const currentDate = options.currentDate ?? toIsoDate(new Date());
   // Stored weights are in the athlete's display unit; normalize to canonical kg
@@ -1258,7 +1286,15 @@ export function calculateTrainingLoad(
   }
 
   const firstLogDate = earliestLogDate(workoutLogs);
-  applyLoadDynamics(allDays, rangeStart, currentDate, firstLogDate);
+  // A window that starts later than the warmup cannot support the EWMAs no
+  // matter what is in it: whatever log lands first becomes the seed for both.
+  const truncated =
+    options.historyFrom != null &&
+    // -(N - 1): a window covering [currentDate - (N-1) .. currentDate] IS N days,
+    // so a caller that fetched exactly the warmup must not be called truncated.
+    options.historyFrom > addDays(currentDate, -(EWMA_WARMUP_DAYS - 1)) &&
+    (firstLogDate == null || firstLogDate >= options.historyFrom);
+  applyLoadDynamics(allDays, rangeStart, currentDate, truncated ? null : firstLogDate);
 
   return {
     // ⚡ Bolt Performance Optimization:
