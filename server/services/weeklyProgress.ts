@@ -6,9 +6,22 @@ export interface MondayWeekBoundaries {
   lastMondayStr: string;
 }
 
-export function getMondayWeekBoundaries(todayInput: Date = new Date()): MondayWeekBoundaries {
-  // toDateStr(todayInput) returns "YYYY-MM-DD" in UTC
-  const dateStr = toDateStr(todayInput);
+/**
+ * The Monday that opens this week and the one before it, in the ATHLETE's
+ * calendar.
+ *
+ * `userTimezone` used to be unavailable here, so both callers got UTC weeks
+ * while the weekly review used athlete-local ones — a UTC−8 athlete's weekly
+ * count reset on Sunday afternoon and the two screens disagreed about which
+ * week a session belonged to (audit H11). Omitting the timezone still yields
+ * the old UTC behaviour, for callers that genuinely have no athlete.
+ */
+export function getMondayWeekBoundaries(
+  todayInput: Date = new Date(),
+  userTimezone?: string | null,
+): MondayWeekBoundaries {
+  // The athlete's calendar date when we know their zone; UTC otherwise.
+  const dateStr = userTimezone ? getLocalDateStrSafe(todayInput, userTimezone) : toDateStr(todayInput);
 
   // Parse it explicitly as a UTC date to prevent local timezone skew
   // new Date(dateStr) automatically parses "YYYY-MM-DD" as UTC midnight,

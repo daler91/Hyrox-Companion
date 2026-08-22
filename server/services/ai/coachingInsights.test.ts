@@ -1,3 +1,4 @@
+import { isPlanEnded, planWeekForDisplay } from "@shared/planPhase";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TrainingContext } from "../../gemini/index";
@@ -199,11 +200,16 @@ describe("computePlanPhase", () => {
       currentWeek: 1,
       totalWeeks: 12,
       phaseLabel: "early",
-      progressPct: 8,
+      // Progress is measured at the week's MIDPOINT now, not its end (audit
+      // H15), so week 1 of 12 is 4% through the block rather than 8%.
+      progressPct: 4,
       remainingPhases: ["build", "peak", "taper", "race_week"],
     });
   });
 
+  // The band thresholds are unchanged by the move to a midpoint measure. On a
+  // 100-week block week 25 reads 24.5%, which Math.round takes UP to 25 — so
+  // the same weeks sit on the same boundaries as before.
   it("enters build at exactly 25% and stays early at 24%", () => {
     expect(computePlanPhase(100, 25).phaseLabel).toBe("build");
     expect(computePlanPhase(100, 24).phaseLabel).toBe("early");
@@ -222,14 +228,39 @@ describe("computePlanPhase", () => {
   it("labels race_week on the final week and lists no remaining phases", () => {
     const phase = computePlanPhase(12, 12);
     expect(phase.phaseLabel).toBe("race_week");
-    expect(phase.progressPct).toBe(100);
+    // The final week's midpoint is 96% through the block; the label is
+    // structural, not a percentage.
+    expect(phase.progressPct).toBe(96);
     expect(phase.remainingPhases).toEqual([]);
   });
 
-  it("treats currentWeek beyond totalWeeks as race_week (overrides the percentage bands)", () => {
-    const phase = computePlanPhase(4, 5);
-    expect(phase.phaseLabel).toBe("race_week");
-    expect(phase.progressPct).toBe(125);
+  it("makes the week before the race a taper, whatever the block length", () => {
+    // Taper used to depend on the percentage alone, which under the midpoint
+    // measure only 10+ week blocks could reach — an 8-week plan went peak →
+    // race week with no taper at all.
+    for (const totalWeeks of [4, 8, 12, 16]) {
+      expect(computePlanPhase(totalWeeks, totalWeeks - 1)?.phaseLabel).toBe("taper");
+      expect(computePlanPhase(totalWeeks, totalWeeks)?.phaseLabel).toBe("race_week");
+    }
+    // A 3-week block is too short to spend a third of itself tapering.
+    expect(computePlanPhase(3, 2)?.phaseLabel).toBe("build");
+  });
+
+  it("opens in EARLY for a short block rather than jumping straight to build", () => {
+    // A 4-week plan used to read 25% in week 1 and open in build; a 3-week plan
+    // used to PEAK in week 2 (audit H15).
+    expect(computePlanPhase(4, 1)?.phaseLabel).toBe("early");
+    expect(computePlanPhase(3, 1)?.phaseLabel).toBe("early");
+    expect(computePlanPhase(3, 2)?.phaseLabel).not.toBe("peak");
+  });
+
+  it("returns no phase at all once the block has ended", () => {
+    // INVERTED (audit H15). This asserted that a week beyond the block still
+    // reported race_week "overriding the percentage bands". Combined with
+    // computeCurrentWeek's clamp, that meant a plan which ended months ago read
+    // as race week forever and locked the coach into "reduce work only".
+    expect(computePlanPhase(4, 5)).toBeUndefined();
+    expect(computePlanPhase(12, 40)).toBeUndefined();
   });
 });
 
@@ -252,25 +283,43 @@ describe("computeWeeklyVolume", () => {
     });
   });
 
-  it("flags a decreasing trend", () => {
+  // TODAY is Monday 2026-06-15, so "this week so far" is one day and the
+  // comparable slice of last week is Monday 2026-06-08 alone (audit H11).
+  it("flags a decreasing trend against the same point in last week", () => {
     const volume = computeWeeklyVolume(
-      [
-        makeEntry({ date: "2026-06-16" }),
-        makeEntry({ date: "2026-06-09" }),
-        makeEntry({ date: "2026-06-10" }),
-      ],
+      [makeEntry({ date: "2026-06-08" })], // last Monday: 1. This Monday: 0.
       3,
     );
     expect(volume.trend).toBe("decreasing");
   });
 
-  it("flags a stable trend when both weeks are equal (including zero)", () => {
+  it("flags a stable trend when both weeks are level at this point (including zero)", () => {
     expect(computeWeeklyVolume([], 5).trend).toBe("stable");
     const volume = computeWeeklyVolume(
-      [makeEntry({ date: "2026-06-16" }), makeEntry({ date: "2026-06-09" })],
+      [makeEntry({ date: "2026-06-15" }), makeEntry({ date: "2026-06-08" })],
       5,
     );
     expect(volume.trend).toBe("stable");
+  });
+
+  it("does not read 'decreasing' on Monday just because last week was complete", () => {
+    // INVERTED (audit H11). This case used to assert "decreasing": one session
+    // logged so far this week against last week's completed total of two. The
+    // partial week could never win, so the coach told every athlete their
+    // volume was falling every Monday. Measured at the same point in each week,
+    // one session by Monday beats last week's zero-by-Monday.
+    const volume = computeWeeklyVolume(
+      [
+        makeEntry({ date: "2026-06-15" }), // today
+        makeEntry({ date: "2026-06-09" }), // last Tuesday
+        makeEntry({ date: "2026-06-10" }), // last Wednesday
+      ],
+      3,
+    );
+    expect(volume.trend).toBe("increasing");
+    // The quoted totals are unchanged: last week really did have two.
+    expect(volume.thisWeekCompleted).toBe(1);
+    expect(volume.lastWeekCompleted).toBe(2);
   });
 
   it("includes the Monday boundary in the current week and excludes the day before", () => {
@@ -680,7 +729,15 @@ describe("computeCurrentWeek", () => {
     expect(computeCurrentWeek("2026-06-01", 12)).toBe(3);
   });
 
-  it("clamps the result to totalWeeks for a long-past start date", () => {
-    expect(computeCurrentWeek("2026-01-01", 12)).toBe(12);
+  it("keeps counting past the end of the block instead of clamping", () => {
+    // INVERTED (audit H15). This asserted a clamp to totalWeeks, which is what
+    // made an ended plan indistinguishable from its final week. The true week
+    // is returned so computePlanPhase can tell the block is over; callers that
+    // display "week N of M" clamp with planWeekForDisplay.
+    const week = computeCurrentWeek("2026-01-01", 12);
+    expect(week).toBeGreaterThan(12);
+    expect(planWeekForDisplay(week, 12)).toBe(12);
+    expect(isPlanEnded(week, 12)).toBe(true);
+    expect(isPlanEnded(6, 12)).toBe(false);
   });
 });

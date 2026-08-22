@@ -195,6 +195,41 @@ export default tseslint.config(
   },
 
 
+  // Athlete-local dates: never derive "today" from the current instant in UTC.
+  //
+  // `new Date().toISOString().slice(0,10)` is the server's calendar day, not the
+  // athlete's. It is what made "this week" reset on Sunday afternoon for a UTC-8
+  // athlete while the weekly review used their real week (audit H11), and the
+  // same shape sat behind the plan-coverage check on the preferences route.
+  //
+  // Deriving a date string from a Date that was PARSED from a YYYY-MM-DD is
+  // fine and common in this codebase — that value is already timezone-free — so
+  // the rule targets the no-argument `new Date()` form specifically rather than
+  // banning toISOString outright.
+  //
+  // Use `getLocalDateStrSafe(new Date(), user.userTimezone)` (server/timezone.ts)
+  // or accept the date as a parameter.
+  {
+    files: ["server/**/*.ts", "client/src/**/*.{ts,tsx}", "shared/**/*.ts"],
+    ignores: [
+      "**/*.test.{ts,tsx}",
+      "**/__tests__/**",
+      "server/timezone.ts",
+      "shared/dateUtils.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.callee.object.type='NewExpression'][callee.object.callee.object.callee.name='Date'][callee.object.callee.object.arguments.length=0][callee.object.callee.property.name='toISOString']",
+          message:
+            "Do not derive today from the current instant in UTC — it is the server's calendar day, not the athlete's (audit H11). Use getLocalDateStrSafe(new Date(), user.userTimezone), or take the date as a parameter.",
+        },
+      ],
+    },
+  },
+
   // Guardrails for timeline + workout-detail surfaces to prevent bloat
   {
     files: [

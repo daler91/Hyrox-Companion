@@ -33,6 +33,10 @@ async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; 
 }
 
 export async function runAssistedMigrationBackfill(userId: string) {
+  // Backfill cutoff for a batch job, not a window any athlete sees. A day
+  // either side changes only which rows this sweep picks up, and the next run
+  // picks up the rest.
+  // eslint-disable-next-line no-restricted-syntax
   const today = new Date().toISOString().slice(0, 10);
   const candidates = await db.select({
     ownerType: sql<OwnerType>`'workoutLog'`,

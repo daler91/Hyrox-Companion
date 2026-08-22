@@ -655,7 +655,10 @@ export function calculateTrainingOverview(
   ).overview;
   const currentStats = computeOverviewStats(weeklySummaries);
   const completedDates = new Set(workoutLogs.map((log) => log.date));
-  const { thisMondayStr } = getMondayWeekBoundaries();
+  // The athlete's week, not the server's: a UTC-8 athlete's weekly count used
+  // to reset on Sunday afternoon (audit H11). `userTimezone` was already in
+  // scope here for the coverage dates.
+  const { thisMondayStr } = getMondayWeekBoundaries(new Date(), userTimezone);
   const weeklyCompletedWorkouts = workoutLogs.filter((log) => log.date >= thisMondayStr).length;
   // ⚡ Bolt Performance Optimization:
   // Replaced chained .map().filter().reduce() with a single for...of loop

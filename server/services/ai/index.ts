@@ -16,6 +16,7 @@ import {
 } from "../analyticsService";
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
 import { calculateTrainingLoad } from "../trainingLoadService";
+import { getMondayWeekBoundaries } from "../weeklyProgress";
 import {
   computeCurrentWeek,
   computeExerciseGaps,
@@ -212,15 +213,22 @@ function buildSupplementaryInsights(params: {
   totalWorkouts: number;
   weightUnit: string;
   distanceUnit: string;
+  userTimezone: string | null | undefined;
   today: string;
 }): Partial<NonNullable<TrainingContext["coachingInsights"]>> {
-  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, today } =
+  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, userTimezone, today } =
     params;
 
   // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
   const personalRecordMap = calculatePersonalRecords(loadExerciseSets);
   const personalRecords = buildPersonalRecordSummaries(personalRecordMap, weightUnit, distanceUnit);
-  const prsThisWeek = countPersonalRecordsInRange(personalRecordMap, addDays(today, -7), today);
+  // "This week" means the athlete's calendar week, the same Monday-anchored
+  // window the weekly volume, the review and the email all use. It used to be
+  // `today-7 … today` INCLUSIVE of both ends — eight days — which both
+  // overcounted and disagreed with the email's count of the same metric
+  // (audit M3).
+  const { thisMondayStr } = getMondayWeekBoundaries(new Date(), userTimezone);
+  const prsThisWeek = countPersonalRecordsInRange(personalRecordMap, thisMondayStr, today);
 
   // Plan adherence over the window.
   let complianceSum = 0;
@@ -378,7 +386,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)
     : undefined;
-  const weeklyVolume = weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal) : undefined;
+  const weeklyVolume =
+    weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, user?.userTimezone) : undefined;
   const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const progressionFlags = computeProgressionFlags(timeline, weightUnit);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
@@ -434,6 +443,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     totalWorkouts,
     weightUnit,
     distanceUnit,
+    userTimezone: user?.userTimezone,
     today,
   });
 

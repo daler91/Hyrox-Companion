@@ -113,8 +113,42 @@ is left as follow-up work.
 on every workout-detail open, but no component reads `blockAvgRpe`, `prSetCount` or `lastSameFocus`.
 Nothing renders it today; it is fixed so a future consumer does not inherit a retroactive statistic.
 
-**Not yet started:** Phases 4, 5, 6, and C4, C6 — note C4 (the age-cohort fallback) is
-not covered by any of the six root causes below and needs its own fix.
+**C4 and C6 — landed.** C4 (`resolveRaceReference`) now clamps a band with no cohort to the nearest
+band that has one, instead of falling through to the all-ages roll-up: a 67-year-old was predicted
+9:47 FASTER than at 62. C6 (`TargetsDialog`) passes the athlete's 28-day chronic EWMA instead of a
+hardcoded 0, so the periodisation reference is their own load rather than an assumed 50 that told
+most athletes to cut carbs on days they trained; where there is genuinely no history the config
+reports `referenceBasis: "assumed"` and the dialog says so.
+
+> **The C4 intent test was wrong, and the fix exposed it.** It asserted "the reference never gets
+> faster as the athlete gets older" across ages 25-75. With the all-ages cliff removed, one
+> 3-second inversion survives: 25-29 is 5082s and 30-34 is 5079s. That is not a defect — Hyrox
+> athletes genuinely peak around 30-34, so the reference legitimately improves through the
+> twenties. Satisfying the original invariant would have meant distorting real benchmark data.
+> Replaced with three assertions that are true: no inversion past the peak, no age resolving to the
+> all-ages roll-up, and no five-year step swinging the reference by anything like the old 587s.
+
+**Phase 4 — time.** Landed for H11, H15, M3, L7 and L10.
+
+| #   | Before → after                                                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H15 | `computeCurrentWeek` clamped to `totalWeeks`, so a plan that ended months ago reported its final week and `computePlanPhase` mapped that to **race week forever**, locking the coach into "reduce work only". The week is no longer clamped and an ended block returns no phase at all. |
+| H15 | Progress was measured at each week's END, so a 4-week plan opened in BUILD and a 3-week plan PEAKED in week 2. Measured at the week's midpoint instead. Taper is now structural — the week before the race — because under any percentage rule alone an 8-week block would go peak → race week with no taper. |
+| H11 | "This week" was UTC in analytics and the coach but athlete-local in the weekly review, so a UTC−8 athlete's week reset on Sunday afternoon. `getMondayWeekBoundaries` now takes the athlete's timezone.                                                             |
+| H11 | The weekly-volume trend compared a **partial** current week against a **complete** previous one, so every Monday read "decreasing". Last week is now counted only as far through the week as today is. The quoted totals are unchanged.                             |
+| M3  | `prsThisWeek` spanned `today-7 … today` inclusive — eight days — and disagreed with the email's count of the same metric. Now the athlete's Monday-anchored calendar week.                                                                                          |
+| L7  | `getStartOfWeek` / `getEndOfWeek` defaulted to Sunday while the rest of the app is Monday-start. Defaults aligned; the sole existing caller already passed Monday explicitly.                                                                                       |
+| L10 | "Last N days" fetched N+1 and left the top end open. The window is now exactly N days with both ends closed — which also gives the weekly rollup a real range to zero-fill against.                                                                                 |
+
+A lint rule (`no-restricted-syntax`) now bans deriving today from the current instant in UTC. It is
+scoped to the no-argument `new Date().toISOString()` form rather than banning `toISOString` outright,
+because deriving a date string from a Date parsed *from* a YYYY-MM-DD is timezone-free and common
+here — a blanket ban would have fired 20 times and been ignored. Three sites carry documented
+exemptions: `shared/planPhase.ts` (shared code has no athlete context and every real caller passes
+its own date), a `coachService` fallback for a plan day with no scheduled date, and a batch-job
+cutoff in `assistedMigrationService`.
+
+**Not yet started:** Phases 5 and 6.
 
 ---
 

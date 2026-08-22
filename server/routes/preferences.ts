@@ -4,6 +4,7 @@ import { type Request as ExpressRequest, type Response,Router } from "express";
 import { isAuthenticated } from "../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { isValidTimezone } from "../timezone";
 import { getUserId } from "../types";
 import { protectedPatch } from "./_helpers/protectedRouteBuilder";
@@ -134,7 +135,10 @@ router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: Expr
     // plans, so we gate the hint on the returned plan actually covering today
     // — users between plans should see the "no active plan" shape (null/false).
     const weeklyGoal = user.weeklyGoal ?? 5;
-    const today = new Date().toISOString().split("T")[0];
+    // The ATHLETE's today, not the server's: a UTC-8 user would otherwise see
+    // the plan stop covering "today" eight hours early (audit H11). Their
+    // timezone is already on the `user` record in scope here.
+    const today = getLocalDateStrSafe(new Date(), user.userTimezone);
     const planCoversToday =
       activePlan?.startDate != null &&
       activePlan.endDate != null &&

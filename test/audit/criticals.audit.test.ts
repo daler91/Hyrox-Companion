@@ -468,7 +468,7 @@ describe("C6 — the periodisation reference load (FIXED)", () => {
 
     // And a genuinely hard day is now a surplus.
     const hardDay = effectiveTarget(base, 60, config);
-    expect(hardDay.carbDeltaG!).toBeGreaterThan(0);
+    expect(hardDay.carbDeltaG).toBeGreaterThan(0);
   });
 
   /**

@@ -550,7 +550,12 @@ describe("buildTrainingContext", () => {
         weight: 100,
         reps: 5,
         workoutLogId: "w1",
-        date: "2026-06-14", // within the last 7 days of TODAY
+        // TODAY is Monday 2026-06-15. This was 2026-06-14 — a Sunday, i.e. LAST
+        // calendar week — and still counted, because the window was
+        // `today-7 … today` inclusive of both ends: eight days (audit M3).
+        // "This week" is now the athlete's Monday-anchored week, matching the
+        // weekly volume, the review and the email.
+        date: "2026-06-15",
       },
     ] as never);
 
@@ -561,6 +566,25 @@ describe("buildTrainingContext", () => {
     ]);
     // maxWeight + estimated1RM both landed this week.
     expect(ctx.coachingInsights?.prsThisWeek).toBe(2);
+  });
+
+  it("excludes a record set in the previous calendar week from PRs-this-week", async () => {
+    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+      {
+        exerciseName: "back_squat",
+        category: "strength",
+        weight: 100,
+        reps: 5,
+        workoutLogId: "w1",
+        date: "2026-06-14", // Sunday: last week, though only one day ago.
+      },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    // Still a personal record — just not one set THIS week.
+    expect(ctx.coachingInsights?.personalRecords).toHaveLength(1);
+    expect(ctx.coachingInsights?.prsThisWeek).toBeUndefined();
   });
 
   it("aggregates plan compliance from the load-window workout logs", async () => {

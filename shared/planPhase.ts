@@ -35,6 +35,10 @@ export interface PlanPhase {
  * under this directory's `noUncheckedIndexedAccess` ratchet.
  */
 function utcToday(): string {
+  // shared/ has no access to an athlete's timezone. This is only the DEFAULT
+  // for `today`; the client passes its own local date and the server passes
+  // getLocalDateStrSafe, so no athlete-facing path relies on it (audit H11).
+  // eslint-disable-next-line no-restricted-syntax
   return new Date().toISOString().slice(0, 10);
 }
 
@@ -55,8 +59,23 @@ export function computeCurrentWeek(
 ): number {
   if (!planStartDate) return 1;
   const days = dayDiff(planStartDate, today);
-  const week = Math.max(1, Math.ceil((days + 1) / 7));
-  return Math.min(week, totalWeeks);
+  // NOT clamped to totalWeeks. It used to be, which meant a plan that ended
+  // months ago still reported its FINAL week — and because computePlanPhase
+  // maps `currentWeek >= totalWeeks` to race_week, the coach was locked into
+  // "reduce work only" forever (audit H15). Returning the true week lets
+  // computePlanPhase recognise a block today does not sit inside; callers that
+  // display "week N of M" clamp for display with planWeekForDisplay.
+  return Math.max(1, Math.ceil((days + 1) / 7));
+}
+
+/** The week number to SHOW, clamped into the block. */
+export function planWeekForDisplay(currentWeek: number, totalWeeks: number): number {
+  return Math.min(Math.max(1, currentWeek), Math.max(1, totalWeeks));
+}
+
+/** True when `today` is past the end of the block. */
+export function isPlanEnded(currentWeek: number, totalWeeks: number): boolean {
+  return totalWeeks > 0 && currentWeek > totalWeeks;
 }
 
 /**
@@ -68,11 +87,34 @@ export function computeCurrentWeek(
  */
 export function computePlanPhase(totalWeeks: number, currentWeek: number): PlanPhase | undefined {
   if (totalWeeks <= 0 || currentWeek <= 0) return undefined;
+  // A week past the end of the block is not a phase of it. Previously
+  // unreachable because computeCurrentWeek clamped, which is what made an ended
+  // plan read as race week indefinitely (audit H15).
+  if (currentWeek > totalWeeks) return undefined;
 
-  const progressPct = Math.round((currentWeek / totalWeeks) * 100);
+  // Progress is measured at the MIDPOINT of the current week, not its end.
+  //
+  // The end-of-week form (`currentWeek / totalWeeks`) made a 4-week plan open
+  // in BUILD — week 1 already reading 25% — and a 3-week plan PEAK in week 2 at
+  // 67% (audit H15). Measuring at the week's start instead would fix both but
+  // costs the taper: an 11th week of 12 would read 83%, never reaching the 85%
+  // taper band, so a 12-week block would jump peak → race week. The midpoint
+  // keeps every band reachable:
+  //
+  //   12-week: w1 4% early · w4 29% build · w8 63% peak · w11 88% taper · w12 race
+  //    4-week: w1 12% early · w2 38% build · w3 62% peak · w4 race
+  //    3-week: w1 17% early · w2 50% build · w3 race
+  const progressPct = Math.round(((currentWeek - 0.5) / totalWeeks) * 100);
 
   let phaseLabel: TrainingPhase;
   if (currentWeek >= totalWeeks) phaseLabel = "race_week";
+  // The week before the race is the taper, structurally — the same kind of rule
+  // as "the final week is always race week", and for the same reason. Leaving
+  // taper to the percentage band alone made it depend on block length: under
+  // the midpoint measure only blocks of 10+ weeks would ever reach 85%, so an
+  // 8-week plan went peak → race week with no taper at all. Skipped for very
+  // short blocks, where a third of the plan should not be spent tapering.
+  else if (totalWeeks >= 4 && currentWeek === totalWeeks - 1) phaseLabel = "taper";
   else if (progressPct >= 85) phaseLabel = "taper";
   else if (progressPct >= 60) phaseLabel = "peak";
   else if (progressPct >= 25) phaseLabel = "build";
