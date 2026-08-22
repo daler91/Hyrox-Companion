@@ -525,7 +525,7 @@ export class WorkoutStorage {
    *
    * `sessionLimit` bounds *distinct dates*, not rows.
    */
-  async getExerciseHistory(userId: string, exerciseName: string, options?: { sessionLimit?: number }): Promise<(ExerciseSet & { date: string })[]> {
+  async getExerciseHistory(userId: string, exerciseName: string, options?: { sessionLimit?: number }): Promise<(ExerciseSet & { date: string; timeOfDayMin?: number | null })[]> {
     const canonical = normalizeExerciseName(exerciseName) ?? exerciseName;
     const sessionLimit = options?.sessionLimit;
     if (!sessionLimit) {
@@ -557,7 +557,7 @@ export class WorkoutStorage {
     if (recentDates.length === 0) return [];
 
     const rows = await db
-      .select({ set: exerciseSets, date: workoutLogs.date })
+      .select({ set: exerciseSets, date: workoutLogs.date, timeOfDayMin: workoutLogs.timeOfDayMin })
       .from(exerciseSets)
       .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
       .where(
@@ -569,7 +569,7 @@ export class WorkoutStorage {
       )
       .orderBy(desc(workoutLogs.date), asc(exerciseSets.sortOrder));
 
-    return rows.map((r) => ({ ...r.set, date: r.date }));
+    return rows.map((r) => ({ ...r.set, date: r.date, timeOfDayMin: r.timeOfDayMin }));
   }
 
   private getMutationOwnerAdapter(context: MutationOwnerContext): MutationOwnerAdapter {

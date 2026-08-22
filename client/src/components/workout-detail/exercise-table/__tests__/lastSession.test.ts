@@ -38,6 +38,63 @@ describe("pickLastSession", () => {
     ).toBeNull();
   });
 
+  it("returns ONE session when the athlete trained twice that day (audit M13)", () => {
+    // Selecting on the date alone merged both logs, so "Last time" read as 4x5
+    // instead of 2x5 — and "Next" then progressed from the doubled volume.
+    const session = pickLastSession([
+      set({ id: "am1", date: "2026-06-10", workoutLogId: "w-am", timeOfDayMin: 420, setNumber: 1 }),
+      set({ id: "am2", date: "2026-06-10", workoutLogId: "w-am", timeOfDayMin: 420, setNumber: 2 }),
+      set({ id: "pm1", date: "2026-06-10", workoutLogId: "w-pm", timeOfDayMin: 1080, setNumber: 1 }),
+      set({ id: "pm2", date: "2026-06-10", workoutLogId: "w-pm", timeOfDayMin: 1080, setNumber: 2 }),
+    ]);
+
+    expect(session?.sets).toHaveLength(2);
+    expect(session?.sets.map((s) => s.id)).toEqual(["pm1", "pm2"]);
+  });
+
+  it("prefers the later time of day, whatever order the rows arrive in", () => {
+    const session = pickLastSession([
+      set({ id: "pm1", date: "2026-06-10", workoutLogId: "w-pm", timeOfDayMin: 1080 }),
+      set({ id: "am1", date: "2026-06-10", workoutLogId: "w-am", timeOfDayMin: 420 }),
+    ]);
+
+    expect(session?.sets.map((s) => s.id)).toEqual(["pm1"]);
+  });
+
+  it("still returns a single session when neither log recorded a time", () => {
+    // Which one is a coin-toss without a time, but picking one is right either
+    // way — merging two never was.
+    const session = pickLastSession([
+      set({ id: "a", date: "2026-06-10", workoutLogId: "w-1", timeOfDayMin: null }),
+      set({ id: "b", date: "2026-06-10", workoutLogId: "w-2", timeOfDayMin: null }),
+    ]);
+
+    expect(session?.sets).toHaveLength(1);
+  });
+
+  it("prefers a log that recorded a time over one that did not", () => {
+    const session = pickLastSession([
+      set({ id: "timed", date: "2026-06-10", workoutLogId: "w-timed", timeOfDayMin: 600 }),
+      set({ id: "untimed", date: "2026-06-10", workoutLogId: "w-untimed", timeOfDayMin: null }),
+    ]);
+
+    expect(session?.sets.map((s) => s.id)).toEqual(["timed"]);
+  });
+
+  it("excludes the viewed workout before choosing the day's session", () => {
+    // The exclusion has to happen first: otherwise the workout being edited can
+    // win the same-day tie-break and then be filtered to nothing.
+    const session = pickLastSession(
+      [
+        set({ id: "earlier", date: "2026-06-10", workoutLogId: "w-am", timeOfDayMin: 420 }),
+        set({ id: "current", date: "2026-06-10", workoutLogId: "w-now", timeOfDayMin: 1080 }),
+      ],
+      "w-now",
+    );
+
+    expect(session?.sets.map((s) => s.id)).toEqual(["earlier"]);
+  });
+
   it("returns null for an empty history", () => {
     expect(pickLastSession([])).toBeNull();
   });
