@@ -28,7 +28,9 @@ describe("calculateStats", () => {
       workoutsThisWeek: 0,
       completedThisWeek: 0,
       plannedUpcoming: 0,
-      completionRate: 0,
+      // Null, not 0: a fresh athlete has no completion rate, and 0% reads as
+      // total failure rather than "nothing has come due yet" (audit M5).
+      completionRate: null,
     });
   });
 
@@ -72,7 +74,7 @@ describe("calculateStats", () => {
   });
 
   describe("completion rate (completionRate)", () => {
-    it("should calculate correctly based on past and today entries", () => {
+    it("scores only days that have finished, excluding today", () => {
       const timeline: Partial<TimelineEntry>[] = [
         // Past
         { date: "2024-05-13", status: "completed" },
@@ -86,18 +88,38 @@ describe("calculateStats", () => {
 
       const stats = calculateStatsFor(timeline);
 
-      // 2 completed out of 3 total (past + today)
-      expect(stats.completionRate).toBe(Math.round((2 / 3) * 100));
+      // INVERTED (audit M5). This asserted 67% — 2 of 3 counting TODAY. The
+      // window was `<= today`, so a session the athlete still had all evening
+      // to do was already scored against them and opening the app in the
+      // morning dropped their rate. Today is now excluded symmetrically: the
+      // day is not scored at all until it is over, so this is 1 of 2 elapsed
+      // days = 50%. Counting today's completion but not today's shortfall
+      // would inflate the numerator against a denominator that ignored it.
+      expect(stats.completionRate).toBe(50);
     });
 
-    it("should return 0 when there are no past or today entries", () => {
+    it("returns null when nothing has come due yet", () => {
       const timeline: Partial<TimelineEntry>[] = [
         { date: "2024-05-16", status: "completed" }, // Future
       ];
 
       const stats = calculateStatsFor(timeline);
 
-      expect(stats.completionRate).toBe(0);
+      expect(stats.completionRate).toBeNull();
+    });
+
+    it("does not count a declared absence as a failure", () => {
+      const timeline: Partial<TimelineEntry>[] = [
+        { date: "2024-05-13", status: "completed" },
+        // Injured; the timeline already refuses to show these as missed.
+        { date: "2024-05-14", status: "planned", excused: true },
+        { date: "2024-05-14", status: "missed", excused: true },
+      ];
+
+      const stats = calculateStatsFor(timeline);
+
+      // 1 of 1 elapsed, unexcused day. Counting the absence would report 33%.
+      expect(stats.completionRate).toBe(100);
     });
   });
 

@@ -9,6 +9,7 @@
 import {
   GENERIC_RUN_PACE_SEC_PER_M,
   MAX_RUN_PACE_RATIO,
+  MAX_RUN_PACE_RATIO_EVIDENCED,
   MIN_RUN_PACE_RATIO,
 } from "@shared/plannedSessionEstimate";
 import type { WorkoutLog } from "@shared/schema";
@@ -17,11 +18,19 @@ import { storage } from "../../storage";
 
 const LOOKBACK_DAYS = 70; // ~10 weeks of recent running to anchor the athlete's pace
 const MIN_SAMPLES = 3; // need a few runs before trusting a personalized ratio
+// Enough of the athlete's own running to widen the clamp past the generic band.
+const WELL_EVIDENCED_SAMPLES = 8;
 // Strava/Garmin set a log's focus to the sport type (e.g. "Run", "TrailRun").
 const RUN_FOCUS = /run/i;
-// Plausible running speeds (m/s): ~1.8 ≈ 9:15/km (slow jog) … ~6.5 ≈ 2:34/km (elite).
-// Filters out mis-tagged cycling/other cardio that would otherwise skew the median.
-const MIN_RUN_SPEED_MS = 1.8;
+// Plausible running speeds (m/s): ~1.1 ≈ 15:09/km … ~6.5 ≈ 2:34/km (elite).
+//
+// The floor was 1.8 (≈9:15/km), which is faster than plenty of people genuinely
+// run. The stated purpose of this filter is removing mis-tagged cycling — and
+// cycling is FAST, so the ceiling does that job; the floor was only discarding
+// slow runners. A beginner at 9:30/km had every run dropped here, so they never
+// reached MIN_SAMPLES and were permanently stuck on the generic pace, with more
+// logging making no difference (audit M4).
+const MIN_RUN_SPEED_MS = 1.1;
 const MAX_RUN_SPEED_MS = 6.5;
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -66,5 +75,9 @@ export async function getRunPaceRatio(userId: string): Promise<number> {
   if (paces.length < MIN_SAMPLES) return 1;
 
   const ratio = median(paces) / GENERIC_RUN_PACE_SEC_PER_M;
-  return clamp(ratio, MIN_RUN_PACE_RATIO, MAX_RUN_PACE_RATIO);
+  // A handful of runs stays grounded to the generic band; a real body of
+  // evidence is allowed to say the athlete is simply slower than generic.
+  const ceiling =
+    paces.length >= WELL_EVIDENCED_SAMPLES ? MAX_RUN_PACE_RATIO_EVIDENCED : MAX_RUN_PACE_RATIO;
+  return clamp(ratio, MIN_RUN_PACE_RATIO, ceiling);
 }

@@ -1,3 +1,4 @@
+import { dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
@@ -16,6 +17,7 @@ import {
 } from "../analyticsService";
 import { computeRaceReadiness } from "../racePrediction/racePredictionService";
 import { calculateTrainingLoad } from "../trainingLoadService";
+import { getMondayWeekBoundaries } from "../weeklyProgress";
 import {
   computeCurrentWeek,
   computeExerciseGaps,
@@ -36,6 +38,42 @@ import {
 } from "./trainingStats";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The athlete's race proximity for the decision engine's S3/S4 gates.
+ *
+ * Both fields were hardcoded (`hasRace: false`, `daysToRace: null`), making
+ * every race-proximity protection unreachable while `training_plans.race_date`
+ * sat populated (audit H13).
+ */
+function resolveRaceContext(
+  raceDate: string | null,
+  today: string,
+): { hasRace: boolean; daysToRace: number | null } {
+  const daysToRace = raceDate ? dayDiff(today, raceDate) : null;
+  return daysToRace != null && daysToRace >= 0
+    ? { hasRace: true, daysToRace }
+    : { hasRace: false, daysToRace: null };
+}
+
+/**
+ * Map the RPE trend onto the decision engine's THREE soreness tiers.
+ *
+ * It was `fatigueFlag ? "high" : "low"`, so "medium" never occurred and the
+ * S2_SOFT_RECOVERY_GUARD branch testing for it was dead (audit H13).
+ * `fatigueFlag` is itself `avgRpeLast3 >= 8`, so 7+ is the natural middle tier:
+ * hard training, not yet alarming. With no rated sessions at all the value is
+ * ABSENT rather than "low", which asserted a freshness the app had no evidence
+ * for.
+ */
+function sorenessFromRpe(trend: {
+  fatigueFlag: boolean;
+  avgRpeLast3?: number;
+}): "low" | "medium" | "high" | undefined {
+  if (trend.fatigueFlag) return "high";
+  if (trend.avgRpeLast3 == null) return undefined;
+  return trend.avgRpeLast3 >= 7 ? "medium" : "low";
+}
 
 /**
  * How far either side of today a declared absence stays worth telling the coach
@@ -212,15 +250,22 @@ function buildSupplementaryInsights(params: {
   totalWorkouts: number;
   weightUnit: string;
   distanceUnit: string;
+  userTimezone: string | null | undefined;
   today: string;
 }): Partial<NonNullable<TrainingContext["coachingInsights"]>> {
-  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, today } =
+  const { loadExerciseSets, loadWorkoutLogs, loadGovernor, totalWorkouts, weightUnit, distanceUnit, userTimezone, today } =
     params;
 
   // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
   const personalRecordMap = calculatePersonalRecords(loadExerciseSets);
   const personalRecords = buildPersonalRecordSummaries(personalRecordMap, weightUnit, distanceUnit);
-  const prsThisWeek = countPersonalRecordsInRange(personalRecordMap, addDays(today, -7), today);
+  // "This week" means the athlete's calendar week, the same Monday-anchored
+  // window the weekly volume, the review and the email all use. It used to be
+  // `today-7 … today` INCLUSIVE of both ends — eight days — which both
+  // overcounted and disagreed with the email's count of the same metric
+  // (audit M3).
+  const { thisMondayStr } = getMondayWeekBoundaries(new Date(), userTimezone);
+  const prsThisWeek = countPersonalRecordsInRange(personalRecordMap, thisMondayStr, today);
 
   // Plan adherence over the window.
   let complianceSum = 0;
@@ -311,7 +356,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   // Costs one indexed read ahead of the concurrent batch, which is noise next
   // to the model call this context feeds.
   const user = await storage.users.getUser(userId);
-  const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  // Read once: every window in this function is anchored to the athlete's
+  // calendar, and four separate `user?.userTimezone` reads each cost a branch
+  // against the function's complexity budget.
+  const userTimezone = user?.userTimezone;
+  const today = getLocalDateStrSafe(new Date(), userTimezone);
   // Read once: the gap suppression and the context payload both want it, and a
   // second optional-chain would put this function back over its complexity budget.
   const trainingConstraints = user?.trainingConstraints ?? null;
@@ -357,7 +406,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     completedDates,
   } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
-  const currentStreak = calculateStreak(completedDates, user?.userTimezone);
+  const currentStreak = calculateStreak(completedDates, userTimezone);
   const recentWorkouts = collectRecentWorkouts(timeline);
   const structuredExerciseStats = getStructuredExerciseStats(timeline);
 
@@ -378,7 +427,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const planPhase = activePlan
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)
     : undefined;
-  const weeklyVolume = weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal) : undefined;
+  const weeklyVolume =
+    weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
   const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const progressionFlags = computeProgressionFlags(timeline, weightUnit);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
@@ -388,6 +438,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       age: user?.age ?? null,
       gender: user?.gender ?? null,
       restingHr: user?.restingHr ?? null,
+      // Scales unweighted-rep tonnage with the body being moved (audit M2).
+      bodyweightKg: user?.bodyweightKg ?? null,
       maxHr: user?.maxHr ?? null,
       ftp: user?.ftp ?? null,
     },
@@ -400,6 +452,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }).length;
   const experienceLevel = classifyExperienceLevel(totalWorkouts);
 
+  const raceContext = resolveRaceContext(activePlanRecord?.raceDate ?? null, today);
+
   const decisionTree = decideTrainingState({
     profile: {
       experienceLevel,
@@ -409,11 +463,21 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     testTrend: {
       direction: mapTestTrendDirection(rpeTrend.rpeTrend),
     },
-    raceContext: { hasRace: false, daysToRace: null },
+    // The athlete's real race, from `training_plans.race_date`. Both of these
+    // were hardcoded (`hasRace: false`, `daysToRace: null`), which made
+    // S3_RACE_WEEK and S4_RACE_SOON permanently unreachable — every
+    // race-proximity protection in the decision engine was dead code, while the
+    // column it needed existed and was populated (audit H13). A gate fed a
+    // literal is worse than no gate: it reads as protection in review.
+    raceContext,
     recoveryMarkers: {
-      sleepQuality: "ok",
-      soreness: rpeTrend.fatigueFlag ? "high" : "low",
-      restingHrDelta: 0,
+      // Sleep quality is not collected anywhere in the product, so it is
+      // ABSENT rather than asserted as "ok" — a literal that silently held the
+      // S2 soft-recovery guard shut. Same for restingHrDelta, which needs a
+      // personal baseline the app does not yet track. Leaving them undefined
+      // keeps the branches honest: they cannot fire, and they no longer claim
+      // to have been evaluated (audit H13).
+      soreness: sorenessFromRpe(rpeTrend),
       // Was hardcoded false, which meant the decision engine had a field for
       // exactly this and nothing ever set it — an athlete could declare an
       // injury and still be told intensity was permitted. This drives a hard
@@ -434,6 +498,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     totalWorkouts,
     weightUnit,
     distanceUnit,
+    userTimezone,
     today,
   });
 

@@ -1,3 +1,4 @@
+import { pooledRatio, roundOrNull, weightedMean } from "@shared/ratio";
 import type {
   ExerciseLoadTag,
   HeatMapMuscle,
@@ -241,22 +242,94 @@ function getMonday(dateStr: string): string {
   return res;
 }
 
+type WeekAccumulator = { count: number; totalDuration: number; durationCount: number; rpeSum: number; rpeCount: number; categoryBreakdown: Record<string, number> };
+
+const emptyWeek = (): WeekAccumulator => ({
+  count: 0,
+  totalDuration: 0,
+  durationCount: 0,
+  rpeSum: 0,
+  rpeCount: 0,
+  categoryBreakdown: {},
+});
+
+/**
+ * Insert an empty entry for every week in the range that holds no workout, so
+ * rest weeks reach the denominator and the chart (audit H7, M10).
+ *
+ * Bounds come from the selected period when there is one, else from the
+ * athlete's own first and last logged week.
+ */
+function zeroFillWeeks(weekMap: Map<string, WeekAccumulator>, period?: { from?: string; to?: string }): void {
+  // Scan for the two ends rather than sorting for them: only the min and max
+  // are wanted, and a bare `.sort()` on strings is a UTF-16 code-unit sort with
+  // no comparator, which SonarCloud flags as a reliability bug (S2871). The
+  // comparisons below are still string comparisons, which is exact here because
+  // `getMonday` yields fixed-width most-significant-first `YYYY-MM-DD`.
+  let earliestObserved: string | undefined;
+  let latestObserved: string | undefined;
+  for (const weekStart of weekMap.keys()) {
+    if (earliestObserved == null || weekStart < earliestObserved) earliestObserved = weekStart;
+    if (latestObserved == null || weekStart > latestObserved) latestObserved = weekStart;
+  }
+  const fromMonday = period?.from ? getMonday(period.from) : earliestObserved;
+  const toMonday = period?.to ? getMonday(period.to) : latestObserved;
+  if (!fromMonday || !toMonday || fromMonday > toMonday) return;
+  for (const weekStart of mondaysBetween(fromMonday, toMonday)) {
+    if (!weekMap.has(weekStart)) weekMap.set(weekStart, emptyWeek());
+  }
+}
+
+/** Every Monday from `fromMonday` to `toMonday` inclusive. */
+function mondaysBetween(fromMonday: string, toMonday: string): string[] {
+  const weeks: string[] = [];
+  let cursor = fromMonday;
+  // Bounded so a bad range cannot spin: 20 years of weeks is far past any
+  // real training history and still terminates.
+  for (let i = 0; i < 1040 && cursor <= toMonday; i++) {
+    weeks.push(cursor);
+    const d = new Date(cursor + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 7);
+    cursor = d.toISOString().split("T")[0];
+  }
+  return weeks;
+}
+
+/**
+ * Build the per-week rollup, INCLUDING weeks the athlete did not train.
+ *
+ * The map used to gain a key only when a workout landed in that week, so a
+ * rest week did not exist as far as every downstream consumer was concerned.
+ * Two things followed: "Avg / Week" divided by the number of weeks CONTAINING
+ * a workout and so could never fall below 1.0 (audit H7 — train 3x, rest three
+ * weeks, train 3x reported 3.0/week instead of 1.2), and the weekly bar chart
+ * simply deleted the layoff, rendering a break as though it never happened
+ * (audit M10).
+ *
+ * `period` is the window the athlete actually selected. When it is absent
+ * ("all time") the span of their own logs is used instead, which still restores
+ * the interior rest weeks; a selected window additionally restores leading and
+ * trailing ones.
+ */
 function buildWeeklySummaries(
   workoutLogs: WorkoutLog[],
+  period?: { from?: string; to?: string },
 ): { summaries: WeeklySummary[]; workoutDates: string[] } {
-  const weekMap = new Map<string, { count: number; totalDuration: number; rpeSum: number; rpeCount: number; categoryBreakdown: Record<string, number> }>();
+  const weekMap = new Map<string, WeekAccumulator>();
   const workoutDates: string[] = [];
 
   for (const log of workoutLogs) {
     const weekStart = getMonday(log.date);
     if (!weekMap.has(weekStart)) {
-      weekMap.set(weekStart, { count: 0, totalDuration: 0, rpeSum: 0, rpeCount: 0, categoryBreakdown: {} });
+      weekMap.set(weekStart, emptyWeek());
     }
     // Safe: we just set this key above if it was missing
     const week = weekMap.get(weekStart);
     if (!week) continue;
     week.count++;
-    if (log.duration) week.totalDuration += log.duration;
+    // `!= null` rather than truthiness: a genuinely 0-minute log is a recorded
+    // duration, not a missing one, and counting it as missing was part of H8.
+    if (log.duration != null) { week.totalDuration += log.duration; week.durationCount++; }
     if (log.rpe) { week.rpeSum += log.rpe; week.rpeCount++; }
 
     const focus = (log.focus ?? "other").toLowerCase();
@@ -265,6 +338,8 @@ function buildWeeklySummaries(
     workoutDates.push(log.date);
   }
 
+  zeroFillWeeks(weekMap, period);
+
   const summaries: WeeklySummary[] = Array.from(weekMap.entries())
     .map(([weekStart, w]) => ({
       weekStart,
@@ -272,6 +347,8 @@ function buildWeeklySummaries(
       totalDuration: w.totalDuration,
       avgRpe: w.rpeCount > 0 ? Math.round((w.rpeSum / w.rpeCount) * 10) / 10 : null,
       categoryBreakdown: w.categoryBreakdown,
+      workoutsWithDuration: w.durationCount,
+      rpeCount: w.rpeCount,
     }))
     .sort((a, b) => {
       if (b.weekStart < a.weekStart) return 1;
@@ -474,33 +551,50 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
   // time complexity from O(2N) to O(N).
   let totalWorkouts = 0;
   let totalDuration = 0;
+  let workoutsWithDuration = 0;
   for (const w of weeklySummaries) {
     totalWorkouts += w.workoutCount;
     totalDuration += w.totalDuration;
+    workoutsWithDuration += w.workoutsWithDuration;
   }
-  const avgPerWeek = Math.round((totalWorkouts / weeklySummaries.length) * 10) / 10;
-  const avgDuration = totalWorkouts > 0 ? Math.round(totalDuration / totalWorkouts) : 0;
+  // `weeklySummaries` is now zero-filled across the period, so rest weeks are
+  // in the denominator and this can fall below 1.0 (audit H7).
+  const avgPerWeek = roundOrNull(pooledRatio(totalWorkouts, weeklySummaries.length), 1) ?? 0;
+  // Divide by the workouts that actually CARRY a duration, not by every
+  // workout: the numerator only ever summed those (audit H8).
+  const avgDuration = Math.round(roundOrNull(pooledRatio(totalDuration, workoutsWithDuration), 0) ?? 0);
 
-  // Only average the weeks that actually recorded an RPE, matching the
-  // client's existing display logic (otherwise a week of zero-RPE logs
-  // would drag the average down).
-  // ⚡ Bolt Performance Optimization:
-  // Replaced chained .filter().reduce() with a single for...of loop
-  // to avoid intermediate array allocations and O(2N) passes.
-  let rpeSum = 0;
-  let rpeCount = 0;
-  for (const w of weeklySummaries) {
-    if (w.avgRpe !== null) {
-      rpeSum += w.avgRpe;
-      rpeCount++;
-    }
-  }
-  const avgRpe = rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : null;
+  // Weight each week's mean RPE by how many rated sessions it holds, instead of
+  // treating every week as one observation. The unweighted form let a single
+  // hard session in a quiet week count as much as six sessions in a heavy one:
+  // one RPE-10 workout plus six RPE-4 workouts reported 7.0 instead of 4.9
+  // (audit H9). Weeks with no rated session contribute no weight, preserving
+  // the original intent that an unrated week must not drag the average down.
+  const ratedWeeks = weeklySummaries.filter((w) => w.avgRpe !== null && w.rpeCount > 0);
+  const avgRpe = roundOrNull(
+    weightedMean(ratedWeeks.map((w) => w.avgRpe as number), ratedWeeks.map((w) => w.rpeCount)),
+    1,
+  );
 
   return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, avgCompliancePct: null };
 }
 
 export interface TrainingOverviewOptions {
+  /**
+   * The window the athlete selected, when there is one. Used to zero-fill the
+   * weekly rollup so leading and trailing rest weeks count toward "Avg / Week"
+   * and appear on the chart, not just the interior ones (audit H7, M10).
+   */
+  period?: { from?: string; to?: string };
+  /**
+   * Plan sessions DUE in the window, and the same for the previous window.
+   * The denominator for "Avg Adherence" — see the note at its call site and
+   * `storage.analytics.getDueSessionCount` (audit H10). Omitted when the
+   * caller cannot supply it, in which case adherence is withheld rather than
+   * computed over the wrong population.
+   */
+  dueSessionCount?: number;
+  previousDueSessionCount?: number;
   weeklyGoal?: number;
   loadTags?: ExerciseLoadTag[];
   trainingLoadInput?: {
@@ -513,6 +607,25 @@ export interface TrainingOverviewOptions {
   athlete?: AthleteLoadContext;
 }
 
+/**
+ * Mean adherence across the sessions that were due, as a percentage.
+ *
+ * Null when the caller could not tell us how many were due, or when none were:
+ * an athlete with no plan has no adherence, and showing one is the same class
+ * of error as emailing them a 100% completion rate (audit H6, H10).
+ */
+export function computeAdherencePct(
+  logs: readonly { compliancePct?: number | null }[],
+  dueSessionCount: number | undefined,
+): number | null {
+  if (dueSessionCount == null) return null;
+  let complianceSum = 0;
+  for (const log of logs) {
+    if (typeof log.compliancePct === "number") complianceSum += log.compliancePct;
+  }
+  return roundOrNull(pooledRatio(complianceSum, dueSessionCount), 0);
+}
+
 export function calculateTrainingOverview(
   workoutLogs: WorkoutLog[],
   exerciseSets: ExerciseSetWithDate[],
@@ -520,6 +633,9 @@ export function calculateTrainingOverview(
   options: TrainingOverviewOptions = {},
 ): TrainingOverview {
   const {
+    period,
+    dueSessionCount,
+    previousDueSessionCount,
     weeklyGoal = 5,
     loadTags = [],
     trainingLoadInput,
@@ -527,7 +643,7 @@ export function calculateTrainingOverview(
     weightUnit = "kg",
     athlete,
   } = options;
-  const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs);
+  const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs, period);
   const categoryTotals = buildCategoryTotals(exerciseSets);
   // "Days since last trained" is counted from the ATHLETE's today; the option
   // was already accepted here and used for the streak, while these three
@@ -549,22 +665,24 @@ export function calculateTrainingOverview(
   ).overview;
   const currentStats = computeOverviewStats(weeklySummaries);
   const completedDates = new Set(workoutLogs.map((log) => log.date));
-  const { thisMondayStr } = getMondayWeekBoundaries();
+  // The athlete's week, not the server's: a UTC-8 athlete's weekly count used
+  // to reset on Sunday afternoon (audit H11). `userTimezone` was already in
+  // scope here for the coverage dates.
+  const { thisMondayStr } = getMondayWeekBoundaries(new Date(), userTimezone);
   const weeklyCompletedWorkouts = workoutLogs.filter((log) => log.date >= thisMondayStr).length;
   // ⚡ Bolt Performance Optimization:
   // Replaced chained .map().filter().reduce() with a single for...of loop
   // to avoid intermediate array allocations and O(3N) passes.
-  let complianceSum = 0;
-  let complianceCount = 0;
-  for (const w of workoutLogs) {
-    if (typeof w.compliancePct === "number") {
-      complianceSum += w.compliancePct;
-      complianceCount++;
-    }
-  }
-  if (complianceCount > 0) {
-    currentStats.avgCompliancePct = Math.round(complianceSum / complianceCount);
-  }
+  // "Avg Adherence" over the sessions the athlete was DUE, not the ones they
+  // logged. Dividing by logged sessions let skipping the plan remove sessions
+  // from adherence's own denominator: complete one session at 90% and skip the
+  // other four, and the athlete was shown 90% (audit H10).
+  //
+  // `compliancePct` is only ever written for a plan-linked workout
+  // (persistAdherenceSnapshot takes a planDayId), so the numerator population
+  // was already right; only the denominator was wrong. A due session with no
+  // log contributes 0, which is the point.
+  currentStats.avgCompliancePct = computeAdherencePct(workoutLogs, dueSessionCount);
 
   // Previous-period stats are optional — the route handler omits them
   // when the user picked "all time" (no lower bound → no meaningful
@@ -575,17 +693,7 @@ export function calculateTrainingOverview(
       // ⚡ Bolt Performance Optimization:
       // Replaced chained .map().filter().reduce() with a single for...of loop
       // to avoid intermediate array allocations and O(3N) passes.
-      let prevComplianceSum = 0;
-      let prevComplianceCount = 0;
-      for (const w of previousWorkoutLogs) {
-        if (typeof w.compliancePct === "number") {
-          prevComplianceSum += w.compliancePct;
-          prevComplianceCount++;
-        }
-      }
-      if (prevComplianceCount > 0) {
-        stats.avgCompliancePct = Math.round(prevComplianceSum / prevComplianceCount);
-      }
+      stats.avgCompliancePct = computeAdherencePct(previousWorkoutLogs, previousDueSessionCount);
       return stats;
     })()
     : undefined;

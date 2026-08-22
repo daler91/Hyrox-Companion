@@ -39,6 +39,28 @@ describe("getRunPaceRatio", () => {
     expect(await getRunPaceRatio("u1")).toBe(1.25); // MAX_RUN_PACE_RATIO
   });
 
+  it("keeps a beginner's runs instead of discarding them (audit M4)", async () => {
+    // 1.754 m/s ≈ 9:30/km. The plausibility floor was 1.8 m/s (9:15/km), so
+    // every one of these was dropped, the athlete never reached MIN_SAMPLES,
+    // and they were pinned to the generic 5:45/km — with more logging making no
+    // difference, because the new runs were filtered out too.
+    const beginner = Array.from({ length: 3 }, () => run({ avgSpeed: 1.754 }));
+    logsMock.mockResolvedValue(beginner);
+    expect(await getRunPaceRatio("u1")).not.toBe(1);
+  });
+
+  it("lets a well-evidenced slow runner past the generic band", async () => {
+    // Three runs stay grounded to the generic band...
+    logsMock.mockResolvedValue(Array.from({ length: 3 }, () => run({ avgSpeed: 1.754 })));
+    expect(await getRunPaceRatio("u1")).toBe(1.25);
+
+    // ...but eight say something real about how this athlete runs.
+    logsMock.mockResolvedValue(Array.from({ length: 8 }, () => run({ avgSpeed: 1.754 })));
+    const evidenced = await getRunPaceRatio("u1");
+    expect(evidenced).toBeGreaterThan(1.25);
+    expect(evidenced).toBeLessThanOrEqual(2.2);
+  });
+
   it("ignores non-run activities and implausible speeds", async () => {
     logsMock.mockResolvedValue([
       run({ focus: "Ride", avgSpeed: 9 }), // cycling, not a run

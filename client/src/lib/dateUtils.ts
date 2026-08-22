@@ -28,7 +28,12 @@ export function getYesterdayString(): string {
   return toISODateString(d);
 }
 
-export function getStartOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 0): Date {
+// Week starts MONDAY by default. These defaulted to Sunday while the server
+// (analyticsService, weeklyProgress), plan import and the weekly review are all
+// Monday-start, so any caller that omitted the argument silently shifted the
+// week by a day (audit L7). The only caller today passes 1 explicitly; the
+// default is aligned so the next one cannot pick up the wrong week.
+export function getStartOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 1): Date {
   const d = new Date(date);
   const day = d.getDay();
   const diff = (day < weekStartsOn ? 7 : 0) + day - weekStartsOn;
@@ -37,7 +42,7 @@ export function getStartOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 0)
   return d;
 }
 
-export function getEndOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 0): Date {
+export function getEndOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 1): Date {
   const start = getStartOfWeek(date, weekStartsOn);
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
@@ -45,11 +50,11 @@ export function getEndOfWeek(date: Date = new Date(), weekStartsOn: 0 | 1 = 0): 
   return end;
 }
 
-export function getStartOfWeekString(date: Date = new Date(), weekStartsOn: 0 | 1 = 0): string {
+export function getStartOfWeekString(date: Date = new Date(), weekStartsOn: 0 | 1 = 1): string {
   return toISODateString(getStartOfWeek(date, weekStartsOn));
 }
 
-export function getEndOfWeekString(date: Date = new Date(), weekStartsOn: 0 | 1 = 0): string {
+export function getEndOfWeekString(date: Date = new Date(), weekStartsOn: 0 | 1 = 1): string {
   return toISODateString(getEndOfWeek(date, weekStartsOn));
 }
 
@@ -57,7 +62,7 @@ export function isDateInRange(dateStr: string, startStr: string, endStr: string)
   return dateStr >= startStr && dateStr <= endStr;
 }
 
-export function isDateInCurrentWeek(dateStr: string, weekStartsOn: 0 | 1 = 0): boolean {
+export function isDateInCurrentWeek(dateStr: string, weekStartsOn: 0 | 1 = 1): boolean {
   const startStr = getStartOfWeekString(new Date(), weekStartsOn);
   const endStr = getEndOfWeekString(new Date(), weekStartsOn);
   return isDateInRange(dateStr, startStr, endStr);

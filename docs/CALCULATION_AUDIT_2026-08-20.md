@@ -80,8 +80,130 @@ converted; correcting the input left every expected output unchanged.
 toggle) is a product call about existing athletes' data and is recorded as explicitly undecided in
 the ADR. L1 (advice that changes with display units) follows from the same undecided question.
 
-**Not yet started:** Phases 3, 4, 5, 6, and C4, C6 — note C4 (the age-cohort fallback) is
-not covered by any of the six root causes below and needs its own fix.
+**Phase 3 — denominators and windows.** Landed for H6, H7, H8, H9, H10, M5, M10, M12, L11 and L12.
+`shared/ratio.ts` holds `pooledRatio` / `weightedMean` / `pooledPercentage`, and every ratio touched
+here now goes through them.
+
+| #   | Before → after                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H7  | "Avg / Week" divided by the weeks that CONTAIN a workout, so it could never fall below 1.0. Train 3×, rest three weeks, train 3× reported **3.0**; it now zero-fills the range and reports **1.2**.                                                                                 |
+| M10 | The same missing weeks were deleted from the bar chart. That five-week span produced **2** bars; it now produces **5**, three of them zero.                                                                                                                                          |
+| H8  | "Avg Duration" summed duration only where recorded but divided by every workout. Ten workouts, five with 60 min → **30 min**; now **60**. `duration = 0` is also no longer treated as missing.                                                                                       |
+| H9  | "Avg RPE" was the unweighted mean of weekly means. One RPE-10 session plus six RPE-4 sessions → **7.0**; weighting by rated-session count gives **4.9**.                                                                                                                            |
+| H6  | The weekly email divided `workout_logs` completions by (those + plan-day misses + plan-day skips). An athlete with no plan was emailed **100%**, captioned "3 of 3 planned sessions". The rate is now plan days completed ÷ plan days due, and is **withheld entirely** when nothing was due. |
+| H10 | "Avg Adherence" divided by the sessions the athlete LOGGED, so skipping removed sessions from its own denominator: one 90% session out of five due read **90%**. Now over due sessions → **18%**. Withheld when nothing was due.                                                     |
+| M5  | The Coach Panel "Rate" scored TODAY's not-yet-done session as a failure, and counted declared absences as failures. Today is now excluded symmetrically (a day is not scored until it is over) and excused days are skipped. Returns null, not 0%, before anything has come due.      |
+| M12 | `countPrSets` measured a set against an all-time max that INCLUDED the set, using `>=`, so repeating last week's 120 kg was reported as a fresh PR. The baseline now excludes the workout being scored and the test is a strict `>`, matching `updateMaxWeight`.                      |
+| L12 | `fetchBlockAvgRpe`'s window ran ±14 days (29 days, not 28) and averaged in sessions logged AFTER the workout, so an old record's stat changed every time it was opened. Now a trailing 28 days ending at the workout.                                                                 |
+
+**A correction to M12 as registered.** The register says the set "always counts itself". That
+overstates it: because the workout is inside its own baseline, the comparison cannot distinguish a
+new best from a tie — a genuine PR and a repeat of the previous best both satisfy `>=`. A *lighter*
+session still correctly failed. The bug is real; its shape is "ties count as PRs", not "everything
+counts".
+
+**L11 is only partly closed.** The panels said "N mapped sets analyzed" where N sums a per-category
+set count, so a set training three patterns was counted three times — an athlete who logged 120 sets
+was told 312 were analysed. The label now says "pattern assignments" / "muscle assignments", which is
+what the number actually is. Reporting the *distinct* count of sets that mapped to at least one
+category would need a new server-side field: the client only receives per-category aggregates. That
+is left as follow-up work.
+
+**L12 is lower severity than registered.** `getWorkoutHistoryStats` is fetched by `useWorkoutDetail`
+on every workout-detail open, but no component reads `blockAvgRpe`, `prSetCount` or `lastSameFocus`.
+Nothing renders it today; it is fixed so a future consumer does not inherit a retroactive statistic.
+
+**C4 and C6 — landed.** C4 (`resolveRaceReference`) now clamps a band with no cohort to the nearest
+band that has one, instead of falling through to the all-ages roll-up: a 67-year-old was predicted
+9:47 FASTER than at 62. C6 (`TargetsDialog`) passes the athlete's 28-day chronic EWMA instead of a
+hardcoded 0, so the periodisation reference is their own load rather than an assumed 50 that told
+most athletes to cut carbs on days they trained; where there is genuinely no history the config
+reports `referenceBasis: "assumed"` and the dialog says so.
+
+> **The C4 intent test was wrong, and the fix exposed it.** It asserted "the reference never gets
+> faster as the athlete gets older" across ages 25-75. With the all-ages cliff removed, one
+> 3-second inversion survives: 25-29 is 5082s and 30-34 is 5079s. That is not a defect — Hyrox
+> athletes genuinely peak around 30-34, so the reference legitimately improves through the
+> twenties. Satisfying the original invariant would have meant distorting real benchmark data.
+> Replaced with three assertions that are true: no inversion past the peak, no age resolving to the
+> all-ages roll-up, and no five-year step swinging the reference by anything like the old 587s.
+
+**Phase 4 — time.** Landed for H11, H15, M3, L7 and L10.
+
+| #   | Before → after                                                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H15 | `computeCurrentWeek` clamped to `totalWeeks`, so a plan that ended months ago reported its final week and `computePlanPhase` mapped that to **race week forever**, locking the coach into "reduce work only". The week is no longer clamped and an ended block returns no phase at all. |
+| H15 | Progress was measured at each week's END, so a 4-week plan opened in BUILD and a 3-week plan PEAKED in week 2. Measured at the week's midpoint instead. Taper is now structural — the week before the race — because under any percentage rule alone an 8-week block would go peak → race week with no taper. |
+| H11 | "This week" was UTC in analytics and the coach but athlete-local in the weekly review, so a UTC−8 athlete's week reset on Sunday afternoon. `getMondayWeekBoundaries` now takes the athlete's timezone.                                                             |
+| H11 | The weekly-volume trend compared a **partial** current week against a **complete** previous one, so every Monday read "decreasing". Last week is now counted only as far through the week as today is. The quoted totals are unchanged.                             |
+| M3  | `prsThisWeek` spanned `today-7 … today` inclusive — eight days — and disagreed with the email's count of the same metric. Now the athlete's Monday-anchored calendar week.                                                                                          |
+| L7  | `getStartOfWeek` / `getEndOfWeek` defaulted to Sunday while the rest of the app is Monday-start. Defaults aligned; the sole existing caller already passed Monday explicitly.                                                                                       |
+| L10 | "Last N days" fetched N+1 and left the top end open. The window is now exactly N days with both ends closed — which also gives the weekly rollup a real range to zero-fill against.                                                                                 |
+
+A lint rule (`no-restricted-syntax`) now bans deriving today from the current instant in UTC. It is
+scoped to the no-argument `new Date().toISOString()` form rather than banning `toISOString` outright,
+because deriving a date string from a Date parsed *from* a YYYY-MM-DD is timezone-free and common
+here — a blanket ban would have fired 20 times and been ignored. Three sites carry documented
+exemptions: `shared/planPhase.ts` (shared code has no athlete context and every real caller passes
+its own date), a `coachService` fallback for a plan day with no scheduled date, and a batch-job
+cutoff in `assistedMigrationService`.
+
+**Phase 5 — fallback provenance.** Landed for H3, H14, M2 and M4 (C6 above).
+
+| #   | Before → after                                                                                                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H3  | A missing `age` silently substituted HRmax 190 — the Tanaka prediction for a 26-year-old — so a 52-year-old's threshold run scored 69.2% of heart-rate reserve instead of 82.3% and was classified as easy aerobic Z2. `hrReserveRatio` and `hrZoneBoundaries` now WITHHOLD rather than guess: the load model falls through to the RPE the athlete actually gave, and no zone table is drawn. |
+| H14 | The estimated energy path could not tell a REST day from a training day whose calories had not synced, so it applied the typical-day multiplier to both: a `very_active` athlete was credited 1613 kcal of "training" on a day they did not train, against 600 for a real synced session — syncing a genuine workout made the app think they had burned 655 kcal LESS. The day's logged-session count now distinguishes them, and both paths define "active" as above daily living. |
+| M2  | Every unweighted rep was worth exactly 20 kg, so a 100 kg and a 55 kg athlete scored identical load; `users.bodyweightKg` never reached the load model. Per-rep tonnage is now proportional to bodyweight.                                                             |
+| M4  | The pace plausibility floor was 1.8 m/s (9:15/km) and the ratio ceiling 1.25 (7:11/km), so a beginner running 9:30/km had every run discarded, never reached the sample minimum, and was pinned to the generic 5:45/km — **more data never fixed it**, because the new runs were filtered out too. The floor is 1.1 m/s and the ceiling widens once the athlete has eight runs on record. |
+
+Two deliberate constraints on the M2 fix, both to avoid a silent recalibration. It is expressed as a
+RATIO against a 75 kg reference rather than an absolute fraction of body mass, because every governor
+threshold, ACWR baseline and periodisation reference is calibrated against the current UTSS scale —
+scaling by 0.65 × bodyweight would have multiplied bodyweight tonnage by ~2.6× and moved all of them.
+And it is still ONE number for every movement: genuinely per-movement fractions (a pull-up moves more
+of the body than a wall ball) need a new field on `ExerciseLoadTagInput` and a calibrated value per
+tag row, which is follow-up work rather than something to invent.
+
+**Still open in Phase 5: M6.** The +5 MAF adjustment goes to anyone selecting "High" + "Improving"
+with no check of training-history length, while Maffetone reserves it for athletes with 2+
+injury-free years — and one dropdown collapses his −10 and −5 categories, so hay fever costs 10 bpm.
+Fixing it means collecting his actual categories in onboarding rather than "Low/Moderate/High", which
+is a product decision about the onboarding flow, not a code fix. Recorded here rather than guessed at.
+
+**Phase 6 — dead gates and unenforced rules.** Landed for H13, H18, M23 and M24; H17/M7 are
+detected but not enforced, pending a product decision.
+
+| #   | Before → after                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H13 | `raceContext` was `{ hasRace: false, daysToRace: null }` — hardcoded — so S3_RACE_WEEK and S4_RACE_SOON were unreachable while `training_plans.race_date` sat populated. The real race date is now passed. |
+| H13 | `sleepQuality: "ok"` and `restingHrDelta: 0` were literals holding the S2 soft-recovery guard shut. The product collects neither, so they are now ABSENT rather than asserted. `soreness` was only ever "high"/"low", making the `=== "medium"` branch dead; it now has three tiers derived from `avgRpeLast3`. |
+| H18 | `/\brest\b/i` on a plan day's focus classified the change as a **rest conversion**, the one kind that DELETES the day's exercise rows — so "Active rest + mobility" lost its entire prescription. Rest is now matched against an exact label set. |
+| M23 | Governor passes ran vector rules first and the ACWR danger lock last, and each pass claims the workouts it acts on — so a "reduce" could take a session and leave the danger-level "recovery" lock unable to touch it. Passes now run in descending severity. |
+| M24 | The recovery-run downshift copied the original's distance **and time**, prescribing the exact pace it existed to slow (a 5 km tempo in 22 min came back as 5 km in 22 min). Time is dropped. A day with no run at all produced a row with neither field — the athlete lost their session and got a blank prescription; it now gets a time-only easy run. |
+
+**Two notes on M23.** The register describes it as "a lower-severity restriction can claim a workout
+and block the ACWR danger lock". Only some of the pairs are genuine inversions: `posterior_chain_velocity_lock`
+and `elastic_tendon_speed_guard` are both `mode: "recovery"`, the same severity as the danger lock, and
+an existing test deliberately prefers their more specific rationale ("hamstring strain" says more than
+"ACWR is high") for an identical action. Those ties are preserved. The real inversions — `acwr_yellow_guard`
+and `anterior_chain_braking_guard`, both `reduce`, pre-empting a `recovery` lock — are fixed.
+
+**H17 and M7 are detected, not enforced.** `findProgressiveOverloadViolations` is a pure, tested
+function that finds week-over-week weight jumps past the ceiling the prompt asks for in prose, and
+generation now logs them. It deliberately does **not** reject or clamp: whether an over-ceiling jump
+should fail generation (making the athlete wait for a regeneration), be clamped down, or simply be
+surfaced to the coach is a product decision. Turning detection into rejection is a one-line change at
+the call site once that decision is made.
+
+The underlying cause of H17 remains: chunks are generated by **parallel** model calls with no shared
+state, so no call can see the previous chunk's loads and the rule is unenforceable across a chunk
+boundary by construction. Making generation sequential would fix that at a latency cost — also a
+product call.
+
+**Still open:** M6 (Maffetone's real categories in onboarding), L4/L1 (canonicalise stored weights, or
+warn at the preference toggle), and the enforcement half of H17/M7. All three are product decisions
+rather than code fixes, and are documented rather than guessed at.
 
 ---
 

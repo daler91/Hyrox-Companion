@@ -637,6 +637,7 @@ export function MuscleHeatMapCard({
           nextFocusTestId="muscle-heat-map-next-focus"
           testId="muscle-heat-map-analysis"
           totalSets={analysis.totalSets}
+          unitLabel={{ singular: "muscle assignment", plural: "muscle assignments" }}
         />
         <div className="grid gap-6 xl:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.2fr)]">
           <div

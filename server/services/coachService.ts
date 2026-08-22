@@ -784,6 +784,10 @@ export async function regenerateCoachNoteForPlanDay(
 
   const workoutInput: UpcomingWorkout = {
     id: day.id,
+    // Reached only when a plan day has no scheduled date, where there is no
+    // athlete-local day to place it on either; the value is a label for the
+    // prompt, not a window bound.
+    // eslint-disable-next-line no-restricted-syntax
     date: day.scheduledDate ?? new Date().toISOString().slice(0, 10),
     focus: day.focus,
     mainWorkout: day.mainWorkout,

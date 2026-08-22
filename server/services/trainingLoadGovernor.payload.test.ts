@@ -83,7 +83,11 @@ describe("buildLoadGovernorSuggestions — suggestion construction", () => {
         category: "running",
         setNumber: 1,
         distance: 5000,
-        time: 30,
+        // INVERTED (audit M24). This asserted time: 30 — the original session's
+        // duration, copied alongside its distance, which prescribes the exact
+        // pace the downshift exists to slow. Distance carries over so the
+        // session keeps its shape; time is dropped so effort is not dictated.
+        time: null,
         notes: "Load governor downshift: flat, low-intensity aerobic session.",
         confidence: 95,
         sortOrder: 0,
@@ -119,7 +123,7 @@ describe("buildLoadGovernorSuggestions — suggestion construction", () => {
       ],
     });
     expect(result[0].structuredSetRows?.[0]).toEqual(
-      expect.objectContaining({ distance: 4000, time: 25 }),
+      expect.objectContaining({ distance: 4000, time: null }),
     );
   });
 });
@@ -209,5 +213,12 @@ describe("buildLoadGovernorSuggestions — graduated (reduce/cap) downshifts", (
     );
     expect(result[0].focusOverride).toBe("Recovery Run");
     expect(result[0].structuredSetRows?.[0].exerciseName).toBe("recovery_run");
+    // A pure strength day has no run to borrow a distance from. It used to
+    // produce a row with neither distance nor time — the athlete lost their
+    // squats and got a blank prescription back (audit M24). A time-only easy
+    // run is a usable session and still does not dictate pace.
+    expect(result[0].structuredSetRows?.[0]).toEqual(
+      expect.objectContaining({ distance: null, time: 30 }),
+    );
   });
 });

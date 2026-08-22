@@ -169,7 +169,7 @@ export function computeRaceReadiness(tsb: number | null, acuteLoad?: number | nu
  */
 async function loadRaceReadiness(
   userId: string,
-  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null } | undefined,
+  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null; bodyweightKg?: number | null } | undefined,
   sets: readonly TrainingLoadSet[],
   log: RacePredictionLogger,
 ): Promise<RaceReadiness> {
@@ -187,6 +187,8 @@ async function loadRaceReadiness(
         age: user?.age ?? null,
         gender: user?.gender ?? null,
         restingHr: user?.restingHr ?? null,
+        // Scales unweighted-rep tonnage with the body being moved (audit M2).
+        bodyweightKg: user?.bodyweightKg ?? null,
         maxHr: user?.maxHr ?? null,
         ftp: user?.ftp ?? null,
       },

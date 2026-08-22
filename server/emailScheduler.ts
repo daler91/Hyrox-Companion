@@ -1,3 +1,4 @@
+import { pooledPercentage, roundOrNull } from "@shared/ratio";
 import type { User } from "@shared/schema";
 
 import { type MissedWorkoutData, sendMafTestReminder,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
@@ -74,14 +75,28 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     weekEndStr,
   );
 
-  const total = stats.completedCount + stats.missedCount + stats.skippedCount;
+  // Completion rate comes from plan days ALONE: how many of the week's due
+  // sessions were completed. It used to divide `workout_logs` completions by
+  // (those completions + plan-day misses + plan-day skips) -- a numerator and
+  // denominator from two different tables. An athlete with no plan has no
+  // misses and no skips, so the sum was just their own workout count and the
+  // email told them 100%, captioned "3 of 3 planned sessions" (audit H6).
+  //
+  // Excused days are already subtracted from `plannedCount`/`missedCount` by
+  // the storage layer, so a week spent injured is not a week of failures.
+  // `null` when nothing was due: no plan is not the same as a perfect score.
+  const dueCount =
+    stats.planCompletedCount + stats.plannedCount + stats.missedCount + stats.skippedCount;
+  const completionRate = roundOrNull(pooledPercentage(stats.planCompletedCount, dueCount), 0);
   const summaryData: WeeklySummaryData = {
     completedCount: stats.completedCount,
+    planCompletedCount: stats.planCompletedCount,
+    dueCount,
     plannedCount: stats.plannedCount,
     missedCount: stats.missedCount,
     skippedCount: stats.skippedCount,
     excusedCount: stats.excusedCount,
-    completionRate: total > 0 ? Math.round((stats.completedCount / total) * 100) : 0,
+    completionRate,
     currentStreak: streak,
     prsThisWeek,
     totalDuration: stats.totalDuration,
@@ -97,7 +112,10 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   // Also send push notification (fire-and-forget)
   void sendPushToUser(user.id, {
     title: "Weekly Training Summary",
-    body: `You completed ${summaryData.completedCount} workouts this week (${summaryData.completionRate}% completion rate).`,
+    body:
+      summaryData.completionRate == null
+        ? `You completed ${summaryData.completedCount} workouts this week.`
+        : `You completed ${summaryData.completedCount} workouts this week (${summaryData.completionRate}% completion rate).`,
     // The review of THIS week, not /analytics — which shows a different set of
     // numbers over a different window than the notification just quoted.
     url: `/review?week=${encodeURIComponent(weekStartStr)}`,

@@ -1,3 +1,4 @@
+import { dayDiff } from "@shared/dateUtils";
 import {
   buildStationCoverage,
   type StationCoverageSource,
@@ -6,6 +7,7 @@ import {
 import { formatMinutes, minutes } from "@shared/units";
 
 import type { TrainingContext } from "../../gemini/index";
+import { addDaysLocal, getLocalDateStrSafe } from "../../timezone";
 import { toDateStr } from "../../types";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { TimelineEntry } from "./types";
@@ -96,23 +98,40 @@ export function computeExerciseGaps(
 export function computeWeeklyVolume(
   timeline: TimelineEntry[],
   weeklyGoal: number,
+  userTimezone?: string | null,
 ): NonNullable<TrainingContext["coachingInsights"]>["weeklyVolume"] {
-  const { thisMondayStr, lastMondayStr } = getMondayWeekBoundaries();
+  const { thisMondayStr, lastMondayStr } = getMondayWeekBoundaries(new Date(), userTimezone);
+  const todayStr = getLocalDateStrSafe(new Date(), userTimezone ?? undefined);
+
+  // The trend compares like with like. It used to weigh a PARTIAL current week
+  // against a COMPLETE previous one, so on Monday morning the coach was told
+  // volume was "decreasing" no matter how the athlete was actually training
+  // (audit H11). Last week is now counted only as far through the week as today
+  // is — Wednesday's three sessions against last Wednesday's, not against last
+  // week's full seven days.
+  const lastWeekCutoff = addDaysLocal(lastMondayStr, dayDiff(thisMondayStr, todayStr));
 
   let thisWeek = 0;
-  let lastWeek = 0;
+  let lastWeekToDate = 0;
+  let lastWeekTotal = 0;
   for (const entry of timeline) {
     if (entry.status !== "completed" || !entry.date) continue;
-    if (entry.date >= thisMondayStr) thisWeek++;
-    else if (entry.date >= lastMondayStr && entry.date < thisMondayStr) lastWeek++;
+    if (entry.date >= thisMondayStr) {
+      thisWeek++;
+    } else if (entry.date >= lastMondayStr && entry.date < thisMondayStr) {
+      lastWeekTotal++;
+      if (entry.date <= lastWeekCutoff) lastWeekToDate++;
+    }
   }
 
   let trend: "increasing" | "stable" | "decreasing";
-  if (thisWeek > lastWeek) trend = "increasing";
-  else if (thisWeek < lastWeek) trend = "decreasing";
+  if (thisWeek > lastWeekToDate) trend = "increasing";
+  else if (thisWeek < lastWeekToDate) trend = "decreasing";
   else trend = "stable";
 
-  return { thisWeekCompleted: thisWeek, lastWeekCompleted: lastWeek, goal: weeklyGoal, trend };
+  // `lastWeekCompleted` stays last week's FULL total, which is what the coach
+  // should quote; only the trend uses the like-for-like slice.
+  return { thisWeekCompleted: thisWeek, lastWeekCompleted: lastWeekTotal, goal: weeklyGoal, trend };
 }
 
 type ProgressionFlag = NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"][0];

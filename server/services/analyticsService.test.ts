@@ -1,6 +1,6 @@
 import { afterEach, describe, expect,it, vi } from "vitest";
 
-import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeOverviewStats, countPersonalRecordsInRange } from "./analyticsService";
+import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview, computeAdherencePct, computeOverviewStats, countPersonalRecordsInRange } from "./analyticsService";
 
 function makeSet(overrides: Record<string, unknown> = {}) {
   return {
@@ -652,7 +652,12 @@ describe("calculateTrainingOverview", () => {
       avgPerWeek: 1.5, // 3 workouts / 2 weeks
       totalDuration: 150,
       avgDuration: 50, // 150 / 3
-      avgRpe: 7, // week1 avg=6, week2 avg=8 → (6+8)/2
+      // INVERTED (audit H9). This asserted 7 with the comment "(6+8)/2" -- the
+      // averaging-of-averages itself. Week 1 holds two rated sessions (7, 5 →
+      // mean 6) and week 2 holds one (8), so weighting by session count gives
+      // (6*2 + 8*1)/3 = 6.7. The old form let the single-session week carry the
+      // same influence as the two-session one.
+      avgRpe: 6.7,
       avgCompliancePct: null,
     });
   });
@@ -707,9 +712,9 @@ describe("computeOverviewStats", () => {
 
   it("rounds avgPerWeek to one decimal place", () => {
     const weeks = [
-      { weekStart: "2026-01-05", workoutCount: 4, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
-      { weekStart: "2026-01-12", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
-      { weekStart: "2026-01-19", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      { weekStart: "2026-01-05", workoutCount: 4, totalDuration: 0, avgRpe: null, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 0 },
+      { weekStart: "2026-01-12", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 0 },
+      { weekStart: "2026-01-19", workoutCount: 3, totalDuration: 0, avgRpe: null, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 0 },
     ];
     // 10 / 3 = 3.333... → rounded to 3.3
     expect(computeOverviewStats(weeks).avgPerWeek).toBe(3.3);
@@ -717,17 +722,18 @@ describe("computeOverviewStats", () => {
 
   it("only averages weeks that had at least one RPE entry", () => {
     const weeks = [
-      { weekStart: "2026-01-05", workoutCount: 2, totalDuration: 0, avgRpe: 8, categoryBreakdown: {} },
-      { weekStart: "2026-01-12", workoutCount: 2, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
-      { weekStart: "2026-01-19", workoutCount: 2, totalDuration: 0, avgRpe: 6, categoryBreakdown: {} },
+      { weekStart: "2026-01-05", workoutCount: 2, totalDuration: 0, avgRpe: 8, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 2 },
+      { weekStart: "2026-01-12", workoutCount: 2, totalDuration: 0, avgRpe: null, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 0 },
+      { weekStart: "2026-01-19", workoutCount: 2, totalDuration: 0, avgRpe: 6, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 2 },
     ];
-    // avg over the 2 weeks with RPE, not all 3
+    // Still only the 2 weeks that recorded an RPE, and now weighted by how many
+    // rated sessions each holds: both hold 2, so (8*2 + 6*2)/4 = 7.
     expect(computeOverviewStats(weeks).avgRpe).toBe(7);
   });
 
   it("returns avgDuration of 0 when no workouts were logged", () => {
     const weeks = [
-      { weekStart: "2026-01-05", workoutCount: 0, totalDuration: 0, avgRpe: null, categoryBreakdown: {} },
+      { weekStart: "2026-01-05", workoutCount: 0, totalDuration: 0, avgRpe: null, categoryBreakdown: {}, workoutsWithDuration: 0, rpeCount: 0 },
     ];
     expect(computeOverviewStats(weeks).avgDuration).toBe(0);
   });
@@ -765,5 +771,36 @@ describe("calculateTrainingOverview — athlete-local coverage dates", () => {
     });
 
     expect(result.stationCoverage.find((s) => s.station === "skierg")?.daysSince).toBe(1);
+  });
+});
+
+describe("computeAdherencePct — adherence over DUE sessions (audit H10)", () => {
+  const logged = (pcts: (number | null)[]) => pcts.map((compliancePct) => ({ compliancePct }));
+
+  it("does not reward skipping: one 90% session out of five due is 18%, not 90%", () => {
+    // The old form divided by the number of sessions LOGGED, so the four the
+    // athlete skipped removed themselves from adherence's own denominator and
+    // the app reported 90% for a week that was 20% completed.
+    expect(computeAdherencePct(logged([90]), 5)).toBe(18);
+    expect(computeAdherencePct(logged([90]), 1)).toBe(90);
+  });
+
+  it("reaches 100% only when every due session was completed in full", () => {
+    expect(computeAdherencePct(logged([100, 100, 100]), 3)).toBe(100);
+    expect(computeAdherencePct(logged([100, 100]), 3)).toBe(67);
+  });
+
+  it("ignores off-plan logs, which never carry a compliancePct", () => {
+    expect(computeAdherencePct(logged([80, null, null]), 2)).toBe(40);
+  });
+
+  it("withholds adherence entirely when nothing was due", () => {
+    // An athlete with no plan has no adherence. Reporting one is the same
+    // class of error as emailing them a 100% completion rate (H6).
+    expect(computeAdherencePct(logged([90]), 0)).toBeNull();
+  });
+
+  it("withholds adherence when the caller could not determine what was due", () => {
+    expect(computeAdherencePct(logged([90]), undefined)).toBeNull();
   });
 });

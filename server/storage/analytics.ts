@@ -7,7 +7,7 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, desc, eq, exists, gte, inArray, lte, notExists,type SQL,sql } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
@@ -90,9 +90,11 @@ export class AnalyticsStorage {
    * The weekly review needs all four statuses from one source: counting
    * completions from `workout_logs` while counting the denominator from
    * `plan_days` is what lets a completion rate exceed 100% for an athlete who
-   * trains off-plan (see getWeeklyStats, which the email tolerates because it
-   * reports the counts rather than a rate). `skipReason` rides along because
-   * this is its first read anywhere in the product.
+   * trains off-plan. `getWeeklyStats` used to do exactly that and the email
+   * DID turn it into a rate, so an athlete with no plan was emailed 100%
+   * (audit H6); it now returns `planCompletedCount` so that rate can be built
+   * from plan days alone. `skipReason` rides along because this is its first
+   * read anywhere in the product.
    *
    * User-scoped in SQL via the parent plan, like getMissedWorkoutsForDate, so
    * it stays an indexed lookup over one athlete's plans.
@@ -227,12 +229,60 @@ export class AnalyticsStorage {
   }
 
   /**
+   * How many plan sessions were DUE in [from, to] — the denominator "Avg
+   * Adherence" needs.
+   *
+   * That figure used to divide the sum of per-session `compliancePct` by the
+   * number of sessions the athlete actually LOGGED, so skipping the plan
+   * removed sessions from its own denominator and drove adherence toward 100%:
+   * complete one session at 90% and skip the other four, and the athlete was
+   * shown 90% (audit H10).
+   *
+   * Due means: finished, missed or skipped, plus days still marked `planned`
+   * whose date has already passed (`dueThrough`). A planned day still in the
+   * future is not yet due and must not count against the athlete. Days covered
+   * by a declared absence are excluded entirely, matching the weekly email and
+   * the timeline's "Not counted" badge — a week spent injured is not a week of
+   * failures.
+   */
+  async getDueSessionCount(userId: string, from: string, to: string, dueThrough: string): Promise<number> {
+    const [row] = await db
+      .select({ count: sql<number>`cast(count(*) as int)` })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          sql`${planDays.scheduledDate} >= ${from}`,
+          sql`${planDays.scheduledDate} <= ${to}`,
+          or(
+            inArray(planDays.status, ["completed", "missed", "skipped"]),
+            and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} <= ${dueThrough}`),
+          ),
+          notExists(
+            db
+              .select({ one: sql`1` })
+              .from(timelineAnnotations)
+              .where(
+                and(
+                  eq(timelineAnnotations.userId, userId),
+                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
+                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
+                ),
+              ),
+          ),
+        ),
+      );
+    return row?.count ?? 0;
+  }
+
+  /**
    * The weekly summary email's counts (its only caller — `processWeeklySummary`
    * reports the most recently COMPLETED week, which the excused split below
    * relies on: with every day of the week in the past, "held out of missed by a
    * declared absence" collapses to annotation coverage, no today needed).
    */
-  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; plannedCount: number; missedCount: number; skippedCount: number; excusedCount: number; totalDuration: number }> {
+  async getWeeklyStats(userId: string, weekStart: string, weekEnd: string): Promise<{ completedCount: number; planCompletedCount: number; plannedCount: number; missedCount: number; skippedCount: number; excusedCount: number; totalDuration: number }> {
     const [logs] = await db
       .select({
         completedCount: sql<number>`cast(count(*) as int)`,
@@ -306,6 +356,11 @@ export class AnalyticsStorage {
     let plannedCount = 0;
     let missedCount = 0;
     let skippedCount = 0;
+    // Plan days the athlete actually completed. The group-by has always
+    // returned this status and the loop has always dropped it, which is why
+    // the email had to reach into `workout_logs` for a numerator and ended up
+    // dividing one table by another (audit H6).
+    let planCompletedCount = 0;
 
     for (const day of days) {
       if (day.status === 'planned') {
@@ -314,6 +369,8 @@ export class AnalyticsStorage {
         missedCount = day.count;
       } else if (day.status === 'skipped') {
         skippedCount = day.count;
+      } else if (day.status === 'completed') {
+        planCompletedCount = day.count;
       }
     }
 
@@ -327,6 +384,6 @@ export class AnalyticsStorage {
       }
     }
 
-    return { completedCount, plannedCount, missedCount, skippedCount, excusedCount, totalDuration };
+    return { completedCount, planCompletedCount, plannedCount, missedCount, skippedCount, excusedCount, totalDuration };
   }
 }

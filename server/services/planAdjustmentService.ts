@@ -103,8 +103,35 @@ function hasAnyField(fields: PlanAdjustmentUpdatedFields): boolean {
   return Object.values(fields).some((value) => value !== undefined);
 }
 
-const REST_FOCUS_PATTERN = /\brest\b/i;
-const REST_WORKOUT_PATTERN = /\b(?:complete rest|rest day|full rest)\b/i;
+/**
+ * Labels that mean the day becomes a genuine rest day.
+ *
+ * Matched EXACTLY, not by substring. `rest_conversion` is the one change kind
+ * that DELETES a table-backed day's exercise rows, and the focus test used to
+ * be `/\brest\b/i` — so "Active rest + mobility" contained the word, was
+ * classified as a rest conversion, and had its entire mobility prescription
+ * silently dropped (audit H18). A destructive branch must not be reachable by
+ * a fuzzy match on free text.
+ */
+const REST_LABELS: ReadonlySet<string> = new Set([
+  "rest",
+  "rest day",
+  "complete rest",
+  "full rest",
+  "off",
+  "day off",
+  "no training",
+]);
+
+function isExactRestLabel(value: string | null | undefined): boolean {
+  if (value == null) return false;
+  // Collapse whitespace and drop sentence punctuation so "Rest." and "Rest Day"
+  // still read as rest, while "Active rest" does not. Both patterns are global
+  // character-class replacements rather than anchored `+$` forms, which carry
+  // super-linear backtracking on a long run of the same character.
+  const normalized = value.trim().toLowerCase().replace(/[.!]/g, "").replace(/\s+/g, " ").trim();
+  return REST_LABELS.has(normalized);
+}
 
 export function derivePlanAdjustmentChangeKind(
   fields: PlanAdjustmentUpdatedFields,
@@ -112,9 +139,7 @@ export function derivePlanAdjustmentChangeKind(
   const prescriptionChanged =
     fields.mainWorkout !== undefined || fields.accessory !== undefined || fields.focus !== undefined;
   if (prescriptionChanged) {
-    const isRest =
-      (fields.focus != null && REST_FOCUS_PATTERN.test(fields.focus)) ||
-      (fields.mainWorkout != null && REST_WORKOUT_PATTERN.test(fields.mainWorkout));
+    const isRest = isExactRestLabel(fields.focus) || isExactRestLabel(fields.mainWorkout);
     return isRest ? "rest_conversion" : "workout_update";
   }
   if (fields.scheduledDate !== undefined) return "reschedule";

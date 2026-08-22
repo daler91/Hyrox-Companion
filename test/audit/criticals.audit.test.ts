@@ -252,40 +252,49 @@ describe("C3 — Form/TSB and the history gate (FIXED)", () => {
   });
 });
 
-describe("C4 — ageing past the top benchmark cohort predicts a faster race", () => {
+describe("C4 — ageing past the top benchmark cohort (FIXED)", () => {
   /**
-   * C4 — `deriveAgeGroupFromAge` produces bands up to 80-84, but the generated
-   * dataset stops at 60-64 for open male. On a miss the code falls back to the
-   * all-ages roll-up, which is dominated by 25-39-year-olds — so the reference
-   * gets FASTER the moment an athlete ages out of the table.
-   * CURRENT:  age 62 → 60-64 cohort; age 67 → all-ages, ~9-10 min faster
-   * INTENDED: clamp to the nearest available band (the oldest), never all-ages
-   * RETIRE:   assert `resolvedAgeGroup` is "60-64" for a 67-year-old.
+   * C4 — RETIRED 2026-08-22 (Phase 4+). `resolveRaceReference` now clamps to the
+   * nearest band that actually HAS a cohort instead of falling through to the
+   * all-ages roll-up, which is dominated by 25-39-year-olds and so was faster
+   * than any masters cohort. Kept as a regression guard on the clamp.
    */
-  it("[BUG C4] predicts a 67-year-old faster than a 62-year-old", () => {
+  it("[FIXED C4] keeps a 67-year-old on the oldest real cohort, not the all-ages roll-up", () => {
     const at62 = resolveRaceReference("open", "male", deriveAgeGroupFromAge(62));
     const at67 = resolveRaceReference("open", "male", deriveAgeGroupFromAge(67));
 
     expect(at62.resolvedAgeGroup).toBe("60-64");
     expect(at62.ageGroupAssumed).toBe(false);
 
-    // 65-69 exists as a band but not as a cohort, so the athlete lands on all-ages.
+    // 65-69 is a real band with no cohort behind it, so the athlete is clamped
+    // to 60-64 and told the band was assumed — rather than being handed the
+    // all-ages reference, which used to predict them 9:47 FASTER than at 62.
     expect(deriveAgeGroupFromAge(67)).toBe("65-69");
-    expect(at67.resolvedAgeGroup).toBeNull();
+    expect(at67.resolvedAgeGroup).toBe("60-64");
     expect(at67.ageGroupAssumed).toBe(true);
 
     const older = totalReferenceSeconds(at67.reference);
     const younger = totalReferenceSeconds(at62.reference);
-    expect(older).toBeLessThan(younger);
-    expect(younger - older).toBeGreaterThan(8 * 60);
+    expect(older).toBe(younger);
   });
 
   /**
-   * The invariant C4 violates.
-   * RETIRE: when this reports "expected to fail, but passed", drop `.fails`.
+   * CORRECTION to the Phase 0 intent test.
+   *
+   * It originally asserted "the reference never gets faster as the athlete gets
+   * older" across 25-75. That invariant is FALSE OF THE WORLD, and the fix
+   * exposed it: with C4's all-ages cliff removed, one 3-second inversion
+   * survives at 25-29 (5082s) → 30-34 (5079s). That is not a defect. Hyrox
+   * athletes genuinely peak around 30-34 — the generated cohorts run 16-24
+   * 5089s, 25-29 5082s, 30-34 5079s, 35-39 5133s — so the reference legitimately
+   * improves through the athlete's twenties before degrading.
+   *
+   * Forcing the code to satisfy the original invariant would have meant
+   * distorting real benchmark data to fit a wrong assumption. The two
+   * assertions below are what C4 was actually about.
    */
-  it.fails("[INTENT C4] the reference never gets faster as the athlete gets older", () => {
-    for (let age = 25; age <= 75; age++) {
+  it("[INTENT C4] never gets faster with age once past the 30-34 performance peak", () => {
+    for (let age = 35; age <= 75; age++) {
       const younger = totalReferenceSeconds(
         resolveRaceReference("open", "male", deriveAgeGroupFromAge(age)).reference,
       );
@@ -293,6 +302,31 @@ describe("C4 — ageing past the top benchmark cohort predicts a faster race", (
         resolveRaceReference("open", "male", deriveAgeGroupFromAge(age + 5)).reference,
       );
       expect(older).toBeGreaterThanOrEqual(younger);
+    }
+  });
+
+  it("[INTENT C4] never drops an athlete onto the all-ages roll-up", () => {
+    // The cliff itself: a real band with no cohort behind it must clamp to a
+    // neighbouring cohort, never to the all-ages reference. Every age from 16
+    // up must resolve to a named band.
+    for (let age = 16; age <= 99; age++) {
+      const resolved = resolveRaceReference("open", "male", deriveAgeGroupFromAge(age));
+      expect(resolved.resolvedAgeGroup).not.toBeNull();
+    }
+  });
+
+  it("[INTENT C4] no five-year step swings the reference by anything like the old cliff", () => {
+    // C4 moved a 67-year-old 9:47 (587s) FASTER. Genuine cohort-to-cohort
+    // variation is single-digit seconds to a few minutes, and never improves by
+    // more than the ~7s of the twenties peak.
+    for (let age = 16; age <= 90; age++) {
+      const younger = totalReferenceSeconds(
+        resolveRaceReference("open", "male", deriveAgeGroupFromAge(age)).reference,
+      );
+      const older = totalReferenceSeconds(
+        resolveRaceReference("open", "male", deriveAgeGroupFromAge(age + 5)).reference,
+      );
+      expect(younger - older).toBeLessThan(60);
     }
   });
 });
@@ -375,29 +409,72 @@ describe("C5 — periodisation and the calorie safety floor (FIXED)", () => {
   });
 });
 
-describe("C6 — every athlete gets a hardcoded 50 UTSS reference load", () => {
+describe("C6 — the periodisation reference load (FIXED)", () => {
   /**
-   * C6 — the sole call site is `defaultPeriodizationConfig(carbG, 0)`; the second
-   * argument is the athlete's recent average daily UTSS, hardcoded to zero. The
-   * function's docstring claims the reference is derived from that average.
-   * CURRENT:  referenceUtss is 50 for every athlete, whatever they actually train
-   * INTENDED: the athlete's real recent average, floored at MIN_REFERENCE_UTSS
-   * RETIRE:   thread the real value through TargetsDialog and assert it is used.
+   * C6 — RETIRED 2026-08-22. `TargetsDialog` now passes the athlete's 28-day
+   * chronic EWMA instead of a hardcoded 0, so the reference is the athlete's own
+   * typical load. When there genuinely is no history the config reports
+   * `referenceBasis: "assumed"` and the dialog says so, rather than presenting
+   * the placeholder as personalisation.
    */
-  it("[BUG C6] ignores the athlete's real load and always resolves to 50", () => {
-    // What the docstring promises, if the real average were passed:
-    expect(defaultPeriodizationConfig(300, 15).referenceUtss).toBe(25);
-    expect(defaultPeriodizationConfig(300, 120).referenceUtss).toBe(120);
+  it("[FIXED C6] uses the athlete's real load, and flags the placeholder when there is none", () => {
+    const light = defaultPeriodizationConfig(300, 15);
+    expect(light.referenceUtss).toBe(25); // floored at MIN_REFERENCE_UTSS
+    expect(light.referenceBasis).toBe("measured");
 
-    // What every athlete actually gets, because the call site passes 0:
-    expect(defaultPeriodizationConfig(300, 0).referenceUtss).toBe(50);
+    const heavy = defaultPeriodizationConfig(300, 120);
+    expect(heavy.referenceUtss).toBe(120);
+    expect(heavy.referenceBasis).toBe("measured");
+
+    // No history: the placeholder still applies, but is no longer silent.
+    for (const noLoad of [0, null]) {
+      const assumed = defaultPeriodizationConfig(300, noLoad);
+      expect(assumed.referenceUtss).toBe(50);
+      expect(assumed.referenceBasis).toBe("assumed");
+    }
   });
 
   /**
-   * The consequence: a real training day scores well under the assumed 50, so
-   * carbs are cut on days the athlete actually trained.
+   * The consequence C6 produced, now measured against the athlete's own load:
+   * a typical session no longer reads as a below-average day.
    */
-  it("[BUG C6] cuts carbs on a genuine training day because 50 UTSS is assumed normal", () => {
+  it("[FIXED C6] stops cutting carbs on a genuine training day", () => {
+    const baseline = calculateNutritionTarget({
+      bodyweightKg: 70,
+      heightCm: 175,
+      ageYears: 32,
+      sex: "male",
+      activityLevel: "moderate",
+      goalDirection: "maintain",
+      goalRateKgPerWeek: 0,
+    });
+    const base = {
+      calories: baseline.calories,
+      proteinG: baseline.proteinG,
+      carbG: baseline.carbG,
+      fatG: baseline.fatG,
+    };
+    // An athlete whose typical day really is ~30 UTSS.
+    const config: PeriodizationConfig = {
+      enabled: true,
+      ...defaultPeriodizationConfig(baseline.carbG, 30),
+    };
+
+    const trainingDay = effectiveTarget(base, 30, config);
+
+    // A day at the athlete's own typical load is neutral, not a deficit.
+    expect(trainingDay.carbDeltaG).toBe(0);
+    expect(trainingDay.carbG).toBe(baseline.carbG);
+
+    // And a genuinely hard day is now a surplus.
+    const hardDay = effectiveTarget(base, 60, config);
+    expect(hardDay.carbDeltaG).toBeGreaterThan(0);
+  });
+
+  /**
+   * The pre-fix behaviour, kept as the record of what the hardcoded 50 did.
+   */
+  it("[FIXED C6] shows what the assumed 50 used to do to a training day", () => {
     const baseline = calculateNutritionTarget({
       bodyweightKg: 70,
       heightCm: 175,

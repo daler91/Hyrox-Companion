@@ -71,10 +71,14 @@ describe('dateUtils', () => {
     });
 
     describe('getStartOfWeek', () => {
-      it('should return Sunday when weekStartsOn is 0 (default)', () => {
+      it('should return Monday by default, and Sunday when asked for 0', () => {
+        // INVERTED (audit L7). The default was Sunday while the server, plan
+        // import and weekly review are all Monday-start, so any caller that
+        // omitted the argument silently shifted the week by a day.
         const start = getStartOfWeek();
-        expect(start.getDay()).toBe(0);
-        expect(toISODateString(start)).toBe('2023-10-15');
+        expect(start.getDay()).toBe(1);
+        expect(toISODateString(start)).toBe('2023-10-16');
+        expect(toISODateString(getStartOfWeek(undefined, 0))).toBe('2023-10-15');
         expect(start.getHours()).toBe(0);
         expect(start.getMinutes()).toBe(0);
         expect(start.getSeconds()).toBe(0);
@@ -89,16 +93,17 @@ describe('dateUtils', () => {
 
       it('should correctly calculate start of week for a specific date', () => {
         const specificDate = new Date(Date.UTC(2023, 9, 21, 15, 0, 0)); // Saturday
-        const start = getStartOfWeek(specificDate);
-        expect(toISODateString(start)).toBe('2023-10-15');
+        expect(toISODateString(getStartOfWeek(specificDate))).toBe('2023-10-16');
+        expect(toISODateString(getStartOfWeek(specificDate, 0))).toBe('2023-10-15');
       });
     });
 
     describe('getEndOfWeek', () => {
-      it('should return Saturday when weekStartsOn is 0 (default)', () => {
+      it('should return Sunday by default, and Saturday when asked for 0', () => {
         const end = getEndOfWeek();
-        expect(end.getDay()).toBe(6);
-        expect(toISODateString(end)).toBe('2023-10-21');
+        expect(end.getDay()).toBe(0);
+        expect(toISODateString(end)).toBe('2023-10-22');
+        expect(toISODateString(getEndOfWeek(undefined, 0))).toBe('2023-10-21');
         expect(end.getHours()).toBe(23);
         expect(end.getMinutes()).toBe(59);
         expect(end.getSeconds()).toBe(59);
@@ -114,34 +119,35 @@ describe('dateUtils', () => {
 
     describe('getStartOfWeekString', () => {
       it('should return string representation of start of week', () => {
-        expect(getStartOfWeekString()).toBe('2023-10-15');
-        expect(getStartOfWeekString(undefined, 1)).toBe('2023-10-16');
+        expect(getStartOfWeekString()).toBe('2023-10-16');
+        expect(getStartOfWeekString(undefined, 0)).toBe('2023-10-15');
       });
     });
 
     describe('getEndOfWeekString', () => {
       it('should return string representation of end of week', () => {
-        expect(getEndOfWeekString()).toBe('2023-10-21');
-        expect(getEndOfWeekString(undefined, 1)).toBe('2023-10-22');
+        expect(getEndOfWeekString()).toBe('2023-10-22');
+        expect(getEndOfWeekString(undefined, 0)).toBe('2023-10-21');
       });
     });
 
     describe('isDateInCurrentWeek', () => {
       it('should return true for dates in current week', () => {
-        expect(isDateInCurrentWeek('2023-10-15')).toBe(true);
+        // Default is now Monday-start (audit L7): Oct 16 → Oct 22.
+        expect(isDateInCurrentWeek('2023-10-16')).toBe(true);
         expect(isDateInCurrentWeek('2023-10-18')).toBe(true);
-        expect(isDateInCurrentWeek('2023-10-21')).toBe(true);
+        expect(isDateInCurrentWeek('2023-10-22')).toBe(true);
       });
 
       it('should return false for dates outside current week', () => {
-        expect(isDateInCurrentWeek('2023-10-14')).toBe(false);
-        expect(isDateInCurrentWeek('2023-10-22')).toBe(false);
+        expect(isDateInCurrentWeek('2023-10-15')).toBe(false);
+        expect(isDateInCurrentWeek('2023-10-23')).toBe(false);
       });
 
       it('should respect weekStartsOn parameter', () => {
-        // Monday week start: Oct 16 to Oct 22
-        expect(isDateInCurrentWeek('2023-10-15', 1)).toBe(false);
-        expect(isDateInCurrentWeek('2023-10-22', 1)).toBe(true);
+        // Sunday week start: Oct 15 to Oct 21.
+        expect(isDateInCurrentWeek('2023-10-15', 0)).toBe(true);
+        expect(isDateInCurrentWeek('2023-10-22', 0)).toBe(false);
       });
     });
 

@@ -28,7 +28,12 @@ describe("email generation", () => {
 
   const baseData: WeeklySummaryData = {
     completedCount: 3,
-    plannedCount: 4,
+    // The rate is now plan days completed / plan days due, from one table
+    // (audit H6): 3 of 4 due = 75%, the same figure this fixture always
+    // asserted but no longer arrived at by dividing workout_logs by plan_days.
+    planCompletedCount: 3,
+    dueCount: 4,
+    plannedCount: 0,
     missedCount: 1,
     skippedCount: 0,
     excusedCount: 0,
@@ -60,6 +65,55 @@ describe("email generation", () => {
     it("returns default URL when env.APP_URL is an empty string", () => {
       env.APP_URL = "";
       expect(getAppUrl()).toBe("https://fitai.coach");
+    });
+  });
+
+  describe("buildWeeklySummaryEmail — no plan means no completion rate (audit H6)", () => {
+    const noPlanData: WeeklySummaryData = {
+      ...baseData,
+      // Trained three times off-plan; nothing was ever scheduled.
+      completedCount: 3,
+      planCompletedCount: 0,
+      dueCount: 0,
+      plannedCount: 0,
+      missedCount: 0,
+      skippedCount: 0,
+      completionRate: null,
+    };
+
+    it("omits the completion-rate card entirely rather than showing 100%", () => {
+      const { html } = buildWeeklySummaryEmail(baseUser, noPlanData);
+      expect(html).not.toContain("Completion Rate");
+      // Not a bare "100%" search: the stylesheet legitimately contains
+      // `width:100%`. This targets the stat-value slot the rate renders into.
+      expect(html).not.toMatch(/stat-value">\s*\d+%/);
+    });
+
+    it("does not claim the athlete completed N of N planned sessions", () => {
+      const { html } = buildWeeklySummaryEmail(baseUser, noPlanData);
+      expect(html).not.toContain("planned sessions");
+    });
+
+    it("still reports the workouts they actually logged", () => {
+      const { subject } = buildWeeklySummaryEmail(baseUser, noPlanData);
+      expect(subject).toContain("3 workouts completed");
+    });
+
+    it("counts the caption from plan days on both sides, not from logged workouts", () => {
+      // An athlete who trains off-plan logs more than the plan asked for. The
+      // caption must still read against the plan, never exceed it.
+      const offPlan: WeeklySummaryData = {
+        ...baseData,
+        completedCount: 9,
+        planCompletedCount: 2,
+        dueCount: 4,
+        plannedCount: 0,
+        missedCount: 2,
+        completionRate: 50,
+      };
+      const { html } = buildWeeklySummaryEmail(baseUser, offPlan);
+      expect(html).toContain("2 of 4 planned sessions");
+      expect(html).not.toContain("9 of");
     });
   });
 

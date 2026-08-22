@@ -144,6 +144,8 @@ export interface AthleteLoadContext {
   restingHr?: number | null;
   maxHr?: number | null;
   ftp?: number | null;
+  /** Canonical kg. Scales the tonnage of unweighted reps — see BODYWEIGHT_REP_REFERENCE_KG. */
+  bodyweightKg?: number | null;
 }
 
 export const DEFAULT_EXERCISE_LOAD_TAGS: ExerciseLoadTagInput[] = [
@@ -326,6 +328,8 @@ export function calculateStrengthStressScore(
   tag: ExerciseLoadTagInput,
   rpe?: number | null,
   weightUnit: string = "kg",
+  /** Canonical kg, for scaling unweighted reps (audit M2). */
+  athleteBodyweightKg?: number | null,
 ): number {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
   // UTSS must represent physiological load, not the athlete's display unit, so
@@ -339,13 +343,45 @@ export function calculateStrengthStressScore(
   if (weight > 0 && reps > 0) {
     weightedTonnage = weight * Math.max(reps, 1);
   } else if (reps > 0) {
-    weightedTonnage = reps * 20;
+    weightedTonnage = reps * bodyweightRepLoadKg(athleteBodyweightKg);
   } else if (distance > 0) {
     weightedTonnage = distance * 0.08;
   }
   if (weightedTonnage <= 0) return 0;
   const modifier = Math.max(0.4, tag.axialLoadModifier) * Math.max(0.6, tag.eccentricRiskModifier);
   return round((weightedTonnage / 100) * rpeFactor(rpe) * modifier, 2);
+}
+
+// Per-rep tonnage for an UNWEIGHTED rep, in kg.
+//
+// This was a flat 20 for everyone, so a burpee, a pull-up and a wall ball were
+// identical load and a 100 kg athlete's set scored exactly the same as a 55 kg
+// athlete's (audit M2). `users.bodyweightKg` never reached the load model at
+// all. Bodyweight movements plainly scale with the body being moved, so the
+// per-rep figure is now proportional to it.
+//
+// Deliberately expressed as a RATIO against a reference bodyweight rather than
+// as an absolute fraction of body mass. Every governor threshold, ACWR
+// baseline and periodisation reference in this app is calibrated against the
+// existing UTSS scale; multiplying bodyweight tonnage by ~2.6x (0.65 x 80 kg
+// vs 20) would silently recalibrate all of them. Anchoring at 75 kg leaves the
+// median athlete exactly where they were and only changes the ratio BETWEEN
+// athletes, which is the part that was wrong.
+//
+// Still one number for every movement. Genuinely per-movement fractions (a
+// pull-up moves more of the body than a wall ball) need a field on
+// `ExerciseLoadTagInput` and a calibrated value per tag row; that is follow-up
+// work and is not invented here.
+const BODYWEIGHT_REP_LOAD_KG = 20;
+const BODYWEIGHT_REP_REFERENCE_KG = 75;
+
+export function bodyweightRepLoadKg(bodyweightKg?: number | null): number {
+  if (bodyweightKg == null || !Number.isFinite(bodyweightKg) || bodyweightKg <= 0) {
+    return BODYWEIGHT_REP_LOAD_KG;
+  }
+  // Bounded so an implausible profile value cannot dominate the load model.
+  const ratio = Math.min(2, Math.max(0.5, bodyweightKg / BODYWEIGHT_REP_REFERENCE_KG));
+  return round(BODYWEIGHT_REP_LOAD_KG * ratio, 2);
 }
 
 function inferWorkoutText(
@@ -371,8 +407,26 @@ export function estimateHrMax(age?: number | null): number {
   return age && age > 0 ? Math.round(208 - 0.7 * age) : DEFAULT_HR_MAX;
 }
 
-function resolveHrMax(athlete?: AthleteLoadContext): number {
-  return athlete?.maxHr && athlete.maxHr > 0 ? athlete.maxHr : estimateHrMax(athlete?.age);
+/**
+ * The athlete's max HR and where it came from.
+ *
+ * `DEFAULT_HR_MAX` (190) is the Tanaka prediction for a 26-year-old. Applying
+ * it to an athlete whose age we do not know is not a small approximation: a
+ * 52-year-old's predicted max is 172, so their threshold run scored 69.2% of
+ * heart-rate reserve instead of the true 82.3% and was classified as easy
+ * aerobic Z2 (audit H3). `users.age` is only ever written by the OPTIONAL
+ * nutrition onboarding step, so skipping a nutrition screen silently corrupted
+ * every heart-rate-derived number.
+ */
+function resolveHrMax(athlete?: AthleteLoadContext): {
+  hrMax: number;
+  basis: "measured" | "age_estimated" | "assumed";
+} {
+  if (athlete?.maxHr && athlete.maxHr > 0) return { hrMax: athlete.maxHr, basis: "measured" };
+  if (athlete?.age && athlete.age > 0) {
+    return { hrMax: estimateHrMax(athlete.age), basis: "age_estimated" };
+  }
+  return { hrMax: DEFAULT_HR_MAX, basis: "assumed" };
 }
 
 function resolveHrRest(athlete?: AthleteLoadContext): number {
@@ -388,7 +442,12 @@ export function hrReserveRatio(
   const hr = Number(avgHr ?? 0);
   if (hr <= 0) return null;
   const hrRest = resolveHrRest(athlete);
-  const hrMax = resolveHrMax(athlete);
+  const { hrMax, basis } = resolveHrMax(athlete);
+  // With neither a measured max nor an age there is no honest denominator, so
+  // the HR signal is WITHHELD rather than computed against a 26-year-old's
+  // predicted max (audit H3). Callers fall through to the RPE the athlete
+  // actually gave, which is a real observation rather than a guess.
+  if (basis === "assumed") return null;
   if (hrMax <= hrRest) return null;
   const ratio = (hr - hrRest) / (hrMax - hrRest);
   if (ratio <= 0) return null;
@@ -437,7 +496,7 @@ function hrZoneRank(zone: HrZone): number {
 // HR at ~88% HRmax, the common no-field-test heuristic. Floored strictly above
 // resting HR so the hrTSS denominator (LTHR − rest) is always positive.
 export function estimateLthr(athlete?: AthleteLoadContext): number {
-  const hrMax = resolveHrMax(athlete);
+  const { hrMax } = resolveHrMax(athlete);
   const hrRest = resolveHrRest(athlete);
   return Math.max(Math.round(0.88 * hrMax), hrRest + 1);
 }
@@ -446,7 +505,11 @@ export function estimateLthr(athlete?: AthleteLoadContext): number {
 // Z1.minHr == resting HR, Z5.maxHr == max HR.
 export function hrZoneBoundaries(athlete?: AthleteLoadContext): HrZoneBoundary[] {
   const hrRest = resolveHrRest(athlete);
-  const hrMax = resolveHrMax(athlete);
+  const { hrMax, basis } = resolveHrMax(athlete);
+  // No measured max and no age means no honest zone table. Rendering one built
+  // on a 26-year-old's predicted max told a 52-year-old their threshold effort
+  // was easy aerobic work (audit H3); an empty table shows nothing instead.
+  if (basis === "assumed") return [];
   // Same guard `hrReserveRatio` already applies. Without it, a resting HR entered
   // above max produced a negative reserve and an inverted zone table rendered as
   // fact; an empty table correctly shows nothing instead (audit L8).
@@ -1026,11 +1089,12 @@ function applyStrengthLoad(
   sets: readonly TrainingLoadSet[],
   tags: Map<string, ExerciseLoadTagInput>,
   weightUnit: string,
+  athlete?: AthleteLoadContext,
 ): void {
   for (const set of sets) {
     if (!isStrengthSet(set)) continue;
     const setTag = getTag(tags, set.exerciseName, set.category);
-    const stress = calculateStrengthStressScore(set, setTag, log.rpe, weightUnit);
+    const stress = calculateStrengthStressScore(set, setTag, log.rpe, weightUnit, athlete?.bodyweightKg);
     day.strengthStressScore += stress;
     updateVectorLoads(day.vectorLoads, stress, setTag);
   }
@@ -1106,7 +1170,7 @@ function applyWorkoutLoad(
   weightUnit: string,
   athlete?: AthleteLoadContext,
 ): void {
-  applyStrengthLoad(day, log, sets, tags, weightUnit);
+  applyStrengthLoad(day, log, sets, tags, weightUnit, athlete);
   applyCardioLoad(day, log, sets, tags, athlete);
   finalizeDailyLoad(day);
 }

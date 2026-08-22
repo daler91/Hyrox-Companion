@@ -82,8 +82,14 @@ export default function Analytics() {
 
   const dateParams = useMemo(() => {
     if (dateRange === "all") return "";
-    const from = format(subDays(new Date(), Number(dateRange)), "yyyy-MM-dd");
-    return `?from=${from}`;
+    // `subDays(today, N)` … today inclusive is N+1 days, so "Last 90 days"
+    // fetched 91 (audit L10). N-1 makes the window exactly N days, and `to`
+    // closes the top end rather than leaving it open — which also gives the
+    // weekly rollup a real range to zero-fill rest weeks against (H7/M10).
+    const today = new Date();
+    const from = format(subDays(today, Number(dateRange) - 1), "yyyy-MM-dd");
+    const to = format(today, "yyyy-MM-dd");
+    return `?from=${from}&to=${to}`;
   }, [dateRange]);
 
   const { data: preferences } = useQuery<{ weeklyGoal?: number }>({

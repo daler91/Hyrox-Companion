@@ -4,7 +4,12 @@ import { env } from "./env";
 import { sanitizeHtml } from "./utils/sanitize";
 
 export interface WeeklySummaryData {
+  /** Workouts LOGGED this week, on-plan or not. Never a rate denominator. */
   completedCount: number;
+  /** Plan days completed. The completion-rate numerator. */
+  planCompletedCount: number;
+  /** Plan days due this week (completed + planned + missed + skipped, less excused). */
+  dueCount: number;
   plannedCount: number;
   missedCount: number;
   skippedCount: number;
@@ -14,7 +19,12 @@ export interface WeeklySummaryData {
    * the athlete spent injured is not a week of failures.
    */
   excusedCount: number;
-  completionRate: number;
+  /**
+   * Plan days completed ÷ plan days due, as a percentage. `null` when nothing
+   * was due — an athlete with no plan has no completion rate, and reporting
+   * one as 100% is what audit H6 was about.
+   */
+  completionRate: number | null;
   currentStreak: number;
   prsThisWeek: number;
   totalDuration: number;
@@ -72,8 +82,9 @@ export function buildWeeklySummaryEmail(
   data: WeeklySummaryData,
 ): { subject: string; html: string } {
   const name = getUserName(user);
-  const totalWorkouts =
-    data.completedCount + data.missedCount + data.skippedCount;
+  // The caption counts PLAN days on both sides, so it can no longer read
+  // "3 of 3 planned sessions" to an athlete who has no plan (audit H6).
+  const hasPlan = data.completionRate != null && data.dueCount > 0;
   const durationHours = Math.floor(data.totalDuration / 60);
   const durationMins = data.totalDuration % 60;
   const durationStr =
@@ -134,21 +145,21 @@ export function buildWeeklySummaryEmail(
         <div class="stat-value">${data.completedCount}</div>
         <div class="stat-label">Completed</div>
       </div>
-      <div class="stat-card">
+      ${hasPlan ? `<div class="stat-card">
         <div class="stat-value">${data.completionRate}%</div>
         <div class="stat-label">Completion Rate</div>
-      </div>
+      </div>` : ""}
       <div class="stat-card">
         <div class="stat-value">${durationStr}</div>
         <div class="stat-label">Total Time</div>
       </div>
     </div>
-${data.completionRate > 0 ? `
+${hasPlan ? `
     <div class="section-title">Completion</div>
     <div class="progress-bar">
-      <div class="progress-fill" style="width:${Math.min(data.completionRate, 100)}%"></div>
+      <div class="progress-fill" style="width:${Math.min(data.completionRate ?? 0, 100)}%"></div>
     </div>
-    <p style="font-size:13px;color:#64748b;">${data.completedCount} of ${totalWorkouts} planned sessions</p>` : ""}
+    <p style="font-size:13px;color:#64748b;">${data.planCompletedCount} of ${data.dueCount} planned sessions</p>` : ""}
 ${data.currentStreak > 0 ? `
     <div class="stat-grid">
       <div class="stat-card">

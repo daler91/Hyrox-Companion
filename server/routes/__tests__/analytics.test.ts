@@ -31,6 +31,9 @@ vi.mock("../../storage", () => ({
       getExerciseSetsForPersonalRecords: vi.fn(),
       getWorkoutLogsByDateRange: vi.fn(),
       getPlanDaysByDateRange: vi.fn(),
+      // Denominator for "Avg Adherence" (audit H10). Defaults to 0 so the
+      // existing cases, which have no plan, keep exercising the no-plan path.
+      getDueSessionCount: vi.fn().mockResolvedValue(0),
     },
     users: {
       getUser: vi.fn(),
@@ -395,7 +398,7 @@ describe("Analytics Routes", () => {
             currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           }),
           weightUnit: "kg",
-          athlete: { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
+          athlete: { age: null, gender: null, restingHr: null, bodyweightKg: null, maxHr: null, ftp: null },
         }),
       );
     });
@@ -465,7 +468,7 @@ describe("Analytics Routes", () => {
             currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           }),
           weightUnit: "kg",
-          athlete: { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
+          athlete: { age: null, gender: null, restingHr: null, bodyweightKg: null, maxHr: null, ftp: null },
         }),
       );
     });

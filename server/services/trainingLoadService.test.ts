@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildLoadGovernorSuggestions } from "./trainingLoadGovernor";
 import {
+  bodyweightRepLoadKg,
   calculateCardioStressScore,
   calculateStrengthStressScore,
   calculateTrainingLoad,
@@ -433,8 +434,22 @@ describe("trainingLoadService", () => {
     expect(hrReserveRatio(0, { age: 30 })).toBeNull();
     expect(hrReserveRatio(50, { age: 30, restingHr: 60 })).toBeNull(); // below resting
     expect(hrReserveRatio(250, { age: 30, maxHr: 180 })).toBe(1); // clamped to 1
-    // Defaults (rest 60 / max 190) apply when no athlete context is supplied.
-    expect(hrReserveRatio(125, undefined)).toBeCloseTo(0.5, 2);
+  });
+
+  it("withholds the HR signal entirely when there is no age and no measured max", () => {
+    // INVERTED (audit H3). This asserted that the rest-60 / max-190 defaults
+    // applied with no athlete context. 190 is the Tanaka prediction for a
+    // 26-year-old, so a 52-year-old (true max 172) had a threshold run scored
+    // at 69.2% of reserve instead of 82.3% and classified as easy aerobic Z2.
+    // `users.age` is only written by the OPTIONAL nutrition onboarding step, so
+    // skipping a nutrition screen corrupted every HR-derived number.
+    expect(hrReserveRatio(125, undefined)).toBeNull();
+    expect(hrReserveRatio(125, {})).toBeNull();
+    expect(hrReserveRatio(125, { restingHr: 55 })).toBeNull();
+
+    // A real basis — either measured max or an age — still works.
+    expect(hrReserveRatio(125, { age: 30 })).toBeCloseTo(0.512, 2); // Tanaka max 187
+    expect(hrReserveRatio(125, { maxHr: 190 })).toBeCloseTo(0.5, 2);
   });
 
   it("maps HR reserve and power %FTP into the 0.6–2.6 intensity band", () => {
@@ -516,9 +531,13 @@ describe("trainingLoadService", () => {
     for (let i = 1; i < zones.length; i++) {
       expect(zones[i].minHr).toBe(zones[i - 1].maxHr); // contiguous, monotonic
     }
-    // Default axis (rest 60 / max 190) without an athlete.
-    expect(hrZoneBoundaries()[0].minHr).toBe(60);
-    expect(hrZoneBoundaries()[4].maxHr).toBe(190);
+    // INVERTED (audit H3): no measured max and no age means no honest zone
+    // table, so none is produced rather than one built on a 26-year-old's
+    // predicted max.
+    expect(hrZoneBoundaries()).toEqual([]);
+    expect(hrZoneBoundaries({ restingHr: 60 })).toEqual([]);
+    // An age is enough to build a real axis.
+    expect(hrZoneBoundaries({ age: 52 })[4].maxHr).toBe(172);
   });
 
   it("computes hrTSS anchored on estimated LTHR with null guards", () => {
@@ -602,5 +621,33 @@ describe("trainingLoadService", () => {
     expect(overview.hrZones).toHaveLength(5);
     expect(overview.estimatedLthr).toBeGreaterThan(0);
     expect(overview.powerTssEstimated).toBe(true);
+  });
+});
+
+describe("bodyweightRepLoadKg — unweighted reps scale with the athlete (audit M2)", () => {
+  it("leaves the reference athlete exactly where they were", () => {
+    // Every governor threshold, ACWR baseline and periodisation reference in
+    // this app is calibrated against the existing UTSS scale, so the 75 kg
+    // athlete must be unchanged by this fix.
+    expect(bodyweightRepLoadKg(75)).toBe(20);
+  });
+
+  it("charges a heavier athlete more for the same burpee", () => {
+    // Every unweighted rep used to be worth exactly 20 kg, so a 100 kg athlete
+    // and a 55 kg athlete scored identical load for identical work.
+    expect(bodyweightRepLoadKg(100)).toBeGreaterThan(bodyweightRepLoadKg(55));
+    expect(bodyweightRepLoadKg(100)).toBeCloseTo(26.67, 1);
+    expect(bodyweightRepLoadKg(55)).toBeCloseTo(14.67, 1);
+  });
+
+  it("falls back to the flat figure when bodyweight is unknown", () => {
+    for (const missing of [null, undefined, 0, Number.NaN]) {
+      expect(bodyweightRepLoadKg(missing)).toBe(20);
+    }
+  });
+
+  it("bounds an implausible profile value so it cannot dominate the model", () => {
+    expect(bodyweightRepLoadKg(5)).toBe(10); // 0.5x floor
+    expect(bodyweightRepLoadKg(400)).toBe(40); // 2x ceiling
   });
 });

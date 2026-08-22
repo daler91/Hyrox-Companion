@@ -550,7 +550,12 @@ describe("buildTrainingContext", () => {
         weight: 100,
         reps: 5,
         workoutLogId: "w1",
-        date: "2026-06-14", // within the last 7 days of TODAY
+        // TODAY is Monday 2026-06-15. This was 2026-06-14 — a Sunday, i.e. LAST
+        // calendar week — and still counted, because the window was
+        // `today-7 … today` inclusive of both ends: eight days (audit M3).
+        // "This week" is now the athlete's Monday-anchored week, matching the
+        // weekly volume, the review and the email.
+        date: "2026-06-15",
       },
     ] as never);
 
@@ -561,6 +566,25 @@ describe("buildTrainingContext", () => {
     ]);
     // maxWeight + estimated1RM both landed this week.
     expect(ctx.coachingInsights?.prsThisWeek).toBe(2);
+  });
+
+  it("excludes a record set in the previous calendar week from PRs-this-week", async () => {
+    vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([
+      {
+        exerciseName: "back_squat",
+        category: "strength",
+        weight: 100,
+        reps: 5,
+        workoutLogId: "w1",
+        date: "2026-06-14", // Sunday: last week, though only one day ago.
+      },
+    ] as never);
+
+    const ctx = await buildTrainingContext(USER_ID);
+
+    // Still a personal record — just not one set THIS week.
+    expect(ctx.coachingInsights?.personalRecords).toHaveLength(1);
+    expect(ctx.coachingInsights?.prsThisWeek).toBeUndefined();
   });
 
   it("aggregates plan compliance from the load-window workout logs", async () => {
@@ -757,5 +781,52 @@ describe("buildTrainingContext declared absences", () => {
     expect(ctx.absences).toHaveLength(1);
     expect(ctx.absences![0].active).toBe(false);
     expect(illnessFlagPassedToEngine()).toBe(false);
+  });
+});
+
+describe("buildTrainingContext — the decision engine's safety gates get real inputs (audit H13)", () => {
+  it("passes the athlete's real race date instead of hasRace: false", async () => {
+    // raceContext was hardcoded { hasRace: false, daysToRace: null }, so
+    // S3_RACE_WEEK and S4_RACE_SOON were unreachable — every race-proximity
+    // protection was dead code while training_plans.race_date sat populated.
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValue({
+      id: "p1",
+      name: "Race block",
+      totalWeeks: 12,
+      currentWeek: 11,
+      startDate: "2026-04-06",
+      raceDate: "2026-06-19", // TODAY is 2026-06-15 → 4 days out
+    } as never);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(decideTrainingState).toHaveBeenCalledWith(
+      expect.objectContaining({ raceContext: { hasRace: true, daysToRace: 4 } }),
+    );
+  });
+
+  it("reports no race when the plan has no race date", async () => {
+    vi.mocked(storage.plans.getActivePlan).mockResolvedValue({
+      id: "p1",
+      name: "Base block",
+      totalWeeks: 12,
+      currentWeek: 2,
+      startDate: "2026-06-01",
+      raceDate: null,
+    } as never);
+
+    await buildTrainingContext(USER_ID);
+
+    expect(decideTrainingState).toHaveBeenCalledWith(
+      expect.objectContaining({ raceContext: { hasRace: false, daysToRace: null } }),
+    );
+  });
+
+  it("does not assert sleep quality the product never collects", async () => {
+    await buildTrainingContext(USER_ID);
+
+    const call = vi.mocked(decideTrainingState).mock.calls.at(-1)?.[0];
+    expect(call?.recoveryMarkers).not.toHaveProperty("sleepQuality");
+    expect(call?.recoveryMarkers).not.toHaveProperty("restingHrDelta");
   });
 });

@@ -33,6 +33,19 @@ export interface EnergyBalanceInput {
   sex: BmrSex;
   /** Static activity level for the estimated path; null assumes moderate. */
   activityLevel: ActivityLevel | null;
+  /**
+   * How many workouts the athlete logged that day, measured or not.
+   *
+   * Without this the estimated path had no way to tell a REST day from a
+   * training day whose calories simply had not synced, so it applied the
+   * athlete's typical-day multiplier to both. For a `very_active` athlete that
+   * attributed 1613 kcal of "training" to a day they did not train — more than
+   * the 600 kcal the measured path credited for a real session, so syncing a
+   * genuine workout made the app think they had burned 655 kcal LESS
+   * (audit H14). Omitted (undefined) preserves the old typical-day estimate for
+   * callers that cannot supply it.
+   */
+  loggedSessionCount?: number;
 }
 
 export interface EnergyBalanceSummary {
@@ -41,7 +54,12 @@ export interface EnergyBalanceSummary {
   /** in − out: positive = surplus, negative = deficit. */
   balanceKcal: number;
   bmrKcal: number;
-  /** Training/activity calories above BMR (measured, or implied by the multiplier). */
+  /**
+   * Training calories above DAILY LIVING — the same definition on both paths.
+   * The estimated path used to report `tdee − bmr`, which folds in the
+   * non-exercise living the measured path accounts for separately, so the two
+   * numbers were not comparable (audit H14).
+   */
   activeKcal: number;
   /** "measured" when device workout calories were used; "estimated" otherwise. */
   basis: "measured" | "estimated";
@@ -103,6 +121,16 @@ export function computeEnergyBalance(input: EnergyBalanceInput): EnergyBalanceSu
     explanation =
       `Energy out = ${outKcal - activeKcal} kcal daily living (BMR × ${NEAT_MULTIPLIER}) + ` +
       `${activeKcal} kcal measured training = ${outKcal} kcal. Guidance only.`;
+  } else if (input.loggedSessionCount === 0) {
+    // Nothing was logged, so nothing was trained. Applying the typical-day
+    // multiplier here is what let a rest day out-burn a real session (H14).
+    basis = "estimated";
+    reasonCodes.push("no_training_logged");
+    activeKcal = 0;
+    outKcal = Math.round(bmr * NEAT_MULTIPLIER);
+    explanation =
+      `Energy out = ${outKcal} kcal daily living (BMR ${Math.round(bmr)} kcal × ` +
+      `${NEAT_MULTIPLIER}) + no training logged today. Guidance only.`;
   } else {
     basis = "estimated";
     let level = input.activityLevel;
@@ -110,13 +138,16 @@ export function computeEnergyBalance(input: EnergyBalanceInput): EnergyBalanceSu
       level = "moderate";
       reasonCodes.push("assumed_moderate_activity");
     }
+    reasonCodes.push("typical_day_activity_estimate");
     const tdee = bmr * ACTIVITY_MULTIPLIERS[level];
-    activeKcal = Math.round(tdee - bmr);
+    // Above daily living, matching the measured path's definition — not above
+    // BMR, which double-counted the non-exercise baseline (H14).
+    activeKcal = Math.max(0, Math.round(tdee - bmr * NEAT_MULTIPLIER));
     outKcal = Math.round(tdee);
     explanation =
       `Energy out = TDEE estimate ${outKcal} kcal (BMR ${Math.round(bmr)} kcal × ` +
-      `${ACTIVITY_MULTIPLIERS[level]} ${level}). Connect Strava or Garmin for measured ` +
-      `training calories. Guidance only.`;
+      `${ACTIVITY_MULTIPLIERS[level]} ${level}) — your TYPICAL day, not today's ` +
+      `session. Connect Strava or Garmin for measured training calories. Guidance only.`;
   }
 
   const inKcal = Math.round(Math.max(0, input.intakeKcal));
