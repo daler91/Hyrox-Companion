@@ -276,11 +276,17 @@ function projectedSplitSeconds(
   distanceUnit: string,
   exponent: number,
 ): number | null {
-  if (set.time == null || !Number.isFinite(set.time)) return null;
+  // `usableMeasure`, not a null/finite check: the set schema permits `time: 0`
+  // (`z.number().min(0)`), and a zero-time set used to project to a 0-second
+  // station split that entered the session median and became `bestSeconds` —
+  // an unbeatable fastest split from a set the athlete never timed (audit H12).
+  // The same guard drops a negative, which is equally not a time.
+  const timeMinutes = usableMeasure(set.time);
+  if (timeMinutes == null) return null;
   const factor = projectionFactor(set, target, distanceUnit, exponent);
   // null → effort too far from the full station to trust; drop this split.
   if (factor == null) return null;
-  return set.time * 60 * factor;
+  return timeMinutes * 60 * factor;
 }
 
 function accumulateSetMetrics(

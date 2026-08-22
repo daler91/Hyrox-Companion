@@ -12,10 +12,12 @@ import type {
   WorkoutLog,
 } from "@shared/schema";
 import {
+  EXERCISE_DEFINITIONS,
   getExerciseHeatMapMuscles,
   getExerciseMovementPatterns,
   MOVEMENT_PATTERNS,
   MUSCLE_HEAT_MAP_GROUPS,
+  normalizeExerciseName,
 } from "@shared/schema";
 import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
 
@@ -66,13 +68,40 @@ function updateMaxDistance(pr: PersonalRecord, set: SlimLoggedExerciseSet): void
 //   - AMRAP/EMOM: `time` is a prescribed cap, not a performance metric, so a
 //     "best time" PR is meaningless and is not recorded (reps/rounds is the
 //     score for those).
-const TIME_LONGER_IS_BETTER = new Set<string>([
-  "plank",
-  "side_plank",
-  "hollow_hold",
-  "battle_ropes",
-]);
+//
+// Derived from the catalogue rather than hand-listed, because the rule stated
+// above IS the catalogue's `fields`: an exercise recorded as sets and time and
+// nothing else is a hold. The literal list this replaces happened to match the
+// catalogue exactly, but it was a second copy of the same fact and would go
+// stale the first time a hold was added (audit H4).
+const TIME_LONGER_IS_BETTER: ReadonlySet<string> = new Set(
+  Object.entries(EXERCISE_DEFINITIONS)
+    .filter(([, definition]) => {
+      const fields = definition.fields as readonly string[];
+      return fields.length === 2 && fields.includes("sets") && fields.includes("time");
+    })
+    .map(([name]) => name),
+);
 const TIME_NOT_A_PR_METRIC = new Set<string>(["amrap", "emom"]);
+
+/**
+ * The catalogue name whose time DIRECTION governs this set.
+ *
+ * A custom-labelled set stores `exerciseName: "custom"` with the athlete's own
+ * text in `customLabel`, and "custom" matches no catalogue entry — so every
+ * custom exercise fell through to faster-is-better, and a custom "Plank"
+ * recorded a 20-second hold as a better result than a 60-second one while the
+ * built-in `plank` handled the identical sets correctly (audit H4). PRs bucket
+ * on `custom:<label>`; the direction has to resolve from the same label.
+ *
+ * The label goes through the normaliser the rest of the app already uses, so
+ * "Side Planks" resolves to `side_plank`. A label that resolves to nothing
+ * keeps the faster-is-better default, which is right for most timed work.
+ */
+function timeDirectionKey(exerciseName: string, customLabel: string | null | undefined): string {
+  if (exerciseName !== "custom" || !customLabel) return exerciseName;
+  return normalizeExerciseName(customLabel) ?? exerciseName;
+}
 
 /**
  * Direction-aware "is this time a better PR" comparison, for callers that
@@ -80,16 +109,22 @@ const TIME_NOT_A_PR_METRIC = new Set<string>(["amrap", "emom"]);
  * detection). Mirrors updateBestTime exactly: longer is better for isometric
  * holds, AMRAP/EMOM never count as a time PR, otherwise faster is better.
  */
-export function isTimePrImprovement(exerciseName: string, current: number, previous: number): boolean {
-  if (TIME_NOT_A_PR_METRIC.has(exerciseName)) return false;
-  return TIME_LONGER_IS_BETTER.has(exerciseName) ? current > previous : current < previous;
+export function isTimePrImprovement(
+  exercise: Pick<SlimLoggedExerciseSet, "exerciseName" | "customLabel">,
+  current: number,
+  previous: number,
+): boolean {
+  const key = timeDirectionKey(exercise.exerciseName, exercise.customLabel);
+  if (TIME_NOT_A_PR_METRIC.has(key)) return false;
+  return TIME_LONGER_IS_BETTER.has(key) ? current > previous : current < previous;
 }
 
 function updateBestTime(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
   if (!set.time || set.time <= 0) return;
-  if (TIME_NOT_A_PR_METRIC.has(set.exerciseName)) return;
+  const directionKey = timeDirectionKey(set.exerciseName, set.customLabel);
+  if (TIME_NOT_A_PR_METRIC.has(directionKey)) return;
 
-  const longerIsBetter = TIME_LONGER_IS_BETTER.has(set.exerciseName);
+  const longerIsBetter = TIME_LONGER_IS_BETTER.has(directionKey);
   const isImprovement =
     !pr.bestTime ||
     (longerIsBetter ? set.time > pr.bestTime.value : set.time < pr.bestTime.value);

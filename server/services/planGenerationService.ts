@@ -373,6 +373,9 @@ const MAX_WEEKLY_WEIGHT_INCREASE_PCT = 8;
 /** Below this, plate rounding dominates and the percentage is meaningless. */
 const MIN_TRACKED_WEIGHT = 10;
 
+/** Slack for comparing a computed percentage against a ceiling. See its use below. */
+const PCT_COMPARISON_EPSILON = 1e-9;
+
 export interface ProgressiveOverloadViolation {
   exerciseName: string;
   fromWeek: number;
@@ -424,7 +427,12 @@ export function findProgressiveOverloadViolations(
       const toWeight = weeks.get(toWeek)!;
       if (toWeight <= fromWeight) continue;
       const increasePct = ((toWeight - fromWeight) / fromWeight) * 100;
-      if (increasePct > maxIncreasePct) {
+      // Epsilon because increasePct is a ratio of differences and carries float
+      // noise: a weight sitting EXACTLY on the ceiling measures 8.000000000000002
+      // against a ceiling of 8 and was flagged as a violation of itself. The
+      // ceiling is inclusive — "increase weights up to 8%" permits 8% — so the
+      // boundary must not be decided by representation (same class as audit L2).
+      if (increasePct > maxIncreasePct + PCT_COMPARISON_EPSILON) {
         violations.push({
           exerciseName,
           fromWeek,
@@ -437,6 +445,84 @@ export function findProgressiveOverloadViolations(
     }
   }
   return violations.sort((a, b) => b.increasePct - a.increasePct);
+}
+
+/** One exercise-week whose prescribed weight was reduced to the ceiling. */
+export interface ProgressiveOverloadClamp {
+  exerciseName: string;
+  weekNumber: number;
+  fromWeight: number;
+  toWeight: number;
+  ceiling: number;
+}
+
+/**
+ * Reduce week-over-week weight jumps that break the ceiling the generation
+ * prompt asks for, in place, and report what moved.
+ *
+ * Walks each exercise's weeks in order and carries the CLAMPED weight forward as
+ * the next week's basis. Clamping against the model's original number instead
+ * would let a run of violations compound: clamp week 2 from 130 to 108, and a
+ * week 3 of 150 is still measured against 130 and still ships over the ceiling.
+ *
+ * Only sets ABOVE the ceiling move. Scaling the whole week proportionally would
+ * preserve its internal shape but drag warmup sets down too, turning a clamp
+ * into an unasked-for deload. The ceiling is floored to one decimal so the
+ * result can never round back above it.
+ */
+export function clampProgressiveOverload(
+  days: readonly GeneratedDay[],
+  maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
+): ProgressiveOverloadClamp[] {
+  const clamps: ProgressiveOverloadClamp[] = [];
+  const weeksByExercise = collectHeaviestWeightsByWeek(days);
+
+  for (const [exerciseName, weeks] of weeksByExercise) {
+    let previousWeek: number | null = null;
+    let previousMax: number | null = null;
+
+    for (const weekNumber of [...weeks.keys()].sort((a, b) => a - b)) {
+      let heaviest = weeks.get(weekNumber)!;
+
+      if (previousMax != null && previousWeek != null && weekNumber === previousWeek + 1) {
+        const ceiling = Math.floor(previousMax * (1 + maxIncreasePct / 100) * 10) / 10;
+        if (heaviest > ceiling) {
+          clamps.push({ exerciseName, weekNumber, fromWeight: heaviest, toWeight: ceiling, ceiling });
+          applyWeightCeiling(days, exerciseName, weekNumber, ceiling);
+          heaviest = ceiling;
+        }
+      }
+
+      previousWeek = weekNumber;
+      previousMax = heaviest;
+    }
+  }
+
+  return clamps;
+}
+
+type GeneratedExerciseSet = NonNullable<NonNullable<GeneratedDay["exercises"]>[number]["sets"]>[number];
+
+/** Lower every set of `exerciseName` in `weekNumber` that sits above `ceiling`. */
+function applyWeightCeiling(
+  days: readonly GeneratedDay[],
+  exerciseName: string,
+  weekNumber: number,
+  ceiling: number,
+): void {
+  for (const day of days) {
+    if (day.weekNumber !== weekNumber) continue;
+    for (const exercise of day.exercises ?? []) {
+      if (exercise.exerciseName === exerciseName) capSetWeights(exercise.sets ?? [], ceiling);
+    }
+  }
+}
+
+/** Split out to keep `applyWeightCeiling` under the cognitive-complexity ceiling. */
+function capSetWeights(sets: GeneratedExerciseSet[], ceiling: number): void {
+  for (const set of sets) {
+    if (typeof set.weight === "number" && set.weight > ceiling) set.weight = ceiling;
+  }
 }
 
 function assertTableFirstGeneratedDays(days: GeneratedDay[]): void {
@@ -543,14 +629,17 @@ async function generatePlanDays(
   }
   assertTableFirstGeneratedDays(days);
 
-  // The progressive-overload ceiling is DETECTED and reported, not enforced by
-  // rejection. Whether an over-ceiling jump should fail generation (making the
-  // athlete wait for a regeneration), be clamped, or simply be surfaced to the
-  // coach is a product decision, not one to make inside a validator — so this
-  // logs and the plan proceeds. `findProgressiveOverloadViolations` is pure and
-  // exported, so turning this into a rejection is a one-line change once that
-  // call is made (audit H17, M7).
+  // The progressive-overload ceiling is ENFORCED BY CLAMPING (audit H17, M7).
+  // Rejecting would make the athlete wait out another model round-trip for a
+  // fault that is not theirs, and a persistent violation could loop; logging
+  // alone still shipped the unsafe jump. Clamping hands them a usable plan that
+  // never prescribes a jump past the ceiling its own prompt asked for.
+  //
+  // The trade-off, recorded because it is real: the numbers no longer match what
+  // the model wrote, so a coaching rationale referring to a specific load can
+  // disagree with the set it describes. Everything clamped is logged.
   const overloadViolations = findProgressiveOverloadViolations(days);
+  const overloadClamps = clampProgressiveOverload(days);
   if (overloadViolations.length > 0) {
     // Carries neither the athlete's id nor their prescribed loads. The logger
     // mixin omits userId on purpose (see the S2 note in server/logger.ts) and
@@ -574,6 +663,7 @@ async function generatePlanDays(
         event: "progressive_overload_ceiling_exceeded",
         totalWeeks: input.totalWeeks,
         violationCount: overloadViolations.length,
+        clampedCount: overloadClamps.length,
         worst: overloadViolations
           .slice(0, 5)
           .map(({ exerciseName, fromWeek, toWeek, increasePct }) => ({
@@ -583,7 +673,7 @@ async function generatePlanDays(
             increasePct,
           })),
       },
-      "Generated plan exceeds the week-over-week weight ceiling the prompt asks for.",
+      "Generated plan exceeded the week-over-week weight ceiling; clamped to it.",
     );
   }
 

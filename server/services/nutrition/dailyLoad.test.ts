@@ -17,7 +17,9 @@ vi.mock("../../storage", () => ({
   },
 }));
 
-vi.mock("../trainingLoadService", () => ({ calculateTrainingLoad: vi.fn() }));
+// EWMA_WARMUP_DAYS is a real value, not a stub: the fetch range is derived from
+// it, and one assertion below pins that range (audit H21).
+vi.mock("../trainingLoadService", () => ({ calculateTrainingLoad: vi.fn(), EWMA_WARMUP_DAYS: 56 }));
 
 /** A minimal DailyTrainingLoad row — only the fields the window reads. */
 function load(date: string, utss: number, extra: Record<string, unknown> = {}) {
@@ -52,6 +54,11 @@ describe("fetchTrainingLoadWindow", () => {
     expect(w.recentLoads.filter((v) => v === 0)).toHaveLength(6);
     expect(w.acuteEwma).toBe(60);
     expect(w.tsb).toBe(-10);
+    // The EWMAs are seeded at the first log in whatever range is fetched, so the
+    // fetch must cover the warmup even though recentLoads only reads 7 days.
+    // Fetching 7 handed the effective target a 28-day baseline built from one
+    // week: 26.1 against a true 107.2 for a tapering athlete (audit H21).
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("u1", "2026-04-27", DATE);
     // No future fetches when includeFuture is false.
     expect(storage.timeline.getUpcomingPlannedDays).not.toHaveBeenCalled();
     expect(w.upcoming).toEqual([]);

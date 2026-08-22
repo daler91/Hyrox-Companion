@@ -11,6 +11,7 @@ import {
   DEFAULT_EXERCISE_LOAD_TAGS,
   estimateHrMax,
   estimateLthr,
+  EWMA_WARMUP_DAYS,
   hrIntensityFactor,
   hrReserveRatio,
   hrTss,
@@ -621,6 +622,144 @@ describe("trainingLoadService", () => {
     expect(overview.hrZones).toHaveLength(5);
     expect(overview.estimatedLthr).toBeGreaterThan(0);
     expect(overview.powerTssEstimated).toBe(true);
+  });
+});
+
+describe("EWMA warmup — a short fetch window cannot reseed the baseline (audit H21)", () => {
+  const CURRENT = "2026-05-22";
+
+  // Eight heavy weeks then a taper week. The 28-day chronic baseline should
+  // still be HIGH — that is what a taper is — while the last 7 days are light.
+  const history = (() => {
+    const logs: WorkoutLog[] = [];
+    for (let i = 120; i >= 0; i--) {
+      if (i % 7 === 3) continue; // one rest day a week
+      const tapering = i <= 6;
+      logs.push(
+        log({
+          id: `l-${i}`,
+          date: daysBefore(CURRENT, i),
+          duration: tapering ? 30 : 100,
+          rpe: tapering ? 4 : 8,
+        }),
+      );
+    }
+    return logs;
+  })();
+
+  const today = (windowDays: number, declareWindow: boolean) => {
+    const from = daysBefore(CURRENT, windowDays - 1);
+    return calculateTrainingLoad(
+      history.filter((l) => l.date >= from),
+      [],
+      [],
+      { currentDate: CURRENT, ...(declareWindow ? { historyFrom: from } : {}) },
+    ).dailyLoads.find((d) => d.date === CURRENT);
+  };
+
+  it("reports the same baseline once the window covers the warmup", () => {
+    const full = today(120, true);
+    const warm = today(EWMA_WARMUP_DAYS, true);
+
+    expect(full?.chronicEwma).toBeGreaterThan(100);
+    // Within a few percent of the 120-day truth — the seed has washed out.
+    expect(warm?.chronicEwma).toBeCloseTo(full?.chronicEwma ?? 0, -1);
+  });
+
+  it("withholds the EWMAs when the declared window is too short to support them", () => {
+    // The nutrition recovery path fetched 7 days and read a "28-day chronic
+    // baseline" off the result: 26.1 against a true 107.2 for this athlete, a 4x
+    // understatement of the load their fuelling is scaled from. Withheld is the
+    // honest answer for a window that cannot support the number.
+    const short = today(7, true);
+
+    expect(short?.acuteEwma).toBeNull();
+    expect(short?.chronicEwma).toBeNull();
+    expect(short?.tsb).toBeNull();
+    expect(short?.acwr).toBeNull();
+    // UTSS is per-day and needs no history, so it still reports.
+    expect(short?.utss).toBeGreaterThan(0);
+  });
+
+  it("leaves callers that do not declare a window exactly as they were", () => {
+    const undeclared = today(7, false);
+
+    expect(undeclared?.acuteEwma).not.toBeNull();
+    expect(undeclared?.chronicEwma).not.toBeNull();
+  });
+
+  it("still reports for a genuinely new athlete inside a wide window", () => {
+    // Their first log really is recent, and there is empty range before it — so
+    // the seed is their real starting point, not an artefact of the fetch.
+    const newAthlete = Array.from({ length: 20 }, (_, i) =>
+      log({ id: `n-${i}`, date: daysBefore(CURRENT, i), duration: 60, rpe: 6 }),
+    );
+    const from = daysBefore(CURRENT, EWMA_WARMUP_DAYS - 1);
+    const d = calculateTrainingLoad(newAthlete, [], [], {
+      currentDate: CURRENT,
+      historyFrom: from,
+    }).dailyLoads.find((x) => x.date === CURRENT);
+
+    expect(d?.chronicEwma).not.toBeNull();
+    expect(d?.acwr).not.toBeNull();
+  });
+});
+
+describe("injury vectors for workouts with no sets (audit H19)", () => {
+  const DATE = "2026-05-22";
+  const dayFor = (overrides: Partial<WorkoutLog>, sets: TrainingLoadSet[] = []) =>
+    calculateTrainingLoad([log({ id: "log-1", date: DATE, duration: 60, rpe: 7, ...overrides })], sets, DEFAULT_EXERCISE_LOAD_TAGS, {
+      currentDate: DATE,
+      weightUnit: "kg",
+    }).dailyLoads.find((d) => d.date === DATE);
+
+  it("puts an imported run on the same vectors as the same run logged with sets", () => {
+    // Every vector used to stay exactly 0 for a Strava/Garmin import or a
+    // free-text log, so all four vector restrictions were inert for them — an
+    // athlete whose running is all imported could never trip the Achilles guard.
+    const imported = dayFor({ focus: "Easy Run", mainWorkout: "" });
+    const logged = dayFor({ focus: "Run", mainWorkout: "8k easy" }, [
+      set({ workoutLogId: "log-1", exerciseName: "easy_run", category: "running", distance: 8000, time: 45 }),
+    ]);
+
+    expect(imported?.vectorLoads.elastic_tendon).toBeGreaterThan(0);
+    expect(imported?.vectorLoads.posterior_chain).toBeGreaterThan(0);
+    expect(imported?.vectorLoads).toEqual(logged?.vectorLoads);
+  });
+
+  it("does not give a bike ride the impact profile of a run", () => {
+    // "bike" is endurance text, so the session is duration-loaded — but the
+    // running profile's elastic-tendon weighting is for repeated foot-strike.
+    const ride = dayFor({ focus: "Ride", mainWorkout: "Zwift bike session" });
+
+    expect(ride?.utss).toBeGreaterThan(0);
+    expect(ride?.vectorLoads.elastic_tendon).toBe(0);
+    expect(ride?.vectorLoads.posterior_chain).toBe(0);
+  });
+
+  it("stays near zero for a workout whose text names nothing recognisable", () => {
+    const vague = dayFor({ focus: "Strength", mainWorkout: "Gym session, no detail" });
+
+    expect(vague?.utss).toBeGreaterThan(0);
+    expect(vague?.vectorLoads.posterior_chain).toBe(0);
+    expect(vague?.vectorLoads.elastic_tendon).toBe(0);
+  });
+
+  it("leaves a session that DOES have sets exactly as it was", () => {
+    // The strength path already put this session's tonnage on the vectors;
+    // adding workout-level load on top would double-count it.
+    const sets = Array.from({ length: 10 }, (_, i) =>
+      set({ workoutLogId: "log-1", exerciseName: "back_squat", category: "strength", setNumber: i + 1, reps: 5, weight: 100 }),
+    );
+    const withSets = dayFor({ focus: "Strength", mainWorkout: "Back squat, bench" }, sets);
+
+    expect(withSets?.utss).toBeCloseTo(99.1, 1);
+    expect(withSets?.vectorLoads).toEqual({
+      posterior_chain: 34.7,
+      anterior_chain: 99.1,
+      unilateral_stability: 19.8,
+      elastic_tendon: 9.9,
+    });
   });
 });
 

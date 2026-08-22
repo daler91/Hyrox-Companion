@@ -1,5 +1,5 @@
 import type { ExerciseSet } from "@shared/schema";
-import { History, TrendingUp } from "lucide-react";
+import { History, RotateCcw, TrendingUp } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -135,20 +135,42 @@ function NextTargetLine({
     weightVaries: false,
     hasWeight: true,
   });
-  const stepUnit = target.step.field === "reps" ? "rep" : weightUnit;
-  const stepText = `+${target.step.amount} ${stepUnit}`;
+  const { badge, srSuffix } = describeStep(target.step, weightUnit);
+  const repeating = target.step.field === "repeat";
 
   return (
     <PrescriptionLine
-      icon={<TrendingUp className="h-3 w-3 shrink-0" aria-hidden />}
+      icon={
+        repeating ? (
+          <RotateCcw className="h-3 w-3 shrink-0" aria-hidden />
+        ) : (
+          <TrendingUp className="h-3 w-3 shrink-0" aria-hidden />
+        )
+      }
       label="Next"
       prescription={prescription}
-      badge={stepText}
-      srText={`Suggested next: ${prescription.aria}, up ${target.step.amount} ${stepUnit} on last time`}
+      badge={badge}
+      srText={`Suggested next: ${prescription.aria}, ${srSuffix}`}
       testId={`next-target-${exerciseName}`}
       action={action}
     />
   );
+}
+
+/**
+ * Badge and screen-reader wording for the one thing that moved. `repeat` is not
+ * an overload — last session's prescription was not completed — so it must not
+ * be announced as an increase or carry the rising-trend icon (audit H5).
+ */
+function describeStep(
+  step: NextTarget["step"],
+  weightUnit: "kg" | "lb",
+): { readonly badge: string; readonly srSuffix: string } {
+  if (step.field === "repeat") {
+    return { badge: "Repeat", srSuffix: "the same target as last time, which was not completed" };
+  }
+  const unit = step.field === "reps" ? "rep" : weightUnit;
+  return { badge: `+${step.amount} ${unit}`, srSuffix: `up ${step.amount} ${unit} on last time` };
 }
 
 interface LineAction {

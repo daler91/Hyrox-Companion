@@ -13,7 +13,11 @@ type CreatedWorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
 interface MetricConfig {
   readonly metric: PersonalRecordMetric;
   readonly label: string;
-  readonly isImprovement: (current: number, previous: number, exerciseName: string) => boolean;
+  readonly isImprovement: (
+    current: number,
+    previous: number,
+    exercise: Pick<ExerciseSet, "exerciseName" | "customLabel">,
+  ) => boolean;
 }
 
 const METRICS: readonly MetricConfig[] = [
@@ -21,8 +25,11 @@ const METRICS: readonly MetricConfig[] = [
   { metric: "maxDistance", label: "Max distance", isImprovement: (current, previous) => current > previous },
   // Time direction depends on the exercise: longer is better for isometric
   // holds (plank etc.), faster is better everywhere else — same rule
-  // calculatePersonalRecords used to produce the records being compared.
-  { metric: "bestTime", label: "Best time", isImprovement: (current, previous, exerciseName) => isTimePrImprovement(exerciseName, current, previous) },
+  // calculatePersonalRecords used to produce the records being compared. The
+  // whole set is passed, not just the name: a custom-labelled hold carries
+  // exerciseName "custom" and only `customLabel` says which exercise it is
+  // (audit H4).
+  { metric: "bestTime", label: "Best time", isImprovement: (current, previous, exercise) => isTimePrImprovement(exercise, current, previous) },
   { metric: "estimated1RM", label: "Estimated 1RM", isImprovement: (current, previous) => current > previous },
 ];
 
@@ -66,7 +73,7 @@ export function findPersonalRecordAchievements(
     for (const { metric, label, isImprovement } of METRICS) {
       const current = getMetricValue(createdRecord, metric);
       const previous = getMetricValue(priorRecord, metric);
-      if (!current || !previous || !isImprovement(current.value, previous.value, representativeSet.exerciseName)) continue;
+      if (!current || !previous || !isImprovement(current.value, previous.value, representativeSet)) continue;
 
       achievements.push({
         exerciseKey,

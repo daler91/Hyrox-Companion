@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { ErrorCode } from "../errors";
-import { buildGenerationAbsences, buildGenerationPrompt, createPendingPlan, describeStartLoadPosture, executePlanGeneration,
+import { buildGenerationAbsences, buildGenerationPrompt,   clampProgressiveOverload,
+createPendingPlan, describeStartLoadPosture, executePlanGeneration,
   findProgressiveOverloadViolations,
 } from "./planGenerationService";
 import { summary } from "./trainingLoadGovernor.testHelpers";
@@ -665,6 +666,95 @@ describe("createPendingPlan", () => {
     expect(mocks.plans.createTrainingPlan).toHaveBeenCalledWith(
       expect.objectContaining({ raceDate: null }),
     );
+  });
+});
+
+describe("clampProgressiveOverload (audit H17, M7 — enforcement)", () => {
+  const day = (weekNumber: number, exerciseName: string, weights: number[]) => ({
+    weekNumber,
+    dayName: "Monday" as const,
+    focus: "Strength",
+    mainWorkout: "Squats",
+    exercises: [
+      {
+        exerciseName,
+        category: "strength",
+        sets: weights.map((weight, i) => ({ setNumber: i + 1, reps: 5, weight })),
+      },
+    ],
+  });
+
+  it("brings an over-ceiling week down to the ceiling", () => {
+    const days = [day(1, "back_squat", [100]), day(2, "back_squat", [140])];
+
+    const clamps = clampProgressiveOverload(days);
+
+    expect(clamps).toHaveLength(1);
+    expect(clamps[0]).toMatchObject({ exerciseName: "back_squat", weekNumber: 2, fromWeight: 140, toWeight: 108 });
+    expect(days[1].exercises[0].sets[0].weight).toBe(108);
+    expect(findProgressiveOverloadViolations(days as never)).toEqual([]);
+  });
+
+  it("carries the CLAMPED weight forward, so a run of violations cannot compound", () => {
+    // Measuring week 3 against the model's original 140 rather than the clamped
+    // 108 would let 150 through: 150/140 is 7%, under the ceiling, while
+    // 150/108 is 39% and the athlete still gets the jump the clamp existed to
+    // prevent.
+    const days = [
+      day(1, "back_squat", [100]),
+      day(2, "back_squat", [140]),
+      day(3, "back_squat", [150]),
+    ];
+
+    clampProgressiveOverload(days);
+
+    expect(days[1].exercises[0].sets[0].weight).toBe(108);
+    expect(days[2].exercises[0].sets[0].weight).toBeCloseTo(116.6, 1);
+    expect(findProgressiveOverloadViolations(days as never)).toEqual([]);
+  });
+
+  it("moves only the sets above the ceiling, leaving warmups alone", () => {
+    // Scaling the week proportionally would drag the warmup down too, turning a
+    // clamp into an unasked-for deload.
+    const days = [day(1, "back_squat", [100]), day(2, "back_squat", [60, 90, 140])];
+
+    clampProgressiveOverload(days);
+
+    expect(days[1].exercises[0].sets.map((s) => s.weight)).toEqual([60, 90, 108]);
+  });
+
+  it("leaves a plan that already respects the ceiling untouched", () => {
+    const days = [day(1, "back_squat", [100]), day(2, "back_squat", [105])];
+
+    expect(clampProgressiveOverload(days as never)).toEqual([]);
+    expect(days[1].exercises[0].sets[0].weight).toBe(105);
+  });
+
+  it("never clamps a deload", () => {
+    const days = [day(1, "back_squat", [140]), day(2, "back_squat", [70])];
+
+    expect(clampProgressiveOverload(days as never)).toEqual([]);
+    expect(days[1].exercises[0].sets[0].weight).toBe(70);
+  });
+
+  it("does not clamp across a week the exercise was not prescribed in", () => {
+    // A gap is not a weekly increase; the ceiling only applies to adjacent weeks.
+    const days = [day(1, "back_squat", [100]), day(5, "back_squat", [140])];
+
+    expect(clampProgressiveOverload(days as never)).toEqual([]);
+    expect(days[1].exercises[0].sets[0].weight).toBe(140);
+  });
+
+  it("floors the ceiling so the result can never round back above it", () => {
+    const days = [day(1, "back_squat", [102.5]), day(2, "back_squat", [200])];
+
+    clampProgressiveOverload(days);
+
+    // 102.5 * 1.08 = 110.7 exactly; a ceiling that rounded up would be a
+    // violation of itself.
+    const clamped = days[1].exercises[0].sets[0].weight;
+    expect(clamped).toBeLessThanOrEqual(102.5 * 1.08);
+    expect(findProgressiveOverloadViolations(days as never)).toEqual([]);
   });
 });
 
