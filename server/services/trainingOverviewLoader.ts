@@ -163,6 +163,8 @@ export async function assembleTrainingOverview(
       age: user?.age ?? null,
       gender: user?.gender ?? null,
       restingHr: user?.restingHr ?? null,
+      // Scales unweighted-rep tonnage with the body being moved (audit M2).
+      bodyweightKg: user?.bodyweightKg ?? null,
       maxHr: user?.maxHr ?? null,
       ftp: user?.ftp ?? null,
     },

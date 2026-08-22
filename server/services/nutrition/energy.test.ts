@@ -67,10 +67,27 @@ describe("resolveDayEnergy", () => {
 
   it("ignores an unknown activity level rather than crashing the multiplier", async () => {
     vi.mocked(storage.users.getUser).mockResolvedValue(makeUser({ activityLevel: "bogus" }));
+    // A session WAS logged, it just carries no calories — otherwise this takes
+    // the rest-day path below and never reaches the multiplier at all.
+    vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([
+      { calories: null },
+    ] as never);
 
     const out = await resolveDayEnergy("u1", "2026-06-11", 2000);
 
     expect(out?.basis).toBe("estimated");
     expect(out?.reasonCodes).toContain("assumed_moderate_activity");
+  });
+
+  it("treats a day with nothing logged as a rest day, not a typical training day", async () => {
+    // The beforeEach mocks zero workouts. The estimate used to apply the
+    // athlete's typical-day multiplier here, crediting a very_active athlete
+    // 1613 kcal of "training" on a day they did not train — more than the
+    // measured path gives a real 600 kcal session (audit H14).
+    const out = await resolveDayEnergy("u1", "2026-06-11", 2000);
+
+    expect(out?.basis).toBe("estimated");
+    expect(out?.activeKcal).toBe(0);
+    expect(out?.reasonCodes).toContain("no_training_logged");
   });
 });

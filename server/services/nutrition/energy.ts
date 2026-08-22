@@ -48,6 +48,9 @@ export async function resolveDayEnergy(
   return computeEnergyBalance({
     intakeKcal,
     measuredActiveKcal: measured > 0 ? measured : null,
+    // Lets the estimate tell a rest day from a session whose calories simply
+    // did not sync (audit H14). The workouts are already fetched above.
+    loggedSessionCount: workouts.length,
     bodyweightKg: user.bodyweightKg ?? null,
     heightCm: user.heightCm ?? null,
     ageYears: user.age ?? null,

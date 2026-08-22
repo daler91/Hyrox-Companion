@@ -75,9 +75,23 @@ const MAX_DURATION_MIN = 180;
 // Rough wall-clock per set (incl. rest) when only a rep count / unknown movement is known.
 const MINUTES_PER_SET = 3;
 
-/** Bounds for the personalized running-pace multiplier — keeps it near the generic defaults. */
+/**
+ * Bounds for the personalized running-pace multiplier.
+ *
+ * The upper bound used to be 1.25 for everyone — 7:11/km against the 5:45/km
+ * generic — which is faster than a large share of real recreational runners.
+ * Combined with a plausibility filter that discarded anything slower than
+ * 9:15/km, a beginner running 9:30/km had every run thrown away, fell back to
+ * the generic 5:45/km, and MORE DATA NEVER FIXED IT: the samples that would
+ * have personalised their estimate were the ones being filtered out (audit M4).
+ *
+ * The ceiling now widens once there is enough evidence to trust the athlete's
+ * own median rather than the generic middle.
+ */
 export const MIN_RUN_PACE_RATIO = 0.8;
 export const MAX_RUN_PACE_RATIO = 1.25;
+/** ~12:40/km. Applied once the athlete has WELL_EVIDENCED_SAMPLES runs on record. */
+export const MAX_RUN_PACE_RATIO_EVIDENCED = 2.2;
 
 /**
  * Generic "typical run" pace (sec/m, ~5:45/km) — the conservative middle of the run

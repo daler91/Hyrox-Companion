@@ -148,7 +148,30 @@ exemptions: `shared/planPhase.ts` (shared code has no athlete context and every 
 its own date), a `coachService` fallback for a plan day with no scheduled date, and a batch-job
 cutoff in `assistedMigrationService`.
 
-**Not yet started:** Phases 5 and 6.
+**Phase 5 — fallback provenance.** Landed for H3, H14, M2 and M4 (C6 above).
+
+| #   | Before → after                                                                                                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H3  | A missing `age` silently substituted HRmax 190 — the Tanaka prediction for a 26-year-old — so a 52-year-old's threshold run scored 69.2% of heart-rate reserve instead of 82.3% and was classified as easy aerobic Z2. `hrReserveRatio` and `hrZoneBoundaries` now WITHHOLD rather than guess: the load model falls through to the RPE the athlete actually gave, and no zone table is drawn. |
+| H14 | The estimated energy path could not tell a REST day from a training day whose calories had not synced, so it applied the typical-day multiplier to both: a `very_active` athlete was credited 1613 kcal of "training" on a day they did not train, against 600 for a real synced session — syncing a genuine workout made the app think they had burned 655 kcal LESS. The day's logged-session count now distinguishes them, and both paths define "active" as above daily living. |
+| M2  | Every unweighted rep was worth exactly 20 kg, so a 100 kg and a 55 kg athlete scored identical load; `users.bodyweightKg` never reached the load model. Per-rep tonnage is now proportional to bodyweight.                                                             |
+| M4  | The pace plausibility floor was 1.8 m/s (9:15/km) and the ratio ceiling 1.25 (7:11/km), so a beginner running 9:30/km had every run discarded, never reached the sample minimum, and was pinned to the generic 5:45/km — **more data never fixed it**, because the new runs were filtered out too. The floor is 1.1 m/s and the ceiling widens once the athlete has eight runs on record. |
+
+Two deliberate constraints on the M2 fix, both to avoid a silent recalibration. It is expressed as a
+RATIO against a 75 kg reference rather than an absolute fraction of body mass, because every governor
+threshold, ACWR baseline and periodisation reference is calibrated against the current UTSS scale —
+scaling by 0.65 × bodyweight would have multiplied bodyweight tonnage by ~2.6× and moved all of them.
+And it is still ONE number for every movement: genuinely per-movement fractions (a pull-up moves more
+of the body than a wall ball) need a new field on `ExerciseLoadTagInput` and a calibrated value per
+tag row, which is follow-up work rather than something to invent.
+
+**Still open in Phase 5: M6.** The +5 MAF adjustment goes to anyone selecting "High" + "Improving"
+with no check of training-history length, while Maffetone reserves it for athletes with 2+
+injury-free years — and one dropdown collapses his −10 and −5 categories, so hay fever costs 10 bpm.
+Fixing it means collecting his actual categories in onboarding rather than "Low/Moderate/High", which
+is a product decision about the onboarding flow, not a code fix. Recorded here rather than guessed at.
+
+**Not yet started:** Phase 6.
 
 ---
 

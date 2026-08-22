@@ -319,7 +319,11 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   // Costs one indexed read ahead of the concurrent batch, which is noise next
   // to the model call this context feeds.
   const user = await storage.users.getUser(userId);
-  const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+  // Read once: every window in this function is anchored to the athlete's
+  // calendar, and four separate `user?.userTimezone` reads each cost a branch
+  // against the function's complexity budget.
+  const userTimezone = user?.userTimezone;
+  const today = getLocalDateStrSafe(new Date(), userTimezone);
   // Read once: the gap suppression and the context payload both want it, and a
   // second optional-chain would put this function back over its complexity budget.
   const trainingConstraints = user?.trainingConstraints ?? null;
@@ -365,7 +369,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     completedDates,
   } = calculateTrainingStats(timeline);
   const exerciseBreakdown = getExerciseBreakdown(timeline);
-  const currentStreak = calculateStreak(completedDates, user?.userTimezone);
+  const currentStreak = calculateStreak(completedDates, userTimezone);
   const recentWorkouts = collectRecentWorkouts(timeline);
   const structuredExerciseStats = getStructuredExerciseStats(timeline);
 
@@ -387,7 +391,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     ? computePlanPhase(activePlan.totalWeeks, activePlan.currentWeek ?? 1)
     : undefined;
   const weeklyVolume =
-    weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, user?.userTimezone) : undefined;
+    weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
   const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
   const progressionFlags = computeProgressionFlags(timeline, weightUnit);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
@@ -397,6 +401,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
       age: user?.age ?? null,
       gender: user?.gender ?? null,
       restingHr: user?.restingHr ?? null,
+      // Scales unweighted-rep tonnage with the body being moved (audit M2).
+      bodyweightKg: user?.bodyweightKg ?? null,
       maxHr: user?.maxHr ?? null,
       ftp: user?.ftp ?? null,
     },
@@ -443,7 +449,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     totalWorkouts,
     weightUnit,
     distanceUnit,
-    userTimezone: user?.userTimezone,
+    userTimezone,
     today,
   });
 

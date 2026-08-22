@@ -398,7 +398,7 @@ describe("Analytics Routes", () => {
             currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           }),
           weightUnit: "kg",
-          athlete: { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
+          athlete: { age: null, gender: null, restingHr: null, bodyweightKg: null, maxHr: null, ftp: null },
         }),
       );
     });
@@ -468,7 +468,7 @@ describe("Analytics Routes", () => {
             currentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           }),
           weightUnit: "kg",
-          athlete: { age: null, gender: null, restingHr: null, maxHr: null, ftp: null },
+          athlete: { age: null, gender: null, restingHr: null, bodyweightKg: null, maxHr: null, ftp: null },
         }),
       );
     });
