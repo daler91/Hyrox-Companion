@@ -205,6 +205,16 @@ export const analyticsResults = pgTable(
     // compare that sidesteps the date-vs-timestamp mismatch (workout.date is a
     // calendar day with no time component, generatedAt is a timestamp).
     lastWorkoutDateAtGeneration: date("last_workout_date_at_generation"),
+    // How many rows the athlete's anchor table held at generation time (workout
+    // logs, or food-log entries for nutrition_insights). The date alone cannot
+    // see a change that does not move it (audit L16): a second session on the
+    // same day, or deleting anything that is not the single latest row, both
+    // leave the date identical while the history the analysis was computed over
+    // has changed. NULL on rows written before this column existed, which
+    // computeStale treats as "no count recorded" and falls back to the
+    // date-only test — so deploying this does not mark every stored result
+    // stale at once.
+    entryCountAtGeneration: integer("entry_count_at_generation"),
     // Local calendar date of the last cron recompute — the once-per-day claim
     // guard so at-least-once job delivery (or a DST-doubled local hour) can't
     // recompute the same feature twice in one day.

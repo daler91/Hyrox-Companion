@@ -405,6 +405,80 @@ to make the prompt enforceable across a chunk boundary.
 
 ---
 
+## The L tier (updated 2026-08-22)
+
+The last of the register. Landed for L13, L15 and L16; L5 and L14 are verified and left as
+decisions, for the same reason as M11 and L4.
+
+| #   | Before → after                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L13 | `getPlanWeeklyDensity` returned `Math.ceil(planDayCount / totalWeeks)`, which suppressed the very warning the value exists to raise. A plan of 10 days over 4 weeks schedules 2.5 per week, reported **3**, so the S4 hint compared `3 > 3` and stayed silent — while the athlete sat at 2.5/3 and watched their completion rate cap out at 83% with nothing telling them why. Returns the true average now, to 2 dp so the last bit of a float like 10/3 cannot decide an exactly-matched goal. |
+| L15 | `daysOfHistory`, sent to the AI as a fact about the athlete, was the count of non-null ACWR points in a fixed 42-day window — and ACWR is null for the first 14 logged days. It **saturates at 42**, so a three-year athlete and a seven-week one scored identically. The prompt tells the model to cite the numbers it is given and invent none, which made the *name* an instruction to tell a veteran they had six weeks behind them. Renamed `acwrDaysInWindow`, shipped with `trendWindowDays` as its denominator, and the metric reference now says window counts are not history. |
+| L16 | `computeStale` compared only the latest workout DATE, so any change that left the date alone reported the stored Race Prediction / Coach Insights **fresh**: a second session on a day that already had one (a morning run and an evening lift is an ordinary HYROX week), a delete of anything but the single latest row, or a delete of one of several on the latest date. The anchor now carries a row count as well. |
+
+**L15's sibling was already right.** The consistency chart in the same file ships
+`loggedDaysInWindow` — named for its window, correctly. `daysOfHistory` was the one fact in the
+payload whose name did not describe its value, which is why the rename follows the file's own
+existing convention rather than inventing one.
+
+**What L16 still cannot see, stated plainly.** Editing a workout **in place** — correcting a weight,
+adding a set, fixing a duration or an RPE — moves neither the date nor the count, so it still does
+not mark an analysis stale. Closing that needs a mutation timestamp, and `workout_logs` carries no
+`updated_at` column at all; set-level edits live in a different table again, so an honest fingerprint
+means a schema change *plus* a decision about whether editing a set counts as touching its parent
+workout. The count was added anyway because it closes the common cases outright, and the gap is
+pinned by a test rather than left to be discovered.
+
+`entry_count_at_generation` is nullable, and `null` means *no count recorded*, not *zero rows*.
+Reading it as zero would mark every stored result in the database stale on the deploy that adds the
+column and stampede the recompute queue; legacy rows instead keep the date-only behaviour they were
+written under until they next regenerate.
+
+### L5 — verified, NOT fixed: a question that changes nothing
+
+`mafHrDataAvailable` is asked in onboarding **and** again in Settings, stored on `users`, and
+round-tripped through the preferences API. No calculation reads it. `MafInput` has four fields —
+age, injury/illness/medication, consistency, trend — and all three `calculateMafHr` call sites pass
+exactly those. `useOnboardingWizard` sets `payload.mafHrDataAvailable` on the line immediately before
+calling `calculateMafHr` without it.
+
+The runtime is not broken by this, because it does the right thing a different way:
+`buildMafTestAnalysis` gates on `avgHeartRate != null` — the actual data — rather than on the
+stored flag. That is the better test, and it is exactly why the flag is dead.
+
+What remains is a product question, not an arithmetic one: an athlete who answers "no, I cannot
+measure heart rate" is still offered MAF Method, still given a target heart rate, and still asked
+twice about a capability nothing consults. Either retire the question and the column, or use it —
+warn at style selection that MAF Method needs a monitor. Both are calls about the onboarding flow.
+
+### L14 — verified, NOT fixed: two providers wired to nothing
+
+`searchFatSecretFoods` and `searchSpoonacularFoods` are fully implemented, retried, rate-limited and
+unit-tested — and imported by **nothing outside their own test files**. `foodSearch.ts` fans out to
+Edamam, USDA and OFF; `barcode.ts` resolves Edamam then OFF. The only production importer of either
+client is `refresh.ts`, which calls the by-id variants for `foods` rows whose `source` is already
+`"fatsecret"` or `"spoonacular"` — and the only writers of those sources are the search and barcode
+functions no path calls. It is a closed loop: unreachable code kept alive by its own tests.
+
+The sharper edge is in `server/env.ts`, which still validates `SPOONACULAR_API_KEY`,
+`FATSECRET_CLIENT_ID` and `FATSECRET_CLIENT_SECRET` — including a cross-field rule that the FatSecret
+pair must be set together. An operator can configure a provider, boot cleanly, and get no results
+from it and no warning, because even the "skipped — key not set" log lives in a function nobody
+calls.
+
+Delete the two clients or wire them into the fan-out; either is defensible and both are more than a
+bug fix. Whichever is chosen, the env schema should stop accepting credentials for a provider that
+cannot be reached.
+
+**A correction to L14 as registered.** The register calls Spoonacular's serving-weight-from-title
+heuristic "a latent hazard". Reading it, it is more carefully bounded than that implies: oz only (a
+`g` in a title is usually a macro figure), 5–250 g so a container size is rejected, applied only when
+the product states a single serving, and backstopped by the per-100g clamp in `sanitizeMappedFood`.
+The residual risk is narrow — a genuine container size that happens to fall in the 5–250 g band, such
+as a 6 oz can — and it is unreachable today in any case.
+
+---
+
 ## How to read this
 
 Every finding carries a **verification tier**:
@@ -705,10 +779,10 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | L10 | `client/src/pages/Analytics.tsx:83-87`                         | REPORTED | "Last N days" fetches **N+1** days and leaves the window open-ended at the top. "All time" on the Fuelling tab silently means the last 366 days.                                                                                                                            |
 | L11 | `analyticsService.ts:381-392, 426-437`                         | REPORTED | Coverage panels report "N mapped sets analyzed" where N double- and triple-counts sets mapping to several patterns or muscles. The category pie's slices are overlapping per-category session counts, so the whole exceeds the number of sessions.                          |
 | L12 | `storage/workouts.ts:901-914`                                  | REPORTED | `fetchBlockAvgRpe`'s "surrounding 4-week block" is a 29-day window that also averages in workouts logged **after** the one being viewed, so an old workout's stat changes retroactively.                                                                                    |
-| L13 | `storage/plans.ts:148-168`                                     | REPORTED | `getPlanWeeklyDensity` rounds plan density **up**, suppressing the very warning it exists to raise.                                                                                                                                                                         |
+| L13 | `storage/plans.ts:148-168`                                     | EXECUTED | `getPlanWeeklyDensity` rounds plan density **up**, suppressing the very warning it exists to raise.                                                                                                                                                                         |
 | L14 | `nutrition/refresh.ts:43-45`                                   | READ     | The FatSecret and Spoonacular clients — the only per-serving providers — are **unreachable on current paths** (`foodSearch.ts` wires Edamam/USDA/OFF; `barcode.ts` wires Edamam/OFF). Spoonacular's serving-weight-from-title heuristic is a latent hazard, not a live bug. |
-| L15 | `overviewAnalysisService.ts:130`                               | REPORTED | `daysOfHistory` sent to the AI is the count of non-null ACWR points in the 42-day trend, not days of history.                                                                                                                                                               |
-| L16 | `analyticsStaleness.ts:34`                                     | REPORTED | Prediction staleness tracks only the latest workout **date**, so same-day and edit-in-place changes never mark it stale.                                                                                                                                                    |
+| L15 | `overviewAnalysisService.ts:130`                               | EXECUTED | `daysOfHistory` sent to the AI is the count of non-null ACWR points in the 42-day trend, not days of history — it saturates at 42, so a three-year athlete scores the same as a seven-week one.                                                                                                                                                               |
+| L16 | `analyticsStaleness.ts:34`                                     | EXECUTED | Prediction staleness tracks only the latest workout **date**, so a second session the same day, a delete of any non-latest row, and edit-in-place changes never mark it stale.                                                                                                                                                    |
 
 ---
 

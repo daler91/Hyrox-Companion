@@ -55,7 +55,7 @@ import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
-import { computeStale, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
+import { computeStale, getNutritionAnchor, regenerateAndStoreNutritionInsights } from "../../services/analyticsPersistence";
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { buildBlockView, type DailyUtss } from "../../services/nutrition/blockView";
 import { fetchDailyTraining, fetchDailyUtss, fetchTrainingLoadWindow } from "../../services/nutrition/dailyLoad";
@@ -909,9 +909,9 @@ export function registerNutritionRoutes(router: Router): void {
       // ordering dependency on this "paint instantly on tab open" path. Halves
       // the DB latency for the common case (row exists) at the cost of one
       // harmless unused query when a user has no stored insights yet.
-      const [row, latestLogDate] = await Promise.all([
+      const [row, anchor] = await Promise.all([
         storage.analyticsResults.get(userId, "nutrition_insights"),
-        storage.nutrition.getLatestLogDate(userId),
+        getNutritionAnchor(userId),
       ]);
       if (!row) {
         const empty: NutritionInsightsResponse = { insights: null };
@@ -922,7 +922,7 @@ export function registerNutritionRoutes(router: Router): void {
       const response: NutritionInsightsResponse = {
         ...payload,
         generatedAt: row.generatedAt.toISOString(),
-        stale: computeStale(row, latestLogDate),
+        stale: computeStale(row, anchor),
       };
       res.json(response);
     }),

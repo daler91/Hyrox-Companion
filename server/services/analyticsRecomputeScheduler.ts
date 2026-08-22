@@ -25,7 +25,7 @@ import {
 } from "../queue";
 import type { IStorage } from "../storage";
 import { getLocalDateStr, getLocalHour } from "../timezone";
-import { computeStale } from "./analyticsStaleness";
+import { computeStale, type HistoryAnchor } from "./analyticsStaleness";
 
 /**
  * For one user at their local midnight, enqueue a recompute job for each feature
@@ -42,22 +42,33 @@ async function enqueueStaleRecomputes(
   resultsByFeature: ReadonlyMap<AnalyticsFeature, AnalyticsResult>,
 ): Promise<number> {
   // Anchors are fetched lazily and memoized: the workout anchor is shared by
-  // three features, and the nutrition query is skipped entirely for users
-  // without a stored nutrition row. `undefined` = not yet fetched; `null` =
-  // fetched, user has no activity of that kind (computeStale(row, null) is
-  // false, so such features are simply never stale).
-  let workoutAnchor: string | null | undefined;
-  let nutritionAnchor: string | null | undefined;
-  const anchorFor = async (feature: AnalyticsFeature): Promise<string | null> => {
+  // three features, and the nutrition queries are skipped entirely for users
+  // without a stored nutrition row. `undefined` = not yet fetched. An athlete
+  // with no activity of that kind anchors at { latestDate: null, entryCount: 0 },
+  // which matches what was stored for them, so such features are never stale.
+  //
+  // Each anchor is a date AND a row count (audit L16): the date alone cannot
+  // see a second session logged on a day that already had one, which is an
+  // ordinary week rather than an edge case.
+  let workoutAnchor: HistoryAnchor | undefined;
+  let nutritionAnchor: HistoryAnchor | undefined;
+  const anchorFor = async (feature: AnalyticsFeature): Promise<HistoryAnchor> => {
     if (feature === "nutrition_insights") {
       if (nutritionAnchor === undefined) {
-        nutritionAnchor = await storage.nutrition.getLatestLogDate(userId);
+        const [latestDate, entryCount] = await Promise.all([
+          storage.nutrition.getLatestLogDate(userId),
+          storage.nutrition.countLogEntries(userId),
+        ]);
+        nutritionAnchor = { latestDate, entryCount };
       }
       return nutritionAnchor;
     }
     if (workoutAnchor === undefined) {
-      const [latestWorkout] = await storage.workouts.listWorkoutLogs(userId, 1);
-      workoutAnchor = latestWorkout?.date ?? null;
+      const [[latestWorkout], entryCount] = await Promise.all([
+        storage.workouts.listWorkoutLogs(userId, 1),
+        storage.workouts.countWorkoutLogs(userId),
+      ]);
+      workoutAnchor = { latestDate: latestWorkout?.date ?? null, entryCount };
     }
     return workoutAnchor;
   };

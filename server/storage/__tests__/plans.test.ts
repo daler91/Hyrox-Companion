@@ -297,3 +297,73 @@ describe("PlanStorage.markMissedPlanDays", () => {
     expect(comparedDates()).toEqual(["2026-07-21", "2026-07-20"]);
   });
 });
+
+// -- getPlanWeeklyDensity (audit L13) -----------------------------------------
+
+describe("getPlanWeeklyDensity", () => {
+  let storage: PlanStorage;
+
+  /** Mock the .select().from().leftJoin().where().groupBy() chain. */
+  function mockDensityChain(rows: unknown[]) {
+    const groupByMock = vi.fn().mockResolvedValue(rows);
+    const whereMock = vi.fn().mockReturnValue({ groupBy: groupByMock });
+    const leftJoinMock = vi.fn().mockReturnValue({ where: whereMock });
+    const fromMock = vi.fn().mockReturnValue({ leftJoin: leftJoinMock });
+    vi.mocked(db.select).mockReturnValue({ from: fromMock });
+  }
+
+  beforeEach(() => {
+    storage = new PlanStorage();
+    vi.clearAllMocks();
+  });
+
+  it("reports the true average, not the rounded-up one", async () => {
+    // 10 scheduled days across 4 weeks is 2.5 per week. Math.ceil reported 3.
+    mockDensityChain([{ planDayCount: 10, totalWeeks: 4 }]);
+
+    expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(2.5);
+  });
+
+  it("lets the S4 warning fire on the case that used to silence it", async () => {
+    // The hint is `weeklyGoal > planWeeklyDensity`. At the old ceil'd 3, a goal
+    // of 3 compared 3 > 3 and stayed quiet, so the athlete never learned why
+    // their completion rate capped at 2.5/3 = 83%.
+    mockDensityChain([{ planDayCount: 10, totalWeeks: 4 }]);
+    const density = await storage.getPlanWeeklyDensity("plan-1");
+
+    expect(Math.ceil(10 / 4)).toBe(3);
+    expect(3 > Math.ceil(10 / 4)).toBe(false); // the old, silent comparison
+    expect(3 > density!).toBe(true); // the warning the S4 hint exists to raise
+  });
+
+  it("still stays quiet when the plan really does cover the goal", async () => {
+    // 20 days over 4 weeks is 5 per week; a goal of 5 is met exactly and must
+    // not warn. Returning a real number must not turn the hint into a nag.
+    mockDensityChain([{ planDayCount: 20, totalWeeks: 4 }]);
+
+    expect(5 > (await storage.getPlanWeeklyDensity("plan-1"))!).toBe(false);
+  });
+
+  it("does not let float representation decide the comparison", async () => {
+    // 10/3 is 3.3333333333333335 in IEEE-754. Rounding to 2 dp keeps an
+    // exactly-matched goal from reading as exceeding the plan on the last bit.
+    mockDensityChain([{ planDayCount: 9, totalWeeks: 3 }]);
+
+    expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(3);
+    expect(3 > (await storage.getPlanWeeklyDensity("plan-1"))!).toBe(false);
+  });
+
+  it("returns a zero density for a plan whose days were all deleted", async () => {
+    // The LEFT JOIN exists so this is 0, not "plan not found" — a goal of any
+    // size then exceeds it, which is the honest answer.
+    mockDensityChain([{ planDayCount: 0, totalWeeks: 8 }]);
+
+    expect(await storage.getPlanWeeklyDensity("plan-1")).toBe(0);
+  });
+
+  it("returns undefined when the plan never had totalWeeks set", async () => {
+    mockDensityChain([{ planDayCount: 12, totalWeeks: null }]);
+
+    expect(await storage.getPlanWeeklyDensity("plan-1")).toBeUndefined();
+  });
+});

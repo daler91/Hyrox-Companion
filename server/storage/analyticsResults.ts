@@ -13,6 +13,12 @@ export interface UpsertAnalyticsResultInput {
   /** Latest logged workout date (YYYY-MM-DD) at generation time, or null. */
   lastWorkoutDateAtGeneration: string | null;
   /**
+   * How many rows the anchor table held at generation time. Pairs with the date
+   * so a change that leaves the date alone — a second session the same day, a
+   * delete of a non-latest row — still reads as stale (audit L16).
+   */
+  entryCountAtGeneration: number;
+  /**
    * Local calendar date of a cron recompute. Pass a date from the cron path so
    * the row records the daily claim; OMIT it (undefined) from manual route
    * regenerations so they don't clear the cron's once-per-day guard.
@@ -58,6 +64,7 @@ export class AnalyticsResultsStorage {
         payload: input.payload,
         generatedAt: input.generatedAt,
         lastWorkoutDateAtGeneration: input.lastWorkoutDateAtGeneration,
+        entryCountAtGeneration: input.entryCountAtGeneration,
         recomputedOn: input.recomputedOn ?? null,
         updatedAt: now,
       })
@@ -67,6 +74,7 @@ export class AnalyticsResultsStorage {
           payload: input.payload,
           generatedAt: input.generatedAt,
           lastWorkoutDateAtGeneration: input.lastWorkoutDateAtGeneration,
+          entryCountAtGeneration: input.entryCountAtGeneration,
           // Only advance recomputedOn when the caller supplies one. A manual
           // (route) regeneration passes undefined and must NOT clear a claim
           // the cron already made today.

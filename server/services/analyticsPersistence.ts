@@ -13,6 +13,7 @@ import type { Logger } from "pino";
 
 import { logger as defaultLogger } from "../logger";
 import { storage } from "../storage";
+import type { HistoryAnchor } from "./analyticsStaleness";
 import { type CoachInsightsResult, generateCoachInsights } from "./coachInsightsService";
 import { generateNutritionInsights, type NutritionInsightsResult } from "./nutrition/nutritionInsightsService";
 import { generateOverviewAnalysis } from "./overviewAnalysisService";
@@ -21,12 +22,51 @@ import { generateRacePrediction } from "./racePrediction/racePredictionService";
 // Re-exported so route handlers can import the staleness check alongside the
 // persistence helpers; the canonical (dependency-free) definition lives in
 // analyticsStaleness so the recompute scheduler can use it in isolation.
-export { computeStale } from "./analyticsStaleness";
+export { computeStale, type HistoryAnchor } from "./analyticsStaleness";
 
-/** Latest logged-workout calendar date (YYYY-MM-DD) for the user, or null. */
-export async function getLatestWorkoutDate(userId: string): Promise<string | null> {
-  const [latest] = await storage.workouts.listWorkoutLogs(userId, 1);
-  return latest?.date ?? null;
+/**
+ * The athlete's workout history as the staleness check sees it: latest logged
+ * date plus how many logs there are. Both queries run concurrently — they are
+ * independent reads of the same table on an "instant paint" path. A write
+ * landing between them can pair a stale date with a fresh count, which reads as
+ * stale for that one request and corrects itself on the next; staleness is an
+ * advisory flag, so that is the right trade for halving the latency.
+ *
+ * The count is what makes a second session on an already-logged day, or a
+ * delete of anything but the single latest row, register as a change (audit
+ * L16). Editing a workout in place still does not; see analyticsStaleness.
+ */
+export async function getWorkoutAnchor(userId: string): Promise<HistoryAnchor> {
+  const [[latest], entryCount] = await Promise.all([
+    storage.workouts.listWorkoutLogs(userId, 1),
+    storage.workouts.countWorkoutLogs(userId),
+  ]);
+  return { latestDate: latest?.date ?? null, entryCount };
+}
+
+/** The food-log equivalent of getWorkoutAnchor, for nutrition_insights. */
+export async function getNutritionAnchor(userId: string): Promise<HistoryAnchor> {
+  const [latestDate, entryCount] = await Promise.all([
+    storage.nutrition.getLatestLogDate(userId),
+    storage.nutrition.countLogEntries(userId),
+  ]);
+  return { latestDate, entryCount };
+}
+
+/**
+ * Map an anchor onto the analytics_results columns. The date column is named
+ * `lastWorkoutDateAtGeneration` for historical reasons but holds whichever
+ * anchor the feature uses — food-log date for nutrition_insights — because
+ * computeStale is feature-agnostic.
+ */
+function anchorColumns(anchor: HistoryAnchor): {
+  lastWorkoutDateAtGeneration: string | null;
+  entryCountAtGeneration: number;
+} {
+  return {
+    lastWorkoutDateAtGeneration: anchor.latestDate,
+    entryCountAtGeneration: anchor.entryCount,
+  };
 }
 
 /**
@@ -45,7 +85,7 @@ export async function persistRacePrediction(
     feature: "race_prediction",
     payload: prediction,
     generatedAt: new Date(prediction.generatedAt),
-    lastWorkoutDateAtGeneration: await getLatestWorkoutDate(userId),
+    ...anchorColumns(await getWorkoutAnchor(userId)),
     recomputedOn,
   });
 }
@@ -61,7 +101,7 @@ export async function persistCoachInsights(
     feature: "coach_insights",
     payload: result,
     generatedAt: new Date(result.generatedAt),
-    lastWorkoutDateAtGeneration: await getLatestWorkoutDate(userId),
+    ...anchorColumns(await getWorkoutAnchor(userId)),
     recomputedOn,
   });
 }
@@ -104,7 +144,7 @@ export async function persistOverviewAnalysis(
     feature: "overview_analysis",
     payload: result,
     generatedAt: new Date(result.generatedAt),
-    lastWorkoutDateAtGeneration: await getLatestWorkoutDate(userId),
+    ...anchorColumns(await getWorkoutAnchor(userId)),
     recomputedOn,
   });
 }
@@ -141,7 +181,7 @@ export async function persistNutritionInsights(
     feature: "nutrition_insights",
     payload: result,
     generatedAt: new Date(result.generatedAt),
-    lastWorkoutDateAtGeneration: await storage.nutrition.getLatestLogDate(userId),
+    ...anchorColumns(await getNutritionAnchor(userId)),
     recomputedOn,
   });
 }

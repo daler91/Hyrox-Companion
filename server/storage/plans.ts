@@ -144,6 +144,18 @@ export class PlanStorage {
    * to sanity-check a user's weeklyGoal against their plan density (S4) —
    * a 2-day plan + goal of 7 will show 0% completion unless the user logs
    * extra ad-hoc workouts, so the UI surfaces a gentle warning.
+   *
+   * The average is returned as a REAL number, not rounded up. It used to be
+   * `Math.ceil`, which suppressed the very warning this exists to raise: a plan
+   * of 10 days over 4 weeks schedules 2.5 per week, reported 3, so a goal of 3
+   * compared 3 > 3 and stayed silent — while the athlete sat at 2.5/3 and
+   * watched their completion rate cap out at 83% with no explanation (audit
+   * L13). Rounding up is only ever safe for a floor, and this value is a
+   * ceiling on what the plan can deliver.
+   *
+   * Two decimal places, because the raw quotient is a float: 10/3 stored as
+   * 3.3333333333333335 would make an exactly-matched goal read as exceeding
+   * the plan on representation alone.
    */
   async getPlanWeeklyDensity(planId: string): Promise<number | undefined> {
     // Start FROM training_plans + LEFT JOIN plan_days so a plan with zero
@@ -164,7 +176,7 @@ export class PlanStorage {
     // totalWeeks is nullable on the schema; bail if the plan never had one set.
     const totalWeeks = row?.totalWeeks ?? 0;
     if (totalWeeks <= 0) return undefined;
-    return Math.ceil(row.planDayCount / totalWeeks);
+    return Math.round((row.planDayCount / totalWeeks) * 100) / 100;
   }
 
   /** Class-method wrapper for the standalone syncPlanDayStatusFromWorkouts (S6). */
