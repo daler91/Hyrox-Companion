@@ -207,6 +207,51 @@ rather than code fixes, and are documented rather than guessed at.
 
 ---
 
+## Register findings outside the six phases (updated 2026-08-22)
+
+The phases were organised by root cause, and several findings belonged to none of them. Landed for
+H4, H5, H12, H19, L2 and L3.
+
+| #   | Before → after                                                                                                                                                                                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H4  | The longer-is-better lookup keyed on `exerciseName`, which is the literal `"custom"` for a custom-labelled set, while records bucket on `custom:<label>`. 30s → 60s → 20s on a custom "Plank" recorded the **20-second** hold as the best; the built-in `plank` handled the identical sets correctly. The label now resolves through `normalizeExerciseName`. |
+| H5  | Prescribed 3×5 @ 100 kg, managed 3 reps: the suggestion read the three logged reps as a completed session and answered **"102.5 kg"** — it escalated on top of a failure. A session that fell short of its prescription now returns that prescription again with a `repeat` step. |
+| H12 | `projectedSplitSeconds` guarded null and non-finite but not zero, and the schema permits `time: 0`. One untimed set projected to a 0-second station split that won `bestSeconds` outright. Now uses the file's own `usableMeasure`, which also rejects negatives. |
+| H19 | Every injury vector stayed exactly **0** for a Strava/Garmin import or free-text log, so all four vector restrictions were inert for them — an athlete whose running is all imported could never trip the Achilles guard. Vectors are now attributed from the workout's own text, and an imported run lands on the *same* vectors as the identical run logged with sets. |
+| L2  | Both overload gains were computed as a difference of two Epley products, drifting 2.7e−15 high. At exactly 25 kg × 10 the gain equals the cap, so the comparison was decided by float representation. Epley is linear in each argument, so the gains are now computed directly. |
+| L3  | At the 10-rep ceiling the standard plate step always breached the 10% cap below 25 kg, so a beginner at 3×10 with a light dumbbell got **no suggestion at all, permanently**. A fractional plate is now tried after the standard step is rejected, never before. |
+
+**A correction to H4 as registered.** It says isometric holds "outside a 4-item allowlist" invert.
+They do not: the allowlist was exactly the set of catalogue exercises whose `fields` are sets+time —
+4 for 4, verified against the catalogue, with no misses in either direction. The live defect is the
+custom-label half alone. The list is now *derived* from those fields rather than written out a second
+time, so it cannot drift when a hold is added, but the drift had not happened yet.
+
+**A correction to H20 as registered.** It says UTSS "differs by ~2×" depending on whether the athlete
+typed their sets in. The ratio is not fixed: swept across plausible sessions it runs from **23.7×**
+(one light set) to **0.32×** (30 heavy sets). ~2× is where a moderate 5×5 @ 100 kg lands, which is
+presumably where it was sampled. The shape is not a constant factor but two branches measuring
+different things — a set-less log is scored purely on duration × RPE and cannot vary with what was
+actually done, while a logged one scales with tonnage.
+
+**H20 is not fixed, deliberately.** The mixed-session stacking it might implicate is *documented as
+intentional* at the call site: a cardio set contributes tonnage via the strength path AND a
+0.25-damped share of the duration-based cardio stress, and the comment states the damping is the
+calibration and not to deduplicate without recalibrating thresholds downstream. What remains — the
+set-less cliff — cannot be closed without moving UTSS for a large population, and every governor
+threshold, ACWR baseline and periodisation reference is calibrated against the current scale (the
+same constraint the M2 fix respected). Closing it is a recalibration project, not a bug fix.
+
+**H21 is not fixed.** Confirmed by reading: the EWMAs seed at `earliestLogDate(workoutLogs)`, which
+is the earliest log *in the array the caller passed*, so the seed moves with the fetch window and the
+same athlete's ACWR and TSB genuinely differ per surface. The fix is to anchor seeding to the
+athlete's true first-ever log date, which means a new option on `calculateTrainingLoad` and a
+supporting query at **eight** call sites (`ai/index`, `analyticsService`, `racePredictionService`,
+`nutritionSummary`, `nutrition/dailyLoad` ×2, `planGenerationService`). That is a cross-cutting
+change worth doing on its own rather than inside a batch of unrelated fixes.
+
+---
+
 ## How to read this
 
 Every finding carries a **verification tier**:

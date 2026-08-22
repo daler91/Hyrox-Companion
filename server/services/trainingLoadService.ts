@@ -6,6 +6,7 @@ import {
   type InsertExerciseSet,
   type LoadGovernorAcwrZone,
   type LoadGovernorVector,
+  normalizeExerciseName,
   type TrainingLoadOverview,
   type TrainingLoadRestriction,
   type TrainingMonotonyZone,
@@ -1071,6 +1072,15 @@ function computeRangeStart(
   return earliestLog;
 }
 
+// Endurance keywords in a workout's own text. Named because two things key off
+// it: whether the duration-based cardio branch runs at all, and — for a workout
+// with no sets to read a tag from — which vector profile its load lands on.
+const ENDURANCE_TEXT_PATTERN = /run|bike|row|ski|walk|hike/i;
+
+// The impact subset of the above: repeated foot-strike, which is what the
+// running vector profile's elastic-tendon weighting is calibrated for.
+const FOOT_STRIKE_TEXT_PATTERN = /run|walk|hike/i;
+
 function shouldApplyCardioStress(
   log: Pick<WorkoutLog, "duration" | "focus" | "mainWorkout" | "accessory" | "notes">,
   sets: readonly TrainingLoadSet[],
@@ -1079,8 +1089,42 @@ function shouldApplyCardioStress(
     log.duration &&
     (sets.length === 0 ||
       sets.some(isCardioSet) ||
-      /run|bike|row|ski|walk|hike/i.test(inferWorkoutText(log))),
+      ENDURANCE_TEXT_PATTERN.test(inferWorkoutText(log))),
   );
+}
+
+/**
+ * A load tag for a workout that carries no sets at all — a Strava/Garmin import
+ * or a free-text log.
+ *
+ * Such a workout reaches the cardio branch and moves UTSS, but nothing ever
+ * touched its injury vectors, so every vector stayed exactly 0 and all four
+ * vector restrictions were inert for every imported session (audit H19). An
+ * athlete whose running is all imported could never trip the Achilles guard.
+ *
+ * The exercise is resolved from the athlete's own focus/summary text through
+ * the same normaliser the rest of the app uses; failing that, the endurance
+ * keyword the cardio branch already matched on picks the category, so "45 min
+ * easy run" loads posterior chain and Achilles the way a logged run does. A
+ * workout that names nothing recognisable stays near zero, which is honest —
+ * there is nothing to attribute it to.
+ */
+function inferredWorkoutTag(
+  log: Pick<WorkoutLog, "focus" | "mainWorkout" | "accessory" | "notes">,
+  tags: Map<string, ExerciseLoadTagInput>,
+): ExerciseLoadTagInput {
+  for (const text of [log.focus, log.mainWorkout]) {
+    const resolved = text ? normalizeExerciseName(text) : null;
+    if (resolved) return getTag(tags, resolved, null);
+  }
+  // Only foot-strike work inherits the running profile, whose elastic-tendon
+  // weight and tendon modifier exist for repeated impact. Rowing, skiing and
+  // cycling are in ENDURANCE_TEXT_PATTERN because they are duration work, but
+  // giving a Zwift ride the same Achilles loading as a run would invent a risk
+  // that is not there. They fall through to conditioning, which stays near zero
+  // — honest, because the text alone does not say what they loaded.
+  const category = FOOT_STRIKE_TEXT_PATTERN.test(inferWorkoutText(log)) ? "running" : "conditioning";
+  return inferTag("", category);
 }
 
 function applyStrengthLoad(
@@ -1137,22 +1181,33 @@ function applyCardioLoad(
   if (tss != null) day.tss = round((day.tss ?? 0) + tss, 1);
 
   const cardioSets = sets.filter(isCardioSet);
-  if (cardioSets.length === 0) return;
-
-  // Deliberate stacking: a mixed/circuit set contributes its tonnage to the
-  // vectors via the strength path AND a 0.25-damped share of the workout's
-  // duration-based cardio stress here — mirroring how UTSS itself sums
-  // strength + cardio for the same session. The damping is the calibration;
-  // don't "deduplicate" without recalibrating thresholds downstream.
-  const stressPerSet = stress / cardioSets.length;
-  for (const set of cardioSets) {
-    updateVectorLoads(
-      day.vectorLoads,
-      stressPerSet,
-      getTag(tags, set.exerciseName, set.category),
-      0.25,
-    );
+  if (cardioSets.length > 0) {
+    // Deliberate stacking: a mixed/circuit set contributes its tonnage to the
+    // vectors via the strength path AND a 0.25-damped share of the workout's
+    // duration-based cardio stress here — mirroring how UTSS itself sums
+    // strength + cardio for the same session. The damping is the calibration;
+    // don't "deduplicate" without recalibrating thresholds downstream.
+    const stressPerSet = stress / cardioSets.length;
+    for (const set of cardioSets) {
+      updateVectorLoads(
+        day.vectorLoads,
+        stressPerSet,
+        getTag(tags, set.exerciseName, set.category),
+        0.25,
+      );
+    }
+    return;
   }
+
+  // Sets exist but none are cardio: the strength path has already put this
+  // session's tonnage on the vectors. Adding workout-level load here would
+  // double-count it.
+  if (sets.length > 0) return;
+
+  // No sets at all — nothing else will ever touch this workout's vectors
+  // (audit H19). Same 0.25 damping as the per-set path above, so this stays on
+  // the existing calibration rather than introducing a second scale.
+  updateVectorLoads(day.vectorLoads, stress, inferredWorkoutTag(log, tags), 0.25);
 }
 
 function finalizeDailyLoad(day: DailyTrainingLoad): void {

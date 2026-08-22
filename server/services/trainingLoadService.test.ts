@@ -624,6 +624,64 @@ describe("trainingLoadService", () => {
   });
 });
 
+describe("injury vectors for workouts with no sets (audit H19)", () => {
+  const DATE = "2026-05-22";
+  const dayFor = (overrides: Partial<WorkoutLog>, sets: TrainingLoadSet[] = []) =>
+    calculateTrainingLoad([log({ id: "log-1", date: DATE, duration: 60, rpe: 7, ...overrides })], sets, DEFAULT_EXERCISE_LOAD_TAGS, {
+      currentDate: DATE,
+      weightUnit: "kg",
+    }).dailyLoads.find((d) => d.date === DATE);
+
+  it("puts an imported run on the same vectors as the same run logged with sets", () => {
+    // Every vector used to stay exactly 0 for a Strava/Garmin import or a
+    // free-text log, so all four vector restrictions were inert for them — an
+    // athlete whose running is all imported could never trip the Achilles guard.
+    const imported = dayFor({ focus: "Easy Run", mainWorkout: "" });
+    const logged = dayFor({ focus: "Run", mainWorkout: "8k easy" }, [
+      set({ workoutLogId: "log-1", exerciseName: "easy_run", category: "running", distance: 8000, time: 45 }),
+    ]);
+
+    expect(imported?.vectorLoads.elastic_tendon).toBeGreaterThan(0);
+    expect(imported?.vectorLoads.posterior_chain).toBeGreaterThan(0);
+    expect(imported?.vectorLoads).toEqual(logged?.vectorLoads);
+  });
+
+  it("does not give a bike ride the impact profile of a run", () => {
+    // "bike" is endurance text, so the session is duration-loaded — but the
+    // running profile's elastic-tendon weighting is for repeated foot-strike.
+    const ride = dayFor({ focus: "Ride", mainWorkout: "Zwift bike session" });
+
+    expect(ride?.utss).toBeGreaterThan(0);
+    expect(ride?.vectorLoads.elastic_tendon).toBe(0);
+    expect(ride?.vectorLoads.posterior_chain).toBe(0);
+  });
+
+  it("stays near zero for a workout whose text names nothing recognisable", () => {
+    const vague = dayFor({ focus: "Strength", mainWorkout: "Gym session, no detail" });
+
+    expect(vague?.utss).toBeGreaterThan(0);
+    expect(vague?.vectorLoads.posterior_chain).toBe(0);
+    expect(vague?.vectorLoads.elastic_tendon).toBe(0);
+  });
+
+  it("leaves a session that DOES have sets exactly as it was", () => {
+    // The strength path already put this session's tonnage on the vectors;
+    // adding workout-level load on top would double-count it.
+    const sets = Array.from({ length: 10 }, (_, i) =>
+      set({ workoutLogId: "log-1", exerciseName: "back_squat", category: "strength", setNumber: i + 1, reps: 5, weight: 100 }),
+    );
+    const withSets = dayFor({ focus: "Strength", mainWorkout: "Back squat, bench" }, sets);
+
+    expect(withSets?.utss).toBe(99.1);
+    expect(withSets?.vectorLoads).toEqual({
+      posterior_chain: 34.7,
+      anterior_chain: 99.1,
+      unilateral_stability: 19.8,
+      elastic_tendon: 9.9,
+    });
+  });
+});
+
 describe("bodyweightRepLoadKg — unweighted reps scale with the athlete (audit M2)", () => {
   it("leaves the reference athlete exactly where they were", () => {
     // Every governor threshold, ACWR baseline and periodisation reference in
