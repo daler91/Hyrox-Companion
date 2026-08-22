@@ -1,3 +1,4 @@
+import { totalNutrition } from "@shared/nutritionScaling";
 import type {
   FoodLogEntryWithNutrition,
   MealFuelTarget,
@@ -45,16 +46,16 @@ const ROLE_CAPTION: Record<MealRole, string> = {
   flex_remainder: "Flexible",
 };
 
+/**
+ * This meal's total, raw-summed then rounded once — the same way the day header
+ * is computed.
+ *
+ * Summing each entry's already-rounded `nutrition` instead meant the meals never
+ * added up to the day: every entry contributed its own rounding error, and the
+ * header rounded only at the end (audit M22).
+ */
 function sumNutrition(entries: readonly FoodLogEntryWithNutrition[]): NutritionMacroTotals {
-  let calories = 0, protein = 0, carb = 0, fat = 0, fiber = 0;
-  for (const e of entries) {
-    calories += e.nutrition.calories;
-    protein += e.nutrition.protein;
-    carb += e.nutrition.carb;
-    fat += e.nutrition.fat;
-    fiber += e.nutrition.fiber;
-  }
-  return { calories, protein, carb, fat, fiber };
+  return totalNutrition(entries.map((e) => ({ per100g: e.per100g, quantityG: e.quantityG })));
 }
 
 /** One meal's fuel target + logged entries (per-meal fuelling). Shows the target

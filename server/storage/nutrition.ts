@@ -270,7 +270,19 @@ export class NutritionStorage {
           carbPer100g: sql`excluded.carb_per_100g`,
           fatPer100g: sql`excluded.fat_per_100g`,
           fiberPer100g: sql`excluded.fiber_per_100g`,
-          micros: sql`excluded.micros`,
+          // MERGED, not replaced. A search hit carries whatever micronutrients
+          // that one provider happened to return, and overwriting wiped a row's
+          // USDA enrichment the next time the same product surfaced in an OFF
+          // search (audit M21). Right-hand side wins per key, so fresher values
+          // still land; keys the incoming payload simply does not mention are
+          // kept rather than deleted. `nullif` keeps the column NULL when neither
+          // side has anything, so "no micros" stays distinguishable from
+          // "measured and found to contain none".
+          //
+          // The trade-off, stated because it is real: a provider that DROPS a
+          // micronutrient no longer clears it here. Losing enrichment on every
+          // search is the worse of the two.
+          micros: sql`nullif(coalesce(${foods.micros}, '{}'::jsonb) || coalesce(excluded.micros, '{}'::jsonb), '{}'::jsonb)`,
           lastFetchedAt: now,
           updatedAt: now,
         },
@@ -848,6 +860,10 @@ export class NutritionStorage {
       carbPer100g: computed.carbPer100g,
       fatPer100g: computed.fatPer100g,
       fiberPer100g: computed.fiberPer100g,
+      // Was omitted entirely, so a recipe of USDA-enriched ingredients logged as
+      // carrying no micronutrients at all while the same ingredients logged
+      // individually carried theirs (audit M21).
+      micros: computed.micros,
     };
   }
 

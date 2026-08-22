@@ -237,6 +237,82 @@ Landed for M13, M16, M17, M18, M19, M20 and M27.
 | M20 | `serving_quantity` was read as grams whatever its unit, so a 250 ml drink became a 250 g serving. |
 | M27 | The AI system prompt told the model "UTSS is subjective (from RPE)" and that UTSS and hrTSS "should broadly agree". Both are false — HR is the FIRST branch of UTSS, and hrTSS never feeds it — and the model repeated them to athletes as fact. |
 
+### M21 and M22 — landed 2026-08-22
+
+| #   | Before → after                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M21 | A recipe's backing food was written with **no `micros` at all** — `computeRecipeFood` computed five macros and discarded every ingredient's micronutrients — so a recipe of USDA-enriched ingredients logged as containing none while the same ingredients logged individually carried theirs. Micros are now aggregated with `rollup.scaleMicros`, the same helper the daily rollup uses. |
+| M21 | `upsertFoods` set `micros = excluded.micros`, so the next time a product surfaced in an OFF search its USDA enrichment was **overwritten by whatever that one provider returned**. Now merged per key (right-hand side wins), with `nullif` keeping the column NULL when neither side has anything. |
+| M22 | The edit preview rescaled an entry's **already-rounded** total, so the number shown before saving disagreed with the number stored — and how often depended on how badly the original entry rounded: from a 100 g base of an integer per-100g value, never; from a 31 g base, on **463 of 500** whole-gram edits. |
+| M22 | Meal cards summed rounded per-entry values while the day header summed raw and rounded once, so **the meals never added up to the day**, and the drift grew with the number of entries. |
+
+Both halves of M22 are the same mistake — rounding early — and both are fixed the same way: the
+scaling rule moved from `server/services/nutrition/rollup.ts` to **`shared/nutritionScaling.ts`**,
+and each log entry now carries the backing food's per-100g values alongside its rounded total. Client
+and server apply the identical function to the identical inputs, so they agree by construction rather
+than by two implementations staying in step. `rollup` re-exports it, so every server call site is
+unchanged.
+
+### M14 and M15 — landed 2026-08-22
+
+| #   | Before → after                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M14 | `testCount` counted the FETCHED array, and both callers took the hidden `limit = 20` default — so an athlete with 63 logged MAF tests was told they had 20. Counted in SQL now, with the fetch limits made explicit and raised to 200. |
+| M14 | The compliance trend compared the newest analysis against `scored[0]` — the oldest row *in that 20-row page*. The baseline therefore slid forward with every new test: an athlete who improved sharply and then held steady watched "improving" decay to "flat" with no change in their training. Anchored to a trailing 180-day window instead. |
+| M15 | The duration estimate returned block timing alone the moment ANY block carried it, discarding every per-set estimate — so a session with a timed 10-minute warm-up and twenty untimed working sets was estimated at **10 minutes**. Block minutes and unattached-set minutes are now added. |
+| M15 | Both duration bounds were applied silently, so a four-hour session and a three-hour one both read "180" with nothing to tell them apart. The estimate now carries `clamped`. |
+
+**Why 180 days for the M14 baseline.** MAF tests are typically repeated every four to six weeks, so a
+90-day window yields two or three points to trend across — thin for a comparison that already needs
+5 percentage points of movement before it calls a direction. Half a year gives four to six and is
+still recognisably "recent". Comparing against the athlete's all-time first test would be equally
+stable but would keep crediting a beginner's first month years later. The window length is a policy
+choice; the *defect* was that the baseline moved with logging volume rather than with time.
+
+**The M15 fix is deliberately conservative.** Sets carrying a `blockId` are inside a timed block's
+minutes already, so only unattached sets add time. But a session whose sets carry NO `blockId` at all
+cannot be told apart from one whose sets *are* the block's content — so where there is no linkage
+anywhere, blocks keep winning exactly as before rather than risk double-counting. An existing test
+(`"lets structure-block timing win over a distance set"`) covers precisely that shape and still
+passes; it was not inverted, because it is not certifying a bug.
+
+### M11 — verified, NOT fixed: needs an architecture decision
+
+Logged nutrition is derived by joining `food_log_entries` (which stores only `food_id` and
+`quantity_g`) live to `foods`, and scaling per-100g values. The `foods` comment states the rationale:
+*"never snapshotted, because USDA values are immutable per fdcId."*
+
+That rationale holds for USDA rows. It does not hold for the other things in the same table. Custom
+foods and recipe-backing foods are **user-editable**, and `updateRecipe` does exactly this:
+
+```ts
+await tx.update(foods)
+  .set({ ...this.backingFoodValues(userId, input.name, computed), updatedAt: new Date() })
+  .where(eq(foods.id, existing.foodId));
+```
+
+So editing a recipe today silently rewrites **every past day it was ever logged on**. Add butter to
+your chili and last month's calorie history goes up with it.
+
+The codebase already knows this matters — `deleteRecipe`'s own comment says the backing food is kept
+when a log entry references it *"so logged history survives"*. Delete is careful; update is not.
+
+Three ways to close it, all bigger than a bug fix:
+
+1. **Snapshot nutrition onto the log entry.** The correct long-term shape: a migration adding the
+   scaled macros (and micros) to `food_log_entries`, a backfill, and read paths that prefer the
+   snapshot. Makes history immutable by construction.
+2. **Copy-on-write the backing food.** On edit, if any log entry references the current backing food,
+   insert a new one and repoint the recipe. Needs a column to keep the superseded row out of search —
+   `foods` has no archived/deleted flag today, and visibility keys off `created_by_user_id` +
+   `is_public`.
+3. **Warn at the edit.** Cheapest, and honest, but leaves the history mutable.
+
+Each is a schema or product call about existing athletes' data, so it is recorded here rather than
+chosen unilaterally — the same treatment as L4.
+
+---
+
 **A correction to M17 as registered.** The register says "race-week and taper carb-loading actually
 cut carbs". Race week *adds* carbs in the ordinary case (378.6 g against a 350 g baseline for an
 athlete tapering down from hard training) because the recovery term credits the drop in recent load.

@@ -1,3 +1,4 @@
+import { roundMacros, scaleNutrition } from "@shared/nutritionScaling";
 import type {
   EffectiveTargetSummary,
   Food,
@@ -76,20 +77,19 @@ function parsePortionGrams(value: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Scale an existing entry's nutrition proportionally for the edit preview. */
+/**
+ * Nutrition for the edit preview, from the SAME raw inputs the server will use.
+ *
+ * This used to rescale `entry.nutrition`, which the server had already rounded,
+ * and then round again — so the preview and the saved value disagreed. A 157 kcal
+ * entry (rounded from 157.44) doubled previewed as 314 while the server stored
+ * 315, and the gap widens with the factor (audit M22).
+ */
 function scaleEntryPreview(
   entry: FoodLogEntryWithNutrition,
   quantityG: number,
 ): NutritionMacroTotals {
-  const factor = entry.quantityG > 0 ? quantityG / entry.quantityG : 0;
-  const r1 = (v: number) => Math.round(v * 10) / 10;
-  return {
-    calories: Math.round(entry.nutrition.calories * factor),
-    protein: r1(entry.nutrition.protein * factor),
-    carb: r1(entry.nutrition.carb * factor),
-    fat: r1(entry.nutrition.fat * factor),
-    fiber: r1(entry.nutrition.fiber * factor),
-  };
+  return roundMacros(scaleNutrition(entry.per100g, quantityG));
 }
 
 /** Servings visible to the user (fetched + optimistic), de-duped by id, by grams. */

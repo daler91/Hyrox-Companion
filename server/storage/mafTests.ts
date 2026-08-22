@@ -157,6 +157,15 @@ export class MafTestStorage {
     });
   }
 
+  /** How many MAF tests the athlete has EVER logged, independent of any fetch limit. */
+  async countTestResults(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(mafTestResults)
+      .where(eq(mafTestResults.userId, userId));
+    return row?.total ?? 0;
+  }
+
   async listTestResults(userId: string, limit = 20): Promise<MafTestResult[]> {
     return db
       .select()

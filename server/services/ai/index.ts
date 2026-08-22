@@ -82,6 +82,9 @@ function sorenessFromRpe(trend: {
  * catch booked travel before it is programmed over.
  */
 const ABSENCE_LOOKBACK_DAYS = 70;
+// Rows of MAF history to pull for the trend summary. Bounded, but wide enough
+// that the 90-day compliance baseline is not starved by a 20-row cap.
+const MAF_HISTORY_LIMIT = 200;
 const ABSENCE_LOOKAHEAD_DAYS = 28;
 /** Hard cap, so an athlete with a long annotation history can't bloat the prompt. */
 const MAX_ABSENCES_IN_CONTEXT = 8;
@@ -550,11 +553,17 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   // style and skipped entirely for everyone else.
   let mafTrend: TrainingContext["mafTrend"];
   if (user?.trainingStyleId === "maf_method") {
-    const [mafTestRows, mafAnalysisRows] = await Promise.all([
-      storage.mafTests.listTestResults(userId),
-      storage.mafTests.listWorkoutAnalysis(userId),
+    // Explicit limits, and a separate COUNT. The default was a silent 20, so the
+    // summary reported "20 tests" to anyone with more and computed its trend from
+    // whatever twenty rows happened to be newest (audit M14).
+    const [mafTestRows, mafAnalysisRows, mafTestTotal] = await Promise.all([
+      storage.mafTests.listTestResults(userId, MAF_HISTORY_LIMIT),
+      storage.mafTests.listWorkoutAnalysis(userId, MAF_HISTORY_LIMIT),
+      storage.mafTests.countTestResults(userId),
     ]);
-    mafTrend = summarizeMafTrend(mafTestRows, mafAnalysisRows);
+    mafTrend = summarizeMafTrend(mafTestRows, mafAnalysisRows, new Date(), {
+      totalTestCount: mafTestTotal,
+    });
   }
 
   const nutrition = await nutritionPromise;

@@ -8,6 +8,9 @@ import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPatch, protectedPost } from "../_helpers/protectedRouteBuilder";
 
+/** Rows of MAF history returned to the trend charts. */
+const MAF_HISTORY_LIMIT = 200;
+
 // Manual metric corrections. All optional/nullable: an omitted field keeps the
 // auto-pulled (or previously stored) value, an explicit null clears it. Bounds
 // mirror the manual-metrics validation in the client workout form.
@@ -79,9 +82,11 @@ export function registerWorkoutMafRoutes(router: Router): void {
     rateLimiter("mafTest", 60),
     asyncHandler(async (req: Request, res: Response) => {
       const userId = getUserId(req);
+      // Explicit, and wider than the old silent default of 20 — which quietly
+      // cut both trend charts off at twenty points (audit M14).
       const [tests, analysis] = await Promise.all([
-        storage.mafTests.listTestResults(userId),
-        storage.mafTests.listWorkoutAnalysis(userId),
+        storage.mafTests.listTestResults(userId, MAF_HISTORY_LIMIT),
+        storage.mafTests.listWorkoutAnalysis(userId, MAF_HISTORY_LIMIT),
       ]);
       res.json({ tests, analysis });
     }),
