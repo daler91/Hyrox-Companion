@@ -85,6 +85,28 @@ function firstRunExercise(workout: UpcomingWorkoutForLoad): PromptExerciseForLoa
   return workout.exerciseDetails?.find((exercise) => exercise.category === "running");
 }
 
+/**
+ * Minutes of easy running to prescribe when the day being downshifted has no
+ * run of its own to borrow a distance from. `exercise_sets.time` is MINUTES
+ * (docs/adr-units.md).
+ */
+const SYNTHESIZED_RECOVERY_RUN_MINUTES = 30;
+
+/**
+ * Replace the day's rows with a single easy aerobic run.
+ *
+ * Neither field is allowed to dictate PACE, which is the whole point of a
+ * downshift. Two cases:
+ *
+ *   - the day already contains a run: keep its DISTANCE and drop its TIME.
+ *     Copying both prescribed the exact pace the downshift exists to slow — a
+ *     5 km tempo in 22 minutes came back as a "recovery run" of 5 km in 22
+ *     minutes (audit M24).
+ *   - the day has no run at all (a pure strength session being locked out by
+ *     ACWR danger): synthesize a TIME-ONLY easy run. Time without a distance
+ *     sets duration, not speed. This used to emit a row with neither, so the
+ *     athlete lost their squats and received a blank prescription in return.
+ */
 function buildEasyRunRows(planDayId: string, workout: UpcomingWorkoutForLoad): InsertExerciseSet[] {
   const run = firstRunExercise(workout);
   return [{
@@ -97,7 +119,7 @@ function buildEasyRunRows(planDayId: string, workout: UpcomingWorkoutForLoad): I
     reps: null,
     weight: null,
     distance: run?.distance ?? null,
-    time: run?.time ?? null,
+    time: run ? null : SYNTHESIZED_RECOVERY_RUN_MINUTES,
     plannedReps: null,
     plannedWeight: null,
     plannedDistance: null,
@@ -220,11 +242,12 @@ function buildRecoverySuggestion(
   rationaleCode: string,
   priority: WorkoutSuggestion["priority"],
 ): LoadGovernorSuggestion {
+  const easyRunRows = buildEasyRunRows(workout.id, workout);
   return {
     rationaleCode,
     focusOverride: RECOVERY_RUN_FOCUS,
     suggestion: workoutSuggestion(workout, "mainWorkout", "replace", easyRunRecommendation(workout), rationale, priority),
-    structuredSetRows: workout.exerciseDetails?.length ? buildEasyRunRows(workout.id, workout) : undefined,
+    structuredSetRows: workout.exerciseDetails?.length ? easyRunRows : undefined,
   };
 }
 
@@ -361,16 +384,25 @@ export function buildLoadGovernorSuggestions(
     return 0;
   });
 
+  // Passes run in DESCENDING SEVERITY, because each one claims the workouts it
+  // acts on into `usedWorkoutIds` and later passes skip them.
+  //
+  // The order used to be: vector rules, then acwr_yellow_guard, then
+  // acwr_danger_lock. Both of those are inversions. A "reduce"-mode vector rule
+  // could claim a session and leave the danger-level ACWR lock — a "recovery"
+  // downshift — unable to touch it, and the yellow guard could do the same to
+  // the danger lock. The athlete got the milder of two restrictions precisely
+  // when the more serious one applied (audit M23).
+  //
+  // 1. Vector rules that downshift to RECOVERY. Same severity as the ACWR
+  //    danger lock below — both replace the session — so the tie is broken in
+  //    favour of the more specific rationale ("hamstring strain" tells the
+  //    athlete more than "ACWR is high"). The ACTION is identical either way.
   applySuggestionRules(summary, ordered, [
     { restrictionId: "posterior_chain_velocity_lock", maxDaysAhead: 2, mode: "recovery",
       matches: (workout) => isRunningWorkout(workout) && isHighIntensityRun(workout),
       rationale: () =>
         "Gym log shows high posterior-chain strain, so this high-velocity run is downshifted to protect hamstrings while preserving aerobic volume.",
-    },
-    { restrictionId: "anterior_chain_braking_guard", maxDaysAhead: 3, mode: "reduce",
-      matches: (workout) => isRunningWorkout(workout) && (isBrakingRun(workout) || isHighIntensityRun(workout)),
-      rationale: () =>
-        "Gym log shows high quad and patellar strain, so this run is shifted to a flat low-intensity session to reduce knee braking load.",
     },
     { restrictionId: "elastic_tendon_speed_guard", maxDaysAhead: 3, mode: "recovery",
       matches: isPlyoOrSpeed,
@@ -378,6 +410,25 @@ export function buildLoadGovernorSuggestions(
         "Seven-day elastic tendon load is high, so speed and plyometric work is downshifted to protect the Achilles and plantar fascia.",
     },
   ], currentDate, usedWorkoutIds, suggestions);
+
+  // 2. ACWR danger lock — the most serious ACWR signal, and a full recovery
+  //    downshift. It must outrank everything that merely REDUCES below.
+  applySuggestionRules(summary, ordered, [{
+    restrictionId: "acwr_danger_lock", maxDaysAhead: 4, mode: "recovery",
+    matches: (workout) => isHighIntensityRun(workout) || isStrengthWorkout(workout),
+    rationale: (loadSummary) =>
+      `ACWR is ${loadSummary.acwr ?? "above target"}, so high-intensity training is downshifted to guide load back toward the chronic baseline.`,
+  }], currentDate, usedWorkoutIds, suggestions);
+
+  // 3. Vector rules that only REDUCE.
+  applySuggestionRules(summary, ordered, [{
+    restrictionId: "anterior_chain_braking_guard", maxDaysAhead: 3, mode: "reduce",
+    matches: (workout) => isRunningWorkout(workout) && (isBrakingRun(workout) || isHighIntensityRun(workout)),
+    rationale: () =>
+      "Gym log shows high quad and patellar strain, so this run is shifted to a flat low-intensity session to reduce knee braking load.",
+  }], currentDate, usedWorkoutIds, suggestions);
+
+  // 4. ACWR yellow guard — a softening, not a lock.
   applySuggestionRules(summary, ordered, [{
     restrictionId: "acwr_yellow_guard", maxDaysAhead: 2, mode: "reduce",
     matches: (workout) => isHighIntensityRun(workout) || isHighTaxStrengthWorkout(workout),
@@ -385,12 +436,8 @@ export function buildLoadGovernorSuggestions(
       `ACWR is ${loadSummary.acwr ?? "above target"}, so this higher-tax session is softened while acute load settles back toward the chronic baseline.`,
     priority: "medium",
   }], currentDate, usedWorkoutIds, suggestions);
-  applySuggestionRules(summary, ordered, [{
-    restrictionId: "acwr_danger_lock", maxDaysAhead: 4, mode: "recovery",
-    matches: (workout) => isHighIntensityRun(workout) || isStrengthWorkout(workout),
-    rationale: (loadSummary) =>
-      `ACWR is ${loadSummary.acwr ?? "above target"}, so high-intensity training is downshifted to guide load back toward the chronic baseline.`,
-  }], currentDate, usedWorkoutIds, suggestions);
+
+  // 5. On-ramp nudges, the mildest thing the governor does.
   applyOnrampSuggestions(summary, ordered, currentDate, usedWorkoutIds, suggestions);
 
   return suggestions;

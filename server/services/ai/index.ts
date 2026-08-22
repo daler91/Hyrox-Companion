@@ -1,3 +1,4 @@
+import { dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
@@ -37,6 +38,42 @@ import {
 } from "./trainingStats";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The athlete's race proximity for the decision engine's S3/S4 gates.
+ *
+ * Both fields were hardcoded (`hasRace: false`, `daysToRace: null`), making
+ * every race-proximity protection unreachable while `training_plans.race_date`
+ * sat populated (audit H13).
+ */
+function resolveRaceContext(
+  raceDate: string | null,
+  today: string,
+): { hasRace: boolean; daysToRace: number | null } {
+  const daysToRace = raceDate ? dayDiff(today, raceDate) : null;
+  return daysToRace != null && daysToRace >= 0
+    ? { hasRace: true, daysToRace }
+    : { hasRace: false, daysToRace: null };
+}
+
+/**
+ * Map the RPE trend onto the decision engine's THREE soreness tiers.
+ *
+ * It was `fatigueFlag ? "high" : "low"`, so "medium" never occurred and the
+ * S2_SOFT_RECOVERY_GUARD branch testing for it was dead (audit H13).
+ * `fatigueFlag` is itself `avgRpeLast3 >= 8`, so 7+ is the natural middle tier:
+ * hard training, not yet alarming. With no rated sessions at all the value is
+ * ABSENT rather than "low", which asserted a freshness the app had no evidence
+ * for.
+ */
+function sorenessFromRpe(trend: {
+  fatigueFlag: boolean;
+  avgRpeLast3?: number;
+}): "low" | "medium" | "high" | undefined {
+  if (trend.fatigueFlag) return "high";
+  if (trend.avgRpeLast3 == null) return undefined;
+  return trend.avgRpeLast3 >= 7 ? "medium" : "low";
+}
 
 /**
  * How far either side of today a declared absence stays worth telling the coach
@@ -415,6 +452,8 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   }).length;
   const experienceLevel = classifyExperienceLevel(totalWorkouts);
 
+  const raceContext = resolveRaceContext(activePlanRecord?.raceDate ?? null, today);
+
   const decisionTree = decideTrainingState({
     profile: {
       experienceLevel,
@@ -424,11 +463,21 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     testTrend: {
       direction: mapTestTrendDirection(rpeTrend.rpeTrend),
     },
-    raceContext: { hasRace: false, daysToRace: null },
+    // The athlete's real race, from `training_plans.race_date`. Both of these
+    // were hardcoded (`hasRace: false`, `daysToRace: null`), which made
+    // S3_RACE_WEEK and S4_RACE_SOON permanently unreachable — every
+    // race-proximity protection in the decision engine was dead code, while the
+    // column it needed existed and was populated (audit H13). A gate fed a
+    // literal is worse than no gate: it reads as protection in review.
+    raceContext,
     recoveryMarkers: {
-      sleepQuality: "ok",
-      soreness: rpeTrend.fatigueFlag ? "high" : "low",
-      restingHrDelta: 0,
+      // Sleep quality is not collected anywhere in the product, so it is
+      // ABSENT rather than asserted as "ok" — a literal that silently held the
+      // S2 soft-recovery guard shut. Same for restingHrDelta, which needs a
+      // personal baseline the app does not yet track. Leaving them undefined
+      // keeps the branches honest: they cannot fire, and they no longer claim
+      // to have been evaluated (audit H13).
+      soreness: sorenessFromRpe(rpeTrend),
       // Was hardcoded false, which meant the decision engine had a field for
       // exactly this and nothing ever set it — an athlete could declare an
       // injury and still be told intensity was permitted. This drives a hard
