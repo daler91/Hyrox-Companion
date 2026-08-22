@@ -552,15 +552,29 @@ async function generatePlanDays(
   // call is made (audit H17, M7).
   const overloadViolations = findProgressiveOverloadViolations(days);
   if (overloadViolations.length > 0) {
-    logger.warn({
-      context: "plan-generation",
-      event: "progressive_overload_ceiling_exceeded",
-      userId,
-      totalWeeks: input.totalWeeks,
-      violationCount: overloadViolations.length,
-      // Bounded: a long plan could otherwise emit a very large log line.
-      worst: overloadViolations.slice(0, 5),
-    }, "Generated plan exceeds the week-over-week weight ceiling the prompt asks for.");
+    // Carries neither the athlete's id nor their prescribed loads. The logger
+    // mixin omits userId on purpose (see the S2 note in server/logger.ts) and
+    // injects a requestId instead, which is what correlates this line back to a
+    // generation. The absolute kg say nothing about whether the PROMPT is asking
+    // for jumps that are too big — the percentage is the whole signal. Bounded
+    // to five so a long plan cannot emit a very large log line.
+    logger.warn(
+      {
+        context: "plan-generation",
+        event: "progressive_overload_ceiling_exceeded",
+        totalWeeks: input.totalWeeks,
+        violationCount: overloadViolations.length,
+        worst: overloadViolations
+          .slice(0, 5)
+          .map(({ exerciseName, fromWeek, toWeek, increasePct }) => ({
+            exerciseName,
+            fromWeek,
+            toWeek,
+            increasePct,
+          })),
+      },
+      "Generated plan exceeds the week-over-week weight ceiling the prompt asks for.",
+    );
   }
 
   return days;
