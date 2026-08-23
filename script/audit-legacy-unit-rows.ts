@@ -136,6 +136,12 @@ async function auditAthlete(user: {
   return { ...base, verdict: verdictFor(base) };
 }
 
+/**
+ * The per-athlete line, which necessarily carries a user id — a report saying
+ * "somebody switched units" is not actionable. `--quiet` suppresses these and
+ * leaves only the summary, for a run whose output goes somewhere the ids should
+ * not; the full detail is still written to `--report-file`.
+ */
 function logAthlete(report: AthleteReport): void {
   if (report.verdict === "nothing_to_do") return;
   const detail: Record<string, unknown> = {
@@ -183,6 +189,8 @@ async function main(): Promise<void> {
   }, {});
   const legacyRows = reports.reduce((n, r) => n + r.legacyWeightRows + r.legacyDistanceRows, 0);
 
+  // bearer:disable javascript_lang_logger_leak — counts and a fixed conclusion
+  // string only. No athlete identifier and no logged value reaches this line.
   logger.info(
     {
       athletes: reports.length,
@@ -200,6 +208,8 @@ async function main(): Promise<void> {
   if (flags.reportFile) {
     const { writeFile } = await import("node:fs/promises");
     await writeFile(flags.reportFile, JSON.stringify(reports, null, 2));
+    // bearer:disable javascript_lang_logger_leak — the operator's own --report-file
+    // path, echoed back so they know where the report landed.
     logger.info({ reportFile: flags.reportFile }, "[legacy-units] report written");
   }
 }
@@ -207,6 +217,9 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err) => {
+    // bearer:disable javascript_lang_logger_leak — the operational error that
+    // stopped the run, so it can be diagnosed. Same shape the rest of the
+    // codebase logs a failure with.
     logger.error({ err }, "[legacy-units] failed");
     process.exit(1);
   });
