@@ -23,10 +23,104 @@ describe("scaleNutrition", () => {
     expect(n.protein).toBeCloseTo(1.298, 5);
   });
 
-  it("treats a null per-100g value as 0, not NaN", () => {
-    const n = scaleNutrition({ ...BANANA, caloriesPer100g: null }, 100);
+  it("never produces NaN from an absent value", () => {
+    const n = scaleNutrition({ ...BANANA, proteinPer100g: null }, 100);
 
-    expect(n.calories).toBe(0);
+    expect(n.protein).toBe(0);
+    expect(Number.isNaN(n.protein)).toBe(false);
+  });
+});
+
+describe("energy for a food whose provider published none", () => {
+  // This test used to assert `calories === 0` for exactly this input. That was
+  // the defect, not the contract: OFF admits a product with no energy field
+  // whenever completeness is decent or unknown, and neither the USDA nor the
+  // Edamam mapper gates on calories at all — so a real food carrying real
+  // macros logged as zero calories, and the day header showed a calorie total
+  // that its own protein and carb figures contradicted.
+  const noEnergy: Per100gMacros = { ...BANANA, caloriesPer100g: null };
+
+  it("reconstructs it from the macros instead of logging zero", () => {
+    // 4(1.1) + 4(22.8) + 9(0.3) = 98.3 kcal per 100 g. The banana's own stated
+    // value is 89, so the reconstruction is +10.4% — the high end of the
+    // measured range, because fibre is where providers disagree.
+    expect(scaleNutrition(noEnergy, 100).calories).toBeCloseTo(98.3, 5);
+    expect(scaleNutrition(noEnergy, 200).calories).toBeCloseTo(196.6, 5);
+  });
+
+  it("never overrides an energy value the provider DID publish", () => {
+    // The reconstruction must be a fallback, never a correction: 89 is what
+    // this food says it is, and 98.3 is only an estimate of it.
+    expect(scaleNutrition(BANANA, 100).calories).toBe(89);
+  });
+
+  it("still reports zero when there is nothing to reconstruct from", () => {
+    // A fibre-only food — which sanitizeMappedFood deliberately keeps — has no
+    // energy-bearing macro, so there is no honest number to derive. Fabricating
+    // one would be worse than the zero.
+    const fiberOnly: Per100gMacros = {
+      caloriesPer100g: null,
+      proteinPer100g: null,
+      carbPer100g: null,
+      fatPer100g: null,
+      fiberPer100g: 2.1,
+    };
+
+    expect(scaleNutrition(fiberOnly, 100).calories).toBe(0);
+  });
+
+  it("refuses to derive from macros that cannot physically coexist", () => {
+    // Each field passes its own import clamp (MACRO_PER_100G_MAX is 200), but
+    // 600 g of macros in 100 g of food is not a food. Deriving would assert
+    // 3400 kcal per 100 g — nearly four times pure fat, the densest thing
+    // there is. Nothing cross-checks the macros against each other on import,
+    // so this is the only place that impossibility could become a number.
+    const impossible: Per100gMacros = {
+      caloriesPer100g: null,
+      proteinPer100g: 200,
+      carbPer100g: 200,
+      fatPer100g: 200,
+      fiberPer100g: null,
+    };
+
+    expect(scaleNutrition(impossible, 100).calories).toBe(0);
+  });
+
+  it("still derives for the densest food that is actually possible", () => {
+    // Pure fat: 100 g of fat per 100 g, 900 kcal. The guard must not reject it.
+    const oil: Per100gMacros = {
+      caloriesPer100g: null,
+      proteinPer100g: 0,
+      carbPer100g: 0,
+      fatPer100g: 100,
+      fiberPer100g: null,
+    };
+
+    expect(scaleNutrition(oil, 100).calories).toBe(900);
+  });
+
+  it("makes the day header agree with its own macros", () => {
+    // The bug in one line: 200 g of a food with 50 g protein, 120 g carb and
+    // 20 g fat used to total 0 kcal, so a day could read 107 kcal beside 51 g
+    // protein and 147 g carb — two numbers in the same object that cannot both
+    // be true.
+    const proteinPowder: Per100gMacros = {
+      caloriesPer100g: null,
+      proteinPer100g: 25,
+      carbPer100g: 60,
+      fatPer100g: 10,
+      fiberPer100g: 5,
+    };
+    const day = totalNutrition([
+      { per100g: BANANA, quantityG: 120 },
+      { per100g: proteinPowder, quantityG: 200 },
+    ]);
+
+    const atwaterOfTheDisplayedMacros =
+      4 * day.protein + 4 * day.carb + 9 * day.fat;
+
+    expect(day.calories).toBe(967); // was 107
+    expect(Math.abs(day.calories - atwaterOfTheDisplayedMacros)).toBeLessThan(15);
   });
 });
 

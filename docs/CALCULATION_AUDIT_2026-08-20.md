@@ -479,6 +479,96 @@ as a 6 oz can — and it is unreachable today in any case.
 
 ---
 
+## N1 — found while verifying the food providers (2026-08-22)
+
+Not a register entry. It came out of the **"Not verified"** item below — *"only Edamam/USDA/OFF are
+wired up. Those three were not exercised against real responses, which is where a per-serving slip
+would hide."* The slip was not in per-serving scaling. It was in what happens when a provider
+publishes no energy value at all.
+
+**A food with real macros logged as zero calories.** `sanitizeMappedFood` keeps a food when *any one*
+of the five macros survives clamping, and none of the three wired mappers gates on calories: OFF's
+acceptance gate explicitly admits a product with no energy field whenever completeness is decent or
+unknown, and the USDA and Edamam mappers never ask. `scaleNutrition` then treated the resulting
+`null` as 0. Run against the shipping module:
+
+```
+200 g of a food with 25 g protein, 60 g carb, 10 g fat per 100 g
+  logged as: {"calories":0,"protein":50,"carb":120,"fat":20,"fiber":10}
+  Atwater 4/4/9 on those very macros: 860 kcal
+```
+
+Add a banana and the day header reads `{"calories":107, "protein":51.3, "carb":147.4, "fat":20.4}` —
+a calorie figure its own macro figures contradict by a factor of nine, in the same object. The
+athlete is under-reported by 860 kcal, and because the daily total feeds the target machinery, the
+advice they get back is to eat more.
+
+**Fixed by reconstructing the energy from the macros**, in `scaleNutrition` — the single point every
+server total, recipe aggregation, meal card and client preview already flows through (the M22
+guarantee, reused). The macros ARE the energy: a printed label is itself computed from macros with
+these same factors, so this is reconstruction, not invention.
+
+**Measured, not asserted.** Against eight real foods — the Nutella entry in `offClient.test.ts` and
+seven USDA values:
+
+| Food | Stated | Reconstructed | Error |
+| --- | --- | --- | --- |
+| Nutella (OFF fixture) | 539 | 533.3 | −1.1% |
+| Whole milk | 61 | 61.0 | +0.1% |
+| Olive oil | 884 | 900.0 | +1.8% |
+| White rice, cooked | 130 | 126.1 | −3.0% |
+| Chicken breast | 165 | 156.4 | −5.2% |
+| Almonds | 579 | 620.3 | +7.1% |
+| Banana (USDA) | 89 | 98.3 | +10.4% |
+| Banana (OFF fixture) | 89 | 99.1 | +11.3% |
+
+Between −5% and +11%, against the −100% it replaces.
+
+**Why fibre is deliberately excluded**, and it is the whole residual. Providers disagree on whether
+their `carbohydrate` figure already contains fibre — USDA's "carbohydrate by difference" does, the EU
+convention OFF follows does not. Counting it would require a per-provider claim about payloads this
+codebase has never verified against live responses, which is the very gap this finding came out of.
+So the reconstruction uses plain 4/4/9 and the divergence stays visible: it is exactly what pushes
+the two high-fibre foods (banana +11%, almonds +7%) to the top of the error range.
+
+**Three deliberate limits**, each pinned by a test:
+
+1. **It never overrides a stated value.** 89 is what the banana says it is; 98.3 is only an estimate
+   of it. The reconstruction is a fallback, never a correction.
+2. **It refuses when there is nothing to reconstruct from.** A fibre-only food — which
+   `sanitizeMappedFood` deliberately keeps — reports 0, because fabricating a number would be worse.
+3. **It refuses macros that cannot physically coexist.** Each field is clamped individually on import
+   (200 g per 100 g), but nothing cross-checks them, so 200/200/200 passes — 600 g of macros in 100 g
+   of food. Deriving would assert 3400 kcal per 100 g, nearly four times pure fat, the densest food
+   there is. This is the only place that impossibility could have become a confident number.
+
+**Nothing is written to the cache.** The derivation happens at read time, so the stored row keeps the
+provider's honest `null` and picks up a real value the moment a refresh supplies one — and a derived
+number can never later be mistaken for one a provider stated. That is also why the fix is *not* in
+`sanitizeMappedFood`, whose own stated policy is *"We never rewrite a clearly-corrupt number into a
+plausible-looking one."*
+
+**Two existing tests were inverted, not preserved** — `nutritionScaling.test.ts` ("treats a null
+per-100g value as 0, not NaN") and `recipe.test.ts` ("treats null ingredient macros as 0"). Both
+asserted the defect. The NaN-safety intent of the first is kept as its own test.
+
+**The Atwater factors now have one definition.** `nutritionTargets.ts` declared its own
+`KCAL_PER_G_PROTEIN/CARB/FAT` and the reconstruction needed the same three; rather than add a second
+copy, both now import from `shared/nutritionScaling.ts`. That is the L6 lesson (metres-per-mile
+defined twice) applied before it could bite.
+
+### Still not verified after this pass
+
+- **USDA `servingSizeUnit` spellings.** `servingToGrams` accepts `g/gram/grams/mg/kg/oz/lb` and
+  returns null for anything else. Whether FoodData Central ever returns its internal codes (`GRM`,
+  `MLT`) on the search endpoint was **not** confirmed — no live payload was available here. If it
+  does, the effect is a missing default serving size and a skipped `labelNutrients` fallback, not a
+  wrong number. Deliberately left alone rather than guessing at a code that may not exist.
+- **Edamam and USDA per-100g basis** is documented in each client and consistent with the mappers,
+  but likewise unconfirmed against a live response.
+
+---
+
 ## How to read this
 
 Every finding carries a **verification tier**:
@@ -488,6 +578,15 @@ Every finding carries a **verification tier**:
 | `EXECUTED` | The shipping module was imported and run; the output below is what it returned.                                                    |
 | `READ`     | The exact lines and data path were traced by hand. Confident, not executed.                                                        |
 | `REPORTED` | Surfaced by an audit agent and passed adversarial verification, but **not** re-derived by hand. A strong lead, not a settled fact. |
+
+**The tier column was re-scored on 2026-08-22, after remediation.** It records how well a finding is
+known *now*, not how it was first surfaced. Every finding that was fixed carries `EXECUTED`, because
+fixing it meant re-deriving it and pinning it with a test that imports and runs the shipping module;
+findings confirmed by reading the code and deliberately left alone (H17, L9, M25, M26, M11, L4, L5,
+L14) carry `READ`. No `REPORTED` rows remain: nothing in the register is still an unverified lead.
+Five register entries were corrected against the code in the process — H4's allowlist, H20's
+magnitude, H17/M17's scope, H21's framing and L14's Spoonacular heuristic — which is the rate a
+second reader should expect to find.
 
 And a **label**: **provably wrong** (the code contradicts its own cited source, its own comment, or
 arithmetic) or **questionable design choice** (the code does what it intends, and the intent is the
@@ -718,18 +817,18 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | H7  | `analyticsService.ts:481` + `:244-283`                          | READ     | "Avg / Week" divides by `weeklySummaries.length`, and the week map only creates entries for weeks that _contain_ a workout. **Rest weeks are structurally invisible.** Train 3× in week 1, rest three weeks, train 3× in week 5 → "3.0 / week" instead of 1.2. It can never fall below 1.0.                                                                                                                                                   |
 | H8  | `analyticsService.ts:482` + `:259`                              | READ     | "Avg Duration" sums duration only `if (log.duration)` but divides by _every_ logged workout. Ten workouts, five with 60 min recorded → **30 min average** instead of 60. Also treats `duration = 0` as missing.                                                                                                                                                                                                                               |
 | H9  | `analyticsService.ts:490-498`                                   | READ     | "Avg RPE" is an unweighted mean of _weekly_ means — a 1-workout week weighs as much as a 6-workout week. Average compliance (`ai/index.ts:200-210`) has the identical shape, and its `windowDays: 70` is asserted rather than enforced.                                                                                                                                                                                                       |
-| H10 | `analyticsService.ts:557-567`                                   | REPORTED | "Avg Adherence" is computed only over sessions the athlete actually **logged**, so skipping most of the plan raises adherence toward 100%. It is additionally a mean of per-session ratios rather than a pooled ratio.                                                                                                                                                                                                                        |
+| H10 | `analyticsService.ts:557-567`                                   | EXECUTED | "Avg Adherence" is computed only over sessions the athlete actually **logged**, so skipping most of the plan raises adherence toward 100%. It is additionally a mean of per-session ratios rather than a pooled ratio.                                                                                                                                                                                                                        |
 | H11 | `analyticsService.ts:552` + `ai/coachingInsights.ts:99`         | READ     | "This week" is **UTC** in analytics and the coach but **athlete-local** in the weekly review. A UTC−8 athlete's weekly count resets Sunday afternoon. Weekly-volume trend also compares a _partial_ current week against a _complete_ previous one, so Monday always reads "decreasing".                                                                                                                                                      |
 | H12 | `racePrediction/featureBuilder.ts:279`                          | READ     | `projectedSplitSeconds` guards `null` and non-finite `time` but **not `time <= 0`**. The schema explicitly permits 0. One set saved with time 0 yields a 0-second station split feeding the median/best.                                                                                                                                                                                                                                      |
 | H13 | `ai/index.ts:387-391` + `trainingDecisionEngine.ts:76-108`      | READ     | **The decision engine's safety gates are fed hardcoded literals.** `raceContext: { hasRace: false, daysToRace: null }` makes `raceWeek`/`raceSoon` permanently false — every race-proximity protection is unreachable, though `training_plans.raceDate` exists and is populated. `sleepQuality: "ok"` and `restingHrDelta: 0` are literals too, and `soreness` is only ever "high"/"low", so the `=== "medium"` soft-recovery branch is dead. |
 | H14 | `shared/energyBalance.ts:96-120`                                | EXECUTED | The estimated path attributes **more** activity to a rest day than the measured path does to a real session. 80 kg athlete, 2500 kcal: rest day, no sync → 1602 kcal "activity", −882 balance; same day with a real 600 kcal session synced → 600 kcal, −236. A **646 kcal swing driven only by whether Strava synced**. Labelled "estimated", which is the only thing keeping it out of critical.                                            |
 | H15 | `planPhase.ts:57, 74-79` + `storage/plans.ts:393-416`           | READ     | `computeCurrentWeek` clamps with `Math.min(week, totalWeeks)` and `computePlanPhase` maps `currentWeek >= totalWeeks` to `race_week`. A plan that ended months ago is still selected ("most recently ended") and reports **race week forever**, locking the coach into "reduce work only". Measuring progress at week _end_ also means a 4-week plan starts in BUILD and a 3-week plan PEAKS in week 2.                                       |
 | H16 | `workoutStructureSummary.ts:9` + `unitConversion.ts:119`        | READ     | `getStoredDistanceUnit` stores **feet** for miles-preference athletes, but the summary appends `"m"` unconditionally. A 400 m carry stored as 1312 ft renders **"1312m"** — a 3.28× overstatement under the wrong unit label.                                                                                                                                                                                                                 |
-| H17 | `planGenerationService.ts` (chunking)                           | REPORTED | Plan chunks are generated by **parallel model calls with no shared state**, so the "increase 2.5–5% per week" instruction cannot be enforced across a chunk boundary and is never verified afterwards. Progressive overload is unverifiable by construction.                                                                                                                                                                                  |
-| H18 | plan day focus handling                                         | REPORTED | A `"rest"` **substring** in a plan day's focus label silently **deletes that day's entire structured exercise table**. "Active rest + mobility" loses its prescription.                                                                                                                                                                                                                                                                       |
-| H19 | `trainingLoadService.ts:1035-1044`, `:975-989`                  | REPORTED | All four injury-vector restrictions are inert for Strava/Garmin-imported and free-text workouts — every vector stays exactly 0, so the governor never fires for imported sessions.                                                                                                                                                                                                                                                            |
-| H20 | `trainingLoadService.ts:963-973`                                | REPORTED | UTSS for the same session differs by ~2× depending only on whether the athlete typed their sets in, because `sets.length === 0` opens the duration-based cardio branch.                                                                                                                                                                                                                                                                       |
-| H21 | `trainingLoadService.ts:714-718`, `:946-951`                    | REPORTED | EWMAs seed from the first log _inside the caller's fetch window_, so ACWR and TSB depend on the lookback and disagree across surfaces (−70d, 90d, −7d) by up to 12 TSB points.                                                                                                                                                                                                                                                                |
+| H17 | `planGenerationService.ts` (chunking)                           | READ     | Plan chunks are generated by **parallel model calls with no shared state**, so the "increase 2.5–5% per week" instruction cannot be enforced across a chunk boundary and is never verified afterwards. Progressive overload is unverifiable by construction.                                                                                                                                                                                  |
+| H18 | plan day focus handling                                         | EXECUTED | A `"rest"` **substring** in a plan day's focus label silently **deletes that day's entire structured exercise table**. "Active rest + mobility" loses its prescription.                                                                                                                                                                                                                                                                       |
+| H19 | `trainingLoadService.ts:1035-1044`, `:975-989`                  | EXECUTED | All four injury-vector restrictions are inert for Strava/Garmin-imported and free-text workouts — every vector stays exactly 0, so the governor never fires for imported sessions.                                                                                                                                                                                                                                                            |
+| H20 | `trainingLoadService.ts:963-973`                                | EXECUTED | UTSS for the same session differs by ~2× depending only on whether the athlete typed their sets in, because `sets.length === 0` opens the duration-based cardio branch.                                                                                                                                                                                                                                                                       |
+| H21 | `trainingLoadService.ts:714-718`, `:946-951`                    | EXECUTED | EWMAs seed from the first log _inside the caller's fetch window_, so ACWR and TSB depend on the lookback and disagree across surfaces (−70d, 90d, −7d) by up to 12 TSB points.                                                                                                                                                                                                                                                                |
 
 ### Medium
 
@@ -747,21 +846,21 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | M10 | `analyticsService.ts:247-283` + `WeeklyWorkoutsChart.tsx:72`            | READ     | The same missing-week map behind H7 also **deletes zero-training weeks from the weekly bar chart**. A layoff renders as if it never happened, and the chart mislabels how many weeks it shows.                                                                                                                                           |
 | M11 | `storage/nutrition.ts:882-929` + `tables.ts:1319-1323`                  | READ     | Logged nutrition is computed by joining live to `foods` and is _never snapshotted_ — deliberate and safe for immutable USDA rows, but recipes and custom foods **are** user-editable, so editing one silently rewrites **already-logged past days**.                                                                                     |
 | M12 | `storage/workouts.ts:99-114`                                            | READ     | `countPrSets` tests `s.weight >= max`, and `maxByExercise` is built from all the athlete's sets **including this workout's own**. The set is compared against a maximum it is inside: it always counts itself, and equalling an old best also counts. (`analyticsService.updateMaxWeight` uses strict `>` — two PR paths that disagree.) |
-| M13 | `exercise-table/lastSession.ts:22-40`                                   | REPORTED | `pickLastSession` filters on date only, not on workout log, so **two separate sessions on the same day are merged** — doubling the volume "Last time" shows and "Next" progresses from.                                                                                                                                                  |
-| M14 | `storage/mafTests.ts:160-175`                                           | REPORTED | MAF test count and both trend charts are **silently truncated at 20 rows**, and `complianceTrend` compares the newest test against the oldest row still inside that window, so the baseline slides forward as the athlete logs more.                                                                                                     |
-| M15 | `shared/plannedSessionEstimate.ts:307-322`                              | REPORTED | The estimate **discards every per-set time as soon as any block carries its own timing**, so a session with a timed warm-up is estimated at the warm-up's length. Hard-clamped to 10–180 min with no flag when a bound is hit.                                                                                                           |
-| M16 | `stravaMapper.ts:53-60`                                                 | REPORTED | Strava kilojoules → kcal via the thermodynamic factor **0.239**. Strava's kJ is _mechanical work_, not metabolic energy; at ~24% gross efficiency the conventional conversion is ≈1 kJ ≈ 1 kcal. Understates expenditure ~4×.                                                                                                            |
-| M17 | `nutritionTargets.ts:311-322, 374`                                      | REPORTED | **Race-week and taper carb-loading actually cut carbs.** The taper damp applies only when the base-load delta is positive, so on a low-load taper day the negative delta passes through undamped and swamps the race-week bonus.                                                                                                         |
-| M18 | `nutrition/labelParser.ts:50`                                           | REPORTED | Label energy unit parsed as `z.enum(["kcal","kJ"]).catch("kcal")`, so a model spelling it `"kj"` silently degrades to kcal — a **4.184× overstatement** the plausibility clamp does not catch.                                                                                                                                           |
-| M19 | `nutrition/offClient.ts:114`                                            | REPORTED | Open Food Facts has no kJ→kcal path: a kJ-only product caches with `calories = null` and logs as **0 kcal**, while the acceptance gate explicitly admits products with no kcal value.                                                                                                                                                    |
-| M20 | `nutrition/offClient.ts:63-65`                                          | REPORTED | OFF `serving_quantity` is used as grams with no unit check, so millilitre servings are stored as gram quantities.                                                                                                                                                                                                                        |
-| M21 | `storage/nutrition.ts:273, 834-851`                                     | REPORTED | Recipes write their backing food with `micros = NULL`, discarding all micronutrients; and `upsertFoods` overwrites a food's micros with the incoming sparse set, wiping USDA enrichment on the next search.                                                                                                                              |
-| M22 | `LogFoodDialog.tsx:80-92`, `MealSection.tsx:47-57`                      | REPORTED | Edit-mode preview rescales already-rounded stored values, so the number shown before saving differs from what is stored; per-meal totals sum rounded entries, so meal cards never reconcile with the day header.                                                                                                                         |
-| M23 | `trainingLoadGovernor.ts:346-375`                                       | REPORTED | Governor severity inversion: passes share `usedWorkoutIds` and run vector rules first, so a lower-severity restriction can claim a workout and block the ACWR danger lock.                                                                                                                                                               |
-| M24 | `trainingLoadGovernor.ts:70-101`                                        | REPORTED | The "recovery run" downshift copies the original distance **and** time, prescribing the same pace it was meant to slow down. It can also convert a pure strength day into a single blank `recovery_run` row.                                                                                                                             |
-| M25 | `trainingLoadService.ts:314-317` vs `:529`                              | REPORTED | Two unreconciled RPE→load curves. The strength curve `1.18^max(0, rpe−6)` is flat for every RPE ≤ 6, so a deload is invisible to the load model.                                                                                                                                                                                         |
-| M26 | `trainingLoadService.ts:658-665`                                        | REPORTED | Monotony uses population SD (÷n) against Foster's published >2.0 threshold, which assumes sample SD — inflating monotony by `sqrt(7/6)` = **8.0%**.                                                                                                                                                                                      |
-| M27 | `overviewAnalysisService.ts:60`                                         | REPORTED | The AI system prompt tells the model UTSS is RPE-based and should broadly agree with hrTSS. Both claims are false — HR is the first branch of UTSS, and the scales diverge up to 2.5×.                                                                                                                                                   |
+| M13 | `exercise-table/lastSession.ts:22-40`                                   | EXECUTED | `pickLastSession` filters on date only, not on workout log, so **two separate sessions on the same day are merged** — doubling the volume "Last time" shows and "Next" progresses from.                                                                                                                                                  |
+| M14 | `storage/mafTests.ts:160-175`                                           | EXECUTED | MAF test count and both trend charts are **silently truncated at 20 rows**, and `complianceTrend` compares the newest test against the oldest row still inside that window, so the baseline slides forward as the athlete logs more.                                                                                                     |
+| M15 | `shared/plannedSessionEstimate.ts:307-322`                              | EXECUTED | The estimate **discards every per-set time as soon as any block carries its own timing**, so a session with a timed warm-up is estimated at the warm-up's length. Hard-clamped to 10–180 min with no flag when a bound is hit.                                                                                                           |
+| M16 | `stravaMapper.ts:53-60`                                                 | EXECUTED | Strava kilojoules → kcal via the thermodynamic factor **0.239**. Strava's kJ is _mechanical work_, not metabolic energy; at ~24% gross efficiency the conventional conversion is ≈1 kJ ≈ 1 kcal. Understates expenditure ~4×.                                                                                                            |
+| M17 | `nutritionTargets.ts:311-322, 374`                                      | EXECUTED | **Race-week and taper carb-loading actually cut carbs.** The taper damp applies only when the base-load delta is positive, so on a low-load taper day the negative delta passes through undamped and swamps the race-week bonus.                                                                                                         |
+| M18 | `nutrition/labelParser.ts:50`                                           | EXECUTED | Label energy unit parsed as `z.enum(["kcal","kJ"]).catch("kcal")`, so a model spelling it `"kj"` silently degrades to kcal — a **4.184× overstatement** the plausibility clamp does not catch.                                                                                                                                           |
+| M19 | `nutrition/offClient.ts:114`                                            | EXECUTED | Open Food Facts has no kJ→kcal path: a kJ-only product caches with `calories = null` and logs as **0 kcal**, while the acceptance gate explicitly admits products with no kcal value.                                                                                                                                                    |
+| M20 | `nutrition/offClient.ts:63-65`                                          | EXECUTED | OFF `serving_quantity` is used as grams with no unit check, so millilitre servings are stored as gram quantities.                                                                                                                                                                                                                        |
+| M21 | `storage/nutrition.ts:273, 834-851`                                     | EXECUTED | Recipes write their backing food with `micros = NULL`, discarding all micronutrients; and `upsertFoods` overwrites a food's micros with the incoming sparse set, wiping USDA enrichment on the next search.                                                                                                                              |
+| M22 | `LogFoodDialog.tsx:80-92`, `MealSection.tsx:47-57`                      | EXECUTED | Edit-mode preview rescales already-rounded stored values, so the number shown before saving differs from what is stored; per-meal totals sum rounded entries, so meal cards never reconcile with the day header.                                                                                                                         |
+| M23 | `trainingLoadGovernor.ts:346-375`                                       | EXECUTED | Governor severity inversion: passes share `usedWorkoutIds` and run vector rules first, so a lower-severity restriction can claim a workout and block the ACWR danger lock.                                                                                                                                                               |
+| M24 | `trainingLoadGovernor.ts:70-101`                                        | EXECUTED | The "recovery run" downshift copies the original distance **and** time, prescribing the same pace it was meant to slow down. It can also convert a pure strength day into a single blank `recovery_run` row.                                                                                                                             |
+| M25 | `trainingLoadService.ts:314-317` vs `:529`                              | READ     | Two unreconciled RPE→load curves. The strength curve `1.18^max(0, rpe−6)` is flat for every RPE ≤ 6, so a deload is invisible to the load model.                                                                                                                                                                                         |
+| M26 | `trainingLoadService.ts:658-665`                                        | READ     | Monotony uses population SD (÷n) against Foster's published >2.0 threshold, which assumes sample SD — inflating monotony by `sqrt(7/6)` = **8.0%**.                                                                                                                                                                                      |
+| M27 | `overviewAnalysisService.ts:60`                                         | EXECUTED | The AI system prompt tells the model UTSS is RPE-based and should broadly agree with hrTSS. Both claims are false — HR is the first branch of UTSS, and the scales diverge up to 2.5×.                                                                                                                                                   |
 
 ### Low
 
@@ -773,12 +872,12 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | L4  | `unitConversion.ts:19-34`                                      | READ     | Stored weights carry no unit column. Switching kg↔lb reinterprets all history as a ~2.2× jump. Documented and accepted in the S5 sentinel — but nothing warns the athlete at the moment of switching.                                                                       |
 | L5  | `GoalStep.tsx:140` (repo-wide)                                 | READ     | `mafHrDataAvailable` is asked in onboarding **and** Settings, stored, round-tripped through the preferences API, and read by **no calculation**. MAF ceilings and compliance are produced identically whether or not the athlete can measure HR.                            |
 | L6  | `trainingLoadService.ts:1047-1049`; `unitConversion.ts:52, 55` | READ     | Strength and cardio stress are each rounded to 1 dp _before_ being summed into UTSS and rounded again. Metres-per-mile is defined twice (1609.34 vs 1/0.621371), differing by 2.5 ppm.                                                                                      |
-| L7  | `client/src/lib/dateUtils.ts:31-60`                            | REPORTED | `getStartOfWeek`/`getEndOfWeek` default to `weekStartsOn = 0` (Sunday) while the rest of the app is Monday-start. Callers that omit the argument silently shift the week.                                                                                                   |
-| L8  | `trainingLoadService.ts:445-459`                               | REPORTED | `hrZoneBoundaries` has no `hrMax <= hrRest` guard, though `hrReserveRatio` at `:390` has one. A resting HR above max yields an inverted zone table rather than no table.                                                                                                    |
-| L9  | `shared/maf.ts:26-29`                                          | REPORTED | The under-16 branch is unreachable (onboarding validates 16–99), and a genuine under-16 athlete is blocked. Maffetone specifies a flat 165 for under-16s; the code would compute `180−age−10`.                                                                              |
-| L10 | `client/src/pages/Analytics.tsx:83-87`                         | REPORTED | "Last N days" fetches **N+1** days and leaves the window open-ended at the top. "All time" on the Fuelling tab silently means the last 366 days.                                                                                                                            |
-| L11 | `analyticsService.ts:381-392, 426-437`                         | REPORTED | Coverage panels report "N mapped sets analyzed" where N double- and triple-counts sets mapping to several patterns or muscles. The category pie's slices are overlapping per-category session counts, so the whole exceeds the number of sessions.                          |
-| L12 | `storage/workouts.ts:901-914`                                  | REPORTED | `fetchBlockAvgRpe`'s "surrounding 4-week block" is a 29-day window that also averages in workouts logged **after** the one being viewed, so an old workout's stat changes retroactively.                                                                                    |
+| L7  | `client/src/lib/dateUtils.ts:31-60`                            | EXECUTED | `getStartOfWeek`/`getEndOfWeek` default to `weekStartsOn = 0` (Sunday) while the rest of the app is Monday-start. Callers that omit the argument silently shift the week.                                                                                                   |
+| L8  | `trainingLoadService.ts:445-459`                               | EXECUTED | `hrZoneBoundaries` has no `hrMax <= hrRest` guard, though `hrReserveRatio` at `:390` has one. A resting HR above max yields an inverted zone table rather than no table.                                                                                                    |
+| L9  | `shared/maf.ts:26-29`                                          | READ     | The under-16 branch is unreachable (onboarding validates 16–99), and a genuine under-16 athlete is blocked. Maffetone specifies a flat 165 for under-16s; the code would compute `180−age−10`.                                                                              |
+| L10 | `client/src/pages/Analytics.tsx:83-87`                         | EXECUTED | "Last N days" fetches **N+1** days and leaves the window open-ended at the top. "All time" on the Fuelling tab silently means the last 366 days.                                                                                                                            |
+| L11 | `analyticsService.ts:381-392, 426-437`                         | EXECUTED | Coverage panels report "N mapped sets analyzed" where N double- and triple-counts sets mapping to several patterns or muscles. The category pie's slices are overlapping per-category session counts, so the whole exceeds the number of sessions.                          |
+| L12 | `storage/workouts.ts:901-914`                                  | EXECUTED | `fetchBlockAvgRpe`'s "surrounding 4-week block" is a 29-day window that also averages in workouts logged **after** the one being viewed, so an old workout's stat changes retroactively.                                                                                    |
 | L13 | `storage/plans.ts:148-168`                                     | EXECUTED | `getPlanWeeklyDensity` rounds plan density **up**, suppressing the very warning it exists to raise.                                                                                                                                                                         |
 | L14 | `nutrition/refresh.ts:43-45`                                   | READ     | The FatSecret and Spoonacular clients — the only per-serving providers — are **unreachable on current paths** (`foodSearch.ts` wires Edamam/USDA/OFF; `barcode.ts` wires Edamam/OFF). Spoonacular's serving-weight-from-title heuristic is a latent hazard, not a live bug. |
 | L15 | `overviewAnalysisService.ts:130`                               | EXECUTED | `daysOfHistory` sent to the AI is the count of non-null ACWR points in the 42-day trend, not days of history — it saturates at 42, so a three-year athlete scores the same as a seven-week one.                                                                                                                                                               |
@@ -988,9 +1087,13 @@ Stated explicitly rather than assumed fine:
 - **Every `REPORTED` row.** These passed the fleet's adversarial verifier but were not re-derived by
   hand. Given that pass confirmed 190 of 225, they are likely sound — but the Spoonacular correction
   shows what a second reader catches.
-- **Food provider payloads.** The architecture is sound (each client maps to `*Per100g`; `rollup.ts`
-  is the single scaling point), and only Edamam/USDA/OFF are wired up. Those three were not exercised
-  against real responses, which is where a per-serving slip would hide. M19 is the first to check.
+- **Food provider payloads.** ~~Not exercised against real responses.~~ **Read in full on
+  2026-08-22** — see N1 above, which came out of exactly this item. The architecture is sound (each
+  client maps to `*Per100g`; the scaling rule now lives in `shared/nutritionScaling.ts`) and the
+  per-serving handling held up: USDA's `labelNutrients` fallback divides by the serving correctly,
+  Edamam's parser nutrients really are per-100g, and OFF's serving unit is checked. The defect was
+  elsewhere — a food with NO energy value logged as zero calories. Two payload assumptions remain
+  unconfirmed for want of a live response; both are listed under N1.
 - **`open|female` wall balls at 260 s** (`raceBenchmarks.generated.ts:33`) looks low next to its
   neighbours, but there is no authoritative dataset here to judge it against. Marked _undetermined_
   by the verifier, and left that way.

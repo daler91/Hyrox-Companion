@@ -29,9 +29,22 @@ describe("computeRecipeFood", () => {
     expect(r.servingSizeG).toBe(100); // 200g / 2 servings
   });
 
-  it("treats null ingredient macros as 0", () => {
+  it("reconstructs an ingredient's energy from its macros rather than counting it as 0", () => {
+    // This asserted 0. A recipe whose ingredient came from a provider that
+    // published no energy value contributed nothing to the recipe's calories
+    // while contributing all of its protein, carbs and fat — so the backing
+    // food was written with a calorie figure its own macros contradicted, and
+    // every future log of that recipe inherited it.
     const r = computeRecipeFood([{ food: food({ caloriesPer100g: null }), quantityG: 100 }], 1);
-    expect(r.caloriesPer100g).toBe(0);
+
+    expect(r.caloriesPer100g).toBeCloseTo(165, 5); // 4(10) + 4(20) + 9(5)
+    expect(r.proteinPer100g).toBe(10);
+  });
+
+  it("leaves an ingredient's stated energy alone", () => {
+    const r = computeRecipeFood([{ food: food({ caloriesPer100g: 100 }), quantityG: 100 }], 1);
+
+    expect(r.caloriesPer100g).toBe(100);
   });
 
   it("aggregates ingredient micronutrients instead of discarding them (audit M21)", () => {
