@@ -10,6 +10,10 @@ import {
   summarizeSetAdherence,
 } from "./workoutService";
 
+// The athlete's units, now required so no write path can store a number without
+// recording what unit it is in (audit L4).
+const UNITS = { weightUnit: "kg", distanceUnit: "km" };
+
 function makeSet(exerciseName: string, overrides: Partial<ExerciseSet> = {}): ExerciseSet {
   return {
     id: "set-id",
@@ -34,7 +38,7 @@ describe("expandExercisesToSetRows", () => {
   const workoutLogId = "w1";
 
   it("returns empty array for empty exercises array", () => {
-    const result = expandExercisesToSetRows([], workoutLogId);
+    const result = expandExercisesToSetRows([], workoutLogId, UNITS);
     expect(result).toStrictEqual([]);
   });
 
@@ -50,7 +54,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({
@@ -84,7 +88,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(3);
     expect(result[0].setNumber).toBe(1);
@@ -113,7 +117,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(3);
     expect(result[0].sortOrder).toBe(0);
@@ -136,7 +140,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result[0].reps).toBeNull();
     expect(result[0].weight).toBeNull();
@@ -164,7 +168,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(1);
     expect(result[0].exerciseName).toBe("custom");
@@ -179,7 +183,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(1);
     expect(result[0].setNumber).toBe(1);
@@ -194,7 +198,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(1);
     expect(result[0].setNumber).toBe(1);
@@ -216,7 +220,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({
@@ -251,7 +255,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
@@ -279,7 +283,7 @@ describe("expandExercisesToSetRows", () => {
       },
     ];
 
-    const result = expandExercisesToSetRows(exercises, workoutLogId);
+    const result = expandExercisesToSetRows(exercises, workoutLogId, UNITS);
 
     expect(result[0]).toMatchObject({
       blockId: "block-emom",

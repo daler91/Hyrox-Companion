@@ -325,22 +325,65 @@ deltas, so a light taper day scores exactly like a light build day and the damp 
 hard taper day. That is documented intent working as written. Whether a taper should also soften the
 *reduction* is a methodology call, and it is left open rather than flipped silently.
 
-**M25 is not fixed.** Confirmed real: `rpeFactor` for strength is `1.18^max(0, rpe − 6)`, which is
-exactly 1.000 for every RPE at or below 6, while the cardio branch uses `0.6 + (rpe/10)²·2` and is
-monotonic across the whole range. So a strength deload at RPE 4 scores identically to the same
-tonnage at RPE 6, and the two curves in the same file never reconcile. The `max(0, …)` is explicit
-and therefore deliberate, but carries no comment saying why. Changing it moves UTSS for every
-sub-RPE-6 strength set, and with it every governor threshold and ACWR baseline — the same
-recalibration constraint as H20 and M2.
+**M25 — resolved 2026-08-23: not a defect. The maths stays; the reasoning is now written down.**
 
-**M26 is not fixed, and its stated rationale was wrong.** Monotony uses population SD (÷n). The
-comment justified that as keeping "a single hard day in an otherwise-easy week finite", which is
-simply not true: both conventions are finite for any week that is not perfectly flat, and the SD = 0
-branch is what actually handles flatness. The real effect is that ÷n rather than ÷(n−1) makes SD
-smaller and monotony uniformly larger by sqrt(7/6) = **8.0%**, measured against a 2.0 threshold taken
-from Foster. Whether that threshold assumes the sample SD **could not be established from primary
-sources in this environment**, and switching would move every athlete's monotony zone, so the
-convention is left alone and the false rationale in the comment is replaced with this.
+The observation was right — `rpeFactor` for strength is `1.18^max(0, rpe − 6)`, exactly 1.000 for
+every RPE at or below 6, while the cardio branch (`0.6 + (rpe/10)²·2`) is monotonic across the whole
+range. Reading that as an inconsistency was the error. The two curves differ because the fatigue
+does.
+
+Cardiovascular stress scales relatively cleanly down toward zero with effort. Sub-maximal *strength*
+fatigue does not: it is driven mostly by base mechanical volume, and 5×5 back squat at RPE 5 still
+imposes real mechanical tension and neurological demand. Had this curve decayed below RPE 6 the way
+cardio's does, heavy low-RPE speed and technique work — genuinely fatiguing — would have scored
+near-zero UTSS.
+
+So `max(0, rpe − 6)` encodes a specific, defensible claim: below RPE 6 tonnage alone dictates the
+load, and an exponential effort penalty applies only once sets approach muscular failure at RPE 7+.
+A deload at RPE 4 scoring the same as that tonnage at RPE 6 is the model working, not a bug — the
+tonnage *is* the stimulus.
+
+The register entry stands as an observation and is withdrawn as a finding. What was genuinely
+missing was the rationale, which is now on `rpeFactor` itself, so the next reader does not re-derive
+the same false alarm and trigger an unnecessary recalibration of the whole governor.
+
+**M26 — fixed 2026-08-23: monotony now uses the sample SD.**
+
+Two separate problems, one of which was fixable immediately and one of which needed a source.
+
+The *rationale* was simply wrong, and that was fixed on sight: the comment justified ÷n as keeping
+"a single hard day in an otherwise-easy week finite", which is not true — both conventions are finite
+for any week that is not perfectly flat, and the SD = 0 branch is what actually handles flatness.
+
+The *convention* needed provenance this environment could not reach, so it was left alone and
+flagged as needing a source rather than guessed at. The source: Foster's 1998 threshold was
+established with the statistical tooling of the era — SPSS and Excel's `STDEV` — both of which
+default to the **sample** equation; and sports-science methodology treats a 7-day microcycle as a
+sample of the athlete's ongoing macrocycle, not a closed population. The 2.0 threshold therefore
+assumes ÷(n−1).
+
+Measured consequence of having used ÷n against it:
+
+| | |
+| --- | --- |
+| Ratio between the conventions | sqrt(7/6) = **1.080123** |
+| How high every score ran | **+8.01%** |
+| Shift on correcting | **−7.42%** (the same ratio, inverted) |
+| The 2.0 flag in true terms | it was firing at a real monotony of **1.8516** |
+
+A concrete case, and it was already in the test suite: the varied week `[10, 6, 12, 0, 9, 11, 7]`
+scored **2.091** and was classified `high_risk`. The same training scores **1.936** — `elevated` —
+under the convention the threshold came from. That week's athlete was being told they were
+over-training when they were never over the line, and the existing characterisation test asserted
+the flag as correct.
+
+The window is gated to exactly 7 whole days by `availableFrom`, so the n−1 denominator is always 6
+and can never be zero. The SD = 0 branch is untouched, so C1's uniform-load behaviour is unchanged.
+
+**A note on the two figures.** "8.0% hot" and "7.42% lower after the fix" describe the same ratio
+from opposite ends — old values were 8.01% above the new ones, which is a 7.42% reduction. Both
+appear above deliberately, because the first is the size of the error against the threshold and the
+second is what athletes' displayed numbers actually do.
 
 ---
 
@@ -566,6 +609,89 @@ defined twice) applied before it could bite.
   wrong number. Deliberately left alone rather than guessing at a code that may not exist.
 - **Edamam and USDA per-100g basis** is documented in each client and consistent with the mappers,
   but likewise unconfirmed against a live response.
+
+---
+
+## L4 — stored weights now record their own unit (2026-08-23)
+
+Chosen over warn-at-the-toggle and over full canonicalisation. What shipped is the half of
+canonicalisation that can be done safely today, plus the thing that makes the other half possible
+at all.
+
+### The bug, and why it could not simply be migrated away
+
+`exercise_sets.weight` was a bare number meaning "whatever unit the athlete preferred when it was
+written", and that unit was never recorded. Switching kg ↔ lbs therefore reinterpreted the athlete's
+entire history and analytics showed a ~2.2× step change on the day they toggled a display preference.
+
+The obvious fix — convert every row to kg — **cannot be done**, and it is worth being precise about
+why, because it is not a matter of effort:
+
+- there is no per-row unit;
+- `users.weight_unit` is a bare scalar with **no history**, in a table that records
+  `training_style_previous_id` and `training_style_changed_at` two fields away, so the codebase
+  already knows this pattern and simply never applied it to units;
+- and the manual-log path does no conversion at all, so there is not even an indirect trace.
+
+Converting history by the athlete's *current* preference would multiply every row written under a
+previous preference by 2.2 — committing the exact bug L4 describes, deliberately.
+
+### What shipped
+
+Every `exercise_sets` row written from now on records the unit its numbers are in
+(`weight_unit` = kg | lbs, `distance_unit` = m | ft — a miles athlete stores feet). The **value is
+unchanged**; only the meaning is now written down. One place stamps it: `buildExerciseSetRow`, which
+every insert in the product funnels through.
+
+`preferences` was made a **required** parameter with no default, so the compiler enumerated every
+write path rather than letting one silently keep writing unstamped rows. It found nine, including a
+backfill script that grep had missed.
+
+### Why stamp the athlete's unit rather than store canonical kg
+
+I built canonical first and changed my mind on evidence. There are **23 exercise_sets read sites and
+no single serialisation boundary**. Under canonical storage every one of them is wrong until taught
+to convert back, and a missed one shows a lbs athlete kilograms labelled as pounds — a *new* 2.2×
+error that does not exist today. Under a stamp, an un-updated read is still correct for any athlete
+whose preference has not changed, so read paths convert one at a time and each is an improvement
+rather than a prerequisite.
+
+The measurement that settled the rounding question, before the design changed: canonical kg snapped
+to the 0.5 grid `roundStoredWeight` uses would have displayed the **wrong weight on 56 of the first
+600 whole-pound entries**. Storing the athlete's own number sidesteps that entirely — there is no
+round-trip to lose precision in.
+
+This is also the prerequisite for canonicalising later, history included. The reason old rows cannot
+be converted is that their unit is unknown; from here on it is known.
+
+### Two real bugs this fixed on the way
+
+Both were pre-existing, both invisible, both found by asking what unit a value was actually in:
+
+| Where | What it did |
+| --- | --- |
+| `assistedMigrationService` | Parses every athlete's text into **kg** with a hardcoded preference, then stored it as though it were their display unit. For a lbs athlete a parsed 100 kg squat rendered as **100 lbs** — wrong by 2.2×. |
+| `script/backfill-structured-exercises.ts` | Passes only the weight unit, so `resolveParseUnitPreferences` fills distance in as km and distances come back in **metres for everyone**. A miles athlete's "1 mile" parsed to 1609 and rendered as **1609 feet** — a 3.3× understatement. |
+
+Neither needed a code change beyond stamping the rows with the units the values were genuinely in.
+Both now carry a named constant so the parse target and the stamp cannot drift apart again.
+
+### A correction to the S5 sentinel
+
+It stated that "the Gemini parser and the manual log form both convert incoming text to the user's
+current `weightUnit` before insert". The parser and plan generation do. **The manual log form does
+not and never did** — `expandExercisesToSetRows` was called with no unit preferences at all and the
+client's number was stored verbatim. It happened to be right, because that number was already in the
+athlete's unit, but nothing in the write path was enforcing it.
+
+### Not done: the legacy tail
+
+Rows written before this migration keep `NULL` units and are read as the athlete's current
+preference — exactly what every read path did before. Right for an athlete who never switched, wrong
+by ~2.2× for one who did, and not fixable in code. Closing it needs a decision about real user data:
+assume nobody switched, ask each athlete to confirm, or detect the ~2.2× discontinuity in their
+history and offer it for confirmation rather than applying it silently. Recorded here rather than
+guessed at.
 
 ---
 
@@ -858,8 +984,8 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | M22 | `LogFoodDialog.tsx:80-92`, `MealSection.tsx:47-57`                      | EXECUTED | Edit-mode preview rescales already-rounded stored values, so the number shown before saving differs from what is stored; per-meal totals sum rounded entries, so meal cards never reconcile with the day header.                                                                                                                         |
 | M23 | `trainingLoadGovernor.ts:346-375`                                       | EXECUTED | Governor severity inversion: passes share `usedWorkoutIds` and run vector rules first, so a lower-severity restriction can claim a workout and block the ACWR danger lock.                                                                                                                                                               |
 | M24 | `trainingLoadGovernor.ts:70-101`                                        | EXECUTED | The "recovery run" downshift copies the original distance **and** time, prescribing the same pace it was meant to slow down. It can also convert a pure strength day into a single blank `recovery_run` row.                                                                                                                             |
-| M25 | `trainingLoadService.ts:314-317` vs `:529`                              | READ     | Two unreconciled RPE→load curves. The strength curve `1.18^max(0, rpe−6)` is flat for every RPE ≤ 6, so a deload is invisible to the load model.                                                                                                                                                                                         |
-| M26 | `trainingLoadService.ts:658-665`                                        | READ     | Monotony uses population SD (÷n) against Foster's published >2.0 threshold, which assumes sample SD — inflating monotony by `sqrt(7/6)` = **8.0%**.                                                                                                                                                                                      |
+| M25 | `trainingLoadService.ts:314-317` vs `:529`                              | EXECUTED | **Withdrawn as a finding.** The strength curve `1.18^max(0, rpe−6)` is flat for every RPE ≤ 6 — deliberately: sub-maximal strength fatigue is driven by tonnage, not effort, so the two curves are meant to differ. Rationale now documented on `rpeFactor`.                                                                                                                                                                                         |
+| M26 | `trainingLoadService.ts:658-665`                                        | EXECUTED | **Fixed.** Monotony used population SD (÷n) against Foster's >2.0 threshold, which assumes sample SD — every score ran `sqrt(7/6)` = **8.01%** hot, firing the overtraining flag at a real monotony of 1.85. Now ÷(n−1); scores shift down 7.42%.                                                                                                                                                                                      |
 | M27 | `overviewAnalysisService.ts:60`                                         | EXECUTED | The AI system prompt tells the model UTSS is RPE-based and should broadly agree with hrTSS. Both claims are false — HR is the first branch of UTSS, and the scales diverge up to 2.5×.                                                                                                                                                   |
 
 ### Low
@@ -869,7 +995,7 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | L1  | `nextTarget.ts:25, 70-84`                                      | EXECUTED | Advice depends on display units. 85 kg → "+1 rep"; the identical 187 lb → "+5 lb". Crossover is 87.5 kg metric, 79 kg imperial.                                                                                                                                             |
 | L2  | `nextTarget.ts:73, 84`                                         | EXECUTED | Gain is computed as a difference of two Epley products, drifting 2.7e−15 high, so at exactly 25.0 kg the suppression threshold flips on float representation alone.                                                                                                         |
 | L3  | `nextTarget.ts:68, 84`                                         | EXECUTED | At 3×10 with anything under 25 kg — the beginner dumbbell case — the function returns **nothing at all, permanently**. Any set with varying reps (10/9/8) also yields nothing.                                                                                              |
-| L4  | `unitConversion.ts:19-34`                                      | READ     | Stored weights carry no unit column. Switching kg↔lb reinterprets all history as a ~2.2× jump. Documented and accepted in the S5 sentinel — but nothing warns the athlete at the moment of switching.                                                                       |
+| L4  | `unitConversion.ts:19-34`                                      | EXECUTED | Stored weights carried no unit column, so switching kg↔lb reinterpreted all history as a ~2.2× jump. New rows now record their own unit; the pre-migration tail cannot be converted because the write-time unit was never recorded anywhere (see the L4 section above).      |
 | L5  | `GoalStep.tsx:140` (repo-wide)                                 | READ     | `mafHrDataAvailable` is asked in onboarding **and** Settings, stored, round-tripped through the preferences API, and read by **no calculation**. MAF ceilings and compliance are produced identically whether or not the athlete can measure HR.                            |
 | L6  | `trainingLoadService.ts:1047-1049`; `unitConversion.ts:52, 55` | READ     | Strength and cardio stress are each rounded to 1 dp _before_ being summed into UTSS and rounded again. Metres-per-mile is defined twice (1609.34 vs 1/0.621371), differing by 2.5 ppm.                                                                                      |
 | L7  | `client/src/lib/dateUtils.ts:31-60`                            | EXECUTED | `getStartOfWeek`/`getEndOfWeek` default to `weekStartsOn = 0` (Sunday) while the rest of the app is Monday-start. Callers that omit the argument silently shift the week.                                                                                                   |

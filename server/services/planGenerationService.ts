@@ -862,7 +862,7 @@ export async function executePlanGeneration(
         if (!day.exercises || day.exercises.length === 0) continue;
         const pd = createdPlanDays[i];
         const normalised = day.exercises.map((exercise) => normalizeGeneratedExercise(exercise, unitPreferences));
-        allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id));
+        allSetRows.push(...expandExercisesToPlanDaySetRows(normalised, pd.id, unitPreferences));
         dwe++;
       }
 

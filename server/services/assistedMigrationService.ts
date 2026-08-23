@@ -11,6 +11,21 @@ type OwnerType = "workoutLog" | "planDay";
 const HIGH_CONFIDENCE_THRESHOLD = 70;
 const BATCH_SIZE = 25;
 
+/**
+ * This backfill parses into kg/km regardless of whose text it is, and the rows
+ * it writes MUST be stamped with the same units — they are the units the values
+ * are actually in.
+ *
+ * That coupling used to be broken, and silently. Before rows carried a unit, a
+ * stored number meant "the athlete's own display unit", so parsing an lbs
+ * athlete's text into kg and storing it produced a row that every read path
+ * then rendered as lbs: a parsed 100 kg squat displayed as 100 lbs, wrong by
+ * 2.2x. The row now says it holds kg, so a unit-aware read converts it instead.
+ * The constant exists so the parse target and the stamp cannot drift apart
+ * again (audit L4).
+ */
+const MIGRATION_PARSE_UNITS = { weightUnit: "kg", distanceUnit: "km" } as const;
+
 async function upsertReviewFlag(input: { ownerType: OwnerType; ownerId: string; userId: string | null; status: "needs_manual_review" | "resolved"; reason: string | null }) {
   await db.insert(structuredExerciseBackfillReviews).values({
     ownerType: input.ownerType,
@@ -66,7 +81,7 @@ export async function runAssistedMigrationBackfill(userId: string) {
   let processed = 0;
   for (const item of queue) {
     try {
-      const parsed = await parseExercisesFromText(item.text, { weightUnit: "kg", distanceUnit: "km" }, undefined, item.userId ?? undefined);
+      const parsed = await parseExercisesFromText(item.text, MIGRATION_PARSE_UNITS, undefined, item.userId ?? undefined);
       if (!parsed.length) {
         await upsertReviewFlag({ ownerType: item.ownerType, ownerId: item.ownerId, userId: item.userId, status: "needs_manual_review", reason: "parse_returned_no_rows" });
         continue;
@@ -74,9 +89,13 @@ export async function runAssistedMigrationBackfill(userId: string) {
 
       const lowConfidence = parsed.some((e) => (e.confidence ?? 0) < HIGH_CONFIDENCE_THRESHOLD);
       if (item.ownerType === "workoutLog") {
-        await db.insert(exerciseSets).values(expandExercisesToSetRows(parsed, item.ownerId));
+        await db
+          .insert(exerciseSets)
+          .values(expandExercisesToSetRows(parsed, item.ownerId, MIGRATION_PARSE_UNITS));
       } else {
-        await db.insert(exerciseSets).values(expandExercisesToPlanDaySetRows(parsed, item.ownerId));
+        await db
+          .insert(exerciseSets)
+          .values(expandExercisesToPlanDaySetRows(parsed, item.ownerId, MIGRATION_PARSE_UNITS));
       }
 
       await upsertReviewFlag({

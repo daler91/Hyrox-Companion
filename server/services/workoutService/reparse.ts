@@ -138,7 +138,16 @@ async function reparseFromText(
 
   const { acceptedRows, rejectedRows, fallbackUsed, structureBlocks } =
     await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), unitPreferences);
-  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, fallbackUsed);
+  return writeParsedStructure({
+    owner,
+    context,
+    source,
+    acceptedRows,
+    rejectedCount: rejectedRows.length,
+    structureBlocks,
+    fallbackUsed,
+    unitPreferences,
+  });
 }
 
 function buildReparseWriteThroughResult(
@@ -157,18 +166,40 @@ function buildReparseWriteThroughResult(
   };
 }
 
-async function writeParsedStructure(
-  owner: SetOwner,
-  context: "workout" | "plan",
-  source: CounterSource,
-  acceptedRows: ParsedExercise[],
-  rejectedCount: number,
-  structureBlocks: StructureBlockInput[],
-  fallbackUsed: boolean,
-): Promise<ReparseWriteThroughResult | null> {
+/**
+ * One object rather than a positional list: adding `unitPreferences` for the L4
+ * unit stamp took this past eight parameters, and three of them were bare
+ * booleans and counts, so a call read `…, rejectedRows.length, structureBlocks,
+ * false, unitPreferences)` with nothing to catch a transposition.
+ */
+interface ParsedStructureWrite {
+  owner: SetOwner;
+  context: "workout" | "plan";
+  source: CounterSource;
+  acceptedRows: ParsedExercise[];
+  rejectedCount: number;
+  structureBlocks: StructureBlockInput[];
+  fallbackUsed: boolean;
+  /** The units the parsed numbers are in, recorded on every row written. */
+  unitPreferences: UnitPreferences;
+}
+
+async function writeParsedStructure({
+  owner,
+  context,
+  source,
+  acceptedRows,
+  rejectedCount,
+  structureBlocks,
+  fallbackUsed,
+  unitPreferences,
+}: ParsedStructureWrite): Promise<ReparseWriteThroughResult | null> {
   if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
 
-  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
+  const setRows =
+    acceptedRows.length > 0
+      ? expandExercisesToRows(acceptedRows, owner, context, unitPreferences)
+      : [];
   const setCount = await replaceExerciseSetsAndStructureByOwner(
     owner,
     setRows,
@@ -227,7 +258,16 @@ async function reparseFromImage(
     customExerciseNames,
     userId,
   });
-  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, false);
+  return writeParsedStructure({
+    owner,
+    context,
+    source,
+    acceptedRows,
+    rejectedCount: rejectedRows.length,
+    structureBlocks,
+    fallbackUsed: false,
+    unitPreferences,
+  });
 }
 
 /**

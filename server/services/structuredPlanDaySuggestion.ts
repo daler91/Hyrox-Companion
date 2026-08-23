@@ -20,7 +20,7 @@ export async function parseStructuredPlanDaySuggestionRows(
     userId,
   );
 
-  return expandExercisesToPlanDaySetRows(parsedExercises, suggestion.workoutId);
+  return expandExercisesToPlanDaySetRows(parsedExercises, suggestion.workoutId, unitPreferences);
 }
 
 async function getNextPlanDaySortOrder(planDayId: string, tx: DbExecutor): Promise<number> {

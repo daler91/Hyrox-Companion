@@ -1,5 +1,5 @@
 import { type InsertExerciseSet, type ParsedExercise } from "@shared/schema";
-import type { UnitPreferences } from "@shared/unitConversion";
+import { stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
 
 import { AppError, ErrorCode } from "../../errors";
 import { ownerColumns } from "./owners";
@@ -61,25 +61,46 @@ interface SetMeasurements {
   notes: string | null;
 }
 
+/**
+ * The single point where a set row records the unit its numbers are in (L4).
+ *
+ * Every exercise_sets row in the product is built here — the Gemini parser,
+ * plan generation and the manual log form all funnel through this function — so
+ * stamping once here means no write path can forget.
+ *
+ * The VALUES are stored exactly as they arrive, in the athlete's own unit. What
+ * changes is that the row now says which unit that was, so a later preference
+ * switch can be converted through instead of silently reinterpreting the
+ * number. Storing a canonical unit instead would have meant every read site had
+ * to convert back before it was correct again; this way an un-updated read is
+ * still right for an athlete who never switches.
+ */
 function buildExerciseSetRow(
   ex: ParsedExercise,
   measurements: SetMeasurements,
   ownerCols: Partial<InsertExerciseSet>,
   sortOrder: number,
+  preferences: UnitPreferences,
 ): InsertExerciseSet {
+  const stamp = stampForPreferences(preferences);
   return {
     ...ownerCols,
     exerciseName: ex.exerciseName,
     customLabel: ex.customLabel || null,
     category: ex.category,
     setNumber: measurements.setNumber,
-    reps: measurements.reps,
     weight: measurements.weight,
     distance: measurements.distance,
-    time: measurements.time,
-    plannedReps: measurements.plannedReps,
     plannedWeight: measurements.plannedWeight,
     plannedDistance: measurements.plannedDistance,
+    // Stamp UNCONDITIONALLY, even when every measurement is null. The stamp
+    // describes the row's convention, not whether it happens to carry a number,
+    // so a set that later gains a weight through an edit is already covered.
+    weightUnit: stamp.weightUnit,
+    distanceUnit: stamp.distanceUnit,
+    reps: measurements.reps,
+    time: measurements.time,
+    plannedReps: measurements.plannedReps,
     plannedTime: measurements.plannedTime,
     blockId: measurements.blockId,
     stepNumber: measurements.stepNumber,
@@ -155,17 +176,22 @@ function appendRowsForExercise(
   ownerCols: Partial<InsertExerciseSet>,
   rows: InsertExerciseSet[],
   startOrder: number,
+  preferences: UnitPreferences,
 ): number {
   let sortOrder = startOrder;
   if (ex.sets && Array.isArray(ex.sets)) {
     for (const set of ex.sets) {
-      rows.push(buildExerciseSetRow(ex, measurementsFromExplicit(set), ownerCols, sortOrder++));
+      rows.push(
+        buildExerciseSetRow(ex, measurementsFromExplicit(set), ownerCols, sortOrder++, preferences),
+      );
     }
     return sortOrder;
   }
   const numSets = ex.numSets || 1;
   for (let s = 1; s <= numSets; s++) {
-    rows.push(buildExerciseSetRow(ex, measurementsFromAggregate(ex, s), ownerCols, sortOrder++));
+    rows.push(
+      buildExerciseSetRow(ex, measurementsFromAggregate(ex, s), ownerCols, sortOrder++, preferences),
+    );
   }
   return sortOrder;
 }
@@ -185,16 +211,22 @@ function assertRowCapacity(rowCount: number, context: "workout" | "plan"): void 
   );
 }
 
+/**
+ * `preferences` is REQUIRED, with no default, on purpose: it names the unit the
+ * incoming numbers are in, and a default would let a new write path silently
+ * store lbs as if they were kg. Every caller has the athlete's row to hand.
+ */
 export function expandExercisesToRows(
   exercises: ParsedExercise[],
   owner: SetOwner,
   context: "workout" | "plan",
+  preferences: UnitPreferences,
 ): InsertExerciseSet[] {
   const rows: InsertExerciseSet[] = [];
   const ownerCols = ownerColumns(owner);
   let sortOrder = 0;
   for (const ex of exercises) {
-    sortOrder = appendRowsForExercise(ex, ownerCols, rows, sortOrder);
+    sortOrder = appendRowsForExercise(ex, ownerCols, rows, sortOrder, preferences);
   }
   assertRowCapacity(rows.length, context);
   return rows;
@@ -203,8 +235,9 @@ export function expandExercisesToRows(
 export function expandExercisesToSetRows(
   exercises: ParsedExercise[],
   workoutLogId: string,
+  preferences: UnitPreferences,
 ): InsertExerciseSet[] {
-  return expandExercisesToRows(exercises, { workoutLogId }, "workout");
+  return expandExercisesToRows(exercises, { workoutLogId }, "workout", preferences);
 }
 
 // Prescribed rows for a plan day. Same shape as logged rows but owned by
@@ -213,8 +246,9 @@ export function expandExercisesToSetRows(
 export function expandExercisesToPlanDaySetRows(
   exercises: ParsedExercise[],
   planDayId: string,
+  preferences: UnitPreferences,
 ): InsertExerciseSet[] {
-  return expandExercisesToRows(exercises, { planDayId }, "plan");
+  return expandExercisesToRows(exercises, { planDayId }, "plan", preferences);
 }
 
 export async function prepareParsedWorkout(
@@ -229,6 +263,6 @@ export async function prepareParsedWorkout(
   const exercises = await parseExercisesFromText(textToParse.trim(), unitPreferences);
   if (exercises.length === 0) return null;
 
-  const setRows = expandExercisesToSetRows(exercises, workout.id);
+  const setRows = expandExercisesToSetRows(exercises, workout.id, unitPreferences);
   return { exercises, setRows };
 }

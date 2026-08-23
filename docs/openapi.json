@@ -351,6 +351,16 @@
             "minimum": -8388608,
             "maximum": 8388607
           },
+          "weightUnit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 8
+          },
+          "distanceUnit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 8
+          },
           "plannedReps": {
             "type": "integer",
             "nullable": true,

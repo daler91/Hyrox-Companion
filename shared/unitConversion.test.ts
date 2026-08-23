@@ -20,9 +20,13 @@ import {
   normalizeWorkoutTextUnits,
   roundStoredDistance,
   roundStoredWeight,
+  stampForPreferences,
   standardizeDistanceUnit,
   standardizeParsedDistanceUnit,
   standardizeWeightUnit,
+  storedDistanceToDisplay,
+  storedWeightToDisplay,
+  storedWeightToKg,
   userDistanceToMeters,
   userWeightToKg,
 } from "./unitConversion";
@@ -548,5 +552,97 @@ describe("cmToFtIn / ftInToCm", () => {
   it("round-trips feet+inches back to centimetres", () => {
     expect(ftInToCm(5, 11)).toBeCloseTo(180.34, 2);
     expect(ftInToCm(6, 0)).toBeCloseTo(182.88, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-row unit stamps (audit L4)
+// ---------------------------------------------------------------------------
+
+describe("a stored row that records its own unit", () => {
+  const KG_ATHLETE = { weightUnit: "kg", distanceUnit: "km" };
+  const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+  const LEGACY = { weightUnit: null, distanceUnit: null };
+
+  describe("storedWeightToDisplay", () => {
+    it("is the identity while the athlete's unit has not changed", () => {
+      // The common case, and the reason the stamp could ship without updating
+      // all 23 read sites at once: a read that has not been taught to convert
+      // still shows the right number.
+      expect(storedWeightToDisplay(100, { weightUnit: "kg" }, KG_ATHLETE)).toBe(100);
+      expect(storedWeightToDisplay(225, { weightUnit: "lbs" }, LB_ATHLETE)).toBe(225);
+    });
+
+    it("converts a row written before the athlete switched", () => {
+      // THE bug. 100 kg logged, then the athlete switches to lbs. Without the
+      // stamp the row still reads 100 and is rendered "100 lbs" — the same
+      // session, apparently 2.2x lighter, and analytics stacks it as a cliff.
+      expect(storedWeightToDisplay(100, { weightUnit: "kg" }, LB_ATHLETE)).toBe(220);
+      expect(storedWeightToDisplay(225, { weightUnit: "lbs" }, KG_ATHLETE)).toBe(102);
+    });
+
+    it("leaves a legacy row exactly as every read path treated it before", () => {
+      // Unstamped rows keep the old behaviour rather than being guessed at.
+      // Right for an athlete who never switched; wrong for one who did; not
+      // fixable without knowing what they used to prefer.
+      expect(storedWeightToDisplay(100, LEGACY, LB_ATHLETE)).toBe(100);
+      expect(storedWeightToDisplay(100, LEGACY, KG_ATHLETE)).toBe(100);
+    });
+  });
+
+  describe("storedDistanceToDisplay", () => {
+    it("is the identity while the athlete's unit has not changed", () => {
+      expect(storedDistanceToDisplay(5000, { distanceUnit: "m" }, KG_ATHLETE)).toBe(5000);
+      expect(storedDistanceToDisplay(1000, { distanceUnit: "ft" }, LB_ATHLETE)).toBe(1000);
+    });
+
+    it("converts metres to feet for an athlete who switched to miles", () => {
+      // A miles athlete stores FEET (getStoredDistanceUnit), so 5000 m of
+      // logged running must not come back as 5000 ft — a 3.3x understatement.
+      expect(storedDistanceToDisplay(5000, { distanceUnit: "m" }, LB_ATHLETE)).toBe(16404);
+      expect(storedDistanceToDisplay(16404, { distanceUnit: "ft" }, KG_ATHLETE)).toBe(5000);
+    });
+
+    it("leaves a legacy row alone", () => {
+      expect(storedDistanceToDisplay(5000, LEGACY, LB_ATHLETE)).toBe(5000);
+    });
+  });
+
+  describe("storedWeightToKg — what the load model reads", () => {
+    it("uses the row's own unit, not the athlete's current preference", () => {
+      // UTSS must be physiological load. An athlete who switches to lbs used to
+      // have their whole kg history re-priced as if it were pounds, which
+      // deflates every past session's tonnage by 2.2x and drags the chronic
+      // baseline down with it — inflating ACWR and tripping injury warnings.
+      expect(storedWeightToKg(100, { weightUnit: "kg" }, LB_ATHLETE)).toBeCloseTo(100, 5);
+      expect(storedWeightToKg(220.462, { weightUnit: "lbs" }, KG_ATHLETE)).toBeCloseTo(100, 3);
+    });
+
+    it("falls back to the current preference for a legacy row", () => {
+      // The same assumption trainingLoadService made before L4, kept explicit.
+      expect(storedWeightToKg(220.462, LEGACY, LB_ATHLETE)).toBeCloseTo(100, 3);
+      expect(storedWeightToKg(100, LEGACY, KG_ATHLETE)).toBeCloseTo(100, 5);
+    });
+  });
+
+  describe("stampForPreferences — what gets written", () => {
+    it("records the athlete's own units, not a canonical one", () => {
+      expect(stampForPreferences(KG_ATHLETE)).toEqual({ weightUnit: "kg", distanceUnit: "m" });
+      // A miles athlete stores feet, so that is what the stamp must say.
+      expect(stampForPreferences(LB_ATHLETE)).toEqual({ weightUnit: "lbs", distanceUnit: "ft" });
+    });
+
+    it("falls back to the schema defaults for an athlete with no preference set", () => {
+      expect(stampForPreferences({})).toEqual({ weightUnit: "kg", distanceUnit: "m" });
+    });
+  });
+
+  it("round-trips a switch out and back without drift", () => {
+    // kg -> lbs -> kg must land on the original. The stored number never moves;
+    // only the rendering does, so there is nothing to accumulate error.
+    const stamp = { weightUnit: "kg" };
+    const asLbs = storedWeightToDisplay(100, stamp, LB_ATHLETE);
+    expect(asLbs).toBe(220);
+    expect(storedWeightToDisplay(100, stamp, KG_ATHLETE)).toBe(100);
   });
 });

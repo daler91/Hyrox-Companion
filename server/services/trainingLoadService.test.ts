@@ -790,3 +790,53 @@ describe("bodyweightRepLoadKg — unweighted reps scale with the athlete (audit 
     expect(bodyweightRepLoadKg(400)).toBe(40); // 2x ceiling
   });
 });
+
+describe("the standard-deviation convention monotony is measured with (audit M26)", () => {
+  /**
+   * A week whose day-to-day load varies, chosen so it lands in the band the
+   * convention error created. Monotony is mean ÷ SD, so the ratio is what
+   * matters and any linear scaling of these durations gives the same answer.
+   */
+  const VARIED_WEEK_MINUTES = [10, 6, 12, 0, 9, 11, 7];
+
+  const TODAY = "2026-05-22";
+
+  function monotonyForWeek(minutesPerDay: number[]): number {
+    const logs = minutesPerDay.map((m, i) =>
+      log({ id: `m-${i}`, date: daysBefore(TODAY, i), duration: m * 6, rpe: 7 }),
+    );
+    const { dailyLoads } = calculateTrainingLoad(logs, [], [], { currentDate: TODAY });
+    const today = dailyLoads.at(-1);
+    if (today?.monotony == null) throw new Error("expected a monotony for a week with load");
+    return today.monotony;
+  }
+
+  it("uses the sample SD, so scores sit below what dividing by n gave", () => {
+    // Population SD (÷n) scored this week 2.091 and flagged it high_risk.
+    // Sample SD (÷n-1) scores 1.936 — the same training, under the convention
+    // Foster's 2.0 threshold was actually established with.
+    const monotony = monotonyForWeek(VARIED_WEEK_MINUTES);
+
+    expect(monotony).toBeCloseTo(1.94, 1);
+    expect(monotonyZone(monotony)).toBe("elevated");
+  });
+
+  it("puts the whole scale 8.01% below where dividing by n put it", () => {
+    // sqrt(7/6) = 1.080123. Every score was that much high against an ABSOLUTE
+    // threshold, which is what made the convention matter rather than being
+    // cosmetic: it is 7.42% off in the other direction once corrected.
+    const monotony = monotonyForWeek(VARIED_WEEK_MINUTES);
+    const asPopulationSd = monotony * Math.sqrt(7 / 6);
+
+    expect(asPopulationSd).toBeCloseTo(2.09, 1);
+    // The old convention put this athlete over the line; the correct one does not.
+    expect(monotonyZone(asPopulationSd)).toBe("high_risk");
+    expect(monotonyZone(monotony)).toBe("elevated");
+  });
+
+  it("still reports the ceiling for a perfectly flat week", () => {
+    // The n - 1 denominator changes the magnitude of a real SD, not the SD = 0
+    // branch, so C1's uniform-load behaviour is untouched.
+    expect(monotonyForWeek([60, 60, 60, 60, 60, 60, 60])).toBe(10);
+  });
+});
