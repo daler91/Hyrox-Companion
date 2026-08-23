@@ -195,25 +195,34 @@ async function main(): Promise<void> {
   const everyAthleteIsSafeToStamp =
     (counts.needs_split ?? 0) === 0 && (counts.needs_review ?? 0) === 0;
 
-  // bearer:disable javascript_lang_logger_leak — counts and a fixed conclusion
-  // string only. No athlete identifier and no logged value reaches this line.
-  logger.info(
-    {
-      athletes: reports.length,
-      legacyRows,
-      ...counts,
-      conclusion: everyAthleteIsSafeToStamp
-        ? "No athlete shows a unit switch. Stamping legacy rows with each athlete's current preference is correct, not assumed."
-        : "Some athletes changed units mid-history. A blanket stamp would corrupt exactly those, so they need splitting or asking.",
-    },
-    "[legacy-units] summary",
-  );
+  // Counts and a fixed conclusion string only — no athlete identifier and no
+  // logged value. Named fields rather than a `...counts` spread, so the log's
+  // shape is fixed and greppable instead of depending on which verdicts
+  // happened to occur.
+  const summary = {
+    athletes: reports.length,
+    legacyRows,
+    safeToStamp: counts.safe_to_stamp ?? 0,
+    needsSplit: counts.needs_split ?? 0,
+    needsReview: counts.needs_review ?? 0,
+    nothingToDo: counts.nothing_to_do ?? 0,
+    conclusion: everyAthleteIsSafeToStamp
+      ? "No athlete shows a unit switch. Stamping legacy rows with each athlete's current preference is correct, not assumed."
+      : "Some athletes changed units mid-history. A blanket stamp would corrupt exactly those, so they need splitting or asking.",
+  };
+
+  // Built above and logged on ONE line deliberately: Bearer anchors a
+  // multi-line call at its closing parenthesis, so a directive above the
+  // opening line does not cover it.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info(summary, "[legacy-units] summary");
 
   if (flags.reportFile) {
     const { writeFile } = await import("node:fs/promises");
     await writeFile(flags.reportFile, JSON.stringify(reports, null, 2));
-    // bearer:disable javascript_lang_logger_leak — the operator's own --report-file
-    // path, echoed back so they know where the report landed.
+    // The operator's own --report-file path, echoed back so they know where the
+    // report landed.
+    // bearer:disable javascript_lang_logger_leak
     logger.info({ reportFile: flags.reportFile }, "[legacy-units] report written");
   }
 }
@@ -221,9 +230,9 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err) => {
-    // bearer:disable javascript_lang_logger_leak — the operational error that
-    // stopped the run, so it can be diagnosed. Same shape the rest of the
-    // codebase logs a failure with.
+    // The operational error that stopped the run, so it can be diagnosed. Same
+    // shape the rest of the codebase logs a failure with.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err }, "[legacy-units] failed");
     process.exit(1);
   });
