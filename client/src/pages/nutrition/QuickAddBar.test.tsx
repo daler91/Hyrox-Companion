@@ -126,6 +126,32 @@ describe("QuickAddBar", () => {
     });
   });
 
+  it("disables the undo button after the first tap to prevent duplicate deletes", async () => {
+    vi.mocked(api.nutrition.recent).mockResolvedValue([]);
+    vi.mocked(api.nutrition.listFavorites).mockResolvedValue([remembered()]);
+    vi.mocked(api.nutrition.createLog).mockResolvedValue({ id: "entry-1" } as never);
+    vi.mocked(api.nutrition.deleteLog).mockResolvedValue({ success: true });
+    const user = userEvent.setup();
+    renderWithClient(
+      <>
+        <QuickAddBar onSelect={vi.fn()} date={DATE} />
+        <Toaster />
+      </>,
+    );
+
+    await user.click(await screen.findByTestId("quickadd-favorites-f1"));
+    const undoBtn = await screen.findByTestId("button-undo-quickadd");
+    await user.click(undoBtn);
+
+    // After the first tap the button should be disabled with updated text.
+    expect(undoBtn).toBeDisabled();
+    expect(undoBtn).toHaveTextContent("Undoing…");
+
+    // A second tap must not fire another delete.
+    await user.click(undoBtn);
+    expect(api.nutrition.deleteLog).toHaveBeenCalledTimes(1);
+  });
+
   it("queues a favourite's quick-log offline without the undo toast", async () => {
     setOnline(false);
     vi.mocked(api.nutrition.recent).mockResolvedValue([]);
