@@ -12,7 +12,16 @@ vi.mock("../../queue", () => ({
   RECOMPUTE_ANALYTICS_QUEUE: "recompute-analytics",
 }));
 
-type StoredRow = { recomputedOn: string | null; lastWorkoutDateAtGeneration: string | null };
+type StoredRow = {
+  recomputedOn: string | null;
+  lastWorkoutDateAtGeneration: string | null;
+  /**
+   * Row count at generation (audit L16). Omitted here means the row predates
+   * the column, which computeStale answers with the date-only test — so the
+   * date-anchored cases below keep testing exactly what they always did.
+   */
+  entryCountAtGeneration?: number | null;
+};
 
 type Feature = "coach_insights" | "race_prediction" | "nutrition_insights" | "overview_analysis";
 
@@ -20,8 +29,12 @@ interface FakeData {
   engagedUserIds: string[];
   users: Record<string, { userTimezone: string } | undefined>;
   latestWorkoutDate: Record<string, string | null>;
+  /** Total workout logs — the other half of the staleness anchor (audit L16). */
+  workoutCount?: Record<string, number>;
   /** Latest food-log date — the staleness anchor for nutrition_insights. */
   latestNutritionLogDate?: Record<string, string | null>;
+  /** Total food-log entries, the nutrition half of the same anchor. */
+  nutritionLogCount?: Record<string, number>;
   rows: Record<string, Partial<Record<Feature, StoredRow>>>;
 }
 
@@ -33,6 +46,10 @@ function makeStorage(data: FakeData): IStorage {
       getMany: vi.fn(async (userIds: string[]) =>
         userIds.flatMap((userId) =>
           Object.entries(data.rows[userId] ?? {}).map(([feature, row]) => ({
+            // Normalize the omitted count to null explicitly: `undefined` would
+            // read as "a count was recorded, and it was undefined" and mark
+            // every row stale.
+            entryCountAtGeneration: null,
             ...row,
             userId,
             feature,
@@ -58,11 +75,13 @@ function makeStorage(data: FakeData): IStorage {
         const date = data.latestWorkoutDate[userId];
         return date == null ? [] : [{ date }];
       }),
+      countWorkoutLogs: vi.fn(async (userId: string) => data.workoutCount?.[userId] ?? 0),
     },
     nutrition: {
       getLatestLogDate: vi.fn(
         async (userId: string) => data.latestNutritionLogDate?.[userId] ?? null,
       ),
+      countLogEntries: vi.fn(async (userId: string) => data.nutritionLogCount?.[userId] ?? 0),
     },
   } as unknown as IStorage;
 }
@@ -98,6 +117,78 @@ describe("runAnalyticsRecomputeScan", () => {
     expect(payload).toEqual({ userId: "u1", feature: "coach_insights", localDate: "2026-06-05" });
     expect(options.singletonKey).toBe("recompute:coach_insights:u1");
     expect(options.singletonSeconds).toBe(3600);
+  });
+
+  it("recomputes for a second session logged on an already-anchored day (audit L16)", async () => {
+    // The athlete ran in the morning and lifted in the evening. The date the
+    // result was generated against still reads 2026-06-05, so the date-only
+    // test called the stored analysis fresh and the nightly scan skipped it —
+    // leaving Coach Insights and the Race Prediction built on half the day.
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: "2026-06-05" },
+      workoutCount: { u1: 10 }, // the evening session is the 10th
+      rows: {
+        u1: {
+          coach_insights: {
+            recomputedOn: null,
+            lastWorkoutDateAtGeneration: "2026-06-05",
+            entryCountAtGeneration: 9,
+          },
+        },
+      },
+    });
+
+    const result = await runAnalyticsRecomputeScan(storage, NOW);
+
+    expect(result).toEqual({ usersChecked: 1, enqueued: 1 });
+    expect(sendMock.mock.calls[0][1]).toEqual({
+      userId: "u1",
+      feature: "coach_insights",
+      localDate: "2026-06-05",
+    });
+  });
+
+  it("leaves a genuinely unchanged history alone", async () => {
+    // The count must not turn the nightly scan into an unconditional recompute
+    // of every engaged user — that would be an AI bill, not a fix.
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: "2026-06-05" },
+      workoutCount: { u1: 9 },
+      rows: {
+        u1: {
+          coach_insights: {
+            recomputedOn: null,
+            lastWorkoutDateAtGeneration: "2026-06-05",
+            entryCountAtGeneration: 9,
+          },
+        },
+      },
+    });
+
+    expect(await runAnalyticsRecomputeScan(storage, NOW)).toEqual({ usersChecked: 1, enqueued: 0 });
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("does not stampede on rows written before the count column existed", async () => {
+    // Every stored row has a null count on the deploy that adds it. If null
+    // read as zero, this scan would enqueue a recompute for the entire engaged
+    // user base on one night.
+    const storage = makeStorage({
+      engagedUserIds: ["u1"],
+      users: { u1: { userTimezone: "UTC" } },
+      latestWorkoutDate: { u1: "2026-06-05" },
+      workoutCount: { u1: 9 },
+      rows: {
+        u1: { coach_insights: { recomputedOn: null, lastWorkoutDateAtGeneration: "2026-06-05" } },
+      },
+    });
+
+    expect(await runAnalyticsRecomputeScan(storage, NOW)).toEqual({ usersChecked: 1, enqueued: 0 });
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
   it("skips users whose local time is not midnight", async () => {

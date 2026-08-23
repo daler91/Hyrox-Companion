@@ -1124,7 +1124,7 @@ Re-embed all coaching materials for the current user.
 Get the current user's preferences.
 
 - **Auth:** Required
-- **Response:** Serialized preferences — `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, trainingStylePreviousId, trainingStyleChangedAt, trainingStyleRecomputeNow, onboardingCompleted, mafAge, mafInjuryIllnessMedication, mafConsistency, mafTrend, mafHrDataAvailable, mafHr, mafBaselineTestScheduledAt }` plus two derived fields: `planWeeklyDensity` (the active plan's per-week density, or `null`) and `weeklyGoalExceedsPlan` (boolean hint when the user's `weeklyGoal` exceeds that density).
+- **Response:** Serialized preferences — `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, trainingStylePreviousId, trainingStyleChangedAt, trainingStyleRecomputeNow, onboardingCompleted, mafAge, mafInjuryIllnessMedication, mafConsistency, mafTrend, mafHrDataAvailable, mafHr, mafBaselineTestScheduledAt }` plus two derived fields: `planWeeklyDensity` (the active plan's per-week density — a real number to 2 dp, e.g. `2.5` for a 10-day plan over 4 weeks — or `null`) and `weeklyGoalExceedsPlan` (boolean hint when the user's `weeklyGoal` exceeds that density).
 
 ### PATCH /api/v1/preferences
 

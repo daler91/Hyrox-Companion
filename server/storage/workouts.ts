@@ -299,6 +299,20 @@ export class WorkoutStorage {
     return await query;
   }
 
+  /**
+   * How many workout logs the athlete has, total. Half of the analytics
+   * staleness anchor (audit L16) — the latest DATE cannot see a second session
+   * logged on a day that already had one, nor a delete of anything but the
+   * single latest row, and both change the history an analysis was built on.
+   */
+  async countWorkoutLogs(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(workoutLogs)
+      .where(eq(workoutLogs.userId, userId));
+    return row?.total ?? 0;
+  }
+
   async getWorkoutLog(logId: string, userId: string): Promise<WorkoutLog | undefined> {
     const [log] = await db
       .select()

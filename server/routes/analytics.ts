@@ -10,7 +10,7 @@ import { db } from "../db";
 import { env } from "../env";
 import { reqLogger } from "../logger";
 import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
-import { computeStale, getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
+import { computeStale, getWorkoutAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { addCalendarDays, assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
@@ -172,15 +172,15 @@ router.get("/api/v1/race-prediction", isAuthenticated, rateLimiter("race-predict
       // tab open" path. Firing both unconditionally costs one harmless unused
       // query on the (rare) no-stored-row-yet branch below, in exchange for
       // halving the latency on every returning user's request.
-      const [row, latestWorkoutDate] = await Promise.all([
+      const [row, anchor] = await Promise.all([
         storage.analyticsResults.get(userId, "race_prediction"),
-        getLatestWorkoutDate(userId),
+        getWorkoutAnchor(userId),
       ]);
       if (row) {
         res.json({
           ...(row.payload as RacePredictionResponse),
           generatedAt: row.generatedAt.toISOString(),
-          stale: computeStale(row, latestWorkoutDate),
+          stale: computeStale(row, anchor),
         });
         return;
       }

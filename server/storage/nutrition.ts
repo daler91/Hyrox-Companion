@@ -1051,6 +1051,18 @@ export class NutritionStorage {
     return row?.logDate ?? null;
   }
 
+  /**
+   * How many food-log entries the athlete has, total. The nutrition half of the
+   * analytics staleness anchor (audit L16); see countWorkoutLogs.
+   */
+  async countLogEntries(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(foodLogEntries)
+      .where(eq(foodLogEntries.userId, userId));
+    return row?.total ?? 0;
+  }
+
   // --- targets (FR-5.2) -----------------------------------------------------
 
   /** The target effective on `onDate` — the latest version with effectiveFrom <= onDate. */

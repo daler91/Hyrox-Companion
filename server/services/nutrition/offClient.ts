@@ -98,9 +98,14 @@ function parseServingGrams(product: OffProduct): number | null {
  *
  * Only `energy-kcal_100g` was read, so a product publishing energy solely in kJ
  * — the norm across the EU — cached with `calories = null` and then logged as
- * **0 kcal**, because `scaleNutrition` treats a null per-100g value as zero. The
+ * **0 kcal**, because `scaleNutrition` treated a null per-100g value as zero. The
  * acceptance gate below admits exactly those products whenever completeness is
  * decent or unknown, so nothing else stopped them (audit M19).
+ *
+ * A product with NO energy field at all still caches `null` here, deliberately —
+ * the gate above still admits it on completeness. `scaleNutrition` now
+ * reconstructs its energy from the macros instead of reporting zero, so the null
+ * stays honest in the cache and is filled in at the point of use.
  *
  * Here 0.239 is the right factor and needs no efficiency term: a label's kJ is
  * already metabolisable food energy, so this is a pure unit conversion. (Contrast

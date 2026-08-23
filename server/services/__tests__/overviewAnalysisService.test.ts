@@ -158,3 +158,58 @@ describe("the metric reference the model is given (audit M27)", () => {
     expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/never feed UTSS/i);
   });
 });
+
+describe("window counts are not history counts (audit L15)", () => {
+  /** A 42-day trend whose last `acwrDays` points carry a computed ratio. */
+  function trendWithAcwr(acwrDays: number): TrainingLoadTrendPoint[] {
+    const TREND_DAYS = 42;
+    return Array.from({ length: TREND_DAYS }, (_, i) =>
+      trendPoint({
+        date: `day-${i}`,
+        utss: 50,
+        acwr: i >= TREND_DAYS - acwrDays ? 1.1 : null,
+      }),
+    );
+  }
+
+  const factsFor = (acwrDays: number) =>
+    buildOverviewChartFacts(
+      overview({ trainingLoad: trainingLoad({ acwr: 1.1, trend: trendWithAcwr(acwrDays) }) }),
+    ).trainingLoad?.facts;
+
+  it("no longer sends the model a fact called daysOfHistory", () => {
+    // The prompt orders the model to cite the numbers it is given and invent
+    // none, so the NAME is the instruction. A veteran scored 42 here.
+    expect(factsFor(42)).not.toHaveProperty("daysOfHistory");
+  });
+
+  it("saturates at the window, which is why the old name was wrong", () => {
+    // Three years of training and seven weeks of it produce the identical
+    // number — there is no value of the count that means "days of history".
+    expect(factsFor(42)?.acwrDaysInWindow).toBe(42);
+    expect(factsFor(42)?.trendWindowDays).toBe(42);
+  });
+
+  it("ships the denominator so partial coverage is readable", () => {
+    // An athlete 20 logged days in: ACWR needs 14, so 7 days carry a ratio.
+    // Alone that reads as "a week of training"; with the window it reads as
+    // "7 of the last 42 days have a ratio", which is what it is.
+    const facts = factsFor(7);
+    expect(facts?.acwrDaysInWindow).toBe(7);
+    expect(facts?.trendWindowDays).toBe(42);
+  });
+
+  it("tells the model not to read history out of a window count", () => {
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/NOT how long the athlete has trained/i);
+    expect(OVERVIEW_ANALYSIS_SYSTEM_PROMPT).toMatch(/never tell the athlete how much history/i);
+  });
+
+  it("keeps the sibling consistency count named for its window too", () => {
+    const facts = buildOverviewChartFacts(
+      overview({ workoutDates: ["2026-06-02", "2026-06-09"], currentStreak: 2 }),
+    ).consistency?.facts;
+
+    expect(facts?.loggedDaysInWindow).toBe(2);
+    expect(facts).not.toHaveProperty("daysOfHistory");
+  });
+});

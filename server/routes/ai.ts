@@ -11,7 +11,7 @@ import { aiConsentCheck } from "../middleware/aiConsent";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../routeUtils";
 import { type AIContext, buildAIContext, type ChatInput } from "../services/aiContextService";
 import { applyTimelineAiSuggestion, generateTimelineAiSuggestions } from "../services/aiSuggestionService";
-import { computeStale, getLatestWorkoutDate, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
+import { computeStale, getWorkoutAnchor, regenerateAndStoreCoachInsights, regenerateAndStoreOverviewAnalysis } from "../services/analyticsPersistence";
 import { classifyPlanEditIntent, hasPlanEditKeywords, isPlanEditIntent } from "../services/chatIntentService";
 import type { CoachInsightsResult } from "../services/coachInsightsService";
 import { applyPlanAdjustmentProposal, createPlanAdjustmentProposal } from "../services/planAdjustmentService";
@@ -532,9 +532,9 @@ router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 6
     // ordering dependency between them on this "paint instantly on tab open"
     // path. Halves the DB latency for the common case (row exists) at the cost
     // of one harmless unused query when a user has no stored insights yet.
-    const [row, latestWorkoutDate] = await Promise.all([
+    const [row, anchor] = await Promise.all([
       storage.analyticsResults.get(userId, "coach_insights"),
-      getLatestWorkoutDate(userId),
+      getWorkoutAnchor(userId),
     ]);
     if (!row) {
       res.json({ insights: null });
@@ -544,7 +544,7 @@ router.get("/api/v1/coach-insights", isAuthenticated, rateLimiter("analytics", 6
     res.json({
       ...payload,
       generatedAt: row.generatedAt.toISOString(),
-      stale: computeStale(row, latestWorkoutDate),
+      stale: computeStale(row, anchor),
     });
   }));
 
@@ -565,9 +565,9 @@ router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics"
     // See the coach-insights GET above: row and staleness anchor read
     // unrelated tables, so fetch them concurrently instead of paying two
     // sequential DB round-trips on this instant-paint path.
-    const [row, latestWorkoutDate] = await Promise.all([
+    const [row, anchor] = await Promise.all([
       storage.analyticsResults.get(userId, "overview_analysis"),
-      getLatestWorkoutDate(userId),
+      getWorkoutAnchor(userId),
     ]);
     if (!row) {
       res.json({ sections: null });
@@ -577,7 +577,7 @@ router.get("/api/v1/overview-analysis", isAuthenticated, rateLimiter("analytics"
     res.json({
       ...payload,
       generatedAt: row.generatedAt.toISOString(),
-      stale: computeStale(row, latestWorkoutDate),
+      stale: computeStale(row, anchor),
     });
   }));
 

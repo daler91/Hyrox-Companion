@@ -2,7 +2,7 @@ import type express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getLatestWorkoutDate, regenerateAndStoreRacePrediction } from "../../services/analyticsPersistence";
+import { getWorkoutAnchor, regenerateAndStoreRacePrediction } from "../../services/analyticsPersistence";
 import { storage } from "../../storage";
 import analyticsRouter from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -36,7 +36,7 @@ vi.mock("../../services/analyticsPersistence", async () => {
   );
   return {
     computeStale: staleness.computeStale,
-    getLatestWorkoutDate: vi.fn().mockResolvedValue(null),
+    getWorkoutAnchor: vi.fn().mockResolvedValue({ latestDate: null, entryCount: 0 }),
     regenerateAndStoreRacePrediction: vi.fn(),
   };
 });
@@ -73,8 +73,10 @@ describe("GET /api/v1/race-prediction (stored-first)", () => {
       payload: STORED_PAYLOAD,
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       lastWorkoutDateAtGeneration: "2026-06-01",
+      entryCountAtGeneration: 4,
     } as never);
-    vi.mocked(getLatestWorkoutDate).mockResolvedValue("2026-06-03"); // newer → stale
+    // Newer date → stale. The count moves with it; either half alone is enough.
+    vi.mocked(getWorkoutAnchor).mockResolvedValue({ latestDate: "2026-06-03", entryCount: 5 });
 
     const res = await request(app).get("/api/v1/race-prediction");
 

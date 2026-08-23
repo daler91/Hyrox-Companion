@@ -1,0 +1,1 @@
+ALTER TABLE "analytics_results" ADD COLUMN "entry_count_at_generation" integer;

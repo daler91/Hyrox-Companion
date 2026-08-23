@@ -12,6 +12,10 @@
  *      keeping protein/fat anchored to bodyweight.
  */
 
+// Atwater factors live in ONE place so a target and a logged total can never be
+// computed against different ones (the L6 lesson, applied before it could bite).
+import { KCAL_PER_G_CARB, KCAL_PER_G_FAT, KCAL_PER_G_PROTEIN } from "./nutritionScaling";
+
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 export type WeightGoalDirection = "lose" | "maintain" | "gain";
 // BMR needs a binary sex term; null / "prefer not to say" → a neutral midpoint.
@@ -27,9 +31,6 @@ export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
 };
 
 const KCAL_PER_KG_BODYWEIGHT = 7700; // ~7700 kcal per kg of body mass
-const KCAL_PER_G_PROTEIN = 4;
-const KCAL_PER_G_CARB = 4;
-const KCAL_PER_G_FAT = 9;
 const DAYS_PER_WEEK = 7;
 
 // g/kg anchors — the chosen macro method. Overridable per call.

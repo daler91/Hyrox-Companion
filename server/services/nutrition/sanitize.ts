@@ -11,12 +11,18 @@ import type { MappedFood } from "./types";
  * the one boundary where those values are caught before they reach the cache.
  *
  * Policy: clamp, don't truncate. A field that is non-finite, negative, or beyond
- * a sane per-100g ceiling is set to `null` — treated as "absent", which
- * `scaleNutrition` already counts as 0, so it can never inflate a total. We
- * never rewrite a clearly-corrupt number into a plausible-looking one. The whole
- * food is dropped only when fundamentally unusable: no name, or no usable macro
- * at all (nothing to log). The ceilings are shared with custom-food validation
- * (CALORIES_PER_100G_MAX / MACRO_PER_100G_MAX) so every food obeys one rulebook.
+ * a sane per-100g ceiling is set to `null` — treated as "absent", so it can never
+ * inflate a total. We never rewrite a clearly-corrupt number into a
+ * plausible-looking one. The whole food is dropped only when fundamentally
+ * unusable: no name, or no usable macro at all (nothing to log). The ceilings are
+ * shared with custom-food validation (CALORIES_PER_100G_MAX /
+ * MACRO_PER_100G_MAX) so every food obeys one rulebook.
+ *
+ * That "never rewrite" rule is why energy is NOT reconstructed here. A food whose
+ * provider published no calories keeps its honest `null` in the cache, and
+ * `scaleNutrition` derives the figure from the macros at the point of use — so a
+ * later refresh that supplies a real value simply takes effect, and a derived
+ * number can never be mistaken for one the provider actually stated.
  */
 
 /** A finite, non-negative per-100g macro within `max`; else null. */

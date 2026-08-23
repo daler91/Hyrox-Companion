@@ -70,6 +70,7 @@ vi.mock("../../storage", () => ({
     workouts: {
       getExerciseSetsByPlanDay: vi.fn(),
       listWorkoutLogs: vi.fn(async () => []),
+      countWorkoutLogs: vi.fn(async () => 0),
     },
     coaching: {
       listCoachingMaterials: vi.fn(),
@@ -231,6 +232,7 @@ describe("GET /api/v1/overview-analysis", () => {
       },
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       lastWorkoutDateAtGeneration: "2026-06-01",
+      entryCountAtGeneration: 1,
       recomputedOn: null,
       updatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });
@@ -241,6 +243,7 @@ describe("GET /api/v1/overview-analysis", () => {
     vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
       { date: "2026-06-01" },
     ] as never);
+    vi.mocked(storage.workouts.countWorkoutLogs).mockResolvedValue(1);
 
     const response = await request(app).get("/api/v1/overview-analysis");
 
@@ -259,6 +262,7 @@ describe("GET /api/v1/overview-analysis", () => {
       payload: { sections: {}, generatedAt: "2026-06-01T00:00:00.000Z" },
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       lastWorkoutDateAtGeneration: "2026-06-01",
+      entryCountAtGeneration: 1,
       recomputedOn: null,
       updatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });
@@ -304,6 +308,7 @@ describe("GET /api/v1/coach-insights", () => {
       },
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       lastWorkoutDateAtGeneration: "2026-06-01",
+      entryCountAtGeneration: 1,
       recomputedOn: null,
       updatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });
@@ -314,6 +319,7 @@ describe("GET /api/v1/coach-insights", () => {
     vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
       { date: "2026-06-01" },
     ] as never);
+    vi.mocked(storage.workouts.countWorkoutLogs).mockResolvedValue(1);
 
     const response = await request(app).get("/api/v1/coach-insights");
 
@@ -336,6 +342,7 @@ describe("GET /api/v1/coach-insights", () => {
       },
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       lastWorkoutDateAtGeneration: "2026-06-01",
+      entryCountAtGeneration: 1,
       recomputedOn: null,
       updatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });

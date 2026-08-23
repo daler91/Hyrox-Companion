@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError, ErrorCode } from "../../../errors";
 import { clearRateLimitBuckets } from "../../../routeUtils";
-import { regenerateAndStoreNutritionInsights } from "../../../services/analyticsPersistence";
+import { getNutritionAnchor, regenerateAndStoreNutritionInsights } from "../../../services/analyticsPersistence";
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
@@ -92,6 +92,7 @@ vi.mock("../../../storage", () => ({
 
 vi.mock("../../../services/analyticsPersistence", () => ({
   computeStale: vi.fn(() => false),
+  getNutritionAnchor: vi.fn(async () => ({ latestDate: null, entryCount: 0 })),
   regenerateAndStoreNutritionInsights: vi.fn(),
 }));
 
@@ -910,7 +911,9 @@ describe("nutrition routes", () => {
         payload: { insights: "# Eat up", generatedAt: "2026-06-01T00:00:00.000Z" },
         generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       });
-      vi.mocked(storage.nutrition.getLatestLogDate).mockResolvedValue("2026-06-07");
+      // The athlete has logged since the analysis was generated; computeStale is
+      // mocked here, so this only has to be a well-formed anchor.
+      vi.mocked(getNutritionAnchor).mockResolvedValue({ latestDate: "2026-06-07", entryCount: 12 });
 
       const res = await request(app).get("/api/v1/nutrition/insights");
       expect(res.status).toBe(200);

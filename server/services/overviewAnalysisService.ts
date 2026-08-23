@@ -60,6 +60,7 @@ export const OVERVIEW_ANALYSIS_SYSTEM_PROMPT = [
   "- UTSS is this app's own training-load unit. It prefers heart rate, then power, then the athlete's RPE — so it is NOT a purely subjective measure, and a session with HR data barely uses RPE at all.",
   "- hrTSS / Power TSS are separate objective loads shown for reference only; they never feed UTSS and sit on a different scale, so do not tell the athlete they should agree or read a gap between them as an inconsistency.",
   "- Weekly Workouts vs the weekly goal shows consistency against target; RPE/Duration trends show how hard and how long sessions are trending; the consistency heatmap + streak show training regularity.",
+  "- Counts named *InWindow (acwrDaysInWindow, loggedDaysInWindow) describe only the chart's own window, NOT how long the athlete has trained. The load window is the last 42 days and ACWR needs 14 logged days before it computes, so acwrDaysInWindow saturates at 42 for anyone past their first six weeks. Never tell the athlete how much history they have, or call them new, from these numbers.",
   "",
   'Respond with STRICT JSON only, shaped exactly as: {"sections": {"<chartKey>": "<reading>"}}. Use ONLY the chart keys present in the input. Do not add commentary outside the JSON.',
 ].join("\n");
@@ -128,7 +129,17 @@ export function buildOverviewChartFacts(
         monotony: round(load.monotony, 2),
         monotonyZone: load.monotonyZone,
         activeRestrictions: load.activeRestrictions.map((r) => r.label),
-        daysOfHistory: acwrSeries.filter((v) => v != null).length,
+        // NOT the athlete's days of history, which is what this used to be
+        // called (audit L15). The trend is a fixed 42-day window and ACWR is
+        // null for the first 14 logged days, so the count saturates at 42 for
+        // anyone past their first six weeks: a three-year athlete and a
+        // seven-week one both scored 42. The prompt tells the model to cite the
+        // numbers it is given and never invent any, so a fact named
+        // `daysOfHistory` was an instruction to tell a veteran they had six
+        // weeks of training behind them. Named for what it measures, and
+        // shipped with its denominator so the model can read the coverage.
+        acwrDaysInWindow: acwrSeries.filter((v) => v != null).length,
+        trendWindowDays: acwrSeries.length,
       },
     };
   }
