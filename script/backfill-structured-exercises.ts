@@ -40,6 +40,7 @@ import {
   users,
   workoutLogs,
 } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 import { and, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
@@ -143,6 +144,22 @@ async function userWeightUnit(userId: string | null | undefined): Promise<string
 }
 
 /**
+ * The units the parsed values are actually in, which is what the inserted rows
+ * must be stamped with (audit L4).
+ *
+ * `parseExercisesFromText(text, unit)` takes the weight unit as a bare string,
+ * and `resolveParseUnitPreferences` fills distance in as "km" — so distances
+ * come back in METRES whoever the athlete is, including a miles athlete. Under
+ * the old unit-less storage that produced a real error: a miles athlete's
+ * "1 mile" parsed to 1609, stored bare, and every read path rendered it as
+ * 1609 FEET. The row now records that it holds metres, so a unit-aware read
+ * converts it to 5279 ft. Mirror any change to the parse call here.
+ */
+function parseUnitsFor(weightUnit: string) {
+  return { weightUnit, distanceUnit: "km" };
+}
+
+/**
  * Describes a free-text row that needs structured sets. The adapter keeps
  * both backfill passes using the same execution loop, which avoids a pair
  * of near-duplicate functions and lets Sonar's cognitive-complexity budget
@@ -155,7 +172,7 @@ interface BackfillCandidate {
   userId: string | null;
   mainWorkout: string | null;
   accessory: string | null;
-  expand: (exercises: ParsedExercises) => InsertExerciseSet[];
+  expand: (exercises: ParsedExercises, preferences: UnitPreferences) => InsertExerciseSet[];
 }
 
 function ownerTypeForCandidate(cand: BackfillCandidate): BackfillReportRow["ownerType"] {
@@ -230,8 +247,9 @@ async function handleParsedExercises(
   result: PassResult,
   reportRows: BackfillReportRow[],
   exercises: ParsedExercises,
+  preferences: UnitPreferences,
 ): Promise<void> {
-  const setRows = cand.expand(exercises);
+  const setRows = cand.expand(exercises, preferences);
   result.parsed++;
   if (flags.dryRun) {
     logger.info(
@@ -284,7 +302,7 @@ async function processCandidate(
       await handleEmptyParsedExercises(cand, flags, result, reportRows);
       return;
     }
-    await handleParsedExercises(cand, flags, result, reportRows, exercises);
+    await handleParsedExercises(cand, flags, result, reportRows, exercises, parseUnitsFor(unit));
   } catch (err) {
     await handleParseFailure(cand, flags, result, reportRows, err);
   }
@@ -353,7 +371,7 @@ async function loadPlanDayCandidates(flags: Flags): Promise<BackfillCandidate[]>
     userId: pd.userId,
     mainWorkout: pd.mainWorkout,
     accessory: pd.accessory,
-    expand: (exercises) => expandExercisesToPlanDaySetRows(exercises, pd.id),
+    expand: (exercises, preferences) => expandExercisesToPlanDaySetRows(exercises, pd.id, preferences),
   }));
 }
 
@@ -393,7 +411,7 @@ async function loadWorkoutLogCandidates(flags: Flags): Promise<BackfillCandidate
     userId: log.userId,
     mainWorkout: log.mainWorkout,
     accessory: log.accessory,
-    expand: (exercises) => expandExercisesToSetRows(exercises, log.id),
+    expand: (exercises, preferences) => expandExercisesToSetRows(exercises, log.id, preferences),
   }));
 }
 

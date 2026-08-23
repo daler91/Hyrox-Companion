@@ -129,7 +129,12 @@ export function DraftExerciseTable({
           setNumber: s.setNumber ?? i + 1,
           reps: s.reps ?? null,
           weight: s.weight ?? null,
+          // A client-side DRAFT holds what the athlete typed and is never
+          // persisted from here — the server stamps the unit on ingestion
+          // (audit L4). Unstamped is the correct shape for a draft row.
+          weightUnit: null,
           distance: s.distance ?? null,
+          distanceUnit: null,
           time: s.time ?? null,
           plannedReps: s.plannedReps ?? null,
           plannedWeight: s.plannedWeight ?? null,

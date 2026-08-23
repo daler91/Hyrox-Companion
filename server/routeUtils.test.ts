@@ -84,6 +84,10 @@ import rateLimit from "express-rate-limit";
 import { calculateStreak, clearRateLimitBuckets, DEFAULT_WINDOW_MS,rateLimiter, validateBody } from "./routeUtils";
 import { expandExercisesToSetRows } from "./services/workoutService";
 
+// The athlete's units. Required since audit L4 so no write path can store a
+// number without recording what unit it is in.
+const SET_ROW_UNITS = { weightUnit: "kg", distanceUnit: "km" };
+
 describe("rateLimiter", () => {
   let req: { auth: () => { userId: string }; ip: string };
   let res: {
@@ -393,7 +397,7 @@ describe("expandExercisesToSetRows", () => {
         ],
       },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows).toHaveLength(2);
     expect(rows[0].workoutLogId).toBe("workout-1");
     expect(rows[0].exerciseName).toBe("back_squat");
@@ -415,7 +419,7 @@ describe("expandExercisesToSetRows", () => {
         weight: 60,
       },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows).toHaveLength(3);
     expect(rows[0].setNumber).toBe(1);
     expect(rows[1].setNumber).toBe(2);
@@ -427,7 +431,7 @@ describe("expandExercisesToSetRows", () => {
     const exercises = [
       { exerciseName: "pull_up", category: "strength", reps: 10 },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows).toHaveLength(1);
     expect(rows[0].setNumber).toBe(1);
   });
@@ -441,7 +445,7 @@ describe("expandExercisesToSetRows", () => {
         sets: [{ setNumber: 1, reps: 5, weight: 24 }],
       },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows[0].customLabel).toBe("Turkish Getup");
   });
 
@@ -461,7 +465,7 @@ describe("expandExercisesToSetRows", () => {
         ],
       },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows).toHaveLength(3);
     expect(rows[0].sortOrder).toBe(0);
     expect(rows[1].sortOrder).toBe(1);
@@ -476,7 +480,7 @@ describe("expandExercisesToSetRows", () => {
         sets: [],
       },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows).toHaveLength(0);
   });
 
@@ -488,7 +492,7 @@ describe("expandExercisesToSetRows", () => {
         sets: [{ setNumber: 1, time: 30 }],
       },
     ];
-    const rows = expandExercisesToSetRows(exercises, "workout-1");
+    const rows = expandExercisesToSetRows(exercises, "workout-1", SET_ROW_UNITS);
     expect(rows[0].reps).toBeNull();
     expect(rows[0].weight).toBeNull();
     expect(rows[0].distance).toBeNull();

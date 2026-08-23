@@ -92,7 +92,7 @@ describe("extractAndDeduplicateCustomExercises", () => {
 
 describe("expandExercisesToRows", () => {
   it("returns an empty array for no exercises", () => {
-    expect(expandExercisesToRows([], { workoutLogId: WORKOUT_ID }, "workout")).toEqual([]);
+    expect(expandExercisesToRows([], { workoutLogId: WORKOUT_ID }, "workout", UNITS)).toEqual([]);
   });
 
   it("expands explicit sets into one row each with running sortOrder", () => {
@@ -107,6 +107,7 @@ describe("expandExercisesToRows", () => {
       ],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => [r.setNumber, r.reps, r.sortOrder])).toEqual([
@@ -120,6 +121,7 @@ describe("expandExercisesToRows", () => {
       [pe({ confidence: 0.8, sets: [{ setNumber: 2, reps: 5, weight: 100, notes: "deep" }] })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows[0]).toEqual({
       workoutLogId: WORKOUT_ID,
@@ -130,7 +132,13 @@ describe("expandExercisesToRows", () => {
       setNumber: 2,
       reps: 5,
       weight: 100,
+      // Stored as the athlete typed it; the row records WHICH unit that was, so
+      // a later kg <-> lbs switch converts instead of reinterpreting (audit L4).
+      // Stamped even where the measurement is null, because the stamp describes
+      // the row's convention rather than whether it carries a number.
+      weightUnit: "kg",
       distance: null,
+      distanceUnit: "m",
       time: null,
       plannedReps: null,
       plannedWeight: null,
@@ -158,6 +166,7 @@ describe("expandExercisesToRows", () => {
       [pe({ numSets: 3, reps: 10, weight: 60 })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows).toHaveLength(3);
     expect(rows.map((r) => r.setNumber)).toEqual([1, 2, 3]);
@@ -165,7 +174,7 @@ describe("expandExercisesToRows", () => {
   });
 
   it("defaults the aggregate to a single set when numSets is absent", () => {
-    const rows = expandExercisesToRows([pe({ reps: 10 })], { workoutLogId: WORKOUT_ID }, "workout");
+    const rows = expandExercisesToRows([pe({ reps: 10 })], { workoutLogId: WORKOUT_ID }, "workout", UNITS);
     expect(rows).toHaveLength(1);
     expect(rows[0].setNumber).toBe(1);
   });
@@ -175,6 +184,7 @@ describe("expandExercisesToRows", () => {
       [pe({ sets: [], numSets: 5 })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows).toEqual([]);
   });
@@ -184,6 +194,7 @@ describe("expandExercisesToRows", () => {
       [pe({ sets: [{ setNumber: 0, reps: 5 }] })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows[0].setNumber).toBe(1);
   });
@@ -193,6 +204,7 @@ describe("expandExercisesToRows", () => {
       [pe({ sets: [{ setNumber: 1, weight: 100 }] })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows[0].reps).toBeNull();
     expect(rows[0].weight).toBe(100);
@@ -203,6 +215,7 @@ describe("expandExercisesToRows", () => {
       [pe({ numSets: 2 }), pe({ exerciseName: "deadlift", numSets: 2 })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows.map((r) => r.sortOrder)).toEqual([0, 1, 2, 3]);
     expect(rows.map((r) => r.exerciseName)).toEqual([
@@ -218,6 +231,7 @@ describe("expandExercisesToRows", () => {
       [pe({ numSets: 1000 })],
       { workoutLogId: WORKOUT_ID },
       "workout",
+      UNITS,
     );
     expect(rows).toHaveLength(1000);
   });
@@ -225,7 +239,7 @@ describe("expandExercisesToRows", () => {
   it("throws a 400 AppError when the workout exceeds the row cap", () => {
     let thrown: unknown;
     try {
-      expandExercisesToRows([pe({ numSets: 1001 })], { workoutLogId: WORKOUT_ID }, "workout");
+      expandExercisesToRows([pe({ numSets: 1001 })], { workoutLogId: WORKOUT_ID }, "workout", UNITS);
     } catch (err) {
       thrown = err;
     }
@@ -240,19 +254,19 @@ describe("expandExercisesToRows", () => {
 
   it("uses plan-day wording in the cap error for the plan context", () => {
     expect(() =>
-      expandExercisesToRows([pe({ numSets: 1001 })], { planDayId: "p1" }, "plan"),
+      expandExercisesToRows([pe({ numSets: 1001 })], { planDayId: "p1" }, "plan", UNITS),
     ).toThrow(/Plan day expanded to 1001 set rows .* Split into multiple days/);
   });
 });
 
 describe("owner-specific wrappers", () => {
   it("expandExercisesToSetRows roots rows in the workout log", () => {
-    const rows = expandExercisesToSetRows([pe({ numSets: 1 })], WORKOUT_ID);
+    const rows = expandExercisesToSetRows([pe({ numSets: 1 })], WORKOUT_ID, UNITS);
     expect(rows[0]).toMatchObject({ workoutLogId: WORKOUT_ID, planDayId: null });
   });
 
   it("expandExercisesToPlanDaySetRows roots rows in the plan day", () => {
-    const rows = expandExercisesToPlanDaySetRows([pe({ numSets: 1 })], "p1");
+    const rows = expandExercisesToPlanDaySetRows([pe({ numSets: 1 })], "p1", UNITS);
     expect(rows[0]).toMatchObject({ workoutLogId: null, planDayId: "p1" });
   });
 });
@@ -293,5 +307,49 @@ describe("prepareParsedWorkout", () => {
       UNITS,
     );
     expect(parseMock).toHaveBeenCalledWith("Pushups", UNITS);
+  });
+});
+
+describe("the unit stamp every row carries (audit L4)", () => {
+  const LB_ATHLETE: UnitPreferences = { weightUnit: "lbs", distanceUnit: "miles" };
+
+  it("records the athlete's own units, leaving the value untouched", () => {
+    // 225 is what the athlete typed and what they will see. The row does not
+    // convert it — it records that 225 means POUNDS, which is the thing that
+    // used to be lost. A miles athlete's distances are stored in FEET
+    // (getStoredDistanceUnit), so that is what the stamp must say.
+    const rows = expandExercisesToRows(
+      [pe({ sets: [{ setNumber: 1, reps: 5, weight: 225, distance: 400 }] })],
+      { workoutLogId: WORKOUT_ID },
+      "workout",
+      LB_ATHLETE,
+    );
+
+    expect(rows[0]).toMatchObject({
+      weight: 225,
+      weightUnit: "lbs",
+      distance: 400,
+      distanceUnit: "ft",
+    });
+  });
+
+  it("stamps a set that carries no measurements at all", () => {
+    // The stamp describes the row's convention, not its contents, so a set that
+    // later gains a weight through an edit is already covered.
+    const rows = expandExercisesToRows(
+      [pe({ numSets: 1 })],
+      { workoutLogId: WORKOUT_ID },
+      "workout",
+      LB_ATHLETE,
+    );
+
+    expect(rows[0]).toMatchObject({ weight: null, weightUnit: "lbs", distanceUnit: "ft" });
+  });
+
+  it("stamps plan-day rows the same way as logged rows", () => {
+    // A prescription copied into a log must not change meaning on the way.
+    const rows = expandExercisesToPlanDaySetRows([pe({ numSets: 1, weight: 100 })], "p1", UNITS);
+
+    expect(rows[0]).toMatchObject({ weight: 100, weightUnit: "kg", distanceUnit: "m" });
   });
 });

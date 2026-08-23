@@ -569,6 +569,89 @@ defined twice) applied before it could bite.
 
 ---
 
+## L4 — stored weights now record their own unit (2026-08-23)
+
+Chosen over warn-at-the-toggle and over full canonicalisation. What shipped is the half of
+canonicalisation that can be done safely today, plus the thing that makes the other half possible
+at all.
+
+### The bug, and why it could not simply be migrated away
+
+`exercise_sets.weight` was a bare number meaning "whatever unit the athlete preferred when it was
+written", and that unit was never recorded. Switching kg ↔ lbs therefore reinterpreted the athlete's
+entire history and analytics showed a ~2.2× step change on the day they toggled a display preference.
+
+The obvious fix — convert every row to kg — **cannot be done**, and it is worth being precise about
+why, because it is not a matter of effort:
+
+- there is no per-row unit;
+- `users.weight_unit` is a bare scalar with **no history**, in a table that records
+  `training_style_previous_id` and `training_style_changed_at` two fields away, so the codebase
+  already knows this pattern and simply never applied it to units;
+- and the manual-log path does no conversion at all, so there is not even an indirect trace.
+
+Converting history by the athlete's *current* preference would multiply every row written under a
+previous preference by 2.2 — committing the exact bug L4 describes, deliberately.
+
+### What shipped
+
+Every `exercise_sets` row written from now on records the unit its numbers are in
+(`weight_unit` = kg | lbs, `distance_unit` = m | ft — a miles athlete stores feet). The **value is
+unchanged**; only the meaning is now written down. One place stamps it: `buildExerciseSetRow`, which
+every insert in the product funnels through.
+
+`preferences` was made a **required** parameter with no default, so the compiler enumerated every
+write path rather than letting one silently keep writing unstamped rows. It found nine, including a
+backfill script that grep had missed.
+
+### Why stamp the athlete's unit rather than store canonical kg
+
+I built canonical first and changed my mind on evidence. There are **23 exercise_sets read sites and
+no single serialisation boundary**. Under canonical storage every one of them is wrong until taught
+to convert back, and a missed one shows a lbs athlete kilograms labelled as pounds — a *new* 2.2×
+error that does not exist today. Under a stamp, an un-updated read is still correct for any athlete
+whose preference has not changed, so read paths convert one at a time and each is an improvement
+rather than a prerequisite.
+
+The measurement that settled the rounding question, before the design changed: canonical kg snapped
+to the 0.5 grid `roundStoredWeight` uses would have displayed the **wrong weight on 56 of the first
+600 whole-pound entries**. Storing the athlete's own number sidesteps that entirely — there is no
+round-trip to lose precision in.
+
+This is also the prerequisite for canonicalising later, history included. The reason old rows cannot
+be converted is that their unit is unknown; from here on it is known.
+
+### Two real bugs this fixed on the way
+
+Both were pre-existing, both invisible, both found by asking what unit a value was actually in:
+
+| Where | What it did |
+| --- | --- |
+| `assistedMigrationService` | Parses every athlete's text into **kg** with a hardcoded preference, then stored it as though it were their display unit. For a lbs athlete a parsed 100 kg squat rendered as **100 lbs** — wrong by 2.2×. |
+| `script/backfill-structured-exercises.ts` | Passes only the weight unit, so `resolveParseUnitPreferences` fills distance in as km and distances come back in **metres for everyone**. A miles athlete's "1 mile" parsed to 1609 and rendered as **1609 feet** — a 3.3× understatement. |
+
+Neither needed a code change beyond stamping the rows with the units the values were genuinely in.
+Both now carry a named constant so the parse target and the stamp cannot drift apart again.
+
+### A correction to the S5 sentinel
+
+It stated that "the Gemini parser and the manual log form both convert incoming text to the user's
+current `weightUnit` before insert". The parser and plan generation do. **The manual log form does
+not and never did** — `expandExercisesToSetRows` was called with no unit preferences at all and the
+client's number was stored verbatim. It happened to be right, because that number was already in the
+athlete's unit, but nothing in the write path was enforcing it.
+
+### Not done: the legacy tail
+
+Rows written before this migration keep `NULL` units and are read as the athlete's current
+preference — exactly what every read path did before. Right for an athlete who never switched, wrong
+by ~2.2× for one who did, and not fixable in code. Closing it needs a decision about real user data:
+assume nobody switched, ask each athlete to confirm, or detect the ~2.2× discontinuity in their
+history and offer it for confirmation rather than applying it silently. Recorded here rather than
+guessed at.
+
+---
+
 ## How to read this
 
 Every finding carries a **verification tier**:
@@ -869,7 +952,7 @@ Grouped by severity. `#` keys are stable for cross-referencing from code comment
 | L1  | `nextTarget.ts:25, 70-84`                                      | EXECUTED | Advice depends on display units. 85 kg → "+1 rep"; the identical 187 lb → "+5 lb". Crossover is 87.5 kg metric, 79 kg imperial.                                                                                                                                             |
 | L2  | `nextTarget.ts:73, 84`                                         | EXECUTED | Gain is computed as a difference of two Epley products, drifting 2.7e−15 high, so at exactly 25.0 kg the suppression threshold flips on float representation alone.                                                                                                         |
 | L3  | `nextTarget.ts:68, 84`                                         | EXECUTED | At 3×10 with anything under 25 kg — the beginner dumbbell case — the function returns **nothing at all, permanently**. Any set with varying reps (10/9/8) also yields nothing.                                                                                              |
-| L4  | `unitConversion.ts:19-34`                                      | READ     | Stored weights carry no unit column. Switching kg↔lb reinterprets all history as a ~2.2× jump. Documented and accepted in the S5 sentinel — but nothing warns the athlete at the moment of switching.                                                                       |
+| L4  | `unitConversion.ts:19-34`                                      | EXECUTED | Stored weights carried no unit column, so switching kg↔lb reinterpreted all history as a ~2.2× jump. New rows now record their own unit; the pre-migration tail cannot be converted because the write-time unit was never recorded anywhere (see the L4 section above).      |
 | L5  | `GoalStep.tsx:140` (repo-wide)                                 | READ     | `mafHrDataAvailable` is asked in onboarding **and** Settings, stored, round-tripped through the preferences API, and read by **no calculation**. MAF ceilings and compliance are produced identically whether or not the athlete can measure HR.                            |
 | L6  | `trainingLoadService.ts:1047-1049`; `unitConversion.ts:52, 55` | READ     | Strength and cardio stress are each rounded to 1 dp _before_ being summed into UTSS and rounded again. Metres-per-mile is defined twice (1609.34 vs 1/0.621371), differing by 2.5 ppm.                                                                                      |
 | L7  | `client/src/lib/dateUtils.ts:31-60`                            | EXECUTED | `getStartOfWeek`/`getEndOfWeek` default to `weekStartsOn = 0` (Sunday) while the rest of the app is Monday-start. Callers that omit the argument silently shift the week.                                                                                                   |

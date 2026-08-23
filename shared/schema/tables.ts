@@ -527,23 +527,50 @@ export const exerciseSets = pgTable(
     // original prescription so the athlete can edit actuals without losing plan
     // context.
     reps: integer("reps"),
-    // UNITS (see docs/adr-units.md). These three do not share a convention, and
-    // leaving that undocumented is what produced three separate 60x errors and
-    // two mislabelled renders (audit C7, H1, H2, H16, M8, L1):
+    // UNITS (see docs/adr-units.md). Read `weightUnit` / `distanceUnit` below
+    // BEFORE interpreting `weight` or `distance` — since audit L4 these columns
+    // no longer share a single convention across rows:
     //
-    //   weight   — the athlete's OWN unit at write time (kg or lbs), NOT
-    //              canonical. Never compare across a preference change; never
-    //              render with a hardcoded suffix. See the S5 sentinel in
-    //              shared/unitConversion.ts.
-    //   distance — likewise the athlete's own STORED unit: metres for a km
-    //              athlete, FEET for a miles athlete (getStoredDistanceUnit).
-    //   time     — MINUTES, canonical for every athlete. Fractional values are
-    //              expected: a 45-second step target is 0.75. Anything arriving
-    //              in seconds must be converted at the boundary
-    //              (shared/units.ts secondsToMinutes), never assigned across.
+    //   weightUnit / distanceUnit SET  → the value is in THAT unit, whatever
+    //              the athlete prefers today. Every row written since the L4
+    //              migration says which unit it was written in, so a later
+    //              preference switch converts instead of reinterpreting.
+    //   weightUnit / distanceUnit NULL → the row is LEGACY: the value is in the
+    //              athlete's own unit AT WRITE TIME, and that unit was never
+    //              recorded. It is unrecoverable — `users.weight_unit` is a
+    //              bare scalar with no history (contrast `training_style_*`,
+    //              which does record previous + changed_at). Legacy rows are
+    //              read as the athlete's CURRENT preference, which is exactly
+    //              what the whole codebase did before L4; it is right for an
+    //              athlete who never switched and wrong by ~2.2x for one who
+    //              did. Backfilling them needs an assumption about real user
+    //              data, so they are left alone rather than guessed at.
+    //
+    // Read a stamped value through `storedWeightToDisplay` /
+    // `storedDistanceToDisplay` (shared/unitConversion.ts) rather than raw. A
+    // read that has not been updated yet is still correct for an athlete whose
+    // preference has not changed, which is why the stamp could be added without
+    // touching all 23 read sites at once.
+    //
+    //   time     — MINUTES, canonical for every athlete and every row.
+    //              Fractional values are expected: a 45-second step target is
+    //              0.75. Anything arriving in seconds must be converted at the
+    //              boundary (shared/units.ts secondsToMinutes), never assigned
+    //              across.
+    //
+    // Undocumented unit conventions here produced three separate 60x errors and
+    // two mislabelled renders (audit C7, H1, H2, H16, M8, L1).
     weight: real("weight"),
     distance: real("distance"),
     time: real("time"),
+    // The unit `weight` is stored in: "kg" or "lbs" on rows written since L4,
+    // NULL on legacy rows. Also what makes canonicalising possible later — the
+    // reason pre-L4 rows cannot be converted is precisely that this is unknown
+    // for them.
+    weightUnit: varchar("weight_unit", { length: 8 }),
+    // The unit `distance` is stored in: "m" or "ft" (the STORED distance unit,
+    // per getStoredDistanceUnit — a miles athlete stores feet). See weightUnit.
+    distanceUnit: varchar("distance_unit", { length: 8 }),
     // Planned counterparts snapshot the prescription and carry the SAME units
     // as the actuals above.
     plannedReps: integer("planned_reps"),

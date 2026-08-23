@@ -13,7 +13,7 @@ import {
   type WorkoutLog,
   type WorkoutSuggestion,
 } from "@shared/schema";
-import { userWeightToKg } from "@shared/unitConversion";
+import { storedWeightToKg } from "@shared/unitConversion";
 
 export type LoadVector = LoadGovernorVector;
 
@@ -67,6 +67,13 @@ export type TrainingLoadSet = {
   plannedWeight?: number | null;
   plannedDistance?: number | null;
   plannedTime?: number | null;
+  /**
+   * The units this row's numbers are actually in (audit L4). Present on every
+   * row written since the unit stamp; absent on legacy rows, which fall back to
+   * the athlete's current preference exactly as before.
+   */
+  weightUnit?: string | null;
+  distanceUnit?: string | null;
 };
 
 export interface PromptExerciseForLoad {
@@ -324,7 +331,13 @@ function rpeFactor(rpe: number | null | undefined): number {
 export function calculateStrengthStressScore(
   set: Pick<
     TrainingLoadSet,
-    "reps" | "weight" | "plannedReps" | "plannedWeight" | "distance" | "plannedDistance"
+    | "reps"
+    | "weight"
+    | "plannedReps"
+    | "plannedWeight"
+    | "distance"
+    | "plannedDistance"
+    | "weightUnit"
   >,
   tag: ExerciseLoadTagInput,
   rpe?: number | null,
@@ -334,11 +347,19 @@ export function calculateStrengthStressScore(
 ): number {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
   // UTSS must represent physiological load, not the athlete's display unit, so
-  // normalize the stored weight (kept in the user's unit — see the S5 sentinel
-  // in shared/unitConversion) to canonical kg before computing tonnage. This
+  // normalize the stored weight to canonical kg before computing tonnage. This
   // keeps the absolute governor thresholds and the weighted-vs-bodyweight mix
   // comparable across kg and lb athletes. Read-only: we never write this back.
-  const weight = userWeightToKg(Number(set.weight ?? set.plannedWeight ?? 0), weightUnit);
+  //
+  // A row carrying its own unit stamp is converted from THAT unit, so an
+  // athlete who switched preference no longer has their pre-switch training
+  // silently re-priced (audit L4). A legacy row still falls back to the current
+  // preference, which is the same assumption this line made before — right
+  // until the athlete switches, and unfixable without knowing what they used to
+  // prefer.
+  const weight = storedWeightToKg(Number(set.weight ?? set.plannedWeight ?? 0), set, {
+    weightUnit,
+  });
   const distance = Number(set.distance ?? set.plannedDistance ?? 0);
   let weightedTonnage = 0;
   if (weight > 0 && reps > 0) {

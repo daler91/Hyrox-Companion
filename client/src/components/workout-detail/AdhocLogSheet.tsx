@@ -75,7 +75,12 @@ function makeAdhocRow(seed: RowSeed): ExerciseSet {
     setNumber: seed.setNumber,
     reps: seed.reps ?? null,
     weight: seed.weight ?? null,
+    // A client-side DRAFT holds what the athlete typed and is never persisted
+    // from here — the server stamps the unit on ingestion (audit L4). Unstamped
+    // is therefore the correct shape for a draft row.
+    weightUnit: null,
     distance: seed.distance ?? null,
+    distanceUnit: null,
     time: seed.time ?? null,
     plannedReps: seed.plannedReps ?? null,
     plannedWeight: seed.plannedWeight ?? null,

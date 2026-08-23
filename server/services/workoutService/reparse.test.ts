@@ -186,7 +186,7 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
       rejectionReasons: [],
       fallbackUsed: false,
     });
-    expect(expandMock).toHaveBeenCalledWith(rows, { workoutLogId: "w1" }, "workout");
+    expect(expandMock).toHaveBeenCalledWith(rows, { workoutLogId: "w1" }, "workout", UNITS);
     expect(replaceMock).toHaveBeenCalledWith({ workoutLogId: "w1" }, [{}, {}], undefined);
     expect(counterMock).toHaveBeenCalledWith("workout_log", "manual", MANUAL_FIX);
   });
@@ -227,7 +227,7 @@ describe("reparseWorkout / reparsePlanDay (text)", () => {
   it("targets the plan-day owner and plan context", async () => {
     textMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
     await reparsePlanDay({ id: "p1", mainWorkout: "squats" }, UNITS);
-    expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan");
+    expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan", UNITS);
     expect(counterMock).toHaveBeenCalledWith("plan_day", "manual", MANUAL_FIX);
   });
 });
@@ -253,7 +253,7 @@ describe("reparseWorkoutFromImage / reparsePlanDayFromImage", () => {
       customExerciseNames: ["my_lift"],
       userId: "user1",
     });
-    expect(expandMock).toHaveBeenCalledWith([ex("squat")], { workoutLogId: "w1" }, "workout");
+    expect(expandMock).toHaveBeenCalledWith([ex("squat")], { workoutLogId: "w1" }, "workout", UNITS);
     expect(counterMock).toHaveBeenCalledWith("workout_log", "photo", MANUAL_FIX);
   });
 
@@ -273,7 +273,7 @@ describe("reparseWorkoutFromImage / reparsePlanDayFromImage", () => {
   it("targets the plan-day owner for plan-day images", async () => {
     imageMock.mockResolvedValue(parseResult({ acceptedRows: [ex("squat")] }));
     await reparsePlanDayFromImage({ id: "p1" }, image, UNITS, "user1");
-    expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan");
+    expect(expandMock).toHaveBeenCalledWith([ex("squat")], { planDayId: "p1" }, "plan", UNITS);
     expect(counterMock).toHaveBeenCalledWith("plan_day", "photo", MANUAL_FIX);
   });
 

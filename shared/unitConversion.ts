@@ -20,20 +20,41 @@ export interface WorkoutDistanceDisplay {
 /**
  * 🛡️ Sentinel: unit-storage invariant (S5).
  *
- * Weights and distances in `workout_logs` / `exercise_sets` are stored in the
- * USER'S CURRENT preferred unit at the time of writing — not a canonical SI
- * unit. The Gemini parser and the manual log form both convert incoming text
- * to the user's current `weightUnit` / `distanceUnit` before insert.
+ * Weights and distances in `exercise_sets` are stored in the athlete's own unit
+ * at the time of writing, not a canonical SI unit. Since audit L4 each row also
+ * RECORDS that unit, in `weight_unit` / `distance_unit`.
  *
- * Consequences:
+ * A correction to what this sentinel used to say: it claimed "the Gemini parser
+ * and the manual log form both convert incoming text to the user's current
+ * weightUnit before insert". The parser and plan generation do. The manual log
+ * form does NOT and never did — `expandExercisesToSetRows` was called with no
+ * unit preferences at all, and the number the client sent was stored verbatim.
+ * It happened to be right, because that number was already in the athlete's
+ * unit, but nothing in the write path was enforcing it.
+ *
+ * Two kinds of row now exist:
+ *   STAMPED (every row written since L4) — `weight_unit` says "kg" or "lbs",
+ *      `distance_unit` says "m" or "ft". The value means that, permanently.
+ *      Read it through `storedWeightToDisplay` / `storedDistanceToDisplay` and
+ *      a later preference switch converts instead of reinterpreting.
+ *   LEGACY (everything written before) — the columns are NULL. The unit is
+ *      whatever the athlete preferred at write time and was never recorded, so
+ *      it is UNRECOVERABLE: `users.weight_unit` is a bare scalar with no
+ *      history, unlike `training_style_previous_id` / `training_style_changed_at`
+ *      right beside it. These rows are read as the athlete's CURRENT preference
+ *      — correct for anyone who never switched, wrong by ~2.2x for anyone who
+ *      did, and not fixable in code.
+ *
+ * Consequences that still hold:
  *   1. Round-tripping a stored value through convert*() back to itself will
  *      exhibit floating-point drift (100 kg → 220.462 lbs → 99.99997 kg).
  *      Never read-convert-write a stored weight/distance.
- *   2. Changing a user's unit preference does NOT migrate historical rows.
- *      Analytics stacks the raw numbers, so a user who switches from kg to
- *      lbs mid-history will see an apparent ~2.2x jump. We accept this
- *      trade-off today; a canonicalization migration is tracked as future
- *      work (see docs/state-management.md).
+ *   2. Changing a unit preference still does not migrate historical rows, and
+ *      LEGACY rows will still show the ~2.2x jump. Stamped rows will not, once
+ *      the read path they flow through is unit-aware. Read paths are being
+ *      converted incrementally — an un-updated one is still correct for an
+ *      athlete whose preference has not changed, which is exactly why the stamp
+ *      could be introduced without touching all 23 of them at once.
  *
  * The `kgToUserWeight` / `userWeightToKg` helpers below are provided for
  * integration code that receives canonical units from third parties (e.g.
@@ -41,13 +62,11 @@ export interface WorkoutDistanceDisplay {
  * stored value (consequence 1).
  *
  * Sanctioned read-only exception: the training-load service normalizes stored
- * weights to canonical kg via `userWeightToKg(weight, user.weightUnit)` purely
- * to compute UTSS (it never writes the result back). UTSS must represent
- * physiological load, not the athlete's display unit, so the absolute governor
- * thresholds and the weighted-vs-bodyweight mix stay comparable across kg and
- * lb athletes. The only residual imperfection is the mid-history unit switch
- * already noted in consequence 2; the proper fix remains the tracked
- * canonicalization migration.
+ * weights to kg to compute UTSS (never writing the result back), so that the
+ * absolute governor thresholds and the weighted-vs-bodyweight mix stay
+ * comparable across kg and lb athletes. It now goes through `storedWeightToKg`,
+ * which is exact for a stamped row and falls back to the old current-preference
+ * assumption only for a legacy one.
  */
 
 const KG_TO_LBS = 2.20462;
@@ -298,6 +317,114 @@ export function roundStoredWeight(value: number, weightUnit: string): number {
 
 export function roundStoredDistance(value: number): number {
   return Number.isFinite(value) ? Math.round(value) : value;
+}
+
+// ---------------------------------------------------------------------------
+// Per-row unit stamps (audit L4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every NEW exercise_sets row records the unit its numbers are in, in
+ * `weight_unit` / `distance_unit`.
+ *
+ * Before L4 a stored weight meant "a number in whatever unit the athlete
+ * preferred at write time", and that unit was never written down — so switching
+ * kg <-> lbs reinterpreted the athlete's whole history and analytics showed a
+ * ~2.2x step change on the day they toggled a display preference.
+ *
+ * The value itself is stored UNCHANGED, in the athlete's own unit. Storing one
+ * canonical unit instead would also fix the switch, but it would make every one
+ * of the 23 places that read a set wrong until each was taught to convert back,
+ * and a missed one shows a lbs athlete kilos labelled as pounds. Recording the
+ * unit fixes the same bug while leaving every existing read correct for the
+ * athlete who never switches, so read paths can be corrected one at a time
+ * instead of all at once.
+ *
+ * It is also the prerequisite for canonicalising later, history included: the
+ * reason old rows cannot be converted today is that nobody knows what unit they
+ * are in. From here on, that is known.
+ */
+
+/** A stored row's unit stamp. Null/undefined means a pre-L4 row (see below). */
+export interface StoredUnitStamp {
+  readonly weightUnit?: string | null;
+  readonly distanceUnit?: string | null;
+}
+
+/** The stamp to write on a new row: the units the athlete is working in. */
+export function stampForPreferences(preferences: UnitPreferences): {
+  weightUnit: WeightUnit;
+  distanceUnit: StoredDistanceUnit;
+} {
+  return {
+    weightUnit: standardizeWeightUnit(preferences.weightUnit),
+    distanceUnit: getStoredDistanceUnit(preferences.distanceUnit),
+  };
+}
+
+/**
+ * Read a stored weight as the athlete should see it now.
+ *
+ *   stamped, unit unchanged → identity. The overwhelmingly common case, and why
+ *                 an un-updated read path stays correct.
+ *   stamped, unit changed   → convert from the unit it was written in. THIS is
+ *                 the ~2.2x jump that L4 is about, and the only case whose
+ *                 answer differs from what the code did before.
+ *   unstamped (legacy)      → pass through unchanged, exactly as every read path
+ *                 did before L4: right for an athlete who never switched, wrong
+ *                 for one who did, and not fixable without knowing what they
+ *                 used to prefer.
+ */
+export function storedWeightToDisplay(
+  value: number,
+  stamp: StoredUnitStamp,
+  preferences: UnitPreferences,
+): number {
+  if (!stamp.weightUnit) return value;
+  const displayUnit = standardizeWeightUnit(preferences.weightUnit);
+  if (standardizeWeightUnit(stamp.weightUnit) === displayUnit) return value;
+  return roundStoredWeight(convertWeight(value, stamp.weightUnit, displayUnit), displayUnit);
+}
+
+/** Read a stored distance as the athlete should see it now. See storedWeightToDisplay. */
+export function storedDistanceToDisplay(
+  value: number,
+  stamp: StoredUnitStamp,
+  preferences: UnitPreferences,
+): number {
+  if (!stamp.distanceUnit) return value;
+  const displayUnit = getStoredDistanceUnit(preferences.distanceUnit);
+  const storedUnit = standardizeParsedDistanceUnit(stamp.distanceUnit) ?? displayUnit;
+  if (storedUnit === displayUnit) return value;
+  return roundStoredDistance(
+    metersToStoredDistance(parsedDistanceToMeters(value, storedUnit), displayUnit),
+  );
+}
+
+/**
+ * A stored weight in kg, for load maths that must not see display units.
+ *
+ * A stamped row is exact. A legacy row falls back to the athlete's CURRENT
+ * preference — the same sanctioned read-only assumption trainingLoadService
+ * already made before L4, and the same one that is wrong after a switch.
+ */
+export function storedWeightToKg(
+  value: number,
+  stamp: StoredUnitStamp,
+  preferences: UnitPreferences,
+): number {
+  const unit = stamp.weightUnit ?? preferences.weightUnit;
+  return userWeightToKg(value, standardizeWeightUnit(unit));
+}
+
+/** A stored distance in metres. See storedWeightToKg. */
+export function storedDistanceToMetersStamped(
+  value: number,
+  stamp: StoredUnitStamp,
+  preferences: UnitPreferences,
+): number {
+  const unit = stamp.distanceUnit ?? getStoredDistanceUnit(preferences.distanceUnit);
+  return parsedDistanceToMeters(value, standardizeParsedDistanceUnit(unit) ?? "m");
 }
 
 export function normalizeParsedWeight(

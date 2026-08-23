@@ -138,7 +138,7 @@ async function reparseFromText(
 
   const { acceptedRows, rejectedRows, fallbackUsed, structureBlocks } =
     await parseWorkoutStructureFromTextWithDiagnostics(textToParse.trim(), unitPreferences);
-  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, fallbackUsed);
+  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, fallbackUsed, unitPreferences);
 }
 
 function buildReparseWriteThroughResult(
@@ -165,10 +165,14 @@ async function writeParsedStructure(
   rejectedCount: number,
   structureBlocks: StructureBlockInput[],
   fallbackUsed: boolean,
+  unitPreferences: UnitPreferences,
 ): Promise<ReparseWriteThroughResult | null> {
   if (acceptedRows.length === 0 && structureBlocks.length === 0) return null;
 
-  const setRows = acceptedRows.length > 0 ? expandExercisesToRows(acceptedRows, owner, context) : [];
+  const setRows =
+    acceptedRows.length > 0
+      ? expandExercisesToRows(acceptedRows, owner, context, unitPreferences)
+      : [];
   const setCount = await replaceExerciseSetsAndStructureByOwner(
     owner,
     setRows,
@@ -227,7 +231,7 @@ async function reparseFromImage(
     customExerciseNames,
     userId,
   });
-  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, false);
+  return writeParsedStructure(owner, context, source, acceptedRows, rejectedRows.length, structureBlocks, false, unitPreferences);
 }
 
 /**

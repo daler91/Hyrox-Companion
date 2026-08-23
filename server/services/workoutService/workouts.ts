@@ -19,6 +19,7 @@ import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../../queue";
 import { storage } from "../../storage";
+import { loadUnitPreferences } from "../unitPreferences";
 import { persistAdherenceSnapshot } from "./adherence";
 import { expandExercisesToSetRows,extractAndDeduplicateCustomExercises } from "./setRows";
 import {
@@ -109,7 +110,10 @@ async function insertClientSuppliedExercises(
   workoutLogId: string,
   userId: string,
 ): Promise<ExerciseSet[]> {
-  const rows = expandExercisesToSetRows(exercises, workoutLogId);
+  // The client sends what the athlete typed, in the athlete's own display unit
+  // — this path does no conversion of its own and never did. The row builder
+  // records which unit that was (audit L4).
+  const rows = expandExercisesToSetRows(exercises, workoutLogId, await loadUnitPreferences(userId));
   const savedSets = await tx.insert(exerciseSets).values(rows).returning();
 
   const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
@@ -285,7 +289,11 @@ export async function updateWorkout(
       await tx.delete(exerciseSets).where(eq(exerciseSets.workoutLogId, log.id));
 
       if (exercises.length > 0) {
-        const exerciseSetData = expandExercisesToSetRows(exercises, log.id);
+        const exerciseSetData = expandExercisesToSetRows(
+          exercises,
+          log.id,
+          await loadUnitPreferences(userId),
+        );
         const savedSets = await tx.insert(exerciseSets).values(exerciseSetData).returning();
 
         const uniqueCustomExs = extractAndDeduplicateCustomExercises(exercises, userId);
