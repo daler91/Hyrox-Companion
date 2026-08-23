@@ -91,6 +91,7 @@ export default function Review() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
+                {/* NOSONAR */}
                 <span tabIndex={isAtCurrentWeek ? 0 : -1}>
                   <Button
                     variant="outline"

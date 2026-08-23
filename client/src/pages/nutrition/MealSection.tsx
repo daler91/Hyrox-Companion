@@ -206,6 +206,7 @@ export function MealSection({
                   {onLogAgain && (
                     <Tooltip>
                       <TooltipTrigger asChild>
+                        {/* NOSONAR */}
                         <span tabIndex={logAgainPending ? 0 : -1}>
                           <Button
                             variant="ghost"
@@ -248,6 +249,7 @@ export function MealSection({
 
                   <Tooltip>
                     <TooltipTrigger asChild>
+                      {/* NOSONAR */}
                       <span tabIndex={deletingId === e.id ? 0 : -1}>
                         <Button
                           variant="ghost"

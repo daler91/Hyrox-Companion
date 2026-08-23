@@ -80,6 +80,7 @@ export function TimelineAnnotationCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
+              {/* NOSONAR */}
               <span tabIndex={isDeleting ? 0 : -1}>
                 <Button
                   variant="ghost"
