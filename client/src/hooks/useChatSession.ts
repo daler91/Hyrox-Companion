@@ -16,13 +16,29 @@ function createMessageUpdater(
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
 ) {
   return (snapshot: { content: string; meta?: RagInfo }) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === assistantMessageId
-          ? { ...m, content: snapshot.content, ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}) }
-          : m,
-      ),
-    );
+    // ⚡ Bolt Performance Optimization:
+    // The streaming placeholder is always the last element in `messages` —
+    // it's pushed immediately before the stream starts, and nothing else
+    // appends while a stream is in flight (sendMessage is re-entrancy-guarded
+    // by isSubmittingRef). A multi-second AI-coach response can trigger
+    // dozens of rAF-batched flushes (consumeSSEStream), and each one used to
+    // run a full `.map()` over every message to find the one to update —
+    // O(messages) work per flush on a conversation that can hold 50+ loaded
+    // messages. Since the target is provably at a fixed position, update the
+    // tail directly instead of rescanning the whole array.
+    setMessages((prev) => {
+      const lastIndex = prev.length - 1;
+      const last = prev[lastIndex];
+      if (!last || last.id !== assistantMessageId) return prev; // defensive no-op
+      const updated: Message = {
+        ...last,
+        content: snapshot.content,
+        ...(snapshot.meta ? { ragInfo: snapshot.meta } : {}),
+      };
+      const next = prev.slice(0, lastIndex);
+      next.push(updated);
+      return next;
+    });
   };
 }
 
