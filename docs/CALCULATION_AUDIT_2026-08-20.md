@@ -684,14 +684,48 @@ not and never did** — `expandExercisesToSetRows` was called with no unit prefe
 client's number was stored verbatim. It happened to be right, because that number was already in the
 athlete's unit, but nothing in the write path was enforcing it.
 
-### Not done: the legacy tail
+### The legacy tail — a detector, so the decision rests on a fact (2026-08-23)
 
-Rows written before this migration keep `NULL` units and are read as the athlete's current
+Rows written before the migration keep `NULL` units and are read as the athlete's current
 preference — exactly what every read path did before. Right for an athlete who never switched, wrong
-by ~2.2× for one who did, and not fixable in code. Closing it needs a decision about real user data:
-assume nobody switched, ask each athlete to confirm, or detect the ~2.2× discontinuity in their
-history and offer it for confirmation rather than applying it silently. Recorded here rather than
-guessed at.
+by ~2.2× for one who did.
+
+All three ways of closing it — assume nobody switched, ask each athlete, or detect the discontinuity
+— turn out to need the **same fact first**: which athletes actually switched. If none did, stamping
+every legacy row with that athlete's current preference stops being an assumption and becomes
+provable. If some did, a blanket stamp corrupts exactly those and nobody else.
+
+So the fact comes first. `server/services/unitSwitchDetection.ts` and the read-only
+`script/audit-legacy-unit-rows.ts` answer it. **The script writes nothing.**
+
+**What the signal is.** A unit switch is not a training change. Getting stronger moves ONE exercise,
+gradually. Toggling kg → lbs multiplies EVERY exercise by the same factor on the same day. The
+detector looks for a date where several different exercises all jump by 2.20462 (or 3.28084 for
+metres → feet) at once, and reports the evidence rather than acting on it.
+
+Three things it took to make that trustworthy, each pinned by a test:
+
+1. **Compare an exercise against itself.** Otherwise "they started deadlifting" reads as a jump.
+2. **Collapse to one value per exercise per day first.** Warm-up and working sets are separate rows,
+   so a single day's back squat legitimately spans 60 → 140 — a 2.33× range, wider than the
+   conversion factor. Raw sets would read that as a switch; a daily median reads it as a session.
+3. **Reject a boundary where either side still straddles the factor.** This was a real bug in the
+   first version, caught by its own test: at a boundary too early in the history the "after" side
+   still holds pre-switch days, its median is dragged up, and the ratio lands on exactly 2.2 —
+   agreeing for the wrong reason. It found *a* boundary rather than *the* boundary, and a human
+   splitting the history there would have converted days that were already in the new unit.
+
+**The blind spot, stated because it is structural.** An athlete who switched and then logged nothing
+has no discontinuity to find; neither does one who switched before logging at all. A null from the
+boundary test is "no evidence of a switch", never "no switch". `describeUnitPlausibility` covers
+part of that gap by reading whether someone's typical logged weight looks like the unit they claim —
+a "lbs" athlete whose median lift is 60 is probably holding kilos — but it is deliberately weak,
+declines to judge inside the 60–140 band where both units are plausible, and declines entirely below
+five data points rather than turning absence of evidence into evidence of absence. It flags for a
+human; it never converts.
+
+**What is still not decided.** The script produces the fact; the fact chooses the option. Running it
+needs the production database, which the audit environment has no access to.
 
 ---
 
