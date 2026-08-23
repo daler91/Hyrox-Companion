@@ -323,6 +323,29 @@ function isCardioSet(set: TrainingLoadSet): boolean {
   );
 }
 
+/**
+ * The strength RPE multiplier: flat at 1.000 up to RPE 6, then exponential.
+ *
+ * Deliberately NOT the shape the cardio branch uses (`0.6 + (rpe/10)^2 * 2`,
+ * monotonic across the whole range), and deliberately left alone (audit M25).
+ *
+ * The two curves differ because the fatigue does. Cardiovascular stress scales
+ * relatively cleanly down toward zero with effort, but sub-maximal strength
+ * fatigue is driven mostly by base mechanical volume: 5x5 back squat at RPE 5
+ * still imposes real mechanical tension and neurological demand. If this decayed
+ * below RPE 6 the way the cardio curve does, heavy low-RPE speed and technique
+ * work — which is genuinely fatiguing — would score near-zero UTSS.
+ *
+ * So `max(0, rpe - 6)` encodes a specific claim: below RPE 6 tonnage alone
+ * dictates the load, and an exponential effort penalty applies only once sets
+ * begin approaching muscular failure at RPE 7+. That is why a deload at RPE 4
+ * scores the same as the same tonnage at RPE 6 — the tonnage IS the stimulus.
+ *
+ * Changing it would move UTSS for every sub-RPE-6 strength set ever logged, and
+ * with it every governor threshold and ACWR baseline calibrated against the
+ * current scale — an unnecessary recalibration of the whole governor for a curve
+ * that already matches how strength fatigue accumulates.
+ */
 function rpeFactor(rpe: number | null | undefined): number {
   if (!rpe) return 1;
   return round(Math.pow(1.18, Math.max(0, rpe - 6)), 3);
@@ -800,9 +823,30 @@ function computeMonotonyStrain(
   // No load at all this week: monotony is undefined, not low and not high.
   if (mean === 0) return { monotony: null, strain: null };
 
+  // SAMPLE standard deviation, / (n - 1), matching the convention Foster's 2.0
+  // threshold was derived under (audit M26).
+  //
+  // This used to divide by n. The comment justifying that claimed it kept "a
+  // single hard day in an otherwise-easy week finite", which is not true —
+  // both conventions are finite for any week that is not perfectly flat, and
+  // the sd === 0 branch below is what actually handles flatness.
+  //
+  // The convention is not cosmetic, because monotony is read against an
+  // absolute threshold taken from the literature. Foster's 1998 threshold was
+  // established with the statistical tooling of the time — SPSS and Excel's
+  // STDEV — both of which default to the sample equation; and sports-science
+  // methodology treats a 7-day microcycle as a SAMPLE of the athlete's ongoing
+  // macrocycle, not a closed population. Dividing by n made sd smaller and
+  // monotony correspondingly larger: every score ran 8.01% above what the 2.0
+  // threshold was calibrated for, so an athlete whose true monotony was 1.85
+  // read 2.00 and was flagged for overtraining.
+  //
+  // Correcting it moves every athlete's score DOWN by 7.42% (the reciprocal of
+  // the same sqrt(7/6) ratio). The window is gated to exactly 7 whole days by
+  // `availableFrom`, so the n - 1 denominator is always 6 and never zero.
   let sumSquaredDeviation = 0;
   for (const v of values) sumSquaredDeviation += (v - mean) * (v - mean);
-  const sd = Math.sqrt(Math.max(0, sumSquaredDeviation / count));
+  const sd = Math.sqrt(Math.max(0, sumSquaredDeviation / (count - 1)));
 
   const monotony = sd === 0 ? MONOTONY_CEILING : Math.min(round(mean / sd, 2), MONOTONY_CEILING);
   return { monotony, strain: round(total * monotony, 1) };

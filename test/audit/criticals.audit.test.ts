@@ -141,7 +141,18 @@ describe("C1 — Foster monotony for perfectly uniform training (FIXED)", () => 
     expect(monotonyZone(null)).toBe("unknown");
   });
 
-  /** A varied week is scored normally — the control that the metric still works. */
+  /**
+   * A varied week is scored normally — the control that the metric still works.
+   *
+   * This asserted "high_risk" until M26 corrected the SD convention, and the
+   * change of answer is the point rather than a regression. Monotony is read
+   * against an ABSOLUTE threshold taken from Foster, and dividing by n instead
+   * of n - 1 ran every score 8.01% above what that threshold was calibrated
+   * for. This exact week is what that looks like on a real athlete: it scored
+   * 2.091 and was flagged for overtraining, and scores 1.936 under the
+   * convention the 2.0 threshold actually came from. Same training, and it was
+   * never over the line.
+   */
   it("scores a varied week correctly (control)", () => {
     const varied = [10, 6, 12, 0, 9, 11, 7].map((minutes, i) =>
       log({ id: `log-${i}`, date: shiftDate(TODAY, -i), duration: minutes * 6, rpe: 7 }),
@@ -149,7 +160,10 @@ describe("C1 — Foster monotony for perfectly uniform training (FIXED)", () => 
     const today = loadToday(varied);
 
     expect(today.monotony).not.toBeNull();
-    expect(monotonyZone(today.monotony)).toBe("high_risk");
+    // Still measured and still discriminating — the control's actual job.
+    expect(monotonyZone(today.monotony)).toBe("elevated");
+    expect(today.monotony!).toBeGreaterThan(1.5);
+    expect(today.monotony!).toBeLessThan(2);
   });
 });
 
