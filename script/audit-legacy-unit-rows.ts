@@ -189,6 +189,12 @@ async function main(): Promise<void> {
   }, {});
   const legacyRows = reports.reduce((n, r) => n + r.legacyWeightRows + r.legacyDistanceRows, 0);
 
+  // The whole question, as one named boolean: can every legacy row be stamped
+  // with its athlete's current preference, or did somebody change units and
+  // would a blanket stamp therefore corrupt exactly them?
+  const everyAthleteIsSafeToStamp =
+    (counts.needs_split ?? 0) === 0 && (counts.needs_review ?? 0) === 0;
+
   // bearer:disable javascript_lang_logger_leak — counts and a fixed conclusion
   // string only. No athlete identifier and no logged value reaches this line.
   logger.info(
@@ -196,11 +202,9 @@ async function main(): Promise<void> {
       athletes: reports.length,
       legacyRows,
       ...counts,
-      // The line that decides the whole question.
-      conclusion:
-        (counts.needs_split ?? 0) === 0 && (counts.needs_review ?? 0) === 0
-          ? "No athlete shows a unit switch. Stamping legacy rows with each athlete's current preference is correct, not assumed."
-          : "Some athletes changed units mid-history. A blanket stamp would corrupt exactly those, so they need splitting or asking.",
+      conclusion: everyAthleteIsSafeToStamp
+        ? "No athlete shows a unit switch. Stamping legacy rows with each athlete's current preference is correct, not assumed."
+        : "Some athletes changed units mid-history. A blanket stamp would corrupt exactly those, so they need splitting or asking.",
     },
     "[legacy-units] summary",
   );
