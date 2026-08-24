@@ -268,6 +268,8 @@ Individual exercise sets. Each row is either **prescribed** (owned by a `plan_da
 | `weight` | `real` | nullable (actual) |
 | `distance` | `real` | nullable (actual) |
 | `time` | `real` | nullable (actual) |
+| `weight_unit` | `varchar(8)` | nullable — unit `weight` is stored in (`kg`/`lbs`); NULL on legacy rows written before this column existed |
+| `distance_unit` | `varchar(8)` | nullable — unit `distance` is stored in (`m`/`ft`); NULL on legacy rows written before this column existed |
 | `planned_reps` | `integer` | nullable (prescription snapshot) |
 | `planned_weight` | `real` | nullable (prescription snapshot) |
 | `planned_distance` | `real` | nullable (prescription snapshot) |
@@ -694,6 +696,7 @@ Durable "last computed result" for the expensive analytics surfaces (Coach Insig
 | `payload` | jsonb | Not null -- the serialized feature result |
 | `generated_at` | timestamp with time zone | Not null, default `now()` |
 | `last_workout_date_at_generation` | date | Nullable -- the athlete's latest logged workout date (YYYY-MM-DD) when this result was generated; the staleness anchor the cron compares against |
+| `entry_count_at_generation` | integer | Nullable -- how many rows the athlete's anchor table (workout logs) held at generation time; catches a change that leaves the date untouched (e.g. a second session on the same day). NULL on rows written before this column existed, read as "no count recorded" |
 | `recomputed_on` | date | Nullable -- local calendar date of the last cron recompute; the once-per-day claim guard against duplicate recomputes |
 | `updated_at` | timestamp with time zone | Not null, default `now()` |
 
