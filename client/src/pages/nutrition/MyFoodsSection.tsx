@@ -69,17 +69,19 @@ export function MyFoodsSection({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Delete ${r.name}`}
-                          disabled={isDeleting}
-                          onClick={() =>
-                            setPendingDelete({ kind: "recipe", id: r.id, name: r.name })
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <span tabIndex={isDeleting ? 0 : -1}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Delete ${r.name}`}
+                            disabled={isDeleting}
+                            onClick={() =>
+                              setPendingDelete({ kind: "recipe", id: r.id, name: r.name })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Delete {r.name}</p>
@@ -123,15 +125,17 @@ export function MyFoodsSection({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Delete ${f.name}`}
-                          disabled={isDeleting}
-                          onClick={() => setPendingDelete({ kind: "food", id: f.id, name: f.name })}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <span tabIndex={isDeleting ? 0 : -1}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Delete ${f.name}`}
+                            disabled={isDeleting}
+                            onClick={() => setPendingDelete({ kind: "food", id: f.id, name: f.name })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Delete {f.name}</p>

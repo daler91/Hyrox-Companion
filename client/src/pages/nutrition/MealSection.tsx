@@ -206,20 +206,22 @@ export function MealSection({
                   {onLogAgain && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Log ${e.name} again today`}
-                          onClick={() => onLogAgain(e)}
-                          disabled={logAgainPending}
-                          data-testid={`button-log-again-${e.id}`}
-                        >
-                          {logAgainPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RotateCw className="h-4 w-4" />
-                          )}
-                        </Button>
+                        <span tabIndex={logAgainPending ? 0 : -1}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Log ${e.name} again today`}
+                            onClick={() => onLogAgain(e)}
+                            disabled={logAgainPending}
+                            data-testid={`button-log-again-${e.id}`}
+                          >
+                            {logAgainPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCw className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </span>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>{logAgainPending ? "Logging…" : "Log again today"}</p>
@@ -246,16 +248,18 @@ export function MealSection({
 
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${e.name}`}
-                        onClick={() => setPendingDelete({ id: e.id, name: e.name })}
-                        disabled={deletingId === e.id}
-                        data-testid={`button-delete-${e.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <span tabIndex={deletingId === e.id ? 0 : -1}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete ${e.name}`}
+                          onClick={() => setPendingDelete({ id: e.id, name: e.name })}
+                          disabled={deletingId === e.id}
+                          data-testid={`button-delete-${e.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Delete {e.name}</p>

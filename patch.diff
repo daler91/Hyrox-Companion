@@ -1,18 +1,35 @@
---- server/services/structuredExerciseHealth.ts
-+++ server/services/structuredExerciseHealth.ts
-@@ -113,6 +113,7 @@
-   const currentPct = Number(wow?.current_pct ?? 0);
-   const prevPct = Number(wow?.prev_pct ?? 0);
-   if (prevPct > 0 && currentPct > prevPct * 1.1) {
-+    // bearer:disable javascript_lang_logger_leak - static context strings and percentage counts, no PII
-     logger.warn(
-       { context: "health-alert", event: "legacy_only_pct_wow_rise", currentPct, prevPct, day },
-       "Legacy-only percentage rose >10% week-over-week",
-@@ -126,6 +127,7 @@
-   `);
-   const rejectedTotal = Number(rejectedWrites.rows[0]?.total ?? 0);
-   if (rejectedTotal >= 20) {
-+    // bearer:disable javascript_lang_logger_leak - static context strings and aggregate count, no PII
-     logger.warn(
-       { context: "health-alert", event: "rejected_text_only_write_spike", day, rejectedTotal },
-       "Rejected text-only writes spiked; verify non-legacy clients are sending exercise_sets",
+<<<<<<< SEARCH
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        aria-label={`Remove ${s.label}`}
+                        disabled={removeServing.isPending}
+                        onClick={() => handleRemovePortion(s)}
+                        data-testid="button-remove-portion"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+=======
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={removeServing.isPending ? 0 : -1}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          aria-label={`Remove ${s.label}`}
+                          disabled={removeServing.isPending}
+                          onClick={() => handleRemovePortion(s)}
+                          data-testid="button-remove-portion"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+>>>>>>> REPLACE

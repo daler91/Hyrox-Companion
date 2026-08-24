@@ -532,17 +532,19 @@ function LogFoodForm({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        aria-label={`Remove ${s.label}`}
-                        disabled={removeServing.isPending}
-                        onClick={() => handleRemovePortion(s)}
-                        data-testid="button-remove-portion"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <span tabIndex={removeServing.isPending ? 0 : -1}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          aria-label={`Remove ${s.label}`}
+                          disabled={removeServing.isPending}
+                          onClick={() => handleRemovePortion(s)}
+                          data-testid="button-remove-portion"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Remove {s.label}</p>
