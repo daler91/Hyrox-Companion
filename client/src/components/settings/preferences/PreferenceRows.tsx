@@ -36,14 +36,24 @@ export function PreferenceSelectRow({
   testId,
   triggerClassName,
 }: PreferenceSelectRowProps) {
+  const descId = `${testId}-desc`;
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="space-y-1">
-        <Label htmlFor={testId} className="cursor-pointer">{label}</Label>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <Label htmlFor={testId} className="cursor-pointer">
+          {label}
+        </Label>
+        <p id={descId} className="text-sm text-muted-foreground">
+          {description}
+        </p>
       </div>
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger id={testId} className={cn("w-24", triggerClassName)} data-testid={testId}>
+        <SelectTrigger
+          id={testId}
+          className={cn("w-24", triggerClassName)}
+          data-testid={testId}
+          aria-describedby={descId}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -79,13 +89,16 @@ export function PreferenceSwitchRow({
   ariaLabel,
   disabled,
 }: PreferenceSwitchRowProps) {
+  const descId = `${id}-desc`;
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="space-y-1">
         <Label htmlFor={id} className="cursor-pointer">
           {label}
         </Label>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p id={descId} className="text-sm text-muted-foreground">
+          {description}
+        </p>
       </div>
       <Switch
         id={id}
@@ -94,6 +107,7 @@ export function PreferenceSwitchRow({
         disabled={disabled}
         data-testid={testId}
         aria-label={ariaLabel}
+        aria-describedby={descId}
       />
     </div>
   );
