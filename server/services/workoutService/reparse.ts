@@ -361,8 +361,14 @@ export async function processBatchChunk(
 export async function batchReparseWorkouts(
   userId: string,
 ): Promise<{ total: number; parsed: number; failed: number }> {
-  const workouts = await storage.workouts.getWorkoutsWithoutExerciseSets(userId);
-  const user = await storage.users.getUser(userId);
+  // ⚡ Bolt Performance Optimization: these two reads hit unrelated tables
+  // (workout_logs vs users) with no data dependency between them, so running
+  // them sequentially just doubles the round-trip latency for no reason.
+  // Promise.all halves the wait on the common path.
+  const [workouts, user] = await Promise.all([
+    storage.workouts.getWorkoutsWithoutExerciseSets(userId),
+    storage.users.getUser(userId),
+  ]);
   const unitPreferences = { weightUnit: user?.weightUnit || "kg", distanceUnit: user?.distanceUnit || "km" };
 
   let totalParsed = 0;
