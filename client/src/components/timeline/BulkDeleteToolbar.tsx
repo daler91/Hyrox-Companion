@@ -1,4 +1,4 @@
-import { ListChecks, Trash2, X } from "lucide-react";
+import { ListChecks, Loader2, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -66,10 +66,15 @@ export function BulkDeleteToolbar({
           className="min-h-11 md:min-h-8"
           onClick={onDelete}
           disabled={isPending || selectedCount === 0}
+          aria-busy={isPending}
           data-testid="button-bulk-delete-selected"
         >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete selected
+          {isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Trash2 className="mr-2 h-4 w-4" />
+          )}
+          {isPending ? "Deleting…" : "Delete selected"}
         </Button>
         <Button
           type="button"

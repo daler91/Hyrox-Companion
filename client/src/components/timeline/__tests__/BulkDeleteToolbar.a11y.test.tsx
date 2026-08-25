@@ -29,4 +29,11 @@ describe("BulkDeleteToolbar a11y", () => {
     expect(status).toHaveTextContent("3 selected");
     expect(status).toHaveAttribute("aria-live", "polite");
   });
+
+  it("shows loading state with aria-busy on the delete button when pending", () => {
+    render(<BulkDeleteToolbar {...defaultProps} isPending />);
+    const deleteBtn = screen.getByTestId("button-bulk-delete-selected");
+    expect(deleteBtn).toHaveAttribute("aria-busy", "true");
+    expect(deleteBtn).toHaveTextContent("Deleting…");
+  });
 });
