@@ -440,6 +440,7 @@ const MovementRow = memo(function MovementRow({
   onMove,
   onRemove,
 }: MovementRowProps) {
+  const durationId = useId();
   const positionLabel = stepPositionLabel(blockType, index);
   const blockStep = linking?.block.steps[index];
 
@@ -537,8 +538,9 @@ const MovementRow = memo(function MovementRow({
       )}
 
       <div className="flex items-center gap-2">
-        <Label className="text-[11px] text-muted-foreground">Time</Label>
+        <Label htmlFor={durationId} className="text-[11px] text-muted-foreground">Time</Label>
         <Input
+          id={durationId}
           className="h-8 w-24"
           type="number"
           min={0}
@@ -813,6 +815,7 @@ function ResultControls({
   value: WorkoutStructureConfig;
   onUpdateScore: (score: StructureBlockScore | null) => void;
 }>) {
+  const notesId = useId();
   const emomScore = value.score?.type === "emom" ? value.score : null;
   const amrapScore = value.score?.type === "amrap" ? value.score : null;
   const roundsScore = value.score?.type === "rounds" ? value.score : null;
@@ -917,8 +920,9 @@ function ResultControls({
       )}
 
       <div>
-        <Label className="text-xs">Notes</Label>
+        <Label htmlFor={notesId} className="text-xs">Notes</Label>
         <Input
+          id={notesId}
           aria-label="Result notes"
           placeholder="Result notes"
           value={value.score?.notes ?? ""}
@@ -942,10 +946,12 @@ function ResultNumberField({
   value: number | null | undefined;
   onChange: (next: number | null) => void;
 }>) {
+  const id = useId();
   return (
     <div>
-      <Label className="text-xs">{label}</Label>
+      <Label htmlFor={id} className="text-xs">{label}</Label>
       <Input
+        id={id}
         type="number"
         min={0}
         aria-label={ariaLabel}
