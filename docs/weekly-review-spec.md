@@ -19,7 +19,8 @@ Wave 0.
 
 | Definition             | Where                                                           | Used by                                                                      |
 | ---------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| UTC, Monday-anchored   | `getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) | `buildWeeklySummaries` → training overview charts, `weeklyCompletedWorkouts` |
+| UTC, Monday-anchored   | `getMondayWeekBoundaries` (`server/services/weeklyProgress.ts`) | `buildWeeklySummaries` → training overview charts |
+| Local, Monday-anchored | `getMondayWeekBoundaries` called with `userTimezone` (audit H11) | `weeklyCompletedWorkouts`, `computeWeeklyVolume`, new-PRs-this-week |
 | Local, Monday-anchored | `getLocalMondayWeekBoundaries` (same file, added in PR1)        | The weekly summary email, and the weekly review                              |
 
 **A correction to the first draft of this spec.** It claimed the email used a trailing

@@ -207,14 +207,12 @@ the output of **both** `buildSystemPrompt` (including its zero-workout branch) a
 
 ## 5. The two collisions that would otherwise ship broken
 
-**5.1 The prompt will contradict itself.** `computeExerciseGaps` derives station gaps purely
-from logged sets, with no equipment model, and `formatStationGaps` renders
+**5.1 The prompt will contradict itself.** `computeExerciseGaps` derived station gaps purely
+from logged sets, with no equipment model, so `formatStationGaps` could render
 `EXERCISE GAPS: sled_push (NEVER TRAINED — CRITICAL)` into the _same prompt_ that says "no sled
-at my gym" — every week, forever. Two options: suppress the matching station in
-`computeExerciseGaps` when an equipment fact covers it (correct, more work), or have the card's
-header instruct the model to reconcile explicitly and program the substitute (cheap, and the
-athlete still sees the contradiction if the note is echoed). **Do at least the header; prefer
-the suppression.**
+at my gym" — every week, forever. **Closed via the suppression option**: `computeExerciseGaps`
+now takes `trainingConstraints` and drops any station `stationsRuledOutByConstraints`
+(`shared/stationCoverage.ts`) matches, rather than only instructing the model to reconcile it.
 
 **5.2 The safety layer breaks in both directions.** `analyzeSafetySignals` returns two signals
 from one text blob, with opposite tolerances for durability:

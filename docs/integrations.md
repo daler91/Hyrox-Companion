@@ -507,7 +507,7 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 
 - **Schedule**: `5 * * * *` (hourly at :05) in `Etc/UTC`
 - **Action**: Calls `runAnalyticsRecomputeScan(storage, now)` (`server/services/analyticsRecomputeScheduler.ts`). The scan ticks every hour but gates per user on their **local** hour being `0` (using `getLocalHour()` in `server/timezone.ts`), mirroring the email scheduler's per-timezone approach, so each user is processed once around their local midnight.
-- **Scope**: Only users who already have a stored `analytics_results` row (i.e. who have opened Coach Insights or the Race Predictor) **and** whose stored result is stale — a workout was logged after `last_workout_date_at_generation`. AI is therefore never spent for users who never used the feature.
+- **Scope**: Only users who already have a stored `analytics_results` row (i.e. who have opened Coach Insights or the Race Predictor) **and** whose stored result is stale — a workout was logged after `last_workout_date_at_generation`, or the workout-log count no longer matches `entry_count_at_generation` (catches a change, like a same-day second session, that leaves the date untouched). AI is therefore never spent for users who never used the feature.
 - **Effect**: Enqueues a [`recompute-analytics`](#job-types) job per stale (user, feature). The job's atomic per-day claim plus the queue `singletonKey` prevent duplicate recomputes (e.g. from a DST-doubled local hour or at-least-once delivery).
 - **Advisory lock**: `analyticsRecompute`
 
