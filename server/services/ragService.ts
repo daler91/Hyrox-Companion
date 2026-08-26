@@ -364,6 +364,10 @@ export async function getRagStatus(userId: string) {
     storage.coaching.listCoachingMaterials(userId),
     storage.coaching.getChunkCountsByMaterial(userId),
     storage.coaching.getStoredEmbeddingDimension(userId).catch((err) => {
+      // userId is an opaque uuid and err is a DB/connection failure; neither
+      // carries the athlete's material content. Same shape already suppressed
+      // above in listPinnedPrincipleChunks.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn({ err, userId }, "[rag] Failed to read stored embedding dimension");
       return null;
     }),
