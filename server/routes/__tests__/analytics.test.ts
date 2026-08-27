@@ -422,11 +422,16 @@ describe("Analytics Routes", () => {
 
       await request(app).get("/api/v1/training-overview?from=2026-02-01&to=2026-02-28");
 
-      // Current window: 2026-02-01 → 2026-02-28 (28 days).
+      // Current window: 2026-02-01 → 2026-02-28 (28 days). The 70-day
+      // training-load window (2025-12-20 → 2026-02-28) starts earlier and
+      // shares the same end date, so it's fetched once and the current window
+      // is derived from it in memory rather than fetched separately (see
+      // assembleTrainingOverview) — no call for the narrower "2026-02-01"
+      // range appears here.
       // Previous window must end one day before 2026-02-01 and be 28 days long.
       // That gives 2026-01-04 → 2026-01-31.
       const calls = vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mock.calls;
-      expect(calls).toContainEqual(["test_user_id", "2026-02-01", "2026-02-28"]);
+      expect(calls).toContainEqual(["test_user_id", "2025-12-20", "2026-02-28"]);
       expect(calls).toContainEqual(["test_user_id", "2026-01-04", "2026-01-31"]);
       // calculateTrainingOverview is invoked with the previous logs as the 3rd arg.
       expect(vi.mocked(calculateTrainingOverview).mock.calls[0][2]).toEqual([]);
@@ -439,8 +444,11 @@ describe("Analytics Routes", () => {
 
       await request(app).get("/api/v1/training-overview");
 
-      // Only the current window and load-history fetches happen; no previous-window fetch.
-      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledTimes(2);
+      // The current (all-time) window and the 70-day load window share the
+      // same upper bound (today) and the current window is unbounded below,
+      // so it's always the wider range — one fetch covers both, and the load
+      // window is derived from it in memory. No previous-window fetch either.
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledTimes(1);
       // calculateTrainingOverview invoked with `undefined` for the previous logs arg.
       expect(vi.mocked(calculateTrainingOverview).mock.calls[0][2]).toBeUndefined();
     });
