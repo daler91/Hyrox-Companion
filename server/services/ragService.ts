@@ -353,17 +353,28 @@ export async function retrieveRelevantChunks(
 }
 
 export async function getRagStatus(userId: string) {
-  const materials = await storage.coaching.listCoachingMaterials(userId);
-  const chunkCounts = await storage.coaching.getChunkCountsByMaterial(userId);
+  // ⚡ Bolt Performance Optimization: these three reads are mutually
+  // independent (materials comes from the main `db` pool; chunk counts and
+  // stored dimension both come from `vectorPool` but scan unrelated
+  // aggregates over document_chunks) — none depends on another's result, so
+  // awaiting them sequentially just triples the round-trip latency for no
+  // reason. This route is UI-polled (see cache comment above), so the
+  // latency saved here is paid on every poll, not just once.
+  const [materials, chunkCounts, storedDimension] = await Promise.all([
+    storage.coaching.listCoachingMaterials(userId),
+    storage.coaching.getChunkCountsByMaterial(userId),
+    storage.coaching.getStoredEmbeddingDimension(userId).catch((err) => {
+      // userId is an opaque uuid and err is a DB/connection failure; neither
+      // carries the athlete's material content. Same shape already suppressed
+      // above in listPinnedPrincipleChunks.
+      // bearer:disable javascript_lang_logger_leak
+      logger.warn({ err, userId }, "[rag] Failed to read stored embedding dimension");
+      return null;
+    }),
+  ]);
   const chunkMap = new Map(chunkCounts.map((c) => [c.materialId, c]));
 
   const hasApiKey = Boolean(env.GEMINI_API_KEY);
-  let storedDimension: number | null = null;
-  try {
-    storedDimension = await storage.coaching.getStoredEmbeddingDimension(userId);
-  } catch (err) {
-    logger.warn({ err, userId }, "[rag] Failed to read stored embedding dimension");
-  }
 
   const materialStatus = materials.map((m) => {
     const chunks = chunkMap.get(m.id);
