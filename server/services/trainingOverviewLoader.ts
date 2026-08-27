@@ -110,25 +110,50 @@ export async function assembleTrainingOverview(
   const loadCurrentDate = to ?? todayUtcYyyyMmDd();
   const loadHistoryStart = addCalendarDays(loadCurrentDate, -70);
 
-  const [
-    workoutLogs,
-    allSets,
-    previousWorkoutLogs,
-    user,
-    loadTags,
-    loadWorkoutLogs,
-    loadExerciseSets,
-  ] = await Promise.all([
-    fetchers.workoutLogs(userId, from, to),
-    fetchers.exerciseSets(userId, from, to),
+  // The selected [from, to] window and the trailing-70-day training-load window
+  // always share the same upper bound (`to` ?? today), so one is always a
+  // superset of the other — one of `from`/`loadHistoryStart` is always the
+  // earlier date. Fetching both independently (as this used to) doubles the
+  // workout_logs / exercise_sets round-trip on every training-overview load and
+  // every AI overview-analysis turn — and the exercise_sets fetch hydrates
+  // every logged set via a relational join, so it isn't a cheap query to repeat.
+  // Fetch only the wider range once and derive the narrower one by filtering
+  // in memory on `date` instead of issuing a second overlapping query.
+  const [wideFrom, wideTo] =
+    from !== undefined && from > loadHistoryStart
+      ? [loadHistoryStart, loadCurrentDate]
+      : [from, to];
+
+  const [wideWorkoutLogs, wideSets, previousWorkoutLogs, user, loadTags] = await Promise.all([
+    fetchers.workoutLogs(userId, wideFrom, wideTo),
+    fetchers.exerciseSets(userId, wideFrom, wideTo),
     previousWindow
       ? fetchers.workoutLogs(userId, previousWindow.from, previousWindow.to)
       : Promise.resolve(undefined),
     storage.users.getUser(userId),
     storage.analytics.getExerciseLoadTags(),
-    fetchers.workoutLogs(userId, loadHistoryStart, loadCurrentDate),
-    fetchers.exerciseSets(userId, loadHistoryStart, loadCurrentDate),
   ]);
+
+  let workoutLogs: WorkoutLog[];
+  let allSets: ExerciseSetWithDate[];
+  let loadWorkoutLogs: WorkoutLog[];
+  let loadExerciseSets: ExerciseSetWithDate[];
+  if (from !== undefined && from > loadHistoryStart) {
+    // The selected window starts after the load window, so `wide*` above
+    // fetched the load window (the wider of the two) — the selected window is
+    // its narrower tail.
+    workoutLogs = wideWorkoutLogs.filter((log) => log.date >= from);
+    allSets = wideSets.filter((set) => set.date >= from);
+    loadWorkoutLogs = wideWorkoutLogs;
+    loadExerciseSets = wideSets;
+  } else {
+    // The selected window covers (or equals) the load window — `wide*` fetched
+    // the selected window, and the load window is its narrower tail.
+    workoutLogs = wideWorkoutLogs;
+    allSets = wideSets;
+    loadWorkoutLogs = wideWorkoutLogs.filter((log) => log.date >= loadHistoryStart && log.date <= loadCurrentDate);
+    loadExerciseSets = wideSets.filter((set) => set.date >= loadHistoryStart && set.date <= loadCurrentDate);
+  }
 
   // "Avg Adherence" divides by the sessions the athlete was DUE, so the count
   // has to come from plan_days rather than from the logs themselves (audit
