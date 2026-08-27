@@ -114,8 +114,16 @@ function dailyMedians(rows: readonly LoggedMeasurement[]): Map<string, Map<strin
  */
 function straddlesFactor(values: readonly number[], factor: number): boolean {
   if (values.length < 2) return false;
-  const low = Math.min(...values);
-  const high = Math.max(...values);
+  // ⚡ Bolt Performance Optimization:
+  // Replaced Math.min(...values) and Math.max(...values) spread calls with a single O(N) linear scan.
+  // This avoids intermediate array allocations and prevents 'Maximum call stack size exceeded'
+  // errors when checking large arrays.
+  let low = Number.POSITIVE_INFINITY;
+  let high = Number.NEGATIVE_INFINITY;
+  for (const v of values) {
+    if (v < low) low = v;
+    if (v > high) high = v;
+  }
   return low > 0 && high / low >= factor * (1 - RATIO_TOLERANCE);
 }
 
