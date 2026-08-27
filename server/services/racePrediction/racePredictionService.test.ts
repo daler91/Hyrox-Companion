@@ -313,6 +313,48 @@ describe("computeRaceReadiness", () => {
     expect(computeRaceReadiness(-25).status).toBe("fatigued");
     expect(computeRaceReadiness(12.6).tsb).toBe(13);
   });
+
+  describe("acuteLoad — telling a taper from detraining (audit C3)", () => {
+    it("still reports peaked when a high TSB comes with real recent training", () => {
+      // A deliberate taper: chronic load stays up, acute has eased but is
+      // still well above the "stopped training" floor.
+      const r = computeRaceReadiness(20, 40);
+      expect(r.status).toBe("peaked");
+      expect(r.tsb).toBe(20);
+    });
+
+    it("downgrades a high TSB to insufficient_data when acute load has collapsed", () => {
+      // Same TSB as the "still peaked" case above, but acute load says the
+      // athlete has effectively stopped training rather than tapered.
+      const r = computeRaceReadiness(20, 3);
+      expect(r.status).toBe("insufficient_data");
+      // The computed TSB must not leak through — surfacing a number invites
+      // the UI to render "peaked" readiness that isn't real.
+      expect(r.tsb).toBeNull();
+    });
+
+    it("treats acute load exactly at the floor as sufficient (boundary is exclusive)", () => {
+      // The floor (MIN_ACUTE_UTSS_FOR_FORM in the source) is 5.
+      expect(computeRaceReadiness(20, 5).status).toBe("peaked");
+      expect(computeRaceReadiness(20, 4.99).status).toBe("insufficient_data");
+    });
+
+    it("does not affect a fatigued reading, where low acute load is the whole story", () => {
+      // Negative TSB already means acute is ABOVE chronic, so a low acute
+      // reading can't happen here — but a caller passing one through must not
+      // change the fatigue verdict itself once past the null-TSB gate.
+      const r = computeRaceReadiness(-20, 3);
+      expect(r.status).toBe("insufficient_data");
+      const normal = computeRaceReadiness(-20, 30);
+      expect(normal.status).toBe("fatigued");
+    });
+
+    it("treats an omitted or null acuteLoad as before — no detraining check applied", () => {
+      expect(computeRaceReadiness(20).status).toBe("peaked");
+      expect(computeRaceReadiness(20, null).status).toBe("peaked");
+      expect(computeRaceReadiness(20, undefined).status).toBe("peaked");
+    });
+  });
 });
 
 describe("generateRacePrediction — race readiness (Form)", () => {

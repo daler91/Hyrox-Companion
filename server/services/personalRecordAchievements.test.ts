@@ -203,4 +203,93 @@ describe("findPersonalRecordAchievements", () => {
 
     expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([]);
   });
+
+  it("treats a LONGER hold as the improvement for a custom-labelled isometric exercise (audit H4)", () => {
+    // exerciseName is "custom" for every custom-labelled set — only customLabel
+    // says which exercise it actually is. Before H4, isImprovement only saw
+    // exerciseName, so this fell through to faster-is-better and a shorter
+    // custom "Plank" was celebrated as a PR.
+    const priorSets = [
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "Plank",
+        category: "strength",
+        time: 60,
+        workoutLogId: "prior-1",
+      }),
+    ];
+    const createdSet = makeSet({
+      id: "set-new",
+      workoutLogId: "created-1",
+      exerciseName: "custom",
+      customLabel: "Plank",
+      category: "strength",
+      time: 90,
+      date: "2026-05-20",
+    }) as ExerciseSet;
+
+    expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([
+      expect.objectContaining({
+        exerciseKey: "custom:Plank",
+        metric: "bestTime",
+        value: 90,
+        previousValue: 60,
+      }),
+    ]);
+  });
+
+  it("does not celebrate a shorter hold as a PR for a custom-labelled isometric exercise (audit H4)", () => {
+    const priorSets = [
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "Plank",
+        category: "strength",
+        time: 90,
+        workoutLogId: "prior-1",
+      }),
+    ];
+    const createdSet = makeSet({
+      id: "set-new",
+      workoutLogId: "created-1",
+      exerciseName: "custom",
+      customLabel: "Plank",
+      category: "strength",
+      time: 60,
+      date: "2026-05-20",
+    }) as ExerciseSet;
+
+    expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([]);
+  });
+
+  it("still treats faster as the improvement for a custom label that doesn't resolve to an isometric hold", () => {
+    // "Sled Push" has no isometric direction override, so the faster-is-better
+    // default applies — same as an unlabelled timed exercise.
+    const priorSets = [
+      makeSet({
+        exerciseName: "custom",
+        customLabel: "Sled Push 50m",
+        category: "functional",
+        time: 40,
+        workoutLogId: "prior-1",
+      }),
+    ];
+    const createdSet = makeSet({
+      id: "set-new",
+      workoutLogId: "created-1",
+      exerciseName: "custom",
+      customLabel: "Sled Push 50m",
+      category: "functional",
+      time: 32,
+      date: "2026-05-20",
+    }) as ExerciseSet;
+
+    expect(findPersonalRecordAchievements(priorSets, makeWorkout([createdSet]))).toEqual([
+      expect.objectContaining({
+        exerciseKey: "custom:Sled Push 50m",
+        metric: "bestTime",
+        value: 32,
+        previousValue: 40,
+      }),
+    ]);
+  });
 });
