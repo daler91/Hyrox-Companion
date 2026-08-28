@@ -45,3 +45,6 @@
 ## 2024-05-15 - Tooltips on disabled buttons
 **Learning:** Radix UI disables pointer events on disabled elements, which breaks tooltips for disabled buttons.
 **Action:** Wrap disabled trigger elements in a `<span>` with `tabIndex={disabled ? 0 : -1}` to ensure the tooltip continues to fire and remains keyboard accessible.
+## 2024-05-24 - [Ensure disabled tooltip triggers are keyboard accessible]
+**Learning:** Radix UI sets pointer-events: none on disabled elements, which prevents tooltips from firing on hover or focus.
+**Action:** When adding tooltips to buttons that can be disabled, wrap the disabled trigger elements in a `<span>` with `tabIndex={disabled ? 0 : -1}` to ensure the tooltip continues to fire and remains keyboard accessible.

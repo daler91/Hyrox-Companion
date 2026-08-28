@@ -5,8 +5,8 @@ import {
   computePlanPhase,
   formatPhaseName,
   isPlanEnded,
-  planWeekForDisplay,
   PLAN_PHASE_ORDER,
+  planWeekForDisplay,
 } from "./planPhase";
 
 describe("computeCurrentWeek", () => {
