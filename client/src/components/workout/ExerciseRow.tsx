@@ -87,7 +87,8 @@ export function ExerciseRow({
           type="button"
           onClick={handleClick}
           className="flex w-full items-center gap-3 px-4 py-3 text-left hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          aria-expanded={isExpanded}
+          aria-label={isAdded ? `${displayLabel}, ${totalSets} ${totalSets === 1 ? "set" : "sets"}` : `Add ${displayLabel}`}
+          aria-expanded={isAdded ? isExpanded : undefined}
           data-testid={`button-exercise-${exerciseName}`}
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
@@ -114,13 +115,14 @@ export function ExerciseRow({
             ))}
             {isAdded && (
               <ChevronDown
+                aria-hidden="true"
                 className={cn(
                   "h-5 w-5 text-muted-foreground transition-transform",
                   isExpanded && "rotate-180",
                 )}
               />
             )}
-            {!isAdded && <Plus className="h-5 w-5 text-muted-foreground" />}
+            {!isAdded && <Plus aria-hidden="true" className="h-5 w-5 text-muted-foreground" />}
           </div>
         </button>
 

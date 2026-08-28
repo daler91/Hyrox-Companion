@@ -56,7 +56,7 @@ export default function SuggestionsPanel({
                 AI Training Suggestions
                 <Badge variant="secondary">{suggestions.length}</Badge>
               </CardTitle>
-              {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {isOpen ? <ChevronUp aria-hidden="true" className="h-4 w-4" /> : <ChevronDown aria-hidden="true" className="h-4 w-4" />}
             </button>
           </CollapsibleTrigger>
         </CardHeader>
