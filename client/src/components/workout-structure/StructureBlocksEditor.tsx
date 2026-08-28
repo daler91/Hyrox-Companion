@@ -46,11 +46,15 @@ interface Props {
 }
 
 interface StructureBlockCardProps {
-  readonly block: StructureBlockInput;
-  readonly config: WorkoutStructureConfig;
+  readonly draft: DraftBlock;
   readonly index: number;
   readonly showScoreControls: boolean;
-  readonly linking: StepLinking;
+  readonly groups: GroupedExercise[];
+  readonly unassignedGroups: GroupedExercise[];
+  readonly weightUnit: "kg" | "lb";
+  readonly distanceUnit: "km" | "miles";
+  readonly onAssignGroup?: AssignGroupHandler;
+  readonly onAddLinkedRow?: AddLinkedRowHandler;
   readonly onChange: (next: WorkoutStructureConfig) => void;
   readonly onRemove: () => void;
   readonly onScoreChange?: (blockId: string, score: StructureBlockScore | null) => void;
@@ -241,35 +245,27 @@ export function StructureBlocksEditor({
       )}
 
       {hasBlocks
-        ? drafts.map((draft, idx) => {
-            const block = blockFromDraft(draft, idx);
-            const linking: StepLinking = {
-              block,
-              groups,
-              unassignedGroups,
-              weightUnit,
-              distanceUnit,
-              onAssignGroup: onUpdateSet ? handleAssignGroup : undefined,
-              onAddLinkedRow: onAddSet ? handleAddLinkedRow : undefined,
-            };
-            return (
-              <StructureBlockCard
-                key={draft.id}
-                block={block}
-                config={draft.config}
-                index={idx}
-                showScoreControls={showScoreControls}
-                linking={linking}
-                onChange={(next) => handleUpdateBlock(draft.id, next)}
-                onRemove={() => handleRemoveBlock(draft.id)}
-                onScoreChange={
-                  onScoreChange
-                    ? (blockId, score) => handleUpdateScore(draft.id, blockId, score)
-                    : undefined
-                }
-              />
-            );
-          })
+        ? drafts.map((draft, idx) => (
+            <StructureBlockCard
+              key={draft.id}
+              draft={draft}
+              index={idx}
+              showScoreControls={showScoreControls}
+              groups={groups}
+              unassignedGroups={unassignedGroups}
+              weightUnit={weightUnit}
+              distanceUnit={distanceUnit}
+              onAssignGroup={onUpdateSet ? handleAssignGroup : undefined}
+              onAddLinkedRow={onAddSet ? handleAddLinkedRow : undefined}
+              onChange={(next) => handleUpdateBlock(draft.id, next)}
+              onRemove={() => handleRemoveBlock(draft.id)}
+              onScoreChange={
+                onScoreChange
+                  ? (blockId, score) => handleUpdateScore(draft.id, blockId, score)
+                  : undefined
+              }
+            />
+          ))
         : null}
 
       {hasBlocks || addOpen ? (
@@ -322,15 +318,43 @@ export function StructureBlocksEditor({
 }
 
 function StructureBlockCard({
-  block,
-  config,
+  draft,
   index,
   showScoreControls,
-  linking,
+  groups,
+  unassignedGroups,
+  weightUnit,
+  distanceUnit,
+  onAssignGroup,
+  onAddLinkedRow,
   onChange,
   onRemove,
   onScoreChange,
 }: StructureBlockCardProps) {
+  // ⚡ Bolt Performance Optimization: `block`/`linking` are memoized here (keyed
+  // on `draft`, which keeps a stable reference for every block *except* the one
+  // just edited — see StructureBlocksEditor's handleUpdateBlock) instead of
+  // being rebuilt as fresh object literals on every StructureBlocksEditor
+  // render. WorkoutStructureEditor passes `linking` straight down to the
+  // memo()'d MovementRow for every movement in every block; a fresh `linking`
+  // object each render defeated that memo entirely, so a single keystroke in
+  // one block re-rendered every MovementRow across every block. Now unrelated
+  // blocks keep the same `linking` reference and their MovementRows correctly
+  // bail out.
+  const block = useMemo(() => blockFromDraft(draft, index), [draft, index]);
+  const linking: StepLinking = useMemo(
+    () => ({
+      block,
+      groups,
+      unassignedGroups,
+      weightUnit,
+      distanceUnit,
+      onAssignGroup,
+      onAddLinkedRow,
+    }),
+    [block, groups, unassignedGroups, weightUnit, distanceUnit, onAssignGroup, onAddLinkedRow],
+  );
+  const config = draft.config;
   const guide = isGuidedFormat(block.formatType) ? FORMAT_GUIDE[block.formatType] : null;
 
   return (
