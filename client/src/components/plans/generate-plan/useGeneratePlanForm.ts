@@ -172,7 +172,7 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
     injuries: values.injuries,
     // Omitted when empty so the payload stays identical to what an older client
     // sends, rather than carrying an empty array through the job queue.
-    ...((values.supersedePlanIds?.length ?? 0) > 0
+    ...(values.supersedePlanIds.length > 0
       ? { supersedePlanIds: values.supersedePlanIds }
       : {}),
   };

@@ -102,6 +102,7 @@ describe("generate plan form helpers", () => {
         restDays: [],
         focusAreas: [],
         injuries: "",
+        supersedePlanIds: [],
       }),
     ).toEqual({
       goal: "Race prep",
