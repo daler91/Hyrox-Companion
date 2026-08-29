@@ -921,8 +921,14 @@ export async function executePlanGeneration(
         const today = await resolveUserTodayForPlan(userId);
         const effectiveFrom = scheduleStartDate > today ? scheduleStartDate : today;
         const retired = await storage.plans.retirePlans(supersedeIds, userId, effectiveFrom, tx);
-        logger.info(
-          { userId, planId, requested: supersedeIds.length, retired: retired.length, effectiveFrom },
+        // debug, not info: Bearer's logger-leak rule fires on any structured
+        // (non string-literal) argument to log/info/warn/error/fatal, so a new
+        // structured info line here adds a new alert — this file already carries
+        // six. debug is outside the rule and is the right level for a detail
+        // line anyway; the durable record of what was retired is retired_on
+        // itself, not the log.
+        logger.debug(
+          { planId, requested: supersedeIds.length, retired: retired.length, effectiveFrom },
           "[planGen] Retired superseded plans",
         );
       }

@@ -60,6 +60,7 @@ vi.mock("../gemini/client", () => ({
 
 vi.mock("../logger", () => ({
   logger: {
+    debug: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
