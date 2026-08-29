@@ -269,7 +269,12 @@ const SKIP_REASON_PROMPT_LABELS: Record<string, string> = {
 function formatRecentSkips(recentSkips: CoachingInsights["recentSkips"]): string {
   if (!recentSkips || recentSkips.length === 0) return "";
   const items = recentSkips
-    .map((s) => `${s.date} ${s.focus} (${SKIP_REASON_PROMPT_LABELS[s.reason] ?? s.reason})`)
+    // s.focus is free-text plan_days.focus (athlete-editable) — sanitize before
+    // it reaches the LLM prompt, same as every other user-authored field here.
+    .map(
+      (s) =>
+        `${s.date} ${sanitizeUserInput(s.focus)} (${SKIP_REASON_PROMPT_LABELS[s.reason] ?? s.reason})`,
+    )
     .join("; ");
   return `RECENT SKIPS (athlete-stated reasons): ${items}. Treat ill/injured skips as recovery signals to program around — not as compliance failures to nudge about.`;
 }
