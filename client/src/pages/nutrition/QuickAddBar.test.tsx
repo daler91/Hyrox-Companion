@@ -150,6 +150,18 @@ describe("QuickAddBar", () => {
     expect(screen.queryByText("Food logged")).not.toBeInTheDocument();
   });
 
+  it("labels favourite chips 'Quick log' and recent chips 'Add' for screen readers", async () => {
+    vi.mocked(api.nutrition.recent).mockResolvedValue([remembered({ id: "r1", name: "Rice" })]);
+    vi.mocked(api.nutrition.listFavorites).mockResolvedValue([remembered()]);
+    renderWithClient(<QuickAddBar onSelect={vi.fn()} date={DATE} />);
+
+    const favChip = await screen.findByTestId("quickadd-favorites-f1");
+    expect(favChip).toHaveAccessibleName("Quick log Banana");
+
+    const recentChip = await screen.findByTestId("quickadd-recent-r1");
+    expect(recentChip).toHaveAccessibleName("Add Rice");
+  });
+
   it("falls back to the dialog for a favourite that has never been logged", async () => {
     vi.mocked(api.nutrition.recent).mockResolvedValue([]);
     vi.mocked(api.nutrition.listFavorites).mockResolvedValue([unlogged()]);

@@ -11,11 +11,15 @@ function FoodChipRow<T extends Food>({
   foods,
   onSelect,
   testid,
+  chipAction,
 }: {
   readonly title: string;
   readonly foods: readonly T[];
   readonly onSelect: (food: T) => void;
   readonly testid: string;
+  /** Verb prefixed to the food name in the aria-label so screen-reader users
+   *  know what tapping the chip does (e.g. "Quick log" vs "Add"). */
+  readonly chipAction?: string;
 }) {
   return (
     <div>
@@ -27,7 +31,13 @@ function FoodChipRow<T extends Food>({
             type="button"
             onClick={() => onSelect(food)}
             className="shrink-0 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            aria-label={food.name.length > MAX_LABEL ? `Quick add ${food.name}` : undefined}
+            aria-label={
+              chipAction
+                ? `${chipAction} ${food.name}`
+                : food.name.length > MAX_LABEL
+                  ? `Quick add ${food.name}`
+                  : undefined
+            }
             data-testid={`quickadd-${testid}-${food.id}`}
           >
             {food.name.length > MAX_LABEL ? `${food.name.slice(0, MAX_LABEL)}…` : food.name}
@@ -80,10 +90,22 @@ export function QuickAddBar({
   return (
     <div className="space-y-3">
       {favorites.length > 0 && (
-        <FoodChipRow title="Favorites" foods={favorites} onSelect={quickLogFavorite} testid="favorites" />
+        <FoodChipRow
+          title="Favorites"
+          foods={favorites}
+          onSelect={quickLogFavorite}
+          testid="favorites"
+          chipAction="Quick log"
+        />
       )}
       {recent.length > 0 && (
-        <FoodChipRow title="Recent" foods={recent} onSelect={onSelect} testid="recent" />
+        <FoodChipRow
+          title="Recent"
+          foods={recent}
+          onSelect={onSelect}
+          testid="recent"
+          chipAction="Add"
+        />
       )}
     </div>
   );

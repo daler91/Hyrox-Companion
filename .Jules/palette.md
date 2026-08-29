@@ -9,3 +9,8 @@
 
 **Learning:** The codebase carefully calibrated `--muted-foreground` to pass WCAG AA at 4.61:1 (with comments citing the exact criteria). But 10+ instances of `text-muted-foreground/60` and `/70` reduced this below AA thresholds (~2.4:1 and ~3.0:1). The opacity modifier pattern is invisible to grep-for-color audits because the base variable passes — the violation lives in the Tailwind utility class, not the CSS variable.
 **Action:** When a design system calibrates a color token to a specific contrast ratio, search for opacity modifiers (`/40`, `/60`, `/70`, `/80`) on that token across the codebase — they silently undo the calibration. Visual hierarchy on secondary text should come from font-size, not from contrast degradation.
+
+## 2026-08-29 - Same chip component, different action semantics
+
+**Learning:** `FoodChipRow` was reused for both Favorites (one-tap immediate log) and Recent (opens dialog) chips. Visually identical buttons with different consequences are invisible to screen readers — the section title (`<p>`) isn't formally associated with the button group, so navigating by interactive element strips all context. The `aria-label` only fired for truncated names, leaving short-named foods with zero action context.
+**Action:** When a generic chip/tag component is reused across rows with different onClick behaviors, always pass a distinguishing verb into the aria-label (e.g. "Quick log" vs "Add") — don't rely on surrounding heading text that screen readers skip during button-mode navigation.
