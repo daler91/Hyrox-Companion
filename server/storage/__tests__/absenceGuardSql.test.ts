@@ -1,10 +1,10 @@
 import { planDays, timelineAnnotations, trainingPlans, users } from "@shared/schema";
-import { and, eq, exists, gte, inArray, isNotNull, lt, lte, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, gte, inArray, lt, lte, notExists, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { alias, PgDialect } from "drizzle-orm/pg-core";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { planDayWithinPlanLifetime, planLiveForDate } from "../planRetirement";
+import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "../planRetirement";
 
 /**
  * The declared-absence guards render as *correlated* NOT EXISTS.
@@ -42,7 +42,6 @@ function render(query: { getSQL: () => never }): string {
  * plans.ts, and every test below renders THIS.
  */
 function renderMissedSweep(today = "2026-07-21", timezone = "UTC"): string {
-  const retiredPlan = alias(trainingPlans, "retired_plan");
   const zonePlanIds = db
     .select({ id: trainingPlans.id })
     .from(trainingPlans)
@@ -58,18 +57,10 @@ function renderMissedSweep(today = "2026-07-21", timezone = "UTC"): string {
           eq(planDays.status, "planned"),
           lt(planDays.scheduledDate, today),
           inArray(planDays.planId, zonePlanIds),
-          notExists(
-            db
-              .select({ one: sql`1` })
-              .from(retiredPlan)
-              .where(
-                and(
-                  eq(retiredPlan.id, planDays.planId),
-                  isNotNull(retiredPlan.retiredOn),
-                  gte(planDays.scheduledDate, retiredPlan.retiredOn),
-                ),
-              ),
-          ),
+          // The REAL guard, imported rather than restated — a predicate asserted
+          // against a hand-copied twin of itself proves nothing about the query
+          // that actually runs.
+          missedSweepRetirementGuard(db),
           notExists(
             db
               .select({ one: sql`1` })

@@ -12,16 +12,12 @@ import {
   users,
 } from "@shared/schema";
 import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { planLiveForDate } from "./planRetirement";
-
-/** Alias for the retirement guard in `markMissedPlanDays` — see the note there. */
-const retiredPlan = alias(trainingPlans, "retired_plan");
+import { missedSweepRetirementGuard, planLiveForDate } from "./planRetirement";
 
 // Re-export for callers that already reach for it via PlanStorage's neighbours.
 export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
@@ -593,31 +589,9 @@ export class PlanStorage {
             // app telling them they failed at something they already decided not
             // to do, and because `missed → planned` is FORBIDDEN (see enums.ts)
             // the damage would be permanent. Same reasoning as the declared-absence
-            // guard below.
-            //
-            // Correlated per DAY, not filtered into zonePlanIds: the cutoff is
-            // compared against each day's own scheduled_date, so a partially
-            // retired plan must still have its EARLIER days swept normally —
-            // that stretch is real history.
-            //
-            // Aliased because this statement already mentions training_plans
-            // inside the annotation guard below. Rewriting the outer UPDATE as
-            // `UPDATE ... FROM training_plans` would put an unaliased copy in
-            // scope that silently shadows that guard's own join — legal SQL,
-            // wrong results, and precisely the class of breakage absenceGuardSql
-            // exists to catch.
-            notExists(
-              db
-                .select({ one: sql`1` })
-                .from(retiredPlan)
-                .where(
-                  and(
-                    eq(retiredPlan.id, planDays.planId),
-                    isNotNull(retiredPlan.retiredOn),
-                    gte(planDays.scheduledDate, retiredPlan.retiredOn),
-                  ),
-                ),
-            ),
+            // guard below. Built in planRetirement.ts so the SQL-rendering test
+            // asserts this exact predicate instead of a copy of it.
+            missedSweepRetirementGuard(db),
             notExists(
               // Correlated on the plan's owner rather than on plan_days
               // directly — plan_days carries no user_id, so the annotation has

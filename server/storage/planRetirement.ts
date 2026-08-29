@@ -1,5 +1,12 @@
 import { planDays, trainingPlans } from "@shared/schema";
-import { and, eq, inArray, lt, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, notExists, or, type SQL, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+// Type-only, so this module still pulls in no database connection and stays
+// importable from the driverless SQL-rendering test.
+import type { db } from "../db";
+
+type Executor = Pick<typeof db, "select">;
 
 /**
  * Guards for `training_plans.retired_on` — the plan-lifecycle column.
@@ -91,4 +98,42 @@ export function planDaysWithinLifetimes(
 
   if (clauses.length === 0) return undefined;
   return clauses.length === 1 ? clauses[0] : or(...clauses);
+}
+
+/**
+ * The missed-day sweep's retirement guard: skip any day at or after its own
+ * plan's cutoff.
+ *
+ * Built here rather than inline in the sweep so that
+ * `server/storage/__tests__/absenceGuardSql.test.ts` can render the REAL
+ * predicate. That test cannot import it from plans.ts — plans.ts pulls in the
+ * database module, and the test runs driverless precisely so it can render SQL
+ * without a connection — so the alternative was a hand-copied restatement, and
+ * a guard asserted against a copy of itself proves nothing.
+ *
+ * `executor` is only used to build the subquery AST; nothing is executed.
+ *
+ * Aliased because the sweep also mentions training_plans inside its absence
+ * guard. Rewriting the outer UPDATE as `UPDATE ... FROM training_plans` would
+ * put an unaliased copy in scope that silently shadows that guard's own join —
+ * legal SQL, wrong results.
+ *
+ * Correlated per DAY, not decidable at plan granularity: a partially retired
+ * plan must still have its EARLIER days swept, since that stretch is real
+ * history the athlete actually lived.
+ */
+export function missedSweepRetirementGuard(executor: Executor): SQL {
+  const retiredPlan = alias(trainingPlans, "retired_plan");
+  return notExists(
+    executor
+      .select({ one: sql`1` })
+      .from(retiredPlan)
+      .where(
+        and(
+          eq(retiredPlan.id, planDays.planId),
+          isNotNull(retiredPlan.retiredOn),
+          gte(planDays.scheduledDate, retiredPlan.retiredOn),
+        ),
+      ),
+  );
 }
