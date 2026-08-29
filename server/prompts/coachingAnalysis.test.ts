@@ -36,6 +36,45 @@ describe("formatCoachingAnalysis", () => {
     expect(out).toContain("&lt;system&gt;");
   });
 
+  it("spells out what a falling RPE means, so the coach cannot call it fatigue", () => {
+    const out = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      rpeTrend: "falling",
+      avgRpeLast3: 6.3,
+      avgRpePrior3: 7.5,
+    });
+
+    expect(out).toContain("RPE TREND: FALLING (avg 6.3 last 3 workouts vs 7.5 prior 3)");
+    expect(out).toContain("EASIER than before");
+    expect(out).toContain("not evidence of accumulating fatigue");
+  });
+
+  it("leaves a rising RPE to its own flags", () => {
+    const out = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      rpeTrend: "rising",
+      avgRpeLast3: 8.2,
+      avgRpePrior3: 6.5,
+      fatigueFlag: true,
+    });
+
+    expect(out).toContain("FATIGUE FLAG ACTIVE");
+    expect(out).not.toContain("EASIER than before");
+  });
+
+  it("does not second-guess an active undertraining flag", () => {
+    const out = formatCoachingAnalysis({
+      ...BASE_INSIGHTS,
+      rpeTrend: "falling",
+      avgRpeLast3: 4.5,
+      avgRpePrior3: 6.5,
+      undertrainingFlag: true,
+    });
+
+    expect(out).toContain("UNDERTRAINING FLAG ACTIVE");
+    expect(out).not.toContain("EASIER than before");
+  });
+
   it("renders a benign recent skip normally", () => {
     const out = formatCoachingAnalysis({
       ...BASE_INSIGHTS,

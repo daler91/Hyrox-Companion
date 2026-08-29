@@ -770,6 +770,20 @@ export function isRunningExerciseName(exerciseName: string): boolean {
   return EXERCISE_DEFINITIONS[normalized].category === "running";
 }
 
+/**
+ * Whether the exercise's prescription is distance-carrying (a run, an erg, a
+ * carry, a sled). For these, a bare `time` is a DURATION, not a result: a 53
+ * min easy run is not a worse effort than a 16 min one, it is a longer one.
+ * Anything comparing efforts across sessions has to normalise by distance
+ * (pace) rather than reading the clock alone — see analyzePaceProgression in
+ * server/services/ai/coachingInsights.ts, which this exists for.
+ */
+export function exerciseTracksDistance(exerciseName: string): boolean {
+  const normalized = normalizeExerciseName(exerciseName);
+  if (!normalized) return false;
+  return (EXERCISE_DEFINITIONS[normalized].fields as readonly string[]).includes("distance");
+}
+
 export function getExerciseMovementPatterns(exerciseName: string): readonly MovementPattern[] {
   const normalizedExerciseName = normalizeExerciseName(exerciseName);
   if (!normalizedExerciseName || !(normalizedExerciseName in EXERCISE_MOVEMENT_PATTERNS)) {

@@ -433,7 +433,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const weeklyVolume =
     weeklyGoal > 0 ? computeWeeklyVolume(timeline, weeklyGoal, userTimezone) : undefined;
   const { weightUnit, distanceUnit } = resolveUnitPreferences(user);
-  const progressionFlags = computeProgressionFlags(timeline, weightUnit);
+  const progressionFlags = computeProgressionFlags(timeline, weightUnit, distanceUnit);
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
     weightUnit,

@@ -27,6 +27,12 @@ function formatRpeTrend(insights: CoachingInsights): string {
     rpeLine += `. FATIGUE FLAG ACTIVE - analyze the upcoming workout fit before reducing volume.`;
   if (insights.undertrainingFlag)
     rpeLine += `. UNDERTRAINING FLAG ACTIVE — athlete needs more intensity.`;
+  // A bare trend with neither flag set used to be handed over uninterpreted,
+  // and the model filled the gap the wrong way round — reading a FALLING RPE
+  // back to the athlete as a sign of "accumulating fatigue". The direction is
+  // not ambiguous, so state it rather than leaving it to be guessed at.
+  else if (!insights.fatigueFlag && insights.rpeTrend === "falling")
+    rpeLine += `. Sessions are being reported as EASIER than before — a deload, a lighter block, or improving fitness. It is not evidence of accumulating fatigue; that shows up as RPE RISING at the same workload.`;
   return rpeLine;
 }
 

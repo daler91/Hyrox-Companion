@@ -60,8 +60,25 @@ function weightEntry(date: string, weight: number): TimelineEntry {
   return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: BACK_SQUAT, weight })] });
 }
 
-function timeEntry(date: string, time: number): TimelineEntry {
-  return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: "rowing", time })] });
+// Sized, non-distance work: a set of wall balls carries no distance, and its
+// rep count says how big the effort was, so the clock is a RESULT. Runs and
+// ergs are distance-carrying and go through the pace path instead — see the
+// "duration is not a result" block below.
+const WALL_BALLS = "wall_balls";
+const FIXED_REPS = 50;
+
+function timeEntry(date: string, time: number, reps: number | null = FIXED_REPS): TimelineEntry {
+  return makeEntry({ date, exerciseSets: [makeSet({ exerciseName: WALL_BALLS, time, reps })] });
+}
+
+// A distance-carrying effort: metres + minutes, i.e. a real pace.
+function runEntry(date: string, metres: number, time: number): TimelineEntry {
+  return makeEntry({
+    date,
+    exerciseSets: [
+      makeSet({ exerciseName: "easy_run", distance: metres, distanceUnit: "m", time }),
+    ],
+  });
 }
 
 describe("computeRpeTrend", () => {
@@ -471,7 +488,7 @@ describe("computeExerciseGaps", () => {
 // Most cases below are unit-agnostic, so they go through a kg-fixed helper; the
 // lbs behaviour is asserted explicitly at the end of this block.
 const flagsInKg = (timeline: Parameters<typeof computeProgressionFlags>[0]) =>
-  computeProgressionFlags(timeline, "kg");
+  computeProgressionFlags(timeline, "kg", "km");
 
 describe("computeProgressionFlags — weight unit labelling (audit M8)", () => {
   const threeRisingSessions = [
@@ -481,13 +498,13 @@ describe("computeProgressionFlags — weight unit labelling (audit M8)", () => {
   ];
 
   it("labels a lbs athlete's loads in lbs, not kg", () => {
-    const [flag] = computeProgressionFlags(threeRisingSessions, "lbs");
+    const [flag] = computeProgressionFlags(threeRisingSessions, "lbs", "miles");
     expect(flag.detail).toBe("Weight increased from 100lbs to 110lbs over last 3 sessions");
     expect(flag.detail).not.toContain("kg");
   });
 
   it("labels a kg athlete's identical numbers in kg", () => {
-    const [flag] = computeProgressionFlags(threeRisingSessions, "kg");
+    const [flag] = computeProgressionFlags(threeRisingSessions, "kg", "km");
     expect(flag.detail).toBe("Weight increased from 100kg to 110kg over last 3 sessions");
   });
 
@@ -499,6 +516,7 @@ describe("computeProgressionFlags — weight unit labelling (audit M8)", () => {
         weightEntry("2026-06-10", 225),
       ],
       "lbs",
+      "miles",
     );
     expect(flag.detail).toBe("Weight stuck at 225lbs for last 3 sessions");
   });
@@ -595,7 +613,7 @@ describe("computeProgressionFlags", () => {
     ]);
     expect(flags).toEqual([
       {
-        exercise: "rowing",
+        exercise: WALL_BALLS,
         flag: "progressing",
         detail: "Time improved from 40min to 30min over last 3 sessions",
       },
@@ -609,7 +627,7 @@ describe("computeProgressionFlags", () => {
       timeEntry("2026-06-10", 30),
     ]);
     expect(flags).toEqual([
-      { exercise: "rowing", flag: "plateau", detail: "Time stuck at 30min for last 3 sessions" },
+      { exercise: WALL_BALLS, flag: "plateau", detail: "Time stuck at 30min for last 3 sessions" },
     ]);
   });
 
@@ -693,7 +711,7 @@ describe("computeProgressionFlags", () => {
       makeEntry({
         date,
         exerciseSets: times.map((time, i) =>
-          makeSet({ exerciseName: "rowing", time, setNumber: i + 1 }),
+          makeSet({ exerciseName: WALL_BALLS, time, reps: FIXED_REPS, setNumber: i + 1 }),
         ),
       });
     const flags = flagsInKg([
@@ -706,6 +724,167 @@ describe("computeProgressionFlags", () => {
       flag: "progressing",
       detail: "Time improved from 40min to 30min over last 3 sessions",
     });
+  });
+});
+
+describe("computeProgressionFlags — duration is not a result", () => {
+  // The bug this block exists for: the coach told an athlete their treadmill
+  // run had "worsened from 16 min to 53 min" and their easy runs were
+  // "improving (33 min to 13 min)". Those are three runs of three different
+  // LENGTHS, not three attempts at one effort. Reading the clock alone on
+  // distance-carrying work turns every long run into a regression.
+  it("does not read a longer run as a regression", () => {
+    const flags = flagsInKg([
+      runEntry("2026-06-01", 3000, 16),
+      runEntry("2026-06-05", 6000, 32),
+      runEntry("2026-06-10", 10000, 53),
+    ]);
+    // Same 5:18/km throughout — three different distances, one steady pace.
+    expect(flags).toEqual([
+      {
+        exercise: "easy_run",
+        flag: "plateau",
+        detail: "Pace stuck at 5:20/km (3 km) for last 3 sessions",
+      },
+    ]);
+  });
+
+  it("does not read a shorter run as an improvement", () => {
+    const flags = flagsInKg([
+      runEntry("2026-06-01", 6000, 33),
+      runEntry("2026-06-05", 4000, 22),
+      runEntry("2026-06-10", 2400, 13.2),
+    ]);
+    // A steady 5:30/km at three lengths. The 33 min → 13 min collapse the
+    // coach called an improvement is just a shorter run.
+    expect(flags.map(f => f.flag)).toEqual(["plateau"]);
+  });
+
+  it("flags a genuinely faster pace as progressing, quoting the distances", () => {
+    const flags = flagsInKg([
+      runEntry("2026-06-01", 5000, 30), //  6:00/km
+      runEntry("2026-06-05", 5000, 29),
+      runEntry("2026-06-10", 8000, 44), //  5:30/km over a longer run
+    ]);
+    expect(flags).toEqual([
+      {
+        exercise: "easy_run",
+        flag: "progressing",
+        detail: "Pace improved from 6:00/km (5 km) to 5:30/km (8 km) over last 3 sessions",
+      },
+    ]);
+  });
+
+  it("flags a genuinely slower pace as regressing", () => {
+    const flags = flagsInKg([
+      runEntry("2026-06-01", 5000, 25), //  5:00/km
+      runEntry("2026-06-05", 5000, 27),
+      runEntry("2026-06-10", 5000, 30), //  6:00/km
+    ]);
+    expect(flags[0]).toMatchObject({
+      flag: "regressing",
+      detail: "Pace worsened from 5:00/km (5 km) to 6:00/km (5 km) over last 3 sessions",
+    });
+  });
+
+  it("ignores pace noise under 3s per km", () => {
+    const flags = flagsInKg([
+      runEntry("2026-06-01", 5000, 25),
+      runEntry("2026-06-05", 5000, 25.1),
+      runEntry("2026-06-10", 5000, 25.15),
+    ]);
+    expect(flags[0]).toMatchObject({ flag: "plateau" });
+  });
+
+  it("says nothing at all about a distance exercise logged without its distance", () => {
+    // Rowing carries a distance in its definition; 40 → 30 min of rowing with
+    // no metres logged is not a result, so there is no honest flag to emit.
+    const rowFor = (date: string, time: number) =>
+      makeEntry({ date, exerciseSets: [makeSet({ exerciseName: "rowing", time })] });
+    expect(
+      flagsInKg([rowFor("2026-06-01", 40), rowFor("2026-06-05", 35), rowFor("2026-06-10", 30)]),
+    ).toEqual([]);
+  });
+
+  it("compares raw time only when the rep count is identical", () => {
+    const sameReps = flagsInKg([
+      timeEntry("2026-06-01", 5, 50),
+      timeEntry("2026-06-05", 4.5, 50),
+      timeEntry("2026-06-10", 4, 50),
+    ]);
+    expect(sameReps[0]).toMatchObject({ flag: "progressing" });
+
+    // 30 reps in 3 min is not a personal best over 50 reps in 4 min.
+    const differentReps = flagsInKg([
+      timeEntry("2026-06-01", 5, 50),
+      timeEntry("2026-06-05", 4.5, 40),
+      timeEntry("2026-06-10", 4, 30),
+    ]);
+    expect(differentReps).toEqual([]);
+  });
+
+  it("says nothing about an unsized clock, which may be a hold", () => {
+    // A plank is time-under-tension: 60s beats 30s, so "Time improved from
+    // 60s to 30s" has the sign backwards. With no rep count to size the
+    // effort there is no way to tell a hold from a for-time set.
+    const hold = (date: string, time: number) =>
+      makeEntry({ date, exerciseSets: [makeSet({ exerciseName: "plank", time, reps: null })] });
+    expect(
+      flagsInKg([hold("2026-06-01", 0.5), hold("2026-06-05", 0.75), hold("2026-06-10", 1)]),
+    ).toEqual([]);
+  });
+
+  it("prefers pace over raw duration when both are recorded", () => {
+    const mixed = (date: string, metres: number, time: number) =>
+      makeEntry({
+        date,
+        exerciseSets: [
+          makeSet({ exerciseName: "rowing", distance: metres, distanceUnit: "m", time, setNumber: 1 }),
+          makeSet({ exerciseName: "rowing", time: 60, setNumber: 2 }),
+        ],
+      });
+    const flags = flagsInKg([
+      mixed("2026-06-01", 2000, 8),
+      mixed("2026-06-05", 2000, 7.5),
+      mixed("2026-06-10", 2000, 7),
+    ]);
+    expect(flags[0].detail).toContain("Pace improved");
+  });
+
+  it("reads a miles athlete's stored feet as feet, and quotes pace per mile", () => {
+    // distanceUnit "ft" is the stored stamp for a miles athlete (5280 ft = 1 mi).
+    const run = (date: string, feet: number, time: number) =>
+      makeEntry({
+        date,
+        exerciseSets: [
+          makeSet({ exerciseName: "easy_run", distance: feet, distanceUnit: "ft", time }),
+        ],
+      });
+    const [flag] = computeProgressionFlags(
+      [run("2026-06-01", 15840, 27), run("2026-06-05", 15840, 26), run("2026-06-10", 15840, 24)],
+      "lbs",
+      "miles",
+    );
+    // 15840 ft = 3 miles: 9:00/mi then 8:00/mi.
+    expect(flag.detail).toBe(
+      "Pace improved from 9:00/mi (3 miles) to 8:00/mi (3 miles) over last 3 sessions",
+    );
+  });
+
+  it("only compares metrics present in all three of the most recent sessions", () => {
+    // The weight was logged in January and the two Junes; "over last 3
+    // sessions" used to be asserted over exactly that, three non-adjacent
+    // sessions spanning five months.
+    const flags = flagsInKg([
+      weightEntry("2026-01-05", 60),
+      makeEntry({
+        date: "2026-06-01",
+        exerciseSets: [makeSet({ exerciseName: BACK_SQUAT, reps: 5 })],
+      }),
+      weightEntry("2026-06-05", 100),
+      weightEntry("2026-06-10", 100),
+    ]);
+    expect(flags).toEqual([]);
   });
 });
 
