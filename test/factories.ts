@@ -62,6 +62,7 @@ export function createMockTrainingPlan(overrides: Partial<TrainingPlan> = {}): T
     startDate: null,
     endDate: null,
     raceDate: null,
+    retiredOn: null,
     generationStatus: "ready",
     generationError: null,
     generationStartedAt: null,

@@ -19,6 +19,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray, or } f
 
 import { db } from "../db";
 import { getLocalDateStrSafe } from "../timezone";
+import { planDaysWithinLifetimes } from "./planRetirement";
 import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
 import { sortAndWindowTimelineEntries } from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
@@ -365,7 +366,7 @@ export class TimelineStorage {
     // break `sqlLimit` semantics.
     const userPlans = await db.query.trainingPlans.findMany({
       where: eq(trainingPlans.userId, userId),
-      columns: { id: true, name: true, raceDate: true },
+      columns: { id: true, name: true, raceDate: true, retiredOn: true },
     });
     // W7: build the plan-name map once and return it so getTimeline can reuse it
     // for standalone-workout plan names instead of issuing a second identical
@@ -374,12 +375,23 @@ export class TimelineStorage {
     if (userPlans.length === 0) return { scheduledDays: [], planNameById };
 
     const planIds = userPlans.map((p) => p.id);
-    const relevantPlanIds = planId && planIds.includes(planId) ? [planId] : planIds;
-    if (relevantPlanIds.length === 0) return { scheduledDays: [], planNameById };
+    if (planIds.length === 0) return { scheduledDays: [], planNameById };
     const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
 
+    // Asking for ONE plan shows all of it, retired or not — that is the athlete
+    // inspecting their own history, and hiding half of it would be a lie. The
+    // "All plans" view instead drops each retired plan's days from its cutoff
+    // onward: without this, superseding leaves the abandoned block's sessions
+    // interleaved with the new one's on the very same days, which is the most
+    // visible symptom of the whole bug.
+    const isSinglePlanView = planId != null && planIds.includes(planId);
+    const planScope = isSinglePlanView
+      ? inArray(planDays.planId, [planId])
+      : planDaysWithinLifetimes(userPlans);
+    if (!planScope) return { scheduledDays: [], planNameById };
+
     const days = await db.query.planDays.findMany({
-      where: and(inArray(planDays.planId, relevantPlanIds), isNotNull(planDays.scheduledDate)),
+      where: and(planScope, isNotNull(planDays.scheduledDate)),
       orderBy: desc(planDays.scheduledDate),
       ...(sqlLimit === undefined ? {} : { limit: sqlLimit }),
     });
@@ -593,15 +605,20 @@ export class TimelineStorage {
     // filtered by plan IDs. Same pattern as fetchScheduledDays.
     const userPlans = await db.query.trainingPlans.findMany({
       where: eq(trainingPlans.userId, userId),
-      columns: { id: true, raceDate: true },
+      columns: { id: true, raceDate: true, retiredOn: true },
     });
     if (userPlans.length === 0) return [];
-    const userPlanIds = userPlans.map((p) => p.id);
     const raceDateById = new Map(userPlans.map((p) => [p.id, p.raceDate]));
+
+    // Never propose sessions from a plan the athlete has retired — this feeds the
+    // coach's "next sessions", so a stale suggestion here is the app actively
+    // coaching them back toward the goal they just left.
+    const planScope = planDaysWithinLifetimes(userPlans);
+    if (!planScope) return [];
 
     const rows = await db.query.planDays.findMany({
       where: and(
-        inArray(planDays.planId, userPlanIds),
+        planScope,
         isNotNull(planDays.scheduledDate),
         gte(planDays.scheduledDate, today),
         // Exclude already-completed/skipped/missed days

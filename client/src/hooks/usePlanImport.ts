@@ -82,6 +82,32 @@ export function usePlanImport({
     },
   });
 
+  const setPlanRetirementMutation = useMutation({
+    mutationFn: ({ planId, retiredOn }: { planId: string; retiredOn: string | null }) =>
+      api.plans.setRetirement(planId, retiredOn),
+    onSuccess: (_data, { retiredOn }) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
+      // The timeline too: archiving changes which plan the server treats as
+      // active, and hides the archived plan's remaining days from "All plans".
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
+      toast({ title: retiredOn === null ? "Plan restored" : "Plan archived" });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "";
+      // The server refuses a restore that would leave two live plans over the
+      // same days — say which plan is in the way rather than "failed".
+      if (message.includes("PLAN_OVERLAP") || message.includes("already covers")) {
+        toast({
+          title: "Can't restore this plan yet",
+          description: "Another plan already covers these dates. Archive that one first.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Failed to update plan", variant: "destructive" });
+    },
+  });
+
   const deletePlanMutation = useMutation({
     mutationFn: (planId: string) => api.plans.deletePlan(planId),
     onSuccess: () => {
@@ -202,6 +228,7 @@ export function usePlanImport({
     renamePlanMutation,
     schedulePlanMutation,
     updatePlanGoalMutation,
+    setPlanRetirementMutation,
     deletePlanMutation,
   };
 }

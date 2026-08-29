@@ -1,5 +1,6 @@
 ﻿import { planDays, trainingPlans } from "../tables";
 import { createInsertSchema, z } from "../zod";
+import { dateStringSchema } from "./requests";
 // Training plan types and schemas
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans)
   .omit({
@@ -13,7 +14,17 @@ export const updateTrainingPlanGoalSchema = z.object({
   goal: z.string().max(500).nullable(),
 });
 
+/**
+ * Archive a plan effective a date, or restore it with `null`. The route clamps
+ * the date forward to the athlete's own today — see the handler for why a
+ * back-dated retirement is refused rather than honoured.
+ */
+export const updateTrainingPlanRetirementSchema = z.object({
+  retiredOn: dateStringSchema.nullable(),
+});
+
 export type UpdateTrainingPlanGoal = z.infer<typeof updateTrainingPlanGoalSchema>;
+export type UpdateTrainingPlanRetirement = z.infer<typeof updateTrainingPlanRetirementSchema>;
 export type InsertTrainingPlan = z.infer<typeof insertTrainingPlanSchema>;
 export type TrainingPlan = typeof trainingPlans.$inferSelect;
 

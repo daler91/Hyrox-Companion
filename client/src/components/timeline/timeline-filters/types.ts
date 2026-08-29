@@ -20,6 +20,13 @@ export interface TimelineFiltersProps {
   /** Delete the given plan (after the in-component confirmation dialog). */
   readonly onDeletePlan?: (planId: string) => void;
   readonly isDeletingPlan?: boolean;
+  /**
+   * Archive the plan from `retiredOn`, or restore it with `null`. Archiving is
+   * how an athlete steps off a plan mid-way without its remaining sessions
+   * counting against them; the server clamps the date to their own today.
+   */
+  readonly onSetPlanRetirement?: (planId: string, retiredOn: string | null) => void;
+  readonly isUpdatingRetirement?: boolean;
   readonly canBulkDelete?: boolean;
   readonly bulkDeleteMode?: boolean;
   readonly onBulkDeleteModeChange?: (enabled: boolean) => void;

@@ -22,8 +22,17 @@ vi.mock("../../storage", () => ({ storage: {} }));
 
 // -- Helpers ------------------------------------------------------------------
 
+// `where` resolves directly AND carries orderBy/limit, because the queries under
+// test end in different places: listTrainingPlans stops at orderBy,
+// getPlanForDate goes on to limit, and the rest await the where itself.
 function mockSelectChain(result: unknown[]) {
-  const whereMock = vi.fn().mockResolvedValue(result);
+  const settle = () => {
+    const thenable = Promise.resolve(result) as Promise<unknown[]> & Record<string, unknown>;
+    thenable.orderBy = vi.fn(settle);
+    thenable.limit = vi.fn(settle);
+    return thenable;
+  };
+  const whereMock = vi.fn(settle);
   const fromMock = vi.fn().mockReturnValue({ where: whereMock });
   vi.mocked(db.select).mockReturnValue({ from: fromMock });
   return { fromMock, whereMock };
@@ -238,8 +247,11 @@ describe("PlanStorage.markMissedPlanDays", () => {
     vi.mocked(db.selectDistinct).mockReturnValue({
       from: vi.fn().mockResolvedValue(zones),
     } as never);
+    // The sweep issues two subqueries off db.select: the per-zone plan-id lookup
+    // (from → innerJoin → where) and the retirement guard (from → where). One
+    // stub serves both shapes.
     vi.mocked(db.select).mockReturnValue({
-      from: () => ({ innerJoin: () => ({ where: () => ({}) }) }),
+      from: () => ({ innerJoin: () => ({ where: () => ({}) }), where: () => ({}) }),
     } as never);
     const returningMock = vi
       .fn()

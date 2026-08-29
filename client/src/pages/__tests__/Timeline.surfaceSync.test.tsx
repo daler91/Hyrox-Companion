@@ -129,6 +129,7 @@ vi.mock("@/hooks/useTimelineState", () => ({
       renamePlanMutation: { isPending: false, mutate: vi.fn() },
       schedulePlanMutation: { isPending: false, mutate: vi.fn() },
       updatePlanGoalMutation: { isPending: false, mutate: vi.fn() },
+      setPlanRetirementMutation: { isPending: false, mutate: vi.fn() },
       deletePlanMutation: { isPending: false, mutate: vi.fn() },
     },
     workoutActions: {

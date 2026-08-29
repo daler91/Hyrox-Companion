@@ -18,6 +18,7 @@ import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { sanitizeUserInput } from "../utils/sanitize";
 import { calculateTrainingLoad, toIsoDate } from "./trainingLoadService";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
@@ -796,6 +797,15 @@ async function computeStartLoadPosture(
   }
 }
 
+/**
+ * The athlete's own calendar date. A UTC "today" would retire a plan a day early
+ * for anyone west of Greenwich — the same reasoning as PlanStorage.resolveUserToday.
+ */
+async function resolveUserTodayForPlan(userId: string): Promise<string> {
+  const user = await storage.users.getUser(userId);
+  return getLocalDateStrSafe(new Date(), user?.userTimezone);
+}
+
 export async function executePlanGeneration(
   planId: string,
   input: GeneratePlanInput,
@@ -886,7 +896,38 @@ export async function executePlanGeneration(
       await storage.plans.schedulePlan(planId, scheduleStartDate, userId);
     }
 
-    await storage.plans.updateGenerationStatus(planId, "ready");
+    // Retire the plans the athlete is switching away from, and publish this one,
+    // in ONE transaction — and only HERE, at the very end of a successful
+    // generation.
+    //
+    // The ordering is load-bearing. A new plan has no start or end date until
+    // schedulePlan runs just above, and getPlanForDate ignores plans without
+    // both. Retiring the old plan any earlier — in the route, before the job is
+    // even enqueued — means a generation that fails or times out leaves the
+    // athlete with the old plan retired and the new one unusable: no active plan
+    // at all. Doing it from the client after polling for `ready` is no better; a
+    // closed tab silently skips it. Here, any throw lands in the catch below,
+    // which marks this plan `failed`, and the transaction never commits, so the
+    // old plan is untouched and remains exactly what the athlete is training.
+    //
+    // Effective from the later of the new plan's start and today: a start date
+    // in the past must not retroactively unattribute workouts already logged
+    // against the old plan. A start date in the FUTURE is the nice case — the
+    // old plan legitimately stays active until the new one begins, with no
+    // cutover job to run.
+    const supersedeIds = (normalized.supersedePlanIds ?? []).filter((id) => id !== planId);
+    await db.transaction(async (tx) => {
+      if (scheduleStartDate && supersedeIds.length > 0) {
+        const today = await resolveUserTodayForPlan(userId);
+        const effectiveFrom = scheduleStartDate > today ? scheduleStartDate : today;
+        const retired = await storage.plans.retirePlans(supersedeIds, userId, effectiveFrom, tx);
+        logger.info(
+          { userId, planId, requested: supersedeIds.length, retired: retired.length, effectiveFrom },
+          "[planGen] Retired superseded plans",
+        );
+      }
+      await storage.plans.updateGenerationStatus(planId, "ready", null, tx);
+    });
 
     logger.info(
       { userId, planId, dayCount: days.length },

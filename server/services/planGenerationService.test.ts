@@ -1,5 +1,5 @@
 import type { GeneratePlanInput, PlanDay } from "@shared/schema";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMockPlanDay } from "../../test/factories";
 import { ErrorCode } from "../errors";
@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
       createPlanDays: vi.fn(),
       schedulePlan: vi.fn(),
       updateGenerationStatus: vi.fn(),
+      retirePlans: vi.fn(),
     },
     users: {
       getUser: vi.fn(),
@@ -369,6 +370,7 @@ describe("executePlanGeneration", () => {
     mocks.trackUsageFromResponse.mockReturnValue(undefined);
     mocks.plans.schedulePlan.mockResolvedValue(true);
     mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
+    mocks.plans.retirePlans.mockResolvedValue([]);
     mocks.users.getUser.mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" });
     mocks.analytics.getWorkoutLogsByDateRange.mockResolvedValue([]);
     mocks.analytics.getAllExerciseSetsWithDates.mockResolvedValue([]);
@@ -532,7 +534,118 @@ describe("executePlanGeneration", () => {
       expect.arrayContaining([expect.objectContaining({ dayName: "Sunday", notes: "Hydrate" })]),
       mocks.tx,
     );
-    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "ready");
+    // The flip to `ready` now runs inside the supersede transaction, so it
+    // carries the tx executor.
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith(
+      "plan-1",
+      "ready",
+      null,
+      mocks.tx,
+    );
+  });
+
+  describe("superseding the plans the athlete switched away from", () => {
+    // Restored unconditionally, so a failing assertion inside a pinned-clock
+    // test cannot leak a frozen clock into the rest of the suite.
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function pinToday(date: string) {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(`${date}T00:00:00Z`));
+    }
+
+    // A one-week plan starting 2026-01-05.
+    function primeSupersede(input: GeneratePlanInput) {
+      const week = makeGeneratedWeek(1);
+      setupPlanStorage(input, createPlanDaysFromGenerated(week));
+      mockAiChunks(week);
+      mocks.users.getUser.mockResolvedValue({
+        weightUnit: "kg",
+        distanceUnit: "km",
+        userTimezone: "UTC",
+      });
+    }
+
+    it("retires the superseded plans once generation succeeds", async () => {
+      const input = { ...baseInput, supersedePlanIds: ["old-plan"] };
+      primeSupersede(input);
+      pinToday("2026-01-02");
+
+      await executePlanGeneration("plan-1", input, "user-1");
+
+      // Effective from the new plan's start, which is still in the future here:
+      // the old plan legitimately stays the athlete's plan until then.
+      expect(mocks.plans.retirePlans).toHaveBeenCalledWith(
+        ["old-plan"],
+        "user-1",
+        "2026-01-05",
+        mocks.tx,
+      );
+    });
+
+    it("does NOT retire anything when generation fails", async () => {
+      // The regression that matters most. Retiring before the plan is known-good
+      // would leave the athlete with the old plan archived and the new one
+      // unusable — no active plan at all.
+      const input = { ...baseInput, supersedePlanIds: ["old-plan"] };
+      mocks.generateContent.mockRejectedValue(new Error("model unavailable"));
+
+      await expect(executePlanGeneration("plan-1", input, "user-1")).rejects.toThrow();
+
+      expect(mocks.plans.retirePlans).not.toHaveBeenCalled();
+      expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith(
+        "plan-1",
+        "failed",
+        expect.any(String),
+      );
+    });
+
+    it("clamps a past start date forward to today", async () => {
+      // Otherwise retirement would reach back over days the athlete already
+      // trained and logged against the old plan, unattributing them.
+      const input = { ...baseInput, supersedePlanIds: ["old-plan"] };
+      primeSupersede(input);
+      pinToday("2026-01-09");
+
+      await executePlanGeneration("plan-1", input, "user-1");
+
+      expect(mocks.plans.retirePlans).toHaveBeenCalledWith(
+        ["old-plan"],
+        "user-1",
+        "2026-01-09",
+        mocks.tx,
+      );
+    });
+
+    it("never retires the plan being generated", async () => {
+      const input = { ...baseInput, supersedePlanIds: ["plan-1", "old-plan"] };
+      primeSupersede(input);
+
+      await executePlanGeneration("plan-1", input, "user-1");
+
+      expect(mocks.plans.retirePlans).toHaveBeenCalledWith(
+        ["old-plan"],
+        "user-1",
+        expect.any(String),
+        mocks.tx,
+      );
+    });
+
+    it("skips the retirement write entirely when nothing is superseded", async () => {
+      primeSupersede(baseInput);
+
+      await executePlanGeneration("plan-1", baseInput, "user-1");
+
+      expect(mocks.plans.retirePlans).not.toHaveBeenCalled();
+      expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith(
+        "plan-1",
+        "ready",
+        null,
+        mocks.tx,
+      );
+    });
   });
 
   it("rejects incomplete chunk coverage and marks plan failed", async () => {

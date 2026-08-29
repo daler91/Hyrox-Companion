@@ -1,3 +1,4 @@
+import type { TrainingPlan } from "@shared/schema";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,9 @@ interface GeneratePlanScheduleStepProps {
   readonly onEndDateIsRaceDateChange: (value: boolean) => void;
   readonly planWeeks: number;
   readonly dateError: string | null;
+  readonly overlappingPlans: readonly TrainingPlan[];
+  readonly supersedePlanIds: readonly string[];
+  readonly onToggleSupersede: (planId: string) => void;
   readonly onBack: () => void;
   readonly onNext: () => void;
   readonly canProceed: boolean;
@@ -57,6 +61,9 @@ export function GeneratePlanScheduleStep({
   onEndDateIsRaceDateChange,
   planWeeks,
   dateError,
+  overlappingPlans,
+  supersedePlanIds,
+  onToggleSupersede,
   onBack,
   onNext,
   canProceed,
@@ -162,6 +169,36 @@ export function GeneratePlanScheduleStep({
           <p className="text-xs text-muted-foreground">{planWeeks}-week plan</p>
         )}
       </div>
+
+      {overlappingPlans.length > 0 && (
+        <fieldset className="space-y-2 rounded-md border p-3">
+          <legend className="px-1 text-sm font-medium">
+            {overlappingPlans.length === 1
+              ? "You're already on a plan"
+              : "You're already on other plans"}
+          </legend>
+          <p className="text-xs text-muted-foreground">
+            Archiving stops the remaining sessions counting towards your adherence. Everything
+            you have already logged is kept.
+          </p>
+          {overlappingPlans.map((plan) => (
+            <div key={plan.id} className="flex items-center justify-between gap-3">
+              <Label htmlFor={`supersede-${plan.id}`} className="text-sm font-normal">
+                Archive <span className="font-medium">{plan.name}</span>
+                {plan.endDate ? (
+                  <span className="text-muted-foreground"> (runs to {plan.endDate})</span>
+                ) : null}
+              </Label>
+              <Switch
+                id={`supersede-${plan.id}`}
+                checked={supersedePlanIds.includes(plan.id)}
+                onCheckedChange={() => onToggleSupersede(plan.id)}
+                data-testid={`switch-supersede-${plan.id}`}
+              />
+            </div>
+          ))}
+        </fieldset>
+      )}
 
       {!canProceed && !dateError && requiredRestDays > 0 && (
         <output id="schedule-rest-hint" className="block text-center text-xs text-muted-foreground">

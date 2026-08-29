@@ -26,6 +26,10 @@ export const plans = {
   updateGoal: (planId: string, goal: string | null) =>
     typedRequest<TrainingPlan>("PATCH", `/api/v1/plans/${planId}/goal`, { goal }),
 
+  /** Archive a plan from `retiredOn`, or restore it with `null`. */
+  setRetirement: (planId: string, retiredOn: string | null) =>
+    typedRequest<TrainingPlan>("PATCH", `/api/v1/plans/${planId}/retirement`, { retiredOn }),
+
   updateDay: (planId: string, dayId: string, updates: Partial<PlanDay>) =>
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/${planId}/days/${dayId}`, updates),
 

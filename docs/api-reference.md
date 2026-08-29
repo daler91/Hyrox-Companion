@@ -548,6 +548,7 @@ Kick off an **asynchronous** AI training-plan generation. The request creates a 
 - **Body:** `GeneratePlanInput` — `{ goal, totalWeeks (1-24), daysPerWeek (2-7), experienceLevel, raceDate?, startDate?, restDays?, focusAreas?, injuries? }`
 - **Validation:** `generatePlanInputSchema`
 - **Response:** `202 Accepted` with the pending `TrainingPlan` stub. Poll [`GET /api/v1/plans/:id/generation-status`](#get-apiv1plansidgeneration-status) for progress.
+- **`supersedePlanIds?: string[]`** (max 5): plans the athlete is switching away from. They are retired **only** once this plan generates successfully, atomically with the flip to `ready`, and effective from the later of the new plan's start date and today. A failed or timed-out generation retires nothing, so the athlete is never left without an active plan.
 - **`409 PLAN_GENERATION_IN_PROGRESS`:** Returned when the user already has a generation in flight (`hasInFlightPlanGeneration`), so rapid re-submits (triple-clicks, retries) can't enqueue parallel jobs that each burn AI budget and race to write the same user's plans.
 
 ### GET /api/v1/plans/:id/generation-status
@@ -575,6 +576,23 @@ Update a training plan's goal.
 - **Rate limit:** `planUpdate` category, 20/min
 - **Body:** `{ goal: string | null }` (max 500 chars)
 - **Response:** Updated `TrainingPlan`
+
+### PATCH /api/v1/plans/:id/retirement
+
+Archive a training plan from a date, or restore it.
+
+- **Auth:** Required
+- **Rate limit:** `planUpdate` category, 20/min
+- **Body:** `{ retiredOn: string | null }` — an ISO `YYYY-MM-DD`, or `null` to restore
+- **Response:** Updated `TrainingPlan`
+- **`404`:** Plan not found (or not the caller's)
+- **`409 PLAN_OVERLAP`:** Returned on a restore that would leave two live plans covering the same days — the state the lifecycle column exists to prevent. The message names the plan in the way.
+
+`retiredOn` is a half-open cutoff: the plan stays the athlete's active plan for
+every date before it. It is clamped forward to the athlete's own local today, so
+a back-dated value is accepted but takes effect from today — a past cutoff would
+strand days the missed-day sweep has already written, which `missed → planned`
+forbids undoing.
 
 ### PATCH /api/v1/plans/:planId/days/:dayId
 

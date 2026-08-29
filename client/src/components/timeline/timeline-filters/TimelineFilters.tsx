@@ -1,4 +1,5 @@
 import {
+  Archive,
   CalendarDays,
   Download,
   Filter,
@@ -33,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getTodayString } from "@/lib/dateUtils";
 
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { FilterStatus } from "../types";
@@ -58,6 +60,8 @@ export default function TimelineFilters({
   onScheduleClick,
   onDeletePlan,
   isDeletingPlan,
+  onSetPlanRetirement,
+  isUpdatingRetirement,
   canBulkDelete,
   bulkDeleteMode,
   onBulkDeleteModeChange,
@@ -68,6 +72,7 @@ export default function TimelineFilters({
   const [goalText, setGoalText] = useState("");
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [retirementConfirmOpen, setRetirementConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId);
@@ -97,6 +102,17 @@ export default function TimelineFilters({
     if (selectedPlanId) {
       onGoalSave?.(selectedPlanId, goalText.trim() || null);
       setGoalDialogOpen(false);
+    }
+  };
+
+  const isArchived = selectedPlan?.retiredOn != null;
+
+  const handleRetirementConfirm = () => {
+    if (selectedPlanId) {
+      // Archiving sends today; the server clamps it to the athlete's own
+      // calendar date anyway, so the exact value here is a floor, not a promise.
+      onSetPlanRetirement?.(selectedPlanId, isArchived ? null : getTodayString());
+      setRetirementConfirmOpen(false);
     }
   };
 
@@ -179,6 +195,18 @@ export default function TimelineFilters({
                         >
                           <CalendarDays className="h-4 w-4 mr-2" />
                           Reschedule
+                        </DropdownMenuItem>
+                      ) : null}
+                      {onSetPlanRetirement ? (
+                        <DropdownMenuItem
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setRetirementConfirmOpen(true);
+                          }}
+                          data-testid="menuitem-archive-plan"
+                        >
+                          <Archive className="h-4 w-4 mr-2" />
+                          {isArchived ? "Restore plan" : "Archive plan"}
                         </DropdownMenuItem>
                       ) : null}
                       {onDeletePlan ? (
@@ -317,7 +345,28 @@ export default function TimelineFilters({
         isUpdatingGoal={isUpdatingGoal}
       />
 
-      <GeneratePlanDialog open={generateDialogOpen} onOpenChange={setGenerateDialogOpen} />
+      <GeneratePlanDialog
+        open={generateDialogOpen}
+        onOpenChange={setGenerateDialogOpen}
+        existingPlans={plans}
+      />
+
+      <ConfirmDialog
+        open={retirementConfirmOpen}
+        onOpenChange={setRetirementConfirmOpen}
+        title={isArchived ? "Restore this plan?" : "Archive this plan?"}
+        description={
+          isArchived
+            ? "Its past sessions will count towards your adherence again, and any that have already gone by will be marked missed."
+            : "Its remaining sessions stop counting towards your adherence from today, and drop off the all-plans timeline. Everything you have already logged is kept."
+        }
+        confirmText={isArchived ? "Restore" : "Archive"}
+        cancelText="Cancel"
+        onConfirm={handleRetirementConfirm}
+        isPending={isUpdatingRetirement}
+        cancelTestId="button-cancel-archive-plan"
+        confirmTestId="button-confirm-archive-plan"
+      />
 
       <ConfirmDialog
         open={deleteConfirmOpen}

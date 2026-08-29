@@ -1,6 +1,6 @@
 import express from "express";
 import request from "supertest";
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { afterEach,beforeEach,describe, expect, it, vi } from "vitest";
 
 import { clearRateLimitBuckets } from "../../routeUtils";
 import { storage } from "../../storage";
@@ -49,6 +49,8 @@ vi.mock("../../storage", () => ({
       schedulePlan: vi.fn(),
       deletePlanDay: vi.fn(),
       hasInFlightPlanGeneration: vi.fn(),
+      setPlanRetirement: vi.fn(),
+      findOverlappingActivePlans: vi.fn(),
     },
     users: {
       getUser: vi.fn(),
@@ -134,6 +136,134 @@ describe("POST /api/plans/import Rate Limiting", () => {
     // Next request should succeed again
     const successfulResponse = await request(app).post("/api/v1/plans/import").send(payload);
     expect(successfulResponse.status).toBe(200);
+  });
+});
+
+describe("PATCH /api/v1/plans/:id/retirement", () => {
+  let app: express.Express;
+
+  const plan = {
+    id: "plan-123",
+    userId: "test_user_id",
+    name: "Race Block",
+    startDate: "2026-01-05",
+    endDate: "2026-03-01",
+    retiredOn: null,
+    days: [],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearRateLimitBuckets();
+    app = createTestApp(plansRouter);
+    vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(plan as never);
+    vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "UTC" } as never);
+    vi.mocked(storage.plans.findOverlappingActivePlans).mockResolvedValue([]);
+    vi.mocked(storage.plans.setPlanRetirement).mockImplementation(
+      async (_id, retiredOn) => ({ ...plan, retiredOn }) as never,
+    );
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-10T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("archives from a future date as given", async () => {
+    const response = await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: "2026-02-20" });
+
+    expect(response.status).toBe(200);
+    expect(storage.plans.setPlanRetirement).toHaveBeenCalledWith(
+      "plan-123",
+      "2026-02-20",
+      "test_user_id",
+    );
+  });
+
+  it("clamps a back-dated retirement forward to today", async () => {
+    // A past cutoff would strand every day the sweep already flipped to
+    // `missed` between then and now: still red on the timeline, but dropped
+    // from the adherence denominator, with no way back (missed → planned is
+    // forbidden).
+    const response = await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: "2026-01-15" });
+
+    expect(response.status).toBe(200);
+    expect(storage.plans.setPlanRetirement).toHaveBeenCalledWith(
+      "plan-123",
+      "2026-02-10",
+      "test_user_id",
+    );
+  });
+
+  it("clamps against the athlete's own calendar, not UTC", async () => {
+    // 2026-02-10T00:00Z is still 2026-02-09 in Los Angeles; clamping to the UTC
+    // date would retire the plan a day early for that athlete.
+    vi.mocked(storage.users.getUser).mockResolvedValue({
+      userTimezone: "America/Los_Angeles",
+    } as never);
+
+    await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: "2026-01-15" });
+
+    expect(storage.plans.setPlanRetirement).toHaveBeenCalledWith(
+      "plan-123",
+      "2026-02-09",
+      "test_user_id",
+    );
+  });
+
+  it("restores a plan when nothing else covers its dates", async () => {
+    const response = await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: null });
+
+    expect(response.status).toBe(200);
+    expect(storage.plans.setPlanRetirement).toHaveBeenCalledWith(
+      "plan-123",
+      null,
+      "test_user_id",
+    );
+  });
+
+  it("refuses a restore that would put two live plans over the same days", async () => {
+    vi.mocked(storage.plans.findOverlappingActivePlans).mockResolvedValue([
+      { id: "plan-999", name: "Base Block" },
+    ] as never);
+
+    const response = await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: null });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("PLAN_OVERLAP");
+    expect(response.body.error).toContain("Base Block");
+    expect(storage.plans.setPlanRetirement).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a plan the athlete does not own", async () => {
+    vi.mocked(storage.plans.getTrainingPlan).mockResolvedValue(undefined);
+
+    const response = await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: null });
+
+    expect(response.status).toBe(404);
+    expect(storage.plans.setPlanRetirement).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed date", async () => {
+    const response = await request(app)
+      .patch("/api/v1/plans/plan-123/retirement")
+      .send({ retiredOn: "not-a-date" });
+
+    expect(response.status).toBe(400);
+    expect(storage.plans.setPlanRetirement).not.toHaveBeenCalled();
   });
 });
 

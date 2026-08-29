@@ -47,6 +47,7 @@ export function PlanSelector({
             {plans.map((plan) => (
               <SelectItem key={plan.id} value={plan.id}>
                 {plan.name} ({plan.totalWeeks} weeks)
+                {plan.retiredOn ? " — Archived" : ""}
               </SelectItem>
             ))}
           </SelectContent>
