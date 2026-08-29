@@ -1,9 +1,4 @@
-import {
-  type CoachNoteInputs,
-  type InsertExerciseSet,
-  type PlanDay,
-  type UpdatePlanDay,
-} from "@shared/schema";
+import { type CoachNoteInputs, type InsertExerciseSet, type UpdatePlanDay } from "@shared/schema";
 import { normalizeWorkoutTextUnits, type UnitPreferences } from "@shared/unitConversion";
 
 import { db, type DbExecutor } from "../db";
@@ -758,8 +753,15 @@ export async function regenerateCoachNoteForPlanDay(
   planDayId: string,
   userId: string,
 ): Promise<RegeneratedCoachNote | RegenerateCooldown> {
-  const user = await storage.users.getUser(userId);
-  const day: PlanDay | undefined = await storage.plans.getPlanDay(planDayId, userId);
+  // ⚡ Bolt Performance Optimization:
+  // `user` (users table) and `day` (plan_days joined to training_plans) are
+  // independent reads with no data dependency between them — `user` isn't
+  // consulted until resolveTrainingStyle() much further down. Fetching them
+  // concurrently halves this handler's DB round-trip latency on every call.
+  const [user, day] = await Promise.all([
+    storage.users.getUser(userId),
+    storage.plans.getPlanDay(planDayId, userId),
+  ]);
   if (!day) {
     throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
   }
