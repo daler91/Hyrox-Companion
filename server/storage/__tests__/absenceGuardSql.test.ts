@@ -29,39 +29,68 @@ function render(query: { getSQL: () => never }): string {
   return dialect.sqlToQuery(query.getSQL()).sql;
 }
 
+/**
+ * The missed-day sweep's statement, built once and rendered by every test that
+ * asserts something about it.
+ *
+ * Both of its guards — declared absence and plan retirement — live on the same
+ * WHERE, and each is a correlated NOT EXISTS that the other could plausibly
+ * break: an unaliased retirement guard would shadow the training_plans the
+ * absence guard joins for its own purposes. Restating the statement per test
+ * meant a fix could be applied to one copy and asserted against the other, so
+ * it is written out once here, kept character-identical to the original in
+ * plans.ts, and every test below renders THIS.
+ */
+function renderMissedSweep(today = "2026-07-21", timezone = "UTC"): string {
+  const retiredPlan = alias(trainingPlans, "retired_plan");
+  const zonePlanIds = db
+    .select({ id: trainingPlans.id })
+    .from(trainingPlans)
+    .innerJoin(users, eq(users.id, trainingPlans.userId))
+    .where(eq(users.userTimezone, timezone));
+
+  return render(
+    db
+      .update(planDays)
+      .set({ status: "missed" })
+      .where(
+        and(
+          eq(planDays.status, "planned"),
+          lt(planDays.scheduledDate, today),
+          inArray(planDays.planId, zonePlanIds),
+          notExists(
+            db
+              .select({ one: sql`1` })
+              .from(retiredPlan)
+              .where(
+                and(
+                  eq(retiredPlan.id, planDays.planId),
+                  isNotNull(retiredPlan.retiredOn),
+                  gte(planDays.scheduledDate, retiredPlan.retiredOn),
+                ),
+              ),
+          ),
+          notExists(
+            db
+              .select({ one: sql`1` })
+              .from(timelineAnnotations)
+              .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
+              .where(
+                and(
+                  eq(timelineAnnotations.userId, trainingPlans.userId),
+                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
+                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
+                ),
+              ),
+          ),
+        ),
+      ) as never,
+  );
+}
+
 describe("declared-absence guards", () => {
   it("correlates the missed-day sweep's NOT EXISTS to each plan day's own owner and date", () => {
-    const zonePlanIds = db
-      .select({ id: trainingPlans.id })
-      .from(trainingPlans)
-      .innerJoin(users, eq(users.id, trainingPlans.userId))
-      .where(eq(users.userTimezone, "UTC"));
-
-    const rendered = render(
-      db
-        .update(planDays)
-        .set({ status: "missed" })
-        .where(
-          and(
-            eq(planDays.status, "planned"),
-            lt(planDays.scheduledDate, "2026-07-21"),
-            inArray(planDays.planId, zonePlanIds),
-            notExists(
-              db
-                .select({ one: sql`1` })
-                .from(timelineAnnotations)
-                .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
-                .where(
-                  and(
-                    eq(timelineAnnotations.userId, trainingPlans.userId),
-                    lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                    gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                  ),
-                ),
-            ),
-          ),
-        ) as never,
-    );
+    const rendered = renderMissedSweep();
 
     expect(rendered).toContain("not exists");
     // The owner is reached through the plan, since plan_days has no user_id.
@@ -207,53 +236,12 @@ describe("plan-retirement guards", () => {
   });
 
   it("keeps the sweep's retirement guard aliased and correlated, without disturbing the absence guard", () => {
-    const retiredPlan = alias(trainingPlans, "retired_plan");
-    const zonePlanIds = db
-      .select({ id: trainingPlans.id })
-      .from(trainingPlans)
-      .innerJoin(users, eq(users.id, trainingPlans.userId))
-      .where(eq(users.userTimezone, "UTC"));
-
-    const rendered = render(
-      db
-        .update(planDays)
-        .set({ status: "missed" })
-        .where(
-          and(
-            eq(planDays.status, "planned"),
-            lt(planDays.scheduledDate, "2026-07-21"),
-            inArray(planDays.planId, zonePlanIds),
-            notExists(
-              db
-                .select({ one: sql`1` })
-                .from(retiredPlan)
-                .where(
-                  and(
-                    eq(retiredPlan.id, planDays.planId),
-                    isNotNull(retiredPlan.retiredOn),
-                    gte(planDays.scheduledDate, retiredPlan.retiredOn),
-                  ),
-                ),
-            ),
-            notExists(
-              db
-                .select({ one: sql`1` })
-                .from(timelineAnnotations)
-                .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
-                .where(
-                  and(
-                    eq(timelineAnnotations.userId, trainingPlans.userId),
-                    lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                    gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                  ),
-                ),
-            ),
-          ),
-        ) as never,
-    );
+    const rendered = renderMissedSweep();
 
     // Aliased, so the guard cannot be confused with the training_plans the
-    // absence guard below it joins for its own purposes.
+    // absence guard joins for its own purposes. Rewriting the outer UPDATE as
+    // `UPDATE ... FROM training_plans` would put an unaliased copy in scope
+    // that silently shadows that join — legal SQL, wrong results.
     expect(rendered).toContain(`"training_plans" "retired_plan"`);
     expect(rendered).toContain(`"retired_plan"."id" = "plan_days"."plan_id"`);
     // Correlated on the outer day: a partially retired plan must still have its
@@ -261,7 +249,7 @@ describe("plan-retirement guards", () => {
     expect(rendered).toContain(
       `"plan_days"."scheduled_date" >= "retired_plan"."retired_on"`,
     );
-    // Regression: the absence guard's own correlation must survive alongside it.
+    // Regression: the absence guard's own correlation survives alongside it.
     expect(rendered).toContain(
       `"timeline_annotations"."user_id" = "training_plans"."user_id"`,
     );
