@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   EXERCISE_DEFINITIONS,
+  exerciseTracksDistance,
   getExerciseHeatMapMuscles,
   getExerciseMovementPatterns,
   MOVEMENT_PATTERNS,
@@ -293,5 +294,38 @@ describe("muscle heat map metadata", () => {
   it("does not map custom or unknown exercises", () => {
     expect(getExerciseHeatMapMuscles("custom")).toEqual([]);
     expect(getExerciseHeatMapMuscles("made_up_movement")).toEqual([]);
+  });
+});
+
+describe("exerciseTracksDistance", () => {
+  it.each(["easy_run", "treadmill_run", "rowing", "skierg", "sled_push", "farmers_carry"])(
+    "reports %s as distance-carrying",
+    (exerciseName) => {
+      expect(exerciseTracksDistance(exerciseName)).toBe(true);
+    },
+  );
+
+  it.each(["plank", "back_squat", "wall_balls", "hollow_hold"])(
+    "reports %s as fixed work, not distance-carrying",
+    (exerciseName) => {
+      expect(exerciseTracksDistance(exerciseName)).toBe(false);
+    },
+  );
+
+  it("resolves human labels and aliases, not just canonical keys", () => {
+    expect(exerciseTracksDistance("Treadmill Run")).toBe(true);
+    expect(exerciseTracksDistance("Back Squat")).toBe(false);
+  });
+
+  it("reports an unrecognised exercise as not distance-carrying", () => {
+    expect(exerciseTracksDistance("not_a_real_exercise")).toBe(false);
+  });
+
+  it("agrees with the definition's own fields for every exercise", () => {
+    for (const [name, def] of Object.entries(EXERCISE_DEFINITIONS)) {
+      expect(exerciseTracksDistance(name)).toBe(
+        (def.fields as readonly string[]).includes("distance"),
+      );
+    }
   });
 });

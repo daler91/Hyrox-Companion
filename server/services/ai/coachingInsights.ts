@@ -1,10 +1,18 @@
 import { dayDiff } from "@shared/dateUtils";
+import { type ExerciseSet, exerciseTracksDistance } from "@shared/schema";
 import {
   buildStationCoverage,
   type StationCoverageSource,
   stationsRuledOutByConstraints,
 } from "@shared/stationCoverage";
-import { formatMinutes, minutes } from "@shared/units";
+import {
+  formatDistance,
+  formatPace,
+  metersToUserDistance,
+  paceSecondsPerUnit,
+  storedDistanceToMetersStamped,
+} from "@shared/unitConversion";
+import { formatMinutes, minutes, minutesToSeconds, unitless } from "@shared/units";
 
 import type { TrainingContext } from "../../gemini/index";
 import { addDaysLocal, getLocalDateStrSafe } from "../../timezone";
@@ -144,26 +152,71 @@ function compareEntryDates(a: TimelineEntry, b: TimelineEntry): number {
   return 0;
 }
 
-function aggregateExercisePeaks(exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>): Record<string, { maxWeight?: number; bestTime?: number }> {
-  const perExercise: Record<string, { maxWeight?: number; bestTime?: number }> = {};
+/**
+ * One session's comparable efforts for a single exercise.
+ *
+ * `bestSpeedMps` and `bestTime` are deliberately exclusive buckets. A set that
+ * records a distance is summarised as a SPEED (fastest set wins); a set with no
+ * distance is summarised as a raw duration. Mixing the two is what made the
+ * coach announce that a treadmill run had "worsened from 16 min to 53 min" —
+ * three different run lengths read as three attempts at the same effort.
+ */
+interface SessionEffort {
+  date: string;
+  maxWeight?: number;
+  /** Fastest distance-carrying set, m/s. Compared as pace via paceSecondsPerUnit. */
+  bestSpeedMps?: number;
+  /** Distance of that fastest set, in metres — quoted so the coach sees the effort's size. */
+  bestSpeedDistanceM?: number;
+  /** Shortest set that recorded a time but NO distance. */
+  bestTime?: number;
+  /** Reps on that set. Raw duration only compares like-for-like work (see analyzeTimeProgression). */
+  repsAtBestTime?: number | null;
+}
+
+function setDistanceInMetres(es: ExerciseSet, distanceUnit: string): number {
+  if (es.distance == null || es.distance <= 0) return 0;
+  return storedDistanceToMetersStamped(es.distance, { distanceUnit: es.distanceUnit }, { distanceUnit });
+}
+
+function aggregateExercisePeaks(
+  exerciseSets: NonNullable<TimelineEntry["exerciseSets"]>,
+  distanceUnit: string,
+): Record<string, Omit<SessionEffort, "date">> {
+  const perExercise: Record<string, Omit<SessionEffort, "date">> = {};
   for (const es of exerciseSets) {
     if (!perExercise[es.exerciseName]) perExercise[es.exerciseName] = {};
     const pe = perExercise[es.exerciseName];
     if (es.weight && (!pe.maxWeight || es.weight > pe.maxWeight)) pe.maxWeight = es.weight;
-    if (es.time && (!pe.bestTime || es.time < pe.bestTime)) pe.bestTime = es.time;
+    if (!es.time || es.time <= 0) continue;
+
+    const metres = setDistanceInMetres(es, distanceUnit);
+    if (metres > 0) {
+      const speedMps = metres / unitless(minutesToSeconds(minutes(es.time)));
+      if (pe.bestSpeedMps == null || speedMps > pe.bestSpeedMps) {
+        pe.bestSpeedMps = speedMps;
+        pe.bestSpeedDistanceM = metres;
+      }
+    } else if (pe.bestTime == null || es.time < pe.bestTime) {
+      pe.bestTime = es.time;
+      pe.repsAtBestTime = es.reps ?? null;
+    }
   }
   return perExercise;
 }
 
-function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> {
-  const history: Record<string, Array<{ date: string; maxWeight?: number; bestTime?: number }>> = {};
+function collectExerciseHistory(
+  timeline: TimelineEntry[],
+  distanceUnit: string,
+): Record<string, SessionEffort[]> {
+  const history: Record<string, SessionEffort[]> = {};
 
   const completed = timeline
     .filter(e => e.status === "completed" && e.date && e.exerciseSets && e.exerciseSets.length > 0)
     .sort(compareEntryDates);
 
   for (const entry of completed) {
-    const peaks = aggregateExercisePeaks(entry.exerciseSets ?? []);
+    const peaks = aggregateExercisePeaks(entry.exerciseSets ?? [], distanceUnit);
     for (const [name, stats] of Object.entries(peaks)) {
       if (!history[name]) history[name] = [];
       history[name].push({ date: entry.date ?? "", ...stats });
@@ -182,54 +235,117 @@ function collectExerciseHistory(timeline: TimelineEntry[]): Record<string, Array
  * (audit M8). `buildPersonalRecordSummaries` in ai/index.ts already threads the
  * real unit through for the same reason; this follows it.
  */
-function analyzeWeightProgression(exercise: string, values: number[], weightUnit: string): ProgressionFlag | null {
-  if (values.length < 3) return null;
-  const recent3 = values.slice(-3);
-  if (recent3.every(w => w === recent3[0])) {
-    return { exercise, flag: "plateau", detail: `Weight stuck at ${recent3[0]}${weightUnit} for last ${recent3.length} sessions` };
+function analyzeWeightProgression(exercise: string, recent3: SessionEffort[], weightUnit: string): ProgressionFlag | null {
+  const values = recent3.map(s => s.maxWeight);
+  if (!isTriple(values)) return null;
+  const [first, , last] = values;
+  if (values.every(w => w === first)) {
+    return { exercise, flag: "plateau", detail: `Weight stuck at ${first}${weightUnit} for last 3 sessions` };
   }
-  if (recent3[2] > recent3[0]) {
-    return { exercise, flag: "progressing", detail: `Weight increased from ${recent3[0]}${weightUnit} to ${recent3[2]}${weightUnit} over last 3 sessions` };
+  if (last > first) {
+    return { exercise, flag: "progressing", detail: `Weight increased from ${first}${weightUnit} to ${last}${weightUnit} over last 3 sessions` };
   }
-  if (recent3[2] < recent3[0]) {
-    return { exercise, flag: "regressing", detail: `Weight decreased from ${recent3[0]}${weightUnit} to ${recent3[2]}${weightUnit} over last 3 sessions` };
+  if (last < first) {
+    return { exercise, flag: "regressing", detail: `Weight decreased from ${first}${weightUnit} to ${last}${weightUnit} over last 3 sessions` };
   }
   return null;
 }
 
-// `values` are exercise_sets.time, i.e. MINUTES, and may be fractional now that
-// seconds-valued step targets are converted on the way in (audit C7) -- so these
-// render through formatMinutes rather than pasting a "min" suffix on a raw
-// number that could read "0.75min".
-function analyzeTimeProgression(exercise: string, values: number[]): ProgressionFlag | null {
-  if (values.length < 3) return null;
-  const recent3 = values.slice(-3);
+/** Pace moves this little between sessions and nothing has changed. 3 s per km/mile. */
+const PACE_TOLERANCE_SECONDS = 3;
+
+/**
+ * The comparison for anything measured over ground: runs, ergs, carries, sleds.
+ *
+ * Duration alone says only how long the athlete was out; PACE says how fast they
+ * covered the distance, which is the thing that can actually progress or regress.
+ * The distance behind each pace is quoted alongside it so the coaching model can
+ * see when it is comparing a 5 km effort with a 12 km one and temper the claim,
+ * rather than reading two paces as a clean head-to-head.
+ */
+function analyzePaceProgression(exercise: string, recent3: SessionEffort[], distanceUnit: string): ProgressionFlag | null {
+  const speeds = recent3.map(s => s.bestSpeedMps);
+  if (!isTriple(speeds)) return null;
+
+  const paces = speeds.map(mps => paceSecondsPerUnit(mps, distanceUnit));
+  if (!isTriple(paces)) return null;
+
+  const asText = (i: number) => {
+    const distance = recent3[i].bestSpeedDistanceM;
+    const size = distance == null ? "" : ` (${formatDistance(metersToUserDistance(distance, distanceUnit), distanceUnit, 1)})`;
+    return `${formatPace(speeds[i], distanceUnit)}${size}`;
+  };
+  const [first, , last] = paces;
+
+  if (paces.every(p => Math.abs(p - first) <= PACE_TOLERANCE_SECONDS)) {
+    return { exercise, flag: "plateau", detail: `Pace stuck at ${asText(0)} for last 3 sessions` };
+  }
+  if (last < first - PACE_TOLERANCE_SECONDS) {
+    return { exercise, flag: "progressing", detail: `Pace improved from ${asText(0)} to ${asText(2)} over last 3 sessions` };
+  }
+  if (last > first + PACE_TOLERANCE_SECONDS) {
+    return { exercise, flag: "regressing", detail: `Pace worsened from ${asText(0)} to ${asText(2)} over last 3 sessions` };
+  }
+  return null;
+}
+
+/**
+ * Raw duration, for work whose SIZE is stated and whose clock is therefore a
+ * result: 50 wall balls in 4 min beats 50 in 5 min.
+ *
+ * Two guards keep this off efforts where the clock is not a score. Distance-
+ * carrying exercises never reach here at all — computeProgressionFlags routes
+ * them through pace, or drops them when the distance was not logged — and the
+ * work has to be sized by a rep count that is IDENTICAL across the three
+ * sessions. 50 wall balls in 4 min says nothing against 30 in 3 min, and an
+ * unsized clock is worse still: it may be a hold, where 60s beats 30s and
+ * "improved from 60s to 30s" has the sign backwards.
+ *
+ * `bestTime` is exercise_sets.time, i.e. MINUTES, and may be fractional now that
+ * seconds-valued step targets are converted on the way in (audit C7) -- so these
+ * render through formatMinutes rather than pasting a "min" suffix on a raw
+ * number that could read "0.75min".
+ */
+function analyzeTimeProgression(exercise: string, recent3: SessionEffort[]): ProgressionFlag | null {
+  const values = recent3.map(s => s.bestTime);
+  if (!isTriple(values)) return null;
+
+  const reps = recent3.map(s => s.repsAtBestTime);
+  if (!isTriple(reps) || new Set(reps).size > 1) return null;
+
+  const [first, , last] = values;
   const asText = (v: number) => formatMinutes(minutes(v));
-  if (recent3.every(t => Math.abs(t - recent3[0]) < 0.1)) {
-    return { exercise, flag: "plateau", detail: `Time stuck at ${asText(recent3[0])} for last ${recent3.length} sessions` };
+  if (values.every(t => Math.abs(t - first) < 0.1)) {
+    return { exercise, flag: "plateau", detail: `Time stuck at ${asText(first)} for last 3 sessions` };
   }
-  if (recent3[2] < recent3[0]) {
-    return { exercise, flag: "progressing", detail: `Time improved from ${asText(recent3[0])} to ${asText(recent3[2])} over last 3 sessions` };
+  if (last < first) {
+    return { exercise, flag: "progressing", detail: `Time improved from ${asText(first)} to ${asText(last)} over last 3 sessions` };
   }
-  if (recent3[2] > recent3[0]) {
-    return { exercise, flag: "regressing", detail: `Time worsened from ${asText(recent3[0])} to ${asText(recent3[2])} over last 3 sessions` };
+  if (last > first) {
+    return { exercise, flag: "regressing", detail: `Time worsened from ${asText(first)} to ${asText(last)} over last 3 sessions` };
   }
   return null;
 }
 
-/** Single-pass extraction of weight and time values from exercise history. */
-function extractWeightsAndTimes(history: Array<{ maxWeight?: number; bestTime?: number }>): { weights: number[]; times: number[] } {
-  const weights: number[] = [];
-  const times: number[] = [];
-  for (const h of history) {
-    if (h.maxWeight != null) weights.push(h.maxWeight);
-    if (h.bestTime != null) times.push(h.bestTime);
-  }
-  return { weights, times };
+/**
+ * Every one of the three sessions carries the metric, so "over last 3 sessions"
+ * is literally true.
+ *
+ * The old code flattened each metric into its own array across the whole
+ * history and took the last three VALUES, which on a mixed log compared
+ * sessions that were neither adjacent nor recent — a weight logged in January
+ * and two in June read as "the last 3 sessions".
+ */
+function isTriple(values: Array<number | null | undefined>): values is [number, number, number] {
+  return values.length === 3 && values.every((v): v is number => v != null);
 }
 
-export function computeProgressionFlags(timeline: TimelineEntry[], weightUnit: string): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
-  const exerciseHistory = collectExerciseHistory(timeline);
+export function computeProgressionFlags(
+  timeline: TimelineEntry[],
+  weightUnit: string,
+  distanceUnit: string,
+): NonNullable<TrainingContext["coachingInsights"]>["progressionFlags"] {
+  const exerciseHistory = collectExerciseHistory(timeline, distanceUnit);
   const flags: ProgressionFlag[] = [];
 
   for (const [exercise, history] of Object.entries(exerciseHistory)) {
@@ -237,19 +353,28 @@ export function computeProgressionFlags(timeline: TimelineEntry[], weightUnit: s
       flags.push({ exercise, flag: "new", detail: `Only trained once (${history[0].date})` });
       continue;
     }
-    if (history.length < 2) continue;
 
-    const { weights, times } = extractWeightsAndTimes(history);
+    const recent3 = history.slice(-3);
+    if (recent3.length < 3) continue;
 
-    const weightFlag = analyzeWeightProgression(exercise, weights, weightUnit);
+    const weightFlag = analyzeWeightProgression(exercise, recent3, weightUnit);
     if (weightFlag) { flags.push(weightFlag); continue; }
 
-    const timeFlag = analyzeTimeProgression(exercise, times);
+    const paceFlag = analyzePaceProgression(exercise, recent3, distanceUnit);
+    if (paceFlag) { flags.push(paceFlag); continue; }
+
+    // A distance-carrying exercise logged without its distance yields no
+    // comparable effort at all. Saying nothing is the honest answer; the
+    // alternative is the run-duration nonsense this guard exists to stop.
+    if (exerciseTracksDistance(exercise)) continue;
+
+    const timeFlag = analyzeTimeProgression(exercise, recent3);
     if (timeFlag) flags.push(timeFlag);
   }
 
   return flags;
 }
+
 
 // Plan-phase math lives in shared/ so the Timeline summary card renders the same
 // week and phase the coaching prompts are built from. Re-exported here because
