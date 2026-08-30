@@ -1,16 +1,57 @@
 export type MafConsistency = "low" | "moderate" | "high";
 export type MafTrend = "improving" | "flat" | "declining";
 
+/**
+ * Maffetone's own 180-Formula categories, asked as he states them rather than
+ * decomposed into proxies (audit M6). The published mapping:
+ *
+ *   (a) recovering from major illness/surgery, or on regular medication  -> -10
+ *   (b) injured, regressed, more than two colds/flu a year, allergies or
+ *       asthma, training inconsistently, or just starting/returning      -> -5
+ *   (c) training consistently (~4x/week) up to two years with none of
+ *       the above                                                        ->  0
+ *   (d) training MORE than two years with none of the above, and making
+ *       progress                                                         -> +5
+ *
+ * The legacy proxy fields below collapsed (a) and (b) into one boolean — so
+ * hay fever cost the same 10 bpm as post-surgery recovery — and granted (d)
+ * with no training-duration question at all.
+ */
+export type MafCategory =
+  | "recovering_or_medicated"
+  | "training_interrupted"
+  | "consistent_up_to_2y"
+  | "consistent_2y_plus_improving";
+
+export type MafAdjustment = -10 | -5 | 0 | 5;
+
+export const MAF_CATEGORY_ADJUSTMENT: Readonly<Record<MafCategory, MafAdjustment>> = {
+  recovering_or_medicated: -10,
+  training_interrupted: -5,
+  consistent_up_to_2y: 0,
+  consistent_2y_plus_improving: 5,
+};
+
 export interface MafInput {
   age: number;
-  injuryIllnessMedication: boolean;
-  consistency: MafConsistency;
-  trend: MafTrend;
+  /**
+   * Maffetone's category question, answered directly. When present it decides
+   * the adjustment alone and the three proxy fields are ignored.
+   */
+  category?: MafCategory | null;
+  /**
+   * Legacy proxies, honoured for stored answers that predate the category
+   * question. Their derivation approximates Maffetone rather than matching
+   * him (audit M6); new surfaces should collect `category` instead.
+   */
+  injuryIllnessMedication?: boolean;
+  consistency?: MafConsistency;
+  trend?: MafTrend;
 }
 
 export interface MafResult {
   base: number;
-  adjustment: -10 | -5 | 0 | 5;
+  adjustment: MafAdjustment;
   ceiling: number;
   reasonCodes: string[];
   explanation: string;
@@ -20,13 +61,24 @@ export interface MafResult {
 export function calculateMafHr(input: MafInput): MafResult {
   const base = 180 - input.age;
   const reasonCodes: string[] = [];
-  let adjustment: -10 | -5 | 0 | 5 = 0;
+  let adjustment: MafAdjustment = 0;
   let warning: string | null = null;
 
   if (input.age < 16) {
-    adjustment = -10;
-    warning = "Under-16 athletes should use clinician-guided override; conservative default applied.";
-    reasonCodes.push("age_under_16_manual_override_recommended", "adjustment_-10");
+    // Maffetone's stated exception: under-16s do not use 180-minus-age at all —
+    // the formula is a FLAT 165 (audit L9). The previous branch computed
+    // 180-age-10, which drifts from his number by the athlete's age minus 5.
+    // Unreachable from onboarding (which validates 16-99) but the function must
+    // not diverge for other callers.
+    warning = "Under-16 athletes: Maffetone specifies a flat 165 ceiling — confirm with a clinician.";
+    reasonCodes.push("age_under_16_fixed_165");
+    const explanation = `MAF ceiling 165 (Maffetone's flat under-16 rule; 180-age does not apply).`;
+    return { base, adjustment: 0, ceiling: 165, reasonCodes, explanation, warning };
+  }
+
+  if (input.category != null) {
+    adjustment = MAF_CATEGORY_ADJUSTMENT[input.category];
+    reasonCodes.push(`category_${input.category}`, `adjustment_${adjustment >= 0 ? "+" : ""}${adjustment}`);
   } else if (input.injuryIllnessMedication) {
     adjustment = -10;
     reasonCodes.push("injury_illness_medication", "adjustment_-10");

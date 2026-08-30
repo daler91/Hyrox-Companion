@@ -184,18 +184,19 @@ export class UserStorage {
       .where(eq(users.id, userId))
       .returning();
 
-    if (
-      user?.trainingStyleId === "maf_method" &&
-      user.mafAge != null &&
-      user.mafConsistency != null &&
-      user.mafTrend != null &&
-      user.mafInjuryIllnessMedication != null
-    ) {
+    // A stored category is Maffetone's own question answered directly and
+    // suffices alone; the legacy proxy trio is the fallback for athletes who
+    // answered the old questions (audit M6).
+    const hasMafAnswers =
+      user?.mafCategory != null ||
+      (user?.mafConsistency != null && user?.mafTrend != null && user?.mafInjuryIllnessMedication != null);
+    if (user?.trainingStyleId === "maf_method" && user.mafAge != null && hasMafAnswers) {
       const maf = calculateMafHr({
         age: user.mafAge,
-        injuryIllnessMedication: user.mafInjuryIllnessMedication,
-        consistency: user.mafConsistency as "low" | "moderate" | "high",
-        trend: user.mafTrend as "improving" | "flat" | "declining",
+        category: user.mafCategory as import("@shared/maf").MafCategory | null,
+        injuryIllnessMedication: user.mafInjuryIllnessMedication ?? false,
+        consistency: (user.mafConsistency ?? "moderate") as "low" | "moderate" | "high",
+        trend: (user.mafTrend ?? "flat") as "improving" | "flat" | "declining",
       });
       const reason = JSON.stringify({ reasonCodes: maf.reasonCodes, explanation: maf.explanation, warning: maf.warning });
 
@@ -244,6 +245,7 @@ export class UserStorage {
         event: "missing_maf_hr_inputs",
         userId,
         hasAge: user.mafAge != null,
+        hasCategory: user.mafCategory != null,
         hasConsistency: user.mafConsistency != null,
         hasTrend: user.mafTrend != null,
         hasInjuryIllnessMedication: user.mafInjuryIllnessMedication != null,

@@ -28,6 +28,7 @@ function seedBalancedWithoutMafSetup(qc: QueryClient, over: Record<string, unkno
     mafAge: null,
     mafConsistency: null,
     mafTrend: null,
+    mafCategory: null,
     ...over,
   });
 }
@@ -86,6 +87,7 @@ describe("Settings MAF style switch", () => {
       mafAge: null,
       mafConsistency: null,
       mafTrend: null,
+    mafCategory: null,
     });
     renderSettings(qc);
 
@@ -139,13 +141,14 @@ describe("Settings MAF style switch", () => {
     // Target the MAF age input directly: the Race-profile card also renders an
     // "Age" label (W17), so a bare getByText("Age") is ambiguous here.
     expect(screen.getByTestId("maf-age-input")).toBeInTheDocument();
-    expect(screen.getByText("Consistency")).toBeInTheDocument();
-    expect(screen.getByText("Trend")).toBeInTheDocument();
+    expect(screen.getByText("Health and training category")).toBeInTheDocument();
     expect(screen.getByText("HR data available")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("maf-age-input"), { target: { value: "39" } });
-    await chooseSelectOption("Consistency", "Moderate");
-    await chooseSelectOption("Trend", "Flat");
+    await chooseSelectOption(
+      "Health and training category",
+      "Training consistently (up to 2 years) without those problems",
+    );
     await chooseSelectOption("HR data available", "Yes");
 
     expect(settingsHarness.updatePreferences).not.toHaveBeenCalled();
@@ -162,28 +165,31 @@ describe("Settings MAF style switch", () => {
         expect.objectContaining({
           trainingStyleId: "maf_method",
           mafAge: 39,
-          mafConsistency: "moderate",
-          mafTrend: "flat",
+          mafCategory: "consistent_up_to_2y",
           mafHrDataAvailable: true,
         }),
       );
     });
+    // The legacy proxy fields are OMITTED from the payload, not nulled: a save
+    // must never disturb an older account's stored answers (audit M6).
+    const savedPayload = vi.mocked(settingsHarness.updatePreferences).mock.calls.at(-1)![0];
+    expect(savedPayload).not.toHaveProperty("mafConsistency");
+    expect(savedPayload).not.toHaveProperty("mafTrend");
+    expect(savedPayload).not.toHaveProperty("mafInjuryIllnessMedication");
   }, 10_000);
 
-  it("lets a healed athlete clear the injury flag that costs 10 bpm of ceiling", async () => {
-    // The flag was written once at onboarding and permanently subtracted 10 bpm
-    // from the MAF ceiling: usePreferencesForm read it back from the stored
-    // preferences and never included it in the save payload, so no edit could
-    // change it. A resolved injury has to be un-settable.
+  it("lets a recovered athlete change the category that was costing 10 bpm of ceiling", async () => {
+    // The same guarantee the old injury-flag test pinned, on the category
+    // surface: an answer that lowers the ceiling must never be write-once. An
+    // athlete who answered "recovering from major illness" (-10) and has since
+    // recovered re-answers Maffetone's question and the save carries it.
     const qc = new QueryClient();
     seedSettings(qc, {
       ...defaultSettings(),
       trainingStyleId: "maf_method",
       mafAge: 39,
-      mafConsistency: "moderate",
-      mafTrend: "flat",
+      mafCategory: "recovering_or_medicated",
       mafHrDataAvailable: true,
-      mafInjuryIllnessMedication: true,
     });
     vi.mocked(settingsHarness.updatePreferences).mockResolvedValue({});
 
@@ -191,13 +197,16 @@ describe("Settings MAF style switch", () => {
     await goToSettingsTab("training");
 
     fireEvent.click(await screen.findByTestId("button-maf-setup"));
-    await chooseSelectOption("Injury, illness or medication", "No");
+    await chooseSelectOption(
+      "Health and training category",
+      "Training consistently (up to 2 years) without those problems",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save MAF setup" }));
     fireEvent.click(await screen.findByTestId("button-save-settings"));
 
     await waitFor(() => {
       expect(settingsHarness.updatePreferences).toHaveBeenCalledWith(
-        expect.objectContaining({ mafInjuryIllnessMedication: false }),
+        expect.objectContaining({ mafCategory: "consistent_up_to_2y" }),
       );
     });
   }, 10_000);

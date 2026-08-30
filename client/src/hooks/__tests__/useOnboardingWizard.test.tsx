@@ -74,8 +74,7 @@ describe("useOnboardingWizard", () => {
     act(() => {
       result.current.setTrainingStyleId("maf_method");
       result.current.setMafAge("40");
-      result.current.setMafConsistency("high");
-      result.current.setMafTrend("improving");
+      result.current.setMafCategory("consistent_2y_plus_improving");
       result.current.setMafHrDataAvailable(true);
     });
 
@@ -87,8 +86,7 @@ describe("useOnboardingWizard", () => {
       expect.objectContaining({
         trainingStyleId: "maf_method",
         mafAge: 40,
-        mafConsistency: "high",
-        mafTrend: "improving",
+        mafCategory: "consistent_2y_plus_improving",
         mafHrDataAvailable: true,
         mafHr: 145,
       }),

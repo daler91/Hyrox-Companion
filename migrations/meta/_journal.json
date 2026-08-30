@@ -631,6 +631,13 @@
       "when": 1788034790053,
       "tag": "0089_bouncy_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1788122430112,
+      "tag": "0090_open_snowbird",
+      "breakpoints": true
     }
   ]
 }

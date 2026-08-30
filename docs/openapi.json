@@ -777,6 +777,17 @@
               null
             ]
           },
+          "mafCategory": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "recovering_or_medicated",
+              "training_interrupted",
+              "consistent_up_to_2y",
+              "consistent_2y_plus_improving",
+              null
+            ]
+          },
           "mafHrDataAvailable": {
             "type": "boolean",
             "nullable": true

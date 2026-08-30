@@ -153,15 +153,15 @@ export function usePreferencesForm() {
 
   const handleSave = useCallback(() => {
     const mafAge = ageInputToSnapshot(draft.mafAgeInput);
-    const mafConsistency = draft.mafConsistencyInput || null;
-    const mafTrend = draft.mafTrendInput || null;
+    // Maffetone's category question, read from the DRAFT for the same reason
+    // the old injury flag was: the answer moves the ceiling and must never be
+    // write-once (a healed injury, a second training anniversary). Legacy
+    // accounts without a category keep their stored proxy-derived ceiling
+    // until they answer it — the save payload omits the proxy fields entirely,
+    // so saving other settings never disturbs them (audit M6).
+    const mafCategory = draft.mafCategoryInput || null;
     const mafHrDataAvailable = mafHrDataAvailableInputToSnapshot(draft.mafHrDataAvailableInput);
-    // Read from the DRAFT, not from the stored preferences. Feeding the saved
-    // value back in is what made this flag permanent: it was written once at
-    // onboarding, costs 10 bpm of MAF ceiling, and no save could ever change it.
-    const mafInjuryIllnessMedication = mafHrDataAvailableInputToSnapshot(draft.mafInjuryIllnessInput);
-    const hasValidMafInputs =
-      mafAge != null && mafAge >= 16 && mafAge <= 99 && Boolean(mafConsistency) && Boolean(mafTrend);
+    const hasValidMafInputs = mafAge != null && mafAge >= 16 && mafAge <= 99 && mafCategory != null;
 
     if (draft.trainingStyleId === "maf_method" && !hasValidMafInputs) {
       toast({
@@ -178,12 +178,9 @@ export function usePreferencesForm() {
       : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
-    const maf = draft.trainingStyleId === "maf_method" && hasValidMafInputs ? calculateMafHr({
-      age: mafAge,
-      injuryIllnessMedication: Boolean(mafInjuryIllnessMedication),
-      consistency: mafConsistency!,
-      trend: mafTrend!,
-    }) : null;
+    const maf = draft.trainingStyleId === "maf_method" && hasValidMafInputs
+      ? calculateMafHr({ age: mafAge, category: mafCategory })
+      : null;
     pendingStyleAuditRef.current = styleChanged
       ? {
           changedAtIso: new Date().toISOString(),
@@ -222,10 +219,8 @@ export function usePreferencesForm() {
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
       mafAge,
-      mafConsistency,
-      mafTrend,
+      mafCategory,
       mafHrDataAvailable,
-      mafInjuryIllnessMedication,
       mafHr: draft.trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
       mafBaselineTestScheduledAt: styleChanged && draft.trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
     });
@@ -236,8 +231,7 @@ export function usePreferencesForm() {
     mafAgeValue != null &&
     mafAgeValue >= 16 &&
     mafAgeValue <= 99 &&
-    Boolean(draft.mafConsistencyInput) &&
-    Boolean(draft.mafTrendInput);
+    Boolean(draft.mafCategoryInput);
 
   return {
     draft,

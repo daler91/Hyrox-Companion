@@ -202,9 +202,15 @@ state, so no call can see the previous chunk's loads and the rule is unenforceab
 boundary by construction. Making generation sequential would fix that at a latency cost — also a
 product call.
 
-**Still open:** M6 (Maffetone's real categories in onboarding) — a product decision about the
-onboarding flow, documented rather than guessed at. L4/L1 came off this list on 2026-08-26 (see the
-Phase 1 update above). H17/M7's root cause came off on 2026-08-30: investigation showed the problem
+**Still open:** nothing from this list. L4/L1 came off on 2026-08-26 (see the Phase 1 update above).
+M6 came off on 2026-08-30: onboarding and Settings now ask Maffetone's own category question — one
+select mapping directly to his published −10/−5/0/+5 — instead of the injury boolean plus
+consistency/trend proxies that collapsed his (a) and (b) categories (hay fever cost 10 bpm) and
+granted +5 with no training-duration question. `calculateMafHr` takes the category directly; the
+proxy derivation is kept bit-for-bit for stored answers that predate it, and a Settings save omits
+the proxy keys entirely so it can never disturb them. L9 landed with it: under-16 now returns
+Maffetone's flat 165 rather than 180−age−10 (the branch stays unreachable from onboarding's 16–99
+validation, but the shared function no longer diverges for other callers). H17/M7's root cause came off on 2026-08-30: investigation showed the problem
 was sharper than "no shared state" — NO chunk received a single absolute load, not even week 1; the
 posture computation fetched the athlete's full recent history and reduced it to one qualitative
 sentence. `server/services/loadAnchors.ts` now derives per-exercise anchors (median top set per day,
@@ -334,10 +340,14 @@ The cut is real only for an athlete who has ALREADY rested through race week, wh
 recovery credit to offset the base-load penalty. That is a narrower population than the register
 implies, but a worse one: it is precisely the athlete who tapered correctly.
 
-**The taper half of M17 is NOT changed.** `TAPER_LOAD_DAMP`'s own comment says it damps POSITIVE
-deltas, so a light taper day scores exactly like a light build day and the damp only ever fires on a
-hard taper day. That is documented intent working as written. Whether a taper should also soften the
-*reduction* is a methodology call, and it is left open rather than flipped silently.
+**The taper half of M17 — decided and changed 2026-08-30.** `TAPER_LOAD_DAMP` damped only POSITIVE
+deltas, so a light taper day was charged the full carb cut of a light build day — the carb-loading
+feature defeating itself one day at a time across the exact weeks glycogen should stay topped. The
+reduction is now damped by 0.5, deliberately the SAME fraction `RECOVERY_CARB_FACTOR` already uses
+for "replace half of a load gap's carbs", so the model keeps one belief about load gaps rather than
+two. Halved, not floored to zero: a taper runs weeks, and energy balance still matters over that
+horizon in a way race week's ~5 days (which keep their stronger floor-at-zero) never did. The test
+that pinned the open question was inverted with the decision recorded in it.
 
 **M25 — resolved 2026-08-23: not a defect. The maths stays; the reasoning is now written down.**
 

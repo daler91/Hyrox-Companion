@@ -1,4 +1,4 @@
-import { calculateMafHr } from "@shared/maf";
+import { calculateMafHr, type MafCategory } from "@shared/maf";
 import {
   type ActivityLevel,
   calculateNutritionTarget,
@@ -40,9 +40,10 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
   const [selectedGoal, setSelectedGoal] = useState<string>(DEFAULT_ONBOARDING_GOAL_ID);
   const [trainingStyleId, setTrainingStyleId] = useState("balanced_default");
   const [mafAge, setMafAge] = useState("");
-  const [mafInjuryIllnessMedication, setMafInjuryIllnessMedication] = useState(false);
-  const [mafConsistency, setMafConsistency] = useState("");
-  const [mafTrend, setMafTrend] = useState("");
+  // Maffetone's category question, answered directly (audit M6). Replaces the
+  // legacy injury-boolean + consistency/trend proxies, which collapsed his -10
+  // and -5 categories and granted +5 with no training-duration question.
+  const [mafCategory, setMafCategory] = useState("");
   const [mafHrDataAvailable, setMafHrDataAvailable] = useState(false);
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date>(addDays(new Date(), 1));
@@ -99,7 +100,7 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
   const hasValidMafProfile = () => {
     if (!isMafMethod) return true;
-    if (!mafAge || !mafConsistency || !mafTrend) {
+    if (!mafAge || !mafCategory) {
       toast({ title: "Complete required MAF profile fields", variant: "destructive" });
       return false;
     }
@@ -121,17 +122,10 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
 
     const age = Number(mafAge);
     payload.mafAge = age;
-    payload.mafInjuryIllnessMedication = mafInjuryIllnessMedication;
-    payload.mafConsistency = mafConsistency;
-    payload.mafTrend = mafTrend;
+    payload.mafCategory = mafCategory;
     payload.mafHrDataAvailable = mafHrDataAvailable;
 
-    const maf = calculateMafHr({
-      age,
-      injuryIllnessMedication: mafInjuryIllnessMedication,
-      consistency: mafConsistency as "low" | "moderate" | "high",
-      trend: mafTrend as "improving" | "flat" | "declining",
-    });
+    const maf = calculateMafHr({ age, category: mafCategory as MafCategory });
     payload.mafHr = maf.ceiling;
     return payload;
   };
@@ -309,12 +303,8 @@ export function useOnboardingWizard(onComplete: (choice: OnboardingCompletionCho
     setTrainingStyleId,
     mafAge,
     setMafAge,
-    mafInjuryIllnessMedication,
-    setMafInjuryIllnessMedication,
-    mafConsistency,
-    setMafConsistency,
-    mafTrend,
-    setMafTrend,
+    mafCategory,
+    setMafCategory,
     mafHrDataAvailable,
     setMafHrDataAvailable,
     startDate,
