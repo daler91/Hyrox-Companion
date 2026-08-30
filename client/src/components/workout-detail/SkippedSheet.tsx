@@ -9,10 +9,10 @@ import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
-  type WorkoutCoachSheetProps,
 } from "./ReadOnlyWorkoutDetailSheet";
+import type { WorkoutCoachChatProps } from "./WorkoutCoachPanel";
 
-interface SkippedSheetProps extends WorkoutCoachSheetProps {
+interface SkippedSheetProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;

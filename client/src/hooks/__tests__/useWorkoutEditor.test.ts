@@ -302,30 +302,10 @@ describe('exerciseToPayload', () => {
 
     const payload = exerciseToPayload(exercise);
 
-    expect(payload).toEqual({
-      exerciseName: 'custom',
-      customLabel: 'Custom Workout',
-      category: 'custom',
-      confidence: 90,
-      sets: [
-        {
-          setNumber: 1,
-          reps: 10,
-          weight: 50,
-          distance: 100,
-          time: 5,
-          notes: 'Felt good'
-        },
-        {
-          setNumber: 2,
-          reps: 8,
-          weight: 55,
-          distance: 100,
-          time: 5,
-          notes: undefined
-        }
-      ]
-    });
+    // A fully-populated exercise maps field-for-field: the payload mirrors the
+    // input, carrying absent optionals as explicit undefineds (which toEqual
+    // treats the same as absent keys).
+    expect(payload).toEqual(exercise);
   });
 
   it('should format correctly when sets array is empty', () => {

@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 
 import { computeRaceReadiness } from "../../server/services/racePrediction/racePredictionService";
 import { calculateTrainingLoad, monotonyZone } from "../../server/services/trainingLoadService";
+import { makeWorkoutLog } from "../../server/services/trainingLoadService.testHelpers";
 import { resolveStructureStepTimeTarget } from "../../server/services/workoutService/structure";
 import { minutes, minutesToSeconds, unitless } from "../../shared/units";
 
@@ -32,45 +33,9 @@ function shiftDate(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** makeWorkoutLog re-anchored to this suite's pinned TODAY. */
 function log(overrides: Partial<WorkoutLog>): WorkoutLog {
-  return {
-    id: "log-1",
-    userId: "user-1",
-    date: TODAY,
-    focus: "Run",
-    mainWorkout: "Easy run",
-    accessory: null,
-    notes: null,
-    prescribedMainWorkout: null,
-    prescribedAccessory: null,
-    prescribedNotes: null,
-    plannedSetCount: null,
-    actualSetCount: null,
-    matchedSetCount: null,
-    addedSetCount: null,
-    removedSetCount: null,
-    compliancePct: null,
-    duration: null,
-    rpe: null,
-    planDayId: null,
-    planId: null,
-    source: "manual",
-    stravaActivityId: null,
-    garminActivityId: null,
-    calories: null,
-    distanceMeters: null,
-    elevationGain: null,
-    avgHeartrate: null,
-    maxHeartrate: null,
-    avgSpeed: null,
-    maxSpeed: null,
-    avgCadence: null,
-    avgWatts: null,
-    sufferScore: null,
-    startedAt: null,
-    timeOfDayMin: null,
-    ...overrides,
-  };
+  return makeWorkoutLog({ date: TODAY, ...overrides });
 }
 
 /** An identical `minutes` session at `rpe`, logged every day for `days` days ending TODAY. */

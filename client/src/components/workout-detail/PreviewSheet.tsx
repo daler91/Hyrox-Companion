@@ -8,10 +8,10 @@ import { FuellingPlanPanel } from "./FuellingPlanPanel";
 import {
   ReadOnlyWorkoutActionGrid,
   ReadOnlyWorkoutDetailSheet,
-  type WorkoutCoachSheetProps,
 } from "./ReadOnlyWorkoutDetailSheet";
+import type { WorkoutCoachChatProps } from "./WorkoutCoachPanel";
 
-interface PreviewSheetProps extends WorkoutCoachSheetProps {
+interface PreviewSheetProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;

@@ -1,8 +1,9 @@
 import * as schema from "@shared/schema";
 import { sql } from "drizzle-orm";
-import { describe, expect,it } from "vitest";
+import type { PoolClient } from "pg";
+import { describe, expect, it } from "vitest";
 
-import { db,pool } from "../../db";
+import { db, pool } from "../../db";
 import { vectorPool } from "../../vectorDb";
 
 /**
@@ -127,31 +128,31 @@ const EXERCISE_SETS_COLUMNS: Record<string, string> = {
 };
 
 // Helper: get a map of column_name -> data_type for a table
-async function getTableColumns(
-  tableName: string,
-  targetPool = pool,
-): Promise<Map<string, string>> {
-  const client = await targetPool.connect();
-  try {
-    const result = await client.query(
-      `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
-      [tableName],
-    );
-    return new Map(result.rows.map((r: any) => [r.column_name, r.data_type]));
-  } finally {
-    client.release();
-  }
+async function getTableColumns(tableName: string, targetPool = pool): Promise<Map<string, string>> {
+  const result = await targetPool.query(
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+    [tableName],
+  );
+  return new Map(result.rows.map((r: any) => [r.column_name, r.data_type]));
 }
 
 // Helper: get all index names for the public schema
 async function getIndexNames(targetPool = pool): Promise<Set<string>> {
-  const client = await targetPool.connect();
+  const result = await targetPool.query(
+    `SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`,
+  );
+  return new Set(result.rows.map((r: any) => r.indexname));
+}
+
+// Helper: run `fn` inside BEGIN…ROLLBACK on one pooled client (the CRUD
+// verification tests must never leave rows behind), releasing it after.
+async function withRollback(fn: (client: PoolClient) => Promise<void>): Promise<void> {
+  const client = await pool.connect();
   try {
-    const result = await client.query(
-      `SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`,
-    );
-    return new Set(result.rows.map((r: any) => r.indexname));
+    await client.query("BEGIN");
+    await fn(client);
   } finally {
+    await client.query("ROLLBACK");
     client.release();
   }
 }
@@ -209,30 +210,20 @@ describe("Post-Migration Verification: Railway + Neon", () => {
 
   describe("2. Schema Integrity — Tables", () => {
     it("all expected tables exist in the public schema", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
-        );
-        const tables = result.rows.map((r: any) => r.table_name);
-        for (const expected of EXPECTED_TABLES) {
-          expect(tables).toContain(expected);
-        }
-      } finally {
-        client.release();
+      const result = await pool.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
+      );
+      const tables = result.rows.map((r: any) => r.table_name);
+      for (const expected of EXPECTED_TABLES) {
+        expect(tables).toContain(expected);
       }
     });
 
     it("document_chunks table exists on vector DB", async () => {
-      const client = await vectorPool.connect();
-      try {
-        const result = await client.query(
-          `SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'`,
-        );
-        expect(result.rowCount).toBeGreaterThan(0);
-      } finally {
-        client.release();
-      }
+      const result = await vectorPool.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_name = 'document_chunks'`,
+      );
+      expect(result.rowCount).toBeGreaterThan(0);
     });
   });
 
@@ -281,17 +272,12 @@ describe("Post-Migration Verification: Railway + Neon", () => {
     });
 
     it("document_chunks.embedding is vector(3072) on vector DB", async () => {
-      const client = await vectorPool.connect();
-      try {
-        const result = await client.query(
-          `SELECT data_type, udt_name FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
-        );
-        expect(result.rows).toHaveLength(1);
-        // pgvector registers as USER-DEFINED type with udt_name 'vector'
-        expect(result.rows[0].udt_name).toBe("vector");
-      } finally {
-        client.release();
-      }
+      const result = await vectorPool.query(
+        `SELECT data_type, udt_name FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding'`,
+      );
+      expect(result.rows).toHaveLength(1);
+      // pgvector registers as USER-DEFINED type with udt_name 'vector'
+      expect(result.rows[0].udt_name).toBe("vector");
     });
   });
 
@@ -316,129 +302,111 @@ describe("Post-Migration Verification: Railway + Neon", () => {
   // ── 5. Schema Integrity — Constraints ─────────────────────────────────
 
   describe("5. Schema Integrity — Constraints", () => {
+    // A UNIQUE constraint on exactly `table`.`column`.
+    async function expectUniqueConstraint(table: string, column: string) {
+      const result = await pool.query(
+        `SELECT 1 FROM information_schema.table_constraints tc
+         JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+         WHERE tc.table_name = $1 AND tc.constraint_type = 'UNIQUE' AND ccu.column_name = $2`,
+        [table, column],
+      );
+      expect(result.rowCount).toBeGreaterThan(0);
+    }
+
     it("users.email has a unique constraint", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT 1 FROM information_schema.table_constraints tc
-           JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-           WHERE tc.table_name = 'users' AND tc.constraint_type = 'UNIQUE' AND ccu.column_name = 'email'`,
-        );
-        expect(result.rowCount).toBeGreaterThan(0);
-      } finally {
-        client.release();
-      }
+      await expectUniqueConstraint("users", "email");
     });
 
     it("strava_connections.user_id has a unique constraint", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT 1 FROM information_schema.table_constraints tc
-           JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-           WHERE tc.table_name = 'strava_connections' AND tc.constraint_type = 'UNIQUE' AND ccu.column_name = 'user_id'`,
-        );
-        expect(result.rowCount).toBeGreaterThan(0);
-      } finally {
-        client.release();
-      }
+      await expectUniqueConstraint("strava_connections", "user_id");
     });
 
     it("plan_days has status CHECK constraint", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT 1 FROM information_schema.table_constraints
-           WHERE table_name = 'plan_days' AND constraint_type = 'CHECK' AND constraint_name = 'status_check'`,
-        );
-        expect(result.rowCount).toBeGreaterThan(0);
-      } finally {
-        client.release();
-      }
+      const result = await pool.query(
+        `SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name = 'plan_days' AND constraint_type = 'CHECK' AND constraint_name = 'status_check'`,
+      );
+      expect(result.rowCount).toBeGreaterThan(0);
     });
 
     it("exercise set and structured-health CHECK constraints are present and current", async () => {
-      const client = await pool.connect();
-      try {
-        const setNumberCheck = await client.query(
-          `SELECT 1 FROM information_schema.table_constraints
-           WHERE table_name = 'exercise_sets' AND constraint_type = 'CHECK' AND constraint_name = 'set_number_check'`,
-        );
-        expect(setNumberCheck.rowCount).toBeGreaterThan(0);
+      const setNumberCheck = await pool.query(
+        `SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name = 'exercise_sets' AND constraint_type = 'CHECK' AND constraint_name = 'set_number_check'`,
+      );
+      expect(setNumberCheck.rowCount).toBeGreaterThan(0);
 
-        const healthCounterCheck = await client.query(
-          `SELECT pg_get_constraintdef(oid) AS def
-           FROM pg_constraint
-           WHERE conname = 'structured_exercise_health_counter_name_check'`,
-        );
-        expect(healthCounterCheck.rowCount).toBeGreaterThan(0);
+      const healthCounterCheck = await pool.query(
+        `SELECT pg_get_constraintdef(oid) AS def
+         FROM pg_constraint
+         WHERE conname = 'structured_exercise_health_counter_name_check'`,
+      );
+      expect(healthCounterCheck.rowCount).toBeGreaterThan(0);
 
-        const def = String(healthCounterCheck.rows[0]?.def ?? "");
-        expect(def).toContain("rejected_text_only_write");
-        expect(def).toContain("parse_text_attempted");
-        expect(def).toContain("parse_photo_failed");
-      } finally {
-        client.release();
-      }
+      const def = String(healthCounterCheck.rows[0]?.def ?? "");
+      expect(def).toContain("rejected_text_only_write");
+      expect(def).toContain("parse_text_attempted");
+      expect(def).toContain("parse_photo_failed");
     });
 
     it("foreign keys exist with correct ON DELETE behavior", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT tc.table_name, kcu.column_name, ccu.table_name AS referenced_table, rc.delete_rule
-           FROM information_schema.table_constraints tc
-           JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-           JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-           JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
-           WHERE tc.constraint_type = 'FOREIGN KEY'
-           ORDER BY tc.table_name, kcu.column_name`,
-        );
+      const result = await pool.query(
+        `SELECT tc.table_name, kcu.column_name, ccu.table_name AS referenced_table, rc.delete_rule
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+         JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+         JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+         WHERE tc.constraint_type = 'FOREIGN KEY'
+         ORDER BY tc.table_name, kcu.column_name`,
+      );
 
-        const fks = result.rows.map((r: any) => ({
-          table: r.table_name,
-          column: r.column_name,
-          ref: r.referenced_table,
-          onDelete: r.delete_rule,
-        }));
+      const fks = result.rows.map((r: any) => ({
+        table: r.table_name,
+        column: r.column_name,
+        ref: r.referenced_table,
+        onDelete: r.delete_rule,
+      }));
 
-        // training_plans.user_id -> users (CASCADE)
-        const tpUser = fks.find((f: any) => f.table === "training_plans" && f.column === "user_id");
-        expect(tpUser).toBeDefined();
-        expect(tpUser!.onDelete).toBe("CASCADE");
+      // training_plans.user_id -> users (CASCADE)
+      const tpUser = fks.find((f: any) => f.table === "training_plans" && f.column === "user_id");
+      expect(tpUser).toBeDefined();
+      expect(tpUser!.onDelete).toBe("CASCADE");
 
-        // plan_days.plan_id -> training_plans (CASCADE)
-        const pdPlan = fks.find((f: any) => f.table === "plan_days" && f.column === "plan_id");
-        expect(pdPlan).toBeDefined();
-        expect(pdPlan!.onDelete).toBe("CASCADE");
+      // plan_days.plan_id -> training_plans (CASCADE)
+      const pdPlan = fks.find((f: any) => f.table === "plan_days" && f.column === "plan_id");
+      expect(pdPlan).toBeDefined();
+      expect(pdPlan!.onDelete).toBe("CASCADE");
 
-        // workout_logs.user_id -> users (CASCADE)
-        const wlUser = fks.find((f: any) => f.table === "workout_logs" && f.column === "user_id");
-        expect(wlUser).toBeDefined();
-        expect(wlUser!.onDelete).toBe("CASCADE");
+      // workout_logs.user_id -> users (CASCADE)
+      const wlUser = fks.find((f: any) => f.table === "workout_logs" && f.column === "user_id");
+      expect(wlUser).toBeDefined();
+      expect(wlUser!.onDelete).toBe("CASCADE");
 
-        // workout_logs.plan_day_id -> plan_days (SET NULL)
-        const wlPlanDay = fks.find((f: any) => f.table === "workout_logs" && f.column === "plan_day_id");
-        expect(wlPlanDay).toBeDefined();
-        expect(wlPlanDay!.onDelete).toBe("SET NULL");
+      // workout_logs.plan_day_id -> plan_days (SET NULL)
+      const wlPlanDay = fks.find(
+        (f: any) => f.table === "workout_logs" && f.column === "plan_day_id",
+      );
+      expect(wlPlanDay).toBeDefined();
+      expect(wlPlanDay!.onDelete).toBe("SET NULL");
 
-        // exercise_sets.workout_log_id -> workout_logs (CASCADE)
-        const esWorkout = fks.find((f: any) => f.table === "exercise_sets" && f.column === "workout_log_id");
-        expect(esWorkout).toBeDefined();
-        expect(esWorkout!.onDelete).toBe("CASCADE");
+      // exercise_sets.workout_log_id -> workout_logs (CASCADE)
+      const esWorkout = fks.find(
+        (f: any) => f.table === "exercise_sets" && f.column === "workout_log_id",
+      );
+      expect(esWorkout).toBeDefined();
+      expect(esWorkout!.onDelete).toBe("CASCADE");
 
-        // chat_messages.user_id -> users (CASCADE)
-        const cmUser = fks.find((f: any) => f.table === "chat_messages" && f.column === "user_id");
-        expect(cmUser).toBeDefined();
-        expect(cmUser!.onDelete).toBe("CASCADE");
+      // chat_messages.user_id -> users (CASCADE)
+      const cmUser = fks.find((f: any) => f.table === "chat_messages" && f.column === "user_id");
+      expect(cmUser).toBeDefined();
+      expect(cmUser!.onDelete).toBe("CASCADE");
 
-        // coaching_materials.user_id -> users (CASCADE)
-        const coachUser = fks.find((f: any) => f.table === "coaching_materials" && f.column === "user_id");
-        expect(coachUser).toBeDefined();
-        expect(coachUser!.onDelete).toBe("CASCADE");
-      } finally {
-        client.release();
-      }
+      // coaching_materials.user_id -> users (CASCADE)
+      const coachUser = fks.find(
+        (f: any) => f.table === "coaching_materials" && f.column === "user_id",
+      );
+      expect(coachUser).toBeDefined();
+      expect(coachUser!.onDelete).toBe("CASCADE");
     });
   });
 
@@ -446,28 +414,18 @@ describe("Post-Migration Verification: Railway + Neon", () => {
 
   describe("6. pgvector Extension", () => {
     it("vector extension is installed on vector DB", async () => {
-      const client = await vectorPool.connect();
-      try {
-        const result = await client.query(
-          `SELECT extname FROM pg_extension WHERE extname = 'vector'`,
-        );
-        expect(result.rowCount).toBe(1);
-      } finally {
-        client.release();
-      }
+      const result = await vectorPool.query(
+        `SELECT extname FROM pg_extension WHERE extname = 'vector'`,
+      );
+      expect(result.rowCount).toBe(1);
     });
 
     it("cosine distance operator (<=>) is available", async () => {
-      const client = await vectorPool.connect();
-      try {
-        const result = await client.query(
-          `SELECT '[1,2,3]'::vector(3) <=> '[4,5,6]'::vector(3) AS distance`,
-        );
-        expect(result.rows[0].distance).toBeTypeOf("number");
-        expect(result.rows[0].distance).toBeGreaterThan(0);
-      } finally {
-        client.release();
-      }
+      const result = await vectorPool.query(
+        `SELECT '[1,2,3]'::vector(3) <=> '[4,5,6]'::vector(3) AS distance`,
+      );
+      expect(result.rows[0].distance).toBeTypeOf("number");
+      expect(result.rows[0].distance).toBeGreaterThan(0);
     });
   });
 
@@ -475,42 +433,26 @@ describe("Post-Migration Verification: Railway + Neon", () => {
 
   describe("7. pg-boss Compatibility", () => {
     it("pgboss schema exists (created at app startup)", async () => {
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss'`,
-        );
-        // pg-boss schema is created when queue.start() runs — may not exist
-        // on first deploy before app has started. Soft assertion.
-        if (result.rowCount === 0) {
-          console.warn(
-            "pgboss schema not found — expected if app has not started workers yet",
-          );
-        } else {
-          expect(result.rowCount).toBe(1);
-        }
-      } finally {
-        client.release();
+      const result = await pool.query(`SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss'`);
+      // pg-boss schema is created when queue.start() runs — may not exist
+      // on first deploy before app has started. Soft assertion.
+      if (result.rowCount === 0) {
+        console.warn("pgboss schema not found — expected if app has not started workers yet");
+      } else {
+        expect(result.rowCount).toBe(1);
       }
     });
 
     it("pgboss.job table exists if schema is present", async () => {
-      const client = await pool.connect();
-      try {
-        const schemaExists = await client.query(
-          `SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss'`,
-        );
-        if (schemaExists.rowCount === 0) {
-          console.warn("Skipping — pgboss schema not present");
-          return;
-        }
-        const result = await client.query(
-          `SELECT 1 FROM information_schema.tables WHERE table_schema = 'pgboss' AND table_name = 'job'`,
-        );
-        expect(result.rowCount).toBe(1);
-      } finally {
-        client.release();
+      const schemaExists = await pool.query(`SELECT 1 FROM pg_namespace WHERE nspname = 'pgboss'`);
+      if (schemaExists.rowCount === 0) {
+        console.warn("Skipping — pgboss schema not present");
+        return;
       }
+      const result = await pool.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'pgboss' AND table_name = 'job'`,
+      );
+      expect(result.rowCount).toBe(1);
     });
   });
 
@@ -518,45 +460,35 @@ describe("Post-Migration Verification: Railway + Neon", () => {
 
   describe("8. Drizzle Migrations Journal", () => {
     it("drizzle migrations journal exists", async () => {
-      const client = await pool.connect();
-      try {
-        // drizzle-kit may store the journal in different schemas depending on version:
-        // - public.__drizzle_migrations (older / programmatic migrate())
-        // - drizzle.__drizzle_migrations (newer drizzle-kit CLI)
-        const result = await client.query(
-          `SELECT table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '%drizzle%'`,
+      // drizzle-kit may store the journal in different schemas depending on version:
+      // - public.__drizzle_migrations (older / programmatic migrate())
+      // - drizzle.__drizzle_migrations (newer drizzle-kit CLI)
+      const result = await pool.query(
+        `SELECT table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '%drizzle%'`,
+      );
+      if (result.rowCount === 0) {
+        // drizzle-kit push doesn't create a journal — acceptable if tables exist
+        console.warn(
+          "No drizzle migrations journal found — migrations may have been applied via drizzle-kit push",
         );
-        if (result.rowCount === 0) {
-          // drizzle-kit push doesn't create a journal — acceptable if tables exist
-          console.warn("No drizzle migrations journal found — migrations may have been applied via drizzle-kit push");
-        } else {
-          expect(result.rowCount).toBeGreaterThan(0);
-        }
-      } finally {
-        client.release();
+      } else {
+        expect(result.rowCount).toBeGreaterThan(0);
       }
     });
 
     it("all migrations are recorded (if journal exists)", async () => {
-      const client = await pool.connect();
-      try {
-        // Find the journal table in any schema
-        const tableResult = await client.query(
-          `SELECT table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '%drizzle%' LIMIT 1`,
-        );
-        if (tableResult.rowCount === 0) {
-          console.warn("Skipping — no migrations journal table found");
-          return;
-        }
-        const schema = tableResult.rows[0].table_schema;
-        const table = tableResult.rows[0].table_name;
-        const result = await client.query(
-          `SELECT COUNT(*)::int AS cnt FROM "${schema}"."${table}"`,
-        );
-        expect(result.rows[0].cnt).toBeGreaterThanOrEqual(15);
-      } finally {
-        client.release();
+      // Find the journal table in any schema
+      const tableResult = await pool.query(
+        `SELECT table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '%drizzle%' LIMIT 1`,
+      );
+      if (tableResult.rowCount === 0) {
+        console.warn("Skipping — no migrations journal table found");
+        return;
       }
+      const schema = tableResult.rows[0].table_schema;
+      const table = tableResult.rows[0].table_name;
+      const result = await pool.query(`SELECT COUNT(*)::int AS cnt FROM "${schema}"."${table}"`);
+      expect(result.rows[0].cnt).toBeGreaterThanOrEqual(15);
     });
   });
 
@@ -564,9 +496,7 @@ describe("Post-Migration Verification: Railway + Neon", () => {
 
   describe("9. Transactional CRUD Verification", () => {
     it("INSERT user with gen_random_uuid() default, then ROLLBACK", async () => {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
+      await withRollback(async (client) => {
         const result = await client.query(
           `INSERT INTO users (email, weight_unit, distance_unit) VALUES ('postmigration-test@test.local', 'kg', 'km') RETURNING id, created_at, updated_at`,
         );
@@ -574,17 +504,11 @@ describe("Post-Migration Verification: Railway + Neon", () => {
         expect(result.rows[0].id.length).toBeGreaterThan(0);
         expect(result.rows[0].created_at).toBeInstanceOf(Date);
         expect(result.rows[0].updated_at).toBeInstanceOf(Date);
-      } finally {
-        await client.query("ROLLBACK");
-        client.release();
-      }
+      });
     });
 
     it("INSERT user -> training_plan -> SELECT with join, then ROLLBACK", async () => {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-
+      await withRollback(async (client) => {
         const userResult = await client.query(
           `INSERT INTO users (email) VALUES ('postmigration-join@test.local') RETURNING id`,
         );
@@ -602,17 +526,11 @@ describe("Post-Migration Verification: Railway + Neon", () => {
         );
         expect(joinResult.rows[0].name).toBe("Test Plan");
         expect(joinResult.rows[0].email).toBe("postmigration-join@test.local");
-      } finally {
-        await client.query("ROLLBACK");
-        client.release();
-      }
+      });
     });
 
     it("ON DELETE CASCADE: deleting user cascades to training_plans", async () => {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-
+      await withRollback(async (client) => {
         const userResult = await client.query(
           `INSERT INTO users (email) VALUES ('cascade-test@test.local') RETURNING id`,
         );
@@ -638,17 +556,11 @@ describe("Post-Migration Verification: Railway + Neon", () => {
           [userId],
         );
         expect(afterDelete.rows[0].cnt).toBe(0);
-      } finally {
-        await client.query("ROLLBACK");
-        client.release();
-      }
+      });
     });
 
     it("workout_logs.plan_day_id SET NULL on plan_day delete", async () => {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-
+      await withRollback(async (client) => {
         const userResult = await client.query(
           `INSERT INTO users (email) VALUES ('setnull-test@test.local') RETURNING id`,
         );
@@ -675,15 +587,11 @@ describe("Post-Migration Verification: Railway + Neon", () => {
         // Delete plan day — workout should get plan_day_id set to NULL
         await client.query(`DELETE FROM plan_days WHERE id = $1`, [dayId]);
 
-        const result = await client.query(
-          `SELECT plan_day_id FROM workout_logs WHERE id = $1`,
-          [workoutId],
-        );
+        const result = await client.query(`SELECT plan_day_id FROM workout_logs WHERE id = $1`, [
+          workoutId,
+        ]);
         expect(result.rows[0].plan_day_id).toBeNull();
-      } finally {
-        await client.query("ROLLBACK");
-        client.release();
-      }
+      });
     });
 
     it("Drizzle ORM can query schema tables without error", async () => {
@@ -706,9 +614,7 @@ describe("Post-Migration Verification: Railway + Neon", () => {
 
   describe("10. Connection Pool Behavior", () => {
     it("handles 10 concurrent queries without error", async () => {
-      const queries = Array.from({ length: 10 }, () =>
-        pool.query("SELECT pg_sleep(0.01)"),
-      );
+      const queries = Array.from({ length: 10 }, () => pool.query("SELECT pg_sleep(0.01)"));
       const results = await Promise.all(queries);
       expect(results).toHaveLength(10);
       results.forEach((r) => expect(r.rowCount).toBe(1));

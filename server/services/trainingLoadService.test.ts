@@ -23,45 +23,7 @@ import {
   type TrainingLoadSet,
   type UpcomingWorkoutForLoad,
 } from "./trainingLoadService";
-
-function log(overrides: Partial<WorkoutLog>): WorkoutLog {
-  return {
-    id: "log-1",
-    userId: "user-1",
-    date: "2026-05-22",
-    focus: "Run",
-    mainWorkout: "Easy run",
-    accessory: null,
-    notes: null,
-    prescribedMainWorkout: null,
-    prescribedAccessory: null,
-    prescribedNotes: null,
-    plannedSetCount: null,
-    actualSetCount: null,
-    matchedSetCount: null,
-    addedSetCount: null,
-    removedSetCount: null,
-    compliancePct: null,
-    duration: null,
-    rpe: null,
-    planDayId: null,
-    planId: null,
-    source: "manual",
-    stravaActivityId: null,
-    garminActivityId: null,
-    calories: null,
-    distanceMeters: null,
-    elevationGain: null,
-    avgHeartrate: null,
-    maxHeartrate: null,
-    avgSpeed: null,
-    maxSpeed: null,
-    avgCadence: null,
-    avgWatts: null,
-    sufferScore: null,
-    ...overrides,
-  };
-}
+import { makeWorkoutLog as log } from "./trainingLoadService.testHelpers";
 
 function set(overrides: Partial<TrainingLoadSet>): TrainingLoadSet {
   return {

@@ -3,14 +3,11 @@ import { Check, Dumbbell, Gauge, MessageSquare, SkipForward } from "lucide-react
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { Separator } from "@/components/ui/separator";
 import { StructureBlocksEditor } from "@/components/workout-structure";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { usePlanDayExercises } from "@/hooks/usePlanDayExercises";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { featureFlags } from "@/lib/featureFlags";
-import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
 import { buildWorkoutCoachSeedMessage } from "./EmbeddedWorkoutCoachChat";
@@ -23,24 +20,13 @@ import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPrescriptionSummary } from "./shared/WorkoutPrescriptionSummary";
 import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
-import {
-  getWorkoutCoachPanelState,
-  WorkoutCoachChatPanel,
-  WorkoutCoachLayout,
-} from "./WorkoutCoachPanel";
+import { type WorkoutCoachChatProps, WorkoutCoachSheet } from "./WorkoutCoachPanel";
 
-interface LogSheetBaseProps {
+interface LogSheetBaseProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
   readonly onSkip?: (entry: TimelineEntry) => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
-  readonly coachChatOpen?: boolean;
-  readonly coachChatNonce?: number;
-  readonly coachSeedText?: string;
-  readonly mobileCoachPanelOpen?: boolean;
-  readonly onCloseCoachChat?: () => void;
-  readonly onShowCoachPanel?: () => void;
-  readonly onShowWorkoutDetails?: () => void;
   readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
   readonly isRenamingTitle?: boolean;
 }
@@ -508,19 +494,12 @@ export function LogSheet({
   onLogAsPlanned,
   onSkip,
   onAskCoach,
-  coachChatOpen = false,
-  coachChatNonce,
-  coachSeedText,
-  mobileCoachPanelOpen = false,
-  onCloseCoachChat,
-  onShowCoachPanel,
-  onShowWorkoutDetails,
   onRenameTitle,
   isRenamingTitle = false,
   isLogging,
   mode = "log",
+  ...coachChat
 }: LogSheetProps) {
-  const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit } = useUnitPreferences();
   const weightUnit: "kg" | "lb" = prefWeightUnit === "kg" ? "kg" : "lb";
   const { rpe, setRpe, note, setNote } = useEntryDraft(entry);
@@ -577,79 +556,61 @@ export function LogSheet({
   const coachExerciseSets = getCoachExerciseSets(entry, planSets);
   const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
   const handleAskCoach = getAskCoachHandler(onAskCoach, currentCoachSeedText);
-  const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   return (
-    <ResponsiveSheet
+    <WorkoutCoachSheet
+      {...coachChat}
+      entry={entry}
       open={!!entry}
       onOpenChange={(open) => !open && onClose()}
       title={title}
-      description={formatScheduledDate(entry.date)}
-      contentClassName={coachChatOpen ? "sm:max-w-5xl" : "sm:max-w-2xl"}
-      mobileFullHeight={coachPanel.coachPanelOpen}
-      desktopFullHeight={coachChatOpen}
+      narrowContentClassName="sm:max-w-2xl"
+      currentCoachSeedText={currentCoachSeedText}
       testId={`log-sheet-${entry.id}`}
+      detailsTestId={`log-details-${entry.id}`}
+      returnTestId={`log-return-to-coach-${entry.id}`}
     >
-      <WorkoutCoachLayout
-        panelState={coachPanel}
-        detailsTestId={`log-details-${entry.id}`}
-        returnTestId={`log-return-to-coach-${entry.id}`}
-        onShowCoachPanel={onShowCoachPanel}
-        chat={
-          <WorkoutCoachChatPanel
-            entry={entry}
-            coachChatOpen={coachChatOpen}
-            coachChatNonce={coachChatNonce}
-            coachSeedText={coachSeedText}
-            currentCoachSeedText={currentCoachSeedText}
-            panelState={coachPanel}
-            onCloseCoachChat={onCloseCoachChat}
-            onShowWorkoutDetails={onShowWorkoutDetails}
-          />
-        }
-      >
-        <WorkoutSummaryHeader
-          stats={buildWorkoutSummaryStats({
-            entry,
-            variant: "planned",
-            distanceUnit,
-            showAdherence: false,
-          })}
-          testId={`log-summary-${entry.id}`}
-        />
-        <CoachRationaleSection
-          rationale={entry.aiRationale}
-          title="Why this workout"
-          testId={`log-rationale-${entry.id}`}
-        />
+      <WorkoutSummaryHeader
+        stats={buildWorkoutSummaryStats({
+          entry,
+          variant: "planned",
+          distanceUnit,
+          showAdherence: false,
+        })}
+        testId={`log-summary-${entry.id}`}
+      />
+      <CoachRationaleSection
+        rationale={entry.aiRationale}
+        title="Why this workout"
+        testId={`log-rationale-${entry.id}`}
+      />
 
-        {/* Pre-workout fuelling guidance sits above the exercise table so
+      {/* Pre-workout fuelling guidance sits above the exercise table so
             it's read before training, not after. */}
-        {featureFlags.nutritionEnabled && entry.planDayId && <FuellingPlanPanel entry={entry} />}
+      {featureFlags.nutritionEnabled && entry.planDayId && <FuellingPlanPanel entry={entry} />}
 
-        <LogSheetPrescriptionContent
-          entry={entry}
-          planSets={planSets}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          isEditMode={isEditMode}
-        />
+      <LogSheetPrescriptionContent
+        entry={entry}
+        planSets={planSets}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        isEditMode={isEditMode}
+      />
 
-        <LogSheetFooter
-          entry={entry}
-          isEditMode={isEditMode}
-          rpe={rpe}
-          setRpe={setRpe}
-          note={note}
-          setNote={setNote}
-          onLog={handleLog}
-          onDone={handleDone}
-          isLogging={isCompletingCurrentEntry || isLogging}
-          isSaving={planSets.isSaving}
-          onAskCoach={handleAskCoach}
-          onSkip={onSkip}
-        />
-      </WorkoutCoachLayout>
-    </ResponsiveSheet>
+      <LogSheetFooter
+        entry={entry}
+        isEditMode={isEditMode}
+        rpe={rpe}
+        setRpe={setRpe}
+        note={note}
+        setNote={setNote}
+        onLog={handleLog}
+        onDone={handleDone}
+        isLogging={isCompletingCurrentEntry || isLogging}
+        isSaving={planSets.isSaving}
+        onAskCoach={handleAskCoach}
+        onSkip={onSkip}
+      />
+    </WorkoutCoachSheet>
   );
 }

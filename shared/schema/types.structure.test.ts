@@ -73,7 +73,7 @@ describe('structureBlockSchema EMOM semantics', () => {
   });
 
   it('accepts AMRAP blocks with a time cap and score', () => {
-    const parsed = structureBlockSchema.safeParse({
+    expectStructureBlock({
       sectionType: 'main',
       formatType: 'amrap',
       timeCapMinutes: 12,
@@ -82,21 +82,19 @@ describe('structureBlockSchema EMOM semantics', () => {
         { stepNumber: 1, stepType: 'work', exerciseName: 'Burpee Broad Jump', targets: { targetReps: 8 } },
         { stepNumber: 2, stepType: 'work', exerciseName: 'Wall Balls', targets: { targetReps: 12 } },
       ],
-    });
-    expect(parsed.success).toBe(true);
+    }, true);
   });
 
   it('rejects AMRAP blocks without a time cap or duration', () => {
-    const parsed = structureBlockSchema.safeParse({
+    expectStructureBlock({
       sectionType: 'main',
       formatType: 'amrap',
       steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Row' }],
-    });
-    expect(parsed.success).toBe(false);
+    }, false);
   });
 
   it('accepts transition steps without movement rows', () => {
-    const parsed = structureBlockSchema.safeParse({
+    expectStructureBlock({
       sectionType: 'main',
       formatType: 'rounds',
       roundCount: 3,
@@ -104,39 +102,35 @@ describe('structureBlockSchema EMOM semantics', () => {
         { stepNumber: 1, stepType: 'work', exerciseName: 'Sled Push' },
         { stepNumber: 2, stepType: 'transition', targets: { instructions: 'Change stations', durationSeconds: 30 } },
       ],
-    });
-    expect(parsed.success).toBe(true);
+    }, true);
   });
 
   it('accepts rounds blocks with completed-round score data', () => {
-    const parsed = structureBlockSchema.safeParse({
+    expectStructureBlock({
       sectionType: 'main',
       formatType: 'rounds',
       roundCount: 5,
       score: { type: 'rounds', completedRounds: 5, elapsedSeconds: 930 },
       steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Sandbag Lunges', targets: { targetReps: 20 } }],
-    });
-    expect(parsed.success).toBe(true);
+    }, true);
   });
 
   it('rejects rounds blocks without a round count', () => {
-    const parsed = structureBlockSchema.safeParse({
+    expectStructureBlock({
       sectionType: 'main',
       formatType: 'rounds',
       steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Sandbag Lunges' }],
-    });
-    expect(parsed.success).toBe(false);
+    }, false);
   });
 
   it('rejects mismatched block score types', () => {
-    const parsed = structureBlockSchema.safeParse({
+    expectStructureBlock({
       sectionType: 'main',
       formatType: 'amrap',
       timeCapMinutes: 10,
       score: { type: 'rounds', completedRounds: 3 },
       steps: [{ stepNumber: 1, stepType: 'work', exerciseName: 'Row' }],
-    });
-    expect(parsed.success).toBe(false);
+    }, false);
   });
 });
 

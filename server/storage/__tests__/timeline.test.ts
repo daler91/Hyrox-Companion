@@ -1,4 +1,4 @@
-import { timelineAnnotations,workoutLogs } from "@shared/schema";
+import { timelineAnnotations, workoutLogs } from "@shared/schema";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../db";
@@ -157,34 +157,14 @@ describe("TimelineStorage race-day derivation", () => {
   it("does NOT override a LOGGED workout that falls on the race date", async () => {
     vi.mocked(db.query.planDays.findMany).mockResolvedValue([planDay("d-race", RACE)] as never);
     linkedRows = [
-      {
-        id: "log-1",
+      logRow("log-1", {
         planDayId: "d-race",
         date: RACE,
         focus: "Race effort",
         mainWorkout: "Raced the HYROX and logged it",
-        accessory: null,
-        notes: null,
         duration: 70,
         rpe: 9,
-        source: "manual",
-        calories: null,
-        distanceMeters: null,
-        elevationGain: null,
-        avgHeartrate: null,
-        maxHeartrate: null,
-        avgSpeed: null,
-        maxSpeed: null,
-        avgCadence: null,
-        avgWatts: null,
-        sufferScore: null,
-        plannedSetCount: null,
-        actualSetCount: null,
-        matchedSetCount: null,
-        addedSetCount: null,
-        removedSetCount: null,
-        compliancePct: null,
-      },
+      }),
     ];
 
     const entries = await storage.getTimeline("user-1");
@@ -195,7 +175,8 @@ describe("TimelineStorage race-day derivation", () => {
   });
 });
 
-function standaloneLog(id: string, overrides: Record<string, unknown> = {}) {
+/** A workout-log row as the mocked select chains resolve it (standalone by default). */
+function logRow(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
     planId: null,
@@ -242,7 +223,7 @@ describe("TimelineStorage standalone workout plan association", () => {
   });
 
   it("tags a standalone workout that carries its own planId with the plan name", async () => {
-    standaloneRows = [standaloneLog("x", { planId: "plan-1" })];
+    standaloneRows = [logRow("x", { planId: "plan-1" })];
 
     const entries = await storage.getTimeline("user-1");
     const entry = entries.find((e) => e.id === "log-x")!;
@@ -252,7 +233,7 @@ describe("TimelineStorage standalone workout plan association", () => {
   });
 
   it("leaves a truly unattached workout (no planId) untagged", async () => {
-    standaloneRows = [standaloneLog("y", { planId: null })];
+    standaloneRows = [logRow("y", { planId: null })];
 
     const entries = await storage.getTimeline("user-1");
     const entry = entries.find((e) => e.id === "log-y")!;
@@ -262,10 +243,7 @@ describe("TimelineStorage standalone workout plan association", () => {
   });
 
   it("forwards the selected plan filter to the standalone query, and omits it for All Plans", async () => {
-    const spy = vi.spyOn(
-      storage,
-      "fetchStandaloneWorkouts",
-    );
+    const spy = vi.spyOn(storage, "fetchStandaloneWorkouts");
 
     // Filtering by a specific plan must thread that planId into the standalone
     // fetch so other-plan workouts can be excluded (the bug: it never was).
@@ -290,7 +268,7 @@ describe("TimelineStorage windowed hydration", () => {
     // hydrate exactly the two returned entries, not the whole merged set (the
     // regression: attachExerciseSets ran on the full 3x-over-fetched merge).
     standaloneRows = ["2026-06-05", "2026-06-04", "2026-06-03", "2026-06-02", "2026-06-01"].map(
-      (date, i) => standaloneLog(`w${i}`, { date }),
+      (date, i) => logRow(`w${i}`, { date }),
     );
 
     const entries = await storage.getTimeline("user-1", undefined, 2, 0);
@@ -303,7 +281,7 @@ describe("TimelineStorage windowed hydration", () => {
 
   it("hydrates everything when no window is requested (export/email path)", async () => {
     standaloneRows = ["2026-06-05", "2026-06-04", "2026-06-03"].map((date, i) =>
-      standaloneLog(`w${i}`, { date }),
+      logRow(`w${i}`, { date }),
     );
 
     const entries = await storage.getTimeline("user-1");

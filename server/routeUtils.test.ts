@@ -518,40 +518,36 @@ describe("validateBody", () => {
     age: z.number().optional(),
   });
 
-  it("should call next() and update req.body on valid input", () => {
-    const req = { body: { name: "Test", age: 30 } } as unknown as import("express").Request;
-    const res = {} as unknown as import("express").Response;
-    const next = vi.fn();
-
-    const middleware = validateBody(schema);
-    middleware(req, res, next);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(req.body).toEqual({ name: "Test", age: 30 });
-  });
-
-  it("should strip unknown properties from req.body on valid input", () => {
-    const req = { body: { name: "Test", unknownProp: true } } as unknown as import("express").Request;
-    const res = {} as unknown as import("express").Response;
-    const next = vi.fn();
-
-    const middleware = validateBody(schema);
-    middleware(req, res, next);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(req.body).toEqual({ name: "Test" });
-  });
-
-  it("should return 400 on invalid input without calling next()", () => {
-    const req = { body: { age: "not a number" } } as unknown as import("express").Request;
+  // Run the middleware over `body` with stubbed req/res/next and hand the
+  // stubs back for assertions.
+  function runValidateBody(body: Record<string, unknown>) {
+    const req = { body } as unknown as import("express").Request;
     const res = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     } as unknown as import("express").Response;
     const next = vi.fn();
 
-    const middleware = validateBody(schema);
-    middleware(req, res, next);
+    validateBody(schema)(req, res, next);
+    return { req, res, next };
+  }
+
+  it("should call next() and update req.body on valid input", () => {
+    const { req, next } = runValidateBody({ name: "Test", age: 30 });
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.body).toEqual({ name: "Test", age: 30 });
+  });
+
+  it("should strip unknown properties from req.body on valid input", () => {
+    const { req, next } = runValidateBody({ name: "Test", unknownProp: true });
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.body).toEqual({ name: "Test" });
+  });
+
+  it("should return 400 on invalid input without calling next()", () => {
+    const { res, next } = runValidateBody({ age: "not a number" });
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
