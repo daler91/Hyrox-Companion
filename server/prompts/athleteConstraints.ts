@@ -56,15 +56,13 @@ export function formatAthleteConstraints(context?: TrainingContext): string {
 
   const constraints = context.trainingConstraints?.trim();
   if (constraints) {
-    lines.push(
-      `STANDING CONSTRAINTS (the athlete's own words — these always apply): ${sanitizeUserInput(constraints)}`,
-    );
     // Belt to the suppression's braces: computeExerciseGaps drops stations the
     // constraints rule out, but that matching is keyword-based and the other
     // computed signals (coverage stats, progression flags) have no equipment
     // model at all. Stating the precedence costs one line and covers whatever
     // the keywords miss.
     lines.push(
+      `STANDING CONSTRAINTS (the athlete's own words — these always apply): ${sanitizeUserInput(constraints)}`,
       `If any computed signal elsewhere in this context (exercise gaps, station coverage, progression flags) conflicts with these constraints, the constraints win — program a substitute, not the excluded work.`,
     );
   }
@@ -86,8 +84,7 @@ export function formatAthleteConstraints(context?: TrainingContext): string {
   }
 
   if (current.length > 0) {
-    lines.push(`CURRENTLY AFFECTED: ${current.map(formatRange).join("; ")}`);
-    lines.push(currentAbsenceGuidance(current));
+    lines.push(`CURRENTLY AFFECTED: ${current.map(formatRange).join("; ")}`, currentAbsenceGuidance(current));
   }
   if (recent.length > 0) {
     lines.push(

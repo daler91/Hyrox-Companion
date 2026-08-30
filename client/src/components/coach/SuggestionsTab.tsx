@@ -66,8 +66,8 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
   const handleApplySuggestion = async (suggestion: Suggestion) => {
     setApplyingId(suggestion.workoutId);
     try {
-      const workoutEntry = timeline.find(e => e.planDayId === suggestion.workoutId);
-      if (!workoutEntry) {
+      const workoutExists = timeline.some(e => e.planDayId === suggestion.workoutId);
+      if (!workoutExists) {
         const errorMessage: Message = {
           id: Date.now().toString(),
           role: "assistant",

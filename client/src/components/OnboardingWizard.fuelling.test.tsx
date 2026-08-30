@@ -126,7 +126,7 @@ describe("OnboardingWizard fuelling step", () => {
     fireEvent.click(screen.getByText("Continue"));
     await screen.findByTestId("plan-step");
 
-    expect(vi.mocked(queryClientLib.apiRequest).mock.calls.length).toBe(callsBefore);
+    expect(vi.mocked(queryClientLib.apiRequest).mock.calls).toHaveLength(callsBefore);
     expect(targetsCalls()).toHaveLength(0);
   });
 

@@ -268,7 +268,7 @@ describe("circuit breaker integration", () => {
     expect(second.status).toBe(503);
     expect(second.body.code).toBe("GARMIN_CIRCUIT_OPEN");
     // Short-circuited before any storage read.
-    expect(vi.mocked(storage.users.getGarminConnection).mock.calls.length).toBe(callsAfterFirst);
+    expect(vi.mocked(storage.users.getGarminConnection).mock.calls).toHaveLength(callsAfterFirst);
   });
 });
 

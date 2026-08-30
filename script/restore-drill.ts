@@ -329,15 +329,15 @@ async function checkCredentialDecrypt(client: Queryable): Promise<CheckResult> {
 }
 
 export async function runRestoreDrill(client: Queryable): Promise<CheckResult[]> {
-  const results: CheckResult[] = [];
-  results.push(await checkConnectivity(client));
-  results.push(await checkMigrationLedger(client));
-  results.push(await checkSchemaCompleteness(client));
-  results.push(...(await checkRowCounts(client)));
-  results.push(await checkForeignKeyIntegrity(client));
-  results.push(...(await checkNullOwnerLeaks(client)));
-  results.push(await checkCredentialDecrypt(client));
-  return results;
+  return [
+    await checkConnectivity(client),
+    await checkMigrationLedger(client),
+    await checkSchemaCompleteness(client),
+    ...(await checkRowCounts(client)),
+    await checkForeignKeyIntegrity(client),
+    ...(await checkNullOwnerLeaks(client)),
+    await checkCredentialDecrypt(client),
+  ];
 }
 
 export function formatReport(results: CheckResult[], elapsedMs: number): string {
@@ -345,14 +345,14 @@ export function formatReport(results: CheckResult[], elapsedMs: number): string 
   const lines = results.map((r) => `${glyph[r.status]} ${r.name}\n         ${r.detail}`);
   const failed = results.filter((r) => r.status === "fail").length;
   const skipped = results.filter((r) => r.status === "skip").length;
-  lines.push("");
   lines.push(
+    "",
     failed === 0
       ? `Restore drill PASSED — ${results.length - skipped} check(s) verified, ${skipped} skipped, ${(elapsedMs / 1000).toFixed(1)}s.`
       : `Restore drill FAILED — ${failed} of ${results.length} check(s) failed, ${(elapsedMs / 1000).toFixed(1)}s.`,
+    // §6's last item: compare the wall clock against the documented RTO.
+    "Record this run (date, operator, wall-clock vs RTO) in docs/operations/backup-restore.md §6.",
   );
-  // §6's last item: compare the wall clock against the documented RTO.
-  lines.push("Record this run (date, operator, wall-clock vs RTO) in docs/operations/backup-restore.md §6.");
   return lines.join("\n");
 }
 

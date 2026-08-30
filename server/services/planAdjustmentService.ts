@@ -273,7 +273,7 @@ async function enrichProposedChanges(
   for (const change of changes) {
     const day = dayById.get(change.planDayId);
     const sets = setsByDay.get(change.planDayId) ?? [];
-    if (!day || day.status !== "planned") {
+    if (day?.status !== "planned") {
       // internal identifiers only (user id, plan-day id), no message or
       // workout content.
       // bearer:disable javascript_lang_logger_leak
@@ -595,7 +595,7 @@ async function revalidateProposalChanges(
     const day = dayById.get(change.planDayId);
     const sets = setsByDay.get(change.planDayId) ?? [];
     const live: LivePlanDay | null =
-      day && day.status === "planned" ? { day, sets } : null;
+      day?.status === "planned" ? { day, sets } : null;
     if (!live || fingerprintLiveDay(live) !== change.baseline.fingerprint) {
       staleChanges.push({ planDayId: change.planDayId, dayLabel: change.dayLabel });
       continue;

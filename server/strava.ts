@@ -676,15 +676,13 @@ async function advanceStravaSyncCursor(
   activities: StravaActivity[],
   hasMore: boolean,
 ): Promise<void> {
-  if (hasMore && activities.length > 0) {
-    // Capped sync: advance the cursor only through the fetched window
-    // (ascending order ⇒ last element is the newest we saw) so the next
-    // sync resumes exactly where this one stopped instead of skipping the
-    // unfetched activities.
-    await storage.users.updateStravaLastSync(
-      userId,
-      new Date(activities[activities.length - 1].start_date),
-    );
+  // Capped sync: advance the cursor only through the fetched window
+  // (ascending order ⇒ last element is the newest we saw) so the next
+  // sync resumes exactly where this one stopped instead of skipping the
+  // unfetched activities.
+  const newest = activities.at(-1);
+  if (hasMore && newest) {
+    await storage.users.updateStravaLastSync(userId, new Date(newest.start_date));
     return;
   }
   await storage.users.updateStravaLastSync(userId);

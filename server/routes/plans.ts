@@ -278,7 +278,8 @@ protectedPatch(router, "/api/v1/plans/:id/retirement", { limiter: rateLimiter("p
     // adherence denominator — and `missed → planned` is forbidden, so there is
     // no way to reconcile them afterwards. Retiring from today onward keeps the
     // past exactly as the athlete lived it.
-    const retiredOn = req.body.retiredOn > today ? req.body.retiredOn : today;
+    let retiredOn = req.body.retiredOn;
+    if (retiredOn < today) retiredOn = today;
     const updated = await storage.plans.setPlanRetirement(plan.id, retiredOn, userId);
     res.json(updated);
   });

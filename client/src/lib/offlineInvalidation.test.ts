@@ -49,7 +49,7 @@ describe("invalidateForSyncedRequests", () => {
     ]);
 
     expect(mocks.invalidateWorkoutWriteQueries).toHaveBeenCalledOnce();
-    expect(invalidatedKeys().length).toBe(3);
+    expect(invalidatedKeys()).toHaveLength(3);
   });
 
   it("falls back to workout invalidation when no request metadata is present", () => {

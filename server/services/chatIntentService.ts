@@ -22,7 +22,7 @@ import { sanitizeUserInput } from "../utils/sanitize";
 const DAY_NAMES = "monday|tuesday|wednesday|thursday|friday|saturday|sunday";
 
 const PLAN_EDIT_KEYWORD_PATTERNS: readonly RegExp[] = [
-  new RegExp(`\\b(?:${DAY_NAMES})\\b`, "i"),
+  new RegExp(String.raw`\b(?:${DAY_NAMES})\b`, "i"),
   /\b(?:today|tomorrow|this week|next week|weekend|next month)\b/i,
   /\b(?:move|swap|switch|replace|resched|shift|push|postpone|delay|bring forward)\b/i,
   /\b(?:skip|cancel|drop|remove|miss(?:ing)?|can'?t|cannot|won'?t make|unable)\b/i,
