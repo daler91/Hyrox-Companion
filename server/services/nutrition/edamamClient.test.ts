@@ -10,6 +10,20 @@ import { env } from "../../env";
 import { mapEdamamFood, resolveEdamamBarcode, searchEdamamFoods } from "./edamamClient";
 import { errResponse, ok } from "./httpClientTestSupport";
 
+/** Per-describe fetch stub + fresh Edamam credentials (tests un-set them to
+ *  exercise the unconfigured path, so each test restores both). */
+function useFetchWithCredentials() {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    (env as { EDAMAM_APP_ID?: string; EDAMAM_APP_KEY?: string }).EDAMAM_APP_ID = "test-id";
+    (env as { EDAMAM_APP_ID?: string; EDAMAM_APP_KEY?: string }).EDAMAM_APP_KEY = "test-key";
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+  return fetchMock;
+}
+
 const HINT = {
   food: {
     foodId: "food_abc",
@@ -60,15 +74,7 @@ describe("mapEdamamFood", () => {
 });
 
 describe("searchEdamamFoods", () => {
-  const fetchMock = vi.fn();
-
-  beforeEach(() => {
-    fetchMock.mockReset();
-    (env as { EDAMAM_APP_ID?: string; EDAMAM_APP_KEY?: string }).EDAMAM_APP_ID = "test-id";
-    (env as { EDAMAM_APP_ID?: string; EDAMAM_APP_KEY?: string }).EDAMAM_APP_KEY = "test-key";
-    vi.stubGlobal("fetch", fetchMock);
-  });
-  afterEach(() => vi.unstubAllGlobals());
+  const fetchMock = useFetchWithCredentials();
 
   it("does nothing and reports not-reached when credentials are missing", async () => {
     (env as { EDAMAM_APP_ID?: string }).EDAMAM_APP_ID = undefined;
@@ -103,15 +109,7 @@ describe("searchEdamamFoods", () => {
 });
 
 describe("resolveEdamamBarcode", () => {
-  const fetchMock = vi.fn();
-
-  beforeEach(() => {
-    fetchMock.mockReset();
-    (env as { EDAMAM_APP_ID?: string; EDAMAM_APP_KEY?: string }).EDAMAM_APP_ID = "test-id";
-    (env as { EDAMAM_APP_ID?: string; EDAMAM_APP_KEY?: string }).EDAMAM_APP_KEY = "test-key";
-    vi.stubGlobal("fetch", fetchMock);
-  });
-  afterEach(() => vi.unstubAllGlobals());
+  const fetchMock = useFetchWithCredentials();
 
   it("resolves a UPC to the first hint", async () => {
     fetchMock.mockResolvedValue(ok({ hints: [HINT] }));

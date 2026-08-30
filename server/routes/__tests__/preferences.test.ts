@@ -6,32 +6,16 @@ import { storage } from "../../storage";
 import preferencesRouter from "../preferences";
 import { createTestApp } from "./testUtils";
 
-// Mock the clerkAuth middleware to simulate authentication
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-// Mock the getUserId function to return our test user
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
-// Mock the storage functions
-vi.mock("../../storage", () => ({
-  storage: {
-    users: {
-      getUser: vi.fn(),
-      updateUserPreferences: vi.fn(),
-    },
-    plans: {
-      getActivePlan: vi.fn(),
-      getPlanWeeklyDensity: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    users: ["getUser", "updateUserPreferences"],
+    plans: ["getActivePlan", "getPlanWeeklyDensity"],
+  }),
+);
 
 describe("GET /api/preferences", () => {
   let app: express.Express;

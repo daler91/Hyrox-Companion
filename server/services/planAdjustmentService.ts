@@ -233,6 +233,28 @@ function clampProposedChanges(
   return clampedChanges;
 }
 
+// ⚡ Bolt Performance Optimization: enrichment and revalidation used to await
+// one getPlanDay() + one getExerciseSetsByPlanDay() pair per change,
+// sequentially inside their loops — for M proposed changes, M round-trip pairs
+// where every pair reads the same two tables the others do. Both reads are
+// resolved once up front via the id-array batch variants (a single indexed
+// join each, keyed by planDayId), then the loops are pure in-memory lookup and
+// assembly. getPlanDaysByIds() already applies the ownership join, so a day
+// missing from `dayById` is the same "vanished or unauthorized" case the old
+// `!day` check caught; a day present but absent from `setsByDay` simply has
+// no prescribed sets yet, matching the old sets === [] case.
+async function batchReadChangePlanDays(
+  changes: ReadonlyArray<{ planDayId: string }>,
+  userId: string,
+) {
+  const dayIds = [...new Set(changes.map((c) => c.planDayId))];
+  const [days, setsByDay] = await Promise.all([
+    storage.plans.getPlanDaysByIds(dayIds, userId),
+    storage.workouts.getExerciseSetsByPlanDays(dayIds, userId),
+  ]);
+  return { dayById: new Map(days.map((d) => [d.id, d])), setsByDay };
+}
+
 /**
  * Enrich against the RAW plan-day rows (not the race-day-overridden timeline
  * view) so baselines and fingerprints match what the apply step will re-read.
@@ -246,22 +268,7 @@ async function enrichProposedChanges(
   const enriched: EnrichedPlanAdjustmentChange[] = [];
   let planId: string | null = null;
 
-  // ⚡ Bolt Performance Optimization: this used to await one getPlanDay() +
-  // one getExerciseSetsByPlanDay() pair per change, sequentially inside the
-  // loop — for M proposed changes, M round-trip pairs where every pair reads
-  // the same two tables the others do. Both reads are resolved once up front
-  // via the id-array batch variants (a single indexed join each, keyed by
-  // planDayId), then the loop below is pure in-memory lookup and assembly.
-  // getPlanDaysByIds() already applies the ownership join, so a day missing
-  // from `days` is the same "vanished or unauthorized" case the old
-  // `!day` check caught; a day present but absent from `setsByDay` simply has
-  // no prescribed sets yet, matching the old sets === [] case.
-  const dayIds = [...new Set(changes.map((c) => c.planDayId))];
-  const [days, setsByDay] = await Promise.all([
-    storage.plans.getPlanDaysByIds(dayIds, userId),
-    storage.workouts.getExerciseSetsByPlanDays(dayIds, userId),
-  ]);
-  const dayById = new Map(days.map((d) => [d.id, d]));
+  const { dayById, setsByDay } = await batchReadChangePlanDays(changes, userId);
 
   for (const change of changes) {
     const day = dayById.get(change.planDayId);
@@ -582,12 +589,7 @@ async function revalidateProposalChanges(
   const liveDays = new Map<string, LivePlanDay>();
   const staleChanges: Array<{ planDayId: string; dayLabel: string }> = [];
 
-  const dayIds = [...new Set(changes.map((c) => c.planDayId))];
-  const [days, setsByDay] = await Promise.all([
-    storage.plans.getPlanDaysByIds(dayIds, userId),
-    storage.workouts.getExerciseSetsByPlanDays(dayIds, userId),
-  ]);
-  const dayById = new Map(days.map((d) => [d.id, d]));
+  const { dayById, setsByDay } = await batchReadChangePlanDays(changes, userId);
 
   for (const change of changes) {
     const day = dayById.get(change.planDayId);

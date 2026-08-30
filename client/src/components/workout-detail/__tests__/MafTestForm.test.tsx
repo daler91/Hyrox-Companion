@@ -17,6 +17,24 @@ vi.mock("@/hooks/useUnitPreferences", () => ({
 const noop = () => {};
 const emptyInitial = { avgHeartRate: null, maxHeartRate: null, durationSeconds: null, distanceMeters: null };
 
+/** Render an empty create-mode form and hand back its onSubmit spy. */
+function renderCreateForm() {
+  const onSubmit = vi.fn();
+  render(
+    <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
+  );
+  return onSubmit;
+}
+
+/** Type `value` into `testId`, submit, and expect a blocked, errored form. */
+async function submitAndExpectBlocked(onSubmit: ReturnType<typeof vi.fn>, testId: string, value: string) {
+  await userEvent.type(screen.getByTestId(testId), value);
+  await userEvent.click(screen.getByTestId("maf-test-form-submit"));
+
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(screen.getByTestId("maf-test-form-error")).toBeInTheDocument();
+}
+
 describe("MafTestForm", () => {
   beforeEach(() => {
     unit.value = "km";
@@ -52,10 +70,7 @@ describe("MafTestForm", () => {
 
   it("converts a distance entered in miles back to canonical meters", async () => {
     unit.value = "miles";
-    const onSubmit = vi.fn();
-    render(
-      <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
-    );
+    const onSubmit = renderCreateForm();
 
     await userEvent.type(screen.getByTestId("maf-test-form-avg-hr"), "140");
     await userEvent.type(screen.getByTestId("maf-test-form-distance"), "1");
@@ -69,28 +84,16 @@ describe("MafTestForm", () => {
   });
 
   it("blocks submit and surfaces an error for an out-of-range heart rate", async () => {
-    const onSubmit = vi.fn();
-    render(
-      <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
-    );
+    const onSubmit = renderCreateForm();
 
-    await userEvent.type(screen.getByTestId("maf-test-form-avg-hr"), "12"); // below the 20 bpm floor
-    await userEvent.click(screen.getByTestId("maf-test-form-submit"));
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByTestId("maf-test-form-error")).toBeInTheDocument();
+    // 12 bpm is below the 20 bpm floor.
+    await submitAndExpectBlocked(onSubmit, "maf-test-form-avg-hr", "12");
   });
 
   it("rejects a malformed duration", async () => {
-    const onSubmit = vi.fn();
-    render(
-      <MafTestForm open onOpenChange={noop} mode="create" initial={emptyInitial} isPending={false} onSubmit={onSubmit} />,
-    );
+    const onSubmit = renderCreateForm();
 
-    await userEvent.type(screen.getByTestId("maf-test-form-duration"), "28:75"); // seconds overflow
-    await userEvent.click(screen.getByTestId("maf-test-form-submit"));
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByTestId("maf-test-form-error")).toBeInTheDocument();
+    // 28:75 overflows the seconds field.
+    await submitAndExpectBlocked(onSubmit, "maf-test-form-duration", "28:75");
   });
 });

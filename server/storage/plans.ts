@@ -4,18 +4,18 @@ import {
   type InsertTrainingPlan,
   type PlanDay,
   planDays,
-  timelineAnnotations,
   type TrainingPlan,
   trainingPlans,
   type TrainingPlanWithDays,
   type UpdatePlanDay,
   users,
 } from "@shared/schema";
-import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
+import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planLiveForDate } from "./planRetirement";
 
@@ -589,26 +589,11 @@ export class PlanStorage {
             // app telling them they failed at something they already decided not
             // to do, and because `missed → planned` is FORBIDDEN (see enums.ts)
             // the damage would be permanent. Same reasoning as the declared-absence
-            // guard below. Built in planRetirement.ts so the SQL-rendering test
-            // asserts this exact predicate instead of a copy of it.
+            // guard below. Both guards are built in planRetirement.ts /
+            // absenceGuard.ts so the SQL-rendering test asserts these exact
+            // predicates instead of copies of them.
             missedSweepRetirementGuard(db),
-            notExists(
-              // Correlated on the plan's owner rather than on plan_days
-              // directly — plan_days carries no user_id, so the annotation has
-              // to be reached through training_plans. Uses
-              // idx_timeline_annotations_user_range.
-              db
-                .select({ one: sql`1` })
-                .from(timelineAnnotations)
-                .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
-                .where(
-                  and(
-                    eq(timelineAnnotations.userId, trainingPlans.userId),
-                    lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                    gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                  ),
-                ),
-            ),
+            noAbsenceDeclaredForPlanDay(db),
           ),
         )
         .returning({ id: planDays.id });

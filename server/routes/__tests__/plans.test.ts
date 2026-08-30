@@ -7,58 +7,23 @@ import { storage } from "../../storage";
 import plansRouter from "../plans";
 import { createTestApp } from "./testUtils";
 
-// Mock the clerkAuth middleware to simulate authentication
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-// Mock the getUserId function to return our test user
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
-vi.mock("../../middleware/aibudget", () => ({
-  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
-}));
+vi.mock("../../middleware/aibudget", async () => (await import("./testUtils")).mockAiBudgetModule());
 
 vi.mock("../../services/planGenerationService", () => ({
   createPendingPlan: vi.fn(),
 }));
 
-// Mock the storage functions
-vi.mock("../../storage", () => ({
-  storage: {
-    workouts: {
-      deleteWorkoutLogByPlanDayId: vi.fn(),
-      getExerciseSetsByPlanDay: vi.fn(),
-      getWorkoutStructureByPlanDay: vi.fn(),
-      mutateExerciseSetUpdate: vi.fn(),
-      mutateExerciseSetAdd: vi.fn(),
-      mutateExerciseSetDelete: vi.fn(),
-    },
-    plans: {
-      listTrainingPlans: vi.fn(),
-      getTrainingPlan: vi.fn(),
-      getPlanDay: vi.fn(),
-      updatePlanDay: vi.fn(),
-      renameTrainingPlan: vi.fn(),
-      deleteTrainingPlan: vi.fn(),
-      schedulePlan: vi.fn(),
-      deletePlanDay: vi.fn(),
-      hasInFlightPlanGeneration: vi.fn(),
-      setPlanRetirement: vi.fn(),
-      findOverlappingActivePlans: vi.fn(),
-    },
-    users: {
-      getUser: vi.fn(),
-      getCustomExercises: vi.fn(),
-      updateUserPreferences: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    workouts: ["deleteWorkoutLogByPlanDayId", "getExerciseSetsByPlanDay", "getWorkoutStructureByPlanDay", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
+    plans: ["listTrainingPlans", "getTrainingPlan", "getPlanDay", "updatePlanDay", "renameTrainingPlan", "deleteTrainingPlan", "schedulePlan", "deletePlanDay", "hasInFlightPlanGeneration", "setPlanRetirement", "findOverlappingActivePlans"],
+    users: ["getUser", "getCustomExercises", "updateUserPreferences"],
+  }),
+);
 
 vi.mock("../../services/structuredExerciseHealth", () => ({ incrementStructuredExerciseCounter: vi.fn().mockResolvedValue(undefined) }));
 

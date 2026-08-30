@@ -1,6 +1,7 @@
 import {
   type ExerciseSet,
   type InsertExerciseSet,
+  type StructureBlockInput,
   workoutLogs,
 } from "@shared/schema";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
@@ -49,6 +50,27 @@ export function prescribedSetToLogRow(
     confidence: p.confidence,
     sortOrder: p.sortOrder,
   };
+}
+
+/**
+ * Structure-step `targets` object derived from an exercise row's prescribed
+ * (falling back to actual) values. Used when mirroring exercise rows into
+ * structure steps — by the WorkoutStorage step-mirror sync and by the
+ * workoutService structure replacement path.
+ */
+export function structureTargetsFromExerciseSet(
+  row: ExerciseSet,
+): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
+  const targets: Record<string, unknown> = {};
+  const reps = row.plannedReps ?? row.reps;
+  const weight = row.plannedWeight ?? row.weight;
+  const distance = row.plannedDistance ?? row.distance;
+  const time = row.plannedTime ?? row.time;
+  if (reps != null) targets.targetReps = reps;
+  if (weight != null) targets.targetWeight = weight;
+  if (distance != null) targets.targetDistance = distance;
+  if (time != null) targets.targetTime = time;
+  return Object.keys(targets).length > 0 ? (targets) : null;
 }
 
 // This helper only walks workoutLogs → exerciseSets, so every returned row

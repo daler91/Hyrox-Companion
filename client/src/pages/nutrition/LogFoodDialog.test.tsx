@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { makeFood } from "@/test/factories/foodFactory";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
 
 import { LogFoodDialog, matchPortionForGrams } from "./LogFoodDialog";
@@ -30,25 +31,33 @@ vi.mock("@/lib/api", () => ({
 
 installRadixPointerMocks();
 
-const FOOD: Food = {
-  id: "f1",
-  source: "usda",
-  sourceId: "1",
-  name: "Banana",
-  brand: "Dole",
-  servingSizeG: 118,
-  caloriesPer100g: 89,
-  proteinPer100g: 1.1,
-  carbPer100g: 23,
-  fatPer100g: 0.3,
-  fiberPer100g: 2.6,
-  micros: null,
-  lastFetchedAt: null,
-  createdByUserId: null,
-  isPublic: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+const FOOD: Food = makeFood({ brand: "Dole" });
+
+const SLICE: FoodServing = {
+  id: "s9",
+  foodId: "f1",
+  label: "1 slice",
+  grams: 95,
+  createdByUserId: "u1",
 };
+
+/** An entry of `quantityG`, on the food the suite's mocks describe. */
+function entryOf(quantityG: number): FoodLogEntryWithNutrition {
+  return {
+    id: "e1",
+    foodId: "f1",
+    name: "Banana",
+    brand: null,
+    loggedAt: "2026-06-07T08:00:00.000Z",
+    logDate: "2026-06-07",
+    quantityG,
+    mealType: "breakfast",
+    entryMethod: "manual",
+    // Per-100g source for the entry, the raw input the server scales (audit M22).
+    per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
+    nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
+  };
+}
 
 const SAVED_ENTRY: FoodLogEntry = {
   id: "e1",
@@ -73,6 +82,27 @@ function renderWithClient(ui: ReactNode) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+function renderCreateDialog() {
+  return renderWithClient(
+    <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
+  );
+}
+
+function renderEditDialog(entry: FoodLogEntryWithNutrition) {
+  return renderWithClient(
+    <LogFoodDialog state={{ mode: "edit", entry }} date="2026-06-07" onClose={vi.fn()} />,
+  );
+}
+
+/** Open the unit selector, choose "+ Add portion…", and save a 95 g "1 slice". */
+async function addSlicePortion(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByTestId("select-unit"));
+  await user.click(await screen.findByRole("option", { name: /add portion/i }));
+  await user.type(screen.getByTestId("input-portion-label"), "1 slice");
+  await user.type(screen.getByTestId("input-portion-grams"), "95");
+  await user.click(screen.getByTestId("button-save-portion"));
+}
+
 describe("LogFoodDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -83,9 +113,7 @@ describe("LogFoodDialog", () => {
 
   it("defaults to one serving and logs the scaled amount", async () => {
     const user = userEvent.setup();
-    renderWithClient(
-      <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
-    );
+    renderCreateDialog();
 
     expect(screen.getByText("Banana")).toBeInTheDocument();
     // Default amount = 1 serving (118 g) → 89 * 118 / 100 ≈ 105 kcal (not a raw 100 g).
@@ -108,26 +136,11 @@ describe("LogFoodDialog", () => {
   });
 
   it("adds a custom portion and logs in that portion", async () => {
-    const slice: FoodServing = {
-      id: "s9",
-      foodId: "f1",
-      label: "1 slice",
-      grams: 95,
-      createdByUserId: "u1",
-    };
-    vi.mocked(api.nutrition.addServing).mockResolvedValue(slice);
+    vi.mocked(api.nutrition.addServing).mockResolvedValue(SLICE);
     const user = userEvent.setup();
-    renderWithClient(
-      <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
-    );
+    renderCreateDialog();
 
-    // Open the unit selector and choose "+ Add portion…".
-    await user.click(screen.getByTestId("select-unit"));
-    await user.click(await screen.findByRole("option", { name: /add portion/i }));
-
-    await user.type(screen.getByTestId("input-portion-label"), "1 slice");
-    await user.type(screen.getByTestId("input-portion-grams"), "95");
-    await user.click(screen.getByTestId("button-save-portion"));
+    await addSlicePortion(user);
 
     await waitFor(() =>
       expect(api.nutrition.addServing).toHaveBeenCalledWith("f1", { label: "1 slice", grams: 95 }),
@@ -183,21 +196,11 @@ describe("LogFoodDialog", () => {
   });
 
   describe("removing a portion", () => {
-    const SLICE: FoodServing = {
-      id: "s9",
-      foodId: "f1",
-      label: "1 slice",
-      grams: 95,
-      createdByUserId: "u1",
-    };
-
     it("falls back to grams when the removed portion was the selected one", async () => {
       vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [SLICE] });
       vi.mocked(api.nutrition.removeServing).mockResolvedValue({ success: true });
       const user = userEvent.setup();
-      renderWithClient(
-        <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
-      );
+      renderCreateDialog();
 
       await user.click(screen.getByTestId("select-unit"));
       await user.click(await screen.findByRole("option", { name: "1 slice" }));
@@ -218,9 +221,7 @@ describe("LogFoodDialog", () => {
       vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [SLICE] });
       vi.mocked(api.nutrition.removeServing).mockResolvedValue({ success: true });
       const user = userEvent.setup();
-      renderWithClient(
-        <LogFoodDialog state={{ mode: "create", food: FOOD }} date="2026-06-07" onClose={vi.fn()} />,
-      );
+      renderCreateDialog();
 
       // Default create-mode selection is "1 serving (118 g)", not the slice.
       await waitFor(() => expect(screen.getByTestId("button-remove-portion")).toBeInTheDocument());
@@ -238,24 +239,8 @@ describe("LogFoodDialog", () => {
   });
 
   it("saves an edited entry", async () => {
-    const entry: FoodLogEntryWithNutrition = {
-      id: "e1",
-      foodId: "f1",
-      name: "Banana",
-      brand: null,
-      loggedAt: "2026-06-07T08:00:00.000Z",
-      logDate: "2026-06-07",
-      quantityG: 100,
-      mealType: "breakfast",
-      entryMethod: "manual",
-      // Per-100g source for the entry, the raw input the server scales (audit M22).
-      per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
-      nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
-    };
     const user = userEvent.setup();
-    renderWithClient(
-      <LogFoodDialog state={{ mode: "edit", entry }} date="2026-06-07" onClose={vi.fn()} />,
-    );
+    renderEditDialog(entryOf(100));
 
     expect(screen.getByText("Edit entry")).toBeInTheDocument();
     // 100 g against a 118 g serving isn't a clean portion count, so the amount
@@ -277,41 +262,9 @@ describe("LogFoodDialog", () => {
   });
 
   describe("editing in named portions", () => {
-    const SLICE: FoodServing = {
-      id: "s9",
-      foodId: "f1",
-      label: "1 slice",
-      grams: 95,
-      createdByUserId: "u1",
-    };
-
-    /** An entry of `quantityG`, on the food the suite's mocks describe. */
-    function entryOf(quantityG: number): FoodLogEntryWithNutrition {
-      return {
-        id: "e1",
-        foodId: "f1",
-        name: "Banana",
-        brand: null,
-        loggedAt: "2026-06-07T08:00:00.000Z",
-        logDate: "2026-06-07",
-        quantityG,
-        mealType: "breakfast",
-        entryMethod: "manual",
-        // Per-100g source for the entry, the raw input the server scales (audit M22).
-        per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
-        nutrition: { calories: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 },
-      };
-    }
-
     it("reopens the entry in the portion it was logged in", async () => {
       vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [SLICE] });
-      renderWithClient(
-        <LogFoodDialog
-          state={{ mode: "edit", entry: entryOf(190) }}
-          date="2026-06-07"
-          onClose={vi.fn()}
-        />,
-      );
+      renderEditDialog(entryOf(190));
 
       // 190 g ÷ 95 g = 2 slices. The servings arrive asynchronously, so the seed
       // resolves after first paint — hence the wait.
@@ -323,13 +276,7 @@ describe("LogFoodDialog", () => {
     it("saves grams, not the portion count", async () => {
       vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [SLICE] });
       const user = userEvent.setup();
-      renderWithClient(
-        <LogFoodDialog
-          state={{ mode: "edit", entry: entryOf(190) }}
-          date="2026-06-07"
-          onClose={vi.fn()}
-        />,
-      );
+      renderEditDialog(entryOf(190));
 
       await waitFor(() => expect(screen.getByTestId("select-unit")).toHaveTextContent("1 slice"));
       const quantity = screen.getByTestId("input-quantity");
@@ -354,13 +301,7 @@ describe("LogFoodDialog", () => {
         }),
       );
       const user = userEvent.setup();
-      renderWithClient(
-        <LogFoodDialog
-          state={{ mode: "edit", entry: entryOf(190) }}
-          date="2026-06-07"
-          onClose={vi.fn()}
-        />,
-      );
+      renderEditDialog(entryOf(190));
 
       const quantity = screen.getByTestId("input-quantity");
       await user.clear(quantity);
@@ -377,19 +318,9 @@ describe("LogFoodDialog", () => {
       vi.mocked(api.nutrition.getFood).mockResolvedValue({ food: FOOD, servings: [] });
       vi.mocked(api.nutrition.addServing).mockResolvedValue(SLICE);
       const user = userEvent.setup();
-      renderWithClient(
-        <LogFoodDialog
-          state={{ mode: "edit", entry: entryOf(190) }}
-          date="2026-06-07"
-          onClose={vi.fn()}
-        />,
-      );
+      renderEditDialog(entryOf(190));
 
-      await user.click(screen.getByTestId("select-unit"));
-      await user.click(await screen.findByRole("option", { name: /add portion/i }));
-      await user.type(screen.getByTestId("input-portion-label"), "1 slice");
-      await user.type(screen.getByTestId("input-portion-grams"), "95");
-      await user.click(screen.getByTestId("button-save-portion"));
+      await addSlicePortion(user);
 
       // Regression guard: edit mode used to pass foodId "" here, so this call
       // went to /foods//servings and the food-detail invalidation missed.

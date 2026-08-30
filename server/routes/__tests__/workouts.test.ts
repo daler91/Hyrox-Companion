@@ -6,45 +6,20 @@ import { clearRateLimitBuckets } from "../../routeUtils";
 import workoutsRouter from "../workouts/index";
 import { createTestApp } from "./testUtils";
 
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
-vi.mock("../../middleware/aibudget", () => ({
-  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
-}));
+vi.mock("../../middleware/aibudget", async () => (await import("./testUtils")).mockAiBudgetModule());
 
-vi.mock("../../storage", () => ({
-  storage: {
-    workouts: {
-      listWorkoutLogs: vi.fn(),
-      getExerciseSetsByWorkoutLog: vi.fn(),
-      getWorkoutStructureByWorkoutLog: vi.fn(),
-      getWorkoutLog: vi.fn(),
-      deleteWorkoutLog: vi.fn(),
-      updateWorkoutLog: vi.fn(),
-      getExerciseHistory: vi.fn(),
-    },
-    plans: {
-      getPlanDay: vi.fn(),
-      deletePlanDay: vi.fn(),
-    },
-    timeline: {
-      getTimeline: vi.fn(),
-    },
-    users: {
-      getUser: vi.fn(),
-      getCustomExercises: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    workouts: ["listWorkoutLogs", "getExerciseSetsByWorkoutLog", "getWorkoutStructureByWorkoutLog", "getWorkoutLog", "deleteWorkoutLog", "updateWorkoutLog", "getExerciseHistory"],
+    plans: ["getPlanDay", "deletePlanDay"],
+    timeline: ["getTimeline"],
+    users: ["getUser", "getCustomExercises"],
+  }),
+);
 
 vi.mock("../../queue", () => ({ queue: { send: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock("../../services/workoutUseCases", () => ({

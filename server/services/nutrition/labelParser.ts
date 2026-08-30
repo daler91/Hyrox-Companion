@@ -10,10 +10,9 @@ import {
 import { z } from "zod";
 
 import { AppError, ErrorCode } from "../../errors";
-import { GEMINI_VISION_MODEL, getAiClient, retryWithBackoff, trackUsageFromResponse } from "../../gemini/client";
 import { logger } from "../../logger";
 import { PARSE_LABEL_PROMPT } from "../../prompts";
-import { validateAiOutput } from "../../utils/sanitize";
+import { callGeminiVisionJson, parseAiJson } from "./visionParsing";
 
 /**
  * Nutrition-label transcription (label-scan flow). Unlike the meal photo parser
@@ -243,58 +242,16 @@ export function normalizeLabel(raw: RawLabel): ParseLabelResponse {
   };
 }
 
-/**
- * Gemini-direct vision call for a label photo. Same shape as the meal photo
- * parser (mealParser.ts): the provider abstraction has no vision method, so
- * this talks to the Gemini client directly with the image as `inlineData`.
- */
-async function callGeminiParseLabelImage(
-  imageBase64: string,
-  mimeType: string,
-  userId: string,
-): Promise<string> {
-  const response = await retryWithBackoff(
-    (signal) =>
-      getAiClient().models.generateContent({
-        model: GEMINI_VISION_MODEL,
-        config: {
-          systemInstruction: PARSE_LABEL_PROMPT,
-          responseMimeType: "application/json",
-          abortSignal: signal,
-        },
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType, data: imageBase64 } },
-              { text: "Transcribe the nutrition facts panel in the attached photo exactly as printed." },
-            ],
-          },
-        ],
-      }),
-    "nutrition-label-parse-image",
-  );
-
-  // Track usage before the empty check — the call consumed tokens regardless.
-  trackUsageFromResponse(userId, GEMINI_VISION_MODEL, "parse", response);
-
-  if (!response.text || response.text.length === 0) {
-    throw new AppError(ErrorCode.AI_ERROR, "AI returned empty response for label parsing", 502);
-  }
-  return validateAiOutput(response.text);
-}
-
 function parseJson(responseText: string): unknown {
-  try {
-    return JSON.parse(responseText);
-  } catch {
-    logger.error("[ai] label-parse JSON.parse failed");
-    throw new AppError(ErrorCode.AI_ERROR, "AI returned invalid JSON for label parsing", 502);
-  }
+  return parseAiJson(responseText, {
+    logMessage: "[ai] label-parse JSON.parse failed",
+    errorMessage: "AI returned invalid JSON for label parsing",
+  });
 }
 
 /**
- * Parse a nutrition-label photo into a reviewed-before-save payload. Returns
+ * Parse a nutrition-label photo into a reviewed-before-save payload. Sends the
+ * image via the shared Gemini-direct vision call in visionParsing.ts. Returns
  * `label: null` (HTTP 200) when the image holds no readable label — that's an
  * expected outcome, not an error.
  */
@@ -304,7 +261,16 @@ export async function parseNutritionLabel(
   userId: string,
 ): Promise<ParseLabelResponse> {
   try {
-    const payload = parseJson(await callGeminiParseLabelImage(imageBase64, mimeType, userId));
+    const responseText = await callGeminiVisionJson({
+      imageBase64,
+      mimeType,
+      userId,
+      systemInstruction: PARSE_LABEL_PROMPT,
+      userText: "Transcribe the nutrition facts panel in the attached photo exactly as printed.",
+      retryLabel: "nutrition-label-parse-image",
+      emptyResponseMessage: "AI returned empty response for label parsing",
+    });
+    const payload = parseJson(responseText);
     // The prompt's "no readable label" sentinel is { "label": null }.
     if (payload == null || typeof payload !== "object" || Array.isArray(payload)) return NO_LABEL;
     if ("label" in payload && (payload as Record<string, unknown>).label == null) return NO_LABEL;

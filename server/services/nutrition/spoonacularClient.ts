@@ -1,9 +1,9 @@
 import { env } from "../../env";
 import { logger } from "../../logger";
-import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
+import { retryWithJitter } from "../../utils/httpRetry";
 import { MICRO_DEFS } from "./micros";
 import type { MappedFood } from "./types";
-import { num, OZ_TO_GRAMS } from "./utils";
+import { num, OZ_TO_GRAMS, providerGetJson } from "./utils";
 
 /**
  * Spoonacular grocery-products client. A verified, frequently-updated source for
@@ -56,21 +56,11 @@ async function spoonacularGet<T>(
   const url = `${SPOONACULAR_BASE_URL}${path}?${query.toString()}`;
 
   try {
+    // 404 → null (unknown product / barcode — a normal "no result"); 401 (bad
+    // key) / 402 (daily quota spent) / other 4xx — non-retryable; the catch
+    // below degrades.
     return await retryWithJitter<T | null>(
-      async () => {
-        const timeout = AbortSignal.timeout(SPOONACULAR_TIMEOUT_MS);
-        const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
-        const res = await fetch(url, { headers: { Accept: "application/json" }, signal: sig });
-        if (res.status === 429 || res.status >= 500) {
-          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-        }
-        if (res.status === 404) return null; // unknown product / barcode — a normal "no result"
-        // 401 (bad key) / 402 (daily quota spent) / other 4xx — non-retryable; the
-        // catch below degrades. A plain Error is intentional so retryWithJitter
-        // doesn't retry it.
-        if (!res.ok) throw new Error(`Spoonacular request failed with HTTP ${res.status}`);
-        return (await res.json()) as T;
-      },
+      () => providerGetJson<T>(url, SPOONACULAR_TIMEOUT_MS, "Spoonacular request failed", signal),
       { retries: 2, label: "spoonacular" },
     );
   } catch (err) {

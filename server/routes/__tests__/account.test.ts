@@ -26,9 +26,7 @@ vi.mock("../../clerkAuth", () => ({
   evictUserFromSeenCache: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
 // env is NOT mocked: vitest.setup.ts sets CLERK_SECRET_KEY="dummy", so the
 // real env module keeps step 2 (Clerk delete) active while routeUtils and the

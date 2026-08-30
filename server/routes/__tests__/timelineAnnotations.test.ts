@@ -7,17 +7,9 @@ import { storage } from "../../storage";
 import timelineAnnotationsRouter from "../timelineAnnotations";
 import { createTestApp } from "./testUtils";
 
-// Mock auth middleware
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
 // Mock the storage layer so we can drive tests without a DB connection
 vi.mock("../../storage", () => ({

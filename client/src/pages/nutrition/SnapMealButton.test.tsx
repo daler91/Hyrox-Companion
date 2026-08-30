@@ -6,14 +6,15 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
-import { compressImage } from "@/lib/image";
+import { uploadCompressedPhoto } from "@/test/support/imageCaptureMocks";
 
 import { SnapMealButton } from "./SnapMealButton";
 
-vi.mock("@/lib/api", () => ({
-  api: { nutrition: { parseMealPhoto: vi.fn() }, preferences: { update: vi.fn() } },
-  QUERY_KEYS: { authUser: ["/api/v1/auth/user"] },
-}));
+vi.mock("@/lib/api", async () =>
+  (await import("@/test/support/imageCaptureMocks")).makeCaptureApiMock({
+    parseMealPhoto: vi.fn(),
+  }),
+);
 vi.mock("@/lib/image", () => ({ compressImage: vi.fn() }));
 
 const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
@@ -51,21 +52,11 @@ describe("SnapMealButton", () => {
   });
 
   it("compresses the chosen photo, parses it, and hands the result to onParsed", async () => {
-    const user = userEvent.setup();
-    vi.mocked(compressImage).mockResolvedValue({
-      blob: new Blob(),
-      mimeType: "image/jpeg",
-      base64: "ZmFrZS1pbWFnZQ==",
-      previewUrl: "blob:preview",
-      width: 100,
-      height: 100,
-    });
     vi.mocked(api.nutrition.parseMealPhoto).mockResolvedValue(PARSED);
     const onParsed = vi.fn();
     renderButton(onParsed);
 
-    const file = new File(["x"], "meal.jpg", { type: "image/jpeg" });
-    await user.upload(screen.getByTestId("button-snap-meal-input"), file);
+    await uploadCompressedPhoto("button-snap-meal-input", "meal.jpg");
 
     await waitFor(() =>
       expect(api.nutrition.parseMealPhoto).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg"),
@@ -77,20 +68,11 @@ describe("SnapMealButton", () => {
     const user = userEvent.setup();
     authState.aiCoachEnabled = false;
     vi.mocked(api.preferences.update).mockResolvedValue({} as never);
-    vi.mocked(compressImage).mockResolvedValue({
-      blob: new Blob(),
-      mimeType: "image/jpeg",
-      base64: "ZmFrZS1pbWFnZQ==",
-      previewUrl: "blob:preview",
-      width: 100,
-      height: 100,
-    });
     vi.mocked(api.nutrition.parseMealPhoto).mockResolvedValue(PARSED);
     const onParsed = vi.fn();
     renderButton(onParsed);
 
-    const file = new File(["x"], "meal.jpg", { type: "image/jpeg" });
-    await user.upload(screen.getByTestId("button-snap-meal-input"), file);
+    await uploadCompressedPhoto("button-snap-meal-input", "meal.jpg");
 
     // The photo is captured but nothing is sent until consent lands.
     await screen.findByRole("button", { name: "Enable AI Coach" });

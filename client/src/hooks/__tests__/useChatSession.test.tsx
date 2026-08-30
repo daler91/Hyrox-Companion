@@ -47,6 +47,27 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   };
 });
 
+/** Reject every apiRequest, render a streaming session, and send `message`. */
+async function sendAfterApiFailure(message: string, error: Error) {
+  vi.mocked(queryClient.apiRequest).mockRejectedValue(error);
+
+  const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
+
+  await act(async () => {
+    await result.current.sendMessage(message);
+  });
+
+  return result;
+}
+
+/** The failure path ends with the placeholder swapped for the error reply. */
+function expectAssistantErrorReply(result: Awaited<ReturnType<typeof sendAfterApiFailure>>) {
+  expect(result.current.messages).toHaveLength(3);
+  expect(result.current.messages[2].role).toBe('assistant');
+  expect(result.current.messages[2].content).toBe('Something went wrong on our side. Please try again.');
+  expect(result.current.isLoading).toBe(false);
+}
+
 describe('useChatSession', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -98,39 +119,19 @@ describe('useChatSession', () => {
   });
 
   it('should handle chat session error recovery (stream request failed)', async () => {
-    // Mock apiRequest to simulate a stream request failure (e.g. 500 error)
-    vi.mocked(queryClient.apiRequest).mockRejectedValue(new Error('500: Internal Server Error'));
-
-    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
-
-    await act(async () => {
-      await result.current.sendMessage('Fail stream');
-    });
+    // Simulate a stream request failure (e.g. 500 error)
+    const result = await sendAfterApiFailure('Fail stream', new Error('500: Internal Server Error'));
 
     // It should push a user message, a placeholder assistant message, and then update the placeholder to an error message
-    expect(result.current.messages).toHaveLength(3);
     expect(result.current.messages[1].role).toBe('user');
     expect(result.current.messages[1].content).toBe('Fail stream');
-
-    expect(result.current.messages[2].role).toBe('assistant');
-    expect(result.current.messages[2].content).toBe('Something went wrong on our side. Please try again.');
-    expect(result.current.isLoading).toBe(false);
+    expectAssistantErrorReply(result);
   });
 
   it('should handle chat session error recovery (fetch throws network error)', async () => {
-    // Mock apiRequest to simulate a network error
-    vi.mocked(queryClient.apiRequest).mockRejectedValue(new Error('Network Error'));
+    const result = await sendAfterApiFailure('Fail network', new Error('Network Error'));
 
-    const { result } = renderHook(() => useChatSession({ useStreaming: true }), { wrapper });
-
-    await act(async () => {
-      await result.current.sendMessage('Fail network');
-    });
-
-    expect(result.current.messages).toHaveLength(3);
-    expect(result.current.messages[2].role).toBe('assistant');
-    expect(result.current.messages[2].content).toBe('Something went wrong on our side. Please try again.');
-    expect(result.current.isLoading).toBe(false);
+    expectAssistantErrorReply(result);
   });
 
   it('should correctly handle successful stream chunk reading', async () => {

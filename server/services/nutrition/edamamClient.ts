@@ -1,8 +1,8 @@
 import { env } from "../../env";
 import { logger } from "../../logger";
-import { parseRetryAfter, RetryableHttpError, retryWithJitter } from "../../utils/httpRetry";
+import { retryWithJitter } from "../../utils/httpRetry";
 import type { MappedFood } from "./types";
-import { num } from "./utils";
+import { num, providerGetJson } from "./utils";
 
 /**
  * Edamam Food Database client. A curated source of branded/packaged + generic
@@ -134,19 +134,10 @@ async function edamamGet(
   const url = `${EDAMAM_PARSER_URL}?${query.toString()}`;
 
   try {
+    // 404 → null (unknown food / barcode — a normal "no result"); 401 (bad key) /
+    // 403 (plan) / other 4xx — non-retryable; the catch degrades.
     return await retryWithJitter<EdamamParserResponse | null>(
-      async () => {
-        const timeout = AbortSignal.timeout(EDAMAM_TIMEOUT_MS);
-        const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
-        const res = await fetch(url, { headers: { Accept: "application/json" }, signal: sig });
-        if (res.status === 429 || res.status >= 500) {
-          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-        }
-        if (res.status === 404) return null; // unknown food / barcode — a normal "no result"
-        // 401 (bad key) / 403 (plan) / other 4xx — non-retryable; the catch degrades.
-        if (!res.ok) throw new Error(`Edamam request failed with HTTP ${res.status}`);
-        return (await res.json()) as EdamamParserResponse;
-      },
+      () => providerGetJson<EdamamParserResponse>(url, EDAMAM_TIMEOUT_MS, "Edamam request failed", signal),
       { retries: 2, label: "edamam" },
     );
   } catch (err) {

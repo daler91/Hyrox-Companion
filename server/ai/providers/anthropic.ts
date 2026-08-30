@@ -1,5 +1,5 @@
 import { retryWithBackoff } from "../../gemini/client";
-import { readJsonPayload, streamSseTextChunks } from "./http";
+import { contentPartText, readJsonPayload, streamSseTextChunks } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiProvider,
@@ -71,14 +71,7 @@ function mergeAnthropicUsage(
 function anthropicText(value: unknown): string {
   const content = (value as { content?: unknown[] } | undefined)?.content;
   if (!Array.isArray(content)) return "";
-  return content
-    .map((part) => {
-      if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
-        return (part as { text: string }).text;
-      }
-      return "";
-    })
-    .join("");
+  return content.map(contentPartText).join("");
 }
 
 function requestBody(request: ResolvedTextAiRequest, stream: boolean) {

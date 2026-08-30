@@ -76,6 +76,37 @@ const workoutStorage = {
   getWorkoutStructuresByPlanDays: vi.fn().mockResolvedValue(new Map()),
 };
 
+/**
+ * Shared per-test reset: clears mocks and fixture rows, wires the db stubs, and
+ * returns a fresh TimelineStorage. Each suite passes just the plan rows and
+ * timezone it cares about; `timezone: null` leaves users.findFirst unmocked for
+ * suites that set it per test.
+ */
+function setupTimelineStorage(
+  options: {
+    plans?: { id: string; name: string; raceDate: string | null }[];
+    emptyPlanDays?: boolean;
+    timezone?: string | null;
+  } = {},
+): TimelineStorage {
+  vi.clearAllMocks();
+  linkedRows = [];
+  standaloneRows = [];
+  absenceRows = [];
+  const storage = new TimelineStorage(workoutStorage as never);
+  vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue((options.plans ?? []) as never);
+  if (options.emptyPlanDays) {
+    vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
+  }
+  vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+  if (options.timezone !== null) {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue({
+      userTimezone: options.timezone ?? "UTC",
+    } as never);
+  }
+  return storage;
+}
+
 function planDay(id: string, scheduledDate: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
@@ -102,16 +133,7 @@ describe("TimelineStorage race-day derivation", () => {
   let storage: TimelineStorage;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    linkedRows = [];
-    standaloneRows = [];
-    absenceRows = [];
-    storage = new TimelineStorage(workoutStorage as never);
-    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
-      { id: "plan-1", name: "Plan", raceDate: RACE },
-    ] as never);
-    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
-    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
+    storage = setupTimelineStorage({ plans: [{ id: "plan-1", name: "Plan", raceDate: RACE }] });
   });
 
   it("derives Race Day / Shakeout / Recovery for planned days and leaves normal days alone", async () => {
@@ -210,18 +232,13 @@ describe("TimelineStorage standalone workout plan association", () => {
   let storage: TimelineStorage;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    linkedRows = [];
-    standaloneRows = [];
-    absenceRows = [];
-    storage = new TimelineStorage(workoutStorage as never);
-    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
-      { id: "plan-1", name: "Plan One", raceDate: null },
-      { id: "plan-2", name: "Plan Two", raceDate: null },
-    ] as never);
-    vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
-    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
+    storage = setupTimelineStorage({
+      plans: [
+        { id: "plan-1", name: "Plan One", raceDate: null },
+        { id: "plan-2", name: "Plan Two", raceDate: null },
+      ],
+      emptyPlanDays: true,
+    });
   });
 
   it("tags a standalone workout that carries its own planId with the plan name", async () => {
@@ -265,15 +282,7 @@ describe("TimelineStorage windowed hydration", () => {
   let storage: TimelineStorage;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    linkedRows = [];
-    standaloneRows = [];
-    absenceRows = [];
-    storage = new TimelineStorage(workoutStorage as never);
-    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.query.planDays.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
-    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
+    storage = setupTimelineStorage({ emptyPlanDays: true });
   });
 
   it("hydrates exercise sets/structures ONLY for the windowed page", async () => {
@@ -308,15 +317,10 @@ describe("TimelineStorage athlete-local today", () => {
   let storage: TimelineStorage;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    linkedRows = [];
-    standaloneRows = [];
-    absenceRows = [];
-    storage = new TimelineStorage(workoutStorage as never);
-    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
-      { id: "plan-1", name: "Plan", raceDate: null },
-    ] as never);
-    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
+    storage = setupTimelineStorage({
+      plans: [{ id: "plan-1", name: "Plan", raceDate: null }],
+      timezone: null, // each test mocks users.findFirst itself
+    });
     // 2026-07-21T01:00Z is still 2026-07-20 18:00 in Los Angeles: the athlete's
     // evening, before their session's day is over.
     vi.useFakeTimers();
@@ -373,16 +377,7 @@ describe("TimelineStorage declared absences", () => {
   let storage: TimelineStorage;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    linkedRows = [];
-    standaloneRows = [];
-    absenceRows = [];
-    storage = new TimelineStorage(workoutStorage as never);
-    vi.mocked(db.query.trainingPlans.findMany).mockResolvedValue([
-      { id: "plan-1", name: "Plan", raceDate: null },
-    ] as never);
-    vi.mocked(db.select).mockImplementation(() => selectStub() as never);
-    vi.mocked(db.query.users.findFirst).mockResolvedValue({ userTimezone: "UTC" } as never);
+    storage = setupTimelineStorage({ plans: [{ id: "plan-1", name: "Plan", raceDate: null }] });
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-21T12:00:00Z")); // today = 2026-07-21 UTC
   });

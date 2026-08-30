@@ -1,48 +1,7 @@
-import type { Food } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { buildDailySummary, emptyTotals, type LogEntryWithFood, scaleNutrition } from "./rollup";
-
-function makeFood(over: Partial<Food> = {}): Food {
-  return {
-    id: "f1",
-    source: "usda",
-    sourceId: "1",
-    name: "Test Food",
-    brand: null,
-    servingSizeG: null,
-    caloriesPer100g: 100,
-    proteinPer100g: 10,
-    carbPer100g: 20,
-    fatPer100g: 5,
-    fiberPer100g: 2,
-    micros: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...over,
-  };
-}
-
-function makeRow(entryOver: Partial<LogEntryWithFood> = {}, foodOver: Partial<Food> = {}): LogEntryWithFood {
-  const food = makeFood(foodOver);
-  return {
-    id: "e1",
-    userId: "u1",
-    foodId: food.id,
-    loggedAt: new Date("2026-06-07T08:00:00Z"),
-    logDate: "2026-06-07",
-    quantityG: 100,
-    mealType: "breakfast",
-    entryMethod: "manual",
-    rawInput: null,
-    parseConfidence: null,
-    pendingReview: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    food,
-    ...entryOver,
-  };
-}
+import { makeLoggedFood as makeFood, makeLogRow as makeRow } from "./foodTestFixture";
+import { buildDailySummary, emptyTotals, scaleNutrition } from "./rollup";
 
 describe("scaleNutrition", () => {
   it("scales per-100g values by grams / 100", () => {

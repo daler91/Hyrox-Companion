@@ -2,47 +2,21 @@ import type { Food } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
 import { buildBlockView } from "./blockView";
+import { makeLogRow } from "./foodTestFixture";
 import { type LogEntryWithFood } from "./rollup";
 
-function makeFood(over: Partial<Food> = {}): Food {
-  return {
-    id: "f1",
-    source: "usda",
-    sourceId: "1",
-    name: "Test Food",
-    brand: null,
-    createdByUserId: null,
-    servingSizeG: null,
-    caloriesPer100g: 100,
-    proteinPer100g: 10,
-    carbPer100g: 20,
-    fatPer100g: 5,
-    fiberPer100g: 2,
-    micros: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...over,
-  };
-}
-
+/** Block-view defaults: a lunch on the given day, id derived from date+grams. */
 function makeRow(logDate: string, quantityG: number, foodOver: Partial<Food> = {}): LogEntryWithFood {
-  const food = makeFood(foodOver);
-  return {
-    id: `${logDate}-${quantityG}`,
-    userId: "u1",
-    foodId: food.id,
-    loggedAt: new Date(`${logDate}T12:00:00Z`),
-    logDate,
-    quantityG,
-    mealType: "lunch",
-    entryMethod: "manual",
-    rawInput: null,
-    parseConfidence: null,
-    pendingReview: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    food,
-  };
+  return makeLogRow(
+    {
+      id: `${logDate}-${quantityG}`,
+      loggedAt: new Date(`${logDate}T12:00:00Z`),
+      logDate,
+      quantityG,
+      mealType: "lunch",
+    },
+    foodOver,
+  );
 }
 
 describe("buildBlockView", () => {

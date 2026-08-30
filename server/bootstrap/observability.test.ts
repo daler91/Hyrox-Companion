@@ -350,26 +350,32 @@ describe("registerProcessErrorHandlers", () => {
     vi.clearAllMocks();
   });
 
-  it("handles uncaught exceptions", async () => {
+  // Registers the handlers against a fully mocked host and hands back the
+  // captured process callbacks so a test can fire them directly.
+  function registerWithMocks(flush = vi.fn().mockResolvedValue(true)) {
     let uncaughtCb: (err: Error) => void = () => {};
-    const onUncaught = vi.fn((cb) => { uncaughtCb = cb; });
-    const onUnhandled = vi.fn();
-    const setStartupError = vi.fn();
-    const captureException = vi.fn();
-    const flush = vi.fn().mockResolvedValue(true);
-    const exit = vi.fn();
-
-    registerProcessErrorHandlers({
-      onUncaught,
-      onUnhandled,
-      setStartupError,
-      captureException,
+    let unhandledCb: (reason: unknown) => void = () => {};
+    const handlers = {
+      onUncaught: vi.fn((cb: (err: Error) => void) => { uncaughtCb = cb; }),
+      onUnhandled: vi.fn((cb: (reason: unknown) => void) => { unhandledCb = cb; }),
+      setStartupError: vi.fn(),
+      captureException: vi.fn(),
       flush,
-      exit,
-    });
+      exit: vi.fn(),
+    };
+    registerProcessErrorHandlers(handlers);
+    return {
+      ...handlers,
+      uncaught: (err: Error) => uncaughtCb(err),
+      unhandled: (reason: unknown) => unhandledCb(reason),
+    };
+  }
+
+  it("handles uncaught exceptions", async () => {
+    const { setStartupError, captureException, flush, exit, uncaught } = registerWithMocks();
 
     const error = new Error("test error");
-    uncaughtCb(error);
+    uncaught(error);
 
     expect(logger.fatal).toHaveBeenCalledWith({ err: error }, "Uncaught exception in server process");
     expect(setStartupError).toHaveBeenCalledWith("uncaught_exception: test error");
@@ -383,25 +389,12 @@ describe("registerProcessErrorHandlers", () => {
   });
 
   it("handles unhandled rejections", async () => {
-    let unhandledCb: (reason: unknown) => void = () => {};
-    const onUncaught = vi.fn();
-    const onUnhandled = vi.fn((cb) => { unhandledCb = cb; });
-    const setStartupError = vi.fn();
-    const captureException = vi.fn();
-    const flush = vi.fn().mockRejectedValue(new Error("flush failed"));
-    const exit = vi.fn();
-
-    registerProcessErrorHandlers({
-      onUncaught,
-      onUnhandled,
-      setStartupError,
-      captureException,
-      flush,
-      exit,
-    });
+    const { setStartupError, captureException, flush, exit, unhandled } = registerWithMocks(
+      vi.fn().mockRejectedValue(new Error("flush failed")),
+    );
 
     const error = new Error("test rejection");
-    unhandledCb(error);
+    unhandled(error);
 
     expect(logger.fatal).toHaveBeenCalledWith({ err: error }, "Unhandled rejection in server process");
     expect(setStartupError).toHaveBeenCalledWith("unhandled_rejection: test rejection");
@@ -415,24 +408,9 @@ describe("registerProcessErrorHandlers", () => {
   });
 
   it("handles string unhandled rejections", async () => {
-    let unhandledCb: (reason: unknown) => void = () => {};
-    const onUncaught = vi.fn();
-    const onUnhandled = vi.fn((cb) => { unhandledCb = cb; });
-    const setStartupError = vi.fn();
-    const captureException = vi.fn();
-    const flush = vi.fn().mockResolvedValue(true);
-    const exit = vi.fn();
+    const { setStartupError, exit, unhandled } = registerWithMocks();
 
-    registerProcessErrorHandlers({
-      onUncaught,
-      onUnhandled,
-      setStartupError,
-      captureException,
-      flush,
-      exit,
-    });
-
-    unhandledCb("just a string");
+    unhandled("just a string");
 
     expect(setStartupError).toHaveBeenCalledWith("unhandled_rejection: just a string");
 

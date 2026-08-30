@@ -8,24 +8,13 @@ import { storage } from "../../storage";
 import workoutsRouter from "../workouts";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
-
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
-
-vi.mock("../../storage", () => ({
-  storage: {
-    timeline: {
-      getTimeline: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    timeline: ["getTimeline"],
+  }),
+);
 
 describe("Workout Timeline Routes", () => {
   let app: express.Express;

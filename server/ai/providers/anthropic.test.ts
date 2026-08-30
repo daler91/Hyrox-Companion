@@ -4,10 +4,7 @@ import { createAnthropicTextProvider } from "./anthropic";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
 
-vi.mock("../../gemini/client", () => ({
-  retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
-  withTimeout: <T>(promise: Promise<T>) => promise,
-}));
+vi.mock("../../gemini/client", async () => (await import("./testHelpers")).mockGeminiClientModule());
 
 const baseRequest = makeProviderRequest({
   providerId: "anthropic",

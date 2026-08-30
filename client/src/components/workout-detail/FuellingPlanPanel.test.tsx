@@ -1,11 +1,12 @@
 import type { TimelineEntry } from "@shared/schema";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { makeTimelineEntry } from "@/test/factories/timelineEntryFactory";
+import { renderWithBodyweight } from "@/test/support/renderWithBodyweight";
 
 import { FuellingPlanPanel } from "./FuellingPlanPanel";
 
@@ -28,29 +29,10 @@ vi.mock("@/lib/api", () => ({
 
 type Blocks = TimelineEntry["structureBlocks"];
 
-function makeEntry(over: Partial<TimelineEntry> = {}): TimelineEntry {
-  return {
-    id: "entry-1",
-    date: "2026-06-09",
-    type: "planned",
-    status: "planned",
-    focus: "Strength",
-    mainWorkout: "5x5 squat",
-    accessory: null,
-    notes: null,
-    planDayId: "day-1",
-    ...over,
-  };
-}
+const makeEntry = makeTimelineEntry;
 
 function renderWithClient(ui: ReactNode, bodyweightKg: number | null = 75) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
-  });
-  if (bodyweightKg !== null) {
-    queryClient.setQueryData(QUERY_KEYS.preferences, { bodyweightKg });
-  }
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return renderWithBodyweight(ui, QUERY_KEYS.preferences, bodyweightKg);
 }
 
 describe("FuellingPlanPanel", () => {

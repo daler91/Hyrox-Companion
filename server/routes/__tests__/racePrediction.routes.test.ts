@@ -7,14 +7,9 @@ import { storage } from "../../storage";
 import analyticsRouter from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-vi.mock("../../types", () => ({ getUserId: () => "test_user_id" }));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
 vi.mock("../../db", () => ({ db: { execute: vi.fn() } }));
 

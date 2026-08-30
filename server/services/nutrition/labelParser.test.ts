@@ -2,21 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError } from "../../errors";
 import { parseNutritionLabel } from "./labelParser";
+import { expectVisionRequest, generateContentSpy } from "./visionTestSupport";
 
 // Vision path: capture the generateContent request the parser builds (mirrors
-// mealParser.test.ts). The mocked retryWithBackoff runs the fn so the spy is
-// invoked with the constructed request; vi.hoisted keeps the spies reachable
-// inside the hoisted vi.mock factory.
-const { generateContentSpy, trackUsageSpy } = vi.hoisted(() => ({
-  generateContentSpy: vi.fn(),
-  trackUsageSpy: vi.fn(),
-}));
-vi.mock("../../gemini/client", () => ({
-  GEMINI_VISION_MODEL: "gemini-2.5-flash",
-  getAiClient: () => ({ models: { generateContent: generateContentSpy } }),
-  retryWithBackoff: (fn: (signal?: AbortSignal) => Promise<unknown>) => fn(),
-  trackUsageFromResponse: trackUsageSpy,
-}));
+// mealParser.test.ts) via the shared visionTestSupport spies. vi.mock is
+// hoisted so it must stay here, but the factory delegates to the shared module.
+vi.mock("../../gemini/client", async () => (await import("./visionTestSupport")).makeGeminiClientMock());
 
 function aiJson(payload: unknown) {
   generateContentSpy.mockResolvedValueOnce({ text: JSON.stringify(payload) });
@@ -62,20 +53,9 @@ describe("parseNutritionLabel", () => {
     });
     expect(result.warnings).toEqual([]);
 
-    // The request carries the base64 under inlineData on the vision model with a JSON contract.
-    expect(generateContentSpy).toHaveBeenCalledTimes(1);
-    const callArgs = generateContentSpy.mock.calls[0][0] as {
-      model: string;
-      config: { responseMimeType: string };
-      contents: { parts: ({ inlineData?: { mimeType: string; data: string }; text?: string })[] }[];
-    };
-    expect(callArgs.model).toBe("gemini-2.5-flash");
-    expect(callArgs.config.responseMimeType).toBe("application/json");
-    expect(callArgs.contents[0].parts[0]).toEqual({
-      inlineData: { mimeType: "image/jpeg", data: "ZmFrZS1pbWFnZQ==" },
-    });
-    // Usage is tracked for the vision call (before any empty-response check).
-    expect(trackUsageSpy).toHaveBeenCalledWith("u1", "gemini-2.5-flash", "parse", expect.anything());
+    // The request carries the base64 under inlineData on the vision model with a
+    // JSON contract, and usage is tracked (before any empty-response check).
+    expectVisionRequest("ZmFrZS1pbWFnZQ==", "image/jpeg", "u1");
   });
 
   it("prefers the per-100g column and reports basis 'both' when both are printed", async () => {

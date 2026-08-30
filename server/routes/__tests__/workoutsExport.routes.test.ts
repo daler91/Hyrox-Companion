@@ -12,9 +12,7 @@ vi.mock("../../clerkAuth", () => ({
   },
 }));
 
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
 vi.mock("../../routeUtils", () => ({
   rateLimiter: () => (_req: any, _res: any, next: () => void) => next(),

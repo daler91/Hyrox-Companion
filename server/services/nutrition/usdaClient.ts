@@ -275,6 +275,32 @@ interface UsdaFoodDetail {
   foodPortions?: UsdaFoodPortion[];
 }
 
+/**
+ * GET the /food/{fdcId} detail endpoint (format=full) with the shared
+ * per-attempt timeout + transient retry, parsing the body as `T`. Returns null
+ * (no network call) when no API key is configured; any other failure propagates
+ * for the caller's best-effort catch.
+ */
+async function fetchUsdaDetail<T>(fdcId: string, opts: { signal?: AbortSignal }): Promise<T | null> {
+  const apiKey = env.USDA_API_KEY;
+  if (!apiKey) return null;
+  const url = `${FDC_DETAIL_URL}/${encodeURIComponent(fdcId)}?api_key=${encodeURIComponent(apiKey)}&format=full`;
+
+  return retryWithJitter(
+    async () => {
+      const timeout = AbortSignal.timeout(USDA_TIMEOUT_MS);
+      const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+      const res = await fetch(url, { signal });
+      if (res.status === 429 || res.status >= 500) {
+        throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
+      }
+      if (!res.ok) throw new Error(`USDA detail failed with HTTP ${res.status}`);
+      return (await res.json()) as T;
+    },
+    { retries: 1, label: "usda-detail" },
+  );
+}
+
 function portionLabel(p: UsdaFoodPortion): string | null {
   const description = p.portionDescription?.trim();
   if (description) return description;
@@ -294,24 +320,9 @@ export async function fetchUsdaFoodPortions(
   fdcId: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<{ label: string; grams: number }[]> {
-  const apiKey = env.USDA_API_KEY;
-  if (!apiKey) return [];
-  const url = `${FDC_DETAIL_URL}/${encodeURIComponent(fdcId)}?api_key=${encodeURIComponent(apiKey)}&format=full`;
-
   try {
-    const raw = await retryWithJitter(
-      async () => {
-        const timeout = AbortSignal.timeout(USDA_TIMEOUT_MS);
-        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
-        const res = await fetch(url, { signal });
-        if (res.status === 429 || res.status >= 500) {
-          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-        }
-        if (!res.ok) throw new Error(`USDA detail failed with HTTP ${res.status}`);
-        return (await res.json()) as UsdaFoodDetail;
-      },
-      { retries: 1, label: "usda-detail" },
-    );
+    const raw = await fetchUsdaDetail<UsdaFoodDetail>(fdcId, opts);
+    if (!raw) return []; // key-less config
 
     const portions = Array.isArray(raw.foodPortions) ? raw.foodPortions : [];
     const out: { label: string; grams: number }[] = [];
@@ -339,25 +350,9 @@ export async function fetchUsdaFoodById(
   fdcId: string,
   opts: { signal?: AbortSignal } = {},
 ): Promise<MappedFood | null> {
-  const apiKey = env.USDA_API_KEY;
-  if (!apiKey) return null;
-  const url = `${FDC_DETAIL_URL}/${encodeURIComponent(fdcId)}?api_key=${encodeURIComponent(apiKey)}&format=full`;
-
   try {
-    const raw = await retryWithJitter(
-      async () => {
-        const timeout = AbortSignal.timeout(USDA_TIMEOUT_MS);
-        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
-        const res = await fetch(url, { signal });
-        if (res.status === 429 || res.status >= 500) {
-          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-        }
-        if (!res.ok) throw new Error(`USDA detail failed with HTTP ${res.status}`);
-        return (await res.json()) as UsdaSearchFood;
-      },
-      { retries: 1, label: "usda-detail" },
-    );
-    return mapUsdaSearchFood(raw);
+    const raw = await fetchUsdaDetail<UsdaSearchFood>(fdcId, opts);
+    return raw ? mapUsdaSearchFood(raw) : null;
   } catch {
     return null;
   }

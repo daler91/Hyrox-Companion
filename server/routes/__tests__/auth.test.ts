@@ -33,13 +33,11 @@ vi.mock("../../logger", () => ({
   },
 }));
 
-vi.mock("../../storage", () => ({
-  storage: {
-    users: {
-      getUser: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    users: ["getUser"],
+  }),
+);
 
 describe("Auth Routes", () => {
   let app: express.Express;

@@ -5,7 +5,8 @@ import { useState } from "react";
 import type { Message } from "@/hooks/useChatSession";
 import { api, QUERY_KEYS, type RagInfo,type Suggestion } from "@/lib/api";
 import { getCurrentTimeString } from "@/lib/dateUtils";
-import { AiBudgetExceededError, queryClient, RateLimitError } from "@/lib/queryClient";
+import { describeAiError } from "@/lib/describeAiError";
+import { queryClient } from "@/lib/queryClient";
 
 import { SuggestionCard } from "./SuggestionCard";
 
@@ -47,23 +48,11 @@ export function useSuggestions({ timeline, addLocalMessage, saveMessage }: UseSu
       saveMessage({ role: "assistant", content: responseContent });
     },
     onError: (error: unknown) => {
-      let errorContent = "Sorry, I couldn't analyze your workouts right now. Please try again.";
-      if (error instanceof AiBudgetExceededError) {
-        errorContent = "You've reached your daily AI usage limit. Please try again later.";
-      } else if (error instanceof RateLimitError) {
-        if (error.retryAfter && error.retryAfter > 0) {
-          errorContent = `You're sending requests too quickly. Please wait about ${error.retryAfter} seconds and try again.`;
-        } else {
-          errorContent = "You're sending requests too quickly. Please wait a moment and try again.";
-        }
-      } else if (
-        (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError"))
-        || (error instanceof Error && (error.message.toLowerCase().includes("timed out") || error.message.toLowerCase().includes("aborted")))
-      ) {
-        errorContent = "Suggestions are taking longer than expected. Please try again in a moment.";
-      } else if (error instanceof Error && (error.message.includes("network") || error.message.includes("fetch"))) {
-        errorContent = "Network error — please check your connection and try again.";
-      }
+      const errorContent = describeAiError(error, {
+        rateLimitActivity: "sending requests",
+        slow: "Suggestions are taking longer than expected. Please try again in a moment.",
+        fallback: "Sorry, I couldn't analyze your workouts right now. Please try again.",
+      });
       const errorMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",

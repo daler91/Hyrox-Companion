@@ -6,14 +6,15 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
-import { compressImage } from "@/lib/image";
+import { uploadCompressedPhoto } from "@/test/support/imageCaptureMocks";
 
 import { ScanLabelButton } from "./ScanLabelButton";
 
-vi.mock("@/lib/api", () => ({
-  api: { nutrition: { parseLabel: vi.fn() }, preferences: { update: vi.fn() } },
-  QUERY_KEYS: { authUser: ["/api/v1/auth/user"] },
-}));
+vi.mock("@/lib/api", async () =>
+  (await import("@/test/support/imageCaptureMocks")).makeCaptureApiMock({
+    parseLabel: vi.fn(),
+  }),
+);
 vi.mock("@/lib/image", () => ({ compressImage: vi.fn() }));
 
 const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
@@ -56,19 +57,7 @@ function renderButton(onExtracted: (r: ParseLabelResponse) => void) {
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-async function uploadPhoto() {
-  const user = userEvent.setup();
-  vi.mocked(compressImage).mockResolvedValue({
-    blob: new Blob(),
-    mimeType: "image/jpeg",
-    base64: "ZmFrZS1pbWFnZQ==",
-    previewUrl: "blob:preview",
-    width: 100,
-    height: 100,
-  });
-  const file = new File(["x"], "label.jpg", { type: "image/jpeg" });
-  await user.upload(screen.getByTestId("button-scan-label-input"), file);
-}
+const uploadPhoto = () => uploadCompressedPhoto("button-scan-label-input", "label.jpg");
 
 describe("ScanLabelButton", () => {
   beforeEach(() => {

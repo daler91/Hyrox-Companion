@@ -18,7 +18,11 @@ import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, ne, or, sql } from 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { prescribedSetToLogRow, queryExerciseSetsWithDates } from "./shared";
+import {
+  prescribedSetToLogRow,
+  queryExerciseSetsWithDates,
+  structureTargetsFromExerciseSet,
+} from "./shared";
 
 type WorkoutStructureBlockRow = typeof workoutStructureBlocks.$inferSelect;
 type WorkoutStructureStepRow = typeof workoutStructureSteps.$inferSelect;
@@ -76,19 +80,6 @@ function mapStructureBlockRows(
       targets: stepTargets(step),
     })),
   }));
-}
-
-function setTargetsForStructureMirror(row: ExerciseSet): Record<string, unknown> | null {
-  const targets: Record<string, unknown> = {};
-  const reps = row.plannedReps ?? row.reps;
-  const weight = row.plannedWeight ?? row.weight;
-  const distance = row.plannedDistance ?? row.distance;
-  const time = row.plannedTime ?? row.time;
-  if (reps != null) targets.targetReps = reps;
-  if (weight != null) targets.targetWeight = weight;
-  if (distance != null) targets.targetDistance = distance;
-  if (time != null) targets.targetTime = time;
-  return Object.keys(targets).length > 0 ? targets : null;
 }
 
 // Count distinct exercises in a logged workout that BEAT the user's previous
@@ -706,7 +697,7 @@ export class WorkoutStorage {
         targetTime: row.plannedTime ?? row.time,
         stepRole: row.stepRole ?? "work",
         groupId: row.groupId,
-        targets: setTargetsForStructureMirror(row),
+        targets: structureTargetsFromExerciseSet(row),
       })
       .where(and(
         eq(workoutStructureSteps.blockId, row.blockId),

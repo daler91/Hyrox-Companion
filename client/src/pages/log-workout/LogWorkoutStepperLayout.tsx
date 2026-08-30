@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils";
 import type { ComposerAutoParseProps, ComposerExerciseProps, ComposerTextProps, ComposerVoiceProps } from "./sharedComposerProps";
 import { CaptureStep } from "./steps/CaptureStep";
 import { ConfirmStep } from "./steps/ConfirmStep";
-import { ReflectStep } from "./steps/ReflectStep";
+import { type ReflectFields, ReflectStep } from "./steps/ReflectStep";
 
-interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerciseProps, ComposerAutoParseProps, ComposerVoiceProps {
+interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerciseProps, ComposerAutoParseProps, ComposerVoiceProps, ReflectFields {
   readonly parseNow: (text: string) => void;
   readonly step: WorkoutStep;
   readonly setStep: (step: WorkoutStep) => void;
@@ -22,33 +22,7 @@ interface LogWorkoutStepperLayoutProps extends ComposerTextProps, ComposerExerci
   readonly setTitle: (value: string) => void;
   readonly date: string;
   readonly setDate: (value: string) => void;
-  readonly rpe: number | null;
-  readonly setRpe: (value: number | null) => void;
-  readonly timeOfDayMin: number | null;
-  readonly setTimeOfDayMin: (value: number | null) => void;
-  readonly durationMinutes: string;
-  readonly setDurationMinutes: (value: string) => void;
-  readonly distance: string;
-  readonly setDistance: (value: string) => void;
-  readonly avgHeartrate: string;
-  readonly setAvgHeartrate: (value: string) => void;
-  readonly maxHeartrate: string;
-  readonly setMaxHeartrate: (value: string) => void;
-  readonly distanceLabel: string;
-  readonly planId: string | null;
-  readonly setPlanId: (value: string | null) => void;
-  readonly planDayId: string | null;
-  readonly setPlanDayId: (value: string | null) => void;
-  readonly notes: string;
-  readonly setNotes: (value: string) => void;
-  readonly isNotesListening: boolean;
-  readonly isNotesSupported: boolean;
-  readonly notesInterim: string;
-  readonly toggleNotesListening: () => void;
-  readonly handleSave: () => void;
-  readonly isSaving: boolean;
   readonly handleCancel: () => void;
-  readonly hasWorkoutDetails: boolean;
   readonly handleDuplicateLast: () => void;
   readonly isDuplicating: boolean;
   readonly defaultPanelOpen?: boolean;
@@ -66,32 +40,14 @@ const STEP_LABELS: Record<WorkoutStep, string> = {
   3: "Reflect",
 };
 
-export function LogWorkoutStepperLayout({
+export function LogWorkoutStepperLayout(props: LogWorkoutStepperLayoutProps) {
+  const {
   step,
   setStep,
   title,
   setTitle,
   date,
   setDate,
-  rpe,
-  setRpe,
-  timeOfDayMin,
-  setTimeOfDayMin,
-  durationMinutes,
-  setDurationMinutes,
-  distance,
-  setDistance,
-  avgHeartrate,
-  setAvgHeartrate,
-  maxHeartrate,
-  setMaxHeartrate,
-  distanceLabel,
-  planId,
-  setPlanId,
-  planDayId,
-  setPlanDayId,
-  notes,
-  setNotes,
   freeText,
   setFreeText,
   exerciseBlocks,
@@ -114,21 +70,14 @@ export function LogWorkoutStepperLayout({
   interimTranscript,
   toggleListening,
   stopListening,
-  isNotesListening,
-  isNotesSupported,
-  notesInterim,
-  toggleNotesListening,
-  handleSave,
-  isSaving,
   handleCancel,
-  hasWorkoutDetails,
   handleDuplicateLast,
   isDuplicating,
   defaultPanelOpen,
   toast,
   onParseImage,
   isParsingImage,
-}: LogWorkoutStepperLayoutProps) {
+  } = props;
   // Parse-checkpoint state lives here (above CaptureStep) so it survives
   // CaptureStep unmounting on step transitions. Returning to Capture after
   // an in-flight parse fails would otherwise reseed the ref to the edited
@@ -216,35 +165,9 @@ export function LogWorkoutStepperLayout({
         )}
 
         {step === 3 && (
-          <ReflectStep
-            rpe={rpe}
-            setRpe={setRpe}
-            timeOfDayMin={timeOfDayMin}
-            setTimeOfDayMin={setTimeOfDayMin}
-            durationMinutes={durationMinutes}
-            setDurationMinutes={setDurationMinutes}
-            distance={distance}
-            setDistance={setDistance}
-            avgHeartrate={avgHeartrate}
-            setAvgHeartrate={setAvgHeartrate}
-            maxHeartrate={maxHeartrate}
-            setMaxHeartrate={setMaxHeartrate}
-            distanceLabel={distanceLabel}
-            planId={planId}
-            setPlanId={setPlanId}
-            planDayId={planDayId}
-            setPlanDayId={setPlanDayId}
-            notes={notes}
-            setNotes={setNotes}
-            isNotesListening={isNotesListening}
-            isNotesSupported={isNotesSupported}
-            notesInterim={notesInterim}
-            toggleNotesListening={toggleNotesListening}
-            onBack={() => setStep(2)}
-            handleSave={handleSave}
-            isSaving={isSaving}
-            hasWorkoutDetails={hasWorkoutDetails}
-          />
+          // The reflect fields ride through untouched, so they are spread from
+          // props wholesale instead of being relayed name by name.
+          <ReflectStep {...props} onBack={() => setStep(2)} />
         )}
       </div>
     </PageContainer>

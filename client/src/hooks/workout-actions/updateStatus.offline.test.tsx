@@ -1,14 +1,16 @@
 import type { TimelineEntry } from "@shared/schema";
 import { QueryClient } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  makeWrapper,
+  offlineMocks,
+  setOnline,
+} from "@/test/support/offlineMutationHarness";
 
 const mocks = vi.hoisted(() => ({
   updateDayStatus: vi.fn(),
-  enqueueMutation: vi.fn(),
-  createOfflineMutationId: vi.fn(() => "queued-id"),
-  toast: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -21,11 +23,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
     },
   };
 });
-vi.mock("@/lib/offlineQueue", () => ({
-  enqueueMutation: mocks.enqueueMutation,
-  createOfflineMutationId: mocks.createOfflineMutationId,
-}));
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
+vi.mock("@/lib/offlineQueue", async () =>
+  (await import("@/test/support/offlineMutationHarness")).makeOfflineQueueMock(),
+);
+vi.mock("@/hooks/use-toast", async () =>
+  (await import("@/test/support/offlineMutationHarness")).makeOfflineToastMock(),
+);
 
 let queryClient: QueryClient;
 vi.mock("@/lib/queryClient", async (importOriginal) => ({
@@ -37,8 +40,6 @@ vi.mock("@/lib/queryClient", async (importOriginal) => ({
     invalidateQueries: (...args: unknown[]) => queryClient.invalidateQueries(...(args as [never])),
   },
 }));
-
-import { QueryClientProvider } from "@tanstack/react-query";
 
 import { QUERY_KEYS } from "@/lib/api";
 
@@ -60,18 +61,12 @@ function plannedEntry(): TimelineEntry {
   };
 }
 
-function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-}
-
-function setOnline(online: boolean) {
-  Object.defineProperty(globalThis.navigator, "onLine", { value: online, configurable: true });
-}
+const wrapper = makeWrapper(() => queryClient);
 
 describe("updateStatusMutation offline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createOfflineMutationId.mockReturnValue("queued-id");
+    offlineMocks.createOfflineMutationId.mockReturnValue("queued-id");
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     queryClient.setQueryData(TIMELINE_KEY, [plannedEntry()]);
     setOnline(true);
@@ -91,14 +86,14 @@ describe("updateStatusMutation offline", () => {
     // success) resolution means onError never rolled it back.
     const entries = queryClient.getQueryData<TimelineEntry[]>(TIMELINE_KEY);
     expect(entries?.[0].status).toBe("skipped");
-    expect(mocks.enqueueMutation).toHaveBeenCalledWith(
+    expect(offlineMocks.enqueueMutation).toHaveBeenCalledWith(
       "PATCH",
       "/api/v1/plans/days/pd-1/status",
       { status: "skipped" },
       { id: "queued-id" },
     );
     expect(mocks.updateDayStatus).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(
+    expect(offlineMocks.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Status change queued" }),
     );
   });
@@ -112,7 +107,7 @@ describe("updateStatusMutation offline", () => {
     });
 
     expect(mocks.updateDayStatus).toHaveBeenCalledOnce();
-    expect(mocks.enqueueMutation).not.toHaveBeenCalled();
+    expect(offlineMocks.enqueueMutation).not.toHaveBeenCalled();
     const entries = queryClient.getQueryData<TimelineEntry[]>(TIMELINE_KEY);
     expect(entries?.[0].status).toBe("skipped");
   });

@@ -8,6 +8,7 @@ import { getNutritionAnchor, regenerateAndStoreNutritionInsights } from "../../.
 import { lookupBarcode } from "../../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../../services/nutrition/foodDetail";
 import { searchFoods } from "../../../services/nutrition/foodSearch";
+import { makeLogRow } from "../../../services/nutrition/foodTestFixture";
 import { parseNutritionLabel } from "../../../services/nutrition/labelParser";
 import { parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "../../../services/nutrition/mealParser";
 import { storage } from "../../../storage";
@@ -179,38 +180,18 @@ describe("nutrition routes", () => {
   });
 
   describe("GET /summary", () => {
-    const row = {
-      id: "e1",
-      userId: "test_user",
-      foodId: "f1",
-      loggedAt: new Date("2026-06-07T08:00:00Z"),
-      logDate: "2026-06-07",
-      quantityG: 100,
-      mealType: "breakfast",
-      entryMethod: "manual",
-      rawInput: null,
-      parseConfidence: null,
-      pendingReview: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      food: {
-        id: "f1",
-        source: "usda",
-        sourceId: "1",
+    // 100 g of a Banana logged at breakfast — 89 kcal / 1.1 g protein per 100 g.
+    const row = makeLogRow(
+      { userId: "test_user" },
+      {
         name: "Banana",
-        brand: null,
-        servingSizeG: null,
         caloriesPer100g: 89,
         proteinPer100g: 1.1,
         carbPer100g: 23,
         fatPer100g: 0.3,
         fiberPer100g: 2.6,
-        micros: null,
-        createdByUserId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       },
-    };
+    );
 
     it("returns totals + per-meal entries for a date", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);

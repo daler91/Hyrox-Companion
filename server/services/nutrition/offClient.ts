@@ -174,6 +174,26 @@ export function mapOffProduct(code: string, product: OffProduct): MappedFood | n
 }
 
 /**
+ * One OFF GET attempt with the shared User-Agent/Accept headers and a fresh
+ * per-attempt timeout (combined with any caller signal). Throws
+ * RetryableHttpError on 429/5xx so `retryWithJitter` retries it; every other
+ * status is returned for the caller to interpret (404 semantics differ between
+ * the product and search endpoints).
+ */
+async function offFetch(url: string, signal?: AbortSignal): Promise<Response> {
+  const timeout = AbortSignal.timeout(OFF_TIMEOUT_MS);
+  const sig = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const res = await fetch(url, {
+    headers: { "User-Agent": OFF_USER_AGENT, Accept: "application/json" },
+    signal: sig,
+  });
+  if (res.status === 429 || res.status >= 500) {
+    throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
+  }
+  return res;
+}
+
+/**
  * Resolve a barcode via Open Food Facts. Returns null when the product is not
  * found — OFF returns **HTTP 200 with `status: 0`** for unknown codes — or on any
  * non-retryable failure (the route turns null into a 404). Retries transient
@@ -187,15 +207,7 @@ export async function resolveBarcode(
 
   const raw = await retryWithJitter(
     async (): Promise<OffResponse | null> => {
-      const timeout = AbortSignal.timeout(OFF_TIMEOUT_MS);
-      const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
-      const res = await fetch(url, {
-        headers: { "User-Agent": OFF_USER_AGENT, Accept: "application/json" },
-        signal,
-      });
-      if (res.status === 429 || res.status >= 500) {
-        throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-      }
+      const res = await offFetch(url, opts.signal);
       if (res.status === 404) return null; // some OFF deployments hard-404 unknown codes
       if (!res.ok) throw new Error(`OFF lookup failed with HTTP ${res.status}`);
       return (await res.json()) as OffResponse;
@@ -241,15 +253,7 @@ export async function searchOffFoods(
   try {
     const raw = await retryWithJitter(
       async (): Promise<OffSearchResponse> => {
-        const timeout = AbortSignal.timeout(OFF_TIMEOUT_MS);
-        const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
-        const res = await fetch(url, {
-          headers: { "User-Agent": OFF_USER_AGENT, Accept: "application/json" },
-          signal,
-        });
-        if (res.status === 429 || res.status >= 500) {
-          throw new RetryableHttpError(res.status, parseRetryAfter(res.headers.get("Retry-After")));
-        }
+        const res = await offFetch(url, opts.signal);
         if (!res.ok) throw new Error(`OFF search failed with HTTP ${res.status}`);
         return (await res.json()) as OffSearchResponse;
       },

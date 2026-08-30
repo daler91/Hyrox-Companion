@@ -1,5 +1,5 @@
 import { retryWithBackoff } from "../../gemini/client";
-import { readJsonPayload, streamSseTextChunks, trimTrailingSlashes } from "./http";
+import { contentPartText, readJsonPayload, streamSseTextChunks, trimTrailingSlashes } from "./http";
 import type {
   ResolvedTextAiRequest,
   TextAiMessage,
@@ -47,13 +47,7 @@ function textFromOpenAiContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
-    .map((part) => {
-      if (typeof part === "string") return part;
-      if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
-        return (part as { text: string }).text;
-      }
-      return "";
-    })
+    .map((part) => (typeof part === "string" ? part : contentPartText(part)))
     .join("");
 }
 

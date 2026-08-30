@@ -27,13 +27,7 @@ function parseStreamResponse(responseText: string) {
 }
 
 
-// Mock the clerkAuth middleware to simulate authentication
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
 // Mock the getUserId function to return our test user
 vi.mock("../../types", () => ({
@@ -182,13 +176,60 @@ const aiConsentGuardCases = [
   },
 ];
 
+/**
+ * Shared helpers for the suites below, which otherwise repeat the same app
+ * bootstrap, stored-analytics fixtures, chat requests, and error assertions.
+ */
+async function freshAiApp(): Promise<express.Express> {
+  vi.resetAllMocks();
+  await resetRouteTestState();
+  return createTestApp(aiRouter);
+}
+
+const STORED_GENERATED_AT = "2026-06-01T00:00:00.000Z";
+
+function mockStoredAnalyticsResult(feature: string, payload: Record<string, unknown>) {
+  vi.mocked(storage.analyticsResults.get).mockResolvedValue({
+    id: "row-1",
+    userId: "test_user_id",
+    feature,
+    payload: { ...payload, generatedAt: STORED_GENERATED_AT },
+    generatedAt: new Date(STORED_GENERATED_AT),
+    lastWorkoutDateAtGeneration: "2026-06-01",
+    entryCountAtGeneration: 1,
+    recomputedOn: null,
+    updatedAt: new Date(STORED_GENERATED_AT),
+  });
+}
+
+// The athlete's latest workout still matches the anchor the analysis was
+// generated from, so nothing has changed under it. (Leaving this as the
+// default empty list would model "every workout deleted", which is stale.)
+function mockWorkoutsMatchingStoredAnchor() {
+  vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
+    { date: "2026-06-01" },
+  ] as never);
+  vi.mocked(storage.workouts.countWorkoutLogs).mockResolvedValue(1);
+}
+
+function postChat(app: express.Express, message = "Hello") {
+  return request(app).post(CHAT_ENDPOINT).send({ message, history: [] });
+}
+
+function postChatStream(app: express.Express, message: string) {
+  return request(app).post(CHAT_STREAM_ENDPOINT).send({ message, history: [] });
+}
+
+function expectInternalError(response: request.Response) {
+  expect(response.status).toBe(500);
+  expect(response.body).toHaveProperty("error", "Internal Server Error");
+}
+
 describe("AI route consent compliance", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
+    app = await freshAiApp();
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: false });
   });
 
@@ -206,9 +247,7 @@ describe("GET /api/v1/overview-analysis", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
+    app = await freshAiApp();
   });
 
   it("returns { sections: null } when nothing is stored (no AI spend)", async () => {
@@ -222,28 +261,9 @@ describe("GET /api/v1/overview-analysis", () => {
   });
 
   it("returns the stored per-chart analysis with generatedAt and a stale flag", async () => {
-    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
-      id: "row-1",
-      userId: "test_user_id",
-      feature: "overview_analysis",
-      payload: {
-        sections: { trainingLoad: "Your ACWR is in the sweet spot." },
-        generatedAt: "2026-06-01T00:00:00.000Z",
-      },
-      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
-      lastWorkoutDateAtGeneration: "2026-06-01",
-      entryCountAtGeneration: 1,
-      recomputedOn: null,
-      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
-    });
+    mockStoredAnalyticsResult("overview_analysis", { sections: { trainingLoad: "Your ACWR is in the sweet spot." } });
 
-    // The athlete's latest workout still matches the anchor the analysis was
-    // generated from, so nothing has changed under it. (Leaving this as the
-    // default empty list would model "every workout deleted", which is stale.)
-    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
-      { date: "2026-06-01" },
-    ] as never);
-    vi.mocked(storage.workouts.countWorkoutLogs).mockResolvedValue(1);
+    mockWorkoutsMatchingStoredAnchor();
 
     const response = await request(app).get("/api/v1/overview-analysis");
 
@@ -255,17 +275,7 @@ describe("GET /api/v1/overview-analysis", () => {
   });
 
   it("flags the stored analysis stale once its anchoring workouts are gone", async () => {
-    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
-      id: "row-1",
-      userId: "test_user_id",
-      feature: "overview_analysis",
-      payload: { sections: {}, generatedAt: "2026-06-01T00:00:00.000Z" },
-      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
-      lastWorkoutDateAtGeneration: "2026-06-01",
-      entryCountAtGeneration: 1,
-      recomputedOn: null,
-      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
-    });
+    mockStoredAnalyticsResult("overview_analysis", { sections: {} });
     // No workouts remain: the analysis describes a history that no longer
     // exists, which the forward-only compare reported as fresh forever.
     vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([] as never);
@@ -281,9 +291,7 @@ describe("GET /api/v1/coach-insights", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
+    app = await freshAiApp();
   });
 
   it("returns { insights: null } when nothing is stored (no AI spend)", async () => {
@@ -297,29 +305,9 @@ describe("GET /api/v1/coach-insights", () => {
   });
 
   it("returns the stored insights with generatedAt and a stale flag", async () => {
-    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
-      id: "row-1",
-      userId: "test_user_id",
-      feature: "coach_insights",
-      payload: {
-        insights: "You're on track for your 5K goal.",
-        ragInfo: { usedChunks: 0 },
-        generatedAt: "2026-06-01T00:00:00.000Z",
-      },
-      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
-      lastWorkoutDateAtGeneration: "2026-06-01",
-      entryCountAtGeneration: 1,
-      recomputedOn: null,
-      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
-    });
+    mockStoredAnalyticsResult("coach_insights", { insights: "You're on track for your 5K goal.", ragInfo: { usedChunks: 0 } });
 
-    // The athlete's latest workout still matches the anchor the analysis was
-    // generated from, so nothing has changed under it. (Leaving this as the
-    // default empty list would model "every workout deleted", which is stale.)
-    vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([
-      { date: "2026-06-01" },
-    ] as never);
-    vi.mocked(storage.workouts.countWorkoutLogs).mockResolvedValue(1);
+    mockWorkoutsMatchingStoredAnchor();
 
     const response = await request(app).get("/api/v1/coach-insights");
 
@@ -331,21 +319,7 @@ describe("GET /api/v1/coach-insights", () => {
   });
 
   it("flags the stored insights stale once their anchoring workouts are gone", async () => {
-    vi.mocked(storage.analyticsResults.get).mockResolvedValue({
-      id: "row-1",
-      userId: "test_user_id",
-      feature: "coach_insights",
-      payload: {
-        insights: "You're on track for your 5K goal.",
-        ragInfo: { usedChunks: 0 },
-        generatedAt: "2026-06-01T00:00:00.000Z",
-      },
-      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
-      lastWorkoutDateAtGeneration: "2026-06-01",
-      entryCountAtGeneration: 1,
-      recomputedOn: null,
-      updatedAt: new Date("2026-06-01T00:00:00.000Z"),
-    });
+    mockStoredAnalyticsResult("coach_insights", { insights: "You're on track for your 5K goal.", ragInfo: { usedChunks: 0 } });
     // No workouts remain: the analysis describes a history that no longer
     // exists, which the forward-only compare reported as fresh forever.
     vi.mocked(storage.workouts.listWorkoutLogs).mockResolvedValue([] as never);
@@ -361,12 +335,9 @@ describe("POST /api/parse-exercises", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
-    app = createTestApp(aiRouter);
-
+    app = await freshAiApp();
   });
 
   afterEach(() => {
@@ -447,8 +418,7 @@ describe("POST /api/parse-exercises", () => {
       .post("/api/v1/parse-exercises")
       .send({ text: "Bench press 135x10" });
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 
 
@@ -456,12 +426,9 @@ describe("POST /api/parse-exercises", () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockRejectedValue(new Error("AI error"));
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "Hello", history: [] });
+    const response = await postChat(app);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 
   it("should return 500 on internal error", async () => {
@@ -471,8 +438,7 @@ describe("POST /api/parse-exercises", () => {
       .post("/api/v1/parse-exercises")
       .send({ text: "Bench press 135x10" });
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 
   it("should rate limit requests after 5 attempts", async () => {
@@ -512,11 +478,9 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
   };
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1));
-    app = createTestApp(aiRouter);
+    app = await freshAiApp();
   });
 
   afterEach(() => {
@@ -590,8 +554,7 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
       .post("/api/v1/parse-exercises-from-image")
       .send(validPayload);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 });
 
@@ -602,11 +565,8 @@ describe("POST /api/chat", () => {
 
 
   beforeEach(async () => {
-    vi.resetAllMocks();
+    app = await freshAiApp();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
-
   });
 
   it("should successfully chat with coach and return response", async () => {
@@ -614,9 +574,7 @@ describe("POST /api/chat", () => {
     vi.mocked(buildTrainingContext).mockResolvedValue(MOCK_TRAINING_CONTEXT);
     vi.mocked(chatWithCoach).mockResolvedValue("Coach response");
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "Hello", history: [] });
+    const response = await postChat(app);
 
     expect(response.status).toBe(200);
     expect(response.body.response).toBe("Coach response");
@@ -636,12 +594,9 @@ describe("POST /api/chat", () => {
   it("should return 500 on internal error", async () => {
     vi.mocked(buildTrainingContext).mockRejectedValue(new Error("Database error"));
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "Hello", history: [] });
+    const response = await postChat(app);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 });
 
@@ -653,11 +608,8 @@ describe("POST /api/chat/stream", () => {
 
 
   beforeEach(async () => {
-    vi.resetAllMocks();
+    app = await freshAiApp();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
-
   });
 
   it("should successfully stream chat response", async () => {
@@ -669,9 +621,7 @@ describe("POST /api/chat/stream", () => {
       yield " World";
     });
 
-    const response = await request(app)
-      .post(CHAT_STREAM_ENDPOINT)
-      .send({ message: "Hello stream", history: [] });
+    const response = await postChatStream(app, "Hello stream");
 
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toBe("text/event-stream");
@@ -701,9 +651,7 @@ describe("POST /api/chat/stream", () => {
       }
     }));
 
-    const response = await request(app)
-      .post(CHAT_STREAM_ENDPOINT)
-      .send({ message: "Error", history: [] });
+    const response = await postChatStream(app, "Error");
 
     expect(response.status).toBe(200);
     const chunks = parseStreamResponse(response.text);
@@ -719,10 +667,7 @@ describe("Chat History and Messages Routes", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
-
+    app = await freshAiApp();
   });
 
   it("should get chat history", async () => {
@@ -783,8 +728,7 @@ describe("Chat History and Messages Routes", () => {
 
     const response = await request(app).get(CHAT_HISTORY_ENDPOINT);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 
   it("should save chat message", async () => {
@@ -831,8 +775,7 @@ describe("Chat History and Messages Routes", () => {
 
     const response = await request(app).delete(CHAT_HISTORY_ENDPOINT);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 });
 
@@ -841,11 +784,8 @@ describe("POST /api/timeline/ai-suggestions", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
+    app = await freshAiApp();
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
-
   });
 
   it("should successfully generate suggestions", async () => {
@@ -1004,8 +944,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 
   it("should return 500 on error", async () => {
@@ -1014,8 +953,7 @@ describe("POST /api/timeline/ai-suggestions", () => {
 
     const response = await request(app).post(TIMELINE_SUGGESTIONS_ENDPOINT);
 
-    expect(response.status).toBe(500);
-    expect(response.body).toHaveProperty("error", "Internal Server Error");
+    expectInternalError(response);
   });
 });
 
@@ -1024,9 +962,7 @@ describe("POST /api/timeline/ai-suggestions/apply", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
+    app = await freshAiApp();
     vi.mocked(storage.users.getUser).mockResolvedValue({ aiCoachEnabled: true, weightUnit: "kg" });
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({
       id: "day-1",
@@ -1074,10 +1010,7 @@ describe("RAG pipeline in chat endpoints", () => {
   let app: express.Express;
 
   beforeEach(async () => {
-    vi.resetAllMocks();
-    await resetRouteTestState();
-    app = createTestApp(aiRouter);
-
+    app = await freshAiApp();
   });
 
   it("should use RAG retrieval when user has embedded chunks", async () => {
@@ -1086,9 +1019,7 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(true);
     vi.mocked(retrieveRelevantChunks).mockResolvedValue(["chunk about squats", "chunk about programming"]);
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "How should I train squats?", history: [] });
+    const response = await postChat(app, "How should I train squats?");
 
     expect(response.status).toBe(200);
     expect(storage.coaching.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
@@ -1112,9 +1043,7 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.mocked(storage.coaching.hasChunksForUser).mockResolvedValue(false);
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "Hello", history: [] });
+    const response = await postChat(app);
 
     expect(response.status).toBe(200);
     expect(storage.coaching.hasChunksForUser).toHaveBeenCalledWith("test_user_id");
@@ -1129,9 +1058,7 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.mocked(retrieveRelevantChunks).mockResolvedValue([]);
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "Hello", history: [] });
+    const response = await postChat(app);
 
     expect(response.status).toBe(200);
     // Empty retrieval should trigger fallback
@@ -1144,9 +1071,7 @@ describe("RAG pipeline in chat endpoints", () => {
     vi.mocked(storage.coaching.hasChunksForUser).mockRejectedValue(new Error("DB error"));
     vi.mocked(storage.coaching.listCoachingMaterials).mockResolvedValue([]);
 
-    const response = await request(app)
-      .post(CHAT_ENDPOINT)
-      .send({ message: "Hello", history: [] });
+    const response = await postChat(app);
 
     expect(response.status).toBe(200);
     // Should gracefully fall back
@@ -1161,9 +1086,7 @@ describe("RAG pipeline in chat endpoints", () => {
       yield "Streamed";
     });
 
-    const response = await request(app)
-      .post(CHAT_STREAM_ENDPOINT)
-      .send({ message: "Train me", history: [] });
+    const response = await postChatStream(app, "Train me");
 
     expect(response.status).toBe(200);
     expect(streamChatWithCoach).toHaveBeenCalledWith(

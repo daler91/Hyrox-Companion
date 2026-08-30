@@ -21,6 +21,7 @@ import {
   powerTss,
   resolveAcwrZone,
   type TrainingLoadSet,
+  type UpcomingWorkoutForLoad,
 } from "./trainingLoadService";
 
 function log(overrides: Partial<WorkoutLog>): WorkoutLog {
@@ -91,6 +92,28 @@ function steadyHistory(currentDate: string, count: number) {
     log({ id: `log-${i}`, date: daysBefore(currentDate, i), duration: 60, rpe: 6 }),
   );
   return calculateTrainingLoad(workoutLogs, [], [], { currentDate });
+}
+
+// Shared harness for the restriction/suggestion tests below: run the load
+// model over the given history, then feed the resulting overview plus one
+// upcoming plan day to the load governor.
+function governorRun(
+  workoutLogs: WorkoutLog[],
+  sets: TrainingLoadSet[],
+  planDay: UpcomingWorkoutForLoad,
+  currentDate = "2026-05-22",
+) {
+  const summary = calculateTrainingLoad(workoutLogs, sets, [], { currentDate }).overview;
+  const suggestions = buildLoadGovernorSuggestions(summary, [planDay], currentDate);
+  return { summary, suggestions };
+}
+
+function expectRestrictionSuggestion(
+  { summary, suggestions }: ReturnType<typeof governorRun>,
+  restrictionId: string,
+) {
+  expect(summary.activeRestrictions.map((restriction) => restriction.id)).toContain(restrictionId);
+  expect(suggestions[0].rationaleCode).toBe(restrictionId);
 }
 
 describe("trainingLoadService", () => {
@@ -201,25 +224,19 @@ describe("trainingLoadService", () => {
         weight: 200,
       }),
     );
-    const summary = calculateTrainingLoad(workoutLogs, sets, [], { currentDate: "2026-05-22" }).overview;
-    const suggestions = buildLoadGovernorSuggestions(summary, [
-      {
-        id: "plan-day-1",
-        date: "2026-05-23",
-        focus: "Run",
-        mainWorkout: "Hill repeats 8x60 seconds",
-        exerciseDetails: [
-          { exerciseName: "hill_repeats", category: "running", setNumber: 1, time: 40 },
-        ],
-      },
-    ], "2026-05-22");
+    const run = governorRun(workoutLogs, sets, {
+      id: "plan-day-1",
+      date: "2026-05-23",
+      focus: "Run",
+      mainWorkout: "Hill repeats 8x60 seconds",
+      exerciseDetails: [
+        { exerciseName: "hill_repeats", category: "running", setNumber: 1, time: 40 },
+      ],
+    });
 
-    expect(summary.activeRestrictions.map((restriction) => restriction.id)).toContain(
-      "posterior_chain_velocity_lock",
-    );
-    expect(suggestions).toHaveLength(1);
-    expect(suggestions[0].rationaleCode).toBe("posterior_chain_velocity_lock");
-    expect(suggestions[0].structuredSetRows?.[0]).toEqual(
+    expectRestrictionSuggestion(run, "posterior_chain_velocity_lock");
+    expect(run.suggestions).toHaveLength(1);
+    expect(run.suggestions[0].structuredSetRows?.[0]).toEqual(
       expect.objectContaining({ exerciseName: "recovery_run", planDayId: "plan-day-1" }),
     );
   });
@@ -235,20 +252,14 @@ describe("trainingLoadService", () => {
         weight: 185,
       }),
     );
-    const summary = calculateTrainingLoad(workoutLogs, sets, [], { currentDate: "2026-05-22" }).overview;
-    const suggestions = buildLoadGovernorSuggestions(summary, [
-      {
-        id: "plan-day-2",
-        date: "2026-05-23",
-        focus: "Run",
-        mainWorkout: "Long road run with downhill finish",
-      },
-    ], "2026-05-22");
+    const run = governorRun(workoutLogs, sets, {
+      id: "plan-day-2",
+      date: "2026-05-23",
+      focus: "Run",
+      mainWorkout: "Long road run with downhill finish",
+    });
 
-    expect(summary.activeRestrictions.map((restriction) => restriction.id)).toContain(
-      "anterior_chain_braking_guard",
-    );
-    expect(suggestions[0].rationaleCode).toBe("anterior_chain_braking_guard");
+    expectRestrictionSuggestion(run, "anterior_chain_braking_guard");
   });
 
   it("flags seven-day elastic tendon overload and speed work", () => {
@@ -274,20 +285,14 @@ describe("trainingLoadService", () => {
         }),
       ),
     );
-    const summary = calculateTrainingLoad(workoutLogs, sets, [], { currentDate: "2026-05-22" }).overview;
-    const suggestions = buildLoadGovernorSuggestions(summary, [
-      {
-        id: "plan-day-3",
-        date: "2026-05-23",
-        focus: "Run",
-        mainWorkout: "Track speed intervals",
-      },
-    ], "2026-05-22");
+    const run = governorRun(workoutLogs, sets, {
+      id: "plan-day-3",
+      date: "2026-05-23",
+      focus: "Run",
+      mainWorkout: "Track speed intervals",
+    });
 
-    expect(summary.activeRestrictions.map((restriction) => restriction.id)).toContain(
-      "elastic_tendon_speed_guard",
-    );
-    expect(suggestions[0].rationaleCode).toBe("elastic_tendon_speed_guard");
+    expectRestrictionSuggestion(run, "elastic_tendon_speed_guard");
   });
 
   it("uses ACWR danger to lock high-intensity work for the next four days", () => {
@@ -310,19 +315,15 @@ describe("trainingLoadService", () => {
       focus: "Run",
       mainWorkout: "Hard intervals",
     });
-    const summary = calculateTrainingLoad([...baseline, spike], [], [], { currentDate }).overview;
-    const suggestions = buildLoadGovernorSuggestions(summary, [
-      {
-        id: "plan-day-4",
-        date: "2026-05-25",
-        focus: "Strength",
-        mainWorkout: "Heavy lower-body lift",
-      },
-    ], currentDate);
+    const run = governorRun([...baseline, spike], [], {
+      id: "plan-day-4",
+      date: "2026-05-25",
+      focus: "Strength",
+      mainWorkout: "Heavy lower-body lift",
+    }, currentDate);
 
-    expect(summary.zone).toBe("danger");
-    expect(summary.activeRestrictions.map((restriction) => restriction.id)).toContain("acwr_danger_lock");
-    expect(suggestions[0].rationaleCode).toBe("acwr_danger_lock");
+    expect(run.summary.zone).toBe("danger");
+    expectRestrictionSuggestion(run, "acwr_danger_lock");
   });
 
   it("uses ACWR yellow to soften near-term high-intensity work", () => {
@@ -372,19 +373,15 @@ describe("trainingLoadService", () => {
         mainWorkout: "Steady run",
       }),
     );
-    const summary = calculateTrainingLoad(priorWork, [], [], { currentDate }).overview;
-    const suggestions = buildLoadGovernorSuggestions(summary, [
-      {
-        id: "plan-day-5",
-        date: "2026-05-23",
-        focus: "Strength",
-        mainWorkout: "Heavy squats and sled pushes",
-      },
-    ], currentDate);
+    const run = governorRun(priorWork, [], {
+      id: "plan-day-5",
+      date: "2026-05-23",
+      focus: "Strength",
+      mainWorkout: "Heavy squats and sled pushes",
+    }, currentDate);
 
-    expect(summary.zone).toBe("undertraining");
-    expect(summary.activeRestrictions.map((restriction) => restriction.id)).toContain("acwr_onramp");
-    expect(suggestions[0].rationaleCode).toBe("acwr_onramp");
+    expect(run.summary.zone).toBe("undertraining");
+    expectRestrictionSuggestion(run, "acwr_onramp");
   });
 
   it("converges EWMA acute and chronic to equal values for steady load (ACWR 1, TSB 0)", () => {
