@@ -1,10 +1,10 @@
+import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
+
 import {
-  type DistanceUnit,
-  formatElevation,
-  formatNumberWithUnit,
-  formatPace as formatPaceShared,
-  metersToUserDistance,
-} from "@shared/unitConversion";
+  formatActivityDistance,
+  formatActivityDuration,
+  formatActivityPace,
+} from "./activityFormatting";
 
 interface StravaActivity {
   id: number;
@@ -31,23 +31,11 @@ interface StravaActivity {
 }
 
 export function formatStravaPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
-  if (metersPerSecond <= 0) return "";
-  return formatPaceShared(metersPerSecond, distanceUnit);
+  return formatActivityPace(metersPerSecond, distanceUnit);
 }
 
 export function formatStravaDistance(meters: number, distanceUnit: DistanceUnit): string {
-  const converted = metersToUserDistance(meters, distanceUnit);
-  const unitStr = distanceUnit === "miles" ? "mi" : "km";
-  return formatNumberWithUnit(converted, unitStr, 2);
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
+  return formatActivityDistance(meters, distanceUnit);
 }
 
 /** Thermodynamic conversion. Correct for FOOD energy, which is already metabolic. */
@@ -117,8 +105,8 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
   const isDistanceActivity = activity.distance > 100;
 
   const mainWorkout = isDistanceActivity
-    ? `${formatStravaDistance(activity.distance, distanceUnit)}, ${formatDuration(activity.moving_time)}`
-    : `${formatDuration(activity.moving_time)} session`;
+    ? `${formatStravaDistance(activity.distance, distanceUnit)}, ${formatActivityDuration(activity.moving_time)}`
+    : `${formatActivityDuration(activity.moving_time)} session`;
 
   const accessory = getAccessory(activity, distanceUnit, isDistanceActivity);
   const notes = getNotes(activity);

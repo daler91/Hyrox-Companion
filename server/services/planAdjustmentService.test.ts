@@ -309,6 +309,33 @@ function proposalRow(
   };
 }
 
+/**
+ * One pending proposal for a table-backed "day-1" whose live rowing set still
+ * matches the change's baseline fingerprint, with every storage read the apply
+ * path makes mocked accordingly.
+ */
+function mockStructuredApplyScenario(overrides: Partial<EnrichedPlanAdjustmentChange> = {}) {
+  const sets = [
+    { id: "set-1", exerciseName: "rowing", category: "functional", setNumber: 1, sortOrder: 0 },
+  ];
+  const day = planDayRow();
+  const change = enrichedChange(day, {
+    structured: true,
+    baseline: { ...enrichedChange(day).baseline, fingerprint: fingerprintFor(day, sets) },
+    ...overrides,
+  });
+  vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
+  vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
+  vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(
+    new Map([["day-1", sets as never]]),
+  );
+  vi.mocked(storage.users.getUser).mockResolvedValue({
+    weightUnit: "kg",
+    distanceUnit: "km",
+  } as never);
+  return { day, change };
+}
+
 describe("applyPlanAdjustmentProposal", () => {
   it("returns undefined for an unknown proposal", async () => {
     vi.mocked(storage.planProposals.getById).mockResolvedValue(undefined);
@@ -398,25 +425,10 @@ describe("applyPlanAdjustmentProposal", () => {
   });
 
   it("clears exercise rows when converting a table-backed day to rest", async () => {
-    const sets = [
-      { id: "set-1", exerciseName: "rowing", category: "functional", setNumber: 1, sortOrder: 0 },
-    ];
-    const day = planDayRow();
-    const change = enrichedChange(day, {
+    const { day, change } = mockStructuredApplyScenario({
       updatedFields: { focus: "Rest", mainWorkout: "Complete rest or light walk", accessory: null },
       kind: "rest_conversion",
-      structured: true,
-      baseline: { ...enrichedChange(day).baseline, fingerprint: fingerprintFor(day, sets) },
     });
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
-    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(
-      new Map([["day-1", sets as never]]),
-    );
-    vi.mocked(storage.users.getUser).mockResolvedValue({
-      weightUnit: "kg",
-      distanceUnit: "km",
-    } as never);
     vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(day);
     vi.mocked(storage.planProposals.resolve).mockResolvedValue(
       proposalRow([change], { status: "applied" }),
@@ -433,23 +445,7 @@ describe("applyPlanAdjustmentProposal", () => {
   });
 
   it("keeps the proposal pending when a structured re-parse fails", async () => {
-    const sets = [
-      { id: "set-1", exerciseName: "rowing", category: "functional", setNumber: 1, sortOrder: 0 },
-    ];
-    const day = planDayRow();
-    const change = enrichedChange(day, {
-      structured: true,
-      baseline: { ...enrichedChange(day).baseline, fingerprint: fingerprintFor(day, sets) },
-    });
-    vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([change]));
-    vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
-    vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(
-      new Map([["day-1", sets as never]]),
-    );
-    vi.mocked(storage.users.getUser).mockResolvedValue({
-      weightUnit: "kg",
-      distanceUnit: "km",
-    } as never);
+    mockStructuredApplyScenario();
     vi.mocked(parseStructuredPlanDaySuggestionRows).mockResolvedValue([]);
 
     const result = await applyPlanAdjustmentProposal("user-1", "prop-1");

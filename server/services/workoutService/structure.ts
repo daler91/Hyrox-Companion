@@ -17,7 +17,7 @@ import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
-import { prescribedSetToLogRow } from "../../storage/shared";
+import { prescribedSetToLogRow, structureTargetsFromExerciseSet } from "../../storage/shared";
 import {
   exerciseSetOwnerCondition,
   ownerColumns,
@@ -191,21 +191,6 @@ async function linkedExerciseRowsByStep(tx: WorkoutTx, owner: SetOwner) {
   return byStep;
 }
 
-function targetsFromLinkedExerciseSet(row: ExerciseSet): NonNullable<StructureBlockInput["steps"][number]["targets"]> | null {
-  const targets: Record<string, unknown> = {};
-  const reps = row.plannedReps ?? row.reps;
-  const weight = row.plannedWeight ?? row.weight;
-  const distance = row.plannedDistance ?? row.distance;
-  const time = row.plannedTime ?? row.time;
-  if (reps != null) targets.targetReps = reps;
-  if (weight != null) targets.targetWeight = weight;
-  if (distance != null) targets.targetDistance = distance;
-  if (time != null) targets.targetTime = time;
-  return Object.keys(targets).length > 0
-    ? (targets)
-    : null;
-}
-
 async function mirrorStructureStepsFromExerciseRows(
   tx: WorkoutTx,
   owner: SetOwner,
@@ -226,7 +211,7 @@ async function mirrorStructureStepsFromExerciseRows(
         customLabel: linked.customLabel,
         stepRole: step.stepRole ?? linked.stepRole ?? "work",
         groupId: step.groupId ?? linked.groupId,
-        targets: step.targets ?? targetsFromLinkedExerciseSet(linked),
+        targets: step.targets ?? structureTargetsFromExerciseSet(linked),
       };
     }),
   }));

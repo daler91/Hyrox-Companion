@@ -19,6 +19,7 @@ import {
   buildStructuredResultingWorkout,
   buildTextResultingWorkout,
   type CoachModificationSignals,
+  mapExerciseSetToPromptDetail,
   shouldSuppressRepeatedFatigueReduction,
   withCoachModificationMetadata,
 } from "./aiModificationGuard";
@@ -28,6 +29,7 @@ import {
   buildSafetyReviewNote,
 } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
+import { buildCoachNoteInputs } from "./coachNoteInputs";
 import { retrieveCoachingText } from "./ragRetrieval";
 import {
   applyStructuredPlanDaySuggestionRows,
@@ -253,40 +255,6 @@ async function applyStructuredSuggestion(
 
   await storage.plans.updatePlanDay(suggestion.workoutId, updates, userId, tx);
   return { applied: true, inputsUsed: suggestionInputs };
-}
-
-/**
- * Capture a compact audit of which inputs were present when the coach
- * produced the note for a plan day. Persisted as `plan_days.ai_inputs_used`
- * so the athlete sees "Based on: RPE trend · plan phase · coaching docs"
- * on the workout card.
- */
-function buildCoachNoteInputs(
-  ctx: TrainingContext,
-  ragUsed: boolean,
-  planGoalPresent: boolean,
-): CoachNoteInputs {
-  const insights = ctx.coachingInsights;
-  return {
-    rpeTrend: insights?.rpeTrend,
-    fatigueFlag: insights?.fatigueFlag,
-    planPhase: insights?.planPhase?.phaseLabel,
-    weeklyVolumeTrend: insights?.weeklyVolume?.trend,
-    loadGovernorAcwrZone: insights?.loadGovernor?.zone,
-    loadGovernorAcwr: insights?.loadGovernor?.acwr ?? undefined,
-    loadGovernorFlaggedVectors: insights?.loadGovernor?.flaggedVectors,
-    loadGovernorRestrictions: insights?.loadGovernor?.activeRestrictions.map((r) => r.id),
-    stationGaps: insights?.stationGaps
-      ?.filter((g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
-      .map((g) => g.station),
-    progressionFlags: insights?.progressionFlags
-      ?.filter((f) => f.flag === "plateau" || f.flag === "regressing")
-      .map((f) => `${f.exercise}:${f.flag}`),
-    ragUsed,
-    recentWorkoutCount: ctx.recentWorkouts?.length ?? 0,
-    completedWorkoutCount: ctx.completedWorkouts,
-    planGoalPresent,
-  };
 }
 
 /**
@@ -795,18 +763,7 @@ export async function regenerateCoachNoteForPlanDay(
     mainWorkout: day.mainWorkout,
     accessory: planDaySets && planDaySets.length > 0 ? undefined : day.accessory || undefined,
     notes: planDaySets && planDaySets.length > 0 ? undefined : day.notes || undefined,
-    exerciseDetails: (planDaySets ?? []).map((es) => ({
-      exerciseName: es.exerciseName,
-      customLabel: es.customLabel,
-      category: es.category,
-      setNumber: es.setNumber,
-      reps: es.reps,
-      weight: es.weight,
-      distance: es.distance,
-      time: es.time,
-      notes: es.notes,
-      sortOrder: es.sortOrder,
-    })),
+    exerciseDetails: (planDaySets ?? []).map(mapExerciseSetToPromptDetail),
   };
 
   const coachingContext = await getCoachingMaterialsString(userId, [workoutInput], {

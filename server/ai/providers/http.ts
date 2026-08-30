@@ -12,6 +12,18 @@ export async function readJsonPayload(response: Response): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }
 
+/**
+ * Text of one content-array part: providers represent assistant text as
+ * `{ text: string }` parts (possibly alongside non-text parts, which
+ * contribute nothing).
+ */
+export function contentPartText(part: unknown): string {
+  if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+    return (part as { text: string }).text;
+  }
+  return "";
+}
+
 export function trimTrailingSlashes(value: string): string {
   let end = value.length;
   while (end > 0 && value.codePointAt(end - 1) === 47) {

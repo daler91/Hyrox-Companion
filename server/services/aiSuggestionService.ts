@@ -25,6 +25,7 @@ import {
   buildSafetyReviewNote,
 } from "./aiSafety";
 import { checkAiBudget } from "./aiUsageService";
+import { buildCoachNoteInputs } from "./coachNoteInputs";
 import { sanitizeRagInfo } from "./ragRetrieval";
 import {
   applyStructuredPlanDaySuggestionRows,
@@ -159,26 +160,8 @@ function buildTimelineCoachInputs(
   traceMetadata: RecommendationTraceMetadata,
   ragUsed: boolean,
 ): CoachNoteInputs {
-  const insights = trainingContext.coachingInsights;
   return {
-    rpeTrend: insights?.rpeTrend,
-    fatigueFlag: insights?.fatigueFlag,
-    planPhase: insights?.planPhase?.phaseLabel,
-    weeklyVolumeTrend: insights?.weeklyVolume?.trend,
-    loadGovernorAcwrZone: insights?.loadGovernor?.zone,
-    loadGovernorAcwr: insights?.loadGovernor?.acwr ?? undefined,
-    loadGovernorFlaggedVectors: insights?.loadGovernor?.flaggedVectors,
-    loadGovernorRestrictions: insights?.loadGovernor?.activeRestrictions.map((r) => r.id),
-    stationGaps: insights?.stationGaps
-      ?.filter((g) => g.daysSinceLastTrained === null || g.daysSinceLastTrained >= 10)
-      .map((g) => g.station),
-    progressionFlags: insights?.progressionFlags
-      ?.filter((f) => f.flag === "plateau" || f.flag === "regressing")
-      .map((f) => `${f.exercise}:${f.flag}`),
-    ragUsed,
-    recentWorkoutCount: trainingContext.recentWorkouts?.length ?? 0,
-    completedWorkoutCount: trainingContext.completedWorkouts,
-    planGoalPresent: Boolean(trainingContext.activePlan?.goal),
+    ...buildCoachNoteInputs(trainingContext, ragUsed, Boolean(trainingContext.activePlan?.goal)),
     recommendationTrace: traceMetadata,
   };
 }
@@ -304,20 +287,7 @@ export async function generateTimelineAiSuggestions(
     aiNoteUpdatedAt: d.aiNoteUpdatedAt,
     aiInputsUsed: d.aiInputsUsed,
     ...(d.exerciseSets && d.exerciseSets.length > 0
-      ? {
-          exerciseDetails: d.exerciseSets.map((es) => ({
-            exerciseName: es.exerciseName,
-            customLabel: es.customLabel,
-            category: es.category,
-            setNumber: es.setNumber,
-            reps: es.reps,
-            weight: es.weight,
-            distance: es.distance,
-            time: es.time,
-            notes: es.notes,
-            sortOrder: es.sortOrder,
-          })),
-        }
+      ? { exerciseDetails: d.exerciseSets.map(mapExerciseSetToPromptDetail) }
       : {}),
   }));
 

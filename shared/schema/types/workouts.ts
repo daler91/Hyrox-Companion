@@ -238,26 +238,34 @@ function withPatchBlockStepPresencePairing<T extends Record<string, unknown>>(
   );
 }
 
+// Measured and planned per-set metric bounds shared by exerciseSetSchema and
+// incomingExerciseSchema. A set with 0 reps is meaningless — there's no such
+// thing as "I did a set of zero reps" — so reps is tightened to .min(1) (W19);
+// weight/distance/time stay at .min(0) because 0 is semantically valid for
+// them (bodyweight = 0 kg, etc.). plannedReps stays per-schema: the two
+// schemas bound it differently.
+const setMetricFields = {
+  reps: z.number().min(1).max(10_000).optional().nullable(),
+  weight: z.number().min(0).max(2_000).optional().nullable(),
+  distance: z.number().min(0).max(1_000_000).optional().nullable(),
+  time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+};
+const plannedSetMetricFields = {
+  plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
+  plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
+  plannedTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+};
+
 export const exerciseSetSchema = withBlockStepPairing(
   z
     .object({
       setNumber: z.number().min(1).max(100).optional().nullable(),
-      // A logged set with 0 reps is meaningless — there's no such thing as
-      // "I did a set of zero reps". The parent-level incomingExerciseSchema
-      // already enforces .min(1) on reps; this tightens the per-set schema
-      // to match (W19). weight/distance/time stay at .min(0) because 0 is
-      // semantically valid for them (bodyweight = 0 kg, etc.).
-      reps: z.number().min(1).max(10_000).optional().nullable(),
-      weight: z.number().min(0).max(2_000).optional().nullable(),
-      distance: z.number().min(0).max(1_000_000).optional().nullable(),
-      time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+      ...setMetricFields,
       // Planned (prescribed) values, captured at log creation. Optional so
       // ad-hoc logs without a prescription can simply omit them. plannedReps
       // tightened to match reps for consistency.
       plannedReps: z.number().min(1).max(10_000).optional().nullable(),
-      plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
-      plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-      plannedTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+      ...plannedSetMetricFields,
       ...setStructureMetadataFieldsOptional,
       notes: z.string().max(1000).optional().nullable(),
     })
@@ -271,14 +279,9 @@ export const incomingExerciseSchema = withBlockStepPairing(
       customLabel: z.string().max(255).optional().nullable(),
       category: z.string().max(50).optional().nullable(),
       numSets: z.number().min(1).max(50).optional().nullable(),
-      reps: z.number().min(1).max(10_000).optional().nullable(),
-      weight: z.number().min(0).max(2_000).optional().nullable(),
-      distance: z.number().min(0).max(1_000_000).optional().nullable(),
-      time: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+      ...setMetricFields,
       plannedReps: z.number().min(0).max(10_000).optional().nullable(),
-      plannedWeight: z.number().min(0).max(2_000).optional().nullable(),
-      plannedDistance: z.number().min(0).max(1_000_000).optional().nullable(),
-      plannedTime: z.number().min(0).max(SET_TIME_MAX_MINUTES).optional().nullable(),
+      ...plannedSetMetricFields,
       ...setStructureMetadataFieldsOptional,
       confidence: z.number().min(0).max(100).optional().nullable(),
       notes: z.string().max(1000).optional().nullable(),

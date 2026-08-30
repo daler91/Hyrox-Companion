@@ -1,10 +1,10 @@
+import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
+
 import {
-  type DistanceUnit,
-  formatElevation,
-  formatNumberWithUnit,
-  formatPace as formatPaceShared,
-  metersToUserDistance,
-} from "@shared/unitConversion";
+  formatActivityDistance,
+  formatActivityDuration,
+  formatActivityPace,
+} from "./activityFormatting";
 
 /**
  * Subset of @flow-js/garmin-connect's IActivity that we actually map. We
@@ -36,26 +36,6 @@ export interface GarminActivity {
   // instances directly without an `as unknown` cast — the runtime type check
   // in the mapper handles the narrowing.
   avgPower?: unknown;
-}
-
-function formatGarminDistance(meters: number, distanceUnit: DistanceUnit): string {
-  const converted = metersToUserDistance(meters, distanceUnit);
-  const unitStr = distanceUnit === "miles" ? "mi" : "km";
-  return formatNumberWithUnit(converted, unitStr, 2);
-}
-
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
-}
-
-function formatGarminPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
-  if (metersPerSecond <= 0) return "";
-  return formatPaceShared(metersPerSecond, distanceUnit);
 }
 
 /**
@@ -94,9 +74,9 @@ function buildMainWorkout(
   distanceUnit: DistanceUnit,
 ): string {
   if (isDistanceActivity) {
-    return `${formatGarminDistance(distance, distanceUnit)}, ${formatDuration(movingSec)}`;
+    return `${formatActivityDistance(distance, distanceUnit)}, ${formatActivityDuration(movingSec)}`;
   }
-  return `${formatDuration(movingSec)} session`;
+  return `${formatActivityDuration(movingSec)} session`;
 }
 
 function buildAccessory(
@@ -111,7 +91,7 @@ function buildAccessory(
   }
   const speed = activity.averageSpeed ?? 0;
   if (isDistanceActivity && speed > 0) {
-    parts.push(`Pace: ${formatGarminPace(speed, distanceUnit)}`);
+    parts.push(`Pace: ${formatActivityPace(speed, distanceUnit)}`);
   }
   return parts.length > 0 ? parts.join(" | ") : null;
 }
