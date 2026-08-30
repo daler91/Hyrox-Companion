@@ -121,7 +121,8 @@ function formatMonotonyLine(lg: TrainingLoadOverview): string {
 function formatObjectiveLoadLine(lg: TrainingLoadOverview): string | null {
   const objective: string[] = [];
   if (lg.hrTss != null) {
-    objective.push(`hrTSS ${Math.round(lg.hrTss)}${lg.hrZone ? ` (${lg.hrZone.toUpperCase()})` : ""}`);
+    const hrZoneStr = lg.hrZone ? ` (${lg.hrZone.toUpperCase()})` : "";
+    objective.push(`hrTSS ${Math.round(lg.hrTss)}${hrZoneStr}`);
   }
   if (lg.tss != null) objective.push(`power TSS ${Math.round(lg.tss)}`);
   if (objective.length === 0) return null;
@@ -189,7 +190,11 @@ function formatDecisionTree(decisionTree: CoachingInsights["decisionTree"]): str
 /** Deterministic race-day readiness (taper guidance only — never inflate volume). */
 function formatRaceReadiness(readiness: CoachingInsights["raceReadiness"]): string | null {
   if (!readiness || readiness.status === "insufficient_data") return null;
-  const tsbStr = readiness.tsb != null ? ` (TSB ${readiness.tsb >= 0 ? "+" : ""}${readiness.tsb})` : "";
+  let tsbStr = "";
+  if (readiness.tsb != null) {
+    const sign = readiness.tsb >= 0 ? "+" : "";
+    tsbStr = ` (TSB ${sign}${readiness.tsb})`;
+  }
   return `RACE READINESS: ${readiness.status.replaceAll("_", " ").toUpperCase()}${tsbStr} — ${readiness.guidance}`;
 }
 
@@ -218,7 +223,10 @@ function formatCoverageGaps(insights: CoachingInsights): string | null {
   ): string | null => {
     if (!items || items.length === 0) return null;
     return items
-      .map((i) => `${i.label} (${i.daysSince === null ? "never" : `${i.daysSince}d`})`)
+      .map((i) => {
+        const daysStr = i.daysSince === null ? "never" : `${i.daysSince}d`;
+        return `${i.label} (${daysStr})`;
+      })
       .join(", ");
   };
   const patterns = render(insights.neglectedPatterns);

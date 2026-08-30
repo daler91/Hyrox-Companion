@@ -93,10 +93,10 @@ export function DescribeMealDialog({
           />
           <CharacterCount id="describe-meal-count" value={text} max={2000} />
           {noFoodsFound && (
-            <p className="text-sm text-amber-600" role="status" data-testid="text-no-foods-found">
+            <output className="block text-sm text-amber-600" data-testid="text-no-foods-found">
               No foods detected — add a little more detail (amounts and cooking style help) and try
               again.
-            </p>
+            </output>
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={parse.isPending}>

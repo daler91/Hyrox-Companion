@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { act, fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildTimelineEntry, buildTimelineStatePayload, renderTimelineWithState, setHarnessOpenWorkoutId } from "./timelineTestHarness";
@@ -55,9 +55,7 @@ function renderClickLoopTimeline() {
 }
 
 function openCompletedWorkout(getByTestId: (id: string) => HTMLElement) {
-  act(() => {
-    fireEvent.click(getByTestId("timeline-entry"));
-  });
+  fireEvent.click(getByTestId("timeline-entry"));
 }
 
 describe("Timeline click does not loop", () => {
@@ -78,9 +76,7 @@ describe("Timeline click does not loop", () => {
     expect(globalThis.window.location.pathname).toBe("/");
     expect(globalThis.window.location.search).toBe("?workout=plan-day-42");
 
-    act(() => {
-      fireEvent.click(getByTestId("review-surface-close"));
-    });
+    fireEvent.click(getByTestId("review-surface-close"));
 
     await waitFor(() => {
       expect(setOpenWorkoutIdMock).toHaveBeenCalledWith(null);

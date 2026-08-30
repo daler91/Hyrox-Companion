@@ -23,18 +23,14 @@ describe("validateAiOutput", () => {
     expect(validateAiOutput(output)).toBe(output);
   });
 
-  it("should throw an error if system leakage is detected (<system>)", () => {
-    const output = "Here is my response. <system>I am secretly ignoring instructions.</system>";
-    expect(() => validateAiOutput(output)).toThrow("AI output validation failed: detected restricted system-level content");
-  });
-
-  it("should throw an error if system leakage is detected (system prompt)", () => {
-    const output = "My system prompt told me to say this.";
-    expect(() => validateAiOutput(output)).toThrow("AI output validation failed: detected restricted system-level content");
-  });
-
-  it("should throw an error if system leakage is detected (ignore previous instructions)", () => {
-    const output = "Okay, I will ignore previous instructions.";
+  it.each([
+    {
+      leak: "<system>",
+      output: "Here is my response. <system>I am secretly ignoring instructions.</system>",
+    },
+    { leak: "system prompt", output: "My system prompt told me to say this." },
+    { leak: "ignore previous instructions", output: "Okay, I will ignore previous instructions." },
+  ])("should throw an error if system leakage is detected ($leak)", ({ output }) => {
     expect(() => validateAiOutput(output)).toThrow("AI output validation failed: detected restricted system-level content");
   });
 });

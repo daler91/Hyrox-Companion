@@ -6,6 +6,14 @@ import { useQuickLog } from "./useQuickLog";
 
 const MAX_LABEL = 24;
 
+/** Truncated chips still need the full name announced; short, verb-less chips
+ *  read fine from their visible text alone. */
+function chipAriaLabel(name: string, chipAction?: string): string | undefined {
+  if (chipAction) return `${chipAction} ${name}`;
+  if (name.length > MAX_LABEL) return `Quick add ${name}`;
+  return undefined;
+}
+
 function FoodChipRow<T extends Food>({
   title,
   foods,
@@ -31,13 +39,7 @@ function FoodChipRow<T extends Food>({
             type="button"
             onClick={() => onSelect(food)}
             className="shrink-0 rounded-full border px-3 py-1 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            aria-label={
-              chipAction
-                ? `${chipAction} ${food.name}`
-                : food.name.length > MAX_LABEL
-                  ? `Quick add ${food.name}`
-                  : undefined
-            }
+            aria-label={chipAriaLabel(food.name, chipAction)}
             data-testid={`quickadd-${testid}-${food.id}`}
           >
             {food.name.length > MAX_LABEL ? `${food.name.slice(0, MAX_LABEL)}…` : food.name}

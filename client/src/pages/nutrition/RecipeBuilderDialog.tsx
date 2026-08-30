@@ -101,6 +101,7 @@ function RecipeBuilderForm({
   const isPending = createRecipe.isPending || updateRecipe.isPending;
   const servingsNum = Number(servings);
   const valid = name.trim().length > 0 && ingredients.length > 0 && servingsNum > 0;
+  const saveLabel = initial ? "Save" : "Create recipe";
 
   const totals: NutritionMacroTotals = { calories: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
   for (const ing of ingredients) {
@@ -255,7 +256,7 @@ function RecipeBuilderForm({
           data-testid="button-save-recipe"
         >
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
-          {isPending ? "Saving…" : initial ? "Save" : "Create recipe"}
+          {isPending ? "Saving…" : saveLabel}
         </Button>
       </DialogFooter>
     </>

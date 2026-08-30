@@ -361,7 +361,7 @@ export function hasFailure(results: CheckResult[]): boolean {
 }
 
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
+  const argv = new Set(process.argv.slice(2));
   const target = process.env.RESTORE_DRILL_DATABASE_URL;
   if (!target) {
     console.error(
@@ -371,7 +371,7 @@ async function main(): Promise<void> {
     );
     process.exit(2);
   }
-  if (target === process.env.DATABASE_URL && !argv.includes("--allow-primary")) {
+  if (target === process.env.DATABASE_URL && !argv.has("--allow-primary")) {
     console.error(
       "RESTORE_DRILL_DATABASE_URL equals DATABASE_URL.\n" +
       "The drill validates a RESTORED COPY — passing against the live primary proves\n" +
@@ -393,7 +393,7 @@ async function main(): Promise<void> {
   const client = await pool.connect();
   try {
     const results = await runRestoreDrill(client);
-    if (argv.includes("--json")) {
+    if (argv.has("--json")) {
       console.log(JSON.stringify({ results, elapsedMs: Date.now() - startedAt }, null, 2));
     } else {
       console.log(formatReport(results, Date.now() - startedAt));

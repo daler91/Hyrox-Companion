@@ -111,9 +111,13 @@ export function buildWeeklySummaryEmail(
   // absence-only week gets a neutral acknowledgement (cheering "Perfect week!
   // Keep it up! 💪" at someone who spent it injured reads as not having
   // listened), and only a genuinely clean week gets the celebration.
+  let excusedSuffix = "s";
+  if (data.excusedCount === 1) {
+    excusedSuffix = "";
+  }
   const excusedNote =
     data.excusedCount > 0
-      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${data.excusedCount === 1 ? "" : "s"} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
+      ? `<p style="font-size:14px;color:#64748b;margin-top:8px;">${data.excusedCount} planned session${excusedSuffix} fell inside an injury, illness, travel or rest window you logged — not counted as missed.</p>`
       : "";
   let missedSessionsMessage: string;
   if (data.missedCount > 0) {
