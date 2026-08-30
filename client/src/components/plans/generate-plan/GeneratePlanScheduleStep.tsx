@@ -68,6 +68,16 @@ export function GeneratePlanScheduleStep({
   onNext,
   canProceed,
 }: GeneratePlanScheduleStepProps) {
+  // Points the disabled Next button at whichever rendered hint explains the
+  // block (the date error and the rest-day hint render under the same
+  // conditions these ids are chosen under).
+  let nextBlockedHintId: string | undefined;
+  if (!canProceed && dateError) {
+    nextBlockedHintId = "schedule-date-error";
+  } else if (!canProceed && requiredRestDays > 0) {
+    nextBlockedHintId = "schedule-rest-hint";
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -210,19 +220,7 @@ export function GeneratePlanScheduleStep({
         <Button variant="outline" onClick={onBack}>
           <ChevronLeft className="mr-1 h-4 w-4" /> Back
         </Button>
-        <Button
-          onClick={onNext}
-          disabled={!canProceed}
-          aria-describedby={
-            !canProceed
-              ? dateError
-                ? "schedule-date-error"
-                : requiredRestDays > 0
-                  ? "schedule-rest-hint"
-                  : undefined
-              : undefined
-          }
-        >
+        <Button onClick={onNext} disabled={!canProceed} aria-describedby={nextBlockedHintId}>
           Next <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
       </div>

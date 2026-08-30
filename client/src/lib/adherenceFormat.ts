@@ -13,9 +13,7 @@
  */
 export type Tone = "good" | "partial" | "low";
 
-export type AdherenceTone = Tone;
-
-export function getAdherenceTone(compliancePct: number): AdherenceTone {
+export function getAdherenceTone(compliancePct: number): Tone {
   if (compliancePct >= 85) return "good";
   if (compliancePct >= 60) return "partial";
   return "low";

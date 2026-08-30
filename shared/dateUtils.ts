@@ -17,7 +17,7 @@ const MS_PER_DAY = 86_400_000;
 
 /** Parse a strict `YYYY-MM-DD` string to a UTC-midnight epoch (ms). */
 function toUtcEpoch(date: string): number {
-  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
+  const [year = Number.NaN, month = Number.NaN, day = Number.NaN] = date.split("-").map(Number);
   return Date.UTC(year, month - 1, day);
 }
 

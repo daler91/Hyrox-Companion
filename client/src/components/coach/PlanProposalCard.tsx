@@ -149,6 +149,7 @@ export function PlanProposalCard({
 }: Readonly<PlanProposalCardProps>) {
   const isAppliedView = proposal.status === "applied";
   const count = proposal.changes.length;
+  const dayNoun = count === 1 ? "day" : "days";
 
   return (
     <Card
@@ -163,8 +164,8 @@ export function PlanProposalCard({
         )}
         <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
           {isAppliedView
-            ? `Applied — ${count} day${count === 1 ? "" : "s"} updated`
-            : `Proposed plan changes (${count} day${count === 1 ? "" : "s"})`}
+            ? `Applied — ${count} ${dayNoun} updated`
+            : `Proposed plan changes (${count} ${dayNoun})`}
         </span>
         <CalendarClock
           className="h-3 w-3 text-muted-foreground ml-auto shrink-0"

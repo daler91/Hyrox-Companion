@@ -65,6 +65,51 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
     staleTime: 5 * 60 * 1000,
   });
 
+  const loadedContent =
+    availableExercises.length === 0 ? (
+      <div className="text-center py-8 space-y-3" data-testid="text-no-progression">
+        <Activity className="h-10 w-10 mx-auto text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">
+          Your exercise progression lines appear here once you&apos;ve logged a few structured
+          workouts — weights, reps, and times across sessions.
+        </p>
+        <Button variant="outline" asChild>
+          <Link href="/log" data-testid="button-log-workout-from-progression">
+            <Dumbbell className="h-4 w-4 mr-2" aria-hidden="true" />
+            Log a Workout
+          </Link>
+        </Button>
+      </div>
+    ) : (
+      <>
+        <div className="mb-6">
+          <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
+            <SelectTrigger
+              data-testid="select-exercise-progression"
+              aria-label="Select an exercise to view progression"
+            >
+              <SelectValue placeholder="Select an exercise..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableExercises.map((e) => (
+                <SelectItem key={e.value} value={e.value}>
+                  {e.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <ExerciseProgressionCharts
+          selectedExercise={selectedExercise}
+          allAnalytics={allAnalytics}
+          analyticsLoading={analyticsLoading}
+          weightLabel={weightLabel}
+          dLabel={dLabel}
+        />
+      </>
+    );
+
   return (
     <Card data-testid="card-exercise-progression">
       <CardHeader>
@@ -81,48 +126,8 @@ export function ExerciseProgressionTab({ dateParams }: ExerciseProgressionTabPro
           <div className="flex items-center justify-center py-8">
             <LoadingSpinner iconClassName="h-6 w-6" />
           </div>
-        ) : availableExercises.length === 0 ? (
-          <div className="text-center py-8 space-y-3" data-testid="text-no-progression">
-            <Activity className="h-10 w-10 mx-auto text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">
-              Your exercise progression lines appear here once you&apos;ve logged a few structured
-              workouts — weights, reps, and times across sessions.
-            </p>
-            <Button variant="outline" asChild>
-              <Link href="/log" data-testid="button-log-workout-from-progression">
-                <Dumbbell className="h-4 w-4 mr-2" aria-hidden="true" />
-                Log a Workout
-              </Link>
-            </Button>
-          </div>
         ) : (
-          <>
-            <div className="mb-6">
-              <Select value={selectedExercise || undefined} onValueChange={setSelectedExercise}>
-                <SelectTrigger
-                  data-testid="select-exercise-progression"
-                  aria-label="Select an exercise to view progression"
-                >
-                  <SelectValue placeholder="Select an exercise..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableExercises.map((e) => (
-                    <SelectItem key={e.value} value={e.value}>
-                      {e.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <ExerciseProgressionCharts
-              selectedExercise={selectedExercise}
-              allAnalytics={allAnalytics}
-              analyticsLoading={analyticsLoading}
-              weightLabel={weightLabel}
-              dLabel={dLabel}
-            />
-          </>
+          loadedContent
         )}
       </CardContent>
     </Card>
