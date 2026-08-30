@@ -23,9 +23,26 @@ export function NutritionInsightsPanel() {
   const showInitialSpinner = (query.isLoading || isGenerating) && !hasInsights;
 
   const buttonLabel = () => {
-    if (isGenerating) return (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing…</>);
-    if (hasInsights) return (<><RefreshCw className="mr-2 h-4 w-4" />Regenerate</>);
-    return (<><Sparkles className="mr-2 h-4 w-4" />Generate insights</>);
+    if (isGenerating)
+      return (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Analyzing…
+        </>
+      );
+    if (hasInsights)
+      return (
+        <>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Regenerate
+        </>
+      );
+    return (
+      <>
+        <Sparkles className="mr-2 h-4 w-4" />
+        Generate insights
+      </>
+    );
   };
 
   const body = () => {
@@ -77,6 +94,7 @@ export function NutritionInsightsPanel() {
               size="sm"
               onClick={() => regenerate.mutate()}
               disabled={isGenerating}
+              aria-busy={isGenerating}
               data-testid="button-generate-nutrition-insights"
             >
               {buttonLabel()}
