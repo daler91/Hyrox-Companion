@@ -242,12 +242,17 @@ protectedPatch(router, "/api/v1/plans/:id/goal", { limiter: rateLimiter("planUpd
 
 protectedPatch(router, "/api/v1/plans/:id/retirement", { limiter: rateLimiter("planUpdate", 20), middleware: [validateBody(updateTrainingPlanRetirementSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanRetirement>, res: Response) => {
     const userId = getUserId(req);
-    const plan = await storage.plans.getTrainingPlan(req.params.id, userId);
+    // ⚡ Bolt Performance Optimization:
+    // Fetch plan and user concurrently via Promise.all since the user query
+    // does not depend on the plan query, saving a sequential round-trip.
+    const [plan, user] = await Promise.all([
+      storage.plans.getTrainingPlan(req.params.id, userId),
+      storage.users.getUser(userId),
+    ]);
     if (!plan) {
       return sendNotFound(res, "Training plan not found");
     }
 
-    const user = await storage.users.getUser(userId);
     const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
 
     if (req.body.retiredOn === null) {
