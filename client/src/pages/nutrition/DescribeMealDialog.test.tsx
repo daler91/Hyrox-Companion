@@ -6,20 +6,18 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { captureAuthState } from "@/test/support/imageCaptureMocks";
 
 import { DescribeMealDialog } from "./DescribeMealDialog";
 
-vi.mock("@/lib/api", () => ({
-  api: { nutrition: { parseMealText: vi.fn() }, preferences: { update: vi.fn() } },
-  QUERY_KEYS: { authUser: ["/api/v1/auth/user"] },
-}));
-
-// The consent gate reads this; default to consented so the parse tests run
-// unobstructed, and flip it per-test to exercise the gate.
-const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
-vi.mock("@/hooks/useAuth", () => ({
-  useIsAiCoachEnabled: () => authState.aiCoachEnabled,
-}));
+vi.mock("@/lib/api", async () =>
+  (await import("@/test/support/imageCaptureMocks")).makeCaptureApiMock({
+    parseMealText: vi.fn(),
+  }),
+);
+vi.mock("@/hooks/useAuth", async () =>
+  (await import("@/test/support/imageCaptureMocks")).makeCaptureAuthMock(),
+);
 
 const PARSED: ParseMealResponse = {
   rawInput: "2 eggs",
@@ -40,9 +38,7 @@ const PARSED: ParseMealResponse = {
 
 function renderDialog(onParsed: (r: ParseMealResponse) => void, onOpenChange = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const ui: ReactNode = (
-    <DescribeMealDialog open onOpenChange={onOpenChange} onParsed={onParsed} />
-  );
+  const ui: ReactNode = <DescribeMealDialog open onOpenChange={onOpenChange} onParsed={onParsed} />;
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
   return { onOpenChange };
 }
@@ -50,7 +46,7 @@ function renderDialog(onParsed: (r: ParseMealResponse) => void, onOpenChange = v
 describe("DescribeMealDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authState.aiCoachEnabled = true;
+    captureAuthState.aiCoachEnabled = true;
   });
 
   it("parses the typed meal and hands the result to onParsed", async () => {
@@ -73,7 +69,7 @@ describe("DescribeMealDialog", () => {
 
   it("gates parsing behind AI consent and resumes with the typed text after accepting", async () => {
     const user = userEvent.setup();
-    authState.aiCoachEnabled = false;
+    captureAuthState.aiCoachEnabled = false;
     vi.mocked(api.preferences.update).mockResolvedValue({} as never);
     vi.mocked(api.nutrition.parseMealText).mockResolvedValue(PARSED);
     const onParsed = vi.fn();
@@ -95,7 +91,7 @@ describe("DescribeMealDialog", () => {
 
   it("keeps the dialog and typed text when consent is declined", async () => {
     const user = userEvent.setup();
-    authState.aiCoachEnabled = false;
+    captureAuthState.aiCoachEnabled = false;
     renderDialog(vi.fn());
 
     await user.type(screen.getByTestId("input-describe-meal"), "2 eggs");

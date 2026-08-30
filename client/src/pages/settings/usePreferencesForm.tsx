@@ -12,12 +12,10 @@ import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
 import {
-  type ActivityLevelValue,
   ageInputToSnapshot,
   DEFAULT_PREFERENCES_DRAFT,
   DEFAULT_PREFERENCES_SNAPSHOT,
   draftToSnapshot,
-  mafHrDataAvailableInputToSnapshot,
   type PreferencesDraft,
   type PreferencesSnapshot,
   preferencesToDraft,
@@ -26,7 +24,6 @@ import {
   savePayloadToSnapshot,
   snapshotToDraft,
   snapshotToSavePayload,
-  type WeightGoalDirectionValue,
 } from "./preferencesSnapshot";
 
 const STYLE_AUDIT_STORAGE_KEY = "fitai-settings-style-audit";
@@ -160,7 +157,6 @@ export function usePreferencesForm() {
     // until they answer it — the save payload omits the proxy fields entirely,
     // so saving other settings never disturbs them (audit M6).
     const mafCategory = draft.mafCategoryInput || null;
-    const mafHrDataAvailable = mafHrDataAvailableInputToSnapshot(draft.mafHrDataAvailableInput);
     const hasValidMafInputs = mafAge != null && mafAge >= 16 && mafAge <= 99 && mafCategory != null;
 
     if (draft.trainingStyleId === "maf_method" && !hasValidMafInputs) {
@@ -178,9 +174,10 @@ export function usePreferencesForm() {
       : null;
     const committedStyleId = baselineSnapshotRef.current?.trainingStyleId ?? "balanced_default";
     const styleChanged = draft.trainingStyleId !== committedStyleId;
-    const maf = draft.trainingStyleId === "maf_method" && hasValidMafInputs
-      ? calculateMafHr({ age: mafAge, category: mafCategory })
-      : null;
+    const maf =
+      draft.trainingStyleId === "maf_method" && hasValidMafInputs
+        ? calculateMafHr({ age: mafAge, category: mafCategory })
+        : null;
     pendingStyleAuditRef.current = styleChanged
       ? {
           changedAtIso: new Date().toISOString(),
@@ -189,40 +186,18 @@ export function usePreferencesForm() {
           recalculations: buildRecalculationSummary(draft.trainingStyleId),
         }
       : null;
+    // The recurring field mappings live in snapshotToSavePayload; only the
+    // save-time-only style/MAF bookkeeping is added here.
     saveMutation.mutate({
-      weightUnit: draft.weightUnit,
-      distanceUnit: draft.distanceUnit,
-      division: draft.division,
-      gender: draft.gender,
-      age: ageInputToSnapshot(draft.ageInput),
-      bodyweightKg: draft.bodyweightKg,
-      heightCm: draft.heightCm,
-      restingHr: ageInputToSnapshot(draft.restingHrInput),
-      maxHr: ageInputToSnapshot(draft.maxHrInput),
-      ftp: ageInputToSnapshot(draft.ftpInput),
-      activityLevel: (draft.activityLevel || null) as ActivityLevelValue | null,
-      weightGoalDirection: (draft.weightGoalDirection || null) as WeightGoalDirectionValue | null,
-      weightGoalRateKgPerWeek: draft.weightGoalRateKgPerWeek,
-      weeklyGoal: Number.parseInt(draft.weeklyGoal, 10),
-      // Emptied box clears the remembered constraints — a resolved injury has
-      // to be forgettable, not just editable.
-      trainingConstraints: draft.trainingConstraints.trim() || null,
-      mealSchedule: draft.mealSchedule,
-      emailNotifications: draft.emailNotifications,
-      emailWeeklySummary: draft.emailWeeklySummary,
-      emailMissedReminder: draft.emailMissedReminder,
-      showAdherenceInsights: draft.showAdherenceInsights,
-      aiCoachEnabled: draft.aiCoachEnabled,
-      coachAutoApplyPlanChanges: draft.coachAutoApplyPlanChanges,
-      trainingStyleId: draft.trainingStyleId,
+      ...snapshotToSavePayload(draftToSnapshot(draft)),
       trainingStylePreviousId: styleChanged ? committedStyleId : undefined,
       trainingStyleChangedAt: styleChanged ? new Date().toISOString() : undefined,
       trainingStyleRecomputeNow: styleChanged,
-      mafAge,
-      mafCategory,
-      mafHrDataAvailable,
       mafHr: draft.trainingStyleId === "maf_method" ? maf?.ceiling : undefined,
-      mafBaselineTestScheduledAt: styleChanged && draft.trainingStyleId === "maf_method" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined,
+      mafBaselineTestScheduledAt:
+        styleChanged && draft.trainingStyleId === "maf_method"
+          ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          : undefined,
     });
   }, [saveMutation, draft, toast]);
 

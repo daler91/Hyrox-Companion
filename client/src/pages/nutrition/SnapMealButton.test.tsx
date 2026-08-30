@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
-import { uploadCompressedPhoto } from "@/test/support/imageCaptureMocks";
+import { captureAuthState, uploadCompressedPhoto } from "@/test/support/imageCaptureMocks";
 
 import { SnapMealButton } from "./SnapMealButton";
 
@@ -16,11 +16,9 @@ vi.mock("@/lib/api", async () =>
   }),
 );
 vi.mock("@/lib/image", () => ({ compressImage: vi.fn() }));
-
-const authState = vi.hoisted(() => ({ aiCoachEnabled: true }));
-vi.mock("@/hooks/useAuth", () => ({
-  useIsAiCoachEnabled: () => authState.aiCoachEnabled,
-}));
+vi.mock("@/hooks/useAuth", async () =>
+  (await import("@/test/support/imageCaptureMocks")).makeCaptureAuthMock(),
+);
 
 const PARSED: ParseMealResponse = {
   rawInput: "[photo]",
@@ -48,7 +46,7 @@ function renderButton(onParsed: (r: ParseMealResponse) => void) {
 describe("SnapMealButton", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authState.aiCoachEnabled = true;
+    captureAuthState.aiCoachEnabled = true;
   });
 
   it("compresses the chosen photo, parses it, and hands the result to onParsed", async () => {
@@ -66,7 +64,7 @@ describe("SnapMealButton", () => {
 
   it("holds the photo behind the consent dialog and parses it after accepting", async () => {
     const user = userEvent.setup();
-    authState.aiCoachEnabled = false;
+    captureAuthState.aiCoachEnabled = false;
     vi.mocked(api.preferences.update).mockResolvedValue({} as never);
     vi.mocked(api.nutrition.parseMealPhoto).mockResolvedValue(PARSED);
     const onParsed = vi.fn();

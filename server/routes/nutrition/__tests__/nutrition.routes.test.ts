@@ -123,6 +123,14 @@ describe("nutrition routes", () => {
     vi.mocked(storage.nutrition.getMealTargetOverrides).mockResolvedValue(new Map());
   });
 
+  // GET the summary for the fixture date, asserting the 200 every summary
+  // test expects, and hand back the response for body assertions.
+  async function getSummary() {
+    const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
+    expect(res.status).toBe(200);
+    return res;
+  }
+
   describe("POST /logs", () => {
     it("computes logDate server-side from the user's timezone", async () => {
       vi.mocked(storage.nutrition.getVisibleFoodById).mockResolvedValue({ id: "food1" });
@@ -195,8 +203,7 @@ describe("nutrition routes", () => {
 
     it("returns totals + per-meal entries for a date", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.totals.calories).toBe(89);
       expect(res.body.meals.breakfast).toHaveLength(1);
     });
@@ -208,8 +215,7 @@ describe("nutrition routes", () => {
 
     it("returns a null effectiveTarget when the user has no target", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([row]);
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.effectiveTarget).toBeNull();
       // No target ⇒ no per-meal targets either.
       expect(res.body.mealTargets).toBeNull();
@@ -232,9 +238,7 @@ describe("nutrition routes", () => {
         { calories: 600 },
       ] as never);
 
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       // BMR 1730 × 1.2 + 600 measured = 2676 out vs 89 kcal logged.
       expect(res.body.energy).toMatchObject({ basis: "measured", outKcal: 2676, inKcal: 89 });
     });
@@ -245,8 +249,7 @@ describe("nutrition routes", () => {
         id: "t1", userId: "test_user", calories: 2000, proteinG: 150, carbG: 200, fatG: 60,
         periodizationEnabled: false, referenceUtss: null, carbGramsPerUtss: null, effectiveFrom: "2026-06-01",
       });
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.effectiveTarget).toMatchObject({ carbG: 200, carbDeltaG: 0, scaled: false });
       // Flat target ⇒ no UTSS/periodisation computation (no exercise-set read), but
       // per-meal targets still need the day's session, so the cheap lookup runs.
@@ -263,8 +266,7 @@ describe("nutrition routes", () => {
       vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mockResolvedValue([]);
       vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
       vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       // No logged workouts ⇒ UTSS 0; the scaling path still runs (scaled: true).
       expect(res.body.effectiveTarget).toMatchObject({ scaled: true, utss: 0, carbDeltaG: 0, carbG: 200 });
       expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith(
@@ -287,8 +289,7 @@ describe("nutrition routes", () => {
         { date: "2026-06-07", duration: 60, rpe: 6 },
       ] as never);
 
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets).not.toBeNull();
       expect(res.body.mealTargets.breakfast.role).toBe("post_workout_recovery");
       expect(res.body.mealTargets.pre_workout).toBeDefined();
@@ -299,8 +300,7 @@ describe("nutrition routes", () => {
     it("builds rest-day per-meal targets when nothing is scheduled or logged", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
       vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets).not.toBeNull();
       expect(res.body.mealTargets.pre_workout).toBeUndefined();
       expect(res.body.mealTargets.breakfast.role).toBe("standard");
@@ -315,8 +315,7 @@ describe("nutrition routes", () => {
         { focus: "Run", expectedDurationMin: 60, expectedRpe: 8 },
       ]);
 
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets.breakfast.role).toBe("post_workout_recovery");
       expect(res.body.mealTargets.pre_workout).toBeDefined();
       expect(storage.analytics.getPlannedDaysForDate).toHaveBeenCalledWith("test_user", "2026-06-07");
@@ -330,8 +329,7 @@ describe("nutrition routes", () => {
         { focus: "Run", expectedDurationMin: 60, expectedRpe: 6, plannedTimeOfDayMin: 720 }, // 12:00 local
       ]);
 
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets.lunch.role).toBe("post_workout_recovery");
       expect(res.body.mealTargets.pre_workout).toBeUndefined();
     });
@@ -345,8 +343,7 @@ describe("nutrition routes", () => {
         { date: "2026-06-07", duration: 60, rpe: 6, startedAt: new Date("2026-06-07T23:30:00Z") },
       ] as never);
 
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets.dinner.role).toBe("post_workout_recovery");
       expect(res.body.mealTargets.pre_workout).toBeUndefined();
     });
@@ -355,8 +352,7 @@ describe("nutrition routes", () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
       vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75, mealSchedule: 5 });
       vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets.snack_pm).toBeDefined();
     });
 
@@ -364,8 +360,7 @@ describe("nutrition routes", () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([]);
       vi.mocked(storage.users.getUser).mockResolvedValue({ userTimezone: "America/Chicago", bodyweightKg: 75, mealSchedule: 3 });
       vi.mocked(storage.nutrition.getCurrentTarget).mockResolvedValue(FLAT_TARGET);
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets.snack).toBeUndefined();
       expect(res.body.mealTargets.dinner.role).toBe("flex_remainder");
     });
@@ -376,8 +371,7 @@ describe("nutrition routes", () => {
       vi.mocked(storage.nutrition.getMealTargetOverrides).mockResolvedValue(
         new Map([["dinner", { mealType: "dinner", calories: null, proteinG: null, carbG: 123, fatG: null }]]) as never,
       );
-      const res = await request(app).get("/api/v1/nutrition/summary?date=2026-06-07");
-      expect(res.status).toBe(200);
+      const res = await getSummary();
       expect(res.body.mealTargets.dinner.carbG).toBe(123);
       expect(res.body.mealTargets.dinner.reasonCodes).toContain("user_override");
     });

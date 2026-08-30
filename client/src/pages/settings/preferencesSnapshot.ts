@@ -38,31 +38,30 @@ export type SavePayload = Omit<
   weeklyGoal: number;
 };
 
-export interface PreferencesSnapshot
-  extends Omit<
-    UserPreferences,
-    | "weeklyGoal"
-    | "userTimezone"
-    | "pushRefuelReminder"
-    | "pushLoggingReminder"
-    | "trainingStyleId"
-    | "age"
-    | "mafAge"
-    | "mafInjuryIllnessMedication"
-    | "mafConsistency"
-    | "mafTrend"
-    | "mafCategory"
-    | "mafHrDataAvailable"
-    | "bodyweightKg"
-    | "heightCm"
-    | "restingHr"
-    | "maxHr"
-    | "ftp"
-    | "activityLevel"
-    | "weightGoalDirection"
-    | "weightGoalRateKgPerWeek"
-    | "trainingConstraints"
-  > {
+export interface PreferencesSnapshot extends Omit<
+  UserPreferences,
+  | "weeklyGoal"
+  | "userTimezone"
+  | "pushRefuelReminder"
+  | "pushLoggingReminder"
+  | "trainingStyleId"
+  | "age"
+  | "mafAge"
+  | "mafInjuryIllnessMedication"
+  | "mafConsistency"
+  | "mafTrend"
+  | "mafCategory"
+  | "mafHrDataAvailable"
+  | "bodyweightKg"
+  | "heightCm"
+  | "restingHr"
+  | "maxHr"
+  | "ftp"
+  | "activityLevel"
+  | "weightGoalDirection"
+  | "weightGoalRateKgPerWeek"
+  | "trainingConstraints"
+> {
   weeklyGoal: string;
   /** Empty string rather than null, so the textarea stays controlled. */
   trainingConstraints: string;
@@ -131,7 +130,9 @@ export function mafHrDataAvailableInputToSnapshot(value: MafHrDataAvailableInput
   return value === "yes";
 }
 
-export function mafHrDataAvailableToInput(value: boolean | null | undefined): MafHrDataAvailableInput {
+export function mafHrDataAvailableToInput(
+  value: boolean | null | undefined,
+): MafHrDataAvailableInput {
   if (value == null) {
     return "";
   }
@@ -204,35 +205,10 @@ export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
 export const DEFAULT_PREFERENCES_SNAPSHOT: PreferencesSnapshot =
   draftToSnapshot(DEFAULT_PREFERENCES_DRAFT);
 
+// Normalization (defaults for absent fields) lives in preferencesToSnapshot;
+// the snapshot→draft step turns numerics into input strings.
 export function preferencesToDraft(preferences: UserPreferences): PreferencesDraft {
-  return {
-    trainingConstraints: preferences.trainingConstraints ?? "",
-    weightUnit: preferences.weightUnit || "kg",
-    distanceUnit: preferences.distanceUnit || "km",
-    division: preferences.division || "open",
-    gender: preferences.gender ?? "prefer_not_to_say",
-    ageInput: preferences.age == null ? "" : String(preferences.age),
-    bodyweightKg: preferences.bodyweightKg ?? null,
-    heightCm: preferences.heightCm ?? null,
-    restingHrInput: preferences.restingHr == null ? "" : String(preferences.restingHr),
-    maxHrInput: preferences.maxHr == null ? "" : String(preferences.maxHr),
-    ftpInput: preferences.ftp == null ? "" : String(preferences.ftp),
-    activityLevel: preferences.activityLevel ?? "",
-    weightGoalDirection: preferences.weightGoalDirection ?? "",
-    weightGoalRateKgPerWeek: preferences.weightGoalRateKgPerWeek ?? null,
-    weeklyGoal: String(preferences.weeklyGoal || 5),
-    mealSchedule: preferences.mealSchedule ?? 4,
-    emailNotifications: preferences.emailNotifications ?? false,
-    emailWeeklySummary: preferences.emailWeeklySummary ?? false,
-    emailMissedReminder: preferences.emailMissedReminder ?? false,
-    showAdherenceInsights: preferences.showAdherenceInsights ?? true,
-    aiCoachEnabled: preferences.aiCoachEnabled ?? false,
-    coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
-    trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
-    mafAgeInput: preferences.mafAge == null ? "" : String(preferences.mafAge),
-    mafCategoryInput: preferences.mafCategory ?? "",
-    mafHrDataAvailableInput: mafHrDataAvailableToInput(preferences.mafHrDataAvailable),
-  };
+  return snapshotToDraft(preferencesToSnapshot(preferences));
 }
 
 export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft {
@@ -266,7 +242,12 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
   };
 }
 
-export function preferencesToSnapshot(preferences: UserPreferences): PreferencesSnapshot {
+// Accepts a SavePayload too: it shares every field read here (it only strips
+// server-owned fields like userTimezone and re-types weeklyGoal), so the
+// same normalization covers both server state and outgoing saves.
+export function preferencesToSnapshot(
+  preferences: UserPreferences | SavePayload,
+): PreferencesSnapshot {
   return {
     trainingConstraints: preferences.trainingConstraints ?? "",
     weightUnit: preferences.weightUnit || "kg",
@@ -298,34 +279,10 @@ export function preferencesToSnapshot(preferences: UserPreferences): Preferences
 }
 
 export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot {
-  return {
-    trainingConstraints: payload.trainingConstraints ?? "",
-    weightUnit: payload.weightUnit,
-    distanceUnit: payload.distanceUnit,
-    division: payload.division ?? "open",
-    gender: payload.gender ?? "prefer_not_to_say",
-    age: payload.age ?? null,
-    bodyweightKg: payload.bodyweightKg ?? null,
-    heightCm: payload.heightCm ?? null,
-    restingHr: payload.restingHr ?? null,
-    maxHr: payload.maxHr ?? null,
-    ftp: payload.ftp ?? null,
-    activityLevel: payload.activityLevel ?? null,
-    weightGoalDirection: payload.weightGoalDirection ?? null,
-    weightGoalRateKgPerWeek: payload.weightGoalRateKgPerWeek ?? null,
-    weeklyGoal: String(payload.weeklyGoal),
-    mealSchedule: payload.mealSchedule ?? 4,
-    emailNotifications: payload.emailNotifications,
-    emailWeeklySummary: payload.emailWeeklySummary,
-    emailMissedReminder: payload.emailMissedReminder,
-    showAdherenceInsights: payload.showAdherenceInsights,
-    aiCoachEnabled: payload.aiCoachEnabled,
-    coachAutoApplyPlanChanges: payload.coachAutoApplyPlanChanges,
-    trainingStyleId: payload.trainingStyleId ?? "balanced_default",
-    mafAge: payload.mafAge ?? null,
-    mafCategory: (payload.mafCategory as PreferencesSnapshot["mafCategory"]) ?? null,
-    mafHrDataAvailable: payload.mafHrDataAvailable ?? null,
-  };
+  // weeklyGoal keeps the payload's exact number (no `|| 5` re-defaulting):
+  // the baseline must mirror what was actually sent so dirty-tracking
+  // compares the draft against committed values.
+  return { ...preferencesToSnapshot(payload), weeklyGoal: String(payload.weeklyGoal) };
 }
 
 export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayload {

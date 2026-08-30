@@ -18,15 +18,12 @@ import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ResponsiveSheet } from "@/components/ui/responsive-sheet";
 import { StructureBlocksEditor } from "@/components/workout-structure";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { useWorkoutDetail } from "@/hooks/useWorkoutDetail";
 import { featureFlags } from "@/lib/featureFlags";
 import { apiRequest } from "@/lib/queryClient";
-import { formatScheduledDate } from "@/lib/timelineEntryFormat";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { EditableWorkoutTitle } from "./EditableWorkoutTitle";
@@ -41,23 +38,12 @@ import { WorkoutContentsLayout } from "./shared/WorkoutContentsLayout";
 import { WorkoutEffortNotes } from "./shared/WorkoutEffortNotes";
 import { WorkoutPlanDayPicker } from "./shared/WorkoutPlanDayPicker";
 import { buildWorkoutSummaryStats, WorkoutSummaryHeader } from "./shared/WorkoutSummaryHeader";
-import {
-  getWorkoutCoachPanelState,
-  WorkoutCoachChatPanel,
-  WorkoutCoachLayout,
-} from "./WorkoutCoachPanel";
+import { type WorkoutCoachChatProps, WorkoutCoachSheet } from "./WorkoutCoachPanel";
 
-interface ReviewSurfaceProps {
+interface ReviewSurfaceProps extends WorkoutCoachChatProps {
   readonly entry: TimelineEntry | null;
   readonly onClose: () => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
-  readonly coachChatOpen?: boolean;
-  readonly coachChatNonce?: number;
-  readonly coachSeedText?: string;
-  readonly mobileCoachPanelOpen?: boolean;
-  readonly onCloseCoachChat?: () => void;
-  readonly onShowCoachPanel?: () => void;
-  readonly onShowWorkoutDetails?: () => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
   readonly onRenameTitle?: (entry: TimelineEntry, title: string) => void;
@@ -136,20 +122,13 @@ export function ReviewSurface({
   entry,
   onClose,
   onAskCoach,
-  coachChatOpen = false,
-  coachChatNonce,
-  coachSeedText,
-  mobileCoachPanelOpen = false,
-  onCloseCoachChat,
-  onShowCoachPanel,
-  onShowWorkoutDetails,
   onMarkPlanned,
   onDelete,
   onRenameTitle,
   isRenamingTitle = false,
   showCompletionSuccess = false,
+  ...coachChat
 }: ReviewSurfaceProps) {
-  const isMobile = useIsMobile();
   const { weightUnit: prefWeightUnit, distanceUnit, showAdherenceInsights } = useUnitPreferences();
   const weightUnit = getWeightUnit(prefWeightUnit);
 
@@ -198,8 +177,6 @@ export function ReviewSurface({
 
   const isStrava = entry.source === "strava";
   const canEditActuals = !isStrava && !!workoutLogId;
-  const sheetContentClassName = getReviewSheetContentClassName(coachChatOpen);
-  const coachPanel = getWorkoutCoachPanelState({ coachChatOpen, isMobile, mobileCoachPanelOpen });
 
   const handleRpeChange = (next: number | null) => {
     if (!workoutLogId) return;
@@ -226,7 +203,9 @@ export function ReviewSurface({
   };
 
   return (
-    <ResponsiveSheet
+    <WorkoutCoachSheet
+      {...coachChat}
+      entry={entry}
       open={!!entry}
       onOpenChange={(open) => {
         if (!open) onClose();
@@ -247,60 +226,41 @@ export function ReviewSurface({
           />
         </span>
       }
-      description={formatScheduledDate(entry.date)}
-      contentClassName={sheetContentClassName}
-      mobileFullHeight={coachPanel.coachPanelOpen}
-      desktopFullHeight={coachChatOpen}
+      narrowContentClassName="sm:max-w-2xl"
+      currentCoachSeedText={currentCoachSeedText}
       testId={`review-surface-${entry.id}`}
+      detailsTestId={`review-details-${entry.id}`}
+      returnTestId={`review-return-to-coach-${entry.id}`}
     >
-      <WorkoutCoachLayout
-        panelState={coachPanel}
-        detailsTestId={`review-details-${entry.id}`}
-        returnTestId={`review-return-to-coach-${entry.id}`}
-        onShowCoachPanel={onShowCoachPanel}
-        chat={
-          <WorkoutCoachChatPanel
-            entry={entry}
-            coachChatOpen={coachChatOpen}
-            coachChatNonce={coachChatNonce}
-            coachSeedText={coachSeedText}
-            currentCoachSeedText={currentCoachSeedText}
-            panelState={coachPanel}
-            onCloseCoachChat={onCloseCoachChat}
-            onShowWorkoutDetails={onShowWorkoutDetails}
-          />
-        }
-      >
-        <CompletionSuccessCallout visible={showCompletionSuccess} />
-        <ReviewDetailsColumn
-          entry={displayEntry}
-          detail={detail}
-          workoutLogId={workoutLogId}
-          exerciseSets={exerciseSets}
-          structureBlocks={structureBlocks}
-          rpe={rpe}
-          notes={notes}
-          isStrava={isStrava}
-          canEditActuals={canEditActuals}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
-          showPlannedDiffs={showAdherenceInsights}
-          reviewFlag={reviewFlag}
-          deleteConfirmOpen={deleteConfirmOpen}
-          currentCoachSeedText={currentCoachSeedText}
-          timeOfDayMin={workout?.timeOfDayMin ?? null}
-          onRpeChange={handleRpeChange}
-          onSaveNote={handleSaveNote}
-          onTimeOfDayChange={canSetTimeOfDay ? handleTimeOfDayChange : undefined}
-          onAskCoach={onAskCoach}
-          onMarkPlanned={onMarkPlanned}
-          onDelete={onDelete}
-          onDeleteConfirmOpenChange={setDeleteConfirmOpen}
-          onDeleteConfirm={handleDeleteConfirm}
-          onResolveReview={resolveReview}
-        />
-      </WorkoutCoachLayout>
-    </ResponsiveSheet>
+      <CompletionSuccessCallout visible={showCompletionSuccess} />
+      <ReviewDetailsColumn
+        entry={displayEntry}
+        detail={detail}
+        workoutLogId={workoutLogId}
+        exerciseSets={exerciseSets}
+        structureBlocks={structureBlocks}
+        rpe={rpe}
+        notes={notes}
+        isStrava={isStrava}
+        canEditActuals={canEditActuals}
+        weightUnit={weightUnit}
+        distanceUnit={distanceUnit}
+        showPlannedDiffs={showAdherenceInsights}
+        reviewFlag={reviewFlag}
+        deleteConfirmOpen={deleteConfirmOpen}
+        currentCoachSeedText={currentCoachSeedText}
+        timeOfDayMin={workout?.timeOfDayMin ?? null}
+        onRpeChange={handleRpeChange}
+        onSaveNote={handleSaveNote}
+        onTimeOfDayChange={canSetTimeOfDay ? handleTimeOfDayChange : undefined}
+        onAskCoach={onAskCoach}
+        onMarkPlanned={onMarkPlanned}
+        onDelete={onDelete}
+        onDeleteConfirmOpenChange={setDeleteConfirmOpen}
+        onDeleteConfirm={handleDeleteConfirm}
+        onResolveReview={resolveReview}
+      />
+    </WorkoutCoachSheet>
   );
 }
 
@@ -832,11 +792,6 @@ function ReviewActionButtons({
 function getWeightUnit(prefWeightUnit: "kg" | "lbs"): WeightUnit {
   if (prefWeightUnit === "kg") return "kg";
   return "lb";
-}
-
-function getReviewSheetContentClassName(coachChatOpen: boolean): string {
-  if (coachChatOpen) return "sm:max-w-5xl";
-  return "sm:max-w-2xl";
 }
 
 function getResolvedReviewStatus(action: MigrationReviewAction): string {
