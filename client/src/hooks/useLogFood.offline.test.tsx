@@ -1,13 +1,15 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { QueryClient } from "@tanstack/react-query";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  makeWrapper,
+  offlineMocks,
+  setOnline,
+} from "@/test/support/offlineMutationHarness";
 
 const mocks = vi.hoisted(() => ({
   createLog: vi.fn(),
-  enqueueMutation: vi.fn(),
-  createOfflineMutationId: vi.fn(() => "queued-id"),
-  toast: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -20,11 +22,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
     },
   };
 });
-vi.mock("@/lib/offlineQueue", () => ({
-  enqueueMutation: mocks.enqueueMutation,
-  createOfflineMutationId: mocks.createOfflineMutationId,
-}));
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
+vi.mock("@/lib/offlineQueue", async () =>
+  (await import("@/test/support/offlineMutationHarness")).makeOfflineQueueMock(),
+);
+vi.mock("@/hooks/use-toast", async () =>
+  (await import("@/test/support/offlineMutationHarness")).makeOfflineToastMock(),
+);
 
 let queryClient: QueryClient;
 vi.mock("@/lib/queryClient", async (importOriginal) => ({
@@ -43,18 +46,12 @@ const input = {
   loggedAt: "2026-05-16T08:00:00.000Z",
 };
 
-function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-}
-
-function setOnline(online: boolean) {
-  Object.defineProperty(globalThis.navigator, "onLine", { value: online, configurable: true });
-}
+const wrapper = makeWrapper(() => queryClient);
 
 describe("useLogFood offline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createOfflineMutationId.mockReturnValue("queued-id");
+    offlineMocks.createOfflineMutationId.mockReturnValue("queued-id");
     queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     setOnline(true);
   });
@@ -70,8 +67,8 @@ describe("useLogFood offline", () => {
     });
 
     expect(mocks.createLog).toHaveBeenCalledWith(input, { idempotencyKey: "queued-id" });
-    expect(mocks.enqueueMutation).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Food logged" }));
+    expect(offlineMocks.enqueueMutation).not.toHaveBeenCalled();
+    expect(offlineMocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Food logged" }));
   });
 
   it("queues offline with the loggedAt preserved and a queued toast", async () => {
@@ -83,13 +80,13 @@ describe("useLogFood offline", () => {
     });
 
     expect(mocks.createLog).not.toHaveBeenCalled();
-    expect(mocks.enqueueMutation).toHaveBeenCalledWith(
+    expect(offlineMocks.enqueueMutation).toHaveBeenCalledWith(
       "POST",
       "/api/v1/nutrition/logs",
       input,
       { id: "queued-id" },
     );
-    expect(mocks.toast).toHaveBeenCalledWith(
+    expect(offlineMocks.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Food log queued" }),
     );
   });
@@ -102,6 +99,6 @@ describe("useLogFood offline", () => {
       await expect(result.current.mutateAsync(input)).rejects.toThrow("400: Bad Request");
     });
 
-    expect(mocks.enqueueMutation).not.toHaveBeenCalled();
+    expect(offlineMocks.enqueueMutation).not.toHaveBeenCalled();
   });
 });

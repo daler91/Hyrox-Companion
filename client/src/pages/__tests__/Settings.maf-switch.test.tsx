@@ -13,6 +13,57 @@ import {
   settingsHarness,
 } from "./settingsTestHarness";
 
+/** Seed a balanced-style athlete whose MAF setup fields are still unset. */
+function seedBalancedWithoutMafSetup(qc: QueryClient, over: Record<string, unknown> = {}) {
+  seedSettings(qc, {
+    weightUnit: "kg",
+    distanceUnit: "km",
+    weeklyGoal: 5,
+    emailNotifications: true,
+    emailWeeklySummary: true,
+    emailMissedReminder: true,
+    showAdherenceInsights: true,
+    aiCoachEnabled: true,
+    trainingStyleId: "balanced_default",
+    mafAge: null,
+    mafConsistency: null,
+    mafTrend: null,
+    ...over,
+  });
+}
+
+/** Pick MAF Method over Balanced, confirm, and wait for the setup modal. */
+async function switchStyleToMaf() {
+  const balancedLabels = await screen.findAllByText("Balanced");
+  fireEvent.click(balancedLabels[0]);
+  fireEvent.click(await screen.findByText("MAF Method"));
+  fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+  expect(await screen.findByRole("heading", { name: "Complete MAF setup" })).toBeInTheDocument();
+}
+
+/**
+ * Trigger a navigation attempt while dirty, expect the discard prompt, cancel
+ * it, and confirm we stayed on Settings with the unsaved draft intact.
+ */
+async function expectDiscardPromptThenCancel(triggerNavigation: () => void) {
+  triggerNavigation();
+
+  expect(
+    await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
+  ).toBeInTheDocument();
+  expect(settingsHarness.setLocation).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole("heading", { name: "Discard unsaved changes?" }),
+    ).not.toBeInTheDocument();
+  });
+  expect(screen.getByTestId("button-save-settings")).toBeInTheDocument();
+}
+
 describe("Settings MAF style switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,29 +114,11 @@ describe("Settings MAF style switch", () => {
 
   it("blocks switching to MAF and opens setup modal when required fields are missing", async () => {
     const qc = new QueryClient();
-    seedSettings(qc, {
-      weightUnit: "kg",
-      distanceUnit: "km",
-      weeklyGoal: 5,
-      emailNotifications: true,
-      emailWeeklySummary: true,
-      emailMissedReminder: true,
-      showAdherenceInsights: true,
-      aiCoachEnabled: true,
-      trainingStyleId: "balanced_default",
-      mafAge: null,
-      mafConsistency: null,
-      mafTrend: null,
-    });
+    seedBalancedWithoutMafSetup(qc);
     renderSettings(qc);
     await goToSettingsTab("training");
 
-    const balancedLabels = await screen.findAllByText("Balanced");
-    fireEvent.click(balancedLabels[0]);
-    fireEvent.click(await screen.findByText("MAF Method"));
-    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
-
-    expect(await screen.findByRole("heading", { name: "Complete MAF setup" })).toBeInTheDocument();
+    await switchStyleToMaf();
     await waitFor(() => {
       expect(screen.getByTestId("maf-switch-blocked")).toHaveTextContent(
         "Complete MAF setup to switch styles",
@@ -95,33 +128,14 @@ describe("Settings MAF style switch", () => {
 
   it("stages MAF setup locally and persists it only from Save Settings", async () => {
     const qc = new QueryClient();
-    seedSettings(qc, {
-      weightUnit: "kg",
-      distanceUnit: "km",
-      weeklyGoal: 5,
-      emailNotifications: true,
-      emailWeeklySummary: true,
-      emailMissedReminder: true,
-      showAdherenceInsights: true,
-      aiCoachEnabled: true,
-      trainingStyleId: "balanced_default",
-      mafAge: null,
-      mafConsistency: null,
-      mafTrend: null,
-      mafHrDataAvailable: null,
-    });
+    seedBalancedWithoutMafSetup(qc, { mafHrDataAvailable: null });
 
     vi.mocked(settingsHarness.updatePreferences).mockResolvedValue({});
 
     renderSettings(qc);
     await goToSettingsTab("training");
 
-    const balancedLabels = await screen.findAllByText("Balanced");
-    fireEvent.click(balancedLabels[0]);
-    fireEvent.click(await screen.findByText("MAF Method"));
-    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
-
-    expect(await screen.findByRole("heading", { name: "Complete MAF setup" })).toBeInTheDocument();
+    await switchStyleToMaf();
     // Target the MAF age input directly: the Race-profile card also renders an
     // "Age" label (W17), so a bare getByText("Age") is ambiguous here.
     expect(screen.getByTestId("maf-age-input")).toBeInTheDocument();
@@ -212,21 +226,9 @@ describe("Settings MAF style switch", () => {
 
     await makeSettingsDirty();
 
-    fireEvent.click(screen.getByText("Analytics link"));
-
-    expect(
-      await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
-    ).toBeInTheDocument();
-    expect(settingsHarness.setLocation).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("heading", { name: "Discard unsaved changes?" }),
-      ).not.toBeInTheDocument();
+    await expectDiscardPromptThenCancel(() => {
+      fireEvent.click(screen.getByText("Analytics link"));
     });
-    expect(screen.getByTestId("button-save-settings")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Analytics link"));
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
@@ -245,21 +247,9 @@ describe("Settings MAF style switch", () => {
     // on the Account tab. Switching tabs keeps the unsaved-changes state.
     await goToSettingsTab("account");
 
-    fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
-
-    expect(
-      await screen.findByRole("heading", { name: "Discard unsaved changes?" }),
-    ).toBeInTheDocument();
-    expect(settingsHarness.setLocation).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("heading", { name: "Discard unsaved changes?" }),
-      ).not.toBeInTheDocument();
+    await expectDiscardPromptThenCancel(() => {
+      fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
     });
-    expect(screen.getByTestId("button-save-settings")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("button-rerun-onboarding"));
     fireEvent.click(await screen.findByRole("button", { name: "Discard" }));

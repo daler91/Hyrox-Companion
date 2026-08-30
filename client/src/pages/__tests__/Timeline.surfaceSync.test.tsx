@@ -81,82 +81,44 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks/useTimelineState", () => ({
-  useTimelineState: () => ({
-    data: {
-      plans: [],
-      plansLoading: false,
-      personalRecords: [],
-      timelineData,
-      timelineLoading,
-      annotations: [],
-      isNewUser: false,
-      todayRef: dataMocks.todayRef,
-      scrollToToday: dataMocks.scrollToToday,
+// Base payload comes from the shared builder; only the fields this suite
+// steers (live closure state and its spies) are overridden per render.
+vi.mock("@/hooks/useTimelineState", async () => {
+  const { buildTimelineStatePayload } = await import("./timelineStatePayload");
+  return {
+    useTimelineState: () => {
+      const base = buildTimelineStatePayload(timelineData);
+      return {
+        ...base,
+        data: {
+          ...base.data,
+          timelineLoading,
+          todayRef: dataMocks.todayRef,
+          scrollToToday: dataMocks.scrollToToday,
+        },
+        filters: {
+          ...base.filters,
+          pastGroups: visiblePastGroups,
+          futureGroups: visibleFutureGroups,
+          visiblePastGroups,
+          visibleFutureGroups,
+        },
+        onboarding: { ...base.onboarding, setCoachOpen: timelineMocks.setCoachOpen },
+        planImport: {
+          ...base.planImport,
+          startDate: "2026-01-01",
+          renamePlanMutation: { isPending: false, mutate: vi.fn() },
+          schedulePlanMutation: { isPending: false, mutate: vi.fn() },
+          updatePlanGoalMutation: { isPending: false, mutate: vi.fn() },
+        },
+        workoutActions: {
+          ...base.workoutActions,
+          handleMarkComplete: workoutActionMocks.handleMarkComplete,
+        },
+      };
     },
-    filters: {
-      filterStatus: "all",
-      setFilterStatus: vi.fn(),
-      showAllPast: true,
-      setShowAllPast: vi.fn(),
-      showAllFuture: true,
-      setShowAllFuture: vi.fn(),
-      pastGroups: visiblePastGroups,
-      futureGroups: visibleFutureGroups,
-      visiblePastGroups,
-      visibleFutureGroups,
-      hiddenPastCount: 0,
-      hiddenFutureCount: 0,
-    },
-    onboarding: {
-      showOnboarding: false,
-      coachOpen: false,
-      setCoachOpen: timelineMocks.setCoachOpen,
-      handleOnboardingComplete: vi.fn(),
-    },
-    planImport: {
-      csvPreview: null,
-      setCsvPreview: vi.fn(),
-      schedulingPlanId: null,
-      setSchedulingPlanId: vi.fn(),
-      startDate: "2026-01-01",
-      setStartDate: vi.fn(),
-      fileInputRef: { current: null },
-      handleFileUpload: vi.fn(),
-      confirmImport: vi.fn(),
-      importMutation: { isPending: false },
-      samplePlanMutation: { isPending: false },
-      renamePlanMutation: { isPending: false, mutate: vi.fn() },
-      schedulePlanMutation: { isPending: false, mutate: vi.fn() },
-      updatePlanGoalMutation: { isPending: false, mutate: vi.fn() },
-      setPlanRetirementMutation: { isPending: false, mutate: vi.fn() },
-      deletePlanMutation: { isPending: false, mutate: vi.fn() },
-    },
-    workoutActions: {
-      skipConfirmEntry: null,
-      setSkipConfirmEntry: vi.fn(),
-      handleMarkComplete: workoutActionMocks.handleMarkComplete,
-      handleChangeStatus: vi.fn(),
-      handleDelete: vi.fn(),
-      confirmSkip: vi.fn(),
-      logWorkoutMutation: { isPending: false },
-      bulkDeleteWorkoutMutation: { isPending: false, mutate: vi.fn() },
-    },
-    combine: {
-      combiningEntry: null,
-      setCombiningEntry: vi.fn(),
-      combineSecondEntry: null,
-      setCombineSecondEntry: vi.fn(),
-      showCombineDialog: false,
-      setShowCombineDialog: vi.fn(),
-      handleCombine: vi.fn(),
-      handleConfirmCombine: vi.fn(),
-      combineWorkoutsMutation: { isPending: false },
-    },
-    selectedPlanId: null,
-    setSelectedPlanId: vi.fn(),
-  }),
-}));
+  };
+});
 
 vi.mock("@/components/timeline", () => ({
   TimelineDateGroup: ({
@@ -350,6 +312,42 @@ function setVisibleTimelineGroups({
   visibleFutureGroups = future;
 }
 
+/** Make handleMarkComplete immediately hand back a completed "wl1" entry. */
+function mockMarkCompleteSuccess() {
+  const completedEntry = makeEntry({
+    id: "log-wl1",
+    status: "completed",
+    workoutLogId: "wl1",
+  });
+  workoutActionMocks.handleMarkComplete.mockImplementation((
+    _entry: TimelineEntry,
+    options?: { onSuccess?: (entry: TimelineEntry) => void },
+  ) => {
+    options?.onSuccess?.(completedEntry);
+  });
+  return completedEntry;
+}
+
+/** Pin fake timers to mid-May on mobile, with no workout surface open. */
+function useMobileFakeTimersAtToday() {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
+  viewportState.isMobile = true;
+  openWorkoutId = null;
+}
+
+/** Seed one past-day and one today entry into the visible timeline groups. */
+function seedPastAndTodayGroups() {
+  const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
+  const todayEntry = makeEntry({ id: "today", date: "2026-05-15", planDayId: "today-day" });
+  timelineData = [pastEntry, todayEntry];
+  setVisibleTimelineGroups({
+    past: [["2026-05-14", [pastEntry]]],
+    future: [["2026-05-15", [todayEntry]]],
+  });
+  return { pastEntry, todayEntry };
+}
+
 function renderTimeline(queryClient = new QueryClient()) {
   queryClient.setQueryDefaults(["/api/v1/preferences"], {
     queryFn: async () => ({ weightUnit: "kg", distanceUnit: "km" }),
@@ -457,17 +455,7 @@ describe("Timeline surface sync", () => {
 
   it("hands a completed workout from the log sheet into the review surface", async () => {
     const user = userEvent.setup();
-    const completedEntry = makeEntry({
-      id: "log-wl1",
-      status: "completed",
-      workoutLogId: "wl1",
-    });
-    workoutActionMocks.handleMarkComplete.mockImplementation((
-      _entry: TimelineEntry,
-      options?: { onSuccess?: (entry: TimelineEntry) => void },
-    ) => {
-      options?.onSuccess?.(completedEntry);
-    });
+    mockMarkCompleteSuccess();
 
     renderTimeline();
 
@@ -530,17 +518,7 @@ describe("Timeline surface sync", () => {
 
   it("clears the completion-success flag when reopening a previously completed entry", async () => {
     const user = userEvent.setup();
-    const completedEntry = makeEntry({
-      id: "log-wl1",
-      status: "completed",
-      workoutLogId: "wl1",
-    });
-    workoutActionMocks.handleMarkComplete.mockImplementation((
-      _entry: TimelineEntry,
-      options?: { onSuccess?: (entry: TimelineEntry) => void },
-    ) => {
-      options?.onSuccess?.(completedEntry);
-    });
+    const completedEntry = mockMarkCompleteSuccess();
 
     const qc = new QueryClient();
     const { rerender } = renderTimeline(qc);
@@ -664,18 +642,8 @@ describe("Timeline surface sync", () => {
   });
 
   it("scrolls to today through the virtualizer and starts the convergence loop", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
-    viewportState.isMobile = true;
-    openWorkoutId = null;
-
-    const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
-    const todayEntry = makeEntry({ id: "today", date: "2026-05-15", planDayId: "today-day" });
-    timelineData = [pastEntry, todayEntry];
-    setVisibleTimelineGroups({
-      past: [["2026-05-14", [pastEntry]]],
-      future: [["2026-05-15", [todayEntry]]],
-    });
+    useMobileFakeTimersAtToday();
+    seedPastAndTodayGroups();
     virtualizerMocks.getVirtualItems.mockReturnValue([{ key: "0", index: 0, start: 0, end: 300, size: 300 }]);
 
     renderTimeline();
@@ -690,20 +658,11 @@ describe("Timeline surface sync", () => {
   });
 
   it("wires the convergence loop to the today row, the virtualizer, and the settle key", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
-    viewportState.isMobile = true;
-    openWorkoutId = null;
+    useMobileFakeTimersAtToday();
 
     dataMocks.todayRef.current = document.createElement("div");
 
-    const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
-    const todayEntry = makeEntry({ id: "today", date: "2026-05-15", planDayId: "today-day" });
-    timelineData = [pastEntry, todayEntry];
-    setVisibleTimelineGroups({
-      past: [["2026-05-14", [pastEntry]]],
-      future: [["2026-05-15", [todayEntry]]],
-    });
+    const { pastEntry, todayEntry } = seedPastAndTodayGroups();
 
     const qc = new QueryClient();
     const { rerender } = renderTimeline(qc);
@@ -745,10 +704,7 @@ describe("Timeline surface sync", () => {
   });
 
   it("does not force-scroll when today is absent from the visible timeline groups", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
-    viewportState.isMobile = true;
-    openWorkoutId = null;
+    useMobileFakeTimersAtToday();
 
     const pastEntry = makeEntry({ id: "past", date: "2026-05-14", planDayId: "past-day" });
     timelineData = [pastEntry];
@@ -766,10 +722,7 @@ describe("Timeline surface sync", () => {
   });
 
   it("retries the initial scroll when today's data arrives after an empty first load", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-15T12:00:00Z"));
-    viewportState.isMobile = true;
-    openWorkoutId = null;
+    useMobileFakeTimersAtToday();
 
     timelineData = [];
     setVisibleTimelineGroups({});

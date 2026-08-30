@@ -60,6 +60,15 @@ function renderForm(preferences = serverPreferences()) {
   return renderHook(() => usePreferencesForm(), { wrapper });
 }
 
+/** Render the form on default server preferences and wait for hydration. */
+async function renderHydratedForm() {
+  const { result } = renderForm();
+  await waitFor(() => {
+    expect(result.current.draft.weeklyGoal).toBe("5");
+  });
+  return result;
+}
+
 describe("usePreferencesForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,10 +87,7 @@ describe("usePreferencesForm", () => {
   });
 
   it("flips hasChanges on edit and back off when the edit is reverted", async () => {
-    const { result } = renderForm();
-    await waitFor(() => {
-      expect(result.current.draft.weeklyGoal).toBe("5");
-    });
+    const result = await renderHydratedForm();
 
     act(() => {
       result.current.updateField("weeklyGoal", "6");
@@ -113,10 +119,7 @@ describe("usePreferencesForm", () => {
   });
 
   it("saves the draft, resets the dirty flag, and promotes the new baseline", async () => {
-    const { result } = renderForm();
-    await waitFor(() => {
-      expect(result.current.draft.weeklyGoal).toBe("5");
-    });
+    const result = await renderHydratedForm();
 
     act(() => {
       result.current.updateField("weeklyGoal", "6");
@@ -167,10 +170,7 @@ describe("usePreferencesForm", () => {
   });
 
   it("offers Undo after save that restores and persists the previous values", async () => {
-    const { result } = renderForm();
-    await waitFor(() => {
-      expect(result.current.draft.weeklyGoal).toBe("5");
-    });
+    const result = await renderHydratedForm();
 
     act(() => {
       result.current.updateField("weeklyGoal", "7");

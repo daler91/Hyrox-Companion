@@ -42,24 +42,52 @@ function renderWithClient(ui: ReactNode) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+function makeSessionFuelling(over: Partial<SessionFuellingResponse> = {}): SessionFuellingResponse {
+  return {
+    workoutId: "w1",
+    date: "2026-06-07",
+    usedStartTime: true,
+    pre: [],
+    post: [],
+    preTotals: ZERO,
+    postTotals: ZERO,
+    ...over,
+  };
+}
+
+function makeTarget(
+  over: Partial<NonNullable<SessionFuellingResponse["target"]>> = {},
+): NonNullable<SessionFuellingResponse["target"]> {
+  return {
+    preCarbG: 30,
+    postCarbG: 60,
+    postProteinG: 25,
+    reasonCodes: [],
+    explanation: "Guidance only.",
+    ...over,
+  };
+}
+
+/** Resolve the fuelling query with `data` and render the panel for w1. */
+function renderPanel(data: SessionFuellingResponse) {
+  vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
+  renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+}
+
 describe("FuellingAroundSessionPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("shows pre/post totals when entries exist (start-time windows)", async () => {
-    const data: SessionFuellingResponse = {
-      workoutId: "w1",
-      date: "2026-06-07",
-      usedStartTime: true,
-      pre: [makeEntry("e1")],
-      post: [makeEntry("e2"), makeEntry("e3")],
-      preTotals: { calories: 200, protein: 20, carb: 40, fat: 10, fiber: 4 },
-      postTotals: { calories: 300, protein: 30, carb: 50, fat: 12, fiber: 5 },
-    };
-    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
-
-    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+    renderPanel(
+      makeSessionFuelling({
+        pre: [makeEntry("e1")],
+        post: [makeEntry("e2"), makeEntry("e3")],
+        preTotals: { calories: 200, protein: 20, carb: 40, fat: 10, fiber: 4 },
+        postTotals: { calories: 300, protein: 30, carb: 50, fat: 12, fiber: 5 },
+      }),
+    );
 
     expect(await screen.findByTestId("fuelling-pre-totals")).toHaveTextContent("200");
     expect(screen.getByTestId("fuelling-post-totals")).toHaveTextContent("30");
@@ -68,37 +96,24 @@ describe("FuellingAroundSessionPanel", () => {
   });
 
   it("shows the meal-tag fallback note when no start time was used", async () => {
-    const data: SessionFuellingResponse = {
-      workoutId: "w1",
-      date: "2026-06-07",
-      usedStartTime: false,
-      pre: [makeEntry("e1")],
-      post: [],
-      preTotals: { calories: 100, protein: 10, carb: 20, fat: 5, fiber: 2 },
-      postTotals: ZERO,
-    };
-    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
-
-    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+    renderPanel(
+      makeSessionFuelling({
+        usedStartTime: false,
+        pre: [makeEntry("e1")],
+        preTotals: { calories: 100, protein: 10, carb: 20, fat: 5, fiber: 2 },
+      }),
+    );
 
     expect(await screen.findByTestId("fuelling-fallback-note")).toBeInTheDocument();
   });
 
   it("shows the per-group empty hint and the session targets when nothing is logged", async () => {
-    const data: SessionFuellingResponse = {
-      workoutId: "w1",
-      date: "2026-06-07",
-      usedStartTime: true,
-      pre: [],
-      post: [],
-      preTotals: ZERO,
-      postTotals: ZERO,
-      target: { preCarbG: 30, postCarbG: 60, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
-      gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
-    };
-    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
-
-    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+    renderPanel(
+      makeSessionFuelling({
+        target: makeTarget(),
+        gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
+      }),
+    );
 
     // Targets are shown even when nothing is logged yet (what to aim for).
     expect(await screen.findByTestId("fuelling-post-target")).toHaveTextContent("60g");
@@ -107,20 +122,16 @@ describe("FuellingAroundSessionPanel", () => {
   });
 
   it("shows the session fuelling targets and the remaining gap", async () => {
-    const data: SessionFuellingResponse = {
-      workoutId: "w1",
-      date: "2026-06-07",
-      usedStartTime: true,
-      pre: [makeEntry("e1")],
-      post: [makeEntry("e2")],
-      preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
-      postTotals: { calories: 200, protein: 15, carb: 30, fat: 5, fiber: 2 },
-      target: { preCarbG: 30, postCarbG: 80, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
-      gap: { preCarbG: 12, postCarbG: 50, postProteinG: 10 },
-    };
-    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
-
-    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+    renderPanel(
+      makeSessionFuelling({
+        pre: [makeEntry("e1")],
+        post: [makeEntry("e2")],
+        preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
+        postTotals: { calories: 200, protein: 15, carb: 30, fat: 5, fiber: 2 },
+        target: makeTarget({ postCarbG: 80 }),
+        gap: { preCarbG: 12, postCarbG: 50, postProteinG: 10 },
+      }),
+    );
 
     expect(await screen.findByTestId("fuelling-pre-target")).toHaveTextContent("12g to go");
     const post = screen.getByTestId("fuelling-post-target");
@@ -130,20 +141,12 @@ describe("FuellingAroundSessionPanel", () => {
   });
 
   it("offers a log-recovery-meal deep link while post-session fuel is still owed", async () => {
-    const data: SessionFuellingResponse = {
-      workoutId: "w1",
-      date: "2026-06-07",
-      usedStartTime: true,
-      pre: [],
-      post: [],
-      preTotals: ZERO,
-      postTotals: ZERO,
-      target: { preCarbG: 30, postCarbG: 60, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
-      gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
-    };
-    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
-
-    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+    renderPanel(
+      makeSessionFuelling({
+        target: makeTarget(),
+        gap: { preCarbG: 30, postCarbG: 60, postProteinG: 25 },
+      }),
+    );
 
     const button = await screen.findByTestId("button-log-recovery-meal");
     button.click();
@@ -151,20 +154,16 @@ describe("FuellingAroundSessionPanel", () => {
   });
 
   it("drops the recovery-meal link once the post-session gap is covered", async () => {
-    const data: SessionFuellingResponse = {
-      workoutId: "w1",
-      date: "2026-06-07",
-      usedStartTime: true,
-      pre: [makeEntry("e1")],
-      post: [makeEntry("e2")],
-      preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
-      postTotals: { calories: 400, protein: 30, carb: 80, fat: 10, fiber: 3 },
-      target: { preCarbG: 30, postCarbG: 80, postProteinG: 25, reasonCodes: [], explanation: "Guidance only." },
-      gap: { preCarbG: 12, postCarbG: 0, postProteinG: 0 },
-    };
-    vi.mocked(api.nutrition.getSessionFuelling).mockResolvedValue(data);
-
-    renderWithClient(<FuellingAroundSessionPanel workoutLogId="w1" />);
+    renderPanel(
+      makeSessionFuelling({
+        pre: [makeEntry("e1")],
+        post: [makeEntry("e2")],
+        preTotals: { calories: 100, protein: 5, carb: 18, fat: 2, fiber: 1 },
+        postTotals: { calories: 400, protein: 30, carb: 80, fat: 10, fiber: 3 },
+        target: makeTarget({ postCarbG: 80 }),
+        gap: { preCarbG: 12, postCarbG: 0, postProteinG: 0 },
+      }),
+    );
 
     await screen.findByTestId("fuelling-post-target");
     expect(screen.queryByTestId("button-log-recovery-meal")).not.toBeInTheDocument();

@@ -1,12 +1,12 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { addDays, format } from "date-fns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useToast } from "@/hooks/use-toast";
-import * as queryClientLib from "@/lib/queryClient";
-
-import { OnboardingWizard } from "./OnboardingWizard";
+import {
+  renderOnboardingWizard,
+  resetOnboardingWizardMocks,
+} from "@/test/support/onboardingWizardHarness";
 
 // Mock child components to isolate OnboardingWizard
 vi.mock("@/components/onboarding/WelcomeStep", () => ({
@@ -77,12 +77,9 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 // We need to mock the entire lib/queryClient module including apiRequest and queryClient
-vi.mock("@/lib/queryClient", () => ({
-  apiRequest: vi.fn(),
-  queryClient: {
-    invalidateQueries: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock("@/lib/queryClient", async () =>
+  (await import("@/test/support/queryClientLibMock")).makeQueryClientLibMock(),
+);
 
 describe("OnboardingWizard Error Handling", () => {
   let queryClient: QueryClient;
@@ -90,30 +87,10 @@ describe("OnboardingWizard Error Handling", () => {
   const mockOnComplete = vi.fn();
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(async () =>
-      new Response(JSON.stringify({ success: true })),
-    );
-    vi.mocked(useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<
-      typeof useToast
-    >);
-    localStorage.clear();
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
+    queryClient = resetOnboardingWizardMocks(mockToast);
   });
 
-  const renderComponent = () => {
-    return render(
-      <QueryClientProvider client={queryClient}>
-        <OnboardingWizard open={true} onComplete={mockOnComplete} />
-      </QueryClientProvider>,
-    );
-  };
+  const renderComponent = () => renderOnboardingWizard(queryClient, mockOnComplete);
 
   it("shows error toast when preferences mutation fails", async () => {
     renderComponent();

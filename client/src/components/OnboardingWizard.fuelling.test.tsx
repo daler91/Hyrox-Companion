@@ -1,13 +1,14 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useToast } from "@/hooks/use-toast";
 import * as queryClientLib from "@/lib/queryClient";
+import {
+  renderOnboardingWizard,
+  resetOnboardingWizardMocks,
+} from "@/test/support/onboardingWizardHarness";
 import { installRadixPointerMocks } from "@/test/support/radixPointerMocks";
-
-import { OnboardingWizard } from "./OnboardingWizard";
 
 // The fuelling step only exists when the nutrition module is enabled; the
 // suite-wide default is off (vitest.config), so force it on here.
@@ -35,12 +36,9 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: vi.fn(),
 }));
 
-vi.mock("@/lib/queryClient", () => ({
-  apiRequest: vi.fn(),
-  queryClient: {
-    invalidateQueries: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock("@/lib/queryClient", async () =>
+  (await import("@/test/support/queryClientLibMock")).makeQueryClientLibMock(),
+);
 
 installRadixPointerMocks();
 
@@ -50,26 +48,10 @@ describe("OnboardingWizard fuelling step", () => {
   const mockOnComplete = vi.fn();
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(queryClientLib.queryClient.invalidateQueries).mockResolvedValue(undefined);
-    vi.mocked(queryClientLib.apiRequest).mockImplementation(async () =>
-      new Response(JSON.stringify({ success: true })),
-    );
-    vi.mocked(useToast).mockReturnValue({ toast: mockToast } as unknown as ReturnType<
-      typeof useToast
-    >);
-    localStorage.clear();
-    queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
+    queryClient = resetOnboardingWizardMocks(mockToast);
   });
 
-  const renderComponent = () =>
-    render(
-      <QueryClientProvider client={queryClient}>
-        <OnboardingWizard open={true} onComplete={mockOnComplete} />
-      </QueryClientProvider>,
-    );
+  const renderComponent = () => renderOnboardingWizard(queryClient, mockOnComplete);
 
   const walkToFuellingStep = async () => {
     fireEvent.click(screen.getByText("Get Started"));
@@ -85,16 +67,20 @@ describe("OnboardingWizard fuelling step", () => {
       .mocked(queryClientLib.apiRequest)
       .mock.calls.filter(([, url]) => url === "/api/v1/nutrition/targets");
 
-  it("saves the body profile and sets the computed targets", async () => {
-    const user = userEvent.setup();
-    renderComponent();
-    await walkToFuellingStep();
-
+  const fillCompleteProfile = async (user: ReturnType<typeof userEvent.setup>) => {
     fireEvent.change(screen.getByTestId("input-fuelling-bodyweight"), { target: { value: "80" } });
     fireEvent.change(screen.getByTestId("input-fuelling-height"), { target: { value: "180" } });
     fireEvent.change(screen.getByTestId("input-fuelling-age"), { target: { value: "30" } });
     await user.click(screen.getByTestId("select-fuelling-activity"));
     await user.click(await screen.findByText(/Moderately active/));
+  };
+
+  it("saves the body profile and sets the computed targets", async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await walkToFuellingStep();
+
+    await fillCompleteProfile(user);
 
     // A complete profile shows the live suggested-targets preview.
     expect(await screen.findByTestId("fuelling-suggested-targets")).toBeInTheDocument();
@@ -149,11 +135,7 @@ describe("OnboardingWizard fuelling step", () => {
     renderComponent();
     await walkToFuellingStep();
 
-    fireEvent.change(screen.getByTestId("input-fuelling-bodyweight"), { target: { value: "80" } });
-    fireEvent.change(screen.getByTestId("input-fuelling-height"), { target: { value: "180" } });
-    fireEvent.change(screen.getByTestId("input-fuelling-age"), { target: { value: "30" } });
-    await user.click(screen.getByTestId("select-fuelling-activity"));
-    await user.click(await screen.findByText(/Moderately active/));
+    await fillCompleteProfile(user);
     await user.click(await screen.findByTestId("switch-fuelling-apply"));
 
     fireEvent.click(screen.getByText("Continue"));

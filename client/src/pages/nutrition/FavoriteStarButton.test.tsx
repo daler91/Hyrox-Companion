@@ -28,6 +28,23 @@ function renderStar() {
   return renderWithClient(<FavoriteStarButton foodId="f1" foodName="Banana" />);
 }
 
+function renderStarWithToaster() {
+  return renderWithClient(
+    <>
+      <FavoriteStarButton foodId="f1" foodName="Banana" />
+      <Toaster />
+    </>,
+  );
+}
+
+/** Wait for the seeded favourite to hydrate the star, then click it. */
+async function clickStarOnceFavourited(user: ReturnType<typeof userEvent.setup>) {
+  await waitFor(() => {
+    expect(screen.getByTestId("favorite-toggle-f1")).toHaveAttribute("aria-pressed", "true");
+  });
+  await user.click(screen.getByTestId("favorite-toggle-f1"));
+}
+
 describe("FavoriteStarButton", () => {
   installRadixPointerMocks();
 
@@ -58,10 +75,7 @@ describe("FavoriteStarButton", () => {
     const user = userEvent.setup();
     renderStar();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("favorite-toggle-f1")).toHaveAttribute("aria-pressed", "true");
-    });
-    await user.click(screen.getByTestId("favorite-toggle-f1"));
+    await clickStarOnceFavourited(user);
 
     await waitFor(() => {
       expect(api.nutrition.removeFavorite).toHaveBeenCalledWith("f1");
@@ -88,17 +102,9 @@ describe("FavoriteStarButton", () => {
     // The DELETE route 404s when the row was already removed elsewhere.
     vi.mocked(api.nutrition.removeFavorite).mockRejectedValue(new Error("404: Favorite not found"));
     const user = userEvent.setup();
-    renderWithClient(
-      <>
-        <FavoriteStarButton foodId="f1" foodName="Banana" />
-        <Toaster />
-      </>,
-    );
+    renderStarWithToaster();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("favorite-toggle-f1")).toHaveAttribute("aria-pressed", "true");
-    });
-    await user.click(screen.getByTestId("favorite-toggle-f1"));
+    await clickStarOnceFavourited(user);
 
     await waitFor(() => {
       expect(api.nutrition.removeFavorite).toHaveBeenCalled();
@@ -111,12 +117,7 @@ describe("FavoriteStarButton", () => {
     vi.mocked(api.nutrition.listFavorites).mockResolvedValue([]);
     vi.mocked(api.nutrition.addFavorite).mockRejectedValue(new Error("500: boom"));
     const user = userEvent.setup();
-    renderWithClient(
-      <>
-        <FavoriteStarButton foodId="f1" foodName="Banana" />
-        <Toaster />
-      </>,
-    );
+    renderStarWithToaster();
 
     await user.click(screen.getByTestId("favorite-toggle-f1"));
 
@@ -127,17 +128,9 @@ describe("FavoriteStarButton", () => {
     vi.mocked(api.nutrition.listFavorites).mockResolvedValue([STARRED]);
     vi.mocked(api.nutrition.removeFavorite).mockRejectedValue(new Error("500: boom"));
     const user = userEvent.setup();
-    renderWithClient(
-      <>
-        <FavoriteStarButton foodId="f1" foodName="Banana" />
-        <Toaster />
-      </>,
-    );
+    renderStarWithToaster();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("favorite-toggle-f1")).toHaveAttribute("aria-pressed", "true");
-    });
-    await user.click(screen.getByTestId("favorite-toggle-f1"));
+    await clickStarOnceFavourited(user);
 
     expect(await screen.findByText("Couldn't update your favourites")).toBeInTheDocument();
     // The optimistic flip rolled back — the star still reads as favourited.
