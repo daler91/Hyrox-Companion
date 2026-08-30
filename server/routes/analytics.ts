@@ -215,18 +215,24 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
 
 
 router.get("/api/v1/analytics/internal/structured-exercise-health", isAuthenticated, rateLimiter("internalAnalytics", 5), requireInternalAnalyticsSecret, asyncHandler(async (_req, res) => {
-  const rollups = await db.execute<{ day: string; total_rows: number; structured_rows: number; legacy_only_rows: number; failed_hydration_backlog: number; legacy_only_pct: number }>(sql`
-    select day, total_rows, structured_rows, legacy_only_rows, failed_hydration_backlog, legacy_only_pct
-    from structured_exercise_health_daily_rollups
-    where day >= (current_date - interval '30 days')
-    order by day desc
-  `);
-  const counters = await db.execute<{ day: string; owner_type: string; source: string; counter_name: string; value: number }>(sql`
-    select day, owner_type, source, counter_name, value
-    from structured_exercise_health_counters
-    where day = current_date
-    order by owner_type, source, counter_name
-  `);
+  // These two queries read unrelated tables (daily rollups vs today's
+  // counters) with no data dependency between them, so run them concurrently
+  // instead of paying two sequential DB round-trips — same pattern already
+  // used above for /api/v1/race-prediction.
+  const [rollups, counters] = await Promise.all([
+    db.execute<{ day: string; total_rows: number; structured_rows: number; legacy_only_rows: number; failed_hydration_backlog: number; legacy_only_pct: number }>(sql`
+      select day, total_rows, structured_rows, legacy_only_rows, failed_hydration_backlog, legacy_only_pct
+      from structured_exercise_health_daily_rollups
+      where day >= (current_date - interval '30 days')
+      order by day desc
+    `),
+    db.execute<{ day: string; owner_type: string; source: string; counter_name: string; value: number }>(sql`
+      select day, owner_type, source, counter_name, value
+      from structured_exercise_health_counters
+      where day = current_date
+      order by owner_type, source, counter_name
+    `),
+  ]);
   res.json({ rollups: rollups.rows, counters: counters.rows });
 }));
 
