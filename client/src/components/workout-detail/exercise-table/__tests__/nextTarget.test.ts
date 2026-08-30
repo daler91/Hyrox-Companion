@@ -226,3 +226,108 @@ describe("buildUseNextPatches", () => {
     ]);
   });
 });
+
+describe("suggestNextTarget — the same prescription missed twice (deload)", () => {
+  const missedSession = (weight: number, opts: { reps?: number; sets?: number } = {}) => {
+    const plannedReps = opts.reps ?? 5;
+    return Array.from({ length: opts.sets ?? 3 }, (_, i) =>
+      set({ id: `m${i}`, reps: plannedReps - 2, weight, plannedReps, plannedWeight: weight }),
+    );
+  };
+
+  it("backs off 10% instead of repeating a third time", () => {
+    // Two sessions short of 3x5 @ 100 kg. Repeat alone was a one-session
+    // memory: the second miss looked exactly like the first, so the athlete
+    // was handed the failed target forever.
+    const target = suggestNextTarget(missedSession(100), {
+      ...KG,
+      previousSets: missedSession(100),
+    });
+
+    expect(target).toEqual({
+      setCount: 3,
+      reps: 5,
+      weight: 90,
+      step: { field: "deload", amount: 10 },
+    });
+  });
+
+  it("floors to the plate step so the deload actually deloads", () => {
+    // 102.5 kg: 10% off is 92.25, which no barbell holds. Rounding to nearest
+    // would give 92.5 — fine here, but flooring is what guarantees the result
+    // can never creep back toward the weight that just failed twice.
+    const target = suggestNextTarget(missedSession(102.5), {
+      ...KG,
+      previousSets: missedSession(102.5),
+    });
+
+    expect(target).toMatchObject({ weight: 90, step: { field: "deload", amount: 12.5 } });
+  });
+
+  it("floors on the 5 lb grid for lb athletes", () => {
+    // 185 lb -> 166.5 -> 165.
+    const target = suggestNextTarget(missedSession(185), {
+      ...LB,
+      previousSets: missedSession(185),
+    });
+
+    expect(target).toMatchObject({ weight: 165, step: { field: "deload", amount: 20 } });
+  });
+
+  it("repeats, not deloads, when the previous session MET the same weight", () => {
+    // One miss is a bad day; the back-off needs two.
+    const met = [set({ reps: 5, weight: 100, plannedReps: 5, plannedWeight: 100 })];
+
+    expect(suggestNextTarget(missedSession(100), { ...KG, previousSets: met })).toMatchObject({
+      step: { field: "repeat" },
+    });
+  });
+
+  it("repeats when the previous miss was at a DIFFERENT prescription", () => {
+    // A changed plan is not a stall: missing 5x5 @ 95 and then 3x5 @ 100 says
+    // the load moved, not that the athlete is stuck.
+    expect(
+      suggestNextTarget(missedSession(100), { ...KG, previousSets: missedSession(95) }),
+    ).toMatchObject({ step: { field: "repeat" } });
+
+    expect(
+      suggestNextTarget(missedSession(100), { ...KG, previousSets: missedSession(100, { reps: 8 }) }),
+    ).toMatchObject({ step: { field: "repeat" } });
+  });
+
+  it("repeats when no previous session is supplied — the pre-deload behaviour", () => {
+    expect(suggestNextTarget(missedSession(100), KG)).toMatchObject({ step: { field: "repeat" } });
+  });
+
+  it("falls back to the fractional plate for a light implement", () => {
+    // 2.5 kg: 10% off is 2.25, which the standard grid floors to zero. The
+    // fractional grid the progression side already uses (audit L3) still has a
+    // real answer: 1.25 kg.
+    const target = suggestNextTarget(missedSession(2.5), {
+      ...KG,
+      previousSets: missedSession(2.5),
+    });
+
+    expect(target).toMatchObject({ weight: 1.25, step: { field: "deload", amount: 1.25 } });
+  });
+
+  it("repeats when even the fractional plate floors to zero", () => {
+    // 1.25 kg cannot deload to anything a gym stocks; a zero-weight
+    // prescription is not a deload.
+    expect(
+      suggestNextTarget(missedSession(1.25), { ...KG, previousSets: missedSession(1.25) }),
+    ).toMatchObject({ step: { field: "repeat" } });
+  });
+
+  it("always lands strictly below the weight that failed", () => {
+    for (const weight of [20, 47.5, 60, 100, 102.5, 140, 225]) {
+      const target = suggestNextTarget(missedSession(weight), {
+        ...KG,
+        previousSets: missedSession(weight),
+      });
+      expect(target?.step.field).toBe("deload");
+      expect(target!.weight).toBeLessThan(weight);
+      expect(target!.weight).toBeGreaterThan(0);
+    }
+  });
+});

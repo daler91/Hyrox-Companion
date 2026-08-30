@@ -18,7 +18,8 @@ export interface NextTarget {
   readonly step:
     | { readonly field: "reps"; readonly amount: 1 }
     | { readonly field: "weight"; readonly amount: number }
-    | { readonly field: "repeat" };
+    | { readonly field: "repeat" }
+    | { readonly field: "deload"; readonly amount: number };
 }
 
 // Same bounds as the estimated-1RM PR metric in
@@ -43,6 +44,13 @@ const SMALL_WEIGHT_INCREMENT: Readonly<Record<"kg" | "lb", number>> = { kg: 1.25
 // estimated 1RM by 20%+. Past this fraction the suggestion would be a
 // programme change, not an overload — stay silent instead.
 const MAX_E1RM_GAIN_FRACTION = 0.1;
+
+// How far a deload steps back: 10% off the weight that was missed twice, then
+// floored to a real plate. The convention of the linear-progression programmes
+// this suggestion mirrors (GreySkull, StrongLifts): enough of a reduction to
+// rebuild through, small enough that the rebuilt weight arrives within a few
+// sessions.
+const DELOAD_FRACTION = 0.1;
 
 function epley(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
@@ -69,6 +77,14 @@ function roundWeight(value: number): number {
  * the suggestion used to answer "you were given 3x5 @ 100 kg and managed 3
  * reps" with "next time do 102.5" (audit H5).
  *
+ * A prescription missed TWICE in a row is not repeated a third time: the
+ * suggestion backs off ~10%, floored to a real plate. Repeat alone was a
+ * one-session memory — a stalled athlete got the same failed target forever,
+ * because their second miss looked exactly like their first (audit register,
+ * nextTarget deload). `previousSets` is the session before last; when it is
+ * absent the repeat behaviour is unchanged, so callers without history lose
+ * nothing.
+ *
  * Returns null — no suggestion rather than a bad one — when the maths has no
  * footing: non-strength work, missing or varying weight/reps, sets outside
  * the 2–10 rep Epley range, or an implement so light that even the smallest
@@ -76,7 +92,13 @@ function roundWeight(value: number): number {
  */
 export function suggestNextTarget(
   lastSets: readonly ExerciseSet[],
-  args: { readonly category: string; readonly weightUnit: "kg" | "lb" },
+  args: {
+    readonly category: string;
+    readonly weightUnit: "kg" | "lb";
+    /** The session before last, for the missed-twice deload. Optional: without
+     *  it a miss repeats, exactly as before this argument existed. */
+    readonly previousSets?: readonly ExerciseSet[];
+  },
 ): NextTarget | null {
   if (args.category !== "strength") return null;
 
@@ -87,6 +109,19 @@ export function suggestNextTarget(
   // have gone silent on exactly the sessions it exists to catch.
   const unmet = unmetPrescription(lastSets);
   if (unmet) {
+    // Missed twice at the SAME prescription -> back off instead of going again.
+    // Exact equality on the stored planned values, not an epsilon: they are
+    // recorded numbers, and two prescriptions that differ at all are a changed
+    // plan, not a stall.
+    const previousUnmet = args.previousSets ? unmetPrescription(args.previousSets) : null;
+    if (
+      previousUnmet &&
+      previousUnmet.reps === unmet.reps &&
+      previousUnmet.weight === unmet.weight
+    ) {
+      const deload = deloadFrom(lastSets.length, unmet, args.weightUnit);
+      if (deload) return deload;
+    }
     return {
       setCount: lastSets.length,
       reps: unmet.reps,
@@ -133,6 +168,41 @@ function unmetPrescription(
   if (!fellShort || plannedReps == null || plannedWeight == null) return null;
   if (plannedWeight <= 0) return null;
   return { reps: plannedReps, weight: plannedWeight };
+}
+
+/**
+ * The backed-off target after the same prescription has been missed twice.
+ *
+ * 10% off the missed weight, floored to the plate step — floored, not rounded,
+ * because rounding could land back on a weight barely under the one that just
+ * failed twice, and a deload that does not deload is the repeat loop wearing a
+ * different badge. Flooring also guarantees the result sits strictly below the
+ * missed weight. The fractional-plate grid is tried only after the standard one
+ * comes back at zero, the same order as the progression side (audit L3), and a
+ * weight too light for even that grid returns null — the caller repeats, since
+ * a deload to zero is not a prescription.
+ *
+ * Reps and set count are the prescription's own: the athlete rebuilds through
+ * the same shape at less weight, rather than being handed a different session.
+ */
+function deloadFrom(
+  setCount: number,
+  missed: { readonly reps: number; readonly weight: number },
+  weightUnit: "kg" | "lb",
+): NextTarget | null {
+  const reduced = missed.weight * (1 - DELOAD_FRACTION);
+  for (const grid of [WEIGHT_INCREMENT[weightUnit], SMALL_WEIGHT_INCREMENT[weightUnit]]) {
+    const floored = roundWeight(Math.floor(reduced / grid) * grid);
+    if (floored > 0) {
+      return {
+        setCount,
+        reps: missed.reps,
+        weight: floored,
+        step: { field: "deload", amount: roundWeight(missed.weight - floored) },
+      };
+    }
+  }
+  return null;
 }
 
 /**

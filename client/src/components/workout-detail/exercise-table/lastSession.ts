@@ -23,26 +23,60 @@ export function pickLastSession(
   history: readonly ExerciseSetWithDate[],
   excludeWorkoutLogId?: string | null,
 ): LastSession | null {
-  const candidates = history.filter(
+  return pickRecentSessions(history, excludeWorkoutLogId, 1)[0] ?? null;
+}
+
+/**
+ * The most recent past sessions, newest first.
+ *
+ * The generalisation `pickLastSession` is built on: each round applies the SAME
+ * pick — latest date, then latest log on that date — and then removes the
+ * chosen log before going again. Two logs on one day therefore come out as two
+ * sessions in time order, exactly as the single-session pick already treated
+ * the later of them (audit M13); a rule applied once and a rule applied
+ * repeatedly cannot disagree about what a session is.
+ *
+ * Why more than one session is worth having: a prescription missed ONCE is
+ * repeated, and a repeat that is missed again looks identical to the first miss
+ * when only the last session is visible — which is how a stalled athlete gets
+ * the same failed target forever. The deload rule in `suggestNextTarget` needs
+ * the session before last to tell those apart.
+ */
+export function pickRecentSessions(
+  history: readonly ExerciseSetWithDate[],
+  excludeWorkoutLogId: string | null | undefined,
+  limit: number,
+): LastSession[] {
+  let candidates = history.filter(
     (set) => !(excludeWorkoutLogId && set.workoutLogId === excludeWorkoutLogId),
   );
 
-  let latest: string | null = null;
-  for (const set of candidates) {
-    if (!latest || set.date > latest) latest = set.date;
+  const sessions: LastSession[] = [];
+  while (sessions.length < limit && candidates.length > 0) {
+    let latest: string | null = null;
+    for (const set of candidates) {
+      if (!latest || set.date > latest) latest = set.date;
+    }
+    if (latest == null) break;
+
+    // One WORKOUT LOG, not one date. Selecting on the date alone merged every
+    // session logged that day, so an athlete who trained twice saw both
+    // sessions' sets as a single "Last time" — doubling the volume shown, and
+    // doubling what "Next" then progressed from (audit M13).
+    const onLatestDate = candidates.filter((set) => set.date === latest);
+    const lastLogId = latestWorkoutLogId(onLatestDate);
+    const sets = onLatestDate.filter((set) => set.workoutLogId === lastLogId);
+    if (sets.length === 0) break;
+
+    sessions.push({
+      date: latest,
+      sets: [...sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)),
+    });
+    // Remove the emitted log — by id AND date, since a null log id can only
+    // stand for one session within a single day's picks, not across days.
+    candidates = candidates.filter((set) => !(set.date === latest && set.workoutLogId === lastLogId));
   }
-  if (latest == null) return null;
-
-  // One WORKOUT LOG, not one date. Selecting on the date alone merged every
-  // session logged that day, so an athlete who trained twice saw both sessions'
-  // sets as a single "Last time" — doubling the volume shown, and doubling what
-  // "Next" then progressed from (audit M13).
-  const onLatestDate = candidates.filter((set) => set.date === latest);
-  const lastLogId = latestWorkoutLogId(onLatestDate);
-  const sets = onLatestDate.filter((set) => set.workoutLogId === lastLogId);
-  if (sets.length === 0) return null;
-
-  return { date: latest, sets: [...sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)) };
+  return sessions;
 }
 
 /**
