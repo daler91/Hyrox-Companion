@@ -154,6 +154,7 @@ export default function Timeline() {
     samplePlanMutation,
     renamePlanMutation,
     updatePlanGoalMutation,
+    setPlanRetirementMutation,
     deletePlanMutation,
   } = planImport;
   const { handleMarkComplete, bulkDeleteWorkoutMutation } = workoutActions;
@@ -233,6 +234,7 @@ export default function Timeline() {
   const { mutate: mutateRenamePlan } = renamePlanMutation;
   const { mutate: mutatePlanGoal } = updatePlanGoalMutation;
   const { mutate: mutateDeletePlan } = deletePlanMutation;
+  const { mutate: mutatePlanRetirement } = setPlanRetirementMutation;
   const handleRenamePlan = useCallback(
     (planId: string, name: string) => mutateRenamePlan({ planId, name }),
     [mutateRenamePlan],
@@ -240,6 +242,21 @@ export default function Timeline() {
   const handleGoalSave = useCallback(
     (planId: string, goal: string | null) => mutatePlanGoal({ planId, goal }),
     [mutatePlanGoal],
+  );
+  const handleSetPlanRetirement = useCallback(
+    (planId: string, retiredOn: string | null) =>
+      mutatePlanRetirement(
+        { planId, retiredOn },
+        {
+          onSuccess: () => {
+            // Archiving hides the plan's remaining days from the all-plans
+            // timeline; leaving it selected would show a view the athlete can no
+            // longer act on. Same fallback the delete handler uses.
+            if (retiredOn !== null && selectedPlanId === planId) setSelectedPlanId(null);
+          },
+        },
+      ),
+    [mutatePlanRetirement, selectedPlanId, setSelectedPlanId],
   );
   const handleDeletePlan = useCallback(
     (planId: string) =>
@@ -382,6 +399,8 @@ export default function Timeline() {
               onScheduleClick={setSchedulingPlanId}
               onDeletePlan={handleDeletePlan}
               isDeletingPlan={deletePlanMutation.isPending}
+              onSetPlanRetirement={handleSetPlanRetirement}
+              isUpdatingRetirement={setPlanRetirementMutation.isPending}
               canBulkDelete={bulkDeletableEntries.length > 0}
               bulkDeleteMode={bulkDeleteMode}
               onBulkDeleteModeChange={handleBulkDeleteModeChange}

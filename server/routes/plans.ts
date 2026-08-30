@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -14,6 +14,7 @@ import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus,updatePlanDayW
 import { incrementStructuredExerciseCounter } from "../services/structuredExerciseHealth";
 import { deriveMissingPlanDaySetsFromStructure, reparsePlanDay, reparsePlanDayFromImage, replacePlanDayStructure } from "../services/workoutService";
 import { storage } from "../storage";
+import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
 import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerciseSet.usecase";
@@ -236,6 +237,49 @@ protectedPatch(router, "/api/v1/plans/:id/goal", { limiter: rateLimiter("planUpd
     if (!updated) {
       return sendNotFound(res, "Training plan not found");
     }
+    res.json(updated);
+  });
+
+protectedPatch(router, "/api/v1/plans/:id/retirement", { limiter: rateLimiter("planUpdate", 20), middleware: [validateBody(updateTrainingPlanRetirementSchema)] }, async (req: ExpressRequest<{ id: string }, unknown, UpdateTrainingPlanRetirement>, res: Response) => {
+    const userId = getUserId(req);
+    const plan = await storage.plans.getTrainingPlan(req.params.id, userId);
+    if (!plan) {
+      return sendNotFound(res, "Training plan not found");
+    }
+
+    const user = await storage.users.getUser(userId);
+    const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+
+    if (req.body.retiredOn === null) {
+      // Restoring re-exposes the plan to every "which plan is active" query, so
+      // it can put two live plans over the same days — the state this column
+      // exists to prevent, recreated by the one operation that undoes it.
+      if (plan.startDate && plan.endDate) {
+        const overlapping = await storage.plans.findOverlappingActivePlans(
+          userId,
+          plan.startDate,
+          plan.endDate,
+          plan.id,
+        );
+        if (overlapping.length > 0) {
+          return res.status(409).json({
+            error: `"${overlapping[0].name}" already covers these dates. Archive it first to restore this plan.`,
+            code: "PLAN_OVERLAP",
+          });
+        }
+      }
+      const restored = await storage.plans.setPlanRetirement(plan.id, null, userId);
+      return res.json(restored);
+    }
+
+    // Clamped forward, never honoured as given. A back-dated retirement would
+    // strand every day the sweep had already flipped to `missed` between that
+    // date and today: still red on the timeline, but silently dropped from the
+    // adherence denominator — and `missed → planned` is forbidden, so there is
+    // no way to reconcile them afterwards. Retiring from today onward keeps the
+    // past exactly as the athlete lived it.
+    const retiredOn = req.body.retiredOn > today ? req.body.retiredOn : today;
+    const updated = await storage.plans.setPlanRetirement(plan.id, retiredOn, userId);
     res.json(updated);
   });
 

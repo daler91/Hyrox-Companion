@@ -11,6 +11,7 @@ import { and, desc, eq, exists, gte, inArray, lte, notExists,or,type SQL,sql } f
 
 import { db } from "../db";
 import { logger } from "../logger";
+import { planDayWithinPlanLifetime } from "./planRetirement";
 import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
 
 export class AnalyticsStorage {
@@ -244,6 +245,13 @@ export class AnalyticsStorage {
    * by a declared absence are excluded entirely, matching the weekly email and
    * the timeline's "Not counted" badge — a week spent injured is not a week of
    * failures.
+   *
+   * Sessions from a retired plan's cutoff onward are excluded for the same
+   * reason. This query joins plan_days to training_plans on the USER, so before
+   * the lifecycle column existed an athlete who switched goals mid-block kept the
+   * weeks they walked away from in their denominator forever — adherence fell for
+   * training they had deliberately stopped doing. The stretch before the cutoff
+   * still counts: they were genuinely training it.
    */
   async getDueSessionCount(userId: string, from: string, to: string, dueThrough: string): Promise<number> {
     const [row] = await db
@@ -255,6 +263,7 @@ export class AnalyticsStorage {
           eq(trainingPlans.userId, userId),
           sql`${planDays.scheduledDate} >= ${from}`,
           sql`${planDays.scheduledDate} <= ${to}`,
+          planDayWithinPlanLifetime(),
           or(
             inArray(planDays.status, ["completed", "missed", "skipped"]),
             and(eq(planDays.status, "planned"), sql`${planDays.scheduledDate} <= ${dueThrough}`),

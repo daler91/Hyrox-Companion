@@ -2,9 +2,11 @@ import { addDaysToISODate } from "@shared/dateUtils";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { createMockTrainingPlan } from "../../../../../test/factories";
 import {
   buildGeneratePlanInput,
   DEFAULT_WEEKS,
+  findOverlappingPlans,
   getGeneratePlanFormValidation,
   useGeneratePlanForm,
 } from "./useGeneratePlanForm";
@@ -100,6 +102,7 @@ describe("generate plan form helpers", () => {
         restDays: [],
         focusAreas: [],
         injuries: "",
+        supersedePlanIds: [],
       }),
     ).toEqual({
       goal: "Race prep",
@@ -159,5 +162,102 @@ describe("generate plan form helpers", () => {
     expect(result.current.startDate).toBe(initialStartDate);
     expect(result.current.endDate).toBe(expectedEndDate);
     expect(result.current.endDateIsRaceDate).toBe(true);
+  });
+});
+
+describe("findOverlappingPlans", () => {
+  const TODAY = "2026-05-01";
+
+  function plan(overrides: Parameters<typeof createMockTrainingPlan>[0] = {}) {
+    return createMockTrainingPlan({
+      id: "old-plan",
+      startDate: "2026-04-01",
+      endDate: "2026-07-01",
+      ...overrides,
+    });
+  }
+
+  it("finds a live plan the new dates run through", () => {
+    expect(
+      findOverlappingPlans([plan()], "2026-05-04", "2026-06-29", TODAY).map((p) => p.id),
+    ).toEqual(["old-plan"]);
+  });
+
+  it("counts a single shared day as an overlap", () => {
+    // Touching at the boundary still means two plans prescribing the same day.
+    expect(
+      findOverlappingPlans([plan({ endDate: "2026-05-04" })], "2026-05-04", "2026-06-29", TODAY),
+    ).toHaveLength(1);
+  });
+
+  it("ignores a plan that finishes before the new one starts", () => {
+    expect(
+      findOverlappingPlans([plan({ endDate: "2026-05-03" })], "2026-05-04", "2026-06-29", TODAY),
+    ).toEqual([]);
+  });
+
+  it("ignores a plan that has already ended", () => {
+    // Nothing left to abandon, so there is nothing to offer to archive.
+    expect(
+      findOverlappingPlans(
+        [plan({ startDate: "2026-01-01", endDate: "2026-04-30" })],
+        "2026-01-01",
+        "2026-06-29",
+        TODAY,
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores an already-archived plan", () => {
+    expect(
+      findOverlappingPlans([plan({ retiredOn: "2026-04-20" })], "2026-05-04", "2026-06-29", TODAY),
+    ).toEqual([]);
+  });
+
+  it("ignores a plan that was never scheduled onto the calendar", () => {
+    expect(
+      findOverlappingPlans(
+        [plan({ startDate: null, endDate: null })],
+        "2026-05-04",
+        "2026-06-29",
+        TODAY,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("supersede selection", () => {
+  const overlapping = createMockTrainingPlan({
+    id: "old-plan",
+    startDate: "2026-04-01",
+    endDate: "2099-07-01",
+  });
+
+  it("defaults to archiving every overlapping plan, and drops one that is toggled off", () => {
+    const { result } = renderHook(() =>
+      useGeneratePlanForm({ existingPlans: [overlapping], initialStartDate: "2026-05-04" }),
+    );
+
+    expect(result.current.supersedePlanIds).toEqual(["old-plan"]);
+
+    act(() => result.current.toggleSupersede("old-plan"));
+    expect(result.current.supersedePlanIds).toEqual([]);
+
+    act(() => result.current.toggleSupersede("old-plan"));
+    expect(result.current.supersedePlanIds).toEqual(["old-plan"]);
+  });
+
+  it("omits the field entirely when nothing is superseded", () => {
+    const { result } = renderHook(() => useGeneratePlanForm());
+
+    expect(buildGeneratePlanInput(result.current.values)).not.toHaveProperty("supersedePlanIds");
+  });
+
+  it("carries the ids into the generate payload", () => {
+    const { result } = renderHook(() =>
+      useGeneratePlanForm({ existingPlans: [overlapping], initialStartDate: "2026-05-04" }),
+    );
+
+    expect(buildGeneratePlanInput(result.current.values).supersedePlanIds).toEqual(["old-plan"]);
   });
 });

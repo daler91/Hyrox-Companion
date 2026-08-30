@@ -1,4 +1,4 @@
-import type { TrainingPlanWithDays } from "@shared/schema";
+import type { TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
 import { Sparkles } from "lucide-react";
 
 import {
@@ -24,6 +24,11 @@ interface GeneratePlanDialogProps {
   readonly mode?: "default" | "onboarding";
   readonly initialGoal?: string;
   readonly initialStartDate?: string;
+  /**
+   * The athlete's existing plans, so the schedule step can offer to archive one
+   * this plan would overlap. Omitted in onboarding, where there are none yet.
+   */
+  readonly existingPlans?: readonly TrainingPlan[];
 }
 
 const STEP_LABELS = ["Goal", "Schedule", "Details"] as const;
@@ -49,6 +54,7 @@ export function GeneratePlanDialog({
   mode = "default",
   initialGoal,
   initialStartDate,
+  existingPlans,
 }: GeneratePlanDialogProps) {
   // The athlete's remembered injuries/limitations, so the box arrives prefilled.
   const { user } = useAuth();
@@ -56,6 +62,7 @@ export function GeneratePlanDialog({
     initialConstraints: user?.trainingConstraints ?? "",
     initialGoal,
     initialStartDate,
+    existingPlans,
   });
   const generatePlan = useGeneratePlan();
 
@@ -138,6 +145,9 @@ export function GeneratePlanDialog({
             onEndDateIsRaceDateChange={form.setEndDateIsRaceDate}
             planWeeks={form.planWeeks}
             dateError={form.dateError}
+            overlappingPlans={form.overlappingPlans}
+            supersedePlanIds={form.supersedePlanIds}
+            onToggleSupersede={form.toggleSupersede}
             onBack={() => form.setStep(0)}
             onNext={() => form.setStep(2)}
             canProceed={form.canProceedStep1}

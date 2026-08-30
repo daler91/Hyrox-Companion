@@ -11,12 +11,13 @@ import {
   type UpdatePlanDay,
   users,
 } from "@shared/schema";
-import { and, eq, gte, inArray, isNotNull, lt, lte, notExists, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
+import { missedSweepRetirementGuard, planLiveForDate } from "./planRetirement";
 
 // Re-export for callers that already reach for it via PlanStorage's neighbours.
 export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
@@ -32,8 +33,9 @@ export class PlanStorage {
     planId: string,
     status: "pending" | "generating" | "ready" | "failed",
     generationError?: string | null,
+    tx?: DbExecutor,
   ): Promise<void> {
-    await db
+    await (tx ?? db)
       .update(trainingPlans)
       .set({ generationStatus: status, generationError: generationError ?? null })
       .where(eq(trainingPlans.id, planId));
@@ -59,8 +61,24 @@ export class PlanStorage {
     return row !== undefined;
   }
 
+  /**
+   * Every plan the athlete owns, retired ones included — the plan selector needs
+   * them to offer a restore, and the timeline needs them to render history. It is
+   * the read paths that ask "what is the athlete training NOW?" that filter, not
+   * this one.
+   *
+   * Ordered live-first then newest-first. Previously unordered, so the selector
+   * listed plans in whatever order Postgres happened to return them.
+   */
   async listTrainingPlans(userId: string): Promise<TrainingPlan[]> {
-    return await db.select().from(trainingPlans).where(eq(trainingPlans.userId, userId));
+    return await db
+      .select()
+      .from(trainingPlans)
+      .where(eq(trainingPlans.userId, userId))
+      .orderBy(
+        sql`CASE WHEN ${trainingPlans.retiredOn} IS NULL THEN 0 ELSE 1 END`,
+        sql`${trainingPlans.startDate} DESC NULLS LAST`,
+      );
   }
 
   async getTrainingPlan(planId: string, userId: string): Promise<TrainingPlanWithDays | undefined> {
@@ -116,6 +134,86 @@ export class PlanStorage {
       .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)))
       .returning();
     return updated;
+  }
+
+  /**
+   * Archive a plan effective `retiredOn`, or restore it with `null`.
+   *
+   * The caller is responsible for clamping the date — see the route, which pins
+   * it to the athlete's own today so a back-dated retirement can't strand days
+   * the sweep already flipped to `missed`: those would keep rendering red on the
+   * timeline while the adherence denominator quietly ignored them, and
+   * `missed → planned` is forbidden, so there would be no way back.
+   */
+  async setPlanRetirement(
+    planId: string,
+    retiredOn: string | null,
+    userId: string,
+  ): Promise<TrainingPlan | undefined> {
+    const [updated] = await db
+      .update(trainingPlans)
+      .set({ retiredOn })
+      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  /**
+   * Retire several plans at once, for the supersede-on-generate flow.
+   *
+   * `retired_on IS NULL` in the WHERE makes this idempotent and stops it stomping
+   * an EARLIER manual retirement with a later date — that would resurrect days the
+   * athlete had already written off. Ownership is re-checked in SQL rather than
+   * trusted from the caller because the plan ids arrive on a durable queue payload
+   * that was validated at the route, possibly by a previous deploy.
+   */
+  async retirePlans(
+    planIds: readonly string[],
+    userId: string,
+    retiredOn: string,
+    tx?: DbExecutor,
+  ): Promise<string[]> {
+    if (planIds.length === 0) return [];
+    const updated = await (tx ?? db)
+      .update(trainingPlans)
+      .set({ retiredOn })
+      .where(
+        and(
+          inArray(trainingPlans.id, [...planIds]),
+          eq(trainingPlans.userId, userId),
+          isNull(trainingPlans.retiredOn),
+        ),
+      )
+      .returning({ id: trainingPlans.id });
+    return updated.map((row) => row.id);
+  }
+
+  /**
+   * Live plans whose scheduled window intersects [start, end], excluding one plan
+   * by id. Used to refuse a restore that would put two live plans over the same
+   * days — the exact state the lifecycle column exists to prevent, which restoring
+   * would otherwise recreate by construction.
+   */
+  async findOverlappingActivePlans(
+    userId: string,
+    start: string,
+    end: string,
+    excludePlanId?: string,
+  ): Promise<TrainingPlan[]> {
+    return await db
+      .select()
+      .from(trainingPlans)
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          isNull(trainingPlans.retiredOn),
+          isNotNull(trainingPlans.startDate),
+          isNotNull(trainingPlans.endDate),
+          lte(trainingPlans.startDate, end),
+          gte(trainingPlans.endDate, start),
+          ...(excludePlanId ? [ne(trainingPlans.id, excludePlanId)] : []),
+        ),
+      );
   }
 
   async deleteTrainingPlan(planId: string, userId: string): Promise<boolean> {
@@ -413,6 +511,13 @@ export class PlanStorage {
           eq(trainingPlans.userId, userId),
           isNotNull(trainingPlans.startDate),
           isNotNull(trainingPlans.endDate),
+          // A retired plan still answers for the stretch it actually ran, and is
+          // invisible from its cutoff onward. Scoped here rather than at each call
+          // site because this method is the single choke point every consumer of
+          // "the active plan" goes through — AI coaching context, nutrition phase,
+          // the weekly-goal hint, and resolveActivePlanLinks, which attributes
+          // newly logged workouts and marks plan days completed.
+          planLiveForDate(date),
         ),
       )
       .orderBy(
@@ -422,6 +527,16 @@ export class PlanStorage {
           WHEN ${trainingPlans.startDate} > ${date} THEN 2
         END`,
         sql`CASE WHEN ${trainingPlans.startDate} > ${date} THEN ${trainingPlans.startDate} END ASC NULLS LAST`,
+        // Most recently STARTED block wins an overlap, with end date only as a
+        // final tiebreak. It used to be end-date-first, which resolved an overlap
+        // by longevity: an athlete who started a short 4-week block while a
+        // 12-week plan still had 6 weeks to run kept getting the old plan back,
+        // because it happened to finish later. Retirement is opt-in and can't
+        // help here — every plan predating this column has retired_on NULL, and
+        // imports, sample plans and /schedule can still create overlaps without
+        // ever going through the supersede flow. Ordering by start date fixes
+        // that whole population with no backfill.
+        sql`${trainingPlans.startDate} DESC`,
         sql`${trainingPlans.endDate} DESC`,
       )
       .limit(1);
@@ -469,6 +584,14 @@ export class PlanStorage {
             eq(planDays.status, "planned"),
             lt(planDays.scheduledDate, today),
             inArray(planDays.planId, zonePlanIds),
+            // Days from a retired plan's cutoff onward are training the athlete
+            // deliberately walked away from — writing `missed` across them is the
+            // app telling them they failed at something they already decided not
+            // to do, and because `missed → planned` is FORBIDDEN (see enums.ts)
+            // the damage would be permanent. Same reasoning as the declared-absence
+            // guard below. Built in planRetirement.ts so the SQL-rendering test
+            // asserts this exact predicate instead of a copy of it.
+            missedSweepRetirementGuard(db),
             notExists(
               // Correlated on the plan's owner rather than on plan_days
               // directly — plan_days carries no user_id, so the annotation has

@@ -33,14 +33,22 @@ function choosePlan(
   todayStr: string,
 ): TrainingPlan | undefined {
   if (selectedPlanId) return plans.find((plan) => plan.id === selectedPlanId);
+  // Mirrors the server's getPlanForDate, retirement guard included: an archived
+  // plan is only an honest answer for the stretch it actually ran, and never
+  // wins the "any plan with an end date" fallback. Without this the summary card
+  // would keep naming the plan the athlete just walked away from while the
+  // timeline below it showed the new one.
+  const isLiveToday = (plan: TrainingPlan) =>
+    plan.retiredOn == null || plan.retiredOn > todayStr;
   return (
     plans.find(
       (plan) =>
         plan.startDate != null &&
         plan.endDate != null &&
         plan.startDate <= todayStr &&
-        plan.endDate >= todayStr,
-    ) ?? plans.find((plan) => plan.endDate != null)
+        plan.endDate >= todayStr &&
+        isLiveToday(plan),
+    ) ?? plans.find((plan) => plan.endDate != null && plan.retiredOn == null)
   );
 }
 

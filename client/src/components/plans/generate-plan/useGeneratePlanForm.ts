@@ -5,10 +5,14 @@ import {
   MAX_PLAN_WEEKS,
   MIN_PLAN_WEEKS,
 } from "@shared/dateUtils";
-import type { GeneratePlanInput } from "@shared/schema";
-import { useState } from "react";
+import type { GeneratePlanInput, TrainingPlan } from "@shared/schema";
+import { useMemo, useState } from "react";
 
 import { getTodayString } from "@/lib/dateUtils";
+
+// Stable identity, so the overlap memo isn't invalidated on every render when
+// the caller passes no plans.
+const EMPTY_PLANS: readonly TrainingPlan[] = [];
 
 export const DEFAULT_WEEKS = 8;
 export const MAX_DAYS_PER_WEEK = 7;
@@ -60,6 +64,7 @@ export interface GeneratePlanFormValues {
   readonly restDays: string[];
   readonly focusAreas: string[];
   readonly injuries: string;
+  readonly supersedePlanIds: string[];
 }
 
 export interface GeneratePlanFormOptions {
@@ -72,6 +77,43 @@ export interface GeneratePlanFormOptions {
    * `initialGoal` is a parameter.
    */
   readonly initialConstraints?: string;
+  /**
+   * The athlete's existing plans, used to spot one this new plan would overlap.
+   * Passed in for the same reason as `initialGoal` — it keeps the hook free of
+   * query context. Defaults to none, which is the onboarding case.
+   */
+  readonly existingPlans?: readonly TrainingPlan[];
+}
+
+/**
+ * Live plans whose scheduled window intersects [startDate, endDate] and which
+ * still have training left to do.
+ *
+ * These are the plans the athlete is really switching away from. Offering to
+ * retire them at this exact moment is the whole point: it is when they are
+ * deciding, and leaving both live is what makes the abandoned block go on
+ * marking sessions missed and dragging their adherence down.
+ *
+ * Plans that already ended are left alone — there is nothing left to abandon —
+ * as are already-archived ones and any not yet scheduled onto the calendar. ISO
+ * dates compare lexicographically, same as isDateWithinPlanWindow server-side.
+ */
+export function findOverlappingPlans(
+  plans: readonly TrainingPlan[],
+  startDate: string,
+  endDate: string,
+  today: string,
+): TrainingPlan[] {
+  if (!startDate || !endDate) return [];
+  return plans.filter(
+    (plan) =>
+      plan.retiredOn == null &&
+      plan.startDate != null &&
+      plan.endDate != null &&
+      plan.endDate >= today &&
+      plan.startDate <= endDate &&
+      plan.endDate >= startDate,
+  );
 }
 
 /**
@@ -128,6 +170,11 @@ export function buildGeneratePlanInput(values: GeneratePlanFormValues): Generate
     // an empty string clears the remembered constraints. Omitting it would make
     // a cleared box indistinguishable from an older client that never sent one.
     injuries: values.injuries,
+    // Omitted when empty so the payload stays identical to what an older client
+    // sends, rather than carrying an empty array through the job queue.
+    ...(values.supersedePlanIds.length > 0
+      ? { supersedePlanIds: values.supersedePlanIds }
+      : {}),
   };
 }
 
@@ -153,6 +200,27 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
   const rememberedConstraints = options.initialConstraints ?? "";
   const [injuries, setInjuries] = useState(rememberedConstraints);
 
+  // Plans this one would overlap, recomputed from the current dates. Kept as a
+  // derived value plus a set of DESELECTED ids rather than a list of selected
+  // ones: the athlete moves the dates around while deciding, and a stored
+  // selection would quietly go stale against a plan that no longer overlaps.
+  // Default is "retire them all" — switching is the normal reason to be here.
+  const existingPlans = options.existingPlans ?? EMPTY_PLANS;
+  const [keptPlanIds, setKeptPlanIds] = useState<readonly string[]>([]);
+  const overlappingPlans = useMemo(
+    () => findOverlappingPlans(existingPlans, startDate, endDate, getTodayString()),
+    [existingPlans, startDate, endDate],
+  );
+  const supersedePlanIds = overlappingPlans
+    .map((plan) => plan.id)
+    .filter((id) => !keptPlanIds.includes(id));
+
+  const toggleSupersede = (planId: string) => {
+    setKeptPlanIds((prev) =>
+      prev.includes(planId) ? prev.filter((id) => id !== planId) : [...prev, planId],
+    );
+  };
+
   const resetForm = () => {
     setStep(0);
     setGoal(initialGoal);
@@ -164,6 +232,7 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
     setRestDays(DEFAULT_REST_DAYS[DEFAULT_DAYS_PER_WEEK]);
     setFocusAreas([]);
     setInjuries(rememberedConstraints);
+    setKeptPlanIds([]);
   };
 
   const toggleFocus = (value: string) => {
@@ -194,6 +263,7 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
     restDays,
     focusAreas,
     injuries,
+    supersedePlanIds,
   };
   const validation = getGeneratePlanFormValidation(values);
   // Clamped for display; out-of-range spans surface via validation.dateError and
@@ -219,6 +289,9 @@ export function useGeneratePlanForm(options: GeneratePlanFormOptions = {}) {
     focusAreas,
     injuries,
     setInjuries,
+    overlappingPlans,
+    supersedePlanIds,
+    toggleSupersede,
     resetForm,
     toggleFocus,
     toggleRestDay,

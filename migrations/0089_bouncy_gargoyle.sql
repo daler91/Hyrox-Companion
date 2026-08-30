@@ -1,0 +1,1 @@
+ALTER TABLE "training_plans" ADD COLUMN "retired_on" date;

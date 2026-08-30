@@ -252,6 +252,23 @@ export const trainingPlans = pgTable(
     // date. Stored separately from endDate because scheduling derives endDate from
     // the Monday-aligned plan days, which can drift a few days off the true race day.
     raceDate: date("race_date"),
+    // Plan lifecycle. NULL = live. A date means the athlete stopped training this
+    // plan from that day — they switched goals, or archived it by hand.
+    //
+    // A DATE rather than a boolean/status because retirement has to be reversible
+    // in both directions of time. Days BEFORE it are real history: they keep their
+    // completed/missed status, stay in the adherence denominator, and still resolve
+    // through getPlanForDate for a past date, so a workout logged three weeks ago
+    // is still attributed to the plan that actually prescribed it. Days ON OR AFTER
+    // it are training the athlete deliberately walked away from, and are excluded
+    // everywhere. A flag would have had to rewrite the past to say the same thing.
+    //
+    // It also keeps the plan_days state machine intact: because retirement is dated
+    // and the sweep only ever touches days in the past, nothing has to walk `missed`
+    // back to `planned` — a transition shared/schema/enums.ts documents as FORBIDDEN.
+    //
+    // The date itself is EXCLUDED: a plan retired on D covers dates < D.
+    retiredOn: date("retired_on"),
     generationStatus: text("generation_status").notNull().default("ready"),
     generationError: text("generation_error"),
     // When AI generation began, used by the startup sweep to fail plans left

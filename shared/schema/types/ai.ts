@@ -19,6 +19,11 @@ export const generatePlanInputSchema = z
       .optional(),
     focusAreas: z.array(z.string().max(100)).max(10).optional(),
     injuries: z.string().max(500).optional(),
+    // Plans the athlete is switching AWAY from. Retired only once this plan
+    // generates successfully — see executePlanGeneration — so a failed generation
+    // can never leave them with nothing to train. Bounded because it rides a
+    // durable queue payload; ownership is re-checked server-side at apply time.
+    supersedePlanIds: z.array(z.string().min(1).max(255)).max(5).optional(),
   })
   .refine((data) => dayDiff(data.startDate, data.endDate) > 0, {
     message: "End date must be after start date",

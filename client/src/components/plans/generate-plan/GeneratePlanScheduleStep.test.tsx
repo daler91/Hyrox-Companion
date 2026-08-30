@@ -1,6 +1,9 @@
+import type { TrainingPlan } from "@shared/schema";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { createMockTrainingPlan } from "../../../../../test/factories";
 import { GeneratePlanScheduleStep } from "./GeneratePlanScheduleStep";
 
 const baseProps = {
@@ -20,7 +23,20 @@ const baseProps = {
   planWeeks: 8,
   onBack: vi.fn(),
   onNext: vi.fn(),
+  overlappingPlans: [] as TrainingPlan[],
+  supersedePlanIds: [] as string[],
+  onToggleSupersede: vi.fn(),
 };
+
+function plan(overrides: Partial<TrainingPlan> = {}): TrainingPlan {
+  return createMockTrainingPlan({
+    id: "old-plan",
+    name: "Race Block",
+    startDate: "2026-04-01",
+    endDate: "2026-07-01",
+    ...overrides,
+  });
+}
 
 describe("GeneratePlanScheduleStep", () => {
   it("points aria-describedby at the date error when one is present", () => {
@@ -105,5 +121,50 @@ describe("GeneratePlanScheduleStep", () => {
     const nextButton = screen.getByRole("button", { name: /next/i });
     expect(nextButton).toBeEnabled();
     expect(nextButton).not.toHaveAttribute("aria-describedby");
+  });
+
+  describe("superseding an overlapping plan", () => {
+    it("offers to archive a plan the new one would overlap, on by default", () => {
+      render(
+        <GeneratePlanScheduleStep
+          {...baseProps}
+          overlappingPlans={[plan()]}
+          supersedePlanIds={["old-plan"]}
+          dateError={null}
+          canProceed
+        />,
+      );
+
+      const toggle = screen.getByTestId("switch-supersede-old-plan");
+      expect(toggle).toBeInTheDocument();
+      expect(screen.getByText("Race Block")).toBeInTheDocument();
+      // Default on: switching is the normal reason to be generating a plan that
+      // overlaps one already running.
+      expect(toggle).toBeChecked();
+    });
+
+    it("reports the plan when the athlete opts to keep it running", async () => {
+      const onToggleSupersede = vi.fn();
+      render(
+        <GeneratePlanScheduleStep
+          {...baseProps}
+          overlappingPlans={[plan()]}
+          supersedePlanIds={["old-plan"]}
+          onToggleSupersede={onToggleSupersede}
+          dateError={null}
+          canProceed
+        />,
+      );
+
+      await userEvent.click(screen.getByTestId("switch-supersede-old-plan"));
+
+      expect(onToggleSupersede).toHaveBeenCalledWith("old-plan");
+    });
+
+    it("says nothing when no existing plan overlaps", () => {
+      render(<GeneratePlanScheduleStep {...baseProps} dateError={null} canProceed />);
+
+      expect(screen.queryByText(/already on a plan/i)).not.toBeInTheDocument();
+    });
   });
 });
