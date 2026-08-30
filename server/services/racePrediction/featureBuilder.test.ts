@@ -15,6 +15,9 @@ function set(
     weight?: number | null;
     distance?: number | null;
     reps?: number | null;
+    /** Per-row unit stamps (audit L4). Omitted = legacy (pre-stamp) row. */
+    weightUnit?: string;
+    distanceUnit?: string;
     date?: string;
     workoutLogId?: string;
   },
@@ -26,6 +29,8 @@ function set(
     weight: fields.weight ?? null,
     distance: fields.distance ?? null,
     reps: fields.reps ?? null,
+    weightUnit: fields.weightUnit ?? null,
+    distanceUnit: fields.distanceUnit ?? null,
     date: fields.date ?? "2026-05-01",
   } as unknown as LoggedExerciseSetWithDate;
 }
@@ -272,7 +277,8 @@ describe("buildRacePredictionFeatures", () => {
   });
 
   it("converts feet-stored distance for miles users before projecting", () => {
-    // A miles user's full 1 km SkiErg is stored as ~3281 ft. Converted to meters
+    // LEGACY (unstamped) row, so the athlete's current preference decides: a
+    // miles user's full 1 km SkiErg is stored as ~3281 ft. Converted to meters
     // it's a full-station effort (~unchanged), NOT a 3281 m effort that would be
     // dropped/understated. Logged 4:00 → stays ≈ 4:00.
     const fullStationFeet = 1000 * 3.28084;
@@ -282,6 +288,72 @@ describe("buildRacePredictionFeatures", () => {
       NOW,
     );
     expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(240, 0);
+  });
+
+  it("reads a stamped metric distance under its stamp after a switch to miles", () => {
+    // The L4 drift this module used to have: 500 m SkiErg intervals logged on
+    // metric carry distance_unit "m". After the athlete switches to miles the
+    // stamp must win over the preference — the profile-only read took the 500
+    // as 500 ft (~152 m), fell below the 0.5× trust band, and silently dropped
+    // the athlete's own data in favor of the cohort benchmark.
+    const features = buildRacePredictionFeatures(
+      [set("skierg", { time: 2, distance: 500, distanceUnit: "m", date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "kg", distanceUnit: "miles" },
+      NOW,
+    );
+    // Same projection as under a metric profile: 120s × 2^1.06 ≈ 250s.
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(250, 0);
+    const ski = features.baselineSegments.find((s) => s.exerciseName === "skierg");
+    expect(ski?.basis).toBe("logged");
+  });
+
+  it("reads a stamped feet distance under its stamp after a switch to km", () => {
+    // The reverse switch: a full-station SkiErg stored as ~3281 ft while on
+    // miles, read after switching to km. The profile-only read took it as a
+    // 3281 m effort (3.28× the station) and dropped it out of the trust band.
+    const fullStationFeet = 1000 * 3.28084;
+    const features = buildRacePredictionFeatures(
+      [
+        set("skierg", {
+          time: 4,
+          distance: fullStationFeet,
+          distanceUnit: "ft",
+          date: "2026-05-20",
+        }),
+      ],
+      { division: "open", gender: "male", weightUnit: "kg", distanceUnit: "km" },
+      NOW,
+    );
+    expect(features.stationFeatures.skierg.medianSeconds).toBeCloseTo(240, 0);
+  });
+
+  it("converts a stamped kg load into a lbs athlete's unit before the load ratio", () => {
+    // 6 kg (the open-male wall-ball standard) logged while on kg, read after a
+    // switch to lbs: the stamp converts it to ≈13 lbs so loadRatio ≈ 1, instead
+    // of comparing the raw 6 against the ≈13.2 lbs standard (ratio ≈ 0.45).
+    const standardKg = getRaceReference("open", "male").stations.wall_balls.loadKg!;
+    const features = buildRacePredictionFeatures(
+      [set("wall_balls", { time: 5, weight: standardKg, weightUnit: "kg", date: "2026-05-20" })],
+      { division: "open", gender: "male", weightUnit: "lbs" },
+      NOW,
+    );
+    const wallBalls = features.stationFeatures.wall_balls;
+    expect(wallBalls.loggedLoadUserUnit).toBeCloseTo(standardKg * 2.20462, 0);
+    expect(wallBalls.loadRatio).toBeCloseTo(1, 1);
+  });
+
+  it("takes the heaviest load across mixed-stamp rows in one unit", () => {
+    // For a kg athlete, 100 kg (stamped kg) beats 180 lbs (stamped lbs ≈ 81.6 kg)
+    // even though 180 is the bigger raw number.
+    const features = buildRacePredictionFeatures(
+      [
+        set("farmers_carry", { time: 2, weight: 100, weightUnit: "kg", date: "2026-05-20" }),
+        set("farmers_carry", { time: 2, weight: 180, weightUnit: "lbs", date: "2026-05-22" }),
+      ],
+      { division: "open", gender: "male", weightUnit: "kg" },
+      NOW,
+    );
+    expect(features.stationFeatures.farmers_carry.loggedLoadUserUnit).toBeCloseTo(100, 0);
   });
 
   it("bounds an impossibly fast logged split to the field-anchored floor", () => {

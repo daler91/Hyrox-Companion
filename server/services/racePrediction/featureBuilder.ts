@@ -20,17 +20,22 @@
  *    of the full amount; further-out efforts are too unreliable to extrapolate
  *    and are dropped (the station then falls back to its benchmark). A set with
  *    no logged distance/reps is assumed to be a full effort.
- *  - logged distances are in the athlete's stored unit (m for km users, ft for
- *    miles users); we convert to meters with `storedDistanceToMeters` (read-only,
- *    so the read-convert-write drift caveat does not apply) before comparing.
- *    KNOWN LIMITATION (accepted): the sentinel also notes historical rows are not
- *    migrated when a user changes unit preference, so a station logged before a
- *    switch is read under the *current* unit. A mis-read effort simply falls
- *    outside the trust band and degrades to the station benchmark — a graceful,
- *    sane fallback, and the same mixed-unit trade-off the rest of the app accepts.
- *  - logged weights are in the athlete's unit; we never convert them. Instead
- *    we convert the canonical-kg standard INTO the athlete's unit
- *    (`kgToUserWeight`, the sanctioned direction) and compare there.
+ *  - logged distances are in the unit each row was written in. Rows stamped
+ *    since audit L4 record it in `distance_unit` ("m"/"ft") and are read under
+ *    that stamp (`storedDistanceToMetersStamped` — read-only, so the
+ *    read-convert-write drift caveat does not apply), so a later preference
+ *    switch converts instead of reinterpreting. KNOWN LIMITATION (accepted):
+ *    LEGACY rows carry no stamp and are read under the athlete's *current*
+ *    stored unit (m for km users, ft for miles users) — right unless the
+ *    athlete switched preference, and unrecoverable when they did. A mis-read
+ *    legacy effort usually falls outside the trust band and degrades to the
+ *    station benchmark — a graceful, sane fallback, and the same legacy-row
+ *    trade-off the rest of the app accepts.
+ *  - logged weights follow the same stamp rule: a stamped row is converted into
+ *    the athlete's current unit (`storedWeightToDisplay`), a legacy row is
+ *    assumed to already be in it. The canonical-kg division standard is
+ *    converted INTO that same unit (`kgToUserWeight`, the sanctioned direction)
+ *    and compared there.
  */
 import {
   type Division,
@@ -46,7 +51,11 @@ import {
   TOTAL_STATIONS,
 } from "@shared/raceSpec";
 import { type ExerciseName, normalizeExerciseName } from "@shared/schema";
-import { kgToUserWeight, storedDistanceToMeters } from "@shared/unitConversion";
+import {
+  kgToUserWeight,
+  storedDistanceToMetersStamped,
+  storedWeightToDisplay,
+} from "@shared/unitConversion";
 
 import type { LoggedExerciseSetWithDate } from "../../storage/shared";
 
@@ -164,7 +173,8 @@ interface SegmentTarget {
   reps?: number;
 }
 
-/** The athlete's stored units, used to interpret logged weights and distances. */
+/** The athlete's current preferred units: the unit loads are compared in, and
+ *  the fallback for interpreting legacy (unstamped) rows. */
 interface AthleteUnits {
   weightUnit: string;
   distanceUnit: string;
@@ -221,9 +231,11 @@ function usableMeasure(value: number | null): number | null {
 /**
  * Factor that scales a logged partial effort's time to the full race-station
  * amount, or null when the effort is too far from the full amount to extrapolate
- * (the caller drops the set). Distance-based stations use the logged distance
- * (converted from the athlete's stored unit to meters); rep-based stations use
- * logged reps. A set with no usable distance/rep count is assumed full (1).
+ * (the caller drops the set). Distance-based stations use the logged distance,
+ * converted to meters under the row's own unit stamp (`distanceUnit` — the
+ * athlete's current preference — only decides legacy, unstamped rows); rep-based
+ * stations use logged reps. A set with no usable distance/rep count is assumed
+ * full (1).
  */
 function projectionFactor(
   set: LoggedExerciseSetWithDate,
@@ -236,7 +248,7 @@ function projectionFactor(
     if (distance == null) return 1;
     return trustedFactor(
       target.distanceMeters,
-      storedDistanceToMeters(distance, distanceUnit),
+      storedDistanceToMetersStamped(distance, set, { distanceUnit }),
       exponent,
     );
   }
@@ -292,7 +304,7 @@ function projectedSplitSeconds(
 function accumulateSetMetrics(
   sets: LoggedExerciseSetWithDate[],
   target: SegmentTarget,
-  distanceUnit: string,
+  units: AthleteUnits,
   exponent: number,
 ): SegmentSetMetrics {
   // Group projected split times by session (workoutLogId) so repeated intervals
@@ -306,14 +318,18 @@ function accumulateSetMetrics(
   let bestSeconds: number | null = null;
 
   for (const set of sets) {
-    const seconds = projectedSplitSeconds(set, target, distanceUnit, exponent);
+    const seconds = projectedSplitSeconds(set, target, units.distanceUnit, exponent);
     if (seconds != null) {
       pushToBucket(sessionSplits, set.workoutLogId, seconds);
       if (bestSeconds == null || seconds < bestSeconds) bestSeconds = seconds;
     }
     if (set.weight != null && Number.isFinite(set.weight)) {
-      if (maxLoad == null || set.weight > maxLoad) {
-        maxLoad = set.weight;
+      // Stamp-aware: rows logged under different weight units compare in ONE
+      // unit (the athlete's current one), so a kg-era 100 isn't outbid by a
+      // lbs-era 180 (≈ 81.6 kg). Legacy rows pass through unchanged, as before.
+      const weight = storedWeightToDisplay(set.weight, set, units);
+      if (maxLoad == null || weight > maxLoad) {
+        maxLoad = weight;
       }
     }
     if (set.date && (mostRecent === null || set.date > mostRecent)) {
@@ -338,7 +354,7 @@ function buildSegmentFeature(
   const { sessionTimesSeconds, bestSeconds, maxLoad, mostRecent } = accumulateSetMetrics(
     sets,
     target,
-    units.distanceUnit,
+    units,
     projectionExponentFor(kind, exerciseName),
   );
 
