@@ -342,16 +342,44 @@ describe("buildGenerationPrompt — start-load posture", () => {
   const input = { ...baseInput, totalWeeks: 4 } as Parameters<typeof buildGenerationPrompt>[0];
   const units = { weightUnit: "kg", distanceUnit: "km" } as Parameters<typeof buildGenerationPrompt>[2];
   const posture = "Carrying high recent load (ACWR 1.60); start week 1 conservatively.";
+  const calibration = { startLoadPosture: posture, loadAnchors: [] };
 
   it("injects the posture into the opening (week 1) chunk", () => {
-    const prompt = buildGenerationPrompt(input, { startWeek: 1, endWeek: 2 }, units, posture);
+    const prompt = buildGenerationPrompt(input, { startWeek: 1, endWeek: 2 }, units, calibration);
     expect(prompt).toContain("CURRENT LOAD POSTURE:");
     expect(prompt).toContain(posture);
   });
 
   it("omits the posture from later chunks", () => {
-    const prompt = buildGenerationPrompt(input, { startWeek: 3, endWeek: 4 }, units, posture);
+    const prompt = buildGenerationPrompt(input, { startWeek: 3, endWeek: 4 }, units, calibration);
     expect(prompt).not.toContain("CURRENT LOAD POSTURE");
+  });
+
+  it("gives the load anchors to EVERY chunk, unlike the posture", () => {
+    // The anchors are the shared state that lets parallel chunk calls produce
+    // continuous loads (audit H17/M7): a chunk generating weeks 5-6 has no
+    // other way to know what weeks 1-4 prescribe. Omitting them from a later
+    // chunk would recreate the sawtooth this exists to close.
+    const withAnchors = {
+      startLoadPosture: posture,
+      loadAnchors: [{ exercise: "back_squat", weight: 100, sessions: 6 }],
+    };
+
+    for (const range of [
+      { startWeek: 1, endWeek: 2 },
+      { startWeek: 3, endWeek: 4 },
+      { startWeek: 5, endWeek: 6 },
+    ]) {
+      const prompt = buildGenerationPrompt(input, range, units, withAnchors);
+      expect(prompt).toContain("RECENT WORKING WEIGHTS");
+      expect(prompt).toContain("back_squat: 100 kg (6 sessions)");
+      expect(prompt).toContain("never above anchor");
+    }
+  });
+
+  it("emits no anchor block when there are no anchors", () => {
+    const prompt = buildGenerationPrompt(input, { startWeek: 1, endWeek: 2 }, units, calibration);
+    expect(prompt).not.toContain("RECENT WORKING WEIGHTS");
   });
 
   it("omits the section when there is no posture", () => {
