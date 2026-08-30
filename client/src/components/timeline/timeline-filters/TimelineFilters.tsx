@@ -1,30 +1,8 @@
-import {
-  Archive,
-  CalendarDays,
-  Download,
-  Filter,
-  Loader2,
-  MoreHorizontal,
-  Pencil,
-  Sparkles,
-  Target,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+import { Filter } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { GeneratePlanDialog } from "@/components/plans/GeneratePlanDialog";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -33,16 +11,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { getTodayString } from "@/lib/dateUtils";
 
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { FilterStatus } from "../types";
-import { downloadTemplate } from "./csv-utils";
 import { GoalDialog } from "./GoalDialog";
+import { PlanGoalRow } from "./PlanGoalRow";
 import { PlanSelector } from "./PlanSelector";
+import { PlanToolsMenu } from "./PlanToolsMenu";
 import { RenamePlanDialog } from "./RenamePlanDialog";
 import type { TimelineFiltersProps } from "./types";
+
+const ARCHIVE_DIALOG_COPY = {
+  title: "Archive this plan?",
+  description:
+    "Its remaining sessions stop counting towards your adherence from today, and drop off the all-plans timeline. Everything you have already logged is kept.",
+  confirmText: "Archive",
+} as const;
+
+const RESTORE_DIALOG_COPY = {
+  title: "Restore this plan?",
+  description:
+    "Its past sessions will count towards your adherence again, and any that have already gone by will be marked missed.",
+  confirmText: "Restore",
+} as const;
 
 export default function TimelineFilters({
   plans,
@@ -106,6 +99,7 @@ export default function TimelineFilters({
   };
 
   const isArchived = selectedPlan?.retiredOn != null;
+  const retirementDialogCopy = isArchived ? RESTORE_DIALOG_COPY : ARCHIVE_DIALOG_COPY;
 
   const handleRetirementConfirm = () => {
     if (selectedPlanId) {
@@ -159,125 +153,23 @@ export default function TimelineFilters({
                 </SelectContent>
               </Select>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between md:w-auto"
-                    data-testid="button-plan-tools"
-                    aria-label="Plan tools"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <MoreHorizontal className="h-4 w-4" />
-                      Plan tools
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  {selectedPlan ? (
-                    <>
-                      <DropdownMenuLabel className="text-xs">{selectedPlan.name}</DropdownMenuLabel>
-                      <DropdownMenuItem
-                        onClick={openRenameDialog}
-                        data-testid="menuitem-rename-plan"
-                      >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Rename plan
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={openGoalDialog} data-testid="menuitem-set-goal">
-                        <Target className="h-4 w-4 mr-2" />
-                        {selectedPlan.goal ? "Edit goal" : "Set goal"}
-                      </DropdownMenuItem>
-                      {onScheduleClick ? (
-                        <DropdownMenuItem
-                          onClick={() => onScheduleClick(selectedPlan.id)}
-                          data-testid="menuitem-reschedule-plan"
-                        >
-                          <CalendarDays className="h-4 w-4 mr-2" />
-                          Reschedule
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onSetPlanRetirement ? (
-                        <DropdownMenuItem
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setRetirementConfirmOpen(true);
-                          }}
-                          data-testid="menuitem-archive-plan"
-                        >
-                          <Archive className="h-4 w-4 mr-2" />
-                          {isArchived ? "Restore plan" : "Archive plan"}
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onDeletePlan ? (
-                        <DropdownMenuItem
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setDeleteConfirmOpen(true);
-                          }}
-                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                          data-testid="menuitem-delete-plan"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete plan
-                        </DropdownMenuItem>
-                      ) : null}
-                      <DropdownMenuSeparator />
-                    </>
-                  ) : null}
-                  <DropdownMenuLabel className="text-xs">Plan setup</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() => setGenerateDialogOpen(true)}
-                    data-testid="button-generate-ai-plan"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    AI plan
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={downloadTemplate}
-                    data-testid="button-download-template"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download template
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={isImporting}
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      openImportPicker();
-                    }}
-                    data-testid="button-import-plan"
-                  >
-                    {isImporting ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    Import plan
-                  </DropdownMenuItem>
-                  {onBulkDeleteModeChange ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={!canBulkDelete && !bulkDeleteMode}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          onBulkDeleteModeChange(!bulkDeleteMode);
-                        }}
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                        data-testid="menuitem-bulk-delete-mode"
-                      >
-                        {bulkDeleteMode ? (
-                          <X className="h-4 w-4 mr-2" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 mr-2" />
-                        )}
-                        {bulkDeleteMode ? "Exit bulk delete" : "Bulk delete"}
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <PlanToolsMenu
+                selectedPlan={selectedPlan}
+                isArchived={isArchived}
+                isImporting={isImporting}
+                canBulkDelete={canBulkDelete}
+                bulkDeleteMode={bulkDeleteMode}
+                onRenameClick={openRenameDialog}
+                onGoalClick={openGoalDialog}
+                onGenerateClick={() => setGenerateDialogOpen(true)}
+                onImportClick={openImportPicker}
+                onScheduleClick={onScheduleClick}
+                onArchiveClick={
+                  onSetPlanRetirement ? () => setRetirementConfirmOpen(true) : undefined
+                }
+                onDeleteClick={onDeletePlan ? () => setDeleteConfirmOpen(true) : undefined}
+                onBulkDeleteModeChange={onBulkDeleteModeChange}
+              />
               <Input
                 ref={fileInputRef}
                 id="csv-upload"
@@ -290,39 +182,7 @@ export default function TimelineFilters({
               />
             </div>
 
-            {selectedPlan && (
-              <div className="flex items-center gap-2 pt-3 border-t mt-3">
-                <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <button
-                  type="button"
-                  className="flex-1 text-left text-sm text-muted-foreground hover:text-foreground truncate transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                  onClick={openGoalDialog}
-                  data-testid="button-plan-goal"
-                  aria-label="Edit plan goal"
-                >
-                  {selectedPlan.goal ? (
-                    selectedPlan.goal
-                  ) : (
-                    <span className="italic">No plan goal set</span>
-                  )}
-                </button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 shrink-0 md:h-7 md:w-7"
-                      onClick={openGoalDialog}
-                      aria-label="Edit plan goal"
-                      data-testid="button-edit-goal"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit plan goal</TooltipContent>
-                </Tooltip>
-              </div>
-            )}
+            <PlanGoalRow plan={selectedPlan} onEditClick={openGoalDialog} />
           </TooltipProvider>
         </CardContent>
       </Card>
@@ -354,13 +214,9 @@ export default function TimelineFilters({
       <ConfirmDialog
         open={retirementConfirmOpen}
         onOpenChange={setRetirementConfirmOpen}
-        title={isArchived ? "Restore this plan?" : "Archive this plan?"}
-        description={
-          isArchived
-            ? "Its past sessions will count towards your adherence again, and any that have already gone by will be marked missed."
-            : "Its remaining sessions stop counting towards your adherence from today, and drop off the all-plans timeline. Everything you have already logged is kept."
-        }
-        confirmText={isArchived ? "Restore" : "Archive"}
+        title={retirementDialogCopy.title}
+        description={retirementDialogCopy.description}
+        confirmText={retirementDialogCopy.confirmText}
         cancelText="Cancel"
         onConfirm={handleRetirementConfirm}
         isPending={isUpdatingRetirement}

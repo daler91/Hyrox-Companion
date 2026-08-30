@@ -1,4 +1,4 @@
-import type { TrainingContext } from "../gemini/types";
+import type { MafTrendSummary, TrainingContext } from "../gemini/types";
 
 /**
  * Shared renderer for the MAF METHOD block: the aerobic ceiling and the test
@@ -26,6 +26,28 @@ const CLASSIFICATION_LABELS: Record<string, string> = {
 /** A monthly retest keeps the ceiling calibrated; nudge past this. */
 const TEST_CADENCE_NUDGE_DAYS = 28;
 
+/** The tests-logged summary sentence, plus the retest nudge when the last test is stale. */
+function formatTestHistoryLines(mafTrend: MafTrendSummary): string[] {
+  let testLine = `MAF tests: ${mafTrend.testCount} logged`;
+  if (mafTrend.lastTestDaysAgo != null) testLine += `, last ${mafTrend.lastTestDaysAgo} days ago`;
+  if (mafTrend.latestClassification) {
+    testLine += `; latest ${CLASSIFICATION_LABELS[mafTrend.latestClassification] ?? mafTrend.latestClassification}`;
+    if (mafTrend.latestCompliancePct != null)
+      testLine += ` (${mafTrend.latestCompliancePct}% under ceiling)`;
+  }
+  if (mafTrend.complianceTrend !== "insufficient_data") {
+    testLine += `; compliance trend ${mafTrend.complianceTrend}`;
+  }
+
+  const lines = [`${testLine}.`];
+  if (mafTrend.lastTestDaysAgo != null && mafTrend.lastTestDaysAgo > TEST_CADENCE_NUDGE_DAYS) {
+    lines.push(
+      `The last test is over ${TEST_CADENCE_NUDGE_DAYS} days old — suggest a retest to keep the ceiling calibrated.`,
+    );
+  }
+  return lines;
+}
+
 export function formatMafContext(context: TrainingContext): string {
   const { mafHr, mafTrend } = context;
   if (!mafTrend) return "";
@@ -40,21 +62,7 @@ export function formatMafContext(context: TrainingContext): string {
   if (mafTrend.testCount === 0) {
     lines.push(`No MAF tests logged yet — suggest a baseline test to calibrate the ceiling.`);
   } else {
-    let testLine = `MAF tests: ${mafTrend.testCount} logged`;
-    if (mafTrend.lastTestDaysAgo != null) testLine += `, last ${mafTrend.lastTestDaysAgo} days ago`;
-    if (mafTrend.latestClassification) {
-      testLine += `; latest ${CLASSIFICATION_LABELS[mafTrend.latestClassification] ?? mafTrend.latestClassification}`;
-      if (mafTrend.latestCompliancePct != null) testLine += ` (${mafTrend.latestCompliancePct}% under ceiling)`;
-    }
-    if (mafTrend.complianceTrend !== "insufficient_data") {
-      testLine += `; compliance trend ${mafTrend.complianceTrend}`;
-    }
-    lines.push(`${testLine}.`);
-    if (mafTrend.lastTestDaysAgo != null && mafTrend.lastTestDaysAgo > TEST_CADENCE_NUDGE_DAYS) {
-      lines.push(
-        `The last test is over ${TEST_CADENCE_NUDGE_DAYS} days old — suggest a retest to keep the ceiling calibrated.`,
-      );
-    }
+    lines.push(...formatTestHistoryLines(mafTrend));
   }
 
   return lines.join("\n");
