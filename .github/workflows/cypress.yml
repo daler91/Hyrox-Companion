@@ -58,11 +58,14 @@ jobs:
         # CI. That also skips this repo's own postinstall
         # (script/patch-cypress-deps.js), which needs the Cypress binary on disk
         # to do anything — so it runs explicitly after `cypress install` below.
-        # `pnpm exec` runs the cypress pinned in the lockfile; `npx` would fall
-        # back to fetching an unpinned one from the registry.
+        # node_modules/.bin/cypress is the binary the lockfile pinned; `npx`
+        # would fall back to fetching an unpinned one from the registry, and
+        # `pnpm exec cypress install` reads to SonarCloud like a package
+        # installation missing --ignore-scripts — a flag `cypress install`
+        # (a binary download that runs no lifecycle scripts) doesn't take.
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
-          pnpm exec cypress install
+          node_modules/.bin/cypress install
           node script/patch-cypress-deps.js
 
       - name: Cache Cypress binary
@@ -74,7 +77,7 @@ jobs:
 
       - name: Install Cypress binary
         if: steps.cypress-cache.outputs.cache-hit != 'true'
-        run: pnpm exec cypress install && node script/patch-cypress-deps.js
+        run: node_modules/.bin/cypress install && node script/patch-cypress-deps.js
 
       - name: Build application
         run: pnpm run build

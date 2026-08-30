@@ -36,6 +36,12 @@ interface DeltaIndicatorProps {
  * zero (nothing meaningful to compare). When previous is zero but current
  * is non-zero the pill renders a muted "new" label instead of a divide-by-
  * zero percentage.
+ *
+ * The pill is the tooltip trigger's own <button> (Radix's default) rather
+ * than a tabIndex'd span: keyboard and touch users need focus to reveal the
+ * previous-period tooltip, and only a genuinely interactive element may
+ * carry that focus (Sonar S6845). Activating it does nothing beyond the
+ * tooltip.
  */
 export function DeltaIndicator({
   current,
@@ -51,15 +57,13 @@ export function DeltaIndicator({
     return (
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              tabIndex={0}
-              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              data-testid={testIdSuffix ? `delta-new-${testIdSuffix}` : undefined}
-              aria-label={`New metric: ${current}${unit}`}
-            >
-              new
-            </span>
+          <TooltipTrigger
+            type="button"
+            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            data-testid={testIdSuffix ? `delta-new-${testIdSuffix}` : undefined}
+            aria-label={`New metric: ${current}${unit}`}
+          >
+            new
           </TooltipTrigger>
           <TooltipContent><p>{tip}</p></TooltipContent>
         </Tooltip>
@@ -79,16 +83,13 @@ export function DeltaIndicator({
     return (
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              tabIndex={0}
-              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              data-testid={testIdSuffix ? `delta-flat-${testIdSuffix}` : undefined}
-              aria-label={`Unchanged at ${current}${unit} vs previous period`}
-            >
-              <ArrowRight className="h-2.5 w-2.5" aria-hidden="true" />
-              =
-            </span>
+          <TooltipTrigger
+            type="button"
+            className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            data-testid={testIdSuffix ? `delta-flat-${testIdSuffix}` : undefined}
+            aria-label={`Unchanged at ${current}${unit} vs previous period`}
+          >
+            <ArrowRight className="h-2.5 w-2.5" aria-hidden="true" />=
           </TooltipTrigger>
           <TooltipContent><p>{tip}</p></TooltipContent>
         </Tooltip>
@@ -109,19 +110,19 @@ export function DeltaIndicator({
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            tabIndex={0}
-            className={cn(
-              "inline-flex items-center gap-0.5 text-[10px] font-medium rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-              isImprovement ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
-            )}
-            data-testid={testIdSuffix ? `delta-${direction}-${testIdSuffix}` : undefined}
-            aria-label={`${isImprovement ? "Improved" : "Regressed"} by ${absPercent}% vs previous period`}
-          >
-            <Arrow className="h-2.5 w-2.5" aria-hidden="true" />
-            {absPercent}%
-          </span>
+        <TooltipTrigger
+          type="button"
+          className={cn(
+            "inline-flex items-center gap-0.5 text-[10px] font-medium rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            isImprovement
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-red-600 dark:text-red-400",
+          )}
+          data-testid={testIdSuffix ? `delta-${direction}-${testIdSuffix}` : undefined}
+          aria-label={`${isImprovement ? "Improved" : "Regressed"} by ${absPercent}% vs previous period`}
+        >
+          <Arrow className="h-2.5 w-2.5" aria-hidden="true" />
+          {absPercent}%
         </TooltipTrigger>
         <TooltipContent><p>{tip}</p></TooltipContent>
       </Tooltip>

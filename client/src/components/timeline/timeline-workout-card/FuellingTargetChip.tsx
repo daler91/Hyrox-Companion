@@ -17,8 +17,12 @@ import { QUERY_KEYS, type UserPreferences } from "@/lib/api";
  * them) and the post-session recovery carbs + protein, so the card carries the
  * whole fuel plan for the session. Renders nothing only when there's no useful
  * target at all. The caller gates on the nutrition flag and on the entry being a
- * planned plan-day. Static (not a button): the card itself opens the detail
- * sheet, where the full panel lives.
+ * planned plan-day. The chip is the tooltip trigger's own <button> (Radix's
+ * default) rather than a tabIndex'd span: keyboard and touch users need focus
+ * to reveal the explanation, and only a genuinely interactive element may
+ * carry that focus (Sonar S6845). Activating it opens nothing itself — the
+ * press bubbles to the card, which opens the detail sheet where the full
+ * panel lives.
  */
 export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry }) {
   const { data: preferences } = useQuery<UserPreferences>({ queryKey: QUERY_KEYS.preferences });
@@ -51,31 +55,28 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            tabIndex={0}
-            className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            aria-label={target.explanation}
-            data-testid={`fuelling-target-chip-${entry.id}`}
-          >
-            <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
-            <span className="tabular-nums">
-              Fuel{" "}
-              {hasPre ? (
-                <>
-                  ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs
-                  before
-                </>
-              ) : null}
-              {hasPre && hasPost ? " · " : null}
-              {hasPost ? (
-                <>
-                  ~<span className="font-medium text-foreground">{target.postCarbG}g</span> C +{" "}
-                  <span className="font-medium text-foreground">{target.postProteinG}g</span> P
-                  after
-                </>
-              ) : null}
-            </span>
+        <TooltipTrigger
+          type="button"
+          className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          aria-label={target.explanation}
+          data-testid={`fuelling-target-chip-${entry.id}`}
+        >
+          <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
+          <span className="tabular-nums">
+            Fuel{" "}
+            {hasPre ? (
+              <>
+                ~<span className="font-medium text-foreground">{target.preCarbG}g</span> carbs
+                before
+              </>
+            ) : null}
+            {hasPre && hasPost ? " · " : null}
+            {hasPost ? (
+              <>
+                ~<span className="font-medium text-foreground">{target.postCarbG}g</span> C +{" "}
+                <span className="font-medium text-foreground">{target.postProteinG}g</span> P after
+              </>
+            ) : null}
           </span>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
