@@ -7,7 +7,7 @@
  *
  *   - if NO athlete shows a switch, stamping every legacy row with that
  *     athlete's current preference is provably correct rather than an
- *     assumption, and the tail closes with one UPDATE;
+ *     assumption, and `script/backfill-legacy-unit-rows.ts` closes the tail;
  *   - if some do, those athletes need their history split at the detected
  *     boundary, or a question put to them, and the rest can still be stamped.
  *
@@ -15,6 +15,13 @@
  * unit, and `users.weight_unit` is a bare scalar with no history — unlike
  * `training_style_previous_id` / `training_style_changed_at` two columns away.
  * The only remaining evidence is the shape of the logged numbers themselves.
+ *
+ * The verdict itself lives in `server/services/legacyUnitAudit`, not here,
+ * because the backfill has to apply the SAME rule this prints. Two copies could
+ * drift, and the direction that matters is a backfill stamping an athlete this
+ * report would have flagged. The backfill also re-derives it at write time
+ * rather than reading `--report-file`: a report from last week cannot know
+ * about a switch made yesterday.
  *
  * Usage:
  *   pnpm tsx script/audit-legacy-unit-rows.ts [flags]
@@ -25,20 +32,12 @@
  *   --quiet            Summary only; skip the per-athlete lines.
  */
 
-import { exerciseSets, users, workoutLogs } from "@shared/schema";
-import { standardizeWeightUnit } from "@shared/unitConversion";
-import { and, eq, isNull, sql } from "drizzle-orm";
-
-import { db } from "../server/db";
 import { logger } from "../server/logger";
 import {
-  describeUnitPlausibility,
-  detectDistanceUnitSwitch,
-  type DetectedSwitch,
-  detectWeightUnitSwitch,
-  type LoggedMeasurement,
-  type UnitPlausibility,
-} from "../server/services/unitSwitchDetection";
+  type AthleteUnitReport,
+  auditAthlete,
+  loadAthletes,
+} from "../server/services/legacyUnitAudit";
 
 interface Flags {
   userId?: string;
@@ -56,93 +55,13 @@ function parseFlags(argv: string[]): Flags {
   return flags;
 }
 
-interface AthleteReport {
-  userId: string;
-  currentWeightUnit: string;
-  currentDistanceUnit: string;
-  legacyWeightRows: number;
-  legacyDistanceRows: number;
-  weightSwitch: DetectedSwitch | null;
-  distanceSwitch: DetectedSwitch | null;
-  weightPlausibility: UnitPlausibility;
-  /** What a stamp-with-current-preference backfill would do to this athlete. */
-  verdict: "safe_to_stamp" | "needs_split" | "needs_review" | "nothing_to_do";
-}
-
-/**
- * Legacy rows only — `weight_unit IS NULL` is exactly "written before the L4
- * migration". Stamped rows already say what they are and are none of this
- * script's business.
- */
-async function loadLegacyMeasurements(
-  userId: string,
-  column: "weight" | "distance",
-): Promise<LoggedMeasurement[]> {
-  const unitColumn = column === "weight" ? exerciseSets.weightUnit : exerciseSets.distanceUnit;
-  const valueColumn = column === "weight" ? exerciseSets.weight : exerciseSets.distance;
-
-  const rows = await db
-    .select({
-      date: workoutLogs.date,
-      exerciseName: exerciseSets.exerciseName,
-      customLabel: exerciseSets.customLabel,
-      value: valueColumn,
-    })
-    .from(exerciseSets)
-    .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
-    .where(and(eq(workoutLogs.userId, userId), isNull(unitColumn), sql`${valueColumn} > 0`));
-
-  return rows.map((r) => ({
-    date: r.date,
-    // Same key analytics uses, so a custom "Sled Push" is not merged with the
-    // catalogue exercises (audit H4 is the same distinction).
-    exercise: r.exerciseName === "custom" && r.customLabel ? `custom:${r.customLabel}` : r.exerciseName,
-    value: Number(r.value),
-  }));
-}
-
-function verdictFor(report: Omit<AthleteReport, "verdict">): AthleteReport["verdict"] {
-  if (report.legacyWeightRows === 0 && report.legacyDistanceRows === 0) return "nothing_to_do";
-  if (report.weightSwitch || report.distanceSwitch) return "needs_split";
-  // No boundary found, but the numbers do not look like the unit the athlete
-  // currently prefers — the blind spot the boundary test cannot cover.
-  if (report.weightPlausibility === "suspect") return "needs_review";
-  return "safe_to_stamp";
-}
-
-async function auditAthlete(user: {
-  id: string;
-  weightUnit: string | null;
-  distanceUnit: string | null;
-}): Promise<AthleteReport> {
-  const [weights, distances] = await Promise.all([
-    loadLegacyMeasurements(user.id, "weight"),
-    loadLegacyMeasurements(user.id, "distance"),
-  ]);
-
-  const base = {
-    userId: user.id,
-    currentWeightUnit: user.weightUnit ?? "kg",
-    currentDistanceUnit: user.distanceUnit ?? "km",
-    legacyWeightRows: weights.length,
-    legacyDistanceRows: distances.length,
-    weightSwitch: detectWeightUnitSwitch(weights),
-    distanceSwitch: detectDistanceUnitSwitch(distances),
-    weightPlausibility: describeUnitPlausibility(
-      weights.map((w) => w.value),
-      standardizeWeightUnit(user.weightUnit),
-    ),
-  };
-  return { ...base, verdict: verdictFor(base) };
-}
-
 /**
  * The per-athlete line, which necessarily carries a user id — a report saying
  * "somebody switched units" is not actionable. `--quiet` suppresses these and
  * leaves only the summary, for a run whose output goes somewhere the ids should
  * not; the full detail is still written to `--report-file`.
  */
-function logAthlete(report: AthleteReport): void {
+function logAthlete(report: AthleteUnitReport): void {
   if (report.verdict === "nothing_to_do") return;
   const detail: Record<string, unknown> = {
     userId: report.userId,
@@ -171,12 +90,8 @@ function logAthlete(report: AthleteReport): void {
 async function main(): Promise<void> {
   const flags = parseFlags(process.argv.slice(2));
 
-  const athletes = await db
-    .select({ id: users.id, weightUnit: users.weightUnit, distanceUnit: users.distanceUnit })
-    .from(users)
-    .where(flags.userId ? eq(users.id, flags.userId) : undefined);
-
-  const reports: AthleteReport[] = [];
+  const athletes = await loadAthletes(flags.userId);
+  const reports: AthleteUnitReport[] = [];
   for (const athlete of athletes) {
     const report = await auditAthlete(athlete);
     reports.push(report);
