@@ -1,5 +1,7 @@
 import type { MicroSummaryRow } from "@shared/schema";
 
+import { cn } from "@/lib/utils";
+
 /**
  * One micronutrient row: label, %RDI, a progress bar (≥100% turns green), and the
  * amount / RDI line. Shared by the daily MicronutrientPanel and the per-serving
@@ -19,21 +21,19 @@ export function MicroRow({
         <span className="truncate text-xs font-medium">{m.label}</span>
         <span className="text-[10px] tabular-nums text-muted-foreground">{m.pctRdi}%</span>
       </div>
-      <div
-        className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-muted"
-        role="progressbar"
+      <progress
+        className={cn(
+          "mt-0.5 block h-1 w-full appearance-none overflow-hidden rounded-full bg-muted",
+          "[&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-moz-progress-bar]:rounded-full",
+          m.pctRdi >= 100
+            ? "[&::-webkit-progress-value]:bg-emerald-500 [&::-moz-progress-bar]:bg-emerald-500"
+            : "[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary",
+        )}
+        value={Math.min(m.pctRdi, 100)}
+        max={100}
         aria-label={m.label}
-        aria-valuenow={m.amount}
-        aria-valuemin={0}
-        aria-valuemax={m.rdi}
         aria-valuetext={`${m.amount} of ${m.rdi} ${m.unit}, ${m.pctRdi}% of daily intake`}
-      >
-        <div
-          className={`h-full ${m.pctRdi >= 100 ? "bg-emerald-500" : "bg-primary"}`}
-          style={{ width: `${Math.min(m.pctRdi, 100)}%` }}
-          aria-hidden="true"
-        />
-      </div>
+      />
       <span className="mt-0.5 block text-[10px] tabular-nums text-muted-foreground">
         {m.amount} / {m.rdi} {m.unit}
       </span>

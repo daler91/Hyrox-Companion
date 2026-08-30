@@ -24,22 +24,15 @@ function renderAt(path: string) {
 }
 
 describe("Breadcrumbs a11y", () => {
-  it("has no WCAG violations on a secondary route", async () => {
-    const { container } = renderAt("/log");
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-
-  it("has no WCAG violations on Settings", async () => {
-    const { container } = renderAt("/settings");
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-
-  it("renders nothing (empty container) on Home without a workout id", async () => {
-    const { container } = renderAt("/");
-    // Empty containers still have zero violations; this asserts the null-render
-    // branch doesn't introduce hidden-structure issues.
+  it.each([
+    { route: "a secondary route", path: "/log" },
+    { route: "Settings", path: "/settings" },
+    // Home without a workout id renders nothing: an empty container still has
+    // zero violations, so this case asserts the null-render branch doesn't
+    // introduce hidden-structure issues.
+    { route: "Home without a workout id (renders nothing)", path: "/" },
+  ])("has no WCAG violations on $route", async ({ path }) => {
+    const { container } = renderAt(path);
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });

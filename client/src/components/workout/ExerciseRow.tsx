@@ -71,6 +71,7 @@ export function ExerciseRow({
   };
 
   const totalSets = blocks.reduce((sum, b) => sum + (b.data.sets?.length ?? 0), 0);
+  const setNoun = totalSets === 1 ? "set" : "sets";
 
   return (
     <Collapsible open={isAdded && isExpanded} className="w-full">
@@ -87,7 +88,7 @@ export function ExerciseRow({
           type="button"
           onClick={handleClick}
           className="flex w-full items-center gap-3 px-4 py-3 text-left hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-          aria-label={isAdded ? `${displayLabel}, ${totalSets} ${totalSets === 1 ? "set" : "sets"}` : `Add ${displayLabel}`}
+          aria-label={isAdded ? `${displayLabel}, ${totalSets} ${setNoun}` : `Add ${displayLabel}`}
           aria-expanded={isAdded ? isExpanded : undefined}
           data-testid={`button-exercise-${exerciseName}`}
         >
@@ -99,7 +100,7 @@ export function ExerciseRow({
             {isAdded && (
               <div className="text-xs text-muted-foreground">
                 {blocks.length > 1 ? `${blocks.length} blocks · ` : ""}
-                {totalSets} {totalSets === 1 ? "set" : "sets"}
+                {totalSets} {setNoun}
               </div>
             )}
           </div>

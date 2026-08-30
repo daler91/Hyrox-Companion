@@ -285,6 +285,8 @@ const GroupRow = memo(function GroupRow({
   const hasWeight = useMemo(() => shouldShowLoad(group, metric.field), [group, metric.field]);
   const loadVaries = uniformity.weightVaries;
 
+  const deletedSetsPhrase = setCount === 1 ? "its set" : `all ${setCount} sets`;
+
   const handleDeleteRow = () => {
     for (const s of group.sets) onDeleteSet(s.id);
     setConfirmDeleteOpen(false);
@@ -492,7 +494,7 @@ const GroupRow = memo(function GroupRow({
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
         title="Delete exercise?"
-        description={`${label} and ${setCount === 1 ? "its set" : `all ${setCount} sets`} will be permanently removed from this workout.`}
+        description={`${label} and ${deletedSetsPhrase} will be permanently removed from this workout.`}
         confirmText="Delete"
         onConfirm={handleDeleteRow}
         isDestructive

@@ -98,11 +98,10 @@ export function GeneratePlanDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div
-          className="flex items-center justify-center gap-1.5"
-          role="group"
-          aria-label={`Step ${form.step + 1} of 3`}
-        >
+        {/* The dots are purely decorative; the sr-only span below is the sole
+            announcement, so the wrapper needs no group role (which would have
+            screen readers read the same step twice). */}
+        <div className="flex items-center justify-center gap-1.5">
           {STEP_LABELS.map((label, i) => (
             <div
               key={label}
