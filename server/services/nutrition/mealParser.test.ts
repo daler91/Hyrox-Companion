@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generateJsonText } from "../../ai/providers";
 import { AppError } from "../../errors";
 import { storage } from "../../storage";
+import { makeLoggedFood } from "./foodTestFixture";
 import { type MealParseRaw, parseMealFromPhoto, parseMealFromText, resolveAndPreview } from "./mealParser";
+import { expectVisionRequest, generateContentSpy } from "./visionTestSupport";
 
 vi.mock("../../ai/providers", () => ({ generateJsonText: vi.fn() }));
 vi.mock("../../storage", () => ({
@@ -12,19 +14,9 @@ vi.mock("../../storage", () => ({
 }));
 
 // Vision path: capture the generateContent request the parser builds (mirrors
-// server/gemini/exerciseParser.image.test.ts). The mocked retryWithBackoff runs
-// the fn so the spy is invoked with the constructed request; vi.hoisted keeps
-// the spies reachable inside the hoisted vi.mock factory.
-const { generateContentSpy, trackUsageSpy } = vi.hoisted(() => ({
-  generateContentSpy: vi.fn(),
-  trackUsageSpy: vi.fn(),
-}));
-vi.mock("../../gemini/client", () => ({
-  GEMINI_VISION_MODEL: "gemini-2.5-flash",
-  getAiClient: () => ({ models: { generateContent: generateContentSpy } }),
-  retryWithBackoff: (fn: (signal?: AbortSignal) => Promise<unknown>) => fn(),
-  trackUsageFromResponse: trackUsageSpy,
-}));
+// labelParser.test.ts) via the shared visionTestSupport spies. vi.mock is
+// hoisted so it must stay here, but the factory delegates to the shared module.
+vi.mock("../../gemini/client", async () => (await import("./visionTestSupport")).makeGeminiClientMock());
 
 function aiText(payload: unknown) {
   // generateJsonText resolves a TextAiResponse; the parser only reads `.text`.
@@ -32,24 +24,14 @@ function aiText(payload: unknown) {
 }
 
 function makeFood(over: Partial<Food> = {}): Food {
-  return {
-    id: "f1",
-    source: "usda",
-    sourceId: "1",
+  return makeLoggedFood({
     name: "Egg, scrambled",
-    brand: null,
-    createdByUserId: null,
-    servingSizeG: null,
     caloriesPer100g: 150,
-    proteinPer100g: 10,
     carbPer100g: 1,
     fatPer100g: 11,
     fiberPer100g: 0,
-    micros: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     ...over,
-  };
+  });
 }
 
 describe("parseMealFromText", () => {
@@ -126,21 +108,10 @@ describe("parseMealFromPhoto", () => {
     expect(raw.items[0]).toMatchObject({ name: "egg, scrambled", quantityG: 100, mealType: "breakfast" });
     expect(raw.warnings).toEqual(["portion estimated from the plate"]);
 
-    // The request carries the base64 under inlineData on the vision model with a JSON contract.
-    expect(generateContentSpy).toHaveBeenCalledTimes(1);
-    const callArgs = generateContentSpy.mock.calls[0][0] as {
-      model: string;
-      config: { responseMimeType: string };
-      contents: { parts: ({ inlineData?: { mimeType: string; data: string }; text?: string })[] }[];
-    };
-    expect(callArgs.model).toBe("gemini-2.5-flash");
-    expect(callArgs.config.responseMimeType).toBe("application/json");
-    expect(callArgs.contents[0].parts[0]).toEqual({
-      inlineData: { mimeType: "image/jpeg", data: "ZmFrZS1pbWFnZQ==" },
-    });
+    // The request carries the base64 under inlineData on the vision model with a
+    // JSON contract, and usage is tracked (before any empty-response check).
+    const callArgs = expectVisionRequest("ZmFrZS1pbWFnZQ==", "image/jpeg", "u1");
     expect(typeof callArgs.contents[0].parts[1].text).toBe("string");
-    // Usage is tracked for the vision call (before any empty-response check).
-    expect(trackUsageSpy).toHaveBeenCalledWith("u1", "gemini-2.5-flash", "parse", expect.anything());
   });
 
   it("drops malformed items but keeps the valid ones", async () => {

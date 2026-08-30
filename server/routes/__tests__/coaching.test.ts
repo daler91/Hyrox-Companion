@@ -7,35 +7,18 @@ import { storage } from "../../storage";
 import coachingRouter from "../coaching";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
-// Mock auth
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
-vi.mock("../../middleware/aibudget", () => ({
-  aiBudgetCheck: (_req: unknown, _res: unknown, next: () => void) => next(),
-}));
+vi.mock("../../middleware/aibudget", async () => (await import("./testUtils")).mockAiBudgetModule());
 
-vi.mock("../../storage", () => ({
-  storage: {
-    coaching: {
-      listCoachingMaterials: vi.fn(),
-      createCoachingMaterial: vi.fn(),
-      updateCoachingMaterial: vi.fn(),
-      deleteCoachingMaterial: vi.fn(),
-    },
-    users: {
-      getUser: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    coaching: ["listCoachingMaterials", "createCoachingMaterial", "updateCoachingMaterial", "deleteCoachingMaterial"],
+    users: ["getUser"],
+  }),
+);
 
 vi.mock("../../queue", () => ({
   queue: {

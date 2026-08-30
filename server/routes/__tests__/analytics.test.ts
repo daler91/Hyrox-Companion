@@ -9,18 +9,9 @@ import { storage } from "../../storage";
 import analyticsRouter, { _cacheForTesting, _prCacheForTesting, _workoutLogCacheForTesting, addCalendarDays,todayUtcYyyyMmDd, validDate } from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
 
-// Mock the clerkAuth middleware to simulate authentication
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
 
-// Mock the getUserId function to return our test user
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
 // Mock the storage functions
 vi.mock("../../storage", () => ({

@@ -7,10 +7,11 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, desc, eq, exists, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
+import { absenceDeclaredForPlanDay, noAbsenceDeclaredForUserDate } from "./absenceGuard";
 import { planDayWithinPlanLifetime } from "./planRetirement";
 import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
 
@@ -171,18 +172,7 @@ export class AnalyticsStorage {
           eq(trainingPlans.userId, userId),
           eq(planDays.scheduledDate, date),
           eq(planDays.status, "missed"),
-          notExists(
-            db
-              .select({ one: sql`1` })
-              .from(timelineAnnotations)
-              .where(
-                and(
-                  eq(timelineAnnotations.userId, userId),
-                  lte(timelineAnnotations.startDate, date),
-                  gte(timelineAnnotations.endDate, date),
-                ),
-              ),
-          ),
+          noAbsenceDeclaredForUserDate(db, userId, date),
         ),
       );
     return days.map((d) => ({
@@ -343,18 +333,7 @@ export class AnalyticsStorage {
           sql`${planDays.scheduledDate} >= ${weekStart}`,
           sql`${planDays.scheduledDate} <= ${weekEnd}`,
           inArray(planDays.status, ["planned", "missed"]),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(timelineAnnotations)
-              .where(
-                and(
-                  eq(timelineAnnotations.userId, userId),
-                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                ),
-              ),
-          ),
+          absenceDeclaredForPlanDay(db, userId),
         ),
       )
       .groupBy(planDays.status);

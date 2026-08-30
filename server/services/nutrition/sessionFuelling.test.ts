@@ -1,49 +1,16 @@
 import type { Food } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
+import { makeLogRow } from "./foodTestFixture";
 import { type LogEntryWithFood } from "./rollup";
 import { computeSessionFuelling, POST_WINDOW_MS, PRE_WINDOW_MS } from "./sessionFuelling";
 
-function makeFood(over: Partial<Food> = {}): Food {
-  return {
-    id: "f1",
-    source: "usda",
-    sourceId: "1",
-    name: "Test Food",
-    brand: null,
-    createdByUserId: null,
-    servingSizeG: null,
-    caloriesPer100g: 100,
-    proteinPer100g: 10,
-    carbPer100g: 20,
-    fatPer100g: 5,
-    fiberPer100g: 2,
-    micros: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...over,
-  };
-}
-
+/** Session-day defaults: an untagged snack stamped at the session's noon. */
 function makeRow(entryOver: Partial<LogEntryWithFood> = {}, foodOver: Partial<Food> = {}): LogEntryWithFood {
-  const food = makeFood(foodOver);
-  return {
-    id: "e1",
-    userId: "u1",
-    foodId: food.id,
-    loggedAt: new Date("2026-06-07T12:00:00Z"),
-    logDate: "2026-06-07",
-    quantityG: 100,
-    mealType: "snack",
-    entryMethod: "manual",
-    rawInput: null,
-    parseConfidence: null,
-    pendingReview: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    food,
-    ...entryOver,
-  };
+  return makeLogRow(
+    { loggedAt: new Date("2026-06-07T12:00:00Z"), mealType: "snack", ...entryOver },
+    foodOver,
+  );
 }
 
 const START = new Date("2026-06-07T12:00:00Z");

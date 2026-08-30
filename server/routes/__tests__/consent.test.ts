@@ -7,25 +7,13 @@ import { storage } from "../../storage";
 import consentRouter from "../consent";
 import { createTestApp } from "./testUtils";
 
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
-
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
-
-vi.mock("../../storage", () => ({
-  storage: {
-    consent: {
-      recordConsent: vi.fn(),
-      getConsents: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAuthModule());
+vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    consent: ["recordConsent", "getConsents"],
+  }),
+);
 
 describe("consent routes (W4)", () => {
   let app: express.Express;

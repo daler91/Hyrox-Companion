@@ -118,7 +118,9 @@ describe('UserStorage', () => {
     });
 
     describe('upsertStravaConnection', () => {
-      it('should encrypt tokens before inserting/updating', async () => {
+      // Wires the insert → values → onConflictDoUpdate → returning chain around
+      // a canonical raw-token payload, returning the mocks each test asserts on.
+      function mockStravaUpsert() {
         const inputData: InsertStravaConnection = {
           userId: 'user-1',
           stravaAthleteId: 'athlete-1',
@@ -136,6 +138,11 @@ describe('UserStorage', () => {
         const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
         const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
         vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
+        return { inputData, valuesMock, onConflictDoUpdateMock };
+      }
+
+      it('should encrypt tokens before inserting/updating', async () => {
+        const { inputData, valuesMock } = mockStravaUpsert();
 
         const result = await userStorage.upsertStravaConnection(inputData);
 
@@ -154,23 +161,7 @@ describe('UserStorage', () => {
       });
 
       it('clears the requires_reauth tombstone on the conflict-update path (reconnect)', async () => {
-        const inputData: InsertStravaConnection = {
-          userId: 'user-1',
-          stravaAthleteId: 'athlete-1',
-          accessToken: 'raw-access',
-          refreshToken: 'raw-refresh',
-          expiresAt: new Date(),
-          scope: 'activity:read_all',
-        };
-
-        const returningMock = vi.fn().mockResolvedValue([{
-          ...inputData,
-          accessToken: 'encrypted-raw-access',
-          refreshToken: 'encrypted-raw-refresh',
-        }]);
-        const onConflictDoUpdateMock = vi.fn().mockReturnValue({ returning: returningMock });
-        const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
-        vi.mocked(db.insert).mockReturnValue({ values: valuesMock });
+        const { inputData, onConflictDoUpdateMock } = mockStravaUpsert();
 
         await userStorage.upsertStravaConnection(inputData);
 

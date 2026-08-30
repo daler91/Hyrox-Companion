@@ -12,7 +12,12 @@ import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { StepFooter } from "../StepFooter";
 
-interface ReflectStepProps {
+/**
+ * The reflect-step data fields and save handlers. Owned by the stepper layout
+ * (whose props extend this) and threaded down to ReflectStep, so the two stay
+ * one declaration instead of drifting copies.
+ */
+export interface ReflectFields {
   readonly rpe: number | null;
   readonly setRpe: (value: number | null) => void;
   readonly timeOfDayMin: number | null;
@@ -36,10 +41,13 @@ interface ReflectStepProps {
   readonly isNotesSupported: boolean;
   readonly notesInterim: string;
   readonly toggleNotesListening: () => void;
-  readonly onBack: () => void;
   readonly handleSave: () => void;
   readonly isSaving: boolean;
   readonly hasWorkoutDetails: boolean;
+}
+
+interface ReflectStepProps extends ReflectFields {
+  readonly onBack: () => void;
 }
 /**
  * Step 3: Post-workout reflection. RPE is required to save by default —

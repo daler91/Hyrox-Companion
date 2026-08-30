@@ -1,9 +1,14 @@
-import { planDays, timelineAnnotations, trainingPlans, users } from "@shared/schema";
-import { and, eq, exists, gte, inArray, lt, lte, notExists, sql } from "drizzle-orm";
+import { planDays, trainingPlans, users } from "@shared/schema";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
+import {
+  absenceDeclaredForPlanDay,
+  noAbsenceDeclaredForPlanDay,
+  noAbsenceDeclaredForUserDate,
+} from "../absenceGuard";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "../planRetirement";
 
 /**
@@ -16,9 +21,10 @@ import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate 
  * days missed, silently, with no error to notice. There is no database in CI to
  * catch that, so the rendered statement is asserted directly.
  *
- * The queries are rebuilt here rather than imported because both are inlined in
- * `.where()` calls on a mocked `db`. They are kept character-identical to the
- * originals in plans.ts / analytics.ts.
+ * The statements are rebuilt here rather than imported because they are inlined
+ * in `.where()` calls on a mocked `db` — but every guard under test is the REAL
+ * predicate builder from ../absenceGuard / ../planRetirement, so the rendered
+ * SQL is asserted against the code the queries actually run, not a copy of it.
  */
 
 // Driverless: building a query AST needs no connection.
@@ -36,10 +42,9 @@ function render(query: { getSQL: () => never }): string {
  * Both of its guards — declared absence and plan retirement — live on the same
  * WHERE, and each is a correlated NOT EXISTS that the other could plausibly
  * break: an unaliased retirement guard would shadow the training_plans the
- * absence guard joins for its own purposes. Restating the statement per test
- * meant a fix could be applied to one copy and asserted against the other, so
- * it is written out once here, kept character-identical to the original in
- * plans.ts, and every test below renders THIS.
+ * absence guard joins for its own purposes. Both are imported rather than
+ * restated — a predicate asserted against a hand-copied twin of itself proves
+ * nothing about the query that actually runs.
  */
 function renderMissedSweep(today = "2026-07-21", timezone = "UTC"): string {
   const zonePlanIds = db
@@ -57,23 +62,8 @@ function renderMissedSweep(today = "2026-07-21", timezone = "UTC"): string {
           eq(planDays.status, "planned"),
           lt(planDays.scheduledDate, today),
           inArray(planDays.planId, zonePlanIds),
-          // The REAL guard, imported rather than restated — a predicate asserted
-          // against a hand-copied twin of itself proves nothing about the query
-          // that actually runs.
           missedSweepRetirementGuard(db),
-          notExists(
-            db
-              .select({ one: sql`1` })
-              .from(timelineAnnotations)
-              .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
-              .where(
-                and(
-                  eq(timelineAnnotations.userId, trainingPlans.userId),
-                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                ),
-              ),
-          ),
+          noAbsenceDeclaredForPlanDay(db),
         ),
       ) as never,
   );
@@ -109,18 +99,7 @@ describe("declared-absence guards", () => {
           eq(trainingPlans.userId, userId),
           eq(planDays.scheduledDate, date),
           eq(planDays.status, "missed"),
-          notExists(
-            db
-              .select({ one: sql`1` })
-              .from(timelineAnnotations)
-              .where(
-                and(
-                  eq(timelineAnnotations.userId, userId),
-                  lte(timelineAnnotations.startDate, date),
-                  gte(timelineAnnotations.endDate, date),
-                ),
-              ),
-          ),
+          noAbsenceDeclaredForUserDate(db, userId, date),
         ),
       );
 
@@ -151,18 +130,7 @@ describe("declared-absence guards", () => {
           sql`${planDays.scheduledDate} >= ${"2026-07-13"}`,
           sql`${planDays.scheduledDate} <= ${"2026-07-19"}`,
           inArray(planDays.status, ["planned", "missed"]),
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(timelineAnnotations)
-              .where(
-                and(
-                  eq(timelineAnnotations.userId, userId),
-                  lte(timelineAnnotations.startDate, planDays.scheduledDate),
-                  gte(timelineAnnotations.endDate, planDays.scheduledDate),
-                ),
-              ),
-          ),
+          absenceDeclaredForPlanDay(db, userId),
         ),
       )
       .groupBy(planDays.status);
@@ -184,10 +152,8 @@ describe("declared-absence guards", () => {
  *
  * These import the REAL predicate builders from ../planRetirement rather than
  * restating them, so the half-open `[start, retired_on)` convention is asserted
- * against the code the queries actually run. The absence guards above can only
- * duplicate their queries because those are inlined in `.where()` calls; the
- * retirement rule is shared across four call sites, which is precisely why it
- * had to be extracted, and why a copy here would defeat the point.
+ * against the code the queries actually run — the same arrangement the absence
+ * guards above get from ../absenceGuard.
  */
 describe("plan-retirement guards", () => {
   it("lets a retired plan answer only for the stretch it actually ran", () => {

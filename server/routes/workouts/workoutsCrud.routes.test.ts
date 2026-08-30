@@ -32,17 +32,9 @@ describe("uniqueIds", () => {
 });
 
 // Mock the clerkAuth middleware to simulate authentication, mirroring
-// server/routes/__tests__/ai.test.ts.
-vi.mock("../../clerkAuth", () => ({
-  isAuthenticated: (req: Record<string, unknown>, _res: unknown, next: () => void) => {
-    req.auth = { userId: "test_user_id" };
-    next();
-  },
-}));
+vi.mock("../../clerkAuth", async () => (await import("../__tests__/testUtils")).mockClerkAuthModule());
 
-vi.mock("../../types", () => ({
-  getUserId: () => "test_user_id",
-}));
+vi.mock("../../types", async () => (await import("../__tests__/testUtils")).mockTypesModule());
 
 // deriveMissingWorkoutSetsFromStructure does real `db.select`/`db.transaction`
 // work under the hood — mock it so the derive-branch test doesn't need a real
@@ -52,19 +44,11 @@ vi.mock("../../services/workoutService", () => ({
   updateWorkoutStructureBlockScore: vi.fn(),
 }));
 
-vi.mock("../../storage", () => ({
-  storage: {
-    workouts: {
-      listWorkoutLogs: vi.fn(),
-      getExerciseSetsByWorkoutLog: vi.fn(),
-      getWorkoutStructureByWorkoutLog: vi.fn(),
-      getWorkoutLog: vi.fn(),
-      mutateExerciseSetUpdate: vi.fn(),
-      mutateExerciseSetAdd: vi.fn(),
-      mutateExerciseSetDelete: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("../__tests__/testUtils")).mockStorageModule({
+    workouts: ["listWorkoutLogs", "getExerciseSetsByWorkoutLog", "getWorkoutStructureByWorkoutLog", "getWorkoutLog", "mutateExerciseSetUpdate", "mutateExerciseSetAdd", "mutateExerciseSetDelete"],
+  }),
+);
 
 import { deriveMissingWorkoutSetsFromStructure } from "../../services/workoutService";
 import { storage } from "../../storage";

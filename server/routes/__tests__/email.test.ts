@@ -6,14 +6,11 @@ import { env } from "../../env";
 import emailRouter from "../email";
 import { createTestApp } from "./testUtils";
 
-// Mock storage
-vi.mock("../../storage", () => ({
-  storage: {
-    users: {
-      getUser: vi.fn(),
-    },
-  },
-}));
+vi.mock("../../storage", async () =>
+  (await import("./testUtils")).mockStorageModule({
+    users: ["getUser"],
+  }),
+);
 
 // Mock emailScheduler
 vi.mock("../../emailScheduler", () => ({
