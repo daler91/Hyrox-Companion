@@ -521,6 +521,41 @@ export const FUNCTIONAL_EXERCISES = [
   "step ups",
 ];
 
+/** RAG-retrieved chunks take priority over legacy coaching materials. */
+function buildMaterialsSection(
+  coachingMaterials?: CoachingMaterialInput[],
+  retrievedChunks?: string[],
+): string {
+  if (retrievedChunks && retrievedChunks.length > 0) {
+    return buildRetrievedChunksSection(retrievedChunks);
+  }
+  return buildCoachingMaterialsSection(coachingMaterials ?? []);
+}
+
+/** System prompt for an athlete with no logged workouts yet. */
+function buildNoDataPrompt(
+  trainingContext: TrainingContext | undefined,
+  coachingMaterials?: CoachingMaterialInput[],
+  retrievedChunks?: string[],
+): string {
+  let prompt =
+    BASE_SYSTEM_PROMPT +
+    `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
+  // Constraints still apply with zero logged workouts — more so, if anything.
+  // An athlete who has just told the plan wizard "recovering from knee
+  // surgery" and gone straight to the chat is the single most likely person
+  // to have declared something, and this no-data path is the path they take.
+  const noDataConstraints = formatAthleteConstraints(trainingContext);
+  if (noDataConstraints) prompt += `\n\n${noDataConstraints}`;
+  // A MAF athlete's ceiling is set at onboarding, before any workout exists —
+  // the day-one chat should already coach to it.
+  const noDataMaf = trainingContext ? formatMafContext(trainingContext) : "";
+  if (noDataMaf) prompt += `\n\n${noDataMaf}`;
+  const materialsSection = buildMaterialsSection(coachingMaterials, retrievedChunks);
+  if (materialsSection) prompt += `\n${materialsSection}`;
+  return prompt;
+}
+
 /**
  * Build system prompt with optional RAG-retrieved chunks or legacy coaching materials.
  * When retrievedChunks is provided, it takes priority over coachingMaterials.
@@ -531,25 +566,7 @@ export function buildSystemPrompt(
   retrievedChunks?: string[],
 ): string {
   if (!trainingContext || trainingContext.totalWorkouts === 0) {
-    let prompt =
-      BASE_SYSTEM_PROMPT +
-      `\n\nNote: This athlete hasn't logged any training data yet. Encourage them to start tracking their workouts to receive personalized insights.`;
-    // Constraints still apply with zero logged workouts — more so, if anything.
-    // An athlete who has just told the plan wizard "recovering from knee
-    // surgery" and gone straight to the chat is the single most likely person
-    // to have declared something, and this early return is the path they take.
-    const noDataConstraints = formatAthleteConstraints(trainingContext);
-    if (noDataConstraints) prompt += `\n\n${noDataConstraints}`;
-    // A MAF athlete's ceiling is set at onboarding, before any workout exists —
-    // the day-one chat should already coach to it.
-    const noDataMaf = trainingContext ? formatMafContext(trainingContext) : "";
-    if (noDataMaf) prompt += `\n\n${noDataMaf}`;
-    const materialsSection =
-      retrievedChunks && retrievedChunks.length > 0
-        ? buildRetrievedChunksSection(retrievedChunks)
-        : buildCoachingMaterialsSection(coachingMaterials || []);
-    if (materialsSection) prompt += `\n${materialsSection}`;
-    return prompt;
+    return buildNoDataPrompt(trainingContext, coachingMaterials, retrievedChunks);
   }
 
   let contextSection = `\n\n--- ATHLETE'S TRAINING DATA ---\n`;
@@ -584,10 +601,7 @@ export function buildSystemPrompt(
 
   contextSection += `\n\n--- END TRAINING DATA ---\n\nUse this data to provide personalized coaching. Reference specific workouts and patterns when relevant.`;
 
-  const materialsSection =
-    retrievedChunks && retrievedChunks.length > 0
-      ? buildRetrievedChunksSection(retrievedChunks)
-      : buildCoachingMaterialsSection(coachingMaterials || []);
+  const materialsSection = buildMaterialsSection(coachingMaterials, retrievedChunks);
   if (materialsSection) contextSection += `\n${materialsSection}`;
 
   return BASE_SYSTEM_PROMPT + contextSection;
