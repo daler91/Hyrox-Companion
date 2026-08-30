@@ -93,6 +93,7 @@ export function CoachInsightsTab() {
               variant={hasInsights ? "outline" : "default"}
               onClick={handleGenerateInsights}
               disabled={isGenerating || !userId}
+              aria-busy={isGenerating}
               data-testid="button-generate-coach-insights"
             >
               {(() => {
