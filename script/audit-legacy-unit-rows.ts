@@ -227,12 +227,13 @@ async function main(): Promise<void> {
   }
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    // The operational error that stopped the run, so it can be diagnosed. Same
-    // shape the rest of the codebase logs a failure with.
-    // bearer:disable javascript_lang_logger_leak
-    logger.error({ err }, "[legacy-units] failed");
-    process.exit(1);
-  });
+try {
+  await main();
+  process.exit(0);
+} catch (err) {
+  // The operational error that stopped the run, so it can be diagnosed. Same
+  // shape the rest of the codebase logs a failure with.
+  // bearer:disable javascript_lang_logger_leak
+  logger.error({ err }, "[legacy-units] failed");
+  process.exit(1);
+}

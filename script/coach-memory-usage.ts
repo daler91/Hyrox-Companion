@@ -54,10 +54,12 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-main().catch((err: unknown) => {
+try {
+  await main();
+} catch (err) {
   // A DB/connection failure from a read-only admin script, printed to the
   // operator's own terminal so they can fix their DATABASE_URL.
   // bearer:disable javascript_lang_logger_leak
   console.error("coach-memory-usage failed:", err);
   process.exit(1);
-});
+}

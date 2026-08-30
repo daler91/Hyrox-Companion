@@ -328,15 +328,29 @@ describe("calculateStreak", () => {
   });
 
 
-  it("maintains streak when run at 11:59 PM", () => {
-    vi.setSystemTime(new Date("2026-01-15T23:59:59.999Z"));
-    expect(calculateStreak(new Set(["2026-01-15", "2026-01-14"]))).toBe(2);
-  });
-
-  it("calculates correctly when run at 00:00 AM (midnight)", () => {
-    vi.setSystemTime(new Date("2026-01-16T00:00:00.000Z"));
-    // If it's the 16th midnight, the 15th was yesterday. Streak should continue.
-    expect(calculateStreak(new Set(["2026-01-15", "2026-01-14"]))).toBe(2);
+  it.each([
+    {
+      name: "maintains streak when run at 11:59 PM",
+      now: "2026-01-15T23:59:59.999Z",
+      dates: ["2026-01-15", "2026-01-14"],
+      expected: 2,
+    },
+    {
+      // If it's the 16th midnight, the 15th was yesterday. Streak should continue.
+      name: "calculates correctly when run at 00:00 AM (midnight)",
+      now: "2026-01-16T00:00:00.000Z",
+      dates: ["2026-01-15", "2026-01-14"],
+      expected: 2,
+    },
+    {
+      name: "returns 0 if today is completed but it is the only one and not today or yesterday",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-10", "2026-01-09"],
+      expected: 0,
+    },
+  ])("$name", ({ now, dates, expected }) => {
+    vi.setSystemTime(new Date(now));
+    expect(calculateStreak(new Set(dates))).toBe(expected);
   });
 
   it("handles a single gap of 1 day correctly (streak broken)", () => {
@@ -359,11 +373,6 @@ describe("calculateStreak", () => {
     // Since "2026-01-14" is not correctly formatted as "YYYY-MM-DD" in the set, it breaks the streak.
     // "2026-01-15" is found, so streak is 1. The next expected is "2026-01-14", which is missing (only "2026/01/14" is there).
     expect(calculateStreak(dates)).toBe(1);
-  });
-
-  it("returns 0 if today is completed but it is the only one and not today or yesterday", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-10", "2026-01-09"]))).toBe(0);
   });
 
   it("anchors today/yesterday to the user's timezone (W19)", () => {
