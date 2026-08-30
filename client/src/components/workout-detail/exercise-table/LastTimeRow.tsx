@@ -1,5 +1,5 @@
 import type { ExerciseSet } from "@shared/schema";
-import { History, RotateCcw, TrendingUp } from "lucide-react";
+import { History, RotateCcw, TrendingDown, TrendingUp } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { useExerciseHistory } from "@/hooks/useExerciseHistory";
 import type { PatchExerciseSetPayload } from "@/lib/api";
 
 import { formatPrescription, type Prescription } from "../../exercise-row/formatPrescription";
-import { buildUseLastPatches, pickLastSession, summariseLastSession } from "./lastSession";
+import { buildUseLastPatches, pickRecentSessions, summariseLastSession } from "./lastSession";
 import { buildUseNextPatches, type NextTarget, suggestNextTarget } from "./nextTarget";
 
 /**
@@ -48,10 +48,15 @@ export function LastTimeRow({
 }) {
   const { data: history } = useExerciseHistory(exerciseName);
 
-  const lastSession = useMemo(
-    () => (history ? pickLastSession(history, currentWorkoutLogId) : null),
+  // Two sessions, not one: the second is what lets "Next" tell a first miss
+  // (repeat) from the same prescription missed twice (deload). The hook already
+  // fetches three sessions; before this, all but the newest were discarded.
+  const recentSessions = useMemo(
+    () => (history ? pickRecentSessions(history, currentWorkoutLogId, 2) : []),
     [history, currentWorkoutLogId],
   );
+  const lastSession = recentSessions[0] ?? null;
+  const previousSets = recentSessions[1]?.sets;
 
   const prescription = useMemo(
     () =>
@@ -62,8 +67,11 @@ export function LastTimeRow({
   );
 
   const nextTarget = useMemo(
-    () => (lastSession ? suggestNextTarget(lastSession.sets, { category, weightUnit }) : null),
-    [lastSession, category, weightUnit],
+    () =>
+      lastSession
+        ? suggestNextTarget(lastSession.sets, { category, weightUnit, previousSets })
+        : null,
+    [lastSession, previousSets, category, weightUnit],
   );
 
   if (!lastSession || !prescription) return null;
@@ -136,17 +144,10 @@ function NextTargetLine({
     hasWeight: true,
   });
   const { badge, srSuffix } = describeStep(target.step, weightUnit);
-  const repeating = target.step.field === "repeat";
 
   return (
     <PrescriptionLine
-      icon={
-        repeating ? (
-          <RotateCcw className="h-3 w-3 shrink-0" aria-hidden />
-        ) : (
-          <TrendingUp className="h-3 w-3 shrink-0" aria-hidden />
-        )
-      }
+      icon={stepIcon(target.step.field)}
       label="Next"
       prescription={prescription}
       badge={badge}
@@ -169,8 +170,22 @@ function describeStep(
   if (step.field === "repeat") {
     return { badge: "Repeat", srSuffix: "the same target as last time, which was not completed" };
   }
+  if (step.field === "deload") {
+    return {
+      badge: `−${step.amount} ${weightUnit}`,
+      srSuffix: `down ${step.amount} ${weightUnit}, after two sessions short of this target`,
+    };
+  }
   const unit = step.field === "reps" ? "rep" : weightUnit;
   return { badge: `+${step.amount} ${unit}`, srSuffix: `up ${step.amount} ${unit} on last time` };
+}
+
+/** Repeat and deload are not overloads, so neither may carry the rising-trend
+ *  icon (audit H5 established that rule for repeat; a deload points down). */
+function stepIcon(field: NextTarget["step"]["field"]) {
+  if (field === "repeat") return <RotateCcw className="h-3 w-3 shrink-0" aria-hidden />;
+  if (field === "deload") return <TrendingDown className="h-3 w-3 shrink-0" aria-hidden />;
+  return <TrendingUp className="h-3 w-3 shrink-0" aria-hidden />;
 }
 
 interface LineAction {

@@ -1,7 +1,7 @@
 import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
-import { buildUseLastPatches, pickLastSession, summariseLastSession } from "../lastSession";
+import { buildUseLastPatches, pickLastSession, pickRecentSessions, summariseLastSession } from "../lastSession";
 import { makeLoggedSet as set } from "./exerciseSetFixture";
 
 const SQUAT = { exerciseName: "back_squat", category: "strength", weightUnit: "kg" } as const;
@@ -183,5 +183,79 @@ describe("buildUseLastPatches", () => {
   it("produces nothing when there is nothing to carry over", () => {
     expect(buildUseLastPatches(current, [set({ id: "l1", reps: null, weight: null })])).toEqual([]);
     expect(buildUseLastPatches(current, [])).toEqual([]);
+  });
+});
+
+describe("pickRecentSessions", () => {
+  it("returns sessions newest first, one per workout log", () => {
+    const sessions = pickRecentSessions(
+      [
+        set({ date: "2026-06-01", workoutLogId: "w1", weight: 80 }),
+        set({ date: "2026-06-08", workoutLogId: "w2", weight: 85 }),
+        set({ date: "2026-06-15", workoutLogId: "w3", weight: 90 }),
+      ],
+      null,
+      2,
+    );
+
+    expect(sessions.map((s) => s.date)).toEqual(["2026-06-15", "2026-06-08"]);
+    expect(sessions[0].sets[0].weight).toBe(90);
+    expect(sessions[1].sets[0].weight).toBe(85);
+  });
+
+  it("splits two same-day logs into two sessions, later time first", () => {
+    // The single-session pick chose the later log and IGNORED the earlier one
+    // (audit M13). Applied repeatedly, the earlier log is not lost — it is the
+    // previous session, which is exactly what the missed-twice deload compares
+    // against for a twice-a-day athlete.
+    const sessions = pickRecentSessions(
+      [
+        set({ date: "2026-06-15", workoutLogId: "am", timeOfDayMin: 8 * 60, weight: 80 }),
+        set({ date: "2026-06-15", workoutLogId: "pm", timeOfDayMin: 18 * 60, weight: 90 }),
+      ],
+      null,
+      2,
+    );
+
+    expect(sessions).toHaveLength(2);
+    expect(sessions[0].sets[0].weight).toBe(90);
+    expect(sessions[1].sets[0].weight).toBe(80);
+  });
+
+  it("excludes the current workout log before picking", () => {
+    const sessions = pickRecentSessions(
+      [
+        set({ date: "2026-06-08", workoutLogId: "w-old", weight: 80 }),
+        set({ date: "2026-06-15", workoutLogId: "w-current", weight: 90 }),
+      ],
+      "w-current",
+      2,
+    );
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].sets[0].weight).toBe(80);
+  });
+
+  it("stops at the limit and at the end of history", () => {
+    const history = [
+      set({ date: "2026-06-01", workoutLogId: "w1" }),
+      set({ date: "2026-06-08", workoutLogId: "w2" }),
+    ];
+
+    expect(pickRecentSessions(history, null, 1)).toHaveLength(1);
+    expect(pickRecentSessions(history, null, 5)).toHaveLength(2);
+    expect(pickRecentSessions([], null, 2)).toHaveLength(0);
+  });
+
+  it("agrees with pickLastSession on the newest session", () => {
+    // The single pick is defined as the first of the many; they must never
+    // diverge, or "Last time" and the deload's idea of last time would differ.
+    const history = [
+      set({ date: "2026-06-15", workoutLogId: "am", timeOfDayMin: 8 * 60 }),
+      set({ date: "2026-06-15", workoutLogId: "pm", timeOfDayMin: 18 * 60 }),
+      set({ date: "2026-06-08", workoutLogId: "w1" }),
+    ];
+
+    expect(pickRecentSessions(history, null, 3)[0]).toEqual(pickLastSession(history, null));
   });
 });
