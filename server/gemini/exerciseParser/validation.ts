@@ -20,9 +20,20 @@ interface MalformedRowSummary {
   rawPreview: string;
 }
 
+/**
+ * Model output is attacker-influenceable (it echoes whatever the user typed
+ * into the parser), so anything from it that reaches a log line has newlines
+ * and control characters stripped to keep one dropped row from forging extra
+ * log records.
+ */
+function sanitizeForLog(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f]/g, " ");
+}
+
 function summarizeMalformedRow(row: unknown): MalformedRowSummary {
   const asRecord = row && typeof row === "object" && !Array.isArray(row) ? row as Record<string, unknown> : null;
-  const keys = Object.keys(asRecord ?? {}).slice(0, 12);
+  const keys = Object.keys(asRecord ?? {}).slice(0, 12).map(sanitizeForLog);
   const exerciseName = asRecord && typeof asRecord.exerciseName === "string" ? asRecord.exerciseName : null;
   const category = asRecord && typeof asRecord.category === "string" ? asRecord.category : null;
   const setsValue = asRecord ? asRecord.sets : undefined;
@@ -41,12 +52,12 @@ function summarizeMalformedRow(row: unknown): MalformedRowSummary {
     keyCount: keys.length,
     keys,
     exerciseNameType: typeof (asRecord ? asRecord.exerciseName : undefined),
-    exerciseNamePreview: exerciseName ? exerciseName.slice(0, 80) : null,
+    exerciseNamePreview: exerciseName ? sanitizeForLog(exerciseName.slice(0, 80)) : null,
     categoryType: typeof (asRecord ? asRecord.category : undefined),
-    categoryPreview: category ? category.slice(0, 80) : null,
+    categoryPreview: category ? sanitizeForLog(category.slice(0, 80)) : null,
     setsType,
     setsLength,
-    rawPreview,
+    rawPreview: sanitizeForLog(rawPreview),
   };
 }
 
@@ -70,11 +81,13 @@ export function validateRowsDetailed(rawArray: unknown[]): ValidatedRows {
       continue;
     }
 
-    const issuesSummary = formatZodIssues(parsed.error);
+    const issuesSummary = sanitizeForLog(formatZodIssues(parsed.error));
     const rowSummary = summarizeMalformedRow(row);
+    // The row's content stays in the sanitized structured fields; the message
+    // string carries only our own values so a crafted row can't reshape it.
     logger.warn(
-      { issues: parsed.error.issues, index, rowSummary },
-      `[ai] exercise-parse dropped malformed row (idx=${index}, issues=${issuesSummary}, rawPreview=${rowSummary.rawPreview})`,
+      { index, issuesSummary, rowSummary },
+      `[ai] exercise-parse dropped malformed row (idx=${index})`,
     );
     rejectedRows.push({ index, reason: `schema_validation_failed: ${issuesSummary}` });
   }

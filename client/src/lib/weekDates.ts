@@ -30,7 +30,7 @@ export function todayLocalDateStr(): string {
   return getTodayString();
 }
 
-export const addDays = addDaysToISODate;
+export { addDaysToISODate as addDays } from "@shared/dateUtils";
 
 /** The Monday of the most recently completed week, as of the browser's today. */
 export function lastCompletedWeekStart(): string {

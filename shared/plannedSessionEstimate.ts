@@ -378,7 +378,7 @@ function blocksRpe(blocks: readonly PlannedSessionBlock[]): number | null {
     maxAnyRpe = higherRpe(maxAnyRpe, rpe);
     if (block.sectionType === "main") maxMainRpe = higherRpe(maxMainRpe, rpe);
   }
-  return maxMainRpe !== null ? maxMainRpe : maxAnyRpe;
+  return maxMainRpe ?? maxAnyRpe;
 }
 
 export function estimatePlannedSession(input: PlannedSessionEstimateInput): PlannedSessionEstimate {

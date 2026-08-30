@@ -13,7 +13,7 @@ import { asyncHandler, rateLimiter, validateBody } from "../routeUtils";
 import { computeStale, getWorkoutAnchor, regenerateAndStoreRacePrediction } from "../services/analyticsPersistence";
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
-import { addCalendarDays, assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
+import { assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
 import { getWeekRangeForDate } from "../services/weeklyProgress";
 import { buildWeeklyReview, isWeekParamValid } from "../services/weeklyReviewService";
 import { storage } from "../storage";
@@ -54,7 +54,7 @@ type DateReq = ExpressRequest<Record<string, never>, unknown, unknown, DateQuery
 // with the Overview AI analysis path so both compute the same windows).
 // Re-exported here so the existing analytics route tests keep importing them
 // from this module.
-export { addCalendarDays, todayUtcYyyyMmDd };
+export { addCalendarDays, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
 
 function parseDateParams(req: DateReq, res: Response): { from?: string; to?: string } | null {
   const from = validDate(req.query.from);

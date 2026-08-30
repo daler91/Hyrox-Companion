@@ -70,7 +70,7 @@ function trendDirection(values: Array<number | null | undefined>): "rising" | "f
   const nums = values.filter((v): v is number => typeof v === "number");
   if (nums.length < MIN_POINTS) return "n/a";
   const first = nums[0];
-  const last = nums[nums.length - 1];
+  const last = nums.at(-1) ?? first;
   const eps = Math.abs(first) * 0.05 + 1e-9;
   if (last - first > eps) return "rising";
   if (first - last > eps) return "falling";
