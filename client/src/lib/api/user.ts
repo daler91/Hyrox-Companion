@@ -75,6 +75,14 @@ export interface UserPreferences {
   mafInjuryIllnessMedication?: boolean | null;
   mafConsistency?: "low" | "moderate" | "high" | null;
   mafTrend?: "improving" | "flat" | "declining" | null;
+  /** Maffetone's category question answered directly (audit M6); the three
+   *  legacy proxy fields above approximate it for older accounts. */
+  mafCategory?:
+    | "recovering_or_medicated"
+    | "training_interrupted"
+    | "consistent_up_to_2y"
+    | "consistent_2y_plus_improving"
+    | null;
   mafHrDataAvailable?: boolean | null;
   mafHr?: number | null;
   mafBaselineTestScheduledAt?: string | null;

@@ -110,6 +110,7 @@ export function defaultSettings() {
     mafAge: null,
     mafConsistency: null,
     mafTrend: null,
+    mafCategory: null,
     mafHrDataAvailable: null,
   };
 }

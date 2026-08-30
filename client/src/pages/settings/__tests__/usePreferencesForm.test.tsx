@@ -40,6 +40,7 @@ function serverPreferences(overrides: Record<string, unknown> = {}) {
     mafAge: null,
     mafConsistency: null,
     mafTrend: null,
+    mafCategory: null,
     mafHrDataAvailable: null,
     ...overrides,
   };

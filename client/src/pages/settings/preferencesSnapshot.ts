@@ -1,8 +1,6 @@
 import type {
-  MafConsistencyInput,
+  MafCategoryInput,
   MafHrDataAvailableInput,
-  MafInjuryIllnessInput,
-  MafTrendInput,
 } from "@/components/settings/TrainingStyleSection";
 import type { UserPreferences } from "@/lib/api";
 
@@ -22,9 +20,20 @@ export type WeightGoalDirectionValue = "lose" | "maintain" | "gain";
 // The nutrition push reminders are excluded: they live on the standalone
 // Push Notifications card with their own immediate-save toggles, so the
 // preferences form neither snapshots nor overwrites them.
+// The legacy MAF proxies (injury boolean, consistency, trend) are omitted from
+// the payload entirely rather than sent as null: Settings no longer edits
+// them, and an absent key leaves an older account's stored answers untouched
+// server-side, where they remain the fallback for athletes who have not yet
+// answered the category question (audit M6).
 export type SavePayload = Omit<
   UserPreferences,
-  "weeklyGoal" | "userTimezone" | "pushRefuelReminder" | "pushLoggingReminder"
+  | "weeklyGoal"
+  | "userTimezone"
+  | "pushRefuelReminder"
+  | "pushLoggingReminder"
+  | "mafInjuryIllnessMedication"
+  | "mafConsistency"
+  | "mafTrend"
 > & {
   weeklyGoal: number;
 };
@@ -39,8 +48,10 @@ export interface PreferencesSnapshot
     | "trainingStyleId"
     | "age"
     | "mafAge"
+    | "mafInjuryIllnessMedication"
     | "mafConsistency"
     | "mafTrend"
+    | "mafCategory"
     | "mafHrDataAvailable"
     | "bodyweightKg"
     | "heightCm"
@@ -71,8 +82,7 @@ export interface PreferencesSnapshot
   weightGoalRateKgPerWeek: number | null;
   trainingStyleId: string;
   mafAge: number | null;
-  mafConsistency: Exclude<MafConsistencyInput, ""> | null;
-  mafTrend: Exclude<MafTrendInput, ""> | null;
+  mafCategory: Exclude<MafCategoryInput, ""> | null;
   mafHrDataAvailable: boolean | null;
 }
 
@@ -105,10 +115,8 @@ export interface PreferencesDraft {
   coachAutoApplyPlanChanges: boolean;
   trainingStyleId: string;
   mafAgeInput: string;
-  mafConsistencyInput: MafConsistencyInput;
-  mafTrendInput: MafTrendInput;
+  mafCategoryInput: MafCategoryInput;
   mafHrDataAvailableInput: MafHrDataAvailableInput;
-  mafInjuryIllnessInput: MafInjuryIllnessInput;
 }
 
 export function ageInputToSnapshot(value: string): number | null {
@@ -158,10 +166,8 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   coachAutoApplyPlanChanges: false,
   trainingStyleId: "balanced_default",
   mafAgeInput: "",
-  mafConsistencyInput: "",
-  mafTrendInput: "",
+  mafCategoryInput: "",
   mafHrDataAvailableInput: "",
-  mafInjuryIllnessInput: "",
 };
 
 export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
@@ -190,10 +196,8 @@ export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
     coachAutoApplyPlanChanges: draft.coachAutoApplyPlanChanges,
     trainingStyleId: draft.trainingStyleId,
     mafAge: ageInputToSnapshot(draft.mafAgeInput),
-    mafConsistency: draft.mafConsistencyInput || null,
-    mafTrend: draft.mafTrendInput || null,
+    mafCategory: draft.mafCategoryInput || null,
     mafHrDataAvailable: mafHrDataAvailableInputToSnapshot(draft.mafHrDataAvailableInput),
-    mafInjuryIllnessMedication: mafHrDataAvailableInputToSnapshot(draft.mafInjuryIllnessInput),
   };
 }
 
@@ -226,10 +230,8 @@ export function preferencesToDraft(preferences: UserPreferences): PreferencesDra
     coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
     trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
     mafAgeInput: preferences.mafAge == null ? "" : String(preferences.mafAge),
-    mafConsistencyInput: preferences.mafConsistency ?? "",
-    mafTrendInput: preferences.mafTrend ?? "",
+    mafCategoryInput: preferences.mafCategory ?? "",
     mafHrDataAvailableInput: mafHrDataAvailableToInput(preferences.mafHrDataAvailable),
-    mafInjuryIllnessInput: mafHrDataAvailableToInput(preferences.mafInjuryIllnessMedication),
   };
 }
 
@@ -259,10 +261,8 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
     trainingStyleId: snapshot.trainingStyleId,
     mafAgeInput: snapshot.mafAge == null ? "" : String(snapshot.mafAge),
-    mafConsistencyInput: snapshot.mafConsistency ?? "",
-    mafTrendInput: snapshot.mafTrend ?? "",
+    mafCategoryInput: snapshot.mafCategory ?? "",
     mafHrDataAvailableInput: mafHrDataAvailableToInput(snapshot.mafHrDataAvailable),
-    mafInjuryIllnessInput: mafHrDataAvailableToInput(snapshot.mafInjuryIllnessMedication),
   };
 }
 
@@ -292,14 +292,8 @@ export function preferencesToSnapshot(preferences: UserPreferences): Preferences
     coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
     trainingStyleId: preferences.trainingStyleId ?? "balanced_default",
     mafAge: preferences.mafAge ?? null,
-    mafConsistency: preferences.mafConsistency ?? null,
-    mafTrend: preferences.mafTrend ?? null,
+    mafCategory: (preferences.mafCategory as PreferencesSnapshot["mafCategory"]) ?? null,
     mafHrDataAvailable: preferences.mafHrDataAvailable ?? null,
-    // Normalised to null like every other nullable flag: draftToSnapshot
-    // produces null for an unanswered input, and an undefined baseline here
-    // makes the form dirty on load — which silently turns every in-app link
-    // into an unsaved-changes prompt.
-    mafInjuryIllnessMedication: preferences.mafInjuryIllnessMedication ?? null,
   };
 }
 
@@ -329,10 +323,8 @@ export function savePayloadToSnapshot(payload: SavePayload): PreferencesSnapshot
     coachAutoApplyPlanChanges: payload.coachAutoApplyPlanChanges,
     trainingStyleId: payload.trainingStyleId ?? "balanced_default",
     mafAge: payload.mafAge ?? null,
-    mafConsistency: payload.mafConsistency ?? null,
-    mafTrend: payload.mafTrend ?? null,
+    mafCategory: (payload.mafCategory as PreferencesSnapshot["mafCategory"]) ?? null,
     mafHrDataAvailable: payload.mafHrDataAvailable ?? null,
-    mafInjuryIllnessMedication: payload.mafInjuryIllnessMedication ?? null,
   };
 }
 
@@ -363,9 +355,7 @@ export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayloa
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
     trainingStyleId: snapshot.trainingStyleId,
     mafAge: snapshot.mafAge,
-    mafConsistency: snapshot.mafConsistency,
-    mafTrend: snapshot.mafTrend,
+    mafCategory: snapshot.mafCategory,
     mafHrDataAvailable: snapshot.mafHrDataAvailable,
-    mafInjuryIllnessMedication: snapshot.mafInjuryIllnessMedication,
   };
 }

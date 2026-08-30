@@ -56,12 +56,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
     setTrainingStyleId,
     mafAge,
     setMafAge,
-    mafInjuryIllnessMedication,
-    setMafInjuryIllnessMedication,
-    mafConsistency,
-    setMafConsistency,
-    mafTrend,
-    setMafTrend,
+    mafCategory,
+    setMafCategory,
     mafHrDataAvailable,
     setMafHrDataAvailable,
     startDate,
@@ -141,12 +137,8 @@ export function OnboardingWizard({ open, onComplete }: Readonly<OnboardingWizard
           onTrainingStyleChange={setTrainingStyleId}
           mafAge={mafAge}
           onMafAgeChange={setMafAge}
-          mafInjuryIllnessMedication={mafInjuryIllnessMedication}
-          onMafInjuryIllnessMedicationChange={setMafInjuryIllnessMedication}
-          mafConsistency={mafConsistency}
-          onMafConsistencyChange={setMafConsistency}
-          mafTrend={mafTrend}
-          onMafTrendChange={setMafTrend}
+          mafCategory={mafCategory}
+          onMafCategoryChange={setMafCategory}
           mafHrDataAvailable={mafHrDataAvailable}
           onMafHrDataAvailableChange={setMafHrDataAvailable}
         />

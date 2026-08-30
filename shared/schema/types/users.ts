@@ -67,6 +67,17 @@ export const updateUserPreferencesSchema = z.object({
   mafInjuryIllnessMedication: z.boolean().nullable().optional(),
   mafConsistency: z.enum(["low", "moderate", "high"]).nullable().optional(),
   mafTrend: z.enum(["improving", "flat", "declining"]).nullable().optional(),
+  // Maffetone's category question, asked directly (audit M6). Values mirror
+  // MafCategory in shared/maf.ts.
+  mafCategory: z
+    .enum([
+      "recovering_or_medicated",
+      "training_interrupted",
+      "consistent_up_to_2y",
+      "consistent_2y_plus_improving",
+    ])
+    .nullable()
+    .optional(),
   mafHrDataAvailable: z.boolean().nullable().optional(),
   mafHr: z.number().int().min(70).max(220).nullable().optional(),
   mafBaselineTestScheduledAt: z.coerce.date().nullable().optional(),

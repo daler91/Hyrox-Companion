@@ -37,12 +37,8 @@ interface GoalStepProps {
   readonly onTrainingStyleChange: (style: string) => void;
   readonly mafAge: string;
   readonly onMafAgeChange: (age: string) => void;
-  readonly mafInjuryIllnessMedication: boolean;
-  readonly onMafInjuryIllnessMedicationChange: (value: boolean) => void;
-  readonly mafConsistency: string;
-  readonly onMafConsistencyChange: (value: string) => void;
-  readonly mafTrend: string;
-  readonly onMafTrendChange: (value: string) => void;
+  readonly mafCategory: string;
+  readonly onMafCategoryChange: (value: string) => void;
   readonly mafHrDataAvailable: boolean;
   readonly onMafHrDataAvailableChange: (value: boolean) => void;
 }
@@ -105,32 +101,28 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
             value={props.mafAge}
             onChange={(e) => props.onMafAgeChange(e.target.value)}
           />
-          <div className="flex items-center justify-between">
-            <Label htmlFor="onboarding-maf-injury">Injury/illness/medication?</Label>
-            <Switch
-              id="onboarding-maf-injury"
-              checked={props.mafInjuryIllnessMedication}
-              onCheckedChange={props.onMafInjuryIllnessMedicationChange}
-            />
-          </div>
-          <Select value={props.mafConsistency} onValueChange={props.onMafConsistencyChange}>
-            <SelectTrigger aria-label="Training consistency">
-              <SelectValue placeholder="Training consistency" />
+          {/* Maffetone's own category question, asked as he states it (audit
+              M6). The previous boolean + consistency/trend selects collapsed
+              his -10 and -5 categories — allergies cost the same 10 bpm as
+              post-surgery recovery — and granted +5 with no training-duration
+              question at all. */}
+          <Select value={props.mafCategory} onValueChange={props.onMafCategoryChange}>
+            <SelectTrigger aria-label="Maffetone health and training category">
+              <SelectValue placeholder="Which best describes you?" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="moderate">Moderate</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={props.mafTrend} onValueChange={props.onMafTrendChange}>
-            <SelectTrigger aria-label="Recent trend">
-              <SelectValue placeholder="Recent trend" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="improving">Improving</SelectItem>
-              <SelectItem value="flat">Flat</SelectItem>
-              <SelectItem value="declining">Declining</SelectItem>
+              <SelectItem value="recovering_or_medicated">
+                Recovering from major illness or surgery, or on regular medication
+              </SelectItem>
+              <SelectItem value="training_interrupted">
+                Injured, regressing, frequent colds, allergies/asthma, or new/inconsistent training
+              </SelectItem>
+              <SelectItem value="consistent_up_to_2y">
+                Training consistently (up to 2 years) without those problems
+              </SelectItem>
+              <SelectItem value="consistent_2y_plus_improving">
+                Training 2+ years without those problems, and improving
+              </SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center justify-between">

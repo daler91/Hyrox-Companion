@@ -57,6 +57,7 @@ describe("GET /api/preferences", () => {
       mafInjuryIllnessMedication: null,
       mafConsistency: null,
       mafTrend: null,
+    mafCategory: null,
       mafHrDataAvailable: null,
       mafHr: null,
       mafBaselineTestScheduledAt: null,
@@ -94,6 +95,7 @@ describe("GET /api/preferences", () => {
       mafInjuryIllnessMedication: null,
       mafConsistency: null,
       mafTrend: null,
+    mafCategory: null,
       mafHrDataAvailable: null,
       mafHr: null,
       mafBaselineTestScheduledAt: null,
@@ -118,6 +120,7 @@ describe("PATCH /api/v1/preferences", () => {
       mafAge: null,
       mafConsistency: null,
       mafTrend: null,
+    mafCategory: null,
     });
     vi.mocked(storage.users.updateUserPreferences).mockResolvedValue({
       weightUnit: "kg",

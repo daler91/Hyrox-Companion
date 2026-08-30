@@ -13,12 +13,8 @@ function renderGoalStep(overrides: Record<string, unknown> = {}) {
     onTrainingStyleChange: vi.fn(),
     mafAge: "",
     onMafAgeChange: vi.fn(),
-    mafInjuryIllnessMedication: false,
-    onMafInjuryIllnessMedicationChange: vi.fn(),
-    mafConsistency: "",
-    onMafConsistencyChange: vi.fn(),
-    mafTrend: "",
-    onMafTrendChange: vi.fn(),
+    mafCategory: "",
+    onMafCategoryChange: vi.fn(),
     mafHrDataAvailable: false,
     onMafHrDataAvailableChange: vi.fn(),
     ...overrides,
@@ -44,9 +40,9 @@ describe("GoalStep accessibility", () => {
 
     expect(screen.getByRole("combobox", { name: "Training style" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Age" })).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Injury/illness/medication?" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Training consistency" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Recent trend" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Maffetone health and training category" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "HR data available?" })).toBeInTheDocument();
 
     expect(await axe(container)).toHaveNoViolations();

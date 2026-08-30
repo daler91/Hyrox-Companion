@@ -280,6 +280,18 @@ const TSB_FATIGUE_SCALE = 25;
 const RACE_WEEK_CARB_LOAD_FRAC = 0.25;
 /** During taper, positive training-load carb deltas are damped by this factor. */
 const TAPER_LOAD_DAMP = 0.85;
+/**
+ * During taper, the CUT for a light day is also damped — by half, the same
+ * fraction `RECOVERY_CARB_FACTOR` already uses for "replace half of a load
+ * gap's carbs". A taper reduces load on purpose while keeping glycogen topped
+ * for race day; charging the full slope against every light taper day was the
+ * carb-loading feature defeating itself one day at a time (audit M17, the
+ * taper half — race week's floor-at-zero fixed the sharper case first).
+ * Halved rather than floored to zero because a taper runs weeks, not days:
+ * energy balance still matters over that horizon in a way race week's ~5 days
+ * never did.
+ */
+const TAPER_NEGATIVE_LOAD_DAMP = 0.5;
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
@@ -341,8 +353,8 @@ function computeBaseLoad(
   if (config.phaseAware && window.phase === "race_week" && raw < 0) {
     return { raw: 0, reason: null };
   }
-  if (config.phaseAware && window.phase === "taper" && raw > 0) {
-    raw *= TAPER_LOAD_DAMP;
+  if (config.phaseAware && window.phase === "taper" && raw !== 0) {
+    raw *= raw > 0 ? TAPER_LOAD_DAMP : TAPER_NEGATIVE_LOAD_DAMP;
     return { raw, reason: "taper" };
   }
   return { raw, reason: null };

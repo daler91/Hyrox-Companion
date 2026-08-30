@@ -125,6 +125,10 @@ export const users = pgTable("users", {
   mafInjuryIllnessMedication: boolean("maf_injury_illness_medication"),
   mafConsistency: text("maf_consistency"),
   mafTrend: text("maf_trend"),
+  // Maffetone's own 180-Formula category, answered directly (audit M6). One of
+  // MafCategory in shared/maf.ts. Null = the athlete answered only the legacy
+  // proxy questions above, whose derivation approximates his categories.
+  mafCategory: text("maf_category"),
   mafHrDataAvailable: boolean("maf_hr_data_available"),
   mafHr: integer("maf_hr"),
   mafBaselineTestScheduledAt: timestamp("maf_baseline_test_scheduled_at", { withTimezone: true }),

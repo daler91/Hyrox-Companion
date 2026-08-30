@@ -20,13 +20,18 @@ function validateMafTransition(payload: UpdateUserPreferences, current: Awaited<
   if (!switchingToMaf) return null;
 
   const nextMafAge = hasOwn(payload, "mafAge") ? payload.mafAge ?? null : current.mafAge ?? null;
+  const nextMafCategory = hasOwn(payload, "mafCategory") ? payload.mafCategory ?? null : current.mafCategory ?? null;
   const nextMafConsistency = hasOwn(payload, "mafConsistency") ? payload.mafConsistency ?? null : current.mafConsistency ?? null;
   const nextMafTrend = hasOwn(payload, "mafTrend") ? payload.mafTrend ?? null : current.mafTrend ?? null;
 
   const missing: string[] = [];
   if (nextMafAge == null) missing.push("mafAge");
-  if (nextMafConsistency == null) missing.push("mafConsistency");
-  if (nextMafTrend == null) missing.push("mafTrend");
+  // Maffetone's category question answered directly is a complete MAF setup on
+  // its own; the consistency/trend pair is the legacy route (audit M6).
+  if (nextMafCategory == null) {
+    if (nextMafConsistency == null) missing.push("mafConsistency");
+    if (nextMafTrend == null) missing.push("mafTrend");
+  }
 
   if (missing.length === 0) return null;
   return {
@@ -68,6 +73,7 @@ function serializePreferences(user: {
   mafInjuryIllnessMedication: boolean | null;
   mafConsistency: string | null;
   mafTrend: string | null;
+  mafCategory: string | null;
   mafHrDataAvailable: boolean | null;
   mafHr: number | null;
   mafBaselineTestScheduledAt: Date | null;
@@ -107,6 +113,7 @@ function serializePreferences(user: {
     mafInjuryIllnessMedication: user.mafInjuryIllnessMedication ?? null,
     mafConsistency: user.mafConsistency ?? null,
     mafTrend: user.mafTrend ?? null,
+    mafCategory: user.mafCategory ?? null,
     mafHrDataAvailable: user.mafHrDataAvailable ?? null,
     mafHr: user.mafHr ?? null,
     mafBaselineTestScheduledAt: user.mafBaselineTestScheduledAt ?? null,

@@ -23,10 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type MafConsistencyInput = "" | "low" | "moderate" | "high";
-export type MafTrendInput = "" | "improving" | "flat" | "declining";
-/** Tri-state like MafHrDataAvailableInput: "" means "not answered". */
-export type MafInjuryIllnessInput = "" | "yes" | "no";
+/** Maffetone's category question (audit M6); "" means "not answered". Values
+ *  mirror MafCategory in shared/maf.ts. */
+export type MafCategoryInput = "" | import("@shared/maf").MafCategory;
 export type MafHrDataAvailableInput = "" | "yes" | "no";
 
 export interface StyleAuditEntry {
@@ -65,14 +64,10 @@ interface TrainingStyleSectionProps {
    *  the settings test harness need not supply it. */
   readonly mafHr?: number | null;
   readonly mafAgeInput: string;
-  readonly mafConsistencyInput: MafConsistencyInput;
-  readonly mafTrendInput: MafTrendInput;
+  readonly mafCategoryInput: MafCategoryInput;
   readonly mafHrDataAvailableInput: MafHrDataAvailableInput;
-  readonly mafInjuryIllnessInput: MafInjuryIllnessInput;
   readonly onMafAgeInputChange: (value: string) => void;
-  readonly onMafConsistencyInputChange: (value: MafConsistencyInput) => void;
-  readonly onMafTrendInputChange: (value: MafTrendInput) => void;
-  readonly onMafInjuryIllnessInputChange: (value: MafInjuryIllnessInput) => void;
+  readonly onMafCategoryInputChange: (value: MafCategoryInput) => void;
   readonly onMafHrDataAvailableInputChange: (value: MafHrDataAvailableInput) => void;
   readonly styleAuditEntries: readonly StyleAuditEntry[];
 }
@@ -93,15 +88,11 @@ export function TrainingStyleSection({
   hasRequiredMafInputs,
   mafHr,
   mafAgeInput,
-  mafConsistencyInput,
-  mafTrendInput,
+  mafCategoryInput,
   mafHrDataAvailableInput,
-  mafInjuryIllnessInput,
   onMafAgeInputChange,
-  onMafConsistencyInputChange,
-  onMafTrendInputChange,
+  onMafCategoryInputChange,
   onMafHrDataAvailableInputChange,
-  onMafInjuryIllnessInputChange,
   styleAuditEntries,
 }: Readonly<TrainingStyleSectionProps>) {
   const [confirmStyleOpen, setConfirmStyleOpen] = useState(false);
@@ -111,13 +102,10 @@ export function TrainingStyleSection({
   const [mafSetupOpen, setMafSetupOpen] = useState(false);
   const [mafSetupError, setMafSetupError] = useState<string | null>(null);
   const [draftMafAgeInput, setDraftMafAgeInput] = useState(mafAgeInput);
-  const [draftMafConsistencyInput, setDraftMafConsistencyInput] =
-    useState<MafConsistencyInput>(mafConsistencyInput);
-  const [draftMafTrendInput, setDraftMafTrendInput] = useState<MafTrendInput>(mafTrendInput);
+  const [draftMafCategoryInput, setDraftMafCategoryInput] =
+    useState<MafCategoryInput>(mafCategoryInput);
   const [draftMafHrDataAvailableInput, setDraftMafHrDataAvailableInput] =
     useState<MafHrDataAvailableInput>(mafHrDataAvailableInput);
-  const [draftMafInjuryIllnessInput, setDraftMafInjuryIllnessInput] =
-    useState<MafInjuryIllnessInput>(mafInjuryIllnessInput);
 
   const applyTrainingStyle = (styleId: string) => {
     onTrainingStyleIdChange(styleId);
@@ -127,10 +115,8 @@ export function TrainingStyleSection({
 
   const openMafSetup = () => {
     setDraftMafAgeInput(mafAgeInput);
-    setDraftMafConsistencyInput(mafConsistencyInput);
-    setDraftMafTrendInput(mafTrendInput);
+    setDraftMafCategoryInput(mafCategoryInput);
     setDraftMafHrDataAvailableInput(mafHrDataAvailableInput);
-    setDraftMafInjuryIllnessInput(mafInjuryIllnessInput);
     setMafSetupError(null);
     setMafSetupOpen(true);
   };
@@ -204,8 +190,8 @@ export function TrainingStyleSection({
               <p>
                 Your MAF ceiling is{" "}
                 <strong className="text-foreground tabular-nums">{mafHr} bpm</strong> — 180 minus
-                your age, adjusted for consistency, trend, and health flags. Aerobic sessions are
-                scored against it, so keep easy runs at or under it.
+                your age, adjusted by your Maffetone health and training category. Aerobic sessions
+                are scored against it, so keep easy runs at or under it.
               </p>
             </div>
           )}
@@ -305,54 +291,32 @@ export function TrainingStyleSection({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="maf-consistency-select">Consistency</Label>
+              <Label htmlFor="maf-category-select">Health and training category</Label>
+              {/* Maffetone's own category question (audit M6), editable here
+                  for the same reason the old injury flag was: the answer moves
+                  the ceiling and must not be write-once at onboarding — a
+                  healed injury or a second training anniversary changes it. */}
               <Select
-                value={draftMafConsistencyInput}
-                onValueChange={(value: MafConsistencyInput) => setDraftMafConsistencyInput(value)}
+                value={draftMafCategoryInput}
+                onValueChange={(value: MafCategoryInput) => setDraftMafCategoryInput(value)}
               >
-                <SelectTrigger id="maf-consistency-select">
-                  <SelectValue placeholder="Consistency (required)" />
+                <SelectTrigger id="maf-category-select" data-testid="select-maf-category">
+                  <SelectValue placeholder="Which best describes you? (required)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="moderate">Moderate</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maf-trend-select">Trend</Label>
-              <Select
-                value={draftMafTrendInput}
-                onValueChange={(value: MafTrendInput) => setDraftMafTrendInput(value)}
-              >
-                <SelectTrigger id="maf-trend-select">
-                  <SelectValue placeholder="Trend (required)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="improving">Improving</SelectItem>
-                  <SelectItem value="flat">Flat</SelectItem>
-                  <SelectItem value="declining">Declining</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maf-injury-illness-select">
-                Injury, illness or medication
-              </Label>
-              {/* Editable here because it costs 10 bpm of MAF ceiling
-                  (shared/maf.ts) and was previously write-once at onboarding —
-                  a healed injury capped the athlete's zones permanently. */}
-              <Select
-                value={draftMafInjuryIllnessInput}
-                onValueChange={(value: MafInjuryIllnessInput) => setDraftMafInjuryIllnessInput(value)}
-              >
-                <SelectTrigger id="maf-injury-illness-select" data-testid="select-maf-injury-illness">
-                  <SelectValue placeholder="Injury, illness or medication (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Yes — lowers the ceiling by 10 bpm</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="recovering_or_medicated">
+                    Recovering from major illness or surgery, or on regular medication (−10 bpm)
+                  </SelectItem>
+                  <SelectItem value="training_interrupted">
+                    Injured, regressing, frequent colds, allergies/asthma, or new/inconsistent
+                    training (−5 bpm)
+                  </SelectItem>
+                  <SelectItem value="consistent_up_to_2y">
+                    Training consistently (up to 2 years) without those problems
+                  </SelectItem>
+                  <SelectItem value="consistent_2y_plus_improving">
+                    Training 2+ years without those problems, and improving (+5 bpm)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -388,19 +352,16 @@ export function TrainingStyleSection({
                   !Number.isInteger(parsedAge) ||
                   parsedAge < 16 ||
                   parsedAge > 99 ||
-                  !draftMafConsistencyInput ||
-                  !draftMafTrendInput
+                  !draftMafCategoryInput
                 ) {
                   event.preventDefault();
-                  setMafSetupError("Enter a valid age and select required MAF fields.");
+                  setMafSetupError("Enter a valid age and select your category.");
                   return;
                 }
                 setMafSetupError(null);
                 onMafAgeInputChange(String(parsedAge));
-                onMafConsistencyInputChange(draftMafConsistencyInput);
-                onMafTrendInputChange(draftMafTrendInput);
+                onMafCategoryInputChange(draftMafCategoryInput);
                 onMafHrDataAvailableInputChange(draftMafHrDataAvailableInput);
-                onMafInjuryIllnessInputChange(draftMafInjuryIllnessInput);
                 // Only a style SWITCH has a pending id to apply; editing the
                 // setup of the style already in use just saves the answers.
                 if (pendingStyleId) applyTrainingStyle(pendingStyleId);

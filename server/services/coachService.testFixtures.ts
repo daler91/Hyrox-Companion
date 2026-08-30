@@ -50,6 +50,7 @@ export function mockEnabledUser(storage: StorageMock) {
     mafInjuryIllnessMedication: null,
     mafConsistency: null,
     mafTrend: null,
+    mafCategory: null,
     mafHrDataAvailable: null,
     mafHr: null,
     mafBaselineTestScheduledAt: null,

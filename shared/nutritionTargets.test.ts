@@ -301,16 +301,21 @@ describe("effectiveTargetWindowed (past + future training)", () => {
     expect(r.carbDeltaG).toBe(150); // plus the 50 g race-week load
   });
 
-  it("leaves the taper alone — its damp is documented as positive-only", () => {
-    // Recorded rather than changed: TAPER_LOAD_DAMP's own doc says it damps
-    // POSITIVE deltas, so a light taper day is scored exactly like a light build
-    // day. Whether a taper should also soften the reduction is a methodology
-    // call, not a bug (audit M17).
+  it("halves the cut for a light taper day instead of charging the full slope (audit M17)", () => {
+    // This test used to PIN the opposite — taper.carbG === build.carbG — as a
+    // recorded open question. Decided 2026-08-30: a taper reduces load on
+    // purpose while keeping glycogen topped, so the reduction is damped by the
+    // same 0.5 the recovery term already uses for "replace half of a load
+    // gap". A light day cuts half as much in taper as in build; race week
+    // keeps its stronger floor-at-zero.
     const light = { ...emptyWindow(30) };
     const taper = effectiveTargetWindowed(base, { ...light, phase: "taper" }, { ...loadCfg, phaseAware: true });
     const build = effectiveTargetWindowed(base, { ...light, phase: "build" }, { ...loadCfg, phaseAware: true });
 
-    expect(taper.carbG).toBe(build.carbG);
+    expect(build.baseLoadDeltaG).toBe(-40); // (30−50)×2, full slope
+    expect(taper.baseLoadDeltaG).toBe(-20); // the same day, half the cut
+    expect(taper.carbG ?? 0).toBeGreaterThan(build.carbG ?? 0);
+    expect(taper.reasonCodes).toContain("taper");
   });
 
   it("caps the combined carb delta and keeps components summing to the total", () => {

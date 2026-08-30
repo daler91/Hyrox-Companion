@@ -16,10 +16,13 @@ describe("calculateMafHr", () => {
     expect(result.ceiling).toBe(145);
   });
 
-  it("returns under-16 warning with conservative default", () => {
+  it("uses Maffetone's flat 165 for under-16s, not 180-age-10 (audit L9)", () => {
+    // The old branch computed 180-15-10 = 155 and this test certified it.
+    // Maffetone's published rule for under-16s is a flat 165, full stop.
     const result = calculateMafHr({ age: 15, injuryIllnessMedication: false, consistency: "high", trend: "improving" });
-    expect(result.adjustment).toBe(-10);
+    expect(result.ceiling).toBe(165);
     expect(result.warning).toMatch(/Under-16/);
+    expect(result.reasonCodes).toContain("age_under_16_fixed_165");
   });
 
   it("keeps the earned category at age 65 and adds a clinician check, not a penalty", () => {
@@ -78,5 +81,58 @@ describe("computeMafCompliance", () => {
     const r = computeMafCompliance({ avgHeartRate: 140, maxHeartRate: null, ceiling: 145 });
     expect(r.classification).toBe("compliant");
     expect(r.details.maxOverBy).toBeNull();
+  });
+});
+
+
+describe("calculateMafHr — Maffetone's category question (audit M6)", () => {
+  it("maps each category to Maffetone's published adjustment", () => {
+    const at = (category: Parameters<typeof calculateMafHr>[0]["category"]) =>
+      calculateMafHr({ age: 40, category });
+
+    expect(at("recovering_or_medicated")).toMatchObject({ adjustment: -10, ceiling: 130 });
+    expect(at("training_interrupted")).toMatchObject({ adjustment: -5, ceiling: 135 });
+    expect(at("consistent_up_to_2y")).toMatchObject({ adjustment: 0, ceiling: 140 });
+    expect(at("consistent_2y_plus_improving")).toMatchObject({ adjustment: 5, ceiling: 145 });
+  });
+
+  it("prices allergies at -5, not the -10 the legacy boolean charged", () => {
+    // The whole point of asking Maffetone's question directly: hay fever is
+    // category (b). The legacy proxies had nowhere to put it except the -10
+    // recovering/medicated boolean, so it cost twice what he says it costs.
+    const withAllergies = calculateMafHr({ age: 40, category: "training_interrupted" });
+    const legacyBoolean = calculateMafHr({ age: 40, injuryIllnessMedication: true, consistency: "high", trend: "improving" });
+
+    expect(withAllergies.adjustment).toBe(-5);
+    expect(legacyBoolean.adjustment).toBe(-10);
+  });
+
+  it("lets the category outrank the legacy proxies when both are supplied", () => {
+    // A category answer is Maffetone's own instrument; the proxies are the
+    // approximation. When an athlete has answered the real question, the
+    // approximation must not override it in either direction.
+    const result = calculateMafHr({
+      age: 40,
+      category: "consistent_2y_plus_improving",
+      injuryIllnessMedication: true,
+      consistency: "low",
+      trend: "declining",
+    });
+
+    expect(result.adjustment).toBe(5);
+  });
+
+  it("still adds the 65+ clinician note on top of an earned category", () => {
+    const result = calculateMafHr({ age: 65, category: "consistent_2y_plus_improving" });
+    expect(result.adjustment).toBe(5);
+    expect(result.ceiling).toBe(120);
+    expect(result.warning).toMatch(/65/);
+  });
+
+  it("keeps the legacy derivation bit-for-bit when no category is stored", () => {
+    // Existing athletes answered the old questions; their ceilings must not
+    // move until they answer the new one.
+    const legacy = calculateMafHr({ age: 35, injuryIllnessMedication: false, consistency: "moderate", trend: "flat" });
+    expect(legacy).toMatchObject({ adjustment: 0, ceiling: 145 });
   });
 });
