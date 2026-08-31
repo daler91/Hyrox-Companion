@@ -105,13 +105,14 @@ M8 — the code did not know the unit, guessed metric, and rendered the guess as
 - `METRES_PER_MILE` is defined once, in `shared/units.ts`. `unitConversion.ts` derives
   `KM_TO_MILES` from it instead of carrying a second, slightly different literal (L6).
 
-## Not decided here
+## L4 — decided and closed
 
-**Whether to canonicalise stored weights and distances** (audit L4). Today, switching
-kg↔lbs reinterprets an athlete's entire history as a ~2.2× jump, and nothing warns them at
-the moment they switch. The options are a migration with a backfill, or a warning at the
-preference toggle. That is a product call about existing athletes' data, not a technical
-one, and it is deliberately left open — see the S5 sentinel for the trade-off as it stands.
+**Whether to canonicalise stored weights and distances** (audit L4) is no longer open.
+`server/services/unitSwitchDetection.ts` detects, per athlete, whether their legacy
+`exercise_sets` rows show a unit switch; `script/backfill-legacy-unit-rows.ts` stamps only
+the athletes `server/services/legacyUnitAudit.ts` clears as safe, re-checking the detector
+immediately before writing (dry-run by default, `--apply` to write). Athletes flagged
+`needs_split` or `needs_review` are left unstamped rather than guessed at.
 
-Until it is decided, rule 2 stands: those two columns are not canonical, and code must
-carry the preference.
+Rule 2 still stands: those two columns are not canonical, and code must carry the
+preference.
