@@ -32,7 +32,7 @@ export function CoachPanelHeader({
     <TooltipProvider>
       <div className="flex flex-shrink-0 items-center justify-between gap-2 border-b p-3">
         <div className="flex min-w-0 items-center gap-2">
-          <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+          <MessageSquare className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span className="shrink-0 text-sm font-semibold">AI Coach</span>
           <Badge
             variant="secondary"

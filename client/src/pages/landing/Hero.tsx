@@ -52,7 +52,7 @@ function TimelineMockup() {
                 variant="outline"
                 className="text-[10px] px-1.5 py-0 bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20"
               >
-                <StravaIcon className="h-2.5 w-2.5 mr-0.5" /> Strava
+                <StravaIcon className="h-2.5 w-2.5 mr-0.5" aria-hidden="true" /> Strava
               </Badge>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                 RPE 7
