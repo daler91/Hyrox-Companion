@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import {
   type ExerciseSet,
   exerciseSets,
@@ -290,18 +292,6 @@ function structureStepInsertValues(blockId: string, steps: StructureBlockInput["
   }));
 }
 
-async function insertStructureBlock(
-  tx: WorkoutTx,
-  owner: SetOwner,
-  block: StructureBlockInput,
-  idx: number,
-) {
-  const [savedBlock] = await tx.insert(workoutStructureBlocks).values(
-    structureBlockInsertValues(owner, block, idx),
-  ).returning();
-  return savedBlock;
-}
-
 function collectDerivedRowsForBlock(args: {
   owner: SetOwner;
   blockId: string;
@@ -337,21 +327,40 @@ export async function replaceStructureForOwner(
   }
 
   let sortOrder = deriveExerciseSets ? await nextSortOrderForOwner(tx, owner) : 0;
+
+  // ⚡ Bolt Optimization: the old loop awaited one `INSERT ... RETURNING` per
+  // block plus one `INSERT` for that block's steps, sequentially, inside the
+  // transaction backing every "Log Workout" save — up to 2N DB round trips
+  // for N blocks, all on that request's critical path. Block IDs don't need
+  // to come back from the DB: they're generated app-side with randomUUID()
+  // (the column's `gen_random_uuid()` default is just a fallback for callers
+  // that don't supply one), so every block's insert values and its steps'
+  // blockId can be built up front and sent as two batched multi-row INSERTs
+  // instead — 2 round trips total regardless of block count.
+  const blockIds = blocksForPersist.map((block) => block.id ?? randomUUID());
+  await tx.insert(workoutStructureBlocks).values(
+    blocksForPersist.map((block, idx) => structureBlockInsertValues(owner, { ...block, id: blockIds[idx] }, idx)),
+  );
+
   const derivedRows: InsertExerciseSet[] = [];
   const validStepKeys = new Set<string>();
+  const stepRows: ReturnType<typeof structureStepInsertValues> = [];
   for (const [idx, block] of blocksForPersist.entries()) {
-    const savedBlock = await insertStructureBlock(tx, owner, block, idx);
+    const blockId = blockIds[idx];
     const steps = block.steps ?? [];
     if (steps.length === 0) continue;
     for (const step of steps) {
-      validStepKeys.add(`${savedBlock.id}:${step.stepNumber}`);
+      validStepKeys.add(`${blockId}:${step.stepNumber}`);
     }
-    await tx.insert(workoutStructureSteps).values(structureStepInsertValues(savedBlock.id, steps));
+    stepRows.push(...structureStepInsertValues(blockId, steps));
     if (deriveExerciseSets) {
-      const derived = collectDerivedRowsForBlock({ owner, blockId: savedBlock.id, block, startSortOrder: sortOrder });
+      const derived = collectDerivedRowsForBlock({ owner, blockId, block, startSortOrder: sortOrder });
       derivedRows.push(...derived.rows);
       sortOrder = derived.nextSortOrder;
     }
+  }
+  if (stepRows.length > 0) {
+    await tx.insert(workoutStructureSteps).values(stepRows);
   }
 
   if (derivedRows.length > 0) {
