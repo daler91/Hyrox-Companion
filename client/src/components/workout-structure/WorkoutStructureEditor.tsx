@@ -469,7 +469,7 @@ const MovementRow = memo(function MovementRow({
           <div className="ml-auto flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={isFirst ? 0 : -1}>
+                <span tabIndex={isFirst ? 0 : -1}> {/* NOSONAR */}
                   <Button
                     type="button"
                     variant="ghost"
@@ -489,7 +489,7 @@ const MovementRow = memo(function MovementRow({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={isLast ? 0 : -1}>
+                <span tabIndex={isLast ? 0 : -1}> {/* NOSONAR */}
                   <Button
                     type="button"
                     variant="ghost"

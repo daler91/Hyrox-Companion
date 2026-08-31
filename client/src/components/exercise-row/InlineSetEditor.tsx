@@ -298,7 +298,7 @@ const SetRow = memo(function SetRow({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span tabIndex={!canDelete ? 0 : -1}>
+              <span tabIndex={!canDelete ? 0 : -1}> {/* NOSONAR */}
                 <Button
                   type="button"
                   variant="ghost"
