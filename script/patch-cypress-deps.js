@@ -1,96 +1,116 @@
+/**
+ * Postinstall: overlay newer versions of a few vulnerable packages bundled
+ * INSIDE the Cypress binary (its resources/app/node_modules), so dependency
+ * scanners that walk the Cypress cache stop flagging them.
+ *
+ * Only relevant where the Cypress binary exists — a dev checkout or the
+ * Cypress CI job. Anywhere else (a production build, CYPRESS_INSTALL_BINARY=0,
+ * no cache dir) it exits early and does nothing. Versions are pinned exactly:
+ * a caret range here used to resolve to whatever the registry served that day,
+ * so two runs could patch two different trees.
+ *
+ * Failures are fatal under CI (the job that runs this wants to know) and a
+ * warning otherwise (a developer's `pnpm install` must never be blocked by a
+ * cosmetic overlay).
+ */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-try {
-  let version = '15.12.0';
-  if (fs.existsSync('node_modules/cypress/package.json')) {
-    const cypressPkg = JSON.parse(fs.readFileSync('node_modules/cypress/package.json', 'utf8'));
-    version = cypressPkg.version;
+const PINNED = {
+  'simple-git': '3.32.3',
+  'serialize-javascript': '7.0.3',
+  'engine.io': '5.2.1',
+  flatted: '3.4.0',
+  ws: '8.17.1',
+  axios: '1.7.4',
+  esbuild: '0.25.12',
+};
+
+function skip(reason) {
+  console.log(`patch-cypress-deps: skipped (${reason})`);
+}
+
+function main() {
+  if (process.env.NODE_ENV === 'production' || process.env.CYPRESS_INSTALL_BINARY === '0') {
+    return skip('no Cypress binary in this environment');
   }
+  const cypressPkgPath = path.resolve('node_modules/cypress/package.json');
+  if (!fs.existsSync(cypressPkgPath)) return skip('cypress is not installed');
+  const { version } = JSON.parse(fs.readFileSync(cypressPkgPath, 'utf8'));
 
-  const isWin = process.platform === 'win32';
-  const npxCmd = isWin ? 'npx.cmd' : 'npx';
-  const npmCmd = isWin ? 'npm.cmd' : 'npm';
-
-  const cachePath = execFileSync(npxCmd, ['cypress', 'cache', 'path'], { encoding: 'utf8' }).trim();
+  // node_modules/.bin/cypress is the binary the lockfile pinned; `npx cypress`
+  // could fall back to fetching an unpinned one from the registry.
+  const cypressBin = path.resolve('node_modules/.bin', process.platform === 'win32' ? 'cypress.cmd' : 'cypress');
+  if (!fs.existsSync(cypressBin)) return skip('cypress launcher missing');
+  const cachePath = execFileSync(cypressBin, ['cache', 'path'], { encoding: 'utf8', shell: process.platform === 'win32' }).trim();
   const appPath = path.join(cachePath, version, 'Cypress', 'resources', 'app');
-  const simpleGitPath = path.join(appPath, 'node_modules', 'simple-git');
-  const serializeJsPath = path.join(appPath, 'node_modules', 'serialize-javascript');
-  const esbuildPath = path.join(appPath, 'node_modules', 'esbuild');
-  const atEsbuildPath = path.join(appPath, 'node_modules', '@esbuild');
-  const engineIoPath = path.join(appPath, 'node_modules', '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
-  const flattedPath = path.join(appPath, 'node_modules', 'flatted');
-  const wsPath = path.join(appPath, 'node_modules', 'ws');
-  const axiosPath = path.join(appPath, 'node_modules', '@packages', 'server', 'node_modules', 'axios');
+  if (!fs.existsSync(appPath)) return skip(`no Cypress ${version} binary in ${cachePath}`);
 
-  if (fs.existsSync(appPath) && (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(engineIoPath) || fs.existsSync(flattedPath) || fs.existsSync(wsPath) || fs.existsSync(esbuildPath) || fs.existsSync(atEsbuildPath) || fs.existsSync(axiosPath))) {
-    console.log(`Patching Cypress dependencies in ${appPath}`);
+  const appModules = path.join(appPath, 'node_modules');
+  const engineIoPath = path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
+  const nestedAxiosPath = path.join(appModules, '@packages', 'server', 'node_modules', 'axios');
+  const present = (name) => fs.existsSync(path.join(appModules, name));
 
-    const tempDir = path.join(appPath, '.temp-patch-deps');
-    fs.mkdirSync(tempDir, { recursive: true });
-    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'temp' }));
+  const wanted = Object.keys(PINNED).filter((name) => {
+    if (name === 'engine.io') return fs.existsSync(engineIoPath);
+    if (name === 'axios') return fs.existsSync(nestedAxiosPath);
+    if (name === 'esbuild') return present('esbuild') || present('@esbuild');
+    return present(name);
+  });
+  if (wanted.length === 0) return skip('nothing to patch');
 
-    const depsToInstall = [];
-    if (fs.existsSync(simpleGitPath)) depsToInstall.push('simple-git@^3.32.3');
-    if (fs.existsSync(serializeJsPath)) depsToInstall.push('serialize-javascript@^7.0.3');
-    if (fs.existsSync(engineIoPath)) depsToInstall.push('engine.io@^5.2.1');
-    if (fs.existsSync(flattedPath)) depsToInstall.push('flatted@^3.4.0');
-    if (fs.existsSync(wsPath)) depsToInstall.push('ws@^8.17.1');
-    if (fs.existsSync(axiosPath)) depsToInstall.push('axios@^1.7.4');
-    if (fs.existsSync(esbuildPath)) depsToInstall.push('esbuild@^0.25.12');
+  // Idempotence: a cached binary that was patched on an earlier run already
+  // carries the pinned versions, so don't re-download them.
+  const alreadyPinned = wanted.every((name) => {
+    const dir = name === 'engine.io' ? engineIoPath : name === 'axios' ? nestedAxiosPath : path.join(appModules, name);
+    const pkg = path.join(dir, 'package.json');
+    if (!fs.existsSync(pkg)) return false;
+    return JSON.parse(fs.readFileSync(pkg, 'utf8')).version === PINNED[name];
+  });
+  if (alreadyPinned) return skip('already patched');
 
-    if (depsToInstall.length > 0) {
-      execFileSync(npmCmd, ['install', ...depsToInstall], { cwd: tempDir, stdio: 'inherit' });
+  console.log(`Patching Cypress bundled dependencies in ${appPath}`);
+  const tempDir = path.join(appPath, '.temp-patch-deps');
+  fs.mkdirSync(tempDir, { recursive: true });
+  try {
+    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
+    const specs = wanted.map((name) => `${name}@${PINNED[name]}`);
+    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
+      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock', '--save-exact', ...specs,
+    ], { cwd: tempDir, stdio: 'inherit', shell: process.platform === 'win32' });
 
-      const sourceDir = path.join(tempDir, 'node_modules');
-      if (fs.existsSync(sourceDir)) {
-        if (fs.existsSync(simpleGitPath) || fs.existsSync(serializeJsPath) || fs.existsSync(flattedPath) || fs.existsSync(wsPath) || fs.existsSync(esbuildPath) || fs.existsSync(atEsbuildPath)) {
-          fs.cpSync(sourceDir, path.join(appPath, 'node_modules'), { recursive: true });
-        }
+    const sourceDir = path.join(tempDir, 'node_modules');
+    fs.cpSync(sourceDir, appModules, { recursive: true });
 
-        // Copy engine.io specifically to its nested location
-        if (fs.existsSync(engineIoPath)) {
-          const sourceEngineIo = path.join(sourceDir, 'engine.io');
-          if (fs.existsSync(sourceEngineIo)) {
-             fs.cpSync(sourceEngineIo, engineIoPath, { recursive: true });
-          }
-          const sourceWs = path.join(sourceDir, 'ws');
-          if (fs.existsSync(sourceWs)) {
-             const engineIoWsPath = path.join(engineIoPath, 'node_modules', 'ws');
-             fs.cpSync(sourceWs, engineIoWsPath, { recursive: true });
-          }
-        }
-
-
-        // Check for an additional engine.io location directly in appPath/node_modules/engine.io
-        const altEngineIoPath = path.join(appPath, 'node_modules', 'engine.io');
-        if (fs.existsSync(altEngineIoPath)) {
-          const sourceWs = path.join(sourceDir, 'ws');
-          if (fs.existsSync(sourceWs)) {
-             const altEngineIoWsPath = path.join(altEngineIoPath, 'node_modules', 'ws');
-             if (fs.existsSync(path.join(altEngineIoPath, 'node_modules'))) {
-               fs.cpSync(sourceWs, altEngineIoWsPath, { recursive: true });
-             }
-          }
-        }
-        // Copy axios specifically to its nested location
-        if (fs.existsSync(axiosPath)) {
-          const sourceAxios = path.join(sourceDir, 'axios');
-          if (fs.existsSync(sourceAxios)) {
-             fs.cpSync(sourceAxios, axiosPath, { recursive: true });
-          }
-        }
-
-        console.log(`Successfully patched ${depsToInstall.join(', ')} in Cypress cache`);
+    // engine.io (and the ws it bundles) and axios live in nested trees that the
+    // top-level overlay above does not reach.
+    if (wanted.includes('engine.io')) {
+      fs.cpSync(path.join(sourceDir, 'engine.io'), engineIoPath, { recursive: true });
+      if (wanted.includes('ws')) {
+        fs.cpSync(path.join(sourceDir, 'ws'), path.join(engineIoPath, 'node_modules', 'ws'), { recursive: true });
       }
     }
-
+    const altEngineIoWs = path.join(appModules, 'engine.io', 'node_modules');
+    if (wanted.includes('ws') && fs.existsSync(altEngineIoWs)) {
+      fs.cpSync(path.join(sourceDir, 'ws'), path.join(altEngineIoWs, 'ws'), { recursive: true });
+    }
+    if (wanted.includes('axios')) {
+      fs.cpSync(path.join(sourceDir, 'axios'), nestedAxiosPath, { recursive: true });
+    }
+    console.log(`Patched ${specs.join(', ')} in the Cypress cache`);
+  } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
-  } else {
-    console.log('Cypress dependencies path not found, skipping patch');
   }
-} catch (e) {
-  console.log('Failed to patch Cypress: ' + e);
+}
+
+try {
+  main();
+} catch (err) {
+  if (process.env.CI) {
+    console.error('patch-cypress-deps: failed', err);
+    process.exit(1);
+  }
+  console.warn(`patch-cypress-deps: failed, continuing (${err instanceof Error ? err.message : String(err)})`);
 }

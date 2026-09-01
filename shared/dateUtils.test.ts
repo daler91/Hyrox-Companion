@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addDaysToISODate, computePlanWeeks, dayDiff, MAX_PLAN_WEEKS, MIN_PLAN_WEEKS } from "./dateUtils";
+import { addDaysToISODate, computePlanWeeks, dayDiff, MAX_PLAN_WEEKS, MIN_PLAN_WEEKS, parseIsoDate, toIsoDateUtc } from "./dateUtils";
 
 describe("dayDiff", () => {
   it("returns the positive whole-day span when end is after start", () => {
@@ -52,5 +52,19 @@ describe("addDaysToISODate", () => {
 
   it("crosses a DST boundary cleanly", () => {
     expect(addDaysToISODate("2026-03-07", 1)).toBe("2026-03-08");
+  });
+});
+
+describe("toIsoDateUtc / parseIsoDate", () => {
+  it("formats an instant as its UTC calendar date", () => {
+    expect(toIsoDateUtc(new Date("2026-03-29T23:30:00Z"))).toBe("2026-03-29");
+    // Same instant, but 30 minutes later crosses UTC midnight.
+    expect(toIsoDateUtc(new Date("2026-03-30T00:30:00Z"))).toBe("2026-03-30");
+  });
+
+  it("parseIsoDate yields UTC midnight, so it round-trips through toIsoDateUtc", () => {
+    const parsed = parseIsoDate("2024-02-29");
+    expect(parsed.toISOString()).toBe("2024-02-29T00:00:00.000Z");
+    expect(toIsoDateUtc(parsed)).toBe("2024-02-29");
   });
 });

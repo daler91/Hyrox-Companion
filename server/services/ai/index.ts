@@ -1,4 +1,4 @@
-import { dayDiff } from "@shared/dateUtils";
+import { addDaysToISODate as addDays, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadOverview } from "@shared/schema";
 import { getStoredDistanceUnit } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
@@ -36,8 +36,6 @@ import {
   getExerciseBreakdown,
   getStructuredExerciseStats,
 } from "./trainingStats";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The athlete's race proximity for the decision engine's S3/S4 gates.
@@ -88,13 +86,6 @@ const MAF_HISTORY_LIMIT = 200;
 const ABSENCE_LOOKAHEAD_DAYS = 28;
 /** Hard cap, so an athlete with a long annotation history can't bloat the prompt. */
 const MAX_ABSENCES_IN_CONTEXT = 8;
-
-function addDays(date: string, delta: number): string {
-  // ⚡ Bolt Performance Optimization:
-  // Use Date.parse() instead of new Date().getTime() to prevent intermediate object allocation
-  const timestamp = Date.parse(`${date}T00:00:00Z`) + delta * DAY_MS;
-  return new Date(timestamp).toISOString().split("T")[0];
-}
 
 /**
  * The declared absences near enough to today for the coach to reason about,

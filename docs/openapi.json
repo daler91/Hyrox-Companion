@@ -3,7 +3,7 @@
   "info": {
     "version": "1.0.0",
     "title": "fitai.coach Workout API",
-    "description": "API for managing workouts, exercises, and training plans.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
+    "description": "API for managing workouts, exercises, and training plans.\n\n### Coverage\nThis document is generated from the Zod schemas in `shared/openapi.ts` and\ncurrently describes the workout CRUD and preferences endpoints only. The\nremaining `/api/v1` routes (plans, timeline, analytics, coach, nutrition,\nintegrations, …) are not yet registered here; `server/routes/` is their\nsource of truth.\n\n### Authentication\nThis API is protected using JWT Bearer authentication provided by Clerk.\nTo authenticate your requests:\n1. Obtain a valid JWT session token for your user from Clerk. If you are building a frontend integration, you can use Clerk's `getToken()` method from their SDKs.\n2. Include the token in the `Authorization` header of your HTTP requests as follows:\n   `Authorization: Bearer <your-clerk-jwt-token>`\n\nClick the **Authorize** button below to enter your JWT token for use within this Swagger UI."
   },
   "servers": [
     {
@@ -20,6 +20,1223 @@
       }
     },
     "schemas": {
+      "WorkoutLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "userId": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "date": {
+            "type": "string"
+          },
+          "focus": {
+            "type": "string"
+          },
+          "mainWorkout": {
+            "type": "string"
+          },
+          "accessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedMainWorkout": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedAccessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "plannedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "actualSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "matchedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "addedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "removedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "compliancePct": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "duration": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "rpe": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "timeOfDayMin": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "planDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "planId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "stravaActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "calories": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "distanceMeters": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "elevationGain": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "maxHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "avgSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "maxSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgCadence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgWatts": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "sufferScore": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "startedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "date",
+          "focus",
+          "mainWorkout",
+          "accessory",
+          "notes",
+          "prescribedMainWorkout",
+          "prescribedAccessory",
+          "prescribedNotes",
+          "plannedSetCount",
+          "actualSetCount",
+          "matchedSetCount",
+          "addedSetCount",
+          "removedSetCount",
+          "compliancePct",
+          "duration",
+          "rpe",
+          "timeOfDayMin",
+          "planDayId",
+          "planId",
+          "source",
+          "stravaActivityId",
+          "garminActivityId",
+          "calories",
+          "distanceMeters",
+          "elevationGain",
+          "avgHeartrate",
+          "maxHeartrate",
+          "avgSpeed",
+          "maxSpeed",
+          "avgCadence",
+          "avgWatts",
+          "sufferScore",
+          "startedAt"
+        ],
+        "title": "WorkoutLog",
+        "description": "A stored workout log row"
+      },
+      "WorkoutLogWithSets": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "userId": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "date": {
+            "type": "string"
+          },
+          "focus": {
+            "type": "string"
+          },
+          "mainWorkout": {
+            "type": "string"
+          },
+          "accessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedMainWorkout": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedAccessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "plannedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "actualSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "matchedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "addedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "removedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "compliancePct": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "duration": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "rpe": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "timeOfDayMin": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "planDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "planId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "stravaActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "calories": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "distanceMeters": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "elevationGain": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "maxHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "avgSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "maxSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgCadence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgWatts": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "sufferScore": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "startedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "exerciseSets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "setNumber": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "reps": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "weight": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                "distance": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                "time": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "plannedReps": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "plannedWeight": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                "plannedDistance": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                "plannedTime": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "blockId": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 255
+                },
+                "stepNumber": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "intervalMinute": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "cycleNumber": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "stepRole": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 50
+                },
+                "groupId": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 255
+                },
+                "intensity": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "load": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "repMode": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": [
+                    "total",
+                    "per_side",
+                    null
+                  ]
+                },
+                "tempo": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "standards": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "notes": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 1000
+                }
+              }
+            }
+          },
+          "newPersonalRecords": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "exerciseKey": {
+                  "type": "string"
+                },
+                "exerciseName": {
+                  "type": "string"
+                },
+                "customLabel": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "category": {
+                  "type": "string"
+                },
+                "metric": {
+                  "type": "string"
+                },
+                "metricLabel": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                },
+                "previousValue": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "exerciseKey",
+                "exerciseName",
+                "category",
+                "metric",
+                "metricLabel",
+                "value",
+                "previousValue"
+              ]
+            },
+            "description": "Present on create only, when the new sets set an all-time best."
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "date",
+          "focus",
+          "mainWorkout",
+          "accessory",
+          "notes",
+          "prescribedMainWorkout",
+          "prescribedAccessory",
+          "prescribedNotes",
+          "plannedSetCount",
+          "actualSetCount",
+          "matchedSetCount",
+          "addedSetCount",
+          "removedSetCount",
+          "compliancePct",
+          "duration",
+          "rpe",
+          "timeOfDayMin",
+          "planDayId",
+          "planId",
+          "source",
+          "stravaActivityId",
+          "garminActivityId",
+          "calories",
+          "distanceMeters",
+          "elevationGain",
+          "avgHeartrate",
+          "maxHeartrate",
+          "avgSpeed",
+          "maxSpeed",
+          "avgCadence",
+          "avgWatts",
+          "sufferScore",
+          "startedAt"
+        ],
+        "title": "WorkoutLogWithSets",
+        "description": "A workout log with the exercise sets it owns"
+      },
+      "WorkoutLogDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "userId": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "date": {
+            "type": "string"
+          },
+          "focus": {
+            "type": "string"
+          },
+          "mainWorkout": {
+            "type": "string"
+          },
+          "accessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedMainWorkout": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedAccessory": {
+            "type": "string",
+            "nullable": true
+          },
+          "prescribedNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "plannedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "actualSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "matchedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "addedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "removedSetCount": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "compliancePct": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "duration": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "rpe": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "timeOfDayMin": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "planDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "planId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "stravaActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "garminActivityId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "calories": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "distanceMeters": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "elevationGain": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "maxHeartrate": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "avgSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "maxSpeed": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgCadence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "avgWatts": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "sufferScore": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "startedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "exerciseSets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "setNumber": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "reps": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "weight": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                "distance": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                "time": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "plannedReps": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "plannedWeight": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                "plannedDistance": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                },
+                "plannedTime": {
+                  "type": "number",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "blockId": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 255
+                },
+                "stepNumber": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "intervalMinute": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "cycleNumber": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "stepRole": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 50
+                },
+                "groupId": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 255
+                },
+                "intensity": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "load": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "repMode": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": [
+                    "total",
+                    "per_side",
+                    null
+                  ]
+                },
+                "tempo": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "standards": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": {
+                    "nullable": true
+                  }
+                },
+                "notes": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 1000
+                }
+              }
+            }
+          },
+          "structureBlocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "description": "Structured workout blocks (see the structureBlockSchema Zod type)."
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "date",
+          "focus",
+          "mainWorkout",
+          "accessory",
+          "notes",
+          "prescribedMainWorkout",
+          "prescribedAccessory",
+          "prescribedNotes",
+          "plannedSetCount",
+          "actualSetCount",
+          "matchedSetCount",
+          "addedSetCount",
+          "removedSetCount",
+          "compliancePct",
+          "duration",
+          "rpe",
+          "timeOfDayMin",
+          "planDayId",
+          "planId",
+          "source",
+          "stravaActivityId",
+          "garminActivityId",
+          "calories",
+          "distanceMeters",
+          "elevationGain",
+          "avgHeartrate",
+          "maxHeartrate",
+          "avgSpeed",
+          "maxSpeed",
+          "avgCadence",
+          "avgWatts",
+          "sufferScore",
+          "startedAt",
+          "exerciseSets",
+          "structureBlocks"
+        ],
+        "title": "WorkoutLogDetail",
+        "description": "A workout log with its exercise sets and structure blocks"
+      },
+      "PreferencesResponse": {
+        "type": "object",
+        "properties": {
+          "weightUnit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "distanceUnit": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "userTimezone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "weeklyGoal": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "mealSchedule": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "emailNotifications": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailWeeklySummary": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "emailMissedReminder": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "showAdherenceInsights": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "aiCoachEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "coachAutoApplyPlanChanges": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "trainingStyleId": {
+            "type": "string",
+            "nullable": true
+          },
+          "trainingStylePreviousId": {
+            "type": "string",
+            "nullable": true
+          },
+          "trainingStyleChangedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "trainingStyleRecomputeNow": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "onboardingCompleted": {
+            "type": "boolean"
+          },
+          "division": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "age": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "bodyweightKg": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "heightCm": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "restingHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "maxHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "ftp": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "activityLevel": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 24
+          },
+          "weightGoalDirection": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "weightGoalRateKgPerWeek": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "mafAge": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "mafInjuryIllnessMedication": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mafConsistency": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafTrend": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "mafHrDataAvailable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "mafHr": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "mafBaselineTestScheduledAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "weightUnit",
+          "distanceUnit",
+          "userTimezone",
+          "weeklyGoal",
+          "mealSchedule",
+          "emailNotifications",
+          "emailWeeklySummary",
+          "emailMissedReminder",
+          "showAdherenceInsights",
+          "aiCoachEnabled",
+          "coachAutoApplyPlanChanges",
+          "trainingStyleId",
+          "trainingStylePreviousId",
+          "trainingStyleChangedAt",
+          "trainingStyleRecomputeNow",
+          "onboardingCompleted",
+          "division",
+          "gender",
+          "age",
+          "bodyweightKg",
+          "heightCm",
+          "restingHr",
+          "maxHr",
+          "ftp",
+          "activityLevel",
+          "weightGoalDirection",
+          "weightGoalRateKgPerWeek",
+          "mafAge",
+          "mafInjuryIllnessMedication",
+          "mafConsistency",
+          "mafTrend",
+          "mafCategory",
+          "mafHrDataAvailable",
+          "mafHr",
+          "mafBaselineTestScheduledAt"
+        ],
+        "title": "PreferencesResponse",
+        "description": "The athlete's preferences as the API serialises them (nulls filled with defaults)"
+      },
       "InsertWorkoutLog": {
         "type": "object",
         "properties": {
@@ -1944,49 +3161,37 @@
         },
         "responses": {
           "200": {
-            "description": "Workout log created successfully",
+            "description": "The created workout log with its exercise sets",
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Workout log created successfully",
-                  "workout": {
-                    "date": "2026-03-29",
-                    "focus": "conditioning",
-                    "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
-                    "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
-                    "notes": "Hyrox simulation - focus on transitions",
-                    "duration": 55,
-                    "rpe": 7,
-                    "source": "manual",
-                    "planDayId": null,
-                    "stravaActivityId": null,
-                    "calories": null,
-                    "distanceMeters": null,
-                    "elevationGain": null,
-                    "avgHeartrate": null,
-                    "maxHeartrate": null,
-                    "avgSpeed": null,
-                    "maxSpeed": null,
-                    "avgCadence": null,
-                    "avgWatts": null,
-                    "sufferScore": null
-                  }
+                  "id": "0b6c5a1e-4f3d-4c2b-9a8e-7d6f5e4c3b2a",
+                  "userId": "user_2xY9zQ",
+                  "date": "2026-03-29",
+                  "focus": "conditioning",
+                  "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
+                  "accessory": "Core circuit: 3x20 sit-ups, 3x30s plank",
+                  "notes": "Hyrox simulation - focus on transitions",
+                  "duration": 55,
+                  "rpe": 7,
+                  "source": "manual",
+                  "planDayId": null,
+                  "stravaActivityId": null,
+                  "calories": null,
+                  "distanceMeters": null,
+                  "elevationGain": null,
+                  "avgHeartrate": null,
+                  "maxHeartrate": null,
+                  "avgSpeed": null,
+                  "maxSpeed": null,
+                  "avgCadence": null,
+                  "avgWatts": null,
+                  "sufferScore": null,
+                  "createdAt": "2026-03-29T18:42:11.000Z",
+                  "exerciseSets": []
                 },
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Workout log created successfully"
-                    },
-                    "workout": {
-                      "$ref": "#/components/schemas/InsertWorkoutLog"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "workout"
-                  ]
+                  "$ref": "#/components/schemas/WorkoutLogWithSets"
                 }
               }
             }
@@ -2017,6 +3222,8 @@
               "application/json": {
                 "example": [
                   {
+                    "id": "0b6c5a1e-4f3d-4c2b-9a8e-7d6f5e4c3b2a",
+                    "userId": "user_2xY9zQ",
                     "date": "2026-03-29",
                     "focus": "conditioning",
                     "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
@@ -2036,13 +3243,15 @@
                     "maxSpeed": null,
                     "avgCadence": null,
                     "avgWatts": null,
-                    "sufferScore": null
+                    "sufferScore": null,
+                    "createdAt": "2026-03-29T18:42:11.000Z",
+                    "exerciseSets": []
                   }
                 ],
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/InsertWorkoutLog"
+                    "$ref": "#/components/schemas/WorkoutLog"
                   }
                 }
               }
@@ -2073,10 +3282,12 @@
         ],
         "responses": {
           "200": {
-            "description": "The requested workout log",
+            "description": "The requested workout log with its exercise sets and structure blocks",
             "content": {
               "application/json": {
                 "example": {
+                  "id": "0b6c5a1e-4f3d-4c2b-9a8e-7d6f5e4c3b2a",
+                  "userId": "user_2xY9zQ",
                   "date": "2026-03-29",
                   "focus": "conditioning",
                   "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
@@ -2096,10 +3307,13 @@
                   "maxSpeed": null,
                   "avgCadence": null,
                   "avgWatts": null,
-                  "sufferScore": null
+                  "sufferScore": null,
+                  "createdAt": "2026-03-29T18:42:11.000Z",
+                  "exerciseSets": [],
+                  "structureBlocks": []
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/InsertWorkoutLog"
+                  "$ref": "#/components/schemas/WorkoutLogDetail"
                 }
               }
             }
@@ -2183,10 +3397,12 @@
         },
         "responses": {
           "200": {
-            "description": "Workout log updated successfully",
+            "description": "The updated workout log with its exercise sets",
             "content": {
               "application/json": {
                 "example": {
+                  "id": "0b6c5a1e-4f3d-4c2b-9a8e-7d6f5e4c3b2a",
+                  "userId": "user_2xY9zQ",
                   "date": "2026-03-29",
                   "focus": "conditioning",
                   "mainWorkout": "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
@@ -2206,10 +3422,12 @@
                   "maxSpeed": null,
                   "avgCadence": null,
                   "avgWatts": null,
-                  "sufferScore": null
+                  "sufferScore": null,
+                  "createdAt": "2026-03-29T18:42:11.000Z",
+                  "exerciseSets": []
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/InsertWorkoutLog"
+                  "$ref": "#/components/schemas/WorkoutLogWithSets"
                 }
               }
             }
@@ -2305,7 +3523,7 @@
         },
         "responses": {
           "200": {
-            "description": "Preferences updated successfully",
+            "description": "The full serialised preferences after the update",
             "content": {
               "application/json": {
                 "example": {
@@ -2321,7 +3539,7 @@
                   "onboardingCompleted": true
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/UpdateUserPreferences"
+                  "$ref": "#/components/schemas/PreferencesResponse"
                 }
               }
             }

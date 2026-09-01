@@ -1,3 +1,4 @@
+import { addDaysToISODate, dayDiff } from "@shared/dateUtils";
 import type { TrainingLoadWindow, TrainingPhase } from "@shared/nutritionTargets";
 import { estimatePlannedDayUtss } from "@shared/plannedSessionEstimate";
 import type { WorkoutLog } from "@shared/schema";
@@ -59,20 +60,6 @@ const PRELOAD_HORIZON_DAYS = 2;
 // A few upcoming planned days is plenty to cover the pre-load horizon.
 const UPCOMING_FETCH_LIMIT = 5;
 
-/** Shift a YYYY-MM-DD calendar date by whole days (UTC-anchored, DST-safe). */
-function shiftDateStr(date: string, deltaDays: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Whole calendar days from `from` to `to` (negative when `to` is earlier). */
-function daysBetweenStr(from: string, to: string): number {
-  return Math.round(
-    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000,
-  );
-}
-
 /**
  * Per-day FULL training load (utss + acute/chronic EWMA + TSB) over `[from, to]`.
  * Unlike {@link fetchDailyUtss} this keeps the fitness/fatigue signals the load
@@ -114,7 +101,7 @@ function resolvePhase(
 ): { phase: TrainingPhase | null; daysUntilRace: number | null } {
   if (!activePlan) return { phase: null, daysUntilRace: null };
   const daysUntilRace = activePlan.raceDate
-    ? Math.max(0, daysBetweenStr(date, activePlan.raceDate))
+    ? Math.max(0, dayDiff(date, activePlan.raceDate))
     : null;
   const covers =
     activePlan.startDate != null &&
@@ -124,7 +111,7 @@ function resolvePhase(
   if (!covers || activePlan.startDate == null || activePlan.totalWeeks <= 0) {
     return { phase: null, daysUntilRace };
   }
-  const weeksElapsed = Math.floor(daysBetweenStr(activePlan.startDate, date) / 7);
+  const weeksElapsed = Math.floor(dayDiff(activePlan.startDate, date) / 7);
   const currentWeek = Math.min(activePlan.totalWeeks, Math.max(1, weeksElapsed + 1));
   const phase = computePlanPhase(activePlan.totalWeeks, currentWeek)?.phaseLabel ?? null;
   return { phase, daysUntilRace };
@@ -153,7 +140,7 @@ export async function fetchTrainingLoadWindow(
   // built from one week. A taper after eight heavy weeks reported 26.1 against
   // a true 107.2, scaling the athlete's fuelling off a quarter of their real
   // baseline at exactly the moment fuelling matters (audit H21).
-  const from = shiftDateStr(date, -Math.max(RECOVERY_WINDOW_DAYS, EWMA_WARMUP_DAYS));
+  const from = addDaysToISODate(date, -Math.max(RECOVERY_WINDOW_DAYS, EWMA_WARMUP_DAYS));
   const loadsPromise = fetchDailyTrainingLoad(userId, from, date);
 
   let plannedDays: Awaited<ReturnType<typeof storage.timeline.getUpcomingPlannedDays>> = [];
@@ -175,13 +162,13 @@ export async function fetchTrainingLoadWindow(
   // isn't biased upward by skipping non-training days.
   const recentLoads: number[] = [];
   for (let i = RECOVERY_WINDOW_DAYS; i >= 1; i--) {
-    recentLoads.push(utssByDate.get(shiftDateStr(date, -i)) ?? 0);
+    recentLoads.push(utssByDate.get(addDaysToISODate(date, -i)) ?? 0);
   }
 
   const distanceUnit = user?.distanceUnit ?? null;
   const upcoming = plannedDays
     .map((d) => ({
-      daysAhead: daysBetweenStr(date, d.date),
+      daysAhead: dayDiff(date, d.date),
       plannedUtss: estimatePlannedDayUtss({
         expectedDurationMin: d.expectedDurationMin,
         expectedRpe: d.expectedRpe,

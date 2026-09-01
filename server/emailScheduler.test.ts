@@ -379,12 +379,12 @@ describe('claim-before-send ledger', () => {
         },
         analytics: {
           getWeeklyStats: vi.fn().mockResolvedValue({}),
-          getAllExerciseSetsWithDates: vi.fn().mockResolvedValue([]),
+          getExerciseSetsForPersonalRecords: vi.fn().mockResolvedValue([]),
           getMissedWorkoutsForDate: vi
             .fn()
             .mockResolvedValue([{ planDayId: 'pd-1', date: '2026-07-19', focus: 'Easy Run', mainWorkout: '5k', planName: 'Plan' }]),
         },
-        timeline: { getTimeline: vi.fn().mockResolvedValue([]) },
+        timeline: { getCompletedWorkoutDates: vi.fn().mockResolvedValue(new Set<string>()) },
       } as unknown as IStorage,
       claim,
     };
@@ -494,8 +494,8 @@ describe('weekly summary window', () => {
           getUser: vi.fn().mockResolvedValue(user),
           claimWeeklySummary: vi.fn().mockResolvedValue(true),
         },
-        analytics: { getWeeklyStats, getAllExerciseSetsWithDates: vi.fn().mockResolvedValue([]) },
-        timeline: { getTimeline: vi.fn().mockResolvedValue([]) },
+        analytics: { getWeeklyStats, getExerciseSetsForPersonalRecords: vi.fn().mockResolvedValue([]) },
+        timeline: { getCompletedWorkoutDates: vi.fn().mockResolvedValue(new Set<string>()) },
       } as unknown as IStorage,
       getWeeklyStats,
     };

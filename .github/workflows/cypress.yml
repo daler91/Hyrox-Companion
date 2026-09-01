@@ -1,6 +1,12 @@
 name: Cypress Tests
 
-on: [push]
+# Runs on pushes AND pull requests so a fork/PR branch gets the same end-to-end
+# gate as a push to a branch in this repository. Secrets are unavailable on
+# fork PRs, so every secret-backed value below has an inert fallback the suite
+# can run against (the server boots without Gemini/Strava/Sentry configured).
+on:
+  push:
+  pull_request:
 
 permissions:
   contents: read
@@ -10,7 +16,31 @@ env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
 jobs:
+  # The record/parallel pair only works with a Cypress Cloud record key. Decide
+  # the matrix once here: with the key, two containers split the specs; without
+  # it, a single container runs everything (two unrecorded containers would
+  # each run the full suite twice over, and `parallel: true` without a key
+  # fails the run outright).
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      containers: ${{ steps.plan.outputs.containers }}
+      record: ${{ steps.plan.outputs.record }}
+    steps:
+      - id: plan
+        env:
+          HAS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY != '' }}
+        run: |
+          if [ "$HAS_RECORD_KEY" = "true" ]; then
+            echo 'containers=[1, 2]' >> "$GITHUB_OUTPUT"
+            echo 'record=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'containers=[1]' >> "$GITHUB_OUTPUT"
+            echo 'record=false' >> "$GITHUB_OUTPUT"
+          fi
+
   cypress-run:
+    needs: plan
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -29,23 +59,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        containers: [1, 2]
+        containers: ${{ fromJSON(needs.plan.outputs.containers) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
         with:
           version: 9.12.0
-
-      - name: Cache Cypress binary
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-cypress-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            cypress-${{ runner.os }}-cypress-
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -53,31 +75,38 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
+      - name: Cache Cypress binary
+        id: cypress-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/Cypress
+          # Keyed on the lockfile: the Cypress version (and so the binary) can
+          # only change with it. One step, one key — a second cache step with a
+          # different key used to make the restore below never hit.
+          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install dependencies
         # --ignore-scripts keeps dependency lifecycle scripts from executing in
         # CI. That also skips this repo's own postinstall
         # (script/patch-cypress-deps.js), which needs the Cypress binary on disk
         # to do anything — so it runs explicitly after `cypress install` below.
-        # node_modules/.bin/cypress is the binary the lockfile pinned; `npx`
-        # would fall back to fetching an unpinned one from the registry, and
-        # `pnpm exec cypress install` reads to SonarCloud like a package
-        # installation missing --ignore-scripts — a flag `cypress install`
-        # (a binary download that runs no lifecycle scripts) doesn't take.
-        run: |
-          pnpm install --frozen-lockfile --ignore-scripts
-          node_modules/.bin/cypress install
-          node script/patch-cypress-deps.js
-
-      - name: Cache Cypress binary
-        id: cypress-cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install Cypress binary
+        # Only on a cache miss. node_modules/.bin/cypress is the binary the
+        # lockfile pinned; `npx` would fall back to fetching an unpinned one
+        # from the registry, and `pnpm exec cypress install` reads to SonarCloud
+        # like a package installation missing --ignore-scripts — a flag
+        # `cypress install` (a binary download that runs no lifecycle scripts)
+        # doesn't take.
         if: steps.cypress-cache.outputs.cache-hit != 'true'
-        run: node_modules/.bin/cypress install && node script/patch-cypress-deps.js
+        run: node_modules/.bin/cypress install
+
+      - name: Patch Cypress bundled dependencies
+        # Idempotent, and cheap when the cached binary was already patched.
+        run: node script/patch-cypress-deps.js
+        env:
+          CI: "true"
 
       - name: Build application
         run: pnpm run build
@@ -93,30 +122,32 @@ jobs:
       - name: Enable pgvector extension
         run: psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
-      - name: Run Integration Tests
-        run: |
-          export ALLOW_DEV_AUTH_BYPASS="true"
-          export NODE_ENV="test"
-          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
-          pnpm exec drizzle-kit push
-          pnpm exec vitest run --config vitest.integration.config.ts
-
       - name: Push database schema
         run: pnpm exec drizzle-kit push
 
+      - name: Run Integration Tests
+        # Container 1 only: these are DB-level suites, not Cypress specs, so a
+        # second container would just repeat them against its own database.
+        if: matrix.containers == 1
+        run: pnpm exec vitest run --config vitest.integration.config.ts
+        env:
+          ALLOW_DEV_AUTH_BYPASS: "true"
+          NODE_ENV: test
+
       - name: Run Smoke Test
+        if: matrix.containers == 1
         run: pnpm exec vitest run --config vitest.smoke.config.ts
         env:
           ALLOW_DEV_AUTH_BYPASS: "true"
           NODE_ENV: test
-          DATABASE_URL: ${{ env.DATABASE_URL }}
           ENCRYPTION_KEY: "01234567890123456789012345678901"
           SESSION_SECRET: "dummy_session_secret_for_ci"
 
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
         env:
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          # Fork PRs have no secrets; the suite must still boot the server.
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'dummy_session_secret_for_ci' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
@@ -137,8 +168,8 @@ jobs:
       - name: Cypress run
         uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
         with:
-          record: ${{ secrets.CYPRESS_RECORD_KEY != '' }}
-          parallel: ${{ secrets.CYPRESS_RECORD_KEY != '' }}
+          record: ${{ needs.plan.outputs.record == 'true' }}
+          parallel: ${{ needs.plan.outputs.record == 'true' }}
           install: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}

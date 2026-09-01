@@ -596,6 +596,43 @@ export class TimelineStorage {
   }
 
   /**
+   * The distinct calendar dates on which this athlete has a "completed"
+   * timeline entry — every logged workout's date plus every plan day marked
+   * completed (within its plan's lifetime, exactly as getTimeline scopes them).
+   *
+   * This is the streak input. The weekly email used to hydrate the athlete's
+   * ENTIRE timeline (every plan day, every log, every exercise set and
+   * structure block) and keep only the dates, for every subscriber, every
+   * Monday. Two DISTINCT projections return the same set for a few hundred
+   * bytes.
+   */
+  async getCompletedWorkoutDates(userId: string): Promise<Set<string>> {
+    const userPlans = await db.query.trainingPlans.findMany({
+      where: eq(trainingPlans.userId, userId),
+      columns: { id: true, retiredOn: true },
+    });
+    const planScope = userPlans.length > 0 ? planDaysWithinLifetimes(userPlans) : undefined;
+
+    const [logDates, planDayDates] = await Promise.all([
+      db
+        .selectDistinct({ date: workoutLogs.date })
+        .from(workoutLogs)
+        .where(eq(workoutLogs.userId, userId)),
+      planScope
+        ? db
+            .selectDistinct({ date: planDays.scheduledDate })
+            .from(planDays)
+            .where(and(planScope, eq(planDays.status, "completed"), isNotNull(planDays.scheduledDate)))
+        : Promise.resolve([] as { date: string | null }[]),
+    ]);
+
+    const dates = new Set<string>();
+    for (const row of logDates) dates.add(row.date);
+    for (const row of planDayDates) if (row.date) dates.add(row.date);
+    return dates;
+  }
+
+  /**
    * Fetch only upcoming planned workouts directly from DB with LIMIT.
    * Avoids loading the full timeline for AI suggestions.
    */

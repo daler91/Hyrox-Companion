@@ -1,4 +1,5 @@
 import { OpenApiGeneratorV3, OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
+import { createSelectSchema } from "drizzle-zod";
 
 import {
   exerciseSetSchema,
@@ -8,6 +9,8 @@ import {
   insertWorkoutLogSchema,
   updateUserPreferencesSchema,
   updateWorkoutLogSchema,
+  users,
+  workoutLogs,
 } from "./schema";
 import { z } from "./schema/zod";
 
@@ -76,6 +79,8 @@ const EXAMPLE_UPDATE_WORKOUT = {
 };
 
 const EXAMPLE_WORKOUT_RESPONSE = {
+  id: "0b6c5a1e-4f3d-4c2b-9a8e-7d6f5e4c3b2a",
+  userId: "user_2xY9zQ",
   date: "2026-03-29",
   focus: "conditioning",
   mainWorkout: "3 rounds: Sled Push 50m, Burpee Broad Jumps x10, 1km Row",
@@ -96,6 +101,8 @@ const EXAMPLE_WORKOUT_RESPONSE = {
   avgCadence: null,
   avgWatts: null,
   sufferScore: null,
+  createdAt: "2026-03-29T18:42:11.000Z",
+  exerciseSets: [],
 };
 
 const EXAMPLE_PREFERENCES = {
@@ -110,6 +117,107 @@ const EXAMPLE_PREFERENCES = {
   trainingStyleId: "balanced_default",
   onboardingCompleted: true,
 };
+
+// Response shapes. The insert schemas above describe what a client SENDS; a
+// stored row also carries its id, owner and server-set columns, and the
+// workout endpoints attach the log's exercise sets (and structure blocks).
+// Documenting responses with the insert schemas — as this registry once did —
+// advertised a shape no endpoint actually returns.
+export const WorkoutLogSchema = registry.register(
+  "WorkoutLog",
+  createSelectSchema(workoutLogs).openapi({
+    title: "WorkoutLog",
+    description: "A stored workout log row",
+  }),
+);
+
+export const WorkoutLogWithSetsSchema = registry.register(
+  "WorkoutLogWithSets",
+  createSelectSchema(workoutLogs)
+    .extend({
+      exerciseSets: z.array(exerciseSetSchema).optional(),
+      newPersonalRecords: z
+        .array(
+          z.object({
+            exerciseKey: z.string(),
+            exerciseName: z.string(),
+            customLabel: z.string().nullable().optional(),
+            category: z.string(),
+            metric: z.string(),
+            metricLabel: z.string(),
+            value: z.number(),
+            previousValue: z.number(),
+          }),
+        )
+        .optional()
+        .openapi({ description: "Present on create only, when the new sets set an all-time best." }),
+    })
+    .openapi({
+      title: "WorkoutLogWithSets",
+      description: "A workout log with the exercise sets it owns",
+    }),
+);
+
+export const WorkoutLogDetailSchema = registry.register(
+  "WorkoutLogDetail",
+  createSelectSchema(workoutLogs)
+    .extend({
+      exerciseSets: z.array(exerciseSetSchema),
+      structureBlocks: z
+        .array(z.record(z.string(), z.unknown()))
+        .openapi({ description: "Structured workout blocks (see the structureBlockSchema Zod type)." }),
+    })
+    .openapi({
+      title: "WorkoutLogDetail",
+      description: "A workout log with its exercise sets and structure blocks",
+    }),
+);
+
+export const PreferencesResponseSchema = registry.register(
+  "PreferencesResponse",
+  createSelectSchema(users)
+    .pick({
+      weightUnit: true,
+      distanceUnit: true,
+      userTimezone: true,
+      weeklyGoal: true,
+      mealSchedule: true,
+      emailNotifications: true,
+      emailWeeklySummary: true,
+      emailMissedReminder: true,
+      showAdherenceInsights: true,
+      aiCoachEnabled: true,
+      coachAutoApplyPlanChanges: true,
+      trainingStyleId: true,
+      trainingStylePreviousId: true,
+      trainingStyleChangedAt: true,
+      trainingStyleRecomputeNow: true,
+      onboardingCompleted: true,
+      division: true,
+      gender: true,
+      age: true,
+      bodyweightKg: true,
+      heightCm: true,
+      restingHr: true,
+      maxHr: true,
+      ftp: true,
+      activityLevel: true,
+      weightGoalDirection: true,
+      weightGoalRateKgPerWeek: true,
+      mafAge: true,
+      mafInjuryIllnessMedication: true,
+      mafConsistency: true,
+      mafTrend: true,
+      mafCategory: true,
+      mafHrDataAvailable: true,
+      mafHr: true,
+      mafBaselineTestScheduledAt: true,
+    })
+    .openapi({
+      title: "PreferencesResponse",
+      description: "The athlete's preferences as the API serialises them (nulls filled with defaults)",
+    }),
+);
 
 // Register base schemas as reusable components
 export const InsertWorkoutLogSchema = registry.register(
@@ -222,17 +330,11 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Workout log created successfully",
+      description: "The created workout log with its exercise sets",
       content: {
         "application/json": {
-          schema: z.object({
-            message: z.string().openapi({ example: "Workout log created successfully" }),
-            workout: InsertWorkoutLogSchema,
-          }),
-          example: {
-            message: "Workout log created successfully",
-            workout: EXAMPLE_WORKOUT_RESPONSE,
-          },
+          schema: WorkoutLogWithSetsSchema,
+          example: EXAMPLE_WORKOUT_RESPONSE,
         },
       },
     },
@@ -257,7 +359,7 @@ registry.registerPath({
       description: "A list of workout logs",
       content: {
         "application/json": {
-          schema: z.array(InsertWorkoutLogSchema),
+          schema: z.array(WorkoutLogSchema),
           example: [EXAMPLE_WORKOUT_RESPONSE],
         },
       },
@@ -282,11 +384,11 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "The requested workout log",
+      description: "The requested workout log with its exercise sets and structure blocks",
       content: {
         "application/json": {
-          schema: InsertWorkoutLogSchema,
-          example: EXAMPLE_WORKOUT_RESPONSE,
+          schema: WorkoutLogDetailSchema,
+          example: { ...EXAMPLE_WORKOUT_RESPONSE, structureBlocks: [] },
         },
       },
     },
@@ -321,10 +423,10 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Workout log updated successfully",
+      description: "The updated workout log with its exercise sets",
       content: {
         "application/json": {
-          schema: InsertWorkoutLogSchema,
+          schema: WorkoutLogWithSetsSchema,
           example: EXAMPLE_WORKOUT_RESPONSE,
         },
       },
@@ -392,10 +494,10 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Preferences updated successfully",
+      description: "The full serialised preferences after the update",
       content: {
         "application/json": {
-          schema: UpdateUserPreferencesSchema,
+          schema: PreferencesResponseSchema,
           example: EXAMPLE_PREFERENCES,
         },
       },
@@ -416,6 +518,13 @@ export function generateOpenApiDocument() {
       title: "fitai.coach Workout API",
       description: `
 API for managing workouts, exercises, and training plans.
+
+### Coverage
+This document is generated from the Zod schemas in \`shared/openapi.ts\` and
+currently describes the workout CRUD and preferences endpoints only. The
+remaining \`/api/v1\` routes (plans, timeline, analytics, coach, nutrition,
+integrations, …) are not yet registered here; \`server/routes/\` is their
+source of truth.
 
 ### Authentication
 This API is protected using JWT Bearer authentication provided by Clerk.

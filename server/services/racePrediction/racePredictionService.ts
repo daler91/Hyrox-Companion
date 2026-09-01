@@ -11,6 +11,7 @@
  * (generateJsonText + zod safeParse + sanitize) and the gating order in
  * server/services/aiSuggestionService.ts.
  */
+import { addDaysToISODate } from "@shared/dateUtils";
 import { deriveAgeGroupFromAge, type HyroxStation, RACE_SEGMENTS } from "@shared/raceSpec";
 import type {
   RacePredictionAiUnavailableReason,
@@ -27,8 +28,9 @@ import { generateJsonText } from "../../ai/providers";
 import { env } from "../../env";
 import { logger as defaultLogger } from "../../logger";
 import { storage } from "../../storage";
+import { getLocalDateStrSafe } from "../../timezone";
 import { checkAiBudget } from "../aiUsageService";
-import { calculateTrainingLoad, toIsoDate,type TrainingLoadSet } from "../trainingLoadService";
+import { calculateTrainingLoad, type TrainingLoadSet } from "../trainingLoadService";
 import {
   buildRacePredictionFeatures,
   MAX_PERSONAL_FRACTION,
@@ -85,7 +87,6 @@ function normalizeStoredGender(gender: string | null | undefined): StoredGender 
   return gender === "male" || gender === "female" || gender === "prefer_not_to_say" ? gender : null;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 // Lookback for the readiness load calc: long enough for the 28-day chronic EWMA
 // to stabilise, short enough to keep the (cached) prediction cheap.
 const READINESS_WINDOW_DAYS = 90;
@@ -169,13 +170,15 @@ export function computeRaceReadiness(tsb: number | null, acuteLoad?: number | nu
  */
 async function loadRaceReadiness(
   userId: string,
-  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null; bodyweightKg?: number | null } | undefined,
+  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null; bodyweightKg?: number | null; userTimezone?: string | null } | undefined,
   sets: readonly TrainingLoadSet[],
   log: RacePredictionLogger,
 ): Promise<RaceReadiness> {
   try {
-    const today = toIsoDate(new Date());
-    const from = toIsoDate(new Date(Date.now() - READINESS_WINDOW_DAYS * DAY_MS));
+    // Race-day form is a question about the athlete's calendar, so anchor the
+    // readiness window on their local date rather than the server's UTC day.
+    const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+    const from = addDaysToISODate(today, -READINESS_WINDOW_DAYS);
     const [workoutLogs, loadTags] = await Promise.all([
       storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
       storage.analytics.getExerciseLoadTags(),

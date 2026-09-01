@@ -1,6 +1,9 @@
 [build]
 builder = "nixpacks"
-buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
+# CYPRESS_INSTALL_BINARY=0: the production image never runs Cypress, so skip
+# the ~250MB binary download its postinstall would otherwise perform (and the
+# repo postinstall that patches it, which exits early without the binary).
+buildCommand = "CYPRESS_INSTALL_BINARY=0 pnpm install --frozen-lockfile && pnpm run build"
 
 [deploy]
 startCommand = "node script/start.js"

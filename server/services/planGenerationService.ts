@@ -21,7 +21,7 @@ import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
 import { sanitizeUserInput } from "../utils/sanitize";
 import { buildLoadAnchors, describeLoadAnchorLines, type LoadAnchor } from "./loadAnchors";
-import { calculateTrainingLoad, toIsoDate } from "./trainingLoadService";
+import { calculateTrainingLoad } from "./trainingLoadService";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
 const PLAN_GENERATION_CHUNK_WEEKS = 2;
@@ -797,8 +797,12 @@ async function computeGenerationCalibration(
   user: Awaited<ReturnType<typeof storage.users.getUser>>,
 ): Promise<GenerationCalibration | null> {
   try {
-    const today = toIsoDate(new Date());
-    const from = toIsoDate(new Date(Date.now() - LOAD_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+    // The athlete's calendar date, not the server's: a UTC "today" put the
+    // load window a day off for everyone west of Greenwich, so the posture and
+    // anchors the plan was calibrated from lagged the schedule it was written
+    // against (resolveUserTodayForPlan makes the same call for the schedule).
+    const today = getLocalDateStrSafe(new Date(), user?.userTimezone);
+    const from = addDaysToISODate(today, -LOAD_WINDOW_DAYS);
     const [workoutLogs, loadExerciseSets, loadTags] = await Promise.all([
       storage.analytics.getWorkoutLogsByDateRange(userId, from, today),
       storage.analytics.getAllExerciseSetsWithDates(userId, from, today),
