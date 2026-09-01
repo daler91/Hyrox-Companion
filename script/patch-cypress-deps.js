@@ -15,6 +15,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -72,8 +73,14 @@ function main() {
   if (alreadyPinned) return skip('already patched');
 
   console.log(`Patching Cypress bundled dependencies in ${appPath}`);
-  const tempDir = path.join(appPath, '.temp-patch-deps');
-  fs.mkdirSync(tempDir, { recursive: true });
+  // The staging dir lives OUTSIDE the Cypress tree. It used to be
+  // `<app>/.temp-patch-deps`, and a blanket copy of its node_modules dragged
+  // npm's `.bin/*` symlinks along, rewritten to point INTO that staging path;
+  // once the staging dir was deleted and the (cached) binary reused on the next
+  // run, cpSync met a dest symlink resolving to its own source and threw
+  // ERR_FS_CP_EINVAL — a failure the old script silently swallowed, so the CI
+  // cache was never actually patched.
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
   try {
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
     const specs = wanted.map((name) => `${name}@${PINNED[name]}`);
@@ -82,22 +89,42 @@ function main() {
     ], { cwd: tempDir, stdio: 'inherit', shell: process.platform === 'win32' });
 
     const sourceDir = path.join(tempDir, 'node_modules');
-    fs.cpSync(sourceDir, appModules, { recursive: true });
+    // Overlay every installed package (the pinned ones plus their transitive
+    // dependencies) as plain directories: no `.bin`, no symlinks, and each
+    // destination replaced whole so nothing stale survives underneath.
+    const overlayPackage = (from, to) => {
+      fs.rmSync(to, { recursive: true, force: true });
+      fs.cpSync(from, to, {
+        recursive: true,
+        filter: (entry) => path.basename(entry) !== '.bin',
+      });
+    };
+    for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      if (entry.name.startsWith('@')) {
+        for (const scoped of fs.readdirSync(path.join(sourceDir, entry.name), { withFileTypes: true })) {
+          if (!scoped.isDirectory()) continue;
+          overlayPackage(path.join(sourceDir, entry.name, scoped.name), path.join(appModules, entry.name, scoped.name));
+        }
+        continue;
+      }
+      overlayPackage(path.join(sourceDir, entry.name), path.join(appModules, entry.name));
+    }
 
     // engine.io (and the ws it bundles) and axios live in nested trees that the
     // top-level overlay above does not reach.
     if (wanted.includes('engine.io')) {
-      fs.cpSync(path.join(sourceDir, 'engine.io'), engineIoPath, { recursive: true });
+      overlayPackage(path.join(sourceDir, 'engine.io'), engineIoPath);
       if (wanted.includes('ws')) {
-        fs.cpSync(path.join(sourceDir, 'ws'), path.join(engineIoPath, 'node_modules', 'ws'), { recursive: true });
+        overlayPackage(path.join(sourceDir, 'ws'), path.join(engineIoPath, 'node_modules', 'ws'));
       }
     }
     const altEngineIoWs = path.join(appModules, 'engine.io', 'node_modules');
     if (wanted.includes('ws') && fs.existsSync(altEngineIoWs)) {
-      fs.cpSync(path.join(sourceDir, 'ws'), path.join(altEngineIoWs, 'ws'), { recursive: true });
+      overlayPackage(path.join(sourceDir, 'ws'), path.join(altEngineIoWs, 'ws'));
     }
     if (wanted.includes('axios')) {
-      fs.cpSync(path.join(sourceDir, 'axios'), nestedAxiosPath, { recursive: true });
+      overlayPackage(path.join(sourceDir, 'axios'), nestedAxiosPath);
     }
     console.log(`Patched ${specs.join(', ')} in the Cypress cache`);
   } finally {
