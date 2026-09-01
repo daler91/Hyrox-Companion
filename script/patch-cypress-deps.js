@@ -43,9 +43,16 @@ const layout = {
   appModules: '',
   /** The two pinned packages that live in nested trees inside the app. */
   nested: { 'engine.io': '', axios: '' },
-  /** node_modules of the staging install, once stagePinned() has run. */
+  /** The staging install: a fresh temp dir and, once stagePinned() has run, its node_modules. */
+  tempDir: '',
   sourceDir: '',
 };
+
+// The three helpers below take a package NAME (always a key of PINNED, or a
+// directory name read from the staging install) and join it onto a directory
+// from `layout`. Bearer reads any function parameter as dynamic input; these
+// never carry request or network data, so the joins are suppressed here with
+// that justification rather than threaded through more module state.
 
 function skip(reason) {
   // `reason` is one of the static strings in this file — never a path or a secret.
@@ -82,6 +89,7 @@ function locateCypressApp() {
 
 /** Where a pinned package lives inside the Cypress app. */
 function bundledDir(name) {
+  // bearer:disable javascript_lang_path_traversal
   return layout.nested[name] ?? path.join(layout.appModules, name);
 }
 
@@ -100,6 +108,7 @@ function selectWanted() {
 /** Idempotence: a cached binary patched on an earlier run already carries the pins. */
 function alreadyPinned(wanted) {
   return [...wanted].every((name) => {
+    // bearer:disable javascript_lang_path_traversal
     const pkg = path.join(bundledDir(name), 'package.json');
     if (!fs.existsSync(pkg)) return false;
     return JSON.parse(fs.readFileSync(pkg, 'utf8')).version === PINNED[name];
@@ -107,12 +116,12 @@ function alreadyPinned(wanted) {
 }
 
 /** npm-install the pinned versions into the staging dir; records its node_modules in `layout`. */
-function stagePinned(tempDir, specs) {
-  fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
+function stagePinned(specs) {
+  fs.writeFileSync(path.join(layout.tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
   execFileSync(IS_WINDOWS ? 'npm.cmd' : 'npm', [
     'install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock', '--save-exact', ...specs,
-  ], { cwd: tempDir, stdio: 'inherit' });
-  layout.sourceDir = path.join(tempDir, 'node_modules');
+  ], { cwd: layout.tempDir, stdio: 'inherit' });
+  layout.sourceDir = path.join(layout.tempDir, 'node_modules');
 }
 
 /**
@@ -122,6 +131,7 @@ function stagePinned(tempDir, specs) {
  */
 function overlayPackage(from, to) {
   fs.rmSync(to, { recursive: true, force: true });
+  // bearer:disable javascript_lang_path_traversal
   fs.cpSync(path.join(layout.sourceDir, from), to, {
     recursive: true,
     filter: (entry) => path.basename(entry) !== '.bin',
@@ -181,17 +191,17 @@ function main() {
   // run, cpSync met a dest symlink resolving to its own source and threw
   // ERR_FS_CP_EINVAL — a failure the old script silently swallowed, so the CI
   // cache was never actually patched.
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
+  layout.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
   try {
     const specs = [...wanted].map((name) => `${name}@${PINNED[name]}`);
-    stagePinned(tempDir, specs);
+    stagePinned(specs);
     overlayTopLevel();
     overlayNested(wanted);
     // `specs` are the pinned name@version strings above — static data.
     // bearer:disable javascript_lang_logger_leak
     console.log(`Patched ${specs.join(', ')} in the Cypress cache`);
   } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(layout.tempDir, { recursive: true, force: true });
   }
 }
 
