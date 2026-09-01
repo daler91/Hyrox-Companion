@@ -151,10 +151,13 @@ describe("Analytics Routes", () => {
 
   const testEndpoint = (endpoint: string, mockMethod: ReturnType<typeof vi.fn>, expectedBody: Record<string, unknown>, storageMethod: ReturnType<typeof vi.fn>) => {
     describe(`GET ${endpoint}`, () => {
-      it("should return analytics for a user", async () => {
+      it("should return analytics for a user, computed in the athlete's current units", async () => {
         vi.mocked(storageMethod).mockResolvedValue([
           { id: "set1", exerciseName: "Test", weight: "100", reps: 10 }
         ]);
+        // The route reads preferences per request so a unit switch shows on
+        // the next call instead of after the sets cache's TTL (audit L4).
+        vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", weightUnit: "lbs", distanceUnit: "miles" } as never);
 
         vi.mocked(mockMethod).mockReturnValue(expectedBody);
 
@@ -162,9 +165,10 @@ describe("Analytics Routes", () => {
 
         expect(response.status).toBe(200);
         expect(storageMethod).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-        expect(mockMethod).toHaveBeenCalledWith([
-          expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })
-        ]);
+        expect(mockMethod).toHaveBeenCalledWith(
+          [expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })],
+          { weightUnit: "lbs", distanceUnit: "miles" },
+        );
         expect(response.body).toEqual(expectedBody);
       });
 

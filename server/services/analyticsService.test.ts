@@ -867,3 +867,74 @@ describe("computeAdherencePct — adherence over DUE sessions (audit H10)", () =
     expect(computeAdherencePct(logged([90]), undefined)).toBeNull();
   });
 });
+
+describe("unit-stamp-aware reads (audit L4)", () => {
+  const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+  const KG_ATHLETE = { weightUnit: "kg", distanceUnit: "km" };
+
+  it("compares a kg-stamped and a lbs-stamped set in ONE unit for the max-weight PR", () => {
+    const sets = [
+      makeSet({ weight: 100, weightUnit: "kg", date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ weight: 150, weightUnit: "lbs", date: "2026-02-10", workoutLogId: "w2" }),
+    ];
+    // Viewed in lbs: 100 kg is 220 lb, which beats 150 lb — the raw comparison
+    // (150 > 100) used to crown w2 and celebrate a false PR.
+    expect(calculatePersonalRecords(sets, LB_ATHLETE)["back_squat"].maxWeight).toEqual({
+      value: 220,
+      date: "2026-01-10",
+      workoutLogId: "w1",
+    });
+    // Viewed in kg the same history yields the same winner, in kg.
+    expect(calculatePersonalRecords(sets, KG_ATHLETE)["back_squat"].maxWeight).toEqual({
+      value: 100,
+      date: "2026-01-10",
+      workoutLogId: "w1",
+    });
+  });
+
+  it("estimates 1RM from the converted weight, not the raw stored number", () => {
+    const sets = [makeSet({ weight: 100, weightUnit: "kg", reps: 5, date: "2026-01-10", workoutLogId: "w1" })];
+    const kg = calculatePersonalRecords(sets, KG_ATHLETE)["back_squat"].estimated1RM!.value;
+    const lb = calculatePersonalRecords(sets, LB_ATHLETE)["back_squat"].estimated1RM!.value;
+    expect(kg).toBeCloseTo(100 * (1 + 5 / 30), 1);
+    expect(lb).toBeCloseTo(220 * (1 + 5 / 30), 1);
+  });
+
+  it("compares metres and feet in one unit for the max-distance PR", () => {
+    const sets = [
+      makeSet({ exerciseName: "rowing", category: "conditioning", distance: 3000, distanceUnit: "m", date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ exerciseName: "rowing", category: "conditioning", distance: 5280, distanceUnit: "ft", date: "2026-02-10", workoutLogId: "w2" }),
+    ];
+    // 5,280 ft is a mile (~1,609 m) — it does not beat a 3,000 m row.
+    expect(calculatePersonalRecords(sets, KG_ATHLETE)["rowing"].maxDistance).toMatchObject({
+      value: 3000,
+      workoutLogId: "w1",
+    });
+  });
+
+  it("passes a legacy (unstamped) row through unconverted", () => {
+    const sets = [makeSet({ weight: 100, weightUnit: null, date: "2026-01-10", workoutLogId: "w1" })];
+    expect(calculatePersonalRecords(sets, LB_ATHLETE)["back_squat"].maxWeight!.value).toBe(100);
+  });
+
+  it("keeps the raw-number behaviour when no preferences are supplied", () => {
+    const sets = [
+      makeSet({ weight: 100, weightUnit: "kg", date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ weight: 150, weightUnit: "lbs", date: "2026-02-10", workoutLogId: "w2" }),
+    ];
+    expect(calculatePersonalRecords(sets)["back_squat"].maxWeight!.value).toBe(150);
+  });
+
+  it("does not step-change a volume chart on the day the athlete switched units", () => {
+    const sets = [
+      makeSet({ weight: 100, weightUnit: "kg", reps: 5, date: "2026-01-10", workoutLogId: "w1" }),
+      makeSet({ weight: 220, weightUnit: "lbs", reps: 5, date: "2026-01-11", workoutLogId: "w2" }),
+    ] as never;
+    const days = calculateExerciseAnalytics(sets, LB_ATHLETE)["back_squat"];
+    // Same lift, two units: identical volume and max on both days.
+    expect(days[0].totalVolume).toBe(220 * 5);
+    expect(days[1].totalVolume).toBe(220 * 5);
+    expect(days[0].maxWeight).toBe(220);
+    expect(days[1].maxWeight).toBe(220);
+  });
+});

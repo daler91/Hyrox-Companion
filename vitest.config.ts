@@ -13,11 +13,15 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    // Nutrition is ON by default at runtime now the module is complete, but tests
-    // are pinned to the prior OFF value so the flag-gate test and flag-conditional
-    // UI (Analytics Fuelling tab, workout fuelling panel) behave exactly as written.
+    // The suite runs in the SHIPPED configuration: nutrition is ON by default at
+    // runtime (server/env.ts, client/src/lib/featureFlags.ts), so it is ON here
+    // too — otherwise the flag-ON wiring (route gate pass-through, Fuelling tab,
+    // workout fuelling panel, onboarding fuelling step) only ever ran in
+    // production. Tests that are ABOUT the OFF state pin it themselves
+    // (the nutrition route flag-gate test, OnboardingWizard.test.tsx); never
+    // flip this back to 'false' to make a flag-conditional test pass.
     // (vitest exposes test.env on both process.env and import.meta.env.)
-    env: { NUTRITION_ENABLED: 'false', VITE_NUTRITION_ENABLED: 'false' },
+    env: { NUTRITION_ENABLED: 'true', VITE_NUTRITION_ENABLED: 'true' },
     exclude: ['**/*.integration.test.ts', '**/smoke.test.ts', '**/node_modules/**', '**/dist/**', '**/cypress/**'],
     globals: true,
     coverage: {

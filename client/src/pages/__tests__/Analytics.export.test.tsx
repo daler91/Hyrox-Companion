@@ -171,7 +171,7 @@ describe("Analytics tabs", () => {
     vi.clearAllMocks();
   });
 
-  it("shows Breakdown as the second tab", () => {
+  it("shows Breakdown as the second tab, with Fuelling last in the shipped (nutrition-on) configuration", () => {
     renderAnalytics();
 
     expect(getTabLabels()).toEqual([
@@ -180,6 +180,7 @@ describe("Analytics tabs", () => {
       "PRs & Trends",
       "Coach Insights",
       "Race Predictor",
+      "Fuelling",
     ]);
   });
 });

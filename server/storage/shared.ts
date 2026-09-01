@@ -172,9 +172,20 @@ export function takeMostRecentSessions<T extends { date: string }>(
 // scalar fields. Projecting just those (no JSON intensity/load/tempo/standards,
 // no planned*/block columns) keeps the all-time PR fetch's payload + memory
 // bounded. Mirrors the row cap + truncation warning above.
+// The unit stamps ride along so calculatePersonalRecords can compare a
+// kg-stamped row against a lbs-stamped one in ONE unit (audit L4) instead of
+// comparing raw numbers across a preference switch.
 export type SlimLoggedExerciseSet = Pick<
   ExerciseSet,
-  "exerciseName" | "customLabel" | "category" | "weight" | "reps" | "distance" | "time"
+  | "exerciseName"
+  | "customLabel"
+  | "category"
+  | "weight"
+  | "reps"
+  | "distance"
+  | "time"
+  | "weightUnit"
+  | "distanceUnit"
 > & { workoutLogId: string; date: string };
 
 export async function querySlimExerciseSetsWithDates(
@@ -198,6 +209,8 @@ export async function querySlimExerciseSetsWithDates(
           reps: true,
           distance: true,
           time: true,
+          weightUnit: true,
+          distanceUnit: true,
         },
       },
     },

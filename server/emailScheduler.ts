@@ -70,7 +70,7 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   // "PRs This Week" = all-time bests first achieved within last week's window
   // (W18). Computed over the user's full history so only true records count.
   const prsThisWeek = countPersonalRecordsInRange(
-    calculatePersonalRecords(allSets),
+    calculatePersonalRecords(allSets, { weightUnit: user.weightUnit, distanceUnit: user.distanceUnit }),
     weekStartStr,
     weekEndStr,
   );

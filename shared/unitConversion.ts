@@ -427,6 +427,70 @@ export function storedDistanceToMetersStamped(
   return parsedDistanceToMeters(value, standardizeParsedDistanceUnit(unit) ?? "m");
 }
 
+/** The per-row values the unit stamp governs: actual and prescribed, per axis. */
+export interface StampedSetValues extends StoredUnitStamp {
+  readonly weight?: number | null;
+  readonly plannedWeight?: number | null;
+  readonly distance?: number | null;
+  readonly plannedDistance?: number | null;
+}
+
+type StampedSetPatch = {
+  weight?: number | null;
+  plannedWeight?: number | null;
+  distance?: number | null;
+  plannedDistance?: number | null;
+  weightUnit?: string | null;
+  distanceUnit?: string | null;
+};
+
+/**
+ * Re-stamp a PARTIAL update to a stored set so the row's unit stamp stays true
+ * for every value on it.
+ *
+ * A patch's numbers are in the athlete's CURRENT preference (that is what the
+ * client shows and edits), so an axis the patch touches is re-stamped with that
+ * unit. But one stamp covers both the actual and the prescribed value on an
+ * axis: patching `weight` on a kg-stamped row for an athlete who now prefers
+ * lbs would relabel an untouched `plannedWeight` as pounds. So any value on a
+ * re-stamped axis that the patch does NOT touch is converted from the old
+ * stamp into the new unit first. A legacy (unstamped) row's values are, by
+ * convention, already in the current preference, so they pass through
+ * unchanged and simply gain the stamp.
+ *
+ * Axes the patch leaves alone keep their existing stamp and values.
+ */
+export function restampSetPatch<TPatch extends StampedSetPatch>(
+  existing: StampedSetValues,
+  patch: TPatch,
+  preferences: UnitPreferences,
+): TPatch & StampedSetPatch {
+  const stamp = stampForPreferences(preferences);
+  const out: StampedSetPatch = { ...patch };
+
+  if (patch.weight !== undefined || patch.plannedWeight !== undefined) {
+    out.weightUnit = stamp.weightUnit;
+    if (patch.weight === undefined && existing.weight != null) {
+      out.weight = storedWeightToDisplay(existing.weight, existing, preferences);
+    }
+    if (patch.plannedWeight === undefined && existing.plannedWeight != null) {
+      out.plannedWeight = storedWeightToDisplay(existing.plannedWeight, existing, preferences);
+    }
+  }
+
+  if (patch.distance !== undefined || patch.plannedDistance !== undefined) {
+    out.distanceUnit = stamp.distanceUnit;
+    if (patch.distance === undefined && existing.distance != null) {
+      out.distance = storedDistanceToDisplay(existing.distance, existing, preferences);
+    }
+    if (patch.plannedDistance === undefined && existing.plannedDistance != null) {
+      out.plannedDistance = storedDistanceToDisplay(existing.plannedDistance, existing, preferences);
+    }
+  }
+
+  return out as TPatch & StampedSetPatch;
+}
+
 export function normalizeParsedWeight(
   value: number,
   sourceUnit: string | undefined | null,

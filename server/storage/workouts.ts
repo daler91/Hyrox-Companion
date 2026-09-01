@@ -13,6 +13,7 @@ import {
   workoutStructureSteps,
 } from "@shared/schema";
 import { normalizeExerciseName } from "@shared/schema/exercises";
+import { restampSetPatch, type UnitPreferences } from "@shared/unitConversion";
 import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
@@ -129,6 +130,13 @@ type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | 
  */
 type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "version">> & {
   readonly expectedVersion?: number;
+  /**
+   * The units the patch's numbers are in (the athlete's current preference).
+   * Like `expectedVersion`, a pseudo-field consumed by storage: it drives the
+   * unit re-stamp of the axes the patch touches (restampSetPatch) and never
+   * reaches the SET clause itself.
+   */
+  readonly unitPreferences?: UnitPreferences;
 };
 
 type MutationOwnerAdapter = {
@@ -643,7 +651,11 @@ export class WorkoutStorage {
     // overwriting. Always bump `version` on success so the next read sees
     // the new value and any client holding the stale version trips the
     // check on its next write.
-    const { expectedVersion, ...setData } = updates;
+    const { expectedVersion, unitPreferences, ...patch } = updates;
+    // Unit stamp maintenance (audit L4): the patch's numbers are in the
+    // athlete's current unit, so re-stamp the axes it touches and convert the
+    // values on those axes it leaves alone. See restampSetPatch.
+    const setData = unitPreferences ? restampSetPatch(owned, patch, unitPreferences) : patch;
     const conditions = [eq(exerciseSets.id, setId)];
     if (expectedVersion !== undefined) {
       conditions.push(eq(exerciseSets.version, expectedVersion));

@@ -1,7 +1,8 @@
 import express, { Router } from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { env } from "../../../env";
 import { AppError, ErrorCode } from "../../../errors";
 import { clearRateLimitBuckets } from "../../../routeUtils";
 import { getNutritionAnchor, regenerateAndStoreNutritionInsights } from "../../../services/analyticsPersistence";
@@ -909,6 +910,18 @@ describe("nutrition routes", () => {
   });
 
   describe("feature flag gate", () => {
+    // The suite runs with the production default (NUTRITION_ENABLED=true) so
+    // every other test exercises the shipped wiring; this is the one test ABOUT
+    // the OFF state, so it flips the flag itself. The gate reads env per
+    // request, so a runtime toggle is enough — no module re-import needed.
+    const shippedFlag = env.NUTRITION_ENABLED;
+    beforeEach(() => {
+      env.NUTRITION_ENABLED = "false";
+    });
+    afterEach(() => {
+      env.NUTRITION_ENABLED = shippedFlag;
+    });
+
     it("404s every route when the flag is off", async () => {
       const gatedApp = createTestApp(nutritionIndexRouter);
       expect((await request(gatedApp).get("/api/v1/nutrition/foods/recent")).status).toBe(404);

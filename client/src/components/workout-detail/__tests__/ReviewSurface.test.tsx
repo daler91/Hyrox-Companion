@@ -80,6 +80,13 @@ vi.mock("../shared/WorkoutPlanDayPicker", () => ({
   ),
 }));
 
+// The fuelling panel is a data-fetching child (useSessionFuelling → useQuery)
+// with its own suite; this file renders ReviewSurface without a QueryClient,
+// so the panel is stubbed out the same way the other data-bound siblings are.
+vi.mock("../FuellingAroundSessionPanel", () => ({
+  FuellingAroundSessionPanel: () => null,
+}));
+
 vi.mock("../AthleteNoteInput", () => ({
   AthleteNoteInput: () => <textarea aria-label="Athlete note" />,
 }));

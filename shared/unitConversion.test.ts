@@ -18,6 +18,7 @@ import {
   normalizeParsedDistance,
   normalizeParsedWeight,
   normalizeWorkoutTextUnits,
+  restampSetPatch,
   roundStoredDistance,
   roundStoredWeight,
   stampForPreferences,
@@ -644,5 +645,63 @@ describe("a stored row that records its own unit", () => {
     const asLbs = storedWeightToDisplay(100, stamp, LB_ATHLETE);
     expect(asLbs).toBe(220);
     expect(storedWeightToDisplay(100, stamp, KG_ATHLETE)).toBe(100);
+  });
+});
+
+describe("restampSetPatch — keeping one stamp true for the whole row (audit L4)", () => {
+  const KG_ATHLETE = { weightUnit: "kg", distanceUnit: "km" };
+  const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+
+  it("re-stamps a touched axis with the current unit and converts the untouched value on it", () => {
+    const existing = { weight: 100, plannedWeight: 90, weightUnit: "kg", distance: 400, distanceUnit: "m" };
+
+    const patch = restampSetPatch(existing, { weight: 230 }, LB_ATHLETE);
+
+    expect(patch).toEqual({ weight: 230, weightUnit: "lbs", plannedWeight: 198 });
+  });
+
+  it("leaves an axis the patch does not touch completely alone", () => {
+    const existing = { weight: 100, weightUnit: "kg", distance: 400, distanceUnit: "m" };
+
+    expect(restampSetPatch(existing, { reps: 8 } as never, LB_ATHLETE)).toEqual({ reps: 8 });
+  });
+
+  it("handles the distance axis the same way (metres → feet for a miles athlete)", () => {
+    const existing = { distance: 400, plannedDistance: 1000, distanceUnit: "m", weight: 20, weightUnit: "kg" };
+
+    const patch = restampSetPatch(existing, { distance: 1500 }, LB_ATHLETE);
+
+    expect(patch.distance).toBe(1500);
+    expect(patch.distanceUnit).toBe("ft");
+    expect(patch.plannedDistance).toBe(3281); // 1,000 m in feet
+    expect("weightUnit" in patch).toBe(false);
+  });
+
+  it("does not convert a value the patch itself sets, even to null", () => {
+    const existing = { weight: 100, plannedWeight: 90, weightUnit: "kg" };
+
+    const patch = restampSetPatch(existing, { weight: 230, plannedWeight: null }, LB_ATHLETE);
+
+    expect(patch).toEqual({ weight: 230, plannedWeight: null, weightUnit: "lbs" });
+  });
+
+  it("treats a legacy (unstamped) row's values as already in the current unit", () => {
+    const existing = { weight: 100, plannedWeight: 90, weightUnit: null };
+
+    expect(restampSetPatch(existing, { weight: 105 }, KG_ATHLETE)).toEqual({
+      weight: 105,
+      weightUnit: "kg",
+      plannedWeight: 90,
+    });
+  });
+
+  it("is the identity conversion when the stamp already matches the preference", () => {
+    const existing = { weight: 100, plannedWeight: 90, weightUnit: "kg" };
+
+    expect(restampSetPatch(existing, { weight: 105 }, KG_ATHLETE)).toEqual({
+      weight: 105,
+      weightUnit: "kg",
+      plannedWeight: 90,
+    });
   });
 });

@@ -59,9 +59,15 @@ export async function createWorkout(input: {
 
   let newPersonalRecords: ReturnType<typeof findPersonalRecordAchievements>;
   try {
-    const allSets = await storage.analytics.getAllExerciseSetsWithDates(input.userId);
+    const [allSets, user] = await Promise.all([
+      storage.analytics.getAllExerciseSetsWithDates(input.userId),
+      storage.users.getUser(input.userId),
+    ]);
     const priorSets = allSets.filter((set) => set.workoutLogId !== createdWorkout.id);
-    newPersonalRecords = findPersonalRecordAchievements(priorSets, createdWorkout);
+    newPersonalRecords = findPersonalRecordAchievements(priorSets, createdWorkout, {
+      weightUnit: user?.weightUnit,
+      distanceUnit: user?.distanceUnit,
+    });
   } catch (err) {
     logger.warn(
       { err, userId: input.userId, workoutLogId: createdWorkout.id },

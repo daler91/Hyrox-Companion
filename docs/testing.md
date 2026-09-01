@@ -31,7 +31,7 @@ The project follows a testing pyramid with three layers:
 | Layer                               | Count     | Location                                                                                                              |
 | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
 | Unit/component/route tests (Vitest) | 262 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
-| Integration tests                   | 2 files   | `server/routes/tests/*.integration.test.ts`                                                                           |
+| Integration tests                   | 6 files   | `server/routes/tests/*.integration.test.ts` (HTTP) and `server/storage/__tests__/*.integration.test.ts` (storage SQL) |
 | Smoke tests                         | 1 file    | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback       |
 | Cypress E2E specs                   | 12 files  | `cypress/e2e/*.cy.ts`                                                                                                 |
 
@@ -271,6 +271,27 @@ Integration tests run against a **real PostgreSQL database** (pgvector/pgvector:
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `server/routes/tests/api.integration.test.ts`            | Tests plans, preferences, timeline, and workout CRUD against a real database                |
 | `server/routes/tests/post-migration.integration.test.ts` | Verifies database schema correctness after migrations (used in the post-migration workflow) |
+
+### Storage-layer integration tests (`server/storage/__tests__/*.integration.test.ts`)
+
+The storage unit tests next to these mock `db` wholesale, so they prove nothing
+about the SQL Drizzle actually generates — ownership joins, cascade ordering,
+windowing, unique constraints. These suites run the real `storage.*` methods
+against the same Postgres the HTTP integration tests use (same config, same
+`fileParallelism: false`), with `server/storage/__tests__/integrationDb.ts`
+providing an FK-safe `resetIntegrationDb()` and seed helpers. Add one here
+whenever a storage method's correctness rests on a predicate, join, or
+constraint rather than on branch logic.
+
+| File                                                            | Purpose                                                                                                          |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `server/storage/__tests__/erasure.integration.test.ts`          | GDPR account erasure (`deleteUserAndPrivateCustomFoods`): cascade, reference-guarded food deletion, public foods |
+| `server/storage/__tests__/exerciseSetOwnership.integration.test.ts` | Exercise-set mutation IDOR guards (workout and plan-day owners), the W18 optimistic lock, the L4 unit re-stamp |
+| `server/storage/__tests__/timelineWindow.integration.test.ts`   | `getTimeline`: three-source merge per athlete, newest-first ordering, limit/offset windowing, set hydration       |
+| `server/storage/__tests__/nutritionLogging.integration.test.ts` | Food visibility predicate, food-log round trip and ownership, one-version-per-day targets (migration 0091)      |
+
+Run them locally against any Postgres with the `vector` extension:
+`CREATE EXTENSION IF NOT EXISTS vector; pnpm exec drizzle-kit push; DATABASE_URL=… pnpm exec vitest run --config vitest.integration.config.ts`.
 
 ---
 
