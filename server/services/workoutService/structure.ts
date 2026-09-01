@@ -441,51 +441,72 @@ export async function copyPrescribedStructureIntoLog(
     stepsByBlock.set(step.blockId, arr);
   }
 
+  // ⚡ Bolt Optimization: this loop used to await one `INSERT ... RETURNING`
+  // per block plus one `INSERT` for that block's steps, sequentially, inside
+  // the transaction backing every "Log Workout" save when logging against a
+  // plan day -- up to 2N round trips for N blocks on that request's critical
+  // path (the exact pattern already fixed in replaceStructureForOwner above,
+  // flagged there as "not yet fixed but same shape" for this function).
+  // workout_structure_blocks.id is a varchar with a gen_random_uuid() column
+  // *default*, not a generated-always identity column, so the new id can be
+  // generated app-side up front instead of read back from a RETURNING clause
+  // -- collapsing the loop to 2 batched multi-row INSERTs total, regardless
+  // of block count.
   for (const block of blocks) {
-    const [savedBlock] = await tx.insert(workoutStructureBlocks).values({
-      workoutLogId,
-      planDayId: null,
-      sectionType: block.sectionType,
-      formatType: block.formatType,
-      durationSeconds: block.durationSeconds,
-      rounds: block.rounds,
-      workSeconds: block.workSeconds,
-      restSeconds: block.restSeconds,
-      durationMinutes: block.durationMinutes,
-      roundCount: block.roundCount,
-      timeCapMinutes: block.timeCapMinutes,
-      workIntervalSec: block.workIntervalSec,
-      restIntervalSec: block.restIntervalSec,
-      score: null,
-      sequenceOrder: block.sequenceOrder,
-      instructions: block.instructions,
-      sortOrder: block.sortOrder,
-    }).returning();
-    blockIdMap.set(block.id, savedBlock.id);
+    blockIdMap.set(block.id, randomUUID());
+  }
+  await tx.insert(workoutStructureBlocks).values(blocks.map((block) => ({
+    id: blockIdMap.get(block.id)!,
+    workoutLogId,
+    planDayId: null,
+    sectionType: block.sectionType,
+    formatType: block.formatType,
+    durationSeconds: block.durationSeconds,
+    rounds: block.rounds,
+    workSeconds: block.workSeconds,
+    restSeconds: block.restSeconds,
+    durationMinutes: block.durationMinutes,
+    roundCount: block.roundCount,
+    timeCapMinutes: block.timeCapMinutes,
+    workIntervalSec: block.workIntervalSec,
+    restIntervalSec: block.restIntervalSec,
+    score: null,
+    sequenceOrder: block.sequenceOrder,
+    instructions: block.instructions,
+    sortOrder: block.sortOrder,
+  })));
+
+  const stepRows: (typeof workoutStructureSteps.$inferInsert)[] = [];
+  for (const block of blocks) {
     const blockSteps = stepsByBlock.get(block.id) ?? [];
-    if (blockSteps.length === 0) continue;
-    await tx.insert(workoutStructureSteps).values(blockSteps.map((step) => ({
-      blockId: savedBlock.id,
-      stepNumber: step.stepNumber,
-      minuteIndex: step.minuteIndex,
-      stepType: step.stepType,
-      exerciseName: step.exerciseName,
-      category: step.category,
-      customLabel: step.customLabel,
-      targetReps: step.targetReps,
-      targetTime: step.targetTime,
-      targetDistance: step.targetDistance,
-      targetWeight: step.targetWeight,
-      targets: step.targets,
-      stepRole: step.stepRole,
-      intensity: step.intensity,
-      loadMode: step.loadMode,
-      unilateralMode: step.unilateralMode,
-      tempo: step.tempo,
-      constraintTags: step.constraintTags,
-      groupId: step.groupId,
-      groupMeta: step.groupMeta,
-    })));
+    const newBlockId = blockIdMap.get(block.id)!;
+    for (const step of blockSteps) {
+      stepRows.push({
+        blockId: newBlockId,
+        stepNumber: step.stepNumber,
+        minuteIndex: step.minuteIndex,
+        stepType: step.stepType,
+        exerciseName: step.exerciseName,
+        category: step.category,
+        customLabel: step.customLabel,
+        targetReps: step.targetReps,
+        targetTime: step.targetTime,
+        targetDistance: step.targetDistance,
+        targetWeight: step.targetWeight,
+        targets: step.targets,
+        stepRole: step.stepRole,
+        intensity: step.intensity,
+        loadMode: step.loadMode,
+        unilateralMode: step.unilateralMode,
+        tempo: step.tempo,
+        constraintTags: step.constraintTags,
+        groupId: step.groupId,
+        groupMeta: step.groupMeta,
+      });
+    }
+  }
+  if (stepRows.length > 0) {
+    await tx.insert(workoutStructureSteps).values(stepRows);
   }
 
   return blockIdMap;
