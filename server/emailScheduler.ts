@@ -124,6 +124,8 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     // numbers over a different window than the notification just quoted.
     url: `/review?week=${encodeURIComponent(weekStartStr)}`,
   }).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err, userId: user.id }, "weekly summary push send failed");
   });
 
@@ -166,6 +168,8 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   // Also send push notification (fire-and-forget; .catch is load-bearing —
   // see processWeeklySummary).
   void sendPushToUser(user.id, buildMissedWorkoutPush(missedData)).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err, userId: user.id }, "missed workout push send failed");
   });
 
@@ -227,6 +231,8 @@ export async function processMafTestReminder(storage: IStorage, user: User, now:
     body: "Run a fixed distance or time at your MAF heart-rate ceiling, then log the run to track your aerobic progress.",
     url: "/log",
   }).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ err, userId: user.id }, "MAF test push send failed");
   });
 

@@ -313,12 +313,16 @@ export function startCron(storage: IStorage): void {
             logger.info({ context: "cron", pruned }, `RAG chunk prune: removed ${pruned} dangling chunk(s)`);
           }
         } catch (err) {
+          // err is a DB/vector error, no PII.
+          // bearer:disable javascript_lang_logger_leak
           logger.error({ context: "cron", err }, "RAG chunk prune failed");
         }
       });
     },
     { timezone: "Etc/UTC" },
   );
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "RAG chunk prune scheduled: daily at 03:50 UTC");
 
   // Nutrition push reminders (post-workout refuel + evening logging nudge).
