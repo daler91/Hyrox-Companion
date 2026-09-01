@@ -54,11 +54,12 @@ export interface Queryable {
 const SPOT_CHECK_TABLES = ["users", "workout_logs", "training_plans"] as const;
 
 /**
- * Known "NULL owner" shapes. Both were live GDPR leaks (rows with a deleted
- * owner staying visible to everyone) whose row cleanup lives in a migration
- * that push-managed production never applies — see
- * docs/operations/pending-manual-steps.md. Checking them here means the drill
- * doubles as the verification step for those outstanding manual DELETEs.
+ * Data states whose cleanup lives in a migration that push-managed production
+ * never applies — see docs/operations/pending-manual-steps.md. Checking them
+ * here means the drill doubles as the verification step for those outstanding
+ * manual statements. 0081/0082 were live GDPR leaks (NULL-owner rows visible
+ * to everyone); 0091's are duplicate-version rows from concurrent-save races,
+ * which the unique indexes shipped with 0091 cannot be created over.
  */
 const NULL_OWNER_PROBES: { name: string; sql: string }[] = [
   {
@@ -69,6 +70,25 @@ const NULL_OWNER_PROBES: { name: string; sql: string }[] = [
   {
     name: "backfill reviews: no NULL user_id rows (0082)",
     sql: `SELECT count(*)::int AS n FROM structured_exercise_backfill_reviews WHERE user_id IS NULL`,
+  },
+  {
+    name: "nutrition targets: no duplicate (user, effective_from) versions (0091)",
+    sql: `SELECT count(*)::int AS n FROM (
+            SELECT 1 FROM nutrition_targets GROUP BY user_id, effective_from HAVING count(*) > 1
+          ) dupes`,
+  },
+  {
+    name: "meal targets: no duplicate (user, meal, effective_from) versions (0091)",
+    sql: `SELECT count(*)::int AS n FROM (
+            SELECT 1 FROM meal_targets GROUP BY user_id, meal_type, effective_from HAVING count(*) > 1
+          ) dupes`,
+  },
+  {
+    name: "training plans: at most one in-flight generation per user (0091)",
+    sql: `SELECT count(*)::int AS n FROM (
+            SELECT 1 FROM training_plans WHERE generation_status IN ('pending', 'generating')
+            GROUP BY user_id HAVING count(*) > 1
+          ) dupes`,
   },
 ];
 
@@ -281,7 +301,7 @@ async function checkNullOwnerLeaks(client: Queryable): Promise<CheckResult[]> {
       results.push({
         name: probe.name,
         status: n === 0 ? "pass" : "fail",
-        detail: n === 0 ? "0 rows" : `${n} ownerless row(s) — run the matching DELETE in docs/operations/pending-manual-steps.md`,
+        detail: n === 0 ? "0 rows" : `${n} offending row(s)/group(s) — run the matching statement in docs/operations/pending-manual-steps.md`,
       });
     } catch (err) {
       results.push({ name: probe.name, status: "fail", detail: err instanceof Error ? err.message : String(err) });

@@ -15,7 +15,7 @@ vi.mock("../../middleware/aibudget", async () => (await import("./testUtils")).m
 
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
-    coaching: ["listCoachingMaterials", "createCoachingMaterial", "updateCoachingMaterial", "deleteCoachingMaterial"],
+    coaching: ["listCoachingMaterials", "createCoachingMaterial", "updateCoachingMaterial", "deleteCoachingMaterial", "deleteChunksByMaterialId"],
     users: ["getUser"],
   }),
 );
@@ -144,21 +144,35 @@ describe("Coaching materials routes", () => {
   });
 
   describe("DELETE /api/v1/coaching-materials/:id", () => {
-    it("should delete material (chunks cascade-deleted via FK)", async () => {
+    it("deletes the material AND purges its vector-DB chunks (split-DB mode has no FK cascade)", async () => {
       vi.mocked(storage.coaching.deleteCoachingMaterial).mockResolvedValue(true);
+      vi.mocked(storage.coaching.deleteChunksByMaterialId).mockResolvedValue(undefined);
 
       const response = await request(app).delete("/api/v1/coaching-materials/m1");
 
       expect(response.status).toBe(200);
       expect(storage.coaching.deleteCoachingMaterial).toHaveBeenCalledWith("m1", "test_user_id");
+      // User-scoped purge, and only AFTER the ownership-checked delete confirmed.
+      expect(storage.coaching.deleteChunksByMaterialId).toHaveBeenCalledWith("m1", "test_user_id");
     });
 
-    it("should return 404 when material not found", async () => {
+    it("still succeeds when the vector-DB chunk purge fails (nightly sweep is the backstop)", async () => {
+      vi.mocked(storage.coaching.deleteCoachingMaterial).mockResolvedValue(true);
+      vi.mocked(storage.coaching.deleteChunksByMaterialId).mockRejectedValue(new Error("vector db unreachable"));
+
+      const response = await request(app).delete("/api/v1/coaching-materials/m1");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ success: true });
+    });
+
+    it("should return 404 when material not found — and never touches the chunk store", async () => {
       vi.mocked(storage.coaching.deleteCoachingMaterial).mockResolvedValue(false);
 
       const response = await request(app).delete("/api/v1/coaching-materials/nonexistent");
 
       expect(response.status).toBe(404);
+      expect(storage.coaching.deleteChunksByMaterialId).not.toHaveBeenCalled();
     });
   });
 });

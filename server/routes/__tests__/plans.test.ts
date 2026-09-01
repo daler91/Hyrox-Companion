@@ -305,6 +305,59 @@ describe("POST /api/v1/plans/generate", () => {
     );
   });
 
+  it("maps the DB unique-violation loser of a concurrent generate race to the same 409", async () => {
+    // hasInFlightPlanGeneration's SELECT is check-then-act: two concurrent
+    // requests can both pass it. The uq_training_plans_user_in_flight index
+    // (migration 0091) fails the loser's INSERT with 23505 — the route must
+    // surface that as PLAN_GENERATION_IN_PROGRESS, not a 500, and must not
+    // enqueue a job.
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const { sendJobNoRetry } = await import("../../queue");
+    const uniqueViolation = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "uq_training_plans_user_in_flight",
+    });
+    vi.mocked(createPendingPlan).mockRejectedValue(uniqueViolation);
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("PLAN_GENERATION_IN_PROGRESS");
+    expect(sendJobNoRetry).not.toHaveBeenCalled();
+  });
+
+  it("detects the unique violation through a drizzle-style cause chain", async () => {
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    const wrapped = new Error("Failed query: insert into training_plans ...");
+    (wrapped as Error & { cause?: unknown }).cause = Object.assign(new Error("duplicate key"), {
+      code: "23505",
+      constraint: "uq_training_plans_user_in_flight",
+    });
+    vi.mocked(createPendingPlan).mockRejectedValue(wrapped);
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("PLAN_GENERATION_IN_PROGRESS");
+  });
+
+  it("does not swallow an unrelated unique violation as an in-flight conflict", async () => {
+    const { createPendingPlan } = await import("../../services/planGenerationService");
+    vi.mocked(createPendingPlan).mockRejectedValue(
+      Object.assign(new Error("duplicate key"), { code: "23505", constraint: "some_other_index" }),
+    );
+
+    const response = await request(app)
+      .post("/api/v1/plans/generate")
+      .send(generatePlanPayload);
+
+    expect(response.status).toBe(500);
+  });
+
   it("remembers the athlete's injuries on their profile", async () => {
     // The generator has always asked for this and always discarded it, so every
     // regeneration asked again.

@@ -290,6 +290,39 @@ describe("estimatePlannedSession", () => {
     });
     expect(clampedExtreme.durationMin).toBe(atLowerBound.durationMin);
   });
+
+  it("passes an evidenced ratio above MAX_RUN_PACE_RATIO through un-squashed (audit M4)", () => {
+    // The server widens the ceiling to MAX_RUN_PACE_RATIO_EVIDENCED (2.2) once
+    // an athlete has 8+ logged runs. This function must not re-clamp that back
+    // to 1.25 — doing so silently reinstated the generic pace for well-evidenced
+    // slow runners, underestimating duration and every fuelling/UTSS number
+    // derived from it.
+    const generic = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+    });
+    const evidencedSlow = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+      runPaceRatio: 2.0, // inside (MAX_RUN_PACE_RATIO, MAX_RUN_PACE_RATIO_EVIDENCED]
+    });
+    const atOldCeiling = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+      runPaceRatio: 1.25,
+    });
+    // 2.0× the generic pace, not 1.25× — the ratio survives normalization.
+    expect(evidencedSlow.durationMin!).toBeGreaterThan(atOldCeiling.durationMin!);
+    expect(evidencedSlow.durationMin!).toBe(Math.round(generic.durationMin! * 2.0));
+
+    // Beyond the evidenced ceiling the guard still bites.
+    const beyondEvidenced = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+      runPaceRatio: 5,
+    });
+    const atEvidencedCeiling = estimatePlannedSession({
+      exerciseSets: [{ exerciseName: "recovery_run", plannedDistance: 9000 }],
+      runPaceRatio: 2.2,
+    });
+    expect(beyondEvidenced.durationMin).toBe(atEvidencedCeiling.durationMin);
+  });
 });
 
 describe("estimatePlannedDayUtss", () => {

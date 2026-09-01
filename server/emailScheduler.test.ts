@@ -305,6 +305,64 @@ describe('processMafTestReminder', () => {
   });
 });
 
+describe('fire-and-forget push rejection containment', () => {
+  // The three `void sendPushToUser(...)` sites carry a load-bearing .catch:
+  // sendPushToUser awaits a DB read before its own allSettled guard, and the
+  // process-wide unhandledRejection handler exits(1). These tests pin that a
+  // rejected push send is swallowed and logged instead of escaping as an
+  // unhandled rejection (which would crash the API during the cron burst).
+  const now = new Date('2026-06-01T12:00:00Z');
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('processMafTestReminder survives a rejected push send and still reports the email result', async () => {
+    const { sendPushToUser } = await import('./pushNotifications');
+    const { logger } = await import('./logger');
+    vi.mocked(sendPushToUser).mockRejectedValueOnce(new Error('db pool exhausted'));
+    const storage = storageFor({
+      id: 'u1', email: 'a@b.com', trainingStyleId: 'maf_method',
+      mafBaselineTestScheduledAt: new Date('2026-05-30T12:00:00Z'), emailNotifications: true,
+    });
+
+    const sent = await processMafTestReminder(storage, { id: 'u1' } as never, now);
+
+    // Let the detached promise's rejection propagate to the .catch.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(sent).toBe(true);
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1' }),
+      'MAF test push send failed',
+    );
+  });
+
+  it('processMissedWorkoutReminder survives a rejected push send', async () => {
+    const { sendPushToUser } = await import('./pushNotifications');
+    const { logger } = await import('./logger');
+    vi.mocked(sendPushToUser).mockRejectedValueOnce(new Error('connection reset'));
+    const storage = {
+      users: {
+        getUser: vi.fn().mockResolvedValue(makeMockUser({ id: 'u1', email: 'a@b.com' })),
+        claimMissedReminder: vi.fn().mockResolvedValue(true),
+      },
+      analytics: {
+        getMissedWorkoutsForDate: vi.fn().mockResolvedValue([
+          { planDayId: 'pd1', date: '2026-05-31', focus: 'Intervals', mainWorkout: '5x800m', planName: 'Base' },
+        ]),
+      },
+    } as unknown as IStorage;
+
+    const sent = await processMissedWorkoutReminder(storage, { id: 'u1' } as never, now);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(sent).toBe(true);
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1' }),
+      'missed workout push send failed',
+    );
+  });
+});
+
 describe('claim-before-send ledger', () => {
   // A Monday, so the weekly summary's day-of-week gate is open.
   const monday = new Date('2026-07-20T09:00:00Z');

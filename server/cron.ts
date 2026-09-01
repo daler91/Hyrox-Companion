@@ -23,6 +23,7 @@ let sharedRuntimeCleanupTask: ReturnType<typeof cron.schedule> | null = null;
 let analyticsRecomputeTask: ReturnType<typeof cron.schedule> | null = null;
 let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
 let nutritionRemindersTask: ReturnType<typeof cron.schedule> | null = null;
+let ragChunkPruneTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -33,7 +34,7 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_014. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_015. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -49,6 +50,7 @@ export const CRON_LOCK_KEYS = {
   analyticsRecompute: 42_010_011n,
   nutritionEmbeddingBackfill: 42_010_012n,
   nutritionReminders: 42_010_013n,
+  ragChunkPrune: 42_010_014n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -292,6 +294,37 @@ export function startCron(storage: IStorage): void {
   );
   logger.info({ context: "cron" }, "Food embedding backfill scheduled: every 30 min (when semantic search enabled)");
 
+  // Self-healing GDPR sweep for coaching-material RAG chunks: in production
+  // document_chunks lives on vectorPool (separate Postgres, no FKs), so a
+  // per-material delete whose vector-side purge failed leaves orphans that
+  // retrieval (user_id-filtered only) would keep serving into coach prompts.
+  // Mirrors the dangling food-embedding prune. Daily is enough — the delete
+  // route purges inline; this only catches its failures and pre-existing
+  // orphans.
+  ragChunkPruneTask = cron.schedule(
+    "50 3 * * *",
+    async () => {
+      await runCronJobWithLock("ragChunkPrune", async () => {
+        try {
+          const { pruned } = await storage.coaching.pruneDanglingChunks();
+          if (pruned > 0) {
+            // Count and static context only, no PII.
+            // bearer:disable javascript_lang_logger_leak
+            logger.info({ context: "cron", pruned }, `RAG chunk prune: removed ${pruned} dangling chunk(s)`);
+          }
+        } catch (err) {
+          // err is a DB/vector error, no PII.
+          // bearer:disable javascript_lang_logger_leak
+          logger.error({ context: "cron", err }, "RAG chunk prune failed");
+        }
+      });
+    },
+    { timezone: "Etc/UTC" },
+  );
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "RAG chunk prune scheduled: daily at 03:50 UTC");
+
   // Nutrition push reminders (post-workout refuel + evening logging nudge).
   // Ticks hourly; per-user timing (refuel window, 20:00 local evening slot) is
   // resolved inside the runner, mirroring the analytics-recompute pattern.
@@ -392,5 +425,9 @@ export async function stopCron(): Promise<void> {
   if (nutritionRemindersTask) {
     await nutritionRemindersTask.stop();
     nutritionRemindersTask = null;
+  }
+  if (ragChunkPruneTask) {
+    await ragChunkPruneTask.stop();
+    ragChunkPruneTask = null;
   }
 }

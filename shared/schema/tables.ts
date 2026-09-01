@@ -287,6 +287,16 @@ export const trainingPlans = pgTable(
       "training_plans_generation_status_check",
       sql`generation_status IN ('pending', 'generating', 'ready', 'failed')`,
     ),
+    // The airtight half of the in-flight guard: hasInFlightPlanGeneration's
+    // SELECT is check-then-act, so two concurrent /plans/generate requests can
+    // both pass it — this index makes the second INSERT fail with 23505 (mapped
+    // back to the same PLAN_GENERATION_IN_PROGRESS 409) instead of enqueueing a
+    // duplicate AI generation. Partial, so finished plans (ready/failed — every
+    // historical row) are unaffected, and the startup stuck-generation sweep
+    // keeps a crashed worker from wedging the athlete behind it.
+    uniqueIndex("uq_training_plans_user_in_flight")
+      .on(table.userId)
+      .where(sql`generation_status IN ('pending', 'generating')`),
   ],
 );
 
@@ -1475,7 +1485,16 @@ export const nutritionTargets = pgTable(
     maxCarbDeltaG: real("max_carb_delta_g"), // cap on the combined positive carb delta
     effectiveFrom: date("effective_from").notNull(),
   },
-  (table) => [index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom)],
+  (table) => [
+    index("idx_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),
+    // createTarget's delete-then-insert keeps one version per (user, day) only
+    // for serialized writers; two concurrent saves both delete zero rows and
+    // both insert, leaving getCurrentTarget's ORDER BY … LIMIT 1 nondeterministic.
+    // This constraint makes the second insert fail with 23505 instead, which
+    // createTarget retries once (its delete then sees the committed winner) —
+    // last writer wins, matching the method's contract.
+    uniqueIndex("uq_nutrition_targets_user_effective").on(table.userId, table.effectiveFrom),
+  ],
 );
 export type NutritionTarget = typeof nutritionTargets.$inferSelect;
 
@@ -1503,6 +1522,13 @@ export const mealTargets = pgTable(
     check(
       "meal_targets_meal_type_check",
       sql`meal_type IN ('breakfast','lunch','dinner','snack','snack_pm','pre_workout','post_workout')`,
+    ),
+    // Same concurrent-save guard as uq_nutrition_targets_user_effective, keyed
+    // per meal to match upsertMealTarget's delete-then-insert.
+    uniqueIndex("uq_meal_targets_user_meal_effective").on(
+      table.userId,
+      table.mealType,
+      table.effectiveFrom,
     ),
   ],
 );

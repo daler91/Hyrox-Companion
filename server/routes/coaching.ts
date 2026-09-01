@@ -6,7 +6,7 @@ import { isAuthenticated } from "../clerkAuth";
 import { reqLogger } from "../logger";
 import { sendJob } from "../queue";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
-import { getRagStatus, reembedAllMaterials } from "../services/ragService";
+import { clearRagCache,getRagStatus, reembedAllMaterials } from "../services/ragService";
 import { storage } from "../storage";
 import { getUserId } from "../types";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
@@ -72,11 +72,24 @@ protectedPost(router, "/api/v1/coaching-materials/re-embed", { limiter: rateLimi
 
 protectedDelete(router, "/api/v1/coaching-materials/:id", { limiter: rateLimiter("coaching", 10) }, async (req: ExpressRequest<{ id: string }>, res: Response) => {
     const userId = getUserId(req);
-    // Chunks are cascade-deleted via FK, no manual cleanup needed
     const deleted = await storage.coaching.deleteCoachingMaterial(req.params.id, userId);
     if (!deleted) {
       return sendNotFound(res, "Coaching material not found");
     }
+    // The main-DB FK cascade only covers single-DB mode. In production
+    // document_chunks lives on vectorPool (a separate Postgres with no FKs),
+    // and retrieval filters by user_id only — so without this purge the
+    // deleted material's text keeps feeding coach prompts. Best-effort AFTER
+    // the ownership-checked delete confirmed: a vector-DB failure here is
+    // logged and the ragChunkPrune cron sweep picks the orphans up.
+    try {
+      await storage.coaching.deleteChunksByMaterialId(req.params.id, userId);
+    } catch (err) {
+      reqLogger(req).error({ err, materialId: req.params.id }, "Failed to purge RAG chunks for deleted material; nightly sweep will retry");
+    }
+    // Drop cached retrievals so the deleted content stops surfacing
+    // immediately rather than after the cache TTL.
+    clearRagCache(userId);
     res.json({ success: true });
   });
 
