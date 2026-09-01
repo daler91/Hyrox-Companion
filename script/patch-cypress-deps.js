@@ -29,65 +29,140 @@ const PINNED = {
   esbuild: '0.25.12',
 };
 
+const IS_WINDOWS = process.platform === 'win32';
+
 function skip(reason) {
-  // `reason` is one of the static strings below — never a path or a secret.
+  // `reason` is one of the static strings in this file — never a path or a secret.
   // bearer:disable javascript_lang_logger_leak
   console.log(`patch-cypress-deps: skipped (${reason})`);
 }
 
-function main() {
+/**
+ * Resolve the Cypress binary's bundled app directory, or return a skip reason.
+ * node_modules/.bin/cypress is the binary the lockfile pinned; `npx cypress`
+ * could fall back to fetching an unpinned one from the registry.
+ */
+function locateCypressApp() {
   if (process.env.NODE_ENV === 'production' || process.env.CYPRESS_INSTALL_BINARY === '0') {
-    return skip('no Cypress binary in this environment');
+    return { reason: 'no Cypress binary in this environment' };
   }
   const cypressPkgPath = path.resolve('node_modules/cypress/package.json');
-  if (!fs.existsSync(cypressPkgPath)) return skip('cypress is not installed');
+  if (!fs.existsSync(cypressPkgPath)) return { reason: 'cypress is not installed' };
   const { version } = JSON.parse(fs.readFileSync(cypressPkgPath, 'utf8'));
 
-  // node_modules/.bin/cypress is the binary the lockfile pinned; `npx cypress`
-  // could fall back to fetching an unpinned one from the registry.
-  const cypressBin = path.resolve('node_modules/.bin', process.platform === 'win32' ? 'cypress.cmd' : 'cypress');
-  if (!fs.existsSync(cypressBin)) return skip('cypress launcher missing');
+  const cypressBin = path.resolve('node_modules/.bin', IS_WINDOWS ? 'cypress.cmd' : 'cypress');
+  if (!fs.existsSync(cypressBin)) return { reason: 'cypress launcher missing' };
   const cachePath = execFileSync(cypressBin, ['cache', 'path'], { encoding: 'utf8' }).trim();
   const appPath = path.join(cachePath, version, 'Cypress', 'resources', 'app');
-  if (!fs.existsSync(appPath)) return skip('no Cypress binary in the cache');
+  if (!fs.existsSync(appPath)) return { reason: 'no Cypress binary in the cache' };
+  return { appPath };
+}
 
-  const appModules = path.join(appPath, 'node_modules');
-  const engineIoPath = path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io');
-  const nestedAxiosPath = path.join(appModules, '@packages', 'server', 'node_modules', 'axios');
-  const present = (name) => fs.existsSync(path.join(appModules, name));
+/** Where each pinned package lives inside the Cypress app; two are nested. */
+function bundledPackageDirs(appModules) {
+  return {
+    'engine.io': path.join(appModules, '@packages', 'socket', 'node_modules', 'socket.io', 'node_modules', 'engine.io'),
+    axios: path.join(appModules, '@packages', 'server', 'node_modules', 'axios'),
+  };
+}
 
-  // A Set, not an array: an array-membership call with the literal 'engine.io' reads to CodeQL like a
-  // hostname check on a URL (js/incomplete-url-substring-sanitization).
-  const wanted = new Set(
+function bundledDir(appModules, nested, name) {
+  // Every path here is rooted in the lockfile-pinned Cypress launcher's own
+  // cache directory and `name` is a key of PINNED above; nothing from a
+  // request or the network reaches it.
+  // bearer:disable javascript_lang_path_traversal
+  return nested[name] ?? path.join(appModules, name);
+}
+
+/** The pinned packages the Cypress app actually bundles. */
+function selectWanted(appModules, nested) {
+  return new Set(
     Object.keys(PINNED).filter((name) => {
-      if (name === 'engine.io') return fs.existsSync(engineIoPath);
-      if (name === 'axios') return fs.existsSync(nestedAxiosPath);
-      if (name === 'esbuild') return present('esbuild') || present('@esbuild');
-      return present(name);
+      if (name === 'esbuild') {
+        return fs.existsSync(path.join(appModules, 'esbuild')) || fs.existsSync(path.join(appModules, '@esbuild'));
+      }
+      return fs.existsSync(bundledDir(appModules, nested, name));
     }),
   );
-  if (wanted.size === 0) return skip('nothing to patch');
+}
 
-  // Idempotence: a cached binary that was patched on an earlier run already
-  // carries the pinned versions, so don't re-download them.
-  const alreadyPinned = [...wanted].every((name) => {
-    // Every path here is rooted in the lockfile-pinned Cypress launcher's own
-    // cache directory and `name` is a key of PINNED above; nothing from a
-    // request or the network reaches it.
+/** Idempotence: a cached binary patched on an earlier run already carries the pins. */
+function alreadyPinned(appModules, nested, wanted) {
+  return [...wanted].every((name) => {
     // bearer:disable javascript_lang_path_traversal
-    const dir = name === 'engine.io' ? engineIoPath : name === 'axios' ? nestedAxiosPath : path.join(appModules, name);
-    // bearer:disable javascript_lang_path_traversal
-    const pkg = path.join(dir, 'package.json');
+    const pkg = path.join(bundledDir(appModules, nested, name), 'package.json');
     if (!fs.existsSync(pkg)) return false;
     // bearer:disable javascript_lang_path_traversal
     return JSON.parse(fs.readFileSync(pkg, 'utf8')).version === PINNED[name];
   });
-  if (alreadyPinned) return skip('already patched');
+}
+
+/** npm-install the pinned versions into a staging dir; returns its node_modules. */
+function stagePinned(tempDir, specs) {
+  fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
+  execFileSync(IS_WINDOWS ? 'npm.cmd' : 'npm', [
+    'install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock', '--save-exact', ...specs,
+  ], { cwd: tempDir, stdio: 'inherit' });
+  return path.join(tempDir, 'node_modules');
+}
+
+/**
+ * Copy one package as a plain directory: no `.bin`, no symlinks, and the
+ * destination replaced whole so nothing stale survives underneath.
+ */
+function overlayPackage(from, to) {
+  fs.rmSync(to, { recursive: true, force: true });
+  fs.cpSync(from, to, { recursive: true, filter: (entry) => path.basename(entry) !== '.bin' });
+}
+
+/** Overlay every staged package (pins + their transitive deps) onto the app. */
+function overlayTopLevel(sourceDir, appModules) {
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    if (!entry.name.startsWith('@')) {
+      overlayPackage(path.join(sourceDir, entry.name), path.join(appModules, entry.name));
+      continue;
+    }
+    for (const scoped of fs.readdirSync(path.join(sourceDir, entry.name), { withFileTypes: true })) {
+      if (!scoped.isDirectory()) continue;
+      overlayPackage(path.join(sourceDir, entry.name, scoped.name), path.join(appModules, entry.name, scoped.name));
+    }
+  }
+}
+
+/** engine.io (and the ws it bundles) and axios live in nested trees the top-level overlay does not reach. */
+function overlayNested(sourceDir, appModules, nested, wanted) {
+  if (wanted.has('engine.io')) {
+    overlayPackage(path.join(sourceDir, 'engine.io'), nested['engine.io']);
+    if (wanted.has('ws')) {
+      overlayPackage(path.join(sourceDir, 'ws'), path.join(nested['engine.io'], 'node_modules', 'ws'));
+    }
+  }
+  const altEngineIoModules = path.join(appModules, 'engine.io', 'node_modules');
+  if (wanted.has('ws') && fs.existsSync(altEngineIoModules)) {
+    overlayPackage(path.join(sourceDir, 'ws'), path.join(altEngineIoModules, 'ws'));
+  }
+  if (wanted.has('axios')) {
+    overlayPackage(path.join(sourceDir, 'axios'), nested.axios);
+  }
+}
+
+function main() {
+  const located = locateCypressApp();
+  if (located.reason) return skip(located.reason);
+  const { appPath } = located;
+  const appModules = path.join(appPath, 'node_modules');
+  const nested = bundledPackageDirs(appModules);
+
+  const wanted = selectWanted(appModules, nested);
+  if (wanted.size === 0) return skip('nothing to patch');
+  if (alreadyPinned(appModules, nested, wanted)) return skip('already patched');
 
   // The Cypress cache path is worth having in the build log; it is a local
   // directory, not a credential.
   // bearer:disable javascript_lang_logger_leak
   console.log(`Patching Cypress bundled dependencies in ${appPath}`);
+
   // The staging dir lives OUTSIDE the Cypress tree. It used to be
   // `<app>/.temp-patch-deps`, and a blanket copy of its node_modules dragged
   // npm's `.bin/*` symlinks along, rewritten to point INTO that staging path;
@@ -97,50 +172,10 @@ function main() {
   // cache was never actually patched.
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cypress-patch-deps-'));
   try {
-    fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'temp', private: true }));
     const specs = [...wanted].map((name) => `${name}@${PINNED[name]}`);
-    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
-      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--no-package-lock', '--save-exact', ...specs,
-    ], { cwd: tempDir, stdio: 'inherit' });
-
-    const sourceDir = path.join(tempDir, 'node_modules');
-    // Overlay every installed package (the pinned ones plus their transitive
-    // dependencies) as plain directories: no `.bin`, no symlinks, and each
-    // destination replaced whole so nothing stale survives underneath.
-    const overlayPackage = (from, to) => {
-      fs.rmSync(to, { recursive: true, force: true });
-      fs.cpSync(from, to, {
-        recursive: true,
-        filter: (entry) => path.basename(entry) !== '.bin',
-      });
-    };
-    for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-      if (entry.name.startsWith('@')) {
-        for (const scoped of fs.readdirSync(path.join(sourceDir, entry.name), { withFileTypes: true })) {
-          if (!scoped.isDirectory()) continue;
-          overlayPackage(path.join(sourceDir, entry.name, scoped.name), path.join(appModules, entry.name, scoped.name));
-        }
-        continue;
-      }
-      overlayPackage(path.join(sourceDir, entry.name), path.join(appModules, entry.name));
-    }
-
-    // engine.io (and the ws it bundles) and axios live in nested trees that the
-    // top-level overlay above does not reach.
-    if (wanted.has('engine.io')) {
-      overlayPackage(path.join(sourceDir, 'engine.io'), engineIoPath);
-      if (wanted.has('ws')) {
-        overlayPackage(path.join(sourceDir, 'ws'), path.join(engineIoPath, 'node_modules', 'ws'));
-      }
-    }
-    const altEngineIoWs = path.join(appModules, 'engine.io', 'node_modules');
-    if (wanted.has('ws') && fs.existsSync(altEngineIoWs)) {
-      overlayPackage(path.join(sourceDir, 'ws'), path.join(altEngineIoWs, 'ws'));
-    }
-    if (wanted.has('axios')) {
-      overlayPackage(path.join(sourceDir, 'axios'), nestedAxiosPath);
-    }
+    const sourceDir = stagePinned(tempDir, specs);
+    overlayTopLevel(sourceDir, appModules);
+    overlayNested(sourceDir, appModules, nested, wanted);
     // `specs` are the pinned name@version strings above — static data.
     // bearer:disable javascript_lang_logger_leak
     console.log(`Patched ${specs.join(', ')} in the Cypress cache`);

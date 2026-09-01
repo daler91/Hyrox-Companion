@@ -8,8 +8,8 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: read
+# Permissions are declared per job (below) rather than for the whole workflow,
+# so each job holds exactly the token scope it uses.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -23,6 +23,8 @@ jobs:
   # fails the run outright).
   plan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       containers: ${{ steps.plan.outputs.containers }}
       record: ${{ steps.plan.outputs.record }}
@@ -42,6 +44,8 @@ jobs:
   cypress-run:
     needs: plan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       postgres:
         image: pgvector/pgvector:pg16
