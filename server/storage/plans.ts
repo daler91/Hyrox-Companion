@@ -44,8 +44,10 @@ export class PlanStorage {
   /**
    * True when the user already has a plan whose AI generation is in flight
    * (`pending` or `generating`). Used to reject duplicate `/plans/generate`
-   * requests (W13). Best-effort, not airtight against two simultaneous requests
-   * — an airtight guard would need a unique partial index, which is a migration.
+   * requests (W13) with a friendly 409 before any work happens. The airtight
+   * half is the DB: `uq_training_plans_user_in_flight` (migration 0091) makes
+   * a second concurrent INSERT fail with 23505, which the route maps to the
+   * same 409 — so this check is a fast path, not the guarantee.
    */
   async hasInFlightPlanGeneration(userId: string): Promise<boolean> {
     const [row] = await db

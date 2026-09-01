@@ -53,6 +53,21 @@ function sendParseWriteThroughResponse(
 
 
 
+/**
+ * True when an error is the uq_training_plans_user_in_flight unique violation —
+ * the DB-level loser of two concurrent /plans/generate requests. Checks the
+ * error and its cause chain because drizzle can wrap the pg error.
+ */
+function isInFlightPlanUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
+    const rec = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (rec.code === "23505" && rec.constraint === "uq_training_plans_user_in_flight") return true;
+    current = rec.cause;
+  }
+  return false;
+}
+
 function isLikelyAiProviderFailure(error: unknown): boolean {
   let raw = "";
   if (error instanceof Error) {
@@ -188,7 +203,22 @@ protectedPost(router, "/api/v1/plans/generate", { limiter: rateLimiter("planGene
       await storage.users.updateUserPreferences(userId, { trainingConstraints: trimmed === "" ? null : trimmed });
     }
 
-    const stub = await createPendingPlan(input, userId);
+    // The SELECT above is check-then-act: two concurrent requests can both pass
+    // it. uq_training_plans_user_in_flight (migration 0091) makes the loser's
+    // INSERT fail with 23505 — surfaced as the same 409 the fast path returns,
+    // so the client experience is identical whichever guard fires.
+    let stub;
+    try {
+      stub = await createPendingPlan(input, userId);
+    } catch (err) {
+      if (isInFlightPlanUniqueViolation(err)) {
+        return res.status(409).json({
+          error: "A plan is already being generated. Please wait for it to finish.",
+          code: "PLAN_GENERATION_IN_PROGRESS",
+        });
+      }
+      throw err;
+    }
     await sendJobNoRetry("plan-generation", { planId: stub.id, userId, input: req.body });
     return res.status(202).json(stub);
   });

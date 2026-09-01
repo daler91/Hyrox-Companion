@@ -56,6 +56,13 @@ const EXPECTED_INDEXES = [
   "idx_custom_exercises_user_id",
   "idx_custom_exercises_user_name",
   "idx_coaching_materials_user_id",
+  // 0091 concurrency guards — load-bearing for correctness, not just speed:
+  // the plans route maps this index's 23505 to PLAN_GENERATION_IN_PROGRESS,
+  // and the nutrition target writers retry on theirs. A schema without them
+  // silently reverts those races to check-then-act.
+  "uq_training_plans_user_in_flight",
+  "uq_nutrition_targets_user_effective",
+  "uq_meal_targets_user_meal_effective",
 ];
 
 const VECTOR_DB_INDEXES = [

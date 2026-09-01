@@ -50,6 +50,35 @@ import { type LogEntryWithFood, roundMacros, scaleNutrition } from "../services/
 import { sanitizeMappedFood } from "../services/nutrition/sanitize";
 import type { MappedFood } from "../services/nutrition/types";
 
+/**
+ * Run a delete-then-insert version write, retrying exactly once when it loses a
+ * concurrent race on the named unique index (23505). The retry's delete sees
+ * the winner's committed row and replaces it — last writer wins, matching what
+ * serialized saves of the same form would produce. Any other error, and a
+ * second conflict on the retry, propagate. Checks the cause chain because
+ * drizzle can wrap the pg error. Exported for testing.
+ */
+export async function retryOnceOnUniqueViolation<T>(
+  indexName: string,
+  write: () => Promise<T>,
+): Promise<T> {
+  const isViolation = (error: unknown): boolean => {
+    let current: unknown = error;
+    for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
+      const rec = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+      if (rec.code === "23505" && rec.constraint === indexName) return true;
+      current = rec.cause;
+    }
+    return false;
+  };
+  try {
+    return await write();
+  } catch (err) {
+    if (!isViolation(err)) throw err;
+    return await write();
+  }
+}
+
 const DEFAULT_SEARCH_LIMIT = 25;
 // The pg_trgm.similarity_threshold GUC default. The fuzzy WHERE uses the `%`
 // operator (index-servable), which reads that GUC — this constant is no longer
@@ -1087,11 +1116,26 @@ export class NutritionStorage {
 
   /**
    * Create a target version (history is preserved across distinct effectiveFrom
-   * dates). Re-saving the same day replaces that day's version in place — a
-   * delete-then-insert keeps exactly one row per (user, effectiveFrom) without
-   * needing a unique constraint, so getCurrentTarget's "latest" is unambiguous.
+   * dates). Re-saving the same day replaces that day's version in place.
+   *
+   * "Exactly one row per (user, effectiveFrom)" is enforced by
+   * uq_nutrition_targets_user_effective (migration 0091), not by the
+   * delete-then-insert alone: two concurrent saves both delete zero rows (each
+   * transaction is blind to the other's uncommitted insert) and would both
+   * insert. With the index, the loser gets 23505 after the winner commits and
+   * is retried once — its delete then sees the committed row, so last writer
+   * wins, which is the same outcome serialized saves produce.
    */
   async createTarget(
+    userId: string,
+    data: UpsertNutritionTargetInput & { effectiveFrom: string },
+  ): Promise<NutritionTarget> {
+    return retryOnceOnUniqueViolation("uq_nutrition_targets_user_effective", () =>
+      this.replaceTargetVersion(userId, data),
+    );
+  }
+
+  private async replaceTargetVersion(
     userId: string,
     data: UpsertNutritionTargetInput & { effectiveFrom: string },
   ): Promise<NutritionTarget> {
@@ -1151,9 +1195,19 @@ export class NutritionStorage {
 
   /**
    * Create/replace a meal's override for a given effectiveFrom. One row per
-   * (user, mealType, effectiveFrom) via delete-then-insert, mirroring createTarget.
+   * (user, mealType, effectiveFrom), enforced by uq_meal_targets_user_meal_effective
+   * with the same retry-once concurrency handling as createTarget.
    */
   async upsertMealTarget(
+    userId: string,
+    data: UpsertMealTargetInput & { effectiveFrom: string },
+  ): Promise<MealTarget> {
+    return retryOnceOnUniqueViolation("uq_meal_targets_user_meal_effective", () =>
+      this.replaceMealTargetVersion(userId, data),
+    );
+  }
+
+  private async replaceMealTargetVersion(
     userId: string,
     data: UpsertMealTargetInput & { effectiveFrom: string },
   ): Promise<MealTarget> {

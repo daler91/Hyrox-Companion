@@ -12,8 +12,9 @@
  * prescribed time) is converted to minutes via a per-exercise default pace, and
  * given a default RPE, so the fuelling target reflects the real session length and
  * intensity instead of falling back to the 10-minute floor and an assumed-moderate
- * effort. Running paces can be scaled by a personalized `runPaceRatio` (clamped so
- * it never strays far from the generic defaults).
+ * effort. Running paces can be scaled by a personalized `runPaceRatio` (guarded to
+ * the widest evidence-backed band; the caller deriving the ratio applies the
+ * tighter low-evidence ceiling).
  */
 
 import { EXERCISE_DEFINITIONS, type ExerciseName, normalizeExerciseName } from "./schema/exercises";
@@ -64,8 +65,9 @@ export interface PlannedSessionEstimateInput {
   distanceUnit?: string | null;
   /**
    * Personalized running-pace multiplier vs the generic defaults: <1 = faster than
-   * generic, >1 = slower. Clamped to [MIN_RUN_PACE_RATIO, MAX_RUN_PACE_RATIO] so a
-   * personalized estimate is grounded to the defaults and never extreme. Defaults to 1.
+   * generic, >1 = slower. Guarded to [MIN_RUN_PACE_RATIO, MAX_RUN_PACE_RATIO_EVIDENCED]
+   * so a personalized estimate is never extreme; the tighter non-evidenced ceiling
+   * (MAX_RUN_PACE_RATIO) is applied by the caller that derives the ratio. Defaults to 1.
    */
   runPaceRatio?: number | null;
 }
@@ -226,10 +228,20 @@ function firstPositive(...values: Array<number | null | undefined>): number | nu
   return null;
 }
 
-/** Clamp a personalized pace multiplier into the grounded band; missing/invalid → 1 (generic). */
+/**
+ * Guard a personalized pace multiplier against garbage; missing/invalid → 1 (generic).
+ *
+ * The bound here is the WIDEST legitimate band ([MIN, MAX_EVIDENCED]), not the
+ * evidence policy: whether an athlete's ratio may exceed MAX_RUN_PACE_RATIO is
+ * decided by the caller that derived it (server getRunPaceRatio widens the
+ * ceiling to MAX_RUN_PACE_RATIO_EVIDENCED at 8+ logged runs). Clamping to
+ * MAX_RUN_PACE_RATIO here silently squashed every evidenced ratio back to 1.25,
+ * re-creating the exact "slow runners stuck on the generic pace" defect the
+ * evidenced ceiling was added to fix (audit M4).
+ */
 function normalizeRunPaceRatio(ratio: number | null | undefined): number {
   if (ratio == null || !Number.isFinite(ratio) || ratio <= 0) return 1;
-  return clamp(ratio, MIN_RUN_PACE_RATIO, MAX_RUN_PACE_RATIO);
+  return clamp(ratio, MIN_RUN_PACE_RATIO, MAX_RUN_PACE_RATIO_EVIDENCED);
 }
 
 /** Estimate one block's minutes, preferring the most explicit timing signal. */

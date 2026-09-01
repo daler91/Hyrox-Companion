@@ -5,7 +5,7 @@ import {
   type InsertCoachingMaterial,
   type InsertDocumentChunk,
 } from "@shared/schema";
-import { and,eq } from "drizzle-orm";
+import { and,eq, inArray } from "drizzle-orm";
 
 import { db } from "../db";
 import { EMBEDDING_DIMENSIONS } from "../gemini/client";
@@ -87,8 +87,53 @@ export class CoachingStorage {
     return results;
   }
 
-  async deleteChunksByMaterialId(materialId: string): Promise<void> {
-    await vectorPool.query(`DELETE FROM document_chunks WHERE material_id = $1`, [materialId]);
+  /**
+   * Delete one material's RAG chunks from the vector database. Required on
+   * per-material deletion for the same reason as `deleteChunksByUserId`: in
+   * production `document_chunks` lives on `vectorPool`, a SEPARATE Postgres
+   * instance with no foreign keys, so the main-DB cascade on
+   * `coaching_materials` cannot reach it — without this call the deleted
+   * material's text and embeddings stay at rest and keep feeding RAG retrieval
+   * (which filters by user_id only). Scoped by userId as belt-and-braces so a
+   * caller can never purge another user's chunks via a guessed material id.
+   */
+  async deleteChunksByMaterialId(materialId: string, userId: string): Promise<void> {
+    await vectorPool.query(`DELETE FROM document_chunks WHERE material_id = $1 AND user_id = $2`, [
+      materialId,
+      userId,
+    ]);
+  }
+
+  /**
+   * Self-healing sweep: delete chunks whose coaching_materials row no longer
+   * exists on the main DB (a per-material delete whose vector-side purge
+   * failed, or rows orphaned before that purge existed). Cross-DB, so
+   * existence is checked in bounded batches rather than a join — mirrors
+   * pruneDanglingFoodEmbeddings.
+   */
+  async pruneDanglingChunks(): Promise<{ pruned: number }> {
+    const CHECK_BATCH = 500;
+    const existing = await vectorPool.query<{ material_id: string }>(
+      `SELECT DISTINCT material_id FROM document_chunks`,
+    );
+    const ids = existing.rows.map((row) => row.material_id);
+    if (ids.length === 0) return { pruned: 0 };
+
+    const live = new Set<string>();
+    for (let i = 0; i < ids.length; i += CHECK_BATCH) {
+      const batch = ids.slice(i, i + CHECK_BATCH);
+      const rows = await db
+        .select({ id: coachingMaterials.id })
+        .from(coachingMaterials)
+        .where(inArray(coachingMaterials.id, batch));
+      for (const row of rows) live.add(row.id);
+    }
+
+    const dangling = ids.filter((id) => !live.has(id));
+    if (dangling.length > 0) {
+      await vectorPool.query(`DELETE FROM document_chunks WHERE material_id = ANY($1)`, [dangling]);
+    }
+    return { pruned: dangling.length };
   }
 
   /**

@@ -32,6 +32,68 @@ describe("CoachingStorage.deleteChunksByUserId", () => {
   });
 });
 
+describe("CoachingStorage.deleteChunksByMaterialId", () => {
+  it("purges one material's chunks scoped by BOTH material_id and user_id", async () => {
+    query.mockResolvedValue({ rows: [], rowCount: 0 });
+    const storage = new CoachingStorage();
+
+    await storage.deleteChunksByMaterialId("mat-7", "user-42");
+
+    // The user_id predicate is belt-and-braces: the vector-side table has no
+    // FKs, so material_id alone would let a caller purge another user's
+    // chunks via a guessed id if an ownership check upstream ever regressed.
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM document_chunks WHERE material_id = $1 AND user_id = $2",
+      ["mat-7", "user-42"],
+    );
+  });
+});
+
+describe("CoachingStorage.pruneDanglingChunks", () => {
+  function mockLiveMaterials(liveIds: string[]) {
+    const whereMock = vi.fn().mockResolvedValue(liveIds.map((id) => ({ id })));
+    const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+    select.mockReturnValue({ from: fromMock });
+  }
+
+  it("deletes chunks whose coaching_materials row is gone, keeps the rest", async () => {
+    query.mockResolvedValueOnce({
+      rows: [{ material_id: "live-1" }, { material_id: "gone-1" }, { material_id: "gone-2" }],
+    });
+    mockLiveMaterials(["live-1"]);
+    query.mockResolvedValueOnce({ rows: [], rowCount: 2 });
+    const storage = new CoachingStorage();
+
+    const result = await storage.pruneDanglingChunks();
+
+    expect(result).toEqual({ pruned: 2 });
+    expect(query).toHaveBeenLastCalledWith("DELETE FROM document_chunks WHERE material_id = ANY($1)", [
+      ["gone-1", "gone-2"],
+    ]);
+  });
+
+  it("issues no delete when every chunk's material still exists", async () => {
+    query.mockResolvedValueOnce({ rows: [{ material_id: "live-1" }] });
+    mockLiveMaterials(["live-1"]);
+    const storage = new CoachingStorage();
+
+    const result = await storage.pruneDanglingChunks();
+
+    expect(result).toEqual({ pruned: 0 });
+    expect(query).toHaveBeenCalledTimes(1); // only the SELECT DISTINCT
+  });
+
+  it("short-circuits without touching the main DB when the chunk store is empty", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    const storage = new CoachingStorage();
+
+    const result = await storage.pruneDanglingChunks();
+
+    expect(result).toEqual({ pruned: 0 });
+    expect(select).not.toHaveBeenCalled();
+  });
+});
+
 describe("CoachingStorage.listPrincipleMaterialIds", () => {
   it("returns ids of the user's principle materials, oldest first", async () => {
     const orderByMock = vi.fn().mockResolvedValue([{ id: "m-1" }, { id: "m-2" }]);

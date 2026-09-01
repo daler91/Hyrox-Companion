@@ -64,3 +64,39 @@ rolled back and must be run again.
   SELECT count(*) FROM structured_exercise_backfill_reviews WHERE user_id IS NULL;
   -- expect 0
   ```
+
+## [ ] 0091 — dedupe versioned targets and in-flight plan generations
+
+- **Migration:** `migrations/0091_lyrical_human_fly.sql`
+- **Shipped:** 2026-09-01 (codebase-analysis remediation, priority item 4)
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** the migration pairs three `CREATE UNIQUE INDEX` statements
+  (which `drizzle-kit push` DOES apply as schema) with the remediation
+  `DELETE`s/`UPDATE` that make them creatable — and it is the remediation half
+  that push never runs. **Order matters here more than for 0081/0082:** if
+  production has duplicates, `push` will fail to create the indexes until the
+  remediation statements are run by hand, so run them *before* (or immediately
+  after a failed) push.
+- **What it does:** removes duplicate `nutrition_targets` (user, effective_from)
+  and `meal_targets` (user, meal, effective_from) versions left by concurrent
+  saves (keeps one arbitrary-but-deterministic survivor of the near-identical
+  duplicates), and marks all but the newest in-flight (`pending`/`generating`)
+  `training_plans` row per user as `failed` — the same terminal state the
+  startup stuck-generation sweep uses.
+- **Safe to re-run:** yes, idempotent. Matches nothing once it has run.
+- **How:** copy the two `DELETE`s and the `UPDATE` out of the migration file and
+  run them via `psql "$DATABASE_URL"`, then re-run `drizzle-kit push` if index
+  creation had failed.
+- **Verify afterwards:** `pnpm ops:restore-drill` carries three 0091 probes, or:
+  ```sql
+  SELECT count(*) FROM (
+    SELECT 1 FROM nutrition_targets GROUP BY user_id, effective_from HAVING count(*) > 1
+  ) d; -- expect 0
+  SELECT count(*) FROM (
+    SELECT 1 FROM meal_targets GROUP BY user_id, meal_type, effective_from HAVING count(*) > 1
+  ) d; -- expect 0
+  SELECT count(*) FROM (
+    SELECT 1 FROM training_plans WHERE generation_status IN ('pending','generating')
+    GROUP BY user_id HAVING count(*) > 1
+  ) d; -- expect 0
+  ```

@@ -109,7 +109,11 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   // (queue.ts), so a failure was never going to be retried.
   const sent = await sendWeeklySummary(user, summaryData);
 
-  // Also send push notification (fire-and-forget)
+  // Also send push notification (fire-and-forget). The .catch is load-bearing:
+  // sendPushToUser awaits a DB read before its own allSettled guard, and an
+  // unguarded rejection here would hit the process-wide unhandledRejection
+  // handler, which exits(1) — one transient DB blip during the cron burst
+  // would take down the whole API.
   void sendPushToUser(user.id, {
     title: "Weekly Training Summary",
     body:
@@ -119,6 +123,8 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
     // The review of THIS week, not /analytics — which shows a different set of
     // numbers over a different window than the notification just quoted.
     url: `/review?week=${encodeURIComponent(weekStartStr)}`,
+  }).catch((err: unknown) => {
+    logger.error({ err, userId: user.id }, "weekly summary push send failed");
   });
 
   return sent;
@@ -157,8 +163,11 @@ export async function processMissedWorkoutReminder(storage: IStorage, user: User
   }));
   const sent = await sendMissedWorkoutReminder(user, missedData);
 
-  // Also send push notification (fire-and-forget)
-  void sendPushToUser(user.id, buildMissedWorkoutPush(missedData));
+  // Also send push notification (fire-and-forget; .catch is load-bearing —
+  // see processWeeklySummary).
+  void sendPushToUser(user.id, buildMissedWorkoutPush(missedData)).catch((err: unknown) => {
+    logger.error({ err, userId: user.id }, "missed workout push send failed");
+  });
 
   return sent;
 }
@@ -211,11 +220,14 @@ export async function processMafTestReminder(storage: IStorage, user: User, now:
 
   const emailSent = user.emailNotifications ? await sendMafTestReminder(user) : false;
 
-  // Push is fire-and-forget and no-ops when the user has no subscription.
+  // Push is fire-and-forget and no-ops when the user has no subscription
+  // (.catch is load-bearing — see processWeeklySummary).
   void sendPushToUser(user.id, {
     title: "Time for your MAF test",
     body: "Run a fixed distance or time at your MAF heart-rate ceiling, then log the run to track your aerobic progress.",
     url: "/log",
+  }).catch((err: unknown) => {
+    logger.error({ err, userId: user.id }, "MAF test push send failed");
   });
 
   return emailSent;
