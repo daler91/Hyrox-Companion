@@ -52,7 +52,7 @@ export default function SuggestionsPanel({
           <CollapsibleTrigger asChild>
             <button type="button" className="flex w-full items-center justify-between rounded-lg bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-primary" />
+                <Lightbulb className="h-4 w-4 text-primary" aria-hidden="true" />
                 AI Training Suggestions
                 <Badge variant="secondary">{suggestions.length}</Badge>
               </CardTitle>

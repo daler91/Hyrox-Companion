@@ -67,7 +67,7 @@ export function AppSidebar() {
                           href={item.url}
                           aria-current={isActive ? "page" : undefined}
                         >
-                          <item.icon className="h-4 w-4" />
+                          <item.icon className="h-4 w-4" aria-hidden="true" />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -94,7 +94,7 @@ export function AppSidebar() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" data-testid="button-logout" aria-label="Log out" onClick={() => signOut()}>
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Log out</TooltipContent>

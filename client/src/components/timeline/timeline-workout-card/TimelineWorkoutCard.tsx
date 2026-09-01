@@ -558,7 +558,7 @@ function TimelineCardHeader({
           and a duplicate data-testid="badge-ai-coach-${id}". */}
       {entry.source === "strava" && (
         <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
-          <StravaIcon className="h-3 w-3 mr-1" />
+          <StravaIcon className="h-3 w-3 mr-1" aria-hidden="true" />
           Strava
         </Badge>
       )}

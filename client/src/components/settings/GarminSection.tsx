@@ -23,7 +23,7 @@ export function GarminSection({ garminStatus, garminLoading }: Readonly<GarminSe
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <GarminIcon className="h-5 w-5 text-[#007CC3]" />
+          <GarminIcon className="h-5 w-5 text-[#007CC3]" aria-hidden="true" />
           Garmin Connect
         </CardTitle>
         <CardDescription>Sync activities from your Garmin device.</CardDescription>
