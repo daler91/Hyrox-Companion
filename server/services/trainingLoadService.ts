@@ -1,3 +1,4 @@
+import { addDaysToISODate as addDays, toIsoDateUtc } from "@shared/dateUtils";
 import {
   EXERCISE_DEFINITIONS,
   type ExerciseLoadTag,
@@ -13,7 +14,6 @@ import {
   type WorkoutLog,
   type WorkoutSuggestion,
 } from "@shared/schema";
-import { addDaysToISODate as addDays, dayDiff as daysBetween, toIsoDateUtc } from "@shared/dateUtils";
 import { storedWeightToKg } from "@shared/unitConversion";
 
 export type LoadVector = LoadGovernorVector;

@@ -1,6 +1,5 @@
-import type { InsertExerciseSet, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
-
 import { dayDiff as daysBetween, toIsoDateUtc } from "@shared/dateUtils";
+import type { InsertExerciseSet, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
 
 import {
   type LoadGovernorSuggestion,
