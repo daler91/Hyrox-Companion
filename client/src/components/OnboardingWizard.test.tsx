@@ -9,6 +9,13 @@ import {
 } from "@/test/support/onboardingWizardHarness";
 
 // Mock child components to isolate OnboardingWizard
+// This suite covers the base (non-fuelling) onboarding flow, so it pins the
+// nutrition flag OFF explicitly; the suite runs ON by default now (vitest.config)
+// and the fuelling step has its own suite in OnboardingWizard.fuelling.test.tsx.
+vi.mock("@/lib/featureFlags", () => ({
+  featureFlags: { nutritionEnabled: false, emomBuilderEnabled: false },
+}));
+
 vi.mock("@/components/onboarding/WelcomeStep", () => ({
   WelcomeStep: () => <div data-testid="welcome-step">WelcomeStep</div>,
 }));

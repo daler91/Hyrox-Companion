@@ -260,7 +260,7 @@ function buildSupplementaryInsights(params: {
     params;
 
   // Recent bests (e1RM/weight/distance/time) + new-bests-this-week.
-  const personalRecordMap = calculatePersonalRecords(loadExerciseSets);
+  const personalRecordMap = calculatePersonalRecords(loadExerciseSets, { weightUnit, distanceUnit });
   const personalRecords = buildPersonalRecordSummaries(personalRecordMap, weightUnit, distanceUnit);
   // "This week" means the athlete's calendar week, the same Monday-anchored
   // window the weekly volume, the review and the email all use. It used to be

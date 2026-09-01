@@ -10,11 +10,14 @@ import { createMutateExerciseSetUseCase } from "../mutateExerciseSet.usecase";
 const WORKOUT = { kind: "workoutLog" as const, ownerId: "w1" };
 const PLAN_DAY = { kind: "planDay" as const, ownerId: "pd1" };
 
+const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+
 function makeUseCase(overrides: Record<string, unknown> = {}) {
   const storage = {
     updateSet: vi.fn().mockResolvedValue({ id: "s1" }),
     addSet: vi.fn().mockResolvedValue({ id: "s2" }),
     deleteSet: vi.fn().mockResolvedValue(true),
+    getUnitPreferences: vi.fn().mockResolvedValue(LB_ATHLETE),
     ...overrides,
   };
   return { storage, useCase: createMutateExerciseSetUseCase(storage) };
@@ -66,5 +69,49 @@ describe("mutateExerciseSet use case — derived-cache invalidation", () => {
       id: "s1",
     });
     await expect(useCase.deleteSet(WORKOUT, "s1", "user-1")).resolves.toBe(true);
+  });
+});
+
+describe("mutateExerciseSet use case — unit stamps (audit L4)", () => {
+  it("stamps a new row with the athlete's current units (a lbs/miles athlete stores lbs and feet)", async () => {
+    // Before this, "+Add row" wrote permanently unstamped rows — read as the
+    // current preference forever, i.e. wrong by ~2.2x after any later switch.
+    const { storage, useCase } = makeUseCase();
+
+    await useCase.addSet(WORKOUT, { exerciseName: "squat", weight: 225 } as never, "user-1");
+
+    expect(storage.getUnitPreferences).toHaveBeenCalledWith("user-1");
+    expect(storage.addSet).toHaveBeenCalledWith(
+      WORKOUT,
+      { exerciseName: "squat", weight: 225, weightUnit: "lbs", distanceUnit: "ft" },
+      "user-1",
+    );
+  });
+
+  it("hands the athlete's preferences to storage with every patch so it can re-stamp the touched axes", async () => {
+    const { storage, useCase } = makeUseCase();
+
+    await useCase.updateSet(WORKOUT, "s1", { weight: 230 }, "user-1");
+
+    expect(storage.updateSet).toHaveBeenCalledWith(
+      WORKOUT,
+      "s1",
+      { weight: 230, unitPreferences: LB_ATHLETE },
+      "user-1",
+    );
+  });
+
+  it("stamps planned-day rows too — prescriptions are edited in the same units", async () => {
+    const { storage, useCase } = makeUseCase({
+      getUnitPreferences: vi.fn().mockResolvedValue({ weightUnit: "kg", distanceUnit: "km" }),
+    });
+
+    await useCase.addSet(PLAN_DAY, { exerciseName: "row", plannedDistance: 1000 } as never, "user-1");
+
+    expect(storage.addSet).toHaveBeenCalledWith(
+      PLAN_DAY,
+      { exerciseName: "row", plannedDistance: 1000, weightUnit: "kg", distanceUnit: "m" },
+      "user-1",
+    );
   });
 });

@@ -340,3 +340,80 @@ describe("WorkoutStorage.updateExerciseSetNormalized — optimistic locking (W18
     expect(result).toBeUndefined();
   });
 });
+
+describe("WorkoutStorage.updateExerciseSetNormalized — unit re-stamp (audit L4)", () => {
+  let storage: WorkoutStorage;
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  function mockOwnedRow(row: Record<string, unknown>) {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue({
+      id: "set-1",
+      workoutLogId: "workout-1",
+      planDayId: null,
+      version: 1,
+      ...row,
+    } as Awaited<ReturnType<WorkoutStorage["getExerciseSetOwned"]>>);
+  }
+
+  it("re-stamps the weight axis and converts the untouched planned weight when a lbs athlete edits a kg row", async () => {
+    // The row was logged as 100 kg with a 90 kg prescription; the athlete now
+    // prefers lbs and types 230 into the weight cell. Storing 230 under the kg
+    // stamp would read back as 230 kg; re-stamping to lbs without converting
+    // plannedWeight would read 90 as pounds. Both must move together.
+    mockOwnedRow({ weight: 100, plannedWeight: 90, weightUnit: "kg", distance: 400, distanceUnit: "m" });
+    const { setMock } = mockUpdateReturning([{ id: "set-1", workoutLogId: "workout-1", version: 2, blockId: null, stepNumber: null }]);
+
+    await storage.updateExerciseSetNormalized(
+      { kind: "workout", id: "workout-1", userId: "user-1" },
+      "set-1",
+      { weight: 230, unitPreferences: { weightUnit: "lbs", distanceUnit: "miles" } },
+    );
+
+    const setArg = setMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg.weight).toBe(230);
+    expect(setArg.weightUnit).toBe("lbs");
+    expect(setArg.plannedWeight).toBe(198); // 90 kg → 198 lb
+    // The distance axis was not touched: its stamp and values stay as stored.
+    expect("distanceUnit" in setArg).toBe(false);
+    expect("distance" in setArg).toBe(false);
+    // The pseudo-field never reaches the SET clause.
+    expect("unitPreferences" in setArg).toBe(false);
+  });
+
+  it("leaves the stamp alone when the patch touches neither axis (a reps-only edit)", async () => {
+    mockOwnedRow({ weight: 100, weightUnit: "kg" });
+    const { setMock } = mockUpdateReturning([{ id: "set-1", workoutLogId: "workout-1", version: 2, blockId: null, stepNumber: null }]);
+
+    await storage.updateExerciseSetNormalized(
+      { kind: "workout", id: "workout-1", userId: "user-1" },
+      "set-1",
+      { reps: 8, unitPreferences: { weightUnit: "lbs", distanceUnit: "miles" } },
+    );
+
+    const setArg = setMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg).toMatchObject({ reps: 8 });
+    expect("weightUnit" in setArg).toBe(false);
+    expect("weight" in setArg).toBe(false);
+  });
+
+  it("is a no-op re-stamp for a legacy (unstamped) row: values pass through and gain the stamp", async () => {
+    mockOwnedRow({ weight: 100, plannedWeight: 90, weightUnit: null });
+    const { setMock } = mockUpdateReturning([{ id: "set-1", workoutLogId: "workout-1", version: 2, blockId: null, stepNumber: null }]);
+
+    await storage.updateExerciseSetNormalized(
+      { kind: "workout", id: "workout-1", userId: "user-1" },
+      "set-1",
+      { weight: 105, unitPreferences: { weightUnit: "kg", distanceUnit: "km" } },
+    );
+
+    const setArg = setMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(setArg.weight).toBe(105);
+    expect(setArg.weightUnit).toBe("kg");
+    // Legacy convention: an unstamped value is already in the current unit.
+    expect(setArg.plannedWeight).toBe(90);
+  });
+});

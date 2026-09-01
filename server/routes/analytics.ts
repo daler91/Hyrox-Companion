@@ -140,8 +140,14 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
     const dates = parseDateParams(req, res);
     if (!dates) return;
 
-    const prSets = await getPersonalRecordSetsCoalesced(userId, dates.from, dates.to);
-    res.json(calculatePersonalRecords(prSets));
+    // Preferences are read per request, not cached with the sets: the caches
+    // hold raw stamped rows and conversion happens here, so a unit switch is
+    // reflected on the next request instead of after the cache TTL.
+    const [prSets, user] = await Promise.all([
+      getPersonalRecordSetsCoalesced(userId, dates.from, dates.to),
+      storage.users.getUser(userId),
+    ]);
+    res.json(calculatePersonalRecords(prSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }));
   }));
 
 router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
@@ -149,8 +155,11 @@ router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics
     const dates = parseDateParams(req, res);
     if (!dates) return;
 
-    const allSets = await getExerciseSetsCoalesced(userId, dates.from, dates.to);
-    res.json(calculateExerciseAnalytics(allSets));
+    const [allSets, user] = await Promise.all([
+      getExerciseSetsCoalesced(userId, dates.from, dates.to),
+      storage.users.getUser(userId),
+    ]);
+    res.json(calculateExerciseAnalytics(allSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }));
   }));
 
 // Race Predictor — predicted HYROX finish time from the athlete's logged

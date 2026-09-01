@@ -20,6 +20,7 @@ import {
   normalizeExerciseName,
 } from "@shared/schema";
 import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
+import { storedDistanceToDisplay, storedWeightToDisplay, type UnitPreferences } from "@shared/unitConversion";
 
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storage/shared";
@@ -48,15 +49,35 @@ function estimateOneRepMax(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30) * 10) / 10;
 }
 
-function updateMaxWeight(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
-  if (set.weight && (!pr.maxWeight || set.weight > pr.maxWeight.value)) {
-    pr.maxWeight = { value: set.weight, date: set.date, workoutLogId: set.workoutLogId };
+/**
+ * A set's weight/distance as the athlete sees them NOW, so rows stamped in
+ * different units (a kg history, then lbs after a preference switch) compare
+ * in one unit instead of raw — without this a 150 lb squat "beat" a 100 kg PR
+ * (audit L4; the same defect class fixed in racePrediction/featureBuilder).
+ * Without preferences the raw stored value is used, which is only right for an
+ * athlete who never switched — every production caller passes them.
+ */
+function displayWeight(set: SlimLoggedExerciseSet, preferences: UnitPreferences | undefined): number | null {
+  if (set.weight == null) return set.weight;
+  return preferences ? storedWeightToDisplay(set.weight, set, preferences) : set.weight;
+}
+
+function displayDistance(set: SlimLoggedExerciseSet, preferences: UnitPreferences | undefined): number | null {
+  if (set.distance == null) return set.distance;
+  return preferences ? storedDistanceToDisplay(set.distance, set, preferences) : set.distance;
+}
+
+function updateMaxWeight(pr: PersonalRecord, set: SlimLoggedExerciseSet, preferences?: UnitPreferences): void {
+  const weight = displayWeight(set, preferences);
+  if (weight && (!pr.maxWeight || weight > pr.maxWeight.value)) {
+    pr.maxWeight = { value: weight, date: set.date, workoutLogId: set.workoutLogId };
   }
 }
 
-function updateMaxDistance(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
-  if (set.distance && (!pr.maxDistance || set.distance > pr.maxDistance.value)) {
-    pr.maxDistance = { value: set.distance, date: set.date, workoutLogId: set.workoutLogId };
+function updateMaxDistance(pr: PersonalRecord, set: SlimLoggedExerciseSet, preferences?: UnitPreferences): void {
+  const distance = displayDistance(set, preferences);
+  if (distance && (!pr.maxDistance || distance > pr.maxDistance.value)) {
+    pr.maxDistance = { value: distance, date: set.date, workoutLogId: set.workoutLogId };
   }
 }
 
@@ -146,25 +167,35 @@ function isE1RMCandidate(set: SlimLoggedExerciseSet): set is E1RMCandidate {
   );
 }
 
-function updateE1RM(pr: PersonalRecord, set: SlimLoggedExerciseSet): void {
+function updateE1RM(pr: PersonalRecord, set: SlimLoggedExerciseSet, preferences?: UnitPreferences): void {
   if (!isE1RMCandidate(set)) return;
-  const e1rm = estimateOneRepMax(set.weight, set.reps);
+  const weight = displayWeight(set, preferences) ?? set.weight;
+  const e1rm = estimateOneRepMax(weight, set.reps);
   if (!pr.estimated1RM || e1rm > pr.estimated1RM.value) {
     pr.estimated1RM = { value: e1rm, date: set.date, workoutLogId: set.workoutLogId };
   }
 }
 
-export function calculatePersonalRecords(allSets: SlimLoggedExerciseSet[]): Record<string, PersonalRecord> {
+/**
+ * Personal records per exercise. `preferences` (the athlete's current units)
+ * makes the comparison stamp-aware: every value is read through its row's unit
+ * stamp into the current unit before comparing, and the returned values are in
+ * that unit — the one the client labels them with.
+ */
+export function calculatePersonalRecords(
+  allSets: SlimLoggedExerciseSet[],
+  preferences?: UnitPreferences,
+): Record<string, PersonalRecord> {
   const prs: Record<string, PersonalRecord> = Object.create(null) as Record<string, PersonalRecord>;
 
   for (const set of allSets) {
     const prKey = getExerciseKey(set);
     if (!prs[prKey]) prs[prKey] = { category: set.category, customLabel: set.customLabel };
     const pr = prs[prKey];
-    updateMaxWeight(pr, set);
-    updateMaxDistance(pr, set);
+    updateMaxWeight(pr, set, preferences);
+    updateMaxDistance(pr, set, preferences);
     updateBestTime(pr, set);
-    updateE1RM(pr, set);
+    updateE1RM(pr, set, preferences);
   }
 
   return prs;
@@ -199,19 +230,23 @@ interface DayAnalytics {
   totalDistance: number;
 }
 
-function accumulateSet(day: DayAnalytics, s: ExerciseSetWithDate): void {
+function accumulateSet(day: DayAnalytics, s: ExerciseSetWithDate, preferences?: UnitPreferences): void {
   day.totalSets += 1;
-  if (s.weight && s.reps) {
-    day.totalVolume += s.weight * s.reps;
+  // Same stamp-aware read as the PR path: a chart must not show a ~2.2x step
+  // on the day the athlete toggled kg/lbs.
+  const weight = displayWeight(s, preferences);
+  const distance = displayDistance(s, preferences);
+  if (weight && s.reps) {
+    day.totalVolume += weight * s.reps;
   }
-  if (s.weight && s.weight > day.maxWeight) {
-    day.maxWeight = s.weight;
+  if (weight && weight > day.maxWeight) {
+    day.maxWeight = weight;
   }
   if (s.reps) {
     day.totalReps += s.reps;
   }
-  if (s.distance) {
-    day.totalDistance += s.distance;
+  if (distance) {
+    day.totalDistance += distance;
   }
 }
 
@@ -221,7 +256,10 @@ function sortByDateAsc(a: DayAnalytics, b: DayAnalytics): number {
   return 0;
 }
 
-export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Record<string, DayAnalytics[]> {
+export function calculateExerciseAnalytics(
+  allSets: ExerciseSetWithDate[],
+  preferences?: UnitPreferences,
+): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
 
   for (const s of allSets) {
@@ -244,7 +282,7 @@ export function calculateExerciseAnalytics(allSets: ExerciseSetWithDate[]): Reco
       };
     }
 
-    accumulateSet(byDate[s.date], s);
+    accumulateSet(byDate[s.date], s, preferences);
   }
 
   const finalAnalytics: Record<string, DayAnalytics[]> = {};

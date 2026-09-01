@@ -41,6 +41,10 @@ const workoutSetUseCase = createMutateExerciseSetUseCase({
   updateSet: (owner, setId, body, userId) => storage.workouts.mutateExerciseSetUpdate(owner, setId, body, userId),
   addSet: (owner, body, userId) => storage.workouts.mutateExerciseSetAdd(owner, body, userId),
   deleteSet: (owner, setId, userId) => storage.workouts.mutateExerciseSetDelete(owner, setId, userId),
+  getUnitPreferences: async (userId) => {
+    const user = await storage.users.getUser(userId);
+    return { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit };
+  },
 });
 
 // How many past sessions of one exercise to return. The client asks for a

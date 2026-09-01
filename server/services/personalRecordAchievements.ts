@@ -5,6 +5,7 @@ import type {
   PersonalRecordMetric,
   WorkoutLog,
 } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 
 import { calculatePersonalRecords, type ExerciseSetWithDate, isTimePrImprovement } from "./analyticsService";
 
@@ -55,12 +56,16 @@ function getMetricValue(record: PersonalRecord, metric: PersonalRecordMetric) {
 export function findPersonalRecordAchievements(
   priorSets: ExerciseSetWithDate[],
   createdWorkout: CreatedWorkoutWithSets,
+  preferences?: UnitPreferences,
 ): PersonalRecordAchievement[] {
   const createdSets = toLoggedSets(createdWorkout);
   if (createdSets.length === 0 || priorSets.length === 0) return [];
 
-  const priorRecords = calculatePersonalRecords(priorSets);
-  const createdRecords = calculatePersonalRecords(createdSets);
+  // Both sides read through their unit stamps into the athlete's current unit,
+  // so a 150 lb squat logged after a kg→lbs switch is compared against the
+  // 100 kg (220 lb) history it actually has to beat — not celebrated as a PR.
+  const priorRecords = calculatePersonalRecords(priorSets, preferences);
+  const createdRecords = calculatePersonalRecords(createdSets, preferences);
   const createdSetByKey = new Map(createdSets.map((set) => [getExerciseKey(set), set]));
   const achievements: PersonalRecordAchievement[] = [];
 

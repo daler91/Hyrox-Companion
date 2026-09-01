@@ -1,6 +1,6 @@
 import type { ExerciseSet, StructureBlockInput, StructureBlockScore, WorkoutLog } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useExerciseSetsForOwner } from "@/hooks/useExerciseSetsForOwner";
@@ -12,7 +12,7 @@ import {
   type WorkoutReferenceTextPayload,
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
-import { invalidateWorkoutWriteQueries } from "@/lib/workoutInvalidation";
+import { flushWorkoutWriteInvalidation, scheduleWorkoutWriteInvalidation } from "@/lib/workoutInvalidation";
 
 type WorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[]; structureBlocks?: StructureBlockInput[] };
 
@@ -140,10 +140,20 @@ export function useWorkoutDetail(workoutId: string | null) {
     addInvalidateQueries: (id) => [QUERY_KEYS.workoutHistory(id)],
     deleteInvalidateQueries: (id) => [QUERY_KEYS.workout(id), QUERY_KEYS.workoutHistory(id)],
     // Set edits move PRs, exercise analytics and the training overview just as
-    // much as logging the workout does — same funnel the workout writes use.
-    onWriteSuccess: invalidateWorkoutWriteQueries,
+    // much as logging the workout does — same funnel the workout writes use,
+    // but coalesced: the timeline, overview and PR queries are all active
+    // under this sheet, so invalidating per cell save refetched all three on
+    // every keystroke's PATCH. One trailing invalidation per burst instead,
+    // flushed the moment the sheet closes (effect below).
+    onWriteSuccess: scheduleWorkoutWriteInvalidation,
     cellSaveDebounceMs: CELL_SAVE_DEBOUNCE_MS,
   });
+
+  // Closing the sheet (or switching workouts) ends the editing burst: run any
+  // pending derived-view invalidation now so the timeline behind the sheet is
+  // fresh when the athlete lands back on it, rather than up to
+  // WORKOUT_WRITE_INVALIDATION_DELAY_MS later.
+  useEffect(() => () => flushWorkoutWriteInvalidation(), [workoutId]);
 
   const seedFromPlan = useApiMutation({
     mutationFn: () => api.workouts.seedFromPlan(workoutId!),

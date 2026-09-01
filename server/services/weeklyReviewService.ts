@@ -294,7 +294,7 @@ export async function buildWeeklyReview(
     sessions: buildSessions(logs),
     plannedDays: buildPlannedDays(planDays, annotations, today),
     personalRecords: listPersonalRecordsInRange(
-      calculatePersonalRecords(prSets),
+      calculatePersonalRecords(prSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }),
       week.weekStart,
       week.weekEnd,
     ),

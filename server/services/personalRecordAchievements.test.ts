@@ -293,3 +293,29 @@ describe("findPersonalRecordAchievements", () => {
     ]);
   });
 });
+
+describe("findPersonalRecordAchievements — unit stamps (audit L4)", () => {
+  const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+
+  it("does not celebrate a 150 lb squat as a PR over a 100 kg (220 lb) history after a kg→lbs switch", () => {
+    const priorSets = [makeSet({ weight: 100, weightUnit: "kg", reps: 1, workoutLogId: "prior-1" })];
+    const created = makeWorkout([
+      makeSet({ id: "new-1", workoutLogId: "created-1", weight: 150, weightUnit: "lbs", reps: 1 }),
+    ]);
+
+    // Raw comparison (150 > 100) used to fire "Max weight PR" here.
+    expect(findPersonalRecordAchievements(priorSets, created, LB_ATHLETE)).toEqual([]);
+  });
+
+  it("still celebrates a genuine improvement measured in one unit", () => {
+    const priorSets = [makeSet({ weight: 100, weightUnit: "kg", reps: 1, workoutLogId: "prior-1" })];
+    const created = makeWorkout([
+      makeSet({ id: "new-1", workoutLogId: "created-1", weight: 230, weightUnit: "lbs", reps: 1 }),
+    ]);
+
+    const achievements = findPersonalRecordAchievements(priorSets, created, LB_ATHLETE);
+    expect(achievements.map((a) => a.metric)).toEqual(["maxWeight"]);
+    // Both sides are reported in the athlete's current unit (lbs).
+    expect(achievements[0]).toMatchObject({ value: 230, previousValue: 220 });
+  });
+});
