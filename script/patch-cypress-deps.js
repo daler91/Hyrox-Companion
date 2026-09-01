@@ -71,9 +71,11 @@ function main() {
   // Idempotence: a cached binary that was patched on an earlier run already
   // carries the pinned versions, so don't re-download them.
   const alreadyPinned = [...wanted].every((name) => {
-    const dir = name === 'engine.io' ? engineIoPath : name === 'axios' ? nestedAxiosPath : path.join(appModules, name);
     // Every path here is rooted in the lockfile-pinned Cypress launcher's own
-    // cache directory; nothing from a request or the network reaches it.
+    // cache directory and `name` is a key of PINNED above; nothing from a
+    // request or the network reaches it.
+    // bearer:disable javascript_lang_path_traversal
+    const dir = name === 'engine.io' ? engineIoPath : name === 'axios' ? nestedAxiosPath : path.join(appModules, name);
     // bearer:disable javascript_lang_path_traversal
     const pkg = path.join(dir, 'package.json');
     if (!fs.existsSync(pkg)) return false;
