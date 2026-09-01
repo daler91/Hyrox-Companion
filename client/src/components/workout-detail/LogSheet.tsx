@@ -1,5 +1,5 @@
 import type { TimelineEntry } from "@shared/schema";
-import { Check, Dumbbell, Gauge, MessageSquare, SkipForward } from "lucide-react";
+import { Check, Dumbbell, Gauge, Loader2, MessageSquare, SkipForward } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -333,7 +333,11 @@ function LogCompletionControls({
           disabled={isLogging || isSaving}
           data-testid={`log-as-planned-${entry.id}`}
         >
-          <Check className="mr-2 h-4 w-4" />
+          {isSaving || isLogging ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Check className="mr-2 h-4 w-4" />
+          )}
           {getLogButtonLabel(isSaving, isLogging)}
         </Button>
 
