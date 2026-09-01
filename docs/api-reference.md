@@ -1152,7 +1152,7 @@ Update user preferences.
 - **Rate limit:** `preferences` category, 20/min
 - **Body:** Partial of the serialized preference fields above (e.g. `weightUnit?: "kg" | "lbs"`, `distanceUnit?: "km" | "miles"`, `weeklyGoal?`, the `email*` toggles, `aiCoachEnabled?`, `showAdherenceInsights?`, `onboardingCompleted?`, `trainingStyleId?`, and the `maf*` fields).
 - **Validation:** `updateUserPreferencesSchema`
-- **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge`, `mafConsistency`, and `mafTrend` to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.
+- **MAF validation:** Switching `trainingStyleId` to `maf_method` requires `mafAge` plus either `mafCategory`, or the legacy `mafConsistency`/`mafTrend` pair, to be set (in the body or already persisted); otherwise the route returns `400 { code: "MAF_SETUP_REQUIRED" }`.
 - **Response:** Updated serialized preferences object
 - **Email toggle semantics:** `emailNotifications` is the master switch — when `false`, no email is sent regardless of the per-type flags. `emailWeeklySummary` and `emailMissedReminder` gate the individual categories and take effect only when the master is on. All three default to `false` at the database level for new users (GDPR-compliant opt-in).
 - **AI consent semantics:** `aiCoachEnabled` gates every outbound AI provider call (workout parsing, chat, auto-coach, embeddings, and image parsing). It defaults to `false` for new users; the AI features are hidden or disabled in the UI until the user explicitly opts in. Flipping it to `false` immediately stops new AI requests; already-persisted chat history and plan AI artifacts remain until the user deletes them.
