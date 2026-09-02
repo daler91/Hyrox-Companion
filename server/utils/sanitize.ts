@@ -84,6 +84,9 @@ function checkAiOutput(output: string, afterIndex: number): void {
   }
   const suspicious = findPatternEndingAfter(lowerOutput, SUSPICIOUS_PATTERNS, afterIndex);
   if (suspicious) {
+    // `suspicious` is one of the static SUSPICIOUS_PATTERNS literals above,
+    // never a slice of the model's output.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: "ai-output-validation", pattern: suspicious }, "Suspicious AI output pattern detected");
   }
 }
