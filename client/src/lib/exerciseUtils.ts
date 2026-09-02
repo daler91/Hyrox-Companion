@@ -1,9 +1,10 @@
 import type { ExerciseSet } from "@shared/schema";
 import { EXERCISE_DEFINITIONS, type ExerciseName } from "@shared/schema/exercises";
-import { getWorkoutDistanceDisplay } from "@shared/unitConversion";
+import { getWorkoutDistanceDisplay, type UnitPreferences } from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import { type StructuredExercise } from "@/components/ExerciseInput";
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
 
 export const categoryChipColors: Record<string, string> = {
   functional: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
@@ -113,7 +114,8 @@ function getUniqueWeights(sets: ExerciseSet[]): number[] {
 
 export function formatExerciseSummary(group: GroupedExercise, weightUnit: string, distanceUnit: string): string {
   const name = getExerciseLabel(group.exerciseName, group.customLabel);
-  const sets = group.sets;
+  // The labels below are the athlete's current units, so the numbers must be too (D2).
+  const sets = toPreferenceScaleAll(group.sets, { weightUnit, distanceUnit });
   if (sets.length === 0) return name;
 
   const firstSet = sets[0];
@@ -144,6 +146,12 @@ export function formatExerciseSummary(group: GroupedExercise, weightUnit: string
 
 interface ExerciseSetsToStructuredOptions {
   readonly snapshotActualsAsPlanned?: boolean;
+  /**
+   * The draft editor has no unit stamp: its numbers mean the athlete's
+   * current unit. Pass the preference so a row stamped in another unit is
+   * converted on the way in rather than copied verbatim (D2).
+   */
+  readonly unitPreferences?: UnitPreferences;
 }
 
 function plannedValue(
@@ -188,7 +196,8 @@ export function exerciseSetsToStructured(
   options: ExerciseSetsToStructuredOptions = {},
 ): { names: string[]; data: Record<string, StructuredExercise> } {
   const snapshotActualsAsPlanned = options.snapshotActualsAsPlanned ?? false;
-  const groups = groupExerciseSets(dbSets);
+  const sets = options.unitPreferences ? toPreferenceScaleAll(dbSets, options.unitPreferences) : dbSets;
+  const groups = groupExerciseSets(sets);
   const names: string[] = [];
   const data: Record<string, StructuredExercise> = {};
   const counter = new Map<string, number>();

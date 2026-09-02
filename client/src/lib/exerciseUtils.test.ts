@@ -156,6 +156,24 @@ describe("formatExerciseSummary", () => {
       distanceUnit: "miles",
       expected: "running 5000 m 25min",
     },
+    {
+      desc: "converts a kg-stamped weight for a lbs athlete (finding D2)",
+      group: createGroup("custom", "strength", "Test", [
+        { reps: 10, weight: 100, weightUnit: "kg", distance: null, time: null },
+      ]),
+      weightUnit: "lbs",
+      distanceUnit: "km",
+      expected: "Test 10r 220lbs",
+    },
+    {
+      desc: "converts a feet-stamped distance for a km athlete (finding D2)",
+      group: createGroup("running", "cardio", undefined, [
+        { reps: null, weight: null, distance: 1312, distanceUnit: "ft", time: null },
+      ]),
+      weightUnit: "kg",
+      distanceUnit: "km",
+      expected: "running 400 m",
+    },
   ])("$desc", ({ group, weightUnit, distanceUnit, expected }) => {
     expect(formatExerciseSummary(group, weightUnit, distanceUnit)).toBe(
       expected,
@@ -380,5 +398,37 @@ describe("exerciseSetsToStructured", () => {
       plannedReps: 8,
       plannedWeight: 100,
     });
+  });
+
+  it("converts a row stamped in another unit into the draft's current-unit numbers (finding D2)", () => {
+    const sets = [
+      {
+        id: "set-1",
+        workoutLogId: "log-1",
+        planDayId: null,
+        exerciseName: "bench_press",
+        customLabel: null,
+        category: "strength",
+        sortOrder: 1,
+        setNumber: 1,
+        reps: 8,
+        weight: 100,
+        weightUnit: "kg",
+        distance: null,
+        time: null,
+        plannedReps: null,
+        plannedWeight: 90,
+        plannedDistance: null,
+        plannedTime: null,
+        notes: null,
+        confidence: 95,
+      },
+    ] as ExerciseSet[];
+
+    const { data } = exerciseSetsToStructured(sets, {
+      unitPreferences: { weightUnit: "lbs", distanceUnit: "miles" },
+    });
+
+    expect(data["bench_press__1"].sets[0]).toMatchObject({ weight: 220, plannedWeight: 198 });
   });
 });

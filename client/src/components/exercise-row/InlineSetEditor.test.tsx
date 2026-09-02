@@ -227,4 +227,65 @@ describe("InlineSetEditor field commit flow", () => {
     expect(screen.getByTestId("planned-distance-set-1")).toHaveTextContent("planned 3 mi");
   });
 
+  it("edits a kg-stamped row in pounds for a lb athlete and writes pounds back (finding D2)", () => {
+    const onUpdateSet = vi.fn();
+    render(
+      <InlineSetEditor
+        sets={[{
+          ...baseSet,
+          exerciseName: "back_squat",
+          category: "strength",
+          reps: 5,
+          weight: 100,
+          plannedWeight: 90,
+          weightUnit: "kg",
+        }]}
+        exerciseName="back_squat"
+        customLabel={null}
+        category="strength"
+        weightUnit="lbs"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+        showPlannedDiffs
+      />,
+    );
+
+    const input = screen.getByTestId("input-weight-set-1");
+    expect(input).toHaveValue(220);
+    expect(screen.getByTestId("planned-weight-set-1")).toHaveTextContent("planned 198 lbs");
+
+    fireEvent.change(input, { target: { value: "225" } });
+    fireEvent.blur(input);
+
+    // The PATCH is in the athlete's unit; the server re-stamps the row as lbs.
+    expect(onUpdateSet).toHaveBeenCalledWith("set-1", { weight: 225 });
+  });
+
+  it("shows a feet-stamped distance in metres for a km athlete", () => {
+    render(
+      <InlineSetEditor
+        sets={[{
+          ...baseSet,
+          exerciseName: "easy_run",
+          category: "running",
+          reps: null,
+          weight: null,
+          distance: 1312,
+          distanceUnit: "ft",
+        }]}
+        exerciseName="easy_run"
+        customLabel={null}
+        category="running"
+        weightUnit="kg"
+        distanceUnit="km"
+        onUpdateSet={vi.fn()}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("input-distance-set-1")).toHaveValue(400);
+    expect(screen.getByTestId("unit-distance-set-1")).toHaveTextContent("m");
+  });
 });

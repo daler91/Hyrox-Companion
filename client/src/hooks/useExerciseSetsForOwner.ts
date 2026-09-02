@@ -1,11 +1,14 @@
 import type { ExerciseSet } from "@shared/schema";
+import { restampSetPatch } from "@shared/unitConversion";
 import { useIsMutating } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { useDebouncedSetPatches } from "@/hooks/useDebouncedSetPatches";
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 import { type AddExerciseSetPayload, type PatchExerciseSetPayload } from "@/lib/api/exerciseSetMutations";
-import { queryClient } from "@/lib/queryClient";
+import { createSetVersionTracker, isSetConflictError } from "@/lib/exerciseSetVersionLock";
+import { humanizeApiError, queryClient } from "@/lib/queryClient";
 
 type QueryKey = readonly unknown[];
 
@@ -31,6 +34,22 @@ type Params<TSnapshot> = {
    */
   onWriteSuccess?: () => void;
   cellSaveDebounceMs?: number;
+};
+
+type UpdateSetVariables = { readonly setId: string; readonly data: PatchExerciseSetPayload };
+type UpdateSetContext<TSnapshot> = {
+  readonly prev: TSnapshot | undefined;
+  readonly seq: number;
+  readonly setId: string;
+};
+
+const SAVE_FAILED_TITLE = "Couldn't save that change";
+// D5: the edit was made against a row another device has since changed. The
+// optimistic value is rolled back and the owner's sets refetched, so the toast
+// says what the athlete will see next rather than offering a retry.
+const CONFLICT_TOAST = {
+  title: "This set was updated elsewhere",
+  description: "Showing the latest values.",
 };
 
 export function useExerciseSetsForOwner<TSnapshot>({
@@ -63,26 +82,63 @@ export function useExerciseSetsForOwner<TSnapshot>({
   // can't revert a newer edit's optimistic value.
   const setPatchSeqRef = useRef<Map<string, number>>(new Map());
 
-  const updateSet = useApiMutation({
+  const unitPreferences = useUnitPreferences();
+  // D5: the client half of the exercise_sets optimistic lock. One PATCH per set
+  // in flight at a time, each carrying the version the last response reported.
+  const [versionTracker] = useState(createSetVersionTracker);
+
+  const sendLockedPatch = async (setId: string, data: PatchExerciseSetPayload): Promise<ExerciseSet> => {
+    const expectedVersion = versionTracker.expectedVersion(setId);
+    const body = expectedVersion === undefined ? data : { ...data, expectedVersion };
+    try {
+      const row = await updateSetRequest(ownerId!, setId, body);
+      // Noted here, not in onSuccess: a response the W13 guard drops for the UI
+      // still carries the version the next PATCH on this set must send.
+      versionTracker.noteServerVersion(setId, row.version);
+      return row;
+    } catch (error) {
+      // Marked before the per-set queue moves on, so an edit queued behind this
+      // one is dropped rather than sent over the other device's write.
+      if (isSetConflictError(error)) versionTracker.markConflict(setId);
+      throw error;
+    }
+  };
+
+  const applyOptimisticPatch = (setId: string, data: PatchExerciseSetPayload) => {
+    patchCachedSets((sets) => {
+      const row = sets.find((s) => s.id === setId);
+      if (!row) return sets;
+      versionTracker.seed(setId, row.version);
+      // The patch is in the athlete's current unit while the row may be stamped
+      // in another. Re-stamping the touched axis (audit L4) keeps the display
+      // conversion (D2) from showing a wrong number until the server row lands.
+      const next = { ...row, ...restampSetPatch(row, data, unitPreferences) };
+      return sets.map((s) => (s === row ? next : s));
+    });
+  };
+
+  const updateSet = useApiMutation<
+    ExerciseSet,
+    Error,
+    UpdateSetVariables,
+    UpdateSetContext<TSnapshot> | undefined
+  >({
     mutationKey: ownerId ? mutationKeyFamily(ownerId) : undefined,
-    mutationFn: ({ setId, data }: { setId: string; data: PatchExerciseSetPayload }) =>
-      updateSetRequest(ownerId!, setId, data),
+    mutationFn: ({ setId, data }) => versionTracker.enqueue(setId, () => sendLockedPatch(setId, data)),
     onMutate: async ({ setId, data }) => {
       if (!ownerId) return undefined;
       const seq = (setPatchSeqRef.current.get(setId) ?? 0) + 1;
       setPatchSeqRef.current.set(setId, seq);
       await queryClient.cancelQueries({ queryKey: setsQueryKey(ownerId) });
       const prev = getSnapshot(ownerId);
-      patchCachedSets((sets) => sets.map((s) => (s.id === setId ? ({ ...s, ...data }) : s)));
+      applyOptimisticPatch(setId, data);
       return { prev, seq, setId };
     },
     onSuccess: (serverSet, _vars, ctx) => {
-      const context = ctx as { seq?: number; setId?: string } | undefined;
       // Ignore a stale response: if a newer PATCH for this set has since been
-      // issued, its optimistic value is the source of truth — don't overwrite
+      // issued, its optimistic value is the source of truth; don't overwrite
       // it with this older server row (W13).
-      const isLatestPatch =
-        context?.setId !== undefined && context.seq === setPatchSeqRef.current.get(context.setId);
+      const isLatestPatch = ctx !== undefined && ctx.seq === setPatchSeqRef.current.get(ctx.setId);
       if (isLatestPatch) {
         patchCachedSets((sets) => sets.map((s) => (s.id === serverSet.id ? serverSet : s)));
       }
@@ -91,12 +147,19 @@ export function useExerciseSetsForOwner<TSnapshot>({
       // derived views are out of date either way.
       onWriteSuccess?.();
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (error, _vars, ctx) => {
       markError();
-      const prev = (ctx as { prev?: TSnapshot } | undefined)?.prev;
-      if (ownerId && prev) restoreSnapshot(ownerId, prev);
+      if (!ownerId) return;
+      if (ctx?.prev) restoreSnapshot(ownerId, ctx.prev);
+      // D5: never retry over the other device's write. Refetch so its row shows.
+      if (isSetConflictError(error)) {
+        void queryClient.invalidateQueries({ queryKey: setsQueryKey(ownerId) });
+      }
     },
-    errorToast: "Couldn't save that change",
+    errorToast: (error) =>
+      isSetConflictError(error)
+        ? CONFLICT_TOAST
+        : { title: SAVE_FAILED_TITLE, description: humanizeApiError(error) },
   });
 
   const { patchSetDebounced, flushPendingSetPatches, cancelPending, getPendingPatches } =
@@ -107,6 +170,7 @@ export function useExerciseSetsForOwner<TSnapshot>({
     setLastSavedAt(null);
     setLastSaveErrorAt(null);
     cancelPending();
+    versionTracker.reset();
   }
 
   const addSet = useApiMutation({

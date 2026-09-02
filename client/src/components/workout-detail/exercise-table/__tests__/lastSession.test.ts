@@ -1,6 +1,8 @@
 import type { ExerciseSet } from "@shared/schema";
 import { describe, expect, it } from "vitest";
 
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
+
 import { buildUseLastPatches, pickLastSession, pickRecentSessions, summariseLastSession } from "../lastSession";
 import { makeLoggedSet as set } from "./exerciseSetFixture";
 
@@ -257,5 +259,28 @@ describe("pickRecentSessions", () => {
     ];
 
     expect(pickRecentSessions(history, null, 3)[0]).toEqual(pickLastSession(history, null));
+  });
+});
+
+describe("history scaled to the athlete's unit at the boundary (finding D2)", () => {
+  const LB_ATHLETE = { weightUnit: "lbs", distanceUnit: "miles" };
+  const LB_SQUAT = { exerciseName: "back_squat", category: "strength", weightUnit: "lb", distanceUnit: "miles" } as const;
+
+  it("summarises a kg-stamped session in pounds", () => {
+    const session = {
+      date: "2026-06-10",
+      sets: toPreferenceScaleAll([set({ id: "a", weight: 100, weightUnit: "kg" })], LB_ATHLETE),
+    };
+
+    expect(summariseLastSession(session, LB_SQUAT).aria).toBe("1 set of 8 reps at 220 lb");
+  });
+
+  it("carries the scaled value forward, so 'use last' writes pounds for a lb athlete", () => {
+    const patches = buildUseLastPatches(
+      [set({ id: "c1", reps: null, weight: null })],
+      toPreferenceScaleAll([set({ id: "l1", reps: 8, weight: 100, weightUnit: "kg" })], LB_ATHLETE),
+    );
+
+    expect(patches).toEqual([{ setId: "c1", patch: { reps: 8, weight: 220 } }]);
   });
 });

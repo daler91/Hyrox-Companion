@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
+
 import { buildUseNextPatches, suggestNextTarget } from "../nextTarget";
 import { makeLoggedSet as set } from "./exerciseSetFixture";
 
@@ -31,6 +33,21 @@ describe("suggestNextTarget", () => {
       reps: 5,
       weight: 102.5,
       step: { field: "weight", amount: 2.5 },
+    });
+  });
+
+  it("progresses from the athlete's unit, not the stored one (finding D2)", () => {
+    // 100 kg × 5 logged before a switch to lb. Read raw, "100 lb" would step
+    // to 105; read in pounds it is 220 and steps to 225.
+    const lastSets = toPreferenceScaleAll(
+      [set({ reps: 5, weight: 100, weightUnit: "kg" })],
+      { weightUnit: "lbs", distanceUnit: "miles" },
+    );
+
+    expect(suggestNextTarget(lastSets, LB)).toMatchObject({
+      reps: 5,
+      weight: 225,
+      step: { field: "weight", amount: 5 },
     });
   });
 

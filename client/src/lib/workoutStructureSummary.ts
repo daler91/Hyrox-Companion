@@ -1,8 +1,14 @@
 import type { ExerciseSet } from "@shared/schema";
-import { type DistanceUnit, getStoredDistanceUnit } from "@shared/unitConversion";
+import {
+  type DistanceUnit,
+  getStoredDistanceUnit,
+  standardizeWeightUnit,
+  type WeightUnit,
+} from "@shared/unitConversion";
 import { formatMinutes, minutes } from "@shared/units";
 
 import { getExerciseLabel } from "@/lib/exerciseUtils";
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
 
 /**
  * The athlete's distance preference, required rather than defaulted.
@@ -14,15 +20,20 @@ import { getExerciseLabel } from "@/lib/exerciseUtils";
  *
  * There is no safe default here -- guessing metric is what produced the bug --
  * so callers must pass the preference they already hold.
+ *
+ * The weight preference is needed for the same reason: the weight used to be
+ * written with no unit at all, and a row stamped in another unit is converted
+ * to the preference before it is labelled (finding D2).
  */
 export interface StructureSummaryUnits {
+  readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnit;
 }
 
 function formatTargets(set: ExerciseSet, units: StructureSummaryUnits): string {
   const parts: string[] = [];
   if (set.reps != null) parts.push(`${set.reps} reps`);
-  if (set.weight != null) parts.push(`${set.weight}`);
+  if (set.weight != null) parts.push(`${set.weight}${standardizeWeightUnit(units.weightUnit)}`);
   if (set.distance != null) {
     parts.push(`${set.distance}${getStoredDistanceUnit(units.distanceUnit)}`);
   }
@@ -85,7 +96,7 @@ export function serializeWorkoutStructure(
   const byBlock = new Map<string, ExerciseSet[]>();
   let previousLegacyLabel: string | null = null;
   let legacySegment = 0;
-  for (const set of exerciseSets) {
+  for (const set of toPreferenceScaleAll(exerciseSets, units)) {
     const keyInfo = getBlockKey(set, previousLegacyLabel, legacySegment);
     const key = keyInfo.key;
     previousLegacyLabel = keyInfo.nextLegacyLabel;

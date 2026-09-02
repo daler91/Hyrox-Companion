@@ -19,6 +19,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
 import { groupExerciseSets } from "@/lib/exerciseUtils";
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
 import { buildBlockAssignmentOptions } from "@/lib/workoutStructureAssignments";
 
 import { useExerciseDndHandler } from "./exercise-table/dnd";
@@ -101,7 +102,15 @@ export function ExerciseTable({
   onOpenConversionHelper,
   structureBlocks = [],
 }: ExerciseTableProps) {
-  const groups = useMemo(() => groupExerciseSets(exerciseSets), [exerciseSets]);
+  // Every read below this line (prescription line, planned diffs, the inline
+  // editor, last time and the next-target suggestion) sees values in the
+  // athlete's current units: a row stamped in another unit is converted once
+  // here instead of being relabelled at each site (finding D2).
+  const scaledSets = useMemo(
+    () => toPreferenceScaleAll(exerciseSets, { weightUnit, distanceUnit }),
+    [exerciseSets, weightUnit, distanceUnit],
+  );
+  const groups = useMemo(() => groupExerciseSets(scaledSets), [scaledSets]);
   const blockAssignmentOptions = useMemo(
     () => buildBlockAssignmentOptions(structureBlocks),
     [structureBlocks],

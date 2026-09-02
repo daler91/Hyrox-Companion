@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AddExerciseSetPayload, PatchExerciseSetPayload } from "@/lib/api";
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
 import { cn } from "@/lib/utils";
 
 import { type FieldKey, getFieldLabel, getFields } from "./fieldMeta";
@@ -57,9 +58,16 @@ export const InlineSetEditor = memo(function InlineSetEditor({
   showPlannedDiffs = false,
 }: InlineSetEditorProps) {
   const fields = useMemo(() => getFields(exerciseName), [exerciseName]);
+  // The editor shows and writes numbers in the athlete's current unit; a row
+  // stamped in another unit is converted first (finding D2). ExerciseTable
+  // already does this, in which case the rows come back by reference.
+  const scaledSets = useMemo(
+    () => toPreferenceScaleAll(sets, { weightUnit, distanceUnit }),
+    [sets, weightUnit, distanceUnit],
+  );
   const orderedSets = useMemo(
-    () => [...sets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)),
-    [sets],
+    () => [...scaledSets].sort((a, b) => (a.setNumber ?? 0) - (b.setNumber ?? 0)),
+    [scaledSets],
   );
   const lastSet = orderedSets.at(-1);
 
