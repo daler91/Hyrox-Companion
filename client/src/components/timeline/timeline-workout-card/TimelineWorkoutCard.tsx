@@ -448,7 +448,7 @@ function FloatingAiCoachBadge({
       className="absolute -top-3 -right-3 z-30 border-primary border-2 text-primary bg-background shadow-lg shadow-primary/30 animate-pulse px-3 py-1 text-xs font-bold"
       data-testid={`badge-ai-coach-${entryId}`}
     >
-      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
       AI Modifying
     </Badge>
   );
@@ -522,7 +522,7 @@ function TimelineCardLeadingAction({
   if (entry.status !== "completed") return null;
   return (
     <div className="shrink-0 mt-0.5 text-success">
-      <CheckCircle2 className="h-5 w-5" />
+      <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
     </div>
   );
 }
@@ -568,7 +568,7 @@ function TimelineCardHeader({
           className="text-muted-foreground"
           data-testid={`badge-plan-${entry.id}`}
         >
-          <BookOpen className="h-3 w-3 mr-1" />
+          <BookOpen className="h-3 w-3 mr-1" aria-hidden="true" />
           {entry.planName}
         </Badge>
       )}
@@ -587,7 +587,7 @@ function TimelineCardHeader({
           variant="outline"
           className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950 text-[10px]"
         >
-          <Database className="h-2.5 w-2.5 mr-1" />
+          <Database className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
           RAG
         </Badge>
       )}
@@ -596,7 +596,7 @@ function TimelineCardHeader({
           variant="outline"
           className="text-amber-600 border-amber-200 bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:bg-amber-950 text-[10px]"
         >
-          <FileText className="h-2.5 w-2.5 mr-1" />
+          <FileText className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
           Legacy
         </Badge>
       )}
