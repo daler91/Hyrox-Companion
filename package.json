@@ -460,6 +460,25 @@
     "  deps for pnpm, so the override is required.",
     "  Remove when postcss depends on nanoid >=3.3.18 by default.",
     "",
+    "browserslist >=4.28.7: fixes two High advisories from the same 2026-09-01 research pass:",
+    "  GHSA-c83g-rgw3-j3cx / CVE-2026-73089 (unbounded browserslist()/parseQueries() result caches,",
+    "  no eviction, so a long-running process fed enough distinct queries eventually OOMs) and",
+    "  GHSA-73wf-gq98-2v4g / CVE-2026-73088 (normalizeStats() does an unguarded for...in over a",
+    "  browserslist-stats.json's keys, so a poisoned stats file crashes any browserslist() call via",
+    "  Object.prototype-name keys, or rewrites the result's [[Prototype]] via a literal '__proto__'",
+    "  key). Both patched in 4.28.7. Pulled transitively - browserslist has no direct entry in this",
+    "  file - via @babel/helper-compilation-targets (itself pulled by @babel/core, which every",
+    "  consumer below reaches through @babel/preset-env or directly): @sentry/esbuild-plugin,",
+    "  @sentry/vite-plugin, eslint-plugin-react-hooks, and vite-plugin-pwa's workbox-build. All",
+    "  consumers already declare 'browserslist: >= 4.21.0', so this is a same-range patch bump, not",
+    "  a forced major - the lockfile had simply frozen a 4.28.2 copy alongside an already-patched",
+    "  4.28.8 copy pulled in elsewhere. Neither vulnerable path is reachable in production: every",
+    "  consumer here only calls browserslist() during build/lint (bundling, Babel transform targets,",
+    "  Workbox precache manifest generation), never from server or client runtime code, so this is",
+    "  supply-chain hygiene rather than live exposure. Dependabot cannot update transitive deps for",
+    "  pnpm, so the override is required.",
+    "  Remove when every consumer's browserslist range resolves to >=4.28.7 by default.",
+    "",
     "NOT an override, but a rule for this block: never add an unscoped 'typescript' key here.",
     "  Overrides match by requested package name, and the 'typescript7' devDependency is an npm",
     "  alias whose request is also 'typescript' (npm:typescript@7.0.2) - an unscoped key would",
@@ -493,7 +512,8 @@
     "body-parser": "^2.3.0",
     "fast-uri": "^3.1.5",
     "brace-expansion@^5.0.5": "^5.0.9",
-    "nanoid@^3.3.16": "^3.3.18"
+    "nanoid@^3.3.16": "^3.3.18",
+    "browserslist": ">=4.28.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -571,7 +591,8 @@
       "body-parser": "^2.3.0",
       "fast-uri": "^3.1.5",
       "brace-expansion@^5.0.5": "^5.0.9",
-      "nanoid@^3.3.16": "^3.3.18"
+      "nanoid@^3.3.16": "^3.3.18",
+      "browserslist": ">=4.28.7"
     }
   },
   "packageManager": "pnpm@9.12.0",
