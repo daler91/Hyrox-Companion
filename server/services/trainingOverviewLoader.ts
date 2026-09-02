@@ -181,6 +181,7 @@ export async function assembleTrainingOverview(
     },
     userTimezone: user?.userTimezone,
     weightUnit: user?.weightUnit ?? "kg",
+    distanceUnit: user?.distanceUnit ?? "km",
     athlete: {
       age: user?.age ?? null,
       gender: user?.gender ?? null,

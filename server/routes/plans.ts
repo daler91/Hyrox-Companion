@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { isAuthenticated } from "../clerkAuth";
 import { env } from "../env";
-import { AppError, classifyAiError, ErrorCode } from "../errors";
+import { AppError, classifyAiError, ErrorCode, isLikelyAiProviderFailure } from "../errors";
 import { reqLogger } from "../logger";
 import { sendJobNoRetry } from "../queue";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody } from "../routeUtils";
@@ -68,22 +68,6 @@ function isInFlightPlanUniqueViolation(error: unknown): boolean {
   return false;
 }
 
-function isLikelyAiProviderFailure(error: unknown): boolean {
-  let raw = "";
-  if (error instanceof Error) {
-    raw = error.message;
-  } else if (typeof error === "string") {
-    raw = error;
-  } else if (error != null) {
-    try {
-      raw = JSON.stringify(error);
-    } catch {
-      raw = "";
-    }
-  }
-  const lower = raw.toLowerCase();
-  return /gemini|google\.?genai|\bai\b|quota|rate.?limit|resource.?exhausted|unavailable|502|503|504|deadline|timeout|overloaded|upstream/.test(lower);
-}
 
 function hasStatusAndCode(error: unknown): error is { status: number; code: string; message?: string } {
   if (!error || typeof error !== "object") return false;
@@ -103,7 +87,7 @@ function sendPlanDayReparseError(
     const isUpstreamUnavailable = error.code === ErrorCode.AI_UNAVAILABLE;
     return res.status(isUpstreamUnavailable ? 502 : error.status).json({
       error: error.message,
-      code: isUpstreamUnavailable ? "AI_UPSTREAM_FAILURE" : error.code,
+      code: isUpstreamUnavailable ? ErrorCode.AI_UPSTREAM_FAILURE : error.code,
     });
   }
 
@@ -124,7 +108,7 @@ function sendPlanDayReparseError(
   const isUpstreamUnavailable = classified.code === ErrorCode.AI_UNAVAILABLE;
   return res.status(isUpstreamUnavailable ? 502 : classified.status).json({
     error: classified.message,
-    code: isUpstreamUnavailable ? "AI_UPSTREAM_FAILURE" : classified.code,
+    code: isUpstreamUnavailable ? ErrorCode.AI_UPSTREAM_FAILURE : classified.code,
   });
 }
 

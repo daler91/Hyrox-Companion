@@ -242,7 +242,7 @@ export function formatSpeed(metersPerSecond: number, distanceUnit: string): stri
 export function metersToUserDistance(meters: number, distanceUnit: string): number {
   const standardUnit = standardizeDistanceUnit(distanceUnit);
   if (standardUnit === 'km') return meters / 1000;
-  if (standardUnit === 'miles') return meters / 1609.34;
+  if (standardUnit === 'miles') return meters / METERS_PER_MILE;
   return meters;
 }
 

@@ -799,3 +799,28 @@ describe("the standard-deviation convention monotony is measured with (audit M26
     expect(monotonyForWeek([60, 60, 60, 60, 60, 60, 60])).toBe(10);
   });
 });
+
+describe("calculateStrengthStressScore distance tonnage (C4)", () => {
+  const tag = DEFAULT_EXERCISE_LOAD_TAGS.find((t) => t.exerciseName === "farmers carry")
+    ?? DEFAULT_EXERCISE_LOAD_TAGS.find((t) => t.exerciseName === "deadlift")!;
+  const base = { reps: null, weight: null, plannedReps: null, plannedWeight: null, plannedDistance: null };
+
+  it("scores a stamped feet row the same as the equivalent stamped metre row", () => {
+    const metres = calculateStrengthStressScore({ ...base, distance: 100, distanceUnit: "m" }, tag, 7);
+    const feet = calculateStrengthStressScore({ ...base, distance: 328.084, distanceUnit: "ft" }, tag, 7);
+    expect(metres).toBeGreaterThan(0);
+    expect(feet).toBeCloseTo(metres, 1);
+  });
+
+  it("reads a legacy (unstamped) row in the athlete's current distance preference", () => {
+    const kmAthlete = calculateStrengthStressScore({ ...base, distance: 100 }, tag, 7, "kg", null, "km");
+    const milesAthlete = calculateStrengthStressScore({ ...base, distance: 328.084 }, tag, 7, "kg", null, "miles");
+    expect(milesAthlete).toBeCloseTo(kmAthlete, 1);
+  });
+
+  it("treats an unstamped row as metres when no preference is supplied", () => {
+    const bare = calculateStrengthStressScore({ ...base, distance: 100 }, tag, 7);
+    const metres = calculateStrengthStressScore({ ...base, distance: 100, distanceUnit: "m" }, tag, 7);
+    expect(bare).toBe(metres);
+  });
+});

@@ -29,6 +29,8 @@ vi.mock("@/lib/api", () => ({
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
     nutritionFavorites: ["/api/v1/nutrition/favorites"],
     nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
+    nutritionMicros: (date: string) => ["/api/v1/nutrition/micros", date],
+    nutritionMicrosPrefix: ["/api/v1/nutrition/micros"],
     nutritionRangePrefix: ["/api/v1/nutrition/range"],
   },
 }));

@@ -98,6 +98,7 @@ export async function buildNutritionSummary(userId: string): Promise<NutritionSu
   const { dailyLoads } = calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
     currentDate: to,
     weightUnit: user?.weightUnit || "kg",
+    distanceUnit: user?.distanceUnit || "km",
     athlete: {
       age: user?.age ?? null,
       gender: user?.gender ?? null,

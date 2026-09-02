@@ -4,7 +4,7 @@ import { generateText, streamText, type TextAiMessage } from "../ai/providers";
 import { AppError, classifyAiError } from "../errors";
 import { logger } from "../logger";
 import { buildSystemPrompt, type CoachingMaterialInput } from "../prompts";
-import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { createStreamingOutputValidator, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
 function buildCoachMessages(
@@ -70,6 +70,9 @@ export async function* streamChatWithCoach(
   userId?: string,
 ): AsyncGenerator<string> {
   try {
+    // Chunk-boundary-safe: a restricted phrase split across two SSE chunks is
+    // caught on the chunk that completes it (S4).
+    const validateChunk = createStreamingOutputValidator();
     for await (const text of streamText({
       systemInstruction: buildSystemPrompt(trainingContext, coachingMaterials, retrievedChunks),
       messages: buildCoachMessages(userMessage, conversationHistory),
@@ -80,7 +83,7 @@ export async function* streamChatWithCoach(
       signal,
     })) {
       if (signal?.aborted) return;
-      if (text) yield validateAiOutput(text);
+      if (text) yield validateChunk(text);
     }
   } catch (error) {
     const classified = classifyAiError(error);

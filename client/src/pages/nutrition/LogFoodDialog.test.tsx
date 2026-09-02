@@ -23,6 +23,8 @@ vi.mock("@/lib/api", () => ({
   },
   QUERY_KEYS: {
     nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
+    nutritionMicros: (date: string) => ["/api/v1/nutrition/micros", date],
+    nutritionMicrosPrefix: ["/api/v1/nutrition/micros"],
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
     nutritionRangePrefix: ["/api/v1/nutrition/summary-range"],
     nutritionFood: (id: string) => ["/api/v1/nutrition/foods", id],

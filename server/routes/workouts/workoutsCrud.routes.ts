@@ -4,25 +4,20 @@ import {
   insertWorkoutLogSchema,
   type PatchExerciseSetBody,
   patchExerciseSetBodySchema,
-  planDays,
   structureBlockScoreSchema,
-  trainingPlans,
-  workoutLogs,
 } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
 import { type Request, type Response, Router } from "express";
 import { z } from "zod";
 
 import { isAuthenticated } from "../../clerkAuth";
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from "../../constants";
-import { db } from "../../db";
-import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, parsePagination, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
 import {
   BULK_DELETE_WORKOUTS_NOT_FOUND,
   bulkDeleteWorkouts,
   isBulkDeleteWorkoutsNotFoundError,
 } from "../../services/bulkDeleteWorkouts";
+import { combineWorkouts } from "../../services/combineWorkouts";
 import { deriveMissingWorkoutSetsFromStructure, updateWorkoutStructureBlockScore } from "../../services/workoutService";
 import { assignWorkoutPlanDayUseCase, createWorkout, updateWorkoutUseCase } from "../../services/workoutUseCases";
 import { storage } from "../../storage";
@@ -249,53 +244,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
   protectedPost(router, "/api/v1/workouts/combine", { limiter: rateLimiter("workout", 10), middleware: [validateBody(combineWorkoutsSchema)] }, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     const { newWorkout, deleteWorkoutIds, skipPlanDayIds } = req.body as z.infer<typeof combineWorkoutsSchema>;
-
-    const result = await db.transaction(async (tx) => {
-      const sourceWorkouts = await tx.select({ id: workoutLogs.id, planDayId: workoutLogs.planDayId }).from(workoutLogs).where(and(inArray(workoutLogs.id, deleteWorkoutIds), eq(workoutLogs.userId, userId)));
-      if (sourceWorkouts.length !== deleteWorkoutIds.length) {
-        throw new AppError(ErrorCode.NOT_FOUND, "One or more source workouts not found", 404);
-      }
-
-      const keptPlanDayId = newWorkout.planDayId ?? null;
-      if (keptPlanDayId) {
-        const owned = await tx.select({ id: planDays.id }).from(planDays).innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id)).where(and(eq(planDays.id, keptPlanDayId), eq(trainingPlans.userId, userId))).limit(1);
-        if (owned.length === 0) {
-          throw new AppError(ErrorCode.NOT_FOUND, "Plan day not found", 404);
-        }
-      }
-
-      const skipIds = (skipPlanDayIds ?? []).filter((id) => id !== keptPlanDayId);
-      const allowed = new Set<string>(skipIds);
-      if (keptPlanDayId) {
-        allowed.add(keptPlanDayId);
-      }
-
-      for (const src of sourceWorkouts) {
-        if (src.planDayId && !allowed.has(src.planDayId)) {
-          throw new AppError(
-            ErrorCode.VALIDATION_ERROR,
-            `Cannot combine: source workout ${src.id} is linked to plan day ${src.planDayId}, which isn't the kept plan day or in skipPlanDayIds.`,
-            400,
-          );
-        }
-      }
-
-      const [created] = await tx.insert(workoutLogs).values({ ...newWorkout, userId }).returning();
-      // ⚡ Bolt Performance Optimization: batch the source-workout deletes into a single
-      // `inArray` query instead of one sequential `await` per id (up to 10, per combineWorkoutsSchema's
-      // max(10)). This collapses up to 10 network round trips into 1 inside the open transaction,
-      // shortening how long row/transaction locks on workout_logs are held. Mirrors the same fix
-      // already applied in server/services/bulkDeleteWorkouts.ts.
-      await tx.delete(workoutLogs).where(and(inArray(workoutLogs.id, deleteWorkoutIds), eq(workoutLogs.userId, userId)));
-
-      if (skipIds.length) {
-        const userPlanIds = tx.select({ id: trainingPlans.id }).from(trainingPlans).where(eq(trainingPlans.userId, userId));
-        await tx.update(planDays).set({ status: "skipped" }).where(and(inArray(planDays.id, skipIds), inArray(planDays.planId, userPlanIds)));
-      }
-
-      return created;
-    });
-
+    const result = await combineWorkouts({ userId, newWorkout, deleteWorkoutIds, skipPlanDayIds });
     res.status(201).json(result);
   });
 

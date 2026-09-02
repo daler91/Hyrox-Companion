@@ -14,7 +14,7 @@ import {
   type WorkoutLog,
   type WorkoutSuggestion,
 } from "@shared/schema";
-import { storedWeightToKg } from "@shared/unitConversion";
+import { storedDistanceToMetersStamped, storedWeightToKg } from "@shared/unitConversion";
 
 export type LoadVector = LoadGovernorVector;
 
@@ -343,12 +343,15 @@ export function calculateStrengthStressScore(
     | "distance"
     | "plannedDistance"
     | "weightUnit"
+    | "distanceUnit"
   >,
   tag: ExerciseLoadTagInput,
   rpe?: number | null,
   weightUnit: string = "kg",
   /** Canonical kg, for scaling unweighted reps (audit M2). */
   athleteBodyweightKg?: number | null,
+  /** The athlete's distance preference, for legacy rows with no stamp. */
+  distanceUnit?: string | null,
 ): number {
   const reps = Number(set.reps ?? set.plannedReps ?? 0);
   // UTSS must represent physiological load, not the athlete's display unit, so
@@ -365,7 +368,15 @@ export function calculateStrengthStressScore(
   const weight = storedWeightToKg(Number(set.weight ?? set.plannedWeight ?? 0), set, {
     weightUnit,
   });
-  const distance = Number(set.distance ?? set.plannedDistance ?? 0);
+  // Same treatment for distance: the branch below used to read the raw stored
+  // number, so a distance-only strength set (a carry, a sled push) scored
+  // 3.28x higher for an athlete whose rows are stored in feet (C4). Canonical
+  // metres, from the row's own stamp where it has one.
+  const distance = storedDistanceToMetersStamped(
+    Number(set.distance ?? set.plannedDistance ?? 0),
+    set,
+    { distanceUnit: distanceUnit ?? undefined },
+  );
   let weightedTonnage = 0;
   if (weight > 0 && reps > 0) {
     weightedTonnage = weight * Math.max(reps, 1);
@@ -1208,11 +1219,12 @@ function applyStrengthLoad(
   tags: Map<string, ExerciseLoadTagInput>,
   weightUnit: string,
   athlete?: AthleteLoadContext,
+  distanceUnit?: string,
 ): void {
   for (const set of sets) {
     if (!isStrengthSet(set)) continue;
     const setTag = getTag(tags, set.exerciseName, set.category);
-    const stress = calculateStrengthStressScore(set, setTag, log.rpe, weightUnit, athlete?.bodyweightKg);
+    const stress = calculateStrengthStressScore(set, setTag, log.rpe, weightUnit, athlete?.bodyweightKg, distanceUnit);
     day.strengthStressScore += stress;
     updateVectorLoads(day.vectorLoads, stress, setTag);
   }
@@ -1298,8 +1310,9 @@ function applyWorkoutLoad(
   tags: Map<string, ExerciseLoadTagInput>,
   weightUnit: string,
   athlete?: AthleteLoadContext,
+  distanceUnit?: string,
 ): void {
-  applyStrengthLoad(day, log, sets, tags, weightUnit, athlete);
+  applyStrengthLoad(day, log, sets, tags, weightUnit, athlete, distanceUnit);
   applyCardioLoad(day, log, sets, tags, athlete);
   finalizeDailyLoad(day);
 }
@@ -1311,6 +1324,8 @@ export function calculateTrainingLoad(
   options: {
     currentDate?: string;
     weightUnit?: string;
+    /** The athlete's distance preference; only consulted for rows with no unit stamp. */
+    distanceUnit?: string;
     athlete?: AthleteLoadContext;
     /**
      * The date the caller actually fetched `workoutLogs` from. Supply it and the
@@ -1327,6 +1342,7 @@ export function calculateTrainingLoad(
   // so UTSS represents physiological load. Defaults to kg for callers that don't
   // supply the preference (and for the kg-native majority).
   const weightUnit = options.weightUnit ?? "kg";
+  const distanceUnit = options.distanceUnit;
   const athlete = options.athlete;
   const rangeStart = computeRangeStart(workoutLogs, currentDate);
   const tags = normalizeTags(loadTags);
@@ -1340,7 +1356,7 @@ export function calculateTrainingLoad(
   for (const log of workoutLogs) {
     const day = getOrCreateDay(allDays, log.date);
     const sets = setsByLog.get(log.id) ?? [];
-    applyWorkoutLoad(day, log, sets, tags, weightUnit, athlete);
+    applyWorkoutLoad(day, log, sets, tags, weightUnit, athlete, distanceUnit);
   }
 
   const firstLogDate = earliestLogDate(workoutLogs);
