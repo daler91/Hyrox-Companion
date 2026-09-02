@@ -128,6 +128,9 @@ export default function Timeline() {
     isNewUser,
     todayRef,
     scrollToToday,
+    hasOlderEntries,
+    isLoadingOlder,
+    loadOlderEntries,
   } = data;
   const {
     filterStatus,
@@ -408,7 +411,11 @@ export default function Timeline() {
 
             <WeeklyReviewPrompt />
 
-            <TimelineSummaryCard selectedPlanId={selectedPlanId} />
+            <TimelineSummaryCard
+              selectedPlanId={selectedPlanId}
+              timelineEntries={timelineData}
+              timelineLoading={timelineLoading}
+            />
 
             <BulkDeleteControls
               enabled={bulkDeleteMode}
@@ -453,6 +460,9 @@ export default function Timeline() {
                 setShowAllPast={setShowAllPast}
                 showAllPast={showAllPast}
                 pastGroups={pastGroups}
+                hasOlderEntries={hasOlderEntries}
+                isLoadingOlder={isLoadingOlder}
+                onLoadOlder={loadOlderEntries}
                 hiddenFutureCount={hiddenFutureCount}
                 setShowAllFuture={setShowAllFuture}
                 showAllFuture={showAllFuture}

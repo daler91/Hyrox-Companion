@@ -1,5 +1,6 @@
-import type { OverviewChartKey, PersonalRecord, RacePredictionResponse, TimelineEntry, TrainingOverview, WeeklyReview } from "@shared/schema";
+import type { OverviewChartKey, PersonalRecord, RacePredictionResponse, TimelineEntry, TrainingOverview, TrainingSummary, WeeklyReview } from "@shared/schema";
 
+import type { TimelinePage } from "../timelineCache";
 import { rawRequest, typedRequest } from "./client";
 import type { RagInfo } from "./coaching";
 
@@ -58,6 +59,9 @@ export const analytics = {
   getTrainingOverview: (dateParams?: string) =>
     typedRequest<TrainingOverview>("GET", `/api/v1/training-overview${dateParams ?? ""}`),
 
+  /** The home summary card's bounded payload (P4). */
+  getTrainingSummary: () => typedRequest<TrainingSummary>("GET", "/api/v1/training-overview/summary"),
+
   // Fetch the LAST stored Overview chart analysis (no AI spend) so each chart's
   // explanation paints instantly on open. Returns `{ sections: null }` when the
   // athlete has never generated it.
@@ -109,10 +113,25 @@ export const analytics = {
     ),
 } as const;
 
+function timelineUrl(planId?: string | null, before?: string | null): string {
+  const params = new URLSearchParams();
+  if (planId) params.set("planId", planId);
+  if (before) params.set("before", before);
+  const query = params.toString();
+  return query ? `/api/v1/timeline?${query}` : "/api/v1/timeline";
+}
+
 export const timeline = {
-  get: (planId?: string | null) => {
-    const url = planId ? `/api/v1/timeline?planId=${planId}` : "/api/v1/timeline";
-    return typedRequest<TimelineEntry[]>("GET", url);
+  get: (planId?: string | null) => typedRequest<TimelineEntry[]>("GET", timelineUrl(planId)),
+
+  /**
+   * One cursor page (P3). The body is a plain entry array; the exclusive
+   * `before` bound for the next older page travels in `X-Next-Cursor`.
+   */
+  getPage: async (planId?: string | null, before?: string | null): Promise<TimelinePage> => {
+    const res = await rawRequest("GET", timelineUrl(planId, before));
+    const entries = (await res.json()) as TimelineEntry[];
+    return { entries, nextCursor: res.headers.get("X-Next-Cursor") };
   },
 
   getSuggestions: () =>

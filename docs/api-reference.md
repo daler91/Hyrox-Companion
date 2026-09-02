@@ -804,6 +804,24 @@ Calculate per-exercise analytics (volume, intensity trends).
 - **Query:** `from?`, `to?`
 - **Response:** Exercise analytics breakdown
 
+### GET /api/v1/training-overview/summary
+
+The home summary card's payload: only the numbers the card renders, from bounded reads (the distinct completed dates for the streak, the trailing 180 days of logs and sets for this week's count and the station radar). Keyed on the client as a child of the training-overview query so overview invalidations refresh it too.
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 20/min
+- **Response shape:**
+
+  ```ts
+  {
+    currentStreak: number,
+    weeklyCompletedWorkouts: number,
+    weeklyGoal: number,
+    stationCoverage: { station: string; lastTrained: string | null; daysSince: number | null }[],
+    coverageLookbackDays: number, // a station outside the window reports lastTrained: null
+  }
+  ```
+
 ### GET /api/v1/training-overview
 
 Calculate weekly training summaries, category totals, station coverage, and week-over-week deltas.
@@ -1346,8 +1364,11 @@ Get merged timeline of planned and logged workouts.
 
 - **Auth:** Required
 - **Rate limit:** `timeline` category, 60/min
-- **Query:** `planId?` (filter by plan), `limit?` (default capped), `offset?`
-- **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date
+- **Query:** `planId?` (filter by plan), `limit?` (past entries per page, default 200, max 500), `before?` (`YYYY-MM-DD`, exclusive: the previous page's cursor), `offset?` (legacy flat window; no cursor is returned when it is sent)
+- **Response:** `TimelineEntry[]` — merged planned + logged workouts sorted by date, newest first
+- **Headers:** `X-Next-Cursor: YYYY-MM-DD` when older entries exist; echo it back as `before` for the next page
+
+The first page (no `before`) is anchored on the athlete's today: it holds every entry dated today or later plus the most recent `limit` past entries, so the upcoming schedule is always complete. Pages never split a calendar date.
 
 **Response example:**
 

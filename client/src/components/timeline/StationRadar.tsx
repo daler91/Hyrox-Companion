@@ -45,14 +45,19 @@ function toneFor(daysSince: number | null): AnalysisTone {
  */
 export function buildStationRadar(
   coverage: readonly { station: string; lastTrained: string | null; daysSince: number | null }[],
+  lookbackDays?: number,
 ): StationRadarSummary | null {
   if (coverage.length === 0) return null;
   if (coverage.every((entry) => entry.lastTrained === null)) return null;
 
+  // Coverage built over a bounded window (P4) cannot tell "never trained" from
+  // "not inside the window", so it says the honest thing instead.
+  const untouchedLabel = lookbackDays ? `Not in ${lookbackDays}d` : null;
   const chips = coverage.map((entry) => ({
     station: entry.station,
     label: stationLabel(entry.station as CoverageStation),
-    freshness: getFreshnessLabel(entry.daysSince),
+    freshness:
+      entry.lastTrained === null && untouchedLabel ? untouchedLabel : getFreshnessLabel(entry.daysSince),
     tone: toneFor(entry.daysSince),
   }));
 
@@ -68,7 +73,9 @@ export function buildStationRadar(
 
   const coldestLabel = stationLabel(coldest.station as CoverageStation);
   let headline: string;
-  if (coldest.lastTrained === null) {
+  if (coldest.lastTrained === null && lookbackDays) {
+    headline = `${coldestLabel} has not been covered in the last ${lookbackDays} days.`;
+  } else if (coldest.lastTrained === null) {
     headline = `${coldestLabel} is untouched — no session has covered it yet.`;
   } else if (toneFor(coldest.daysSince) === "good") {
     headline = `Every station covered in the last ${WATCH_AFTER_DAYS} days.`;

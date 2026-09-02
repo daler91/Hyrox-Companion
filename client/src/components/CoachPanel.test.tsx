@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    api: { ...actual.api, analytics: { ...actual.api.analytics, getTrainingOverview: vi.fn() } },
+    api: { ...actual.api, analytics: { ...actual.api.analytics, getTrainingSummary: vi.fn() } },
   };
 });
 

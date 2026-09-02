@@ -101,6 +101,9 @@ export const QUERY_KEYS = {
   personalRecords: ["/api/v1/personal-records"] as const,
   exerciseAnalytics: ["/api/v1/exercise-analytics"] as const,
   trainingOverview: ["/api/v1/training-overview"] as const,
+  // A child of trainingOverview on purpose (P4): every existing overview
+  // invalidation refreshes the home summary too, with no extra call sites.
+  trainingSummary: ["/api/v1/training-overview", "summary"] as const,
   weeklyReview: (week: string) => ["/api/v1/weekly-review", week] as const,
   overviewAnalysis: ["/api/v1/overview-analysis"] as const,
   racePrediction: ["/api/v1/race-prediction"] as const,
