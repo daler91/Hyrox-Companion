@@ -23,7 +23,9 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string, o
   return Promise.race([
     promise.finally(() => clearTimeout(timerId)),
     new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => {
+      // `ms` is a server constant or a caller-supplied budget, never request
+      // data, so the DevSkim untrusted-delay review does not apply here.
+      timerId = setTimeout(() => { // DevSkim: ignore DS172411
         onTimeout?.();
         reject(new Error(`AI call timed out after ${ms}ms (${label})`));
       }, ms);
