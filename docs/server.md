@@ -110,6 +110,7 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 | Coaching | `server/routes/coaching.ts` |
 | Push | `server/routes/push.ts` |
 | Timeline annotations | `server/routes/timelineAnnotations.ts` |
+| Nutrition | `server/routes/nutrition/` (composite router: `index.ts` mounts the `NUTRITION_ENABLED` 404 gate, then `nutrition.routes.ts` registers the foods, favorites, logs, summary, parse, targets, insights, and recipes sub-route modules) |
 
 All API routes are prefixed with `/api/v1/` by convention within each router file.
 
