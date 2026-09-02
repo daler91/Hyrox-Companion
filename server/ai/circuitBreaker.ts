@@ -1,6 +1,8 @@
 import { logger } from "../logger";
 import { getRuntimeCache, setRuntimeCache } from "../sharedRuntimeState";
 
+const LOG_CONTEXT = "ai-circuit-breaker";
+
 /**
  * Minimal circuit breaker for outbound AI provider calls.
  *
@@ -75,7 +77,7 @@ let probeDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
 function persistBreakerStateAsync(): void {
   const snapshot: BreakerSnapshot = { state, consecutiveFailures, openedAt };
   setRuntimeCache(BREAKER_CACHE_KEY, snapshot, BREAKER_CACHE_TTL_MS).catch((err) => {
-    logger.debug({ err, context: "ai-circuit-breaker" }, "failed to persist circuit-breaker snapshot");
+    logger.debug({ err, context: LOG_CONTEXT }, "failed to persist circuit-breaker snapshot");
   });
 }
 
@@ -98,12 +100,12 @@ export async function loadPersistedBreakerState(): Promise<void> {
     openedAt = snapshot.openedAt;
     if (state !== "closed") {
       logger.info(
-        { context: "ai-circuit-breaker", restoredState: state, consecutiveFailures, openedAt },
+        { context: LOG_CONTEXT, restoredState: state, consecutiveFailures, openedAt },
         "[ai] restored circuit-breaker state from previous process",
       );
     }
   } catch (err) {
-    logger.warn({ err, context: "ai-circuit-breaker" }, "failed to load persisted breaker state — starting closed");
+    logger.warn({ err, context: LOG_CONTEXT }, "failed to load persisted breaker state — starting closed");
   }
 }
 
