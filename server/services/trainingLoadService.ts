@@ -1,3 +1,4 @@
+import { addDaysToISODate as addDays, toIsoDateUtc } from "@shared/dateUtils";
 import {
   EXERCISE_DEFINITIONS,
   type ExerciseLoadTag,
@@ -24,7 +25,6 @@ export const LOAD_VECTOR_KEYS = [
   "elastic_tendon",
 ] as const satisfies readonly LoadVector[];
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const TREND_DAYS = 42;
 const ABSOLUTE_VECTOR_LOAD_THRESHOLD = 45;
 const ELASTIC_SEVEN_DAY_THRESHOLD = 80;
@@ -221,24 +221,6 @@ function tag(exerciseName: string, values: ExerciseLoadTagValues): ExerciseLoadT
     eccentricRiskModifier,
     highIntensityRunningRisk,
   };
-}
-
-export function toIsoDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
-function parseIsoDate(date: string): Date {
-  return new Date(`${date}T00:00:00Z`);
-}
-
-function addDays(date: string, delta: number): string {
-  const d = parseIsoDate(date);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return toIsoDate(d);
-}
-
-export function daysBetween(earlier: string, later: string): number {
-  return Math.round((parseIsoDate(later).getTime() - parseIsoDate(earlier).getTime()) / DAY_MS);
 }
 
 function round(value: number, digits = 1): number {
@@ -1339,7 +1321,8 @@ export function calculateTrainingLoad(
     historyFrom?: string;
   } = {},
 ): TrainingLoadComputation {
-  const currentDate = options.currentDate ?? toIsoDate(new Date());
+  // Callers should pass the athlete-local date; the UTC day is only a fallback.
+  const currentDate = options.currentDate ?? toIsoDateUtc(new Date());
   // Stored weights are in the athlete's display unit; normalize to canonical kg
   // so UTSS represents physiological load. Defaults to kg for callers that don't
   // supply the preference (and for the kg-native majority).

@@ -88,8 +88,7 @@
     "server/storage/__tests__/timeline.test.ts",
     "server/storage/__tests__/workouts.test.ts",
     "server/storage/users.test.ts",
-    "server/usecases/workouts/mutateExerciseSet.usecase.test.ts",
-    "server/usecases/workouts/mutateWorkoutSet.usecase.test.ts",
+    "server/usecases/workouts/__tests__/mutateExerciseSet.usecase.test.ts",
     "shared/schema/types.structure.test.ts"
   ],
   "compilerOptions": {

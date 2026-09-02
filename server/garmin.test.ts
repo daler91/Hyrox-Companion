@@ -124,3 +124,52 @@ describe("garmin safety layers", () => {
     });
   });
 });
+
+describe("looksLike429", () => {
+  const { looksLike429 } = __testing;
+
+  it("trusts a structured HTTP status over the message", () => {
+    expect(looksLike429({ response: { status: 429 }, message: "Request failed" })).toBe(true);
+    expect(looksLike429({ status: 429 })).toBe(true);
+    // A non-429 status wins even when the text happens to mention 429.
+    expect(looksLike429({ response: { status: 500 }, message: "upstream 429 relay" })).toBe(false);
+  });
+
+  it("falls back to a word-bounded message match", () => {
+    expect(looksLike429(new Error("Request failed with status code 429"))).toBe(true);
+    expect(looksLike429(new Error("HTTP 429: Too Many Requests"))).toBe(true);
+    expect(looksLike429(new Error("Garmin rate limit reached"))).toBe(true);
+  });
+
+  it("does not trip the global breaker on digits that merely contain 429", () => {
+    expect(looksLike429(new Error("Activity 14290 not found"))).toBe(false);
+    expect(looksLike429(new Error("Activity 4291 not found"))).toBe(false);
+    expect(looksLike429(new Error("read 84295 bytes then socket hang up"))).toBe(false);
+    expect(looksLike429(new Error("invalid credentials"))).toBe(false);
+  });
+});
+
+describe("withUserLock", () => {
+  const { withUserLock } = __testing;
+
+  it("rejects a concurrent operation for the same athlete and releases the lock afterwards", async () => {
+    let release: () => void = () => {};
+    const first = withUserLock("user-1", () => new Promise<string>((resolve) => { release = () => resolve("done"); }));
+    await Promise.resolve();
+    expect(inFlightUsers.has("user-1")).toBe(true);
+
+    await expect(withUserLock("user-1", () => Promise.resolve("second"))).rejects.toThrow(/already in progress/);
+    // A different athlete is not blocked by user-1's lock.
+    await expect(withUserLock("user-2", () => Promise.resolve("other"))).resolves.toBe("other");
+
+    release();
+    await expect(first).resolves.toBe("done");
+    expect(inFlightUsers.has("user-1")).toBe(false);
+  });
+
+  it("releases the lock when the operation throws", async () => {
+    await expect(withUserLock("user-1", () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+    expect(inFlightUsers.has("user-1")).toBe(false);
+    await expect(withUserLock("user-1", () => Promise.resolve("again"))).resolves.toBe("again");
+  });
+});

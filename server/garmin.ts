@@ -33,7 +33,7 @@ import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter, validateBody } from "./routeUtils";
 import { type GarminActivity,mapGarminActivityToWorkout } from "./services/garminMapper";
-import { getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
+import { claimRuntimeCacheKey, deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getUserId } from "./types";
 
@@ -208,11 +208,27 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   }
 }
 
-/** Sniffs an unknown error to decide if it's a Garmin 429. */
+/** HTTP status carried by an axios-style error (`err.response.status`) or a fetch-style one (`err.status`). */
+function errorHttpStatus(err: unknown): number | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const direct = (err as { status?: unknown }).status;
+  if (typeof direct === "number") return direct;
+  const response = (err as { response?: { status?: unknown } }).response;
+  return typeof response?.status === "number" ? response.status : undefined;
+}
+
+/**
+ * Sniffs an unknown error to decide if it's a Garmin 429. A structured status
+ * wins; the message is only consulted when there is none. The message check is
+ * word-bounded: a loose `includes("429")` used to trip the GLOBAL breaker — a
+ * 30-minute freeze for every athlete on every instance — on any error whose
+ * text merely contained those digits (an activity id, a byte count, a port).
+ */
 function looksLike429(err: unknown): boolean {
+  const status = errorHttpStatus(err);
+  if (status !== undefined) return status === 429;
   const msg = err instanceof Error ? err.message : String(err);
-  const lower = msg.toLowerCase();
-  return lower.includes("429") || lower.includes("too many") || lower.includes("rate limit");
+  return /(?:^|\D)429(?:\D|$)/.test(msg) || /too many requests|rate limit/i.test(msg);
 }
 
 /**
@@ -250,13 +266,56 @@ async function withCircuitBreaker<T>(label: string, fn: () => Promise<T>): Promi
 
 const inFlightUsers = new Set<string>();
 
+// The in-process Set only serialises one instance. With several replicas
+// behind the load balancer a double-tap could land on two of them and log the
+// same athlete in twice — exactly the burst the breaker exists to prevent —
+// so the claim is ALSO taken in server_runtime_cache, where it is atomic
+// across instances. TTL bounds the claim if the process dies mid-call; it is
+// longer than the worst case of the two timed calls (login + activities) so a
+// live operation never loses its lock. Best-effort like the breaker: if the
+// shared store is unreachable the local Set is still authoritative.
+const USER_LOCK_TTL_MS = 2 * GARMIN_CALL_TIMEOUT_MS + 30_000;
+
+function userLockKey(userId: string): string {
+  return `garmin:inflight:${userId}`;
+}
+
+async function claimSharedUserLock(userId: string): Promise<boolean> {
+  if (env.NODE_ENV === "test") return true;
+  try {
+    return await claimRuntimeCacheKey(userLockKey(userId), USER_LOCK_TTL_MS);
+  } catch (err) {
+    logger.debug({ context: LOG_CTX, err }, "Failed to claim shared Garmin user lock");
+    return true;
+  }
+}
+
+async function releaseSharedUserLock(userId: string): Promise<void> {
+  if (env.NODE_ENV === "test") return;
+  try {
+    await deleteRuntimeCache(userLockKey(userId));
+  } catch (err) {
+    logger.debug({ context: LOG_CTX, err }, "Failed to release shared Garmin user lock");
+  }
+}
+
+const USER_LOCK_BUSY_MESSAGE =
+  "A Garmin operation is already in progress for your account. Please wait for it to finish.";
+
 async function withUserLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   if (inFlightUsers.has(userId)) {
-    throw new Error("A Garmin operation is already in progress for your account. Please wait for it to finish.");
+    throw new Error(USER_LOCK_BUSY_MESSAGE);
   }
   inFlightUsers.add(userId);
   try {
-    return await fn();
+    if (!(await claimSharedUserLock(userId))) {
+      throw new Error(USER_LOCK_BUSY_MESSAGE);
+    }
+    try {
+      return await fn();
+    } finally {
+      await releaseSharedUserLock(userId);
+    }
   } finally {
     inFlightUsers.delete(userId);
   }
@@ -701,6 +760,8 @@ export const __testing = {
   fetchAndImportGarminActivities,
   translateGarminError,
   rejectSyncPreflight,
+  looksLike429,
+  withUserLock,
   setGarminConnectCtor(ctor: typeof GarminConnectType): void {
     GarminConnectCtor = ctor;
   },

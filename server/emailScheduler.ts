@@ -56,16 +56,14 @@ export async function processWeeklySummary(storage: IStorage, user: User, now: D
   const weekStartStr = previous.weekStart;
   const weekEndStr = previous.weekEnd;
 
-  const [stats, timeline, allSets] = await Promise.all([
+  // Two slim projections instead of the full hydrated timeline + every set
+  // row: the streak only needs the distinct completed dates, and the PR pass
+  // only reads the columns calculatePersonalRecords compares (audit M-perf).
+  const [stats, completedDates, allSets] = await Promise.all([
     storage.analytics.getWeeklyStats(user.id, weekStartStr, weekEndStr),
-    storage.timeline.getTimeline(user.id),
-    storage.analytics.getAllExerciseSetsWithDates(user.id),
+    storage.timeline.getCompletedWorkoutDates(user.id),
+    storage.analytics.getExerciseSetsForPersonalRecords(user.id),
   ]);
-  const completedDates = new Set(
-    timeline
-      .filter(e => e.status === "completed" && e.date)
-      .map(e => e.date)
-  );
   const streak = calculateStreak(completedDates, tz);
   // "PRs This Week" = all-time bests first achieved within last week's window
   // (W18). Computed over the user's full history so only true records count.

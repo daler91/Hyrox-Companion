@@ -1,10 +1,9 @@
+import { dayDiff as daysBetween, toIsoDateUtc } from "@shared/dateUtils";
 import type { InsertExerciseSet, TrainingLoadOverview, WorkoutSuggestion } from "@shared/schema";
 
 import {
-  daysBetween,
   type LoadGovernorSuggestion,
   type PromptExerciseForLoad,
-  toIsoDate,
   type UpcomingWorkoutForLoad,
 } from "./trainingLoadService";
 
@@ -371,7 +370,10 @@ function applyOnrampSuggestions(
 export function buildLoadGovernorSuggestions(
   summary: TrainingLoadOverview,
   upcomingWorkouts: readonly UpcomingWorkoutForLoad[],
-  currentDate = toIsoDate(new Date()),
+  // The athlete's calendar date (buildAIContext puts it on
+  // TrainingContext.currentDate). The UTC day is only a fallback for callers
+  // with no athlete in scope.
+  currentDate = toIsoDateUtc(new Date()),
 ): LoadGovernorSuggestion[] {
   const suggestions: LoadGovernorSuggestion[] = [];
   const usedWorkoutIds = new Set<string>();

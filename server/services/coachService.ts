@@ -586,6 +586,7 @@ export async function triggerAutoCoach(userId: string): Promise<{ adjusted: numb
       ? buildLoadGovernorSuggestions(
           trainingContext.coachingInsights.loadGovernor,
           upcomingWorkouts,
+          trainingContext.currentDate,
         ).map(prepareLoadGovernorSuggestion)
       : [];
     const loadGovernorModifiedIds = collectModifiedWorkoutIds(

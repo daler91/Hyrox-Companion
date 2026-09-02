@@ -44,6 +44,24 @@ export function computePlanWeeks(startDate: string, endDate: string): number {
   return Math.min(MAX_PLAN_WEEKS, Math.max(MIN_PLAN_WEEKS, weeks));
 }
 
+/**
+ * The UTC calendar date of an instant as `YYYY-MM-DD`.
+ *
+ * This is the SERVER's day, not the athlete's: use it only to format a `Date`
+ * that was itself built from a date-only string (`parseIsoDate`), or where the
+ * caller has explicitly decided a UTC day is what it wants. "What day is it for
+ * this athlete" is `getLocalDateStrSafe(new Date(), user.userTimezone)` in
+ * server/timezone.ts — never `toIsoDateUtc(new Date())` (audit H11).
+ */
+export function toIsoDateUtc(instant: Date): string {
+  return instant.toISOString().slice(0, 10);
+}
+
+/** Parse a `YYYY-MM-DD` string to the `Date` at UTC midnight of that day. */
+export function parseIsoDate(date: string): Date {
+  return new Date(toUtcEpoch(date));
+}
+
 /** Add `days` whole days to a `YYYY-MM-DD` string, returning `YYYY-MM-DD` (UTC math). */
 export function addDaysToISODate(date: string, days: number): string {
   const next = new Date(toUtcEpoch(date) + days * MS_PER_DAY);

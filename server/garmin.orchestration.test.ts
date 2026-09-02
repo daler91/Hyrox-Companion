@@ -50,6 +50,8 @@ vi.mock("./middleware/idempotency", () => ({
 vi.mock("./sharedRuntimeState", () => ({
   getRuntimeCache: vi.fn().mockResolvedValue(null),
   setRuntimeCache: vi.fn().mockResolvedValue(undefined),
+  claimRuntimeCacheKey: vi.fn().mockResolvedValue(true),
+  deleteRuntimeCache: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Fake SDK injected through the constructor seam.

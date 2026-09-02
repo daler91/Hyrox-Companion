@@ -8,6 +8,7 @@
  * is injected so the route can pass its request-coalescing caches while the AI /
  * cron path uses raw storage.
  */
+import { addDaysToISODate } from "@shared/dateUtils";
 import type { TrainingOverview, WorkoutLog } from "@shared/schema";
 
 import { storage } from "../storage";
@@ -22,11 +23,7 @@ export function todayUtcYyyyMmDd(): string {
 }
 
 /** Add (or subtract) whole calendar days to a YYYY-MM-DD string, in UTC. */
-export function addCalendarDays(date: string, delta: number): string {
-  const value = new Date(`${date}T00:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + delta);
-  return value.toISOString().split("T")[0];
-}
+export const addCalendarDays = addDaysToISODate;
 
 /**
  * Returns the pair of ISO dates that bound the period immediately BEFORE
