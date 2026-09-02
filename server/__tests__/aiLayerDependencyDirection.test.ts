@@ -18,8 +18,9 @@ function collectSourceFiles(dir: string): string[] {
 }
 
 // Module specifiers from static imports, `export ... from` re-exports and
-// dynamic `import("...")` calls.
-const MODULE_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/g;
+// dynamic `import("...")` calls. Every optional whitespace run is followed by
+// a required character, so the pattern cannot backtrack super-linearly.
+const MODULE_SPECIFIER = /\b(?:from|import(?:\s*\()?)\s*["']([^"']+)["']/g;
 
 function resolvesInto(root: string, target: string): boolean {
   const relative = path.relative(root, target);
