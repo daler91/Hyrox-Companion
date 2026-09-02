@@ -69,7 +69,7 @@ describe("useStravaMutations", () => {
   describe("connectStravaMutation", () => {
     it("sends the browser to Strava's authorization URL", async () => {
       apiMocks.auth.mockResolvedValue({ authUrl: "https://www.strava.com/oauth/authorize?client_id=1" });
-      const location = { href: "http://localhost/settings" };
+      const location = { href: "https://app.example/settings" };
       const original = globalThis.location;
       Object.defineProperty(globalThis, "location", { configurable: true, value: location });
       try {
