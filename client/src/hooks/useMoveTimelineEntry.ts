@@ -33,6 +33,10 @@ interface MoveContext {
  * jumps to the new date under the user's cursor; the server response (or
  * the invalidate-driven refetch) resolves the final ordering.
  */
+function moveEntryDate(entries: TimelineEntry[], entryId: string, newDate: string): TimelineEntry[] {
+  return entries.map((e) => (e.id === entryId ? { ...e, date: newDate } : e));
+}
+
 export function useMoveTimelineEntry(selectedPlanId: string | null) {
   const moveMutation = useApiMutation<unknown, Error, MoveVariables, MoveContext>({
     mutationFn: async ({ entry, newDate }: MoveVariables) => {
@@ -58,10 +62,7 @@ export function useMoveTimelineEntry(selectedPlanId: string | null) {
       if (previousTimeline) {
         queryClient.setQueryData<TimelineCache>(
           [...QUERY_KEYS.timeline, selectedPlanId],
-          (old) =>
-            mapTimelineCache(old, (entries) =>
-              entries.map((e) => (e.id === entry.id ? { ...e, date: newDate } : e)),
-            ),
+          (old) => mapTimelineCache(old, (entries) => moveEntryDate(entries, entry.id, newDate)),
         );
       }
       return { previousTimeline };
