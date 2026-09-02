@@ -105,6 +105,9 @@ export async function loadPersistedBreakerState(): Promise<void> {
       );
     }
   } catch (err) {
+    // The only dynamic value is the cache read error itself, which carries no
+    // athlete data; the breaker state it failed to restore is a three-word enum.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err, context: LOG_CONTEXT }, "failed to load persisted breaker state — starting closed");
   }
 }
