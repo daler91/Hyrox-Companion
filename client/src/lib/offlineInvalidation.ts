@@ -34,6 +34,7 @@ export function invalidateForSyncedRequests(requests: readonly SyncedRequest[] |
   }
   if (nutrition) {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDayPrefix }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionMicrosPrefix }).catch(() => {});
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRecent }).catch(() => {});
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRangePrefix }).catch(() => {});
   }

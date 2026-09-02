@@ -3,7 +3,6 @@ import crypto from "node:crypto";
 import { type StravaConnection } from "@shared/schema";
 import { type DistanceUnit } from "@shared/unitConversion";
 import type { Request, Response, Router } from "express";
-import rateLimit from "express-rate-limit";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
 import { isAuthenticated } from "./clerkAuth";
@@ -13,7 +12,7 @@ import { env } from "./env";
 import { AppError, ErrorCode } from "./errors";
 import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
-import { asyncHandler } from "./routeUtils";
+import { asyncHandler, rateLimiter } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { claimRuntimeCacheKey, runtimeCacheKey } from "./sharedRuntimeState";
 import { storage } from "./storage";
@@ -39,17 +38,15 @@ if (!env.STRAVA_STATE_SECRET) {
   logger.warn({ context: "strava" }, "STRAVA_STATE_SECRET not configured — using random secret. Strava OAuth state will not be verifiable across multiple server instances.");
 }
 
-const stravaAuthLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_15M_MS,
-  max: 20,
-  message: "Too many requests from this IP, please try again after 15 minutes",
-});
-
-const stravaSyncLimiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_15M_MS,
-  max: 5,
-  message: "Too many sync requests, please try again after 15 minutes",
-});
+// The shared Postgres-backed limiter, not bare express-rate-limit: the bare
+// one keeps its counters in process memory and keys on IP, so in the
+// multi-instance deployment each replica enforced its own budget and the
+// startup log's "enforced across all instances" claim was untrue for these
+// three routes — the exact failure mode the Garmin module documents as its
+// reason to avoid the pattern (S5). Keyed by user where authenticated and by
+// IP on the unauthenticated OAuth callback.
+const stravaAuthLimiter = rateLimiter("stravaAuth", 20, RATE_LIMIT_WINDOW_15M_MS);
+const stravaSyncLimiter = rateLimiter("stravaSync", 5, RATE_LIMIT_WINDOW_15M_MS);
 const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 
 import { getAuth } from "@clerk/express";
 import * as Sentry from "@sentry/node";
@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { NextFunction,type Request, Response } from "express";
 import helmet from "helmet";
+import { stdSerializers } from "pino";
 import pinoHttp from "pino-http";
 
 import { generateOpenApiDocument } from "../shared/openapi";
@@ -275,6 +276,17 @@ app.use(pinoHttp({
       requestId: req.id,
       route: req.url?.split('?')[0] || req.originalUrl?.split('?')[0],
     };
+  },
+  // S2: pino-http's default request serializer logs the full URL (query
+  // string included) plus the parsed query object. OAuth callbacks carry the
+  // provider `code` and the signed `state` in the query, so both were landing
+  // in the access log. Log the path only — the same req.path-not-req.url rule
+  // asyncHandler already applies to error logs.
+  serializers: {
+    req: (req: IncomingMessage) => {
+      const serialized = stdSerializers.req(req);
+      return { ...serialized, url: serialized.url.split('?')[0], query: undefined };
+    },
   },
   autoLogging: {
     ignore: (req) => !req.url?.startsWith('/api/v1')

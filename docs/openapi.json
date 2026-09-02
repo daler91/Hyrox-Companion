@@ -3187,7 +3187,6 @@
                   "avgCadence": null,
                   "avgWatts": null,
                   "sufferScore": null,
-                  "createdAt": "2026-03-29T18:42:11.000Z",
                   "exerciseSets": []
                 },
                 "schema": {
@@ -3244,7 +3243,6 @@
                     "avgCadence": null,
                     "avgWatts": null,
                     "sufferScore": null,
-                    "createdAt": "2026-03-29T18:42:11.000Z",
                     "exerciseSets": []
                   }
                 ],
@@ -3308,7 +3306,6 @@
                   "avgCadence": null,
                   "avgWatts": null,
                   "sufferScore": null,
-                  "createdAt": "2026-03-29T18:42:11.000Z",
                   "exerciseSets": [],
                   "structureBlocks": []
                 },
@@ -3423,7 +3420,6 @@
                   "avgCadence": null,
                   "avgWatts": null,
                   "sufferScore": null,
-                  "createdAt": "2026-03-29T18:42:11.000Z",
                   "exerciseSets": []
                 },
                 "schema": {

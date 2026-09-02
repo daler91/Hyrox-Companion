@@ -811,6 +811,7 @@ async function computeGenerationCalibration(
     const { overview } = calculateTrainingLoad(workoutLogs, loadExerciseSets, loadTags, {
       currentDate: today,
       weightUnit: user?.weightUnit || "kg",
+      distanceUnit: user?.distanceUnit || "km",
       athlete: {
         age: user?.age ?? null,
         gender: user?.gender ?? null,

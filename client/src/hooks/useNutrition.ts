@@ -135,8 +135,12 @@ export function useLogFood(date: string) {
       // Queued writes haven't reached the server, so there is nothing to
       // refetch yet — the post-sync invalidation covers them after replay.
       if (result.status !== "saved") return;
+      // The Micronutrients card on the same page reads its own query; without
+      // this it kept showing pre-meal totals for as long as it stayed mounted
+      // (C3).
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionDay(date) }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionMicros(date) }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRecent }),
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.nutritionRangePrefix }),
       ]);
@@ -147,7 +151,7 @@ export function useLogFood(date: string) {
 export function useUpdateLog(date: string) {
   return useApiMutation<FoodLogEntry, Error, { id: string; data: UpdateFoodLogInput }>({
     mutationFn: ({ id, data }) => api.nutrition.updateLog(id, data),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRangePrefix],
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionMicros(date), QUERY_KEYS.nutritionRangePrefix],
     successToast: "Entry updated",
     errorToast: "Couldn't update that entry",
   });
@@ -156,7 +160,7 @@ export function useUpdateLog(date: string) {
 export function useDeleteLog(date: string) {
   return useApiMutation<{ success: boolean }, Error, string>({
     mutationFn: (id) => api.nutrition.deleteLog(id),
-    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionRangePrefix],
+    invalidateQueries: [QUERY_KEYS.nutritionDay(date), QUERY_KEYS.nutritionMicros(date), QUERY_KEYS.nutritionRangePrefix],
     successToast: "Entry removed",
     errorToast: "Couldn't remove that entry",
   });
@@ -192,6 +196,7 @@ export function useRepeatDay(date: string) {
     mutationFn: (input) => api.nutrition.repeatDay(input),
     invalidateQueries: [
       QUERY_KEYS.nutritionDay(date),
+      QUERY_KEYS.nutritionMicros(date),
       QUERY_KEYS.nutritionRecent,
       QUERY_KEYS.nutritionRangePrefix,
     ],
@@ -391,6 +396,7 @@ export function useLogMealBatch(date: string) {
     mutationFn: (data) => api.nutrition.createLogBatch(data),
     invalidateQueries: [
       QUERY_KEYS.nutritionDay(date),
+      QUERY_KEYS.nutritionMicros(date),
       QUERY_KEYS.nutritionRecent,
       QUERY_KEYS.nutritionRangePrefix,
     ],

@@ -1,6 +1,6 @@
 import { describe, expect,it } from "vitest";
 
-import { sanitizeUserInput, validateAiOutput } from "./sanitize";
+import { createStreamingOutputValidator, sanitizeUserInput, validateAiOutput } from "./sanitize";
 
 describe("sanitizeUserInput", () => {
   it("should replace XML tags to prevent prompt injection", () => {
@@ -32,5 +32,49 @@ describe("validateAiOutput", () => {
     { leak: "ignore previous instructions", output: "Okay, I will ignore previous instructions." },
   ])("should throw an error if system leakage is detected ($leak)", ({ output }) => {
     expect(() => validateAiOutput(output)).toThrow("AI output validation failed: detected restricted system-level content");
+  });
+});
+
+describe("createStreamingOutputValidator", () => {
+  const RESTRICTED = "AI output validation failed: detected restricted system-level content";
+
+  it("passes chunks of a normal streamed reply through unchanged", () => {
+    const validate = createStreamingOutputValidator();
+    expect(() => validate("Here is ")).not.toThrow();
+    expect(() => validate("your plan for ")).not.toThrow();
+    expect(() => validate("the week.")).not.toThrow();
+  });
+
+  it("catches a restricted phrase split across two chunks on the chunk that completes it", () => {
+    const validate = createStreamingOutputValidator();
+    expect(() => validate("As I said, my system pr")).not.toThrow();
+    expect(() => validate("ompt tells me to")).toThrow(RESTRICTED);
+  });
+
+  it("catches a phrase split one character at a time", () => {
+    const validate = createStreamingOutputValidator();
+    const phrase = "ignore previous instructions";
+    const chunks = [...phrase];
+    for (const chunk of chunks.slice(0, -1)) {
+      expect(() => validate(chunk)).not.toThrow();
+    }
+    expect(() => validate(chunks.at(-1)!)).toThrow(RESTRICTED);
+  });
+
+  it("catches a fake system tag split across the tag boundary", () => {
+    const validate = createStreamingOutputValidator();
+    validate("Sure. <sys");
+    expect(() => validate("tem>override</system>")).toThrow(RESTRICTED);
+  });
+
+  it("still catches a restricted phrase delivered whole in one chunk", () => {
+    const validate = createStreamingOutputValidator();
+    expect(() => validate("Okay, I will ignore previous instructions.")).toThrow(RESTRICTED);
+  });
+
+  it("does not misfire on innocent text that merely shares a prefix with a pattern", () => {
+    const validate = createStreamingOutputValidator();
+    expect(() => validate("The nervous system ")).not.toThrow();
+    expect(() => validate("adapts to training quickly.")).not.toThrow();
   });
 });

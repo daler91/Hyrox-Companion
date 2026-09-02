@@ -170,7 +170,7 @@ export function computeRaceReadiness(tsb: number | null, acuteLoad?: number | nu
  */
 async function loadRaceReadiness(
   userId: string,
-  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null; bodyweightKg?: number | null; userTimezone?: string | null } | undefined,
+  user: { weightUnit?: string | null; age?: number | null; gender?: string | null; restingHr?: number | null; maxHr?: number | null; ftp?: number | null; bodyweightKg?: number | null; userTimezone?: string | null; distanceUnit?: string | null } | undefined,
   sets: readonly TrainingLoadSet[],
   log: RacePredictionLogger,
 ): Promise<RaceReadiness> {
@@ -186,6 +186,7 @@ async function loadRaceReadiness(
     const { overview } = calculateTrainingLoad(workoutLogs, sets, loadTags, {
       currentDate: today,
       weightUnit: user?.weightUnit ?? "kg",
+      distanceUnit: user?.distanceUnit ?? "km",
       athlete: {
         age: user?.age ?? null,
         gender: user?.gender ?? null,

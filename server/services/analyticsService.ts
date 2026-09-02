@@ -677,6 +677,8 @@ export interface TrainingOverviewOptions {
   };
   userTimezone?: string;
   weightUnit?: string;
+  /** The athlete's distance preference, for legacy set rows with no unit stamp (C4). */
+  distanceUnit?: string;
   athlete?: AthleteLoadContext;
 }
 
@@ -714,6 +716,7 @@ export function calculateTrainingOverview(
     trainingLoadInput,
     userTimezone = "UTC",
     weightUnit = "kg",
+    distanceUnit,
     athlete,
   } = options;
   const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs, period);
@@ -733,6 +736,7 @@ export function calculateTrainingOverview(
     {
       ...(trainingLoadInput?.currentDate ? { currentDate: trainingLoadInput.currentDate } : {}),
       weightUnit,
+      ...(distanceUnit ? { distanceUnit } : {}),
       ...(athlete ? { athlete } : {}),
     },
   ).overview;

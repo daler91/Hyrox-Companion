@@ -30,6 +30,7 @@ export async function fetchDailyTraining(
     dailyLoads: calculateTrainingLoad(workoutLogs, exerciseSets, loadTags, {
       currentDate: to,
       weightUnit: user?.weightUnit || "kg",
+      distanceUnit: user?.distanceUnit || "km",
       athlete: {
         age: user?.age ?? null,
         gender: user?.gender ?? null,
@@ -82,6 +83,7 @@ export async function fetchDailyTrainingLoad(
     // rather than reseeded if this range is ever narrowed again (audit H21).
     historyFrom: from,
     weightUnit: user?.weightUnit || "kg",
+    distanceUnit: user?.distanceUnit || "km",
     athlete: {
       age: user?.age ?? null,
       gender: user?.gender ?? null,

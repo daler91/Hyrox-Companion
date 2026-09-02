@@ -12,6 +12,8 @@ vi.mock("@/lib/api", () => ({
   api: { nutrition: { createLogBatch: vi.fn(), search: vi.fn() } },
   QUERY_KEYS: {
     nutritionDay: (date: string) => ["/api/v1/nutrition/summary", date],
+    nutritionMicros: (date: string) => ["/api/v1/nutrition/micros", date],
+    nutritionMicrosPrefix: ["/api/v1/nutrition/micros"],
     nutritionRecent: ["/api/v1/nutrition/foods/recent"],
     nutritionSearch: (q: string) => ["/api/v1/nutrition/foods/search", q],
   },

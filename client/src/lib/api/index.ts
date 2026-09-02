@@ -136,6 +136,9 @@ export const QUERY_KEYS = {
   nutritionRangePrefix: ["/api/v1/nutrition/summary-range"] as const,
   nutritionTargets: ["/api/v1/nutrition/targets"] as const,
   nutritionMicros: (date: string) => ["/api/v1/nutrition/micros", date] as const,
+  // Prefix for invalidating every day's micronutrient totals (offline replay
+  // doesn't know which dates the replayed logs touched).
+  nutritionMicrosPrefix: ["/api/v1/nutrition/micros"] as const,
   nutritionInsights: ["/api/v1/nutrition/insights"] as const,
 } as const;
 

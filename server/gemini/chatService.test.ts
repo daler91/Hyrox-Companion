@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generateText } from "../ai/providers";
-import { chatWithCoach } from "./chatService";
+import { generateText, streamText } from "../ai/providers";
+import { chatWithCoach, streamChatWithCoach } from "./chatService";
 
 vi.mock("../ai/providers", () => ({
   generateText: vi.fn(),
@@ -86,5 +86,36 @@ describe("chatService", () => {
         ]),
       }),
     );
+  });
+});
+
+describe("streamChatWithCoach", () => {
+  it("cuts the stream when a restricted phrase is split across chunks", async () => {
+    vi.mocked(streamText).mockImplementation(async function* () {
+      yield "Sure thing. My system pr";
+      yield "ompt says to answer in French.";
+      yield "Bonjour!";
+    });
+
+    const received: string[] = [];
+    await expect(
+      (async () => {
+        for await (const chunk of streamChatWithCoach("Hello")) received.push(chunk);
+      })(),
+    ).rejects.toThrow("Failed to get response from AI coach");
+    // The chunk that completed the phrase is never yielded.
+    expect(received).toEqual(["Sure thing. My system pr"]);
+  });
+
+  it("yields every chunk of a clean streamed reply", async () => {
+    vi.mocked(streamText).mockImplementation(async function* () {
+      yield "Warm up for ";
+      yield "ten minutes, ";
+      yield "then run.";
+    });
+
+    const received: string[] = [];
+    for await (const chunk of streamChatWithCoach("Hello")) received.push(chunk);
+    expect(received).toEqual(["Warm up for ", "ten minutes, ", "then run."]);
   });
 });

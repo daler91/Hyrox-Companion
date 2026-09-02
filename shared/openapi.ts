@@ -101,7 +101,6 @@ const EXAMPLE_WORKOUT_RESPONSE = {
   avgCadence: null,
   avgWatts: null,
   sufferScore: null,
-  createdAt: "2026-03-29T18:42:11.000Z",
   exerciseSets: [],
 };
 

@@ -491,7 +491,7 @@ const chatHistoryQuerySchema = z
     { message: "before and beforeId must be provided together" },
   );
 
-router.get("/api/v1/chat/history", isAuthenticated, validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get("/api/v1/chat/history", isAuthenticated, rateLimiter("chatHistory", 60), validateQuery(chatHistoryQuerySchema), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const { limit, before, beforeId } = req.query as z.infer<typeof chatHistoryQuerySchema>;
     const { messages, nextCursor } = await getChatHistoryUseCase(storage.users, { userId, limit, before, beforeId });
@@ -615,7 +615,7 @@ protectedPost(router, "/api/v1/timeline/ai-suggestions", { limiter: rateLimiter(
   });
 
 
-router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", isAuthenticated, asyncHandler(async (req: ExpressRequest<{workoutId: string}>, res: Response) => {
+router.get("/api/v1/timeline/ai-suggestions/debug/:workoutId", isAuthenticated, rateLimiter("aiSuggestionsDebug", 30), asyncHandler(async (req: ExpressRequest<{workoutId: string}>, res: Response) => {
     const userId = getUserId(req);
     const day = await storage.plans.getPlanDay(req.params.workoutId, userId);
     if (!day) {

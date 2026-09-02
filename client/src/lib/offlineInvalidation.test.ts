@@ -31,12 +31,13 @@ describe("invalidateForSyncedRequests", () => {
     expect(invalidatedKeys()).toEqual([]);
   });
 
-  it("invalidates nutrition summary/recent/range for a synced nutrition log", () => {
+  it("invalidates nutrition summary/micros/recent/range for a synced nutrition log", () => {
     invalidateForSyncedRequests([{ url: "/api/v1/nutrition/logs", method: "POST" }]);
 
     expect(mocks.invalidateWorkoutWriteQueries).not.toHaveBeenCalled();
     expect(invalidatedKeys()).toEqual([
       ["/api/v1/nutrition/summary"],
+      ["/api/v1/nutrition/micros"],
       ["/api/v1/nutrition/foods/recent"],
       ["/api/v1/nutrition/summary-range"],
     ]);
@@ -49,7 +50,7 @@ describe("invalidateForSyncedRequests", () => {
     ]);
 
     expect(mocks.invalidateWorkoutWriteQueries).toHaveBeenCalledOnce();
-    expect(invalidatedKeys()).toHaveLength(3);
+    expect(invalidatedKeys()).toHaveLength(4);
   });
 
   it("falls back to workout invalidation when no request metadata is present", () => {

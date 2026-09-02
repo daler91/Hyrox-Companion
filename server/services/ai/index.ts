@@ -428,6 +428,7 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
   const loadGovernor = calculateTrainingLoad(loadWorkoutLogs, loadExerciseSets, loadTags, {
     currentDate: today,
     weightUnit,
+    distanceUnit,
     athlete: {
       age: user?.age ?? null,
       gender: user?.gender ?? null,
