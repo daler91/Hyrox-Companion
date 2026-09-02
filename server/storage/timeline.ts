@@ -15,13 +15,13 @@ import {
   workoutLogs,
   type WorkoutStatus,
 } from "@shared/schema";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or } from "drizzle-orm";
 
 import { db } from "../db";
 import { getLocalDateStrSafe } from "../timezone";
 import { planDaysWithinLifetimes } from "./planRetirement";
 import { deriveRaceDayOverride, type RaceDayOverride } from "./raceDayView";
-import { sortAndWindowTimelineEntries } from "./timelineWindow";
+import { sortAndWindowTimelineEntries, type TimelinePageWindow, windowTimelinePage } from "./timelineWindow";
 import type { WorkoutStorage } from "./workouts";
 
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
@@ -357,7 +357,7 @@ export class TimelineStorage {
     hydrateTimelineStructureBlocks(entries, blocksByWorkoutId, blocksByPlanDayId);
   }
 
-  private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number) {
+  private async fetchScheduledDays(userId: string, planId?: string, sqlLimit?: number, before?: string) {
     // Two-step relational query. First, resolve the user's plan metadata
     // (cheap — a user has ≪10 plans). Then query planDays filtered by those
     // plan IDs using the relational API. This replaces the prior manual
@@ -391,7 +391,11 @@ export class TimelineStorage {
     if (!planScope) return { scheduledDays: [], planNameById };
 
     const days = await db.query.planDays.findMany({
-      where: and(planScope, isNotNull(planDays.scheduledDate)),
+      where: and(
+        planScope,
+        isNotNull(planDays.scheduledDate),
+        ...(before === undefined ? [] : [lt(planDays.scheduledDate, before)]),
+      ),
       orderBy: desc(planDays.scheduledDate),
       ...(sqlLimit === undefined ? {} : { limit: sqlLimit }),
     });
@@ -460,8 +464,10 @@ export class TimelineStorage {
     userId: string,
     planId?: string,
     sqlLimit?: number,
+    before?: string,
   ): Promise<WorkoutLog[]> {
     const conditions = [eq(workoutLogs.userId, userId), isNull(workoutLogs.planDayId)];
+    if (before !== undefined) conditions.push(lt(workoutLogs.date, before));
 
     // When scoping to a specific plan, hide standalone workouts that belong to a
     // DIFFERENT plan, but keep unattached (no-plan) workouts and this plan's own.
@@ -537,14 +543,25 @@ export class TimelineStorage {
     return { entries, suppressedPlanDayIds };
   }
 
-  async getTimeline(
+  /**
+   * The un-windowed multi-source merge every timeline read starts from:
+   * scheduled plan days, their linked logs and standalone logs, each base
+   * source capped at `sqlOverFetch` rows (newest first) and, when `before` is
+   * given, restricted to dates strictly earlier than it. `sourceTruncated`
+   * reports whether a base source hit its cap, which is the only way a caller
+   * can tell "that was everything" from "the SQL window ended here".
+   */
+  private async loadMergedEntries(
     userId: string,
-    planId?: string,
-    limit?: number,
-    offset?: number,
-  ): Promise<TimelineEntry[]> {
-    const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
-
+    planId: string | undefined,
+    sqlOverFetch: number | undefined,
+    before?: string,
+  ): Promise<{
+    entries: TimelineEntry[];
+    suppressedPlanDayIds: Set<string>;
+    today: string;
+    sourceTruncated: boolean;
+  }> {
     // ⚡ Bolt Performance Optimization: resolveUserToday (reads `users`) and
     // fetchScheduledDays (reads `trainingPlans`/`planDays`) touch unrelated
     // tables and have no data dependency between them — `today` isn't
@@ -557,7 +574,7 @@ export class TimelineStorage {
     // unrelated table and is not consumed until buildTimelineEntries either.
     const [today, { scheduledDays, planNameById }, absences] = await Promise.all([
       this.resolveUserToday(userId),
-      this.fetchScheduledDays(userId, planId, sqlOverFetch),
+      this.fetchScheduledDays(userId, planId, sqlOverFetch, before),
       this.fetchAbsences(userId),
     ]);
     const planDayIds = scheduledDays.map((r) => r.planDay.id);
@@ -571,7 +588,7 @@ export class TimelineStorage {
             .from(workoutLogs)
             .where(and(eq(workoutLogs.userId, userId), inArray(workoutLogs.planDayId, planDayIds)))
         : Promise.resolve([]),
-      this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch),
+      this.fetchStandaloneWorkouts(userId, planId, sqlOverFetch, before),
     ]);
 
     const { entries, suppressedPlanDayIds } = this.buildTimelineEntries(
@@ -582,6 +599,20 @@ export class TimelineStorage {
       planNameById,
       absences,
     );
+    const sourceTruncated =
+      sqlOverFetch !== undefined &&
+      (scheduledDays.length >= sqlOverFetch || standaloneWorkouts.length >= sqlOverFetch);
+    return { entries, suppressedPlanDayIds, today, sourceTruncated };
+  }
+
+  async getTimeline(
+    userId: string,
+    planId?: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<TimelineEntry[]> {
+    const sqlOverFetch = this.computeSqlOverFetch(limit, offset);
+    const { entries, suppressedPlanDayIds } = await this.loadMergedEntries(userId, planId, sqlOverFetch);
     // Window BEFORE hydrating: attachExerciseSets fans out four batch reads keyed
     // by entry ids, so hydrating the full over-fetched merge (offset + 3x limit
     // PER SOURCE — ~3000 entries for the production limit=500 call) did
@@ -593,6 +624,38 @@ export class TimelineStorage {
     const windowed = this.sortAndWindowEntries(entries, limit, offset);
     await this.attachExerciseSets(windowed, suppressedPlanDayIds);
     return windowed;
+  }
+
+  /**
+   * One cursor page of the timeline (P3), hydrated like `getTimeline`.
+   *
+   * Without `before` this is the FIRST page and it is anchored on the
+   * athlete's today: every entry dated today or later (the whole upcoming
+   * schedule, bounded by plan length) plus the most recent `limit` past
+   * entries. That is what the timeline renders on open, so the athlete never
+   * sees an empty past section behind a long plan. With `before` (the previous
+   * page's `nextCursor`) it is `limit` entries dated strictly earlier. Pages
+   * never split a calendar date, see `windowTimelinePage`.
+   */
+  async getTimelinePage(
+    userId: string,
+    options: { planId?: string; limit: number; before?: string },
+  ): Promise<TimelinePageWindow> {
+    const { planId, limit, before } = options;
+    const sqlOverFetch = this.computeSqlOverFetch(limit);
+    const { entries, suppressedPlanDayIds, today, sourceTruncated } = await this.loadMergedEntries(
+      userId,
+      planId,
+      sqlOverFetch,
+      before,
+    );
+    sortAndWindowTimelineEntries(entries);
+    let firstPastIndex = entries.findIndex((entry) => entry.date < today);
+    if (firstPastIndex === -1) firstPastIndex = entries.length;
+    const pageLimit = before === undefined ? firstPastIndex + limit : limit;
+    const page = windowTimelinePage(entries, 0, pageLimit, sourceTruncated);
+    await this.attachExerciseSets(page.entries, suppressedPlanDayIds);
+    return page;
   }
 
   /**

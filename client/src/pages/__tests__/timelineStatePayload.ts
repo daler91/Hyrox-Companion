@@ -25,6 +25,7 @@ export function buildTimelineStatePayload(entries: TimelineEntry[] = [buildTimel
     data: {
       plans: [], plansLoading: false, personalRecords: [], timelineData: entries, timelineLoading: false,
       annotations: [], isNewUser: false, todayRef: { current: null }, scrollToToday: vi.fn(),
+      hasOlderEntries: false, isLoadingOlder: false, loadOlderEntries: vi.fn(),
     },
     filters: {
       filterStatus: "all", setFilterStatus: vi.fn(), showAllPast: true, setShowAllPast: vi.fn(),

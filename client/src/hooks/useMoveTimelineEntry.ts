@@ -3,6 +3,7 @@ import { useCallback } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 import { useApiMutation } from "./useApiMutation";
 
@@ -12,7 +13,7 @@ interface MoveVariables {
 }
 
 interface MoveContext {
-  previousTimeline?: TimelineEntry[];
+  previousTimeline?: TimelineCache;
 }
 
 /**
@@ -50,15 +51,17 @@ export function useMoveTimelineEntry(selectedPlanId: string | null) {
     errorToast: "Couldn't move workout",
     onMutate: async ({ entry, newDate }) => {
       await queryClient.cancelQueries({ queryKey: [...QUERY_KEYS.timeline, selectedPlanId] });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>([
+      const previousTimeline = queryClient.getQueryData<TimelineCache>([
         ...QUERY_KEYS.timeline,
         selectedPlanId,
       ]);
       if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>(
+        queryClient.setQueryData<TimelineCache>(
           [...QUERY_KEYS.timeline, selectedPlanId],
           (old) =>
-            old?.map((e) => (e.id === entry.id ? { ...e, date: newDate } : e)) ?? old,
+            mapTimelineCache(old, (entries) =>
+              entries.map((e) => (e.id === entry.id ? { ...e, date: newDate } : e)),
+            ),
         );
       }
       return { previousTimeline };

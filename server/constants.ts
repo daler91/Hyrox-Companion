@@ -41,8 +41,16 @@ export const AI_CALL_TIMEOUT_MS = 90_000;
  */
 export const PLAN_GENERATION_AI_TIMEOUT_MS = 300_000; // 5 minutes
 
-/** Default timeline query limit */
+/** Hard maximum for one timeline response (also the legacy offset default). */
 export const DEFAULT_TIMELINE_LIMIT = 500;
+
+/**
+ * Past entries on the first timeline page. The cursor contract (P3) always
+ * returns everything from the athlete's today forward, so the schedule is
+ * complete, plus this many past entries; older pages are fetched on demand
+ * with `?before=<date>` instead of shipping the whole history at once.
+ */
+export const DEFAULT_TIMELINE_PAGE_SIZE = 200;
 
 /**
  * Upper bound on timeline entries loaded when building AI coaching context

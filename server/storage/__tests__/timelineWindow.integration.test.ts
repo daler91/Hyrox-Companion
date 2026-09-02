@@ -100,6 +100,28 @@ describe("TimelineStorage.getTimeline (real Postgres)", () => {
     expect(all.find((e) => e.workoutLogId === hydratedLogId)?.exerciseSets).toHaveLength(2);
   });
 
+  it("pages the merge by date cursor, never splitting a day, and hydrates each page (P3)", async () => {
+    // Every seeded date is in the past, so the today-anchored first page is
+    // just the newest `limit` past entries.
+    const first = await storage.timeline.getTimelinePage(ALICE, { limit: 2 });
+    expect(first.entries.map((e) => e.date)).toEqual(["2026-05-08", "2026-05-07"]);
+    expect(first.nextCursor).toBe("2026-05-07");
+    expect(first.entries[1].exerciseSets?.map((s) => s.weight)).toEqual([100, 105]);
+
+    const second = await storage.timeline.getTimelinePage(ALICE, { limit: 2, before: first.nextCursor! });
+    expect(second.entries.map((e) => e.date)).toEqual(["2026-05-06", "2026-05-05"]);
+    expect(second.nextCursor).toBe("2026-05-05");
+
+    const tail = await storage.timeline.getTimelinePage(ALICE, { limit: 10, before: second.nextCursor! });
+    expect(tail.entries.map((e) => e.date)).toEqual(["2026-05-04", "2026-05-01"]);
+    expect(tail.nextCursor).toBeNull();
+
+    // A page wide enough for the whole history reports no cursor at all.
+    const everything = await storage.timeline.getTimelinePage(ALICE, { limit: 50 });
+    expect(everything.entries).toHaveLength(6);
+    expect(everything.nextCursor).toBeNull();
+  });
+
   it("returns nothing for an athlete with no history", async () => {
     await seedUser("timeline-nobody");
 

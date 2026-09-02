@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 interface TimelineTitleMutationOptions {
   readonly setPreviewEntry: Dispatch<SetStateAction<TimelineEntry | null>>;
@@ -31,23 +32,21 @@ function entryMatchesTarget(entry: TimelineEntry, target: TimelineEntry): boolea
 }
 
 function patchTimelineTitle(
-  entries: TimelineEntry[] | undefined,
+  entries: TimelineEntry[],
   target: TimelineEntry,
   title: string,
-): TimelineEntry[] | undefined {
-  if (!entries) return entries;
+): TimelineEntry[] {
   return entries.map((entry) =>
     entryMatchesTarget(entry, target) ? { ...entry, focus: title } : entry,
   );
 }
 
 function rollbackTimelineTitle(
-  entries: TimelineEntry[] | undefined,
+  entries: TimelineEntry[],
   target: TimelineEntry,
   optimisticTitle: string,
   rollbackTitle: string,
-): TimelineEntry[] | undefined {
-  if (!entries) return entries;
+): TimelineEntry[] {
   return entries.map((entry) =>
     entryMatchesTarget(entry, target) && entry.focus === optimisticTitle
       ? { ...entry, focus: rollbackTitle }
@@ -131,8 +130,8 @@ export function useTimelineTitleMutation(setters: TimelineTitleMutationOptions) 
         ? queryClient.getQueryData<WorkoutLog>(QUERY_KEYS.workout(entry.workoutLogId))?.focus
         : undefined;
 
-      queryClient.setQueriesData<TimelineEntry[]>({ queryKey: QUERY_KEYS.timeline }, (current) =>
-        patchTimelineTitle(current, entry, title),
+      queryClient.setQueriesData<TimelineCache>({ queryKey: QUERY_KEYS.timeline }, (current) =>
+        mapTimelineCache(current, (entries) => patchTimelineTitle(entries, entry, title)),
       );
       if (entry.workoutLogId) {
         queryClient.setQueryData<WorkoutLog>(QUERY_KEYS.workout(entry.workoutLogId), (current) =>
@@ -144,8 +143,8 @@ export function useTimelineTitleMutation(setters: TimelineTitleMutationOptions) 
       return { targetKey, previousWorkoutFocus };
     },
     onError: (_error, { entry, title }, context) => {
-      queryClient.setQueriesData<TimelineEntry[]>({ queryKey: QUERY_KEYS.timeline }, (current) =>
-        rollbackTimelineTitle(current, entry, title, entry.focus),
+      queryClient.setQueriesData<TimelineCache>({ queryKey: QUERY_KEYS.timeline }, (current) =>
+        mapTimelineCache(current, (entries) => rollbackTimelineTitle(entries, entry, title, entry.focus)),
       );
       if (entry.workoutLogId) {
         queryClient.setQueryData<WorkoutLog>(QUERY_KEYS.workout(entry.workoutLogId), (current) =>

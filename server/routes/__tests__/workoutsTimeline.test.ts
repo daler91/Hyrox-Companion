@@ -2,7 +2,7 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_TIMELINE_LIMIT } from "../../constants";
+import { DEFAULT_TIMELINE_LIMIT, DEFAULT_TIMELINE_PAGE_SIZE } from "../../constants";
 import { clearRateLimitBuckets } from "../../routeUtils";
 import { storage } from "../../storage";
 import workoutsRouter from "../workouts";
@@ -12,7 +12,7 @@ vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAu
 vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
-    timeline: ["getTimeline"],
+    timeline: ["getTimeline", "getTimelinePage"],
   }),
 );
 
@@ -27,7 +27,7 @@ describe("Workout Timeline Routes", () => {
   });
 
   describe("GET /api/v1/timeline", () => {
-    it("returns the user's timeline entries with default limit", async () => {
+    it("returns the user's first timeline page with the default page size", async () => {
       const mockEntries = [
         {
           id: "entry-1",
@@ -36,57 +36,69 @@ describe("Workout Timeline Routes", () => {
           planId: "plan-1",
         },
       ];
-      vi.mocked(storage.timeline.getTimeline).mockResolvedValue(mockEntries);
+      vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({ entries: mockEntries, nextCursor: null } as never);
 
       const response = await request(app).get("/api/v1/timeline");
 
       expect(response.status).toBe(200);
-      expect(storage.timeline.getTimeline).toHaveBeenCalledWith("test_user_id", undefined, DEFAULT_TIMELINE_LIMIT, undefined);
+      expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith("test_user_id", {
+        planId: undefined,
+        limit: DEFAULT_TIMELINE_PAGE_SIZE,
+        before: undefined,
+      });
       expect(response.body).toEqual(mockEntries);
+      expect(response.headers["x-next-cursor"]).toBeUndefined();
     });
 
-    it("accepts planId parameter", async () => {
-      vi.mocked(storage.timeline.getTimeline).mockResolvedValue([] as never);
+    it("accepts planId and before parameters and surfaces the next cursor", async () => {
+      vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({ entries: [], nextCursor: "2026-01-01" });
 
-      const response = await request(app).get("/api/v1/timeline?planId=plan-123");
+      const response = await request(app).get("/api/v1/timeline?planId=plan-123&before=2026-02-01");
 
       expect(response.status).toBe(200);
-      expect(storage.timeline.getTimeline).toHaveBeenCalledWith("test_user_id", "plan-123", DEFAULT_TIMELINE_LIMIT, undefined);
+      expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith("test_user_id", {
+        planId: "plan-123",
+        limit: DEFAULT_TIMELINE_PAGE_SIZE,
+        before: "2026-02-01",
+      });
+      expect(response.headers["x-next-cursor"]).toBe("2026-01-01");
     });
 
-    it("parses valid limit and offset parameters", async () => {
+    it("keeps the legacy limit/offset window on the flat merge", async () => {
       vi.mocked(storage.timeline.getTimeline).mockResolvedValue([] as never);
 
       const response = await request(app).get("/api/v1/timeline?limit=10&offset=20");
 
       expect(response.status).toBe(200);
       expect(storage.timeline.getTimeline).toHaveBeenCalledWith("test_user_id", undefined, 10, 20);
+      expect(storage.timeline.getTimelinePage).not.toHaveBeenCalled();
     });
 
     it("clamps limit to DEFAULT_TIMELINE_LIMIT", async () => {
-      vi.mocked(storage.timeline.getTimeline).mockResolvedValue([] as never);
+      vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({ entries: [], nextCursor: null });
 
       const requestedLimit = DEFAULT_TIMELINE_LIMIT + 100;
       const response = await request(app).get(`/api/v1/timeline?limit=${requestedLimit}`);
 
       expect(response.status).toBe(200);
-      expect(storage.timeline.getTimeline).toHaveBeenCalledWith("test_user_id", undefined, DEFAULT_TIMELINE_LIMIT, undefined);
+      expect(storage.timeline.getTimelinePage).toHaveBeenCalledWith("test_user_id", {
+        planId: undefined,
+        limit: DEFAULT_TIMELINE_LIMIT,
+        before: undefined,
+      });
     });
 
-    it("rejects invalid limit parameter", async () => {
-      const response = await request(app).get("/api/v1/timeline?limit=invalid");
+    it.each([
+      ["limit", "?limit=invalid"],
+      ["offset", "?offset=invalid"],
+      ["before", "?before=not-a-date"],
+    ])("rejects an invalid %s parameter", async (_name, query) => {
+      const response = await request(app).get(`/api/v1/timeline${query}`);
 
       expect(response.status).toBe(400);
       expect(response.body.code).toBe("BAD_REQUEST");
       expect(storage.timeline.getTimeline).not.toHaveBeenCalled();
-    });
-
-    it("rejects invalid offset parameter", async () => {
-      const response = await request(app).get("/api/v1/timeline?offset=invalid");
-
-      expect(response.status).toBe(400);
-      expect(response.body.code).toBe("BAD_REQUEST");
-      expect(storage.timeline.getTimeline).not.toHaveBeenCalled();
+      expect(storage.timeline.getTimelinePage).not.toHaveBeenCalled();
     });
   });
 });

@@ -5,6 +5,7 @@ import { useEffect, useReducer } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 
 import { QUERY_KEYS } from "@/lib/api";
+import { flattenTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Training",
@@ -30,12 +31,11 @@ function findEntryInTimelineCache(
 ): TimelineEntry | undefined {
   // Scan every cached timeline variant (the key is prefixed with
   // QUERY_KEYS.timeline; each user-selected plan produces its own entry).
-  const variants = queryClient.getQueriesData<TimelineEntry[]>({
+  const variants = queryClient.getQueriesData<TimelineCache>({
     queryKey: QUERY_KEYS.timeline,
   });
   for (const [, data] of variants) {
-    if (!data) continue;
-    const hit = data.find(
+    const hit = flattenTimelineCache(data).find(
       (entry) => entry.workoutLogId === id || entry.planDayId === id,
     );
     if (hit) return hit;
