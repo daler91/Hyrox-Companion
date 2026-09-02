@@ -228,21 +228,27 @@ async function clearStaleStructureSetLinks(
     .select({ id: exerciseSets.id, blockId: exerciseSets.blockId, stepNumber: exerciseSets.stepNumber })
     .from(exerciseSets)
     .where(and(exerciseSetOwnerCondition(owner), isNotNull(exerciseSets.blockId)));
-  for (const row of rows) {
-    const key = structureStepKey(row.blockId, row.stepNumber);
-    if (key && validStepKeys.has(key)) continue;
-    await tx
-      .update(exerciseSets)
-      .set({
-        blockId: null,
-        stepNumber: null,
-        intervalMinute: null,
-        cycleNumber: null,
-        stepRole: null,
-        groupId: null,
-      })
-      .where(eq(exerciseSets.id, row.id));
-  }
+  // Every stale row gets the exact same reset values, so collapse the per-row
+  // sequential UPDATEs (previously one round trip per stale set, inside the
+  // save transaction) into a single batched UPDATE ... WHERE id IN (...).
+  const staleIds = rows
+    .filter((row) => {
+      const key = structureStepKey(row.blockId, row.stepNumber);
+      return !(key && validStepKeys.has(key));
+    })
+    .map((row) => row.id);
+  if (staleIds.length === 0) return;
+  await tx
+    .update(exerciseSets)
+    .set({
+      blockId: null,
+      stepNumber: null,
+      intervalMinute: null,
+      cycleNumber: null,
+      stepRole: null,
+      groupId: null,
+    })
+    .where(inArray(exerciseSets.id, staleIds));
 }
 
 function structureBlockInsertValues(owner: SetOwner, block: StructureBlockInput, idx: number) {
