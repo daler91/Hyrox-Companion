@@ -3,11 +3,11 @@ import { vi } from "vitest";
 import type { ResolvedTextAiRequest, TextAiStreamChunk } from "./types";
 
 /**
- * Mock module for "../../gemini/client" that strips retry/timeout wrapping.
+ * Mock module for "../retry" that strips retry/timeout wrapping.
  * vi.mock factories are hoisted, so callers delegate to this via
- * `vi.mock("../../gemini/client", async () => (await import("./testHelpers")).mockGeminiClientModule())`.
+ * `vi.mock("../retry", async () => (await import("./testHelpers")).mockRetryModule())`.
  */
-export function mockGeminiClientModule() {
+export function mockRetryModule() {
   return {
     retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
     withTimeout: <T>(promise: Promise<T>) => promise,

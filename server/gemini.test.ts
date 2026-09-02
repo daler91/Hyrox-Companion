@@ -1,7 +1,7 @@
 import { exerciseSetSchema } from "@shared/schema";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
-import { __resetCircuitBreakerForTests } from "./gemini/circuitBreaker";
+import { __resetCircuitBreakerForTests } from "./ai/circuitBreaker";
 import {
   isRetryableError,
   parsedExerciseSchema,

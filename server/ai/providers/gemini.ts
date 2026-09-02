@@ -1,7 +1,8 @@
 import { type GenerateContentResponse, ThinkingLevel } from "@google/genai";
 
 import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
-import { getAiClient, retryWithBackoff, withTimeout } from "../../gemini/client";
+import { getAiClient } from "../geminiSdk";
+import { retryWithBackoff, withTimeout } from "../retry";
 import type {
   ResolvedTextAiRequest,
   TextAiProvider,

@@ -4,7 +4,7 @@ import { createOpenAiCompatibleTextProvider } from "./openaiCompatible";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
 
-vi.mock("../../gemini/client", async () => (await import("./testHelpers")).mockGeminiClientModule());
+vi.mock("../retry", async () => (await import("./testHelpers")).mockRetryModule());
 
 const baseRequest = makeProviderRequest({
   providerId: "openai-compatible",

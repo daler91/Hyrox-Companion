@@ -5,8 +5,8 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { withPgAdvisoryLock } from "./advisoryLock";
+import { loadPersistedBreakerState } from "./ai/circuitBreaker";
 import { pool } from "./db";
-import { loadPersistedBreakerState } from "./gemini/circuitBreaker";
 import { EMBEDDING_DIMENSIONS } from "./gemini/client";
 import { logger } from "./logger";
 import { assertCriticalTablesExist, isBenignIdempotencyError } from "./migrationGuards";
