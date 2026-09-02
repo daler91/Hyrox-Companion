@@ -111,20 +111,20 @@ export function validateAiOutput(output: string): string {
  * pattern, the most any single match can straddle — and checks each new chunk
  * together with that tail, so a boundary-split pattern is caught on the chunk
  * that completes it. Matches wholly inside the tail were judged on an earlier
- * call and are not raised twice.
+ * call and are not raised twice. It throws on a restricted match and returns
+ * nothing otherwise; the caller forwards the chunk it already holds.
  *
  * Streaming is inherently best-effort: the chunks before the completing one
  * have already been sent. What this closes is the filter bypass, so the
  * stream is cut and the failure surfaced instead of the phrase being
  * delivered in full.
  */
-export function createStreamingOutputValidator(): (chunk: string) => string {
+export function createStreamingOutputValidator(): (chunk: string) => void {
   let tail = "";
-  return (chunk: string): string => {
-    if (typeof chunk !== "string") return chunk;
+  return (chunk: string): void => {
+    if (typeof chunk !== "string") return;
     const window = tail + chunk;
     checkAiOutput(window, tail.length);
     tail = window.slice(-(LONGEST_PATTERN_LENGTH - 1));
-    return chunk;
   };
 }

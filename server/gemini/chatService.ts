@@ -83,7 +83,10 @@ export async function* streamChatWithCoach(
       signal,
     })) {
       if (signal?.aborted) return;
-      if (text) yield validateChunk(text);
+      if (text) {
+        validateChunk(text);
+        yield text;
+      }
     }
   } catch (error) {
     const classified = classifyAiError(error);
