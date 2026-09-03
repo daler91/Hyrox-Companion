@@ -99,6 +99,17 @@ describe("retryWithBackoff", () => {
       vi.useRealTimers();
     }
   });
+
+  it("throws a budget-exhausted error and never calls fn when the deadline has already passed", async () => {
+    // budgetMs=0 puts the deadline at "now", so the loop's own deadline check
+    // fires before the first attempt — distinct from "exhausts max retries",
+    // which always makes at least one call.
+    const fn = vi.fn();
+    await expect(retryWithBackoff(fn, "budget-test", 2, 1, 0)).rejects.toThrow(
+      "AI request budget exhausted for budget-test",
+    );
+    expect(fn).not.toHaveBeenCalled();
+  });
 });
 
 describe("workoutSuggestionSchema", () => {
