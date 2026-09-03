@@ -1,3 +1,8 @@
+## 2026-09-03 - Parallel AI panels must share the same error-handling pattern
+
+**Learning:** `CoachInsightsTab` had full inline error handling (describeAiError, role="alert", two-context display), but the structurally identical `NutritionInsightsPanel` had none — the mutation hook's `errorToast` was the only feedback, and it's ephemeral. When two surfaces share the same generate-then-display pattern, the second one often ships without the first one's error handling because "it works" in the happy path and error states are only visible under failure conditions that rarely surface during development.
+**Action:** When a new AI panel is created by copying an existing one, audit it against the original's error states, not just its success path. Check: does it import `describeAiError`? Does the body function branch on `errorMessage`? Does it show errors both with and without prior content?
+
 ## 2023-10-27 - Add tooltip to Back button
 **Learning:** Icon-only buttons without tooltips are a common accessibility gap. We should proactively wrap all `size="icon"` buttons in Tooltips. Radix/shadcn tooltips need a full setup (`TooltipProvider`, `Tooltip`, `TooltipTrigger asChild`, `TooltipContent`) to work correctly when isolated.
 **Action:** Always check `size="icon"` components for tooltips. When adding them, explicitly include `TooltipProvider` to ensure the context is available.
