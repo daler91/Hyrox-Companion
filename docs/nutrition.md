@@ -686,7 +686,14 @@ server/routes/nutrition/
   nutritionInsights.routes.ts   /insights (GET stored, POST regenerate; AI-gated)
   nutritionRecipes.routes.ts    recipes CRUD
 
-server/storage/nutrition.ts     NutritionStorage (all DB access)
+server/storage/nutrition.ts     NutritionStorage: the facade, binding each method below
+  nutritionShared.ts            visibility predicate, LIKE/trigram fragments, portion memory,
+                                the unique-violation retry
+  nutritionFoods.ts             shared cache, custom foods, named servings
+  nutritionLogs.ts              log entries, date/window reads, repeat-day
+  nutritionFavorites.ts         favourites
+  nutritionRecipes.ts           recipes + their backing custom food
+  nutritionTargets.ts           daily targets and per-meal overrides
 server/prompts.ts               PARSE_MEAL_PROMPT, MEAL_IMAGE_PREAMBLE,
                                 NUTRITION_INSIGHTS_PROMPT
 
