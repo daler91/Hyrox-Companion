@@ -45,6 +45,12 @@ export const logger = pino({
     'req.body.*.password',
     'req.body.*.accessToken',
     'req.body.*.refreshToken',
+    // 🛡️ Sentinel: Redact Web Push cryptographic secrets (p256dh, auth) to prevent them
+    // from leaking into logs if a request body is logged (e.g., during errors).
+    'req.body.keys.p256dh',
+    'req.body.keys.auth',
+    'req.body.*.p256dh',
+    'req.body.*.auth',
     // AI provider key fields on getTextAiConfig()'s return type. Caught at both
     // top level and one nested level so `logger.info({ config }, "...")` and
     // `logger.info(config, "...")` both redact (W1).
