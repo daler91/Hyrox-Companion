@@ -1,4 +1,4 @@
-import type { Food, FoodWithServingsResponse } from "@shared/schema";
+import type { Food, FoodServing, FoodWithServingsResponse } from "@shared/schema";
 
 import { storage } from "../../storage";
 import { fetchUsdaFoodById, fetchUsdaFoodPortions } from "./usdaClient";
@@ -17,6 +17,21 @@ export async function getFoodWithServings(
   const food = await storage.nutrition.getVisibleFoodById(userId, id);
   if (!food) return null;
 
+  // ⚡ Bolt: servings resolution (DB read, occasionally topped up with a USDA
+  // portions fetch) and micronutrient enrichment (a separate USDA food-detail
+  // fetch) both depend only on `food` -- not on each other's result -- but
+  // used to run back to back on every "open food detail" request. Running
+  // them concurrently means this hot path pays for the slower of the two USDA
+  // round trips once instead of both sequentially.
+  const [servings, enrichedFood] = await Promise.all([
+    resolveServings(userId, id, food),
+    enrichUsdaMicros(food),
+  ]);
+
+  return { food: enrichedFood, servings };
+}
+
+async function resolveServings(userId: string, id: string, food: Food): Promise<FoodServing[]> {
   let servings = await storage.nutrition.getServings(id, userId);
   if (servings.length === 0 && food.source === "usda" && food.sourceId) {
     const portions = await fetchUsdaFoodPortions(food.sourceId);
@@ -24,8 +39,7 @@ export async function getFoodWithServings(
       servings = await storage.nutrition.cacheServings(id, portions);
     }
   }
-
-  return { food: await enrichUsdaMicros(food), servings };
+  return servings;
 }
 
 /**
