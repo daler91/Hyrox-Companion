@@ -181,16 +181,17 @@ export async function getPlannedSessionEstimate(
   const day = await storage.plans.getPlanDay(planDayId, userId);
   if (!day) return null;
 
-  const [sets, structure, user] = await Promise.all([
+  // ⚡ Bolt Performance Optimization: runPaceRatio is independent of sets/structure/user,
+  // parallelize it in Promise.all to remove a sequential round-trip.
+  const [sets, structure, user, runPaceRatio] = await Promise.all([
     storage.workouts.getExerciseSetsByPlanDay(planDayId, userId),
     storage.workouts.getWorkoutStructureByPlanDay(planDayId, userId),
     storage.users.getUser(userId),
+    getRunPaceRatio(userId),
   ]);
   const exerciseSets = sets ?? [];
   const structureBlocks = structure ?? [];
   const distanceUnit = user?.distanceUnit ?? "km";
-
-  const runPaceRatio = await getRunPaceRatio(userId);
   const base = estimatePlannedSession({ structureBlocks, exerciseSets, distanceUnit, runPaceRatio });
 
   // Nothing usable to estimate from → return the empty heuristic, no AI spend.
