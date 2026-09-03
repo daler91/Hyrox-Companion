@@ -40,17 +40,19 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size={size}
-              disabled
-              className={cn("relative opacity-50", className)}
-              data-testid={dataTestId || "button-voice-input"}
-              aria-label="Voice input not supported in this browser"
-            >
-              <MicOff className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            <span tabIndex={0}> {/* NOSONAR */}
+              <Button
+                type="button"
+                variant="outline"
+                size={size}
+                disabled
+                className={cn("relative opacity-50", className)}
+                data-testid={dataTestId || "button-voice-input"}
+                aria-label="Voice input not supported in this browser"
+              >
+                <MicOff className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             <p>Voice input isn&apos;t supported in this browser. Try Chrome or Edge.</p>
