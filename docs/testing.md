@@ -31,7 +31,7 @@ The project follows a testing pyramid with three layers:
 | Layer                               | Count     | Location                                                                                                              |
 | ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
 | Unit/component/route tests (Vitest) | 262 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
-| Integration tests                   | 6 files   | `server/routes/tests/*.integration.test.ts` (HTTP) and `server/storage/__tests__/*.integration.test.ts` (storage SQL) |
+| Integration tests                   | 7 files   | `server/routes/tests/*.integration.test.ts` (HTTP) and `server/storage/__tests__/*.integration.test.ts` (storage SQL) |
 | Smoke tests                         | 1 file    | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback       |
 | Cypress E2E specs                   | 12 files  | `cypress/e2e/*.cy.ts`                                                                                                 |
 
@@ -289,6 +289,7 @@ constraint rather than on branch logic.
 | `server/storage/__tests__/exerciseSetOwnership.integration.test.ts` | Exercise-set mutation IDOR guards (workout and plan-day owners), the W18 optimistic lock, the L4 unit re-stamp |
 | `server/storage/__tests__/timelineWindow.integration.test.ts`   | `getTimeline`: three-source merge per athlete, newest-first ordering, limit/offset windowing, set hydration       |
 | `server/storage/__tests__/nutritionLogging.integration.test.ts` | Food visibility predicate, food-log round trip and ownership, one-version-per-day targets (migration 0091)      |
+| `server/storage/__tests__/completedDates.integration.test.ts`  | `getCompletedWorkoutDates`: distinct logged-workout and completed-plan-day dates, parity with the full timeline's completed set |
 
 Run them locally against any Postgres with the `vector` extension:
 `CREATE EXTENSION IF NOT EXISTS vector; pnpm exec drizzle-kit push; DATABASE_URL=… pnpm exec vitest run --config vitest.integration.config.ts`.
