@@ -1,10 +1,10 @@
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
-import { retryWithBackoff } from "./client";
+import { retryWithBackoff } from "../ai/retry";
 import { parseExercisesFromText, parseWorkoutStructureFromText } from "./exerciseParser";
 
-vi.mock("./client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./client")>();
+vi.mock("../ai/retry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../ai/retry")>();
   return {
     ...actual,
     retryWithBackoff: vi.fn(),

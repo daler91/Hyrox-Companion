@@ -308,3 +308,72 @@ describe("ExerciseTable drag handle", () => {
     expect(await screen.findByRole("menuitem", { name: /Block assignment/i })).toBeInTheDocument();
   }, 10_000);
 });
+
+describe("ExerciseTable unit stamps (finding D2)", () => {
+  const noop = { onUpdateSet: vi.fn(), onAddSet: vi.fn(), onDeleteSet: vi.fn() };
+
+  it("shows a kg-stamped row in pounds to a lb athlete: summary, planned diff and editor", async () => {
+    // 100 kg logged before the athlete switched to lb. Read raw and labelled
+    // with the current preference it said "100 lb", 2.2x lighter than lifted.
+    const sets: ExerciseSet[] = [
+      makeSet({ id: "kg-row", reps: 8, weight: 100, plannedReps: 8, plannedWeight: 90, weightUnit: "kg" }),
+    ];
+
+    render(
+      <ExerciseTable
+        workoutId="log-1"
+        exerciseSets={sets}
+        weightUnit="lb"
+        distanceUnit="miles"
+        {...noop}
+        readableSummary
+        showPlannedDiffs
+      />,
+    );
+
+    expect(screen.getByLabelText("Edit Back Squat: 1 set of 8 reps at 220 lb")).toBeInTheDocument();
+    expect(screen.getByTestId("exercise-row-planned-diff")).toHaveTextContent("planned 198 lb");
+
+    await userEvent.setup().click(screen.getByLabelText(/Edit Back Squat/));
+    expect(screen.getByTestId("input-weight-kg-row")).toHaveValue(220);
+    expect(screen.getByTestId("planned-weight-kg-row")).toHaveTextContent("planned 198 lb");
+  });
+
+  it("shows a feet-stamped distance in metres to a km athlete", () => {
+    // 1312 ft is what a miles athlete stored for a 400 m effort.
+    const sets: ExerciseSet[] = [
+      makeSet({
+        id: "ft-row",
+        exerciseName: "easy_run",
+        category: "running",
+        reps: null,
+        weight: null,
+        distance: 1312,
+        distanceUnit: "ft",
+      }),
+    ];
+
+    render(
+      <ExerciseTable
+        workoutId="log-1"
+        exerciseSets={sets}
+        weightUnit="kg"
+        distanceUnit="km"
+        {...noop}
+        readableSummary
+      />,
+    );
+
+    expect(screen.getByLabelText("Edit Easy Run: 1 set of 400 m")).toBeInTheDocument();
+  });
+
+  it("leaves a row stamped in the athlete's own unit exactly as stored", () => {
+    const sets: ExerciseSet[] = [makeSet({ id: "lb-row", reps: 5, weight: 225, weightUnit: "lbs" })];
+
+    render(
+      <ExerciseTable workoutId="log-1" exerciseSets={sets} weightUnit="lb" {...noop} readableSummary />,
+    );
+
+    expect(screen.getByLabelText("Edit Back Squat: 1 set of 5 reps at 225 lb")).toBeInTheDocument();
+  });
+});

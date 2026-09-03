@@ -5,6 +5,7 @@ import { type ReactNode, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useExerciseHistory } from "@/hooks/useExerciseHistory";
 import type { PatchExerciseSetPayload } from "@/lib/api";
+import { toPreferenceScaleAll } from "@/lib/setDisplay";
 
 import { formatPrescription, type Prescription } from "../../exercise-row/formatPrescription";
 import { buildUseLastPatches, pickRecentSessions, summariseLastSession } from "./lastSession";
@@ -47,13 +48,20 @@ export function LastTimeRow({
   readonly showUseLast: boolean;
 }) {
   const { data: history } = useExerciseHistory(exerciseName);
+  // History rows keep the unit they were logged in. The summary, the
+  // suggestion and both fills must all be in the athlete's current unit, so
+  // the rows are converted here, before any of that maths runs (finding D2).
+  const scaledHistory = useMemo(
+    () => (history ? toPreferenceScaleAll(history, { weightUnit, distanceUnit }) : undefined),
+    [history, weightUnit, distanceUnit],
+  );
 
   // Two sessions, not one: the second is what lets "Next" tell a first miss
   // (repeat) from the same prescription missed twice (deload). The hook already
   // fetches three sessions; before this, all but the newest were discarded.
   const recentSessions = useMemo(
-    () => (history ? pickRecentSessions(history, currentWorkoutLogId, 2) : []),
-    [history, currentWorkoutLogId],
+    () => (scaledHistory ? pickRecentSessions(scaledHistory, currentWorkoutLogId, 2) : []),
+    [scaledHistory, currentWorkoutLogId],
   );
   const lastSession = recentSessions[0] ?? null;
   const previousSets = recentSessions[1]?.sets;

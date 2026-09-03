@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QUERY_KEYS } from "@/lib/api";
+import { flattenTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 import { useTimelineTitleMutation } from "./useTimelineTitleMutation";
 
@@ -108,6 +109,10 @@ function renderMutation(setters = makeSetters()) {
   return { config: mutationHarness.config, result, setters };
 }
 
+function asCache(entries: TimelineEntry[]): TimelineCache {
+  return { pages: [{ entries, nextCursor: null }], pageParams: [null] };
+}
+
 describe("useTimelineTitleMutation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -154,9 +159,9 @@ describe("useTimelineTitleMutation", () => {
 
     expect(queryClientMocks.cancelQueries).toHaveBeenCalledWith({ queryKey: QUERY_KEYS.timeline });
     const timelineUpdater = queryClientMocks.setQueriesData.mock.calls[0]?.[1] as
-      | ((entries: TimelineEntry[]) => TimelineEntry[])
+      | ((cache: TimelineCache) => TimelineCache)
       | undefined;
-    expect(timelineUpdater?.(timeline)).toEqual([
+    expect(flattenTimelineCache(timelineUpdater?.(asCache(timeline)))).toEqual([
       { ...entry, focus: "New title" },
       other,
     ]);
@@ -190,13 +195,13 @@ describe("useTimelineTitleMutation", () => {
     });
 
     const rollbackTimeline = queryClientMocks.setQueriesData.mock.calls[0]?.[1] as
-      | ((entries: TimelineEntry[]) => TimelineEntry[])
+      | ((cache: TimelineCache) => TimelineCache)
       | undefined;
-    expect(rollbackTimeline?.([{ ...entry, focus: "New title" }, other])).toEqual([
+    expect(flattenTimelineCache(rollbackTimeline?.(asCache([{ ...entry, focus: "New title" }, other])))).toEqual([
       entry,
       other,
     ]);
-    expect(rollbackTimeline?.([{ ...entry, focus: "Later title" }, other])).toEqual([
+    expect(flattenTimelineCache(rollbackTimeline?.(asCache([{ ...entry, focus: "Later title" }, other])))).toEqual([
       { ...entry, focus: "Later title" },
       other,
     ]);

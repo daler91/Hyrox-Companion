@@ -1,5 +1,5 @@
 import { AI_REQUEST_TIMEOUT_MS } from "../../constants";
-import { withTimeout } from "../../gemini/client";
+import { withTimeout } from "../retry";
 import type { ResolvedTextAiRequest, TextAiStreamChunk, TextAiUsage } from "./types";
 
 export interface ParsedSseTextEvent {

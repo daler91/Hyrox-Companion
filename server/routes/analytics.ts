@@ -14,6 +14,7 @@ import { computeStale, getWorkoutAnchor, regenerateAndStoreRacePrediction } from
 import { type CacheEntry, createCoalescedCache } from "../services/analyticsRouteCache";
 import { calculateExerciseAnalytics, calculatePersonalRecords, type ExerciseSetWithDate } from "../services/analyticsService";
 import { assembleTrainingOverview, todayUtcYyyyMmDd } from "../services/trainingOverviewLoader";
+import { assembleTrainingSummary } from "../services/trainingSummaryService";
 import { getWeekRangeForDate } from "../services/weeklyProgress";
 import { buildWeeklyReview, isWeekParamValid } from "../services/weeklyReviewService";
 import { storage } from "../storage";
@@ -206,6 +207,14 @@ const getWorkoutLogsCoalesced = createCoalescedCache(
   "wl-",
   (userId, from, to) => storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
 );
+
+// The home summary card's bounded payload (P4). Registered under the
+// training-overview path on purpose: the client keys it as a child of
+// QUERY_KEYS.trainingOverview, so every existing overview invalidation refreshes
+// it without a second list of call sites.
+router.get("/api/v1/training-overview/summary", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: Request, res: Response) => {
+    res.json(await assembleTrainingSummary(getUserId(req)));
+  }));
 
 router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);

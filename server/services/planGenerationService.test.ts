@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => {
     transaction,
     getAiClient: vi.fn(() => ({ models: { generateContent } })),
     retryWithBackoff: vi.fn((fn: () => Promise<unknown>) => fn()),
-    trackUsageFromResponse: vi.fn(),
     plans: {
       createTrainingPlan: vi.fn(),
       createPlanDays: vi.fn(),
@@ -51,11 +50,12 @@ vi.mock("../db", () => ({
   },
 }));
 
-vi.mock("../gemini/client", () => ({
-  GEMINI_SUGGESTIONS_MODEL: "gemini-test-model",
+vi.mock("../ai/geminiSdk", () => ({
   getAiClient: mocks.getAiClient,
+}));
+
+vi.mock("../ai/retry", () => ({
   retryWithBackoff: mocks.retryWithBackoff,
-  trackUsageFromResponse: mocks.trackUsageFromResponse,
 }));
 
 vi.mock("../logger", () => ({
@@ -396,7 +396,6 @@ describe("executePlanGeneration", () => {
     mocks.transaction.mockImplementation(<T,>(fn: (tx: unknown) => Promise<T>) => fn(mocks.tx));
     mocks.getAiClient.mockReturnValue({ models: { generateContent: mocks.generateContent } });
     mocks.retryWithBackoff.mockImplementation((fn: () => Promise<unknown>) => fn());
-    mocks.trackUsageFromResponse.mockReturnValue(undefined);
     mocks.plans.schedulePlan.mockResolvedValue(true);
     mocks.plans.updateGenerationStatus.mockResolvedValue(undefined);
     mocks.plans.retirePlans.mockResolvedValue([]);

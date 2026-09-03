@@ -1,5 +1,5 @@
 import { computeCurrentWeek, computePlanPhase, formatPhaseName } from "@shared/planPhase";
-import type { TimelineEntry, TrainingOverview, TrainingPlan } from "@shared/schema";
+import type { TimelineEntry, TrainingPlan, TrainingSummary } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, CalendarRange, Flag, Flame, type LucideIcon, Target } from "lucide-react";
 
@@ -14,6 +14,12 @@ import { buildStationRadar, StationRadar } from "./StationRadar";
 
 interface TimelineSummaryCardProps {
   readonly selectedPlanId?: string | null;
+  /**
+   * The timeline the page already holds (P3 pages it, so the card no longer
+   * issues its own copy of that query); only today's entry is read from it.
+   */
+  readonly timelineEntries: readonly TimelineEntry[];
+  readonly timelineLoading: boolean;
 }
 
 function parseLocalDate(dateStr: string): Date {
@@ -140,12 +146,18 @@ function SummaryItem({
   );
 }
 
-export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCardProps) {
+export function TimelineSummaryCard({
+  selectedPlanId = null,
+  timelineEntries,
+  timelineLoading,
+}: TimelineSummaryCardProps) {
   const todayStr = getTodayString();
   const isAuthUserLoaded = useIsAuthUserLoaded();
-  const { data: overview, isLoading: overviewLoading } = useQuery<TrainingOverview>({
-    queryKey: QUERY_KEYS.trainingOverview,
-    queryFn: () => api.analytics.getTrainingOverview(),
+  // The bounded summary payload (P4), not the all-time training overview the
+  // card used to assemble for four week-scoped tiles.
+  const { data: summary, isLoading: summaryLoading } = useQuery<TrainingSummary>({
+    queryKey: QUERY_KEYS.trainingSummary,
+    queryFn: () => api.analytics.getTrainingSummary(),
     enabled: isAuthUserLoaded,
   });
   const { data: plans = [], isLoading: plansLoading } = useQuery<TrainingPlan[]>({
@@ -153,34 +165,28 @@ export function TimelineSummaryCard({ selectedPlanId = null }: TimelineSummaryCa
     queryFn: () => api.plans.list(),
     enabled: isAuthUserLoaded,
   });
-  const { data: timelineData = [], isLoading: timelineLoading } = useQuery<TimelineEntry[]>({
-    queryKey: [...QUERY_KEYS.timeline, selectedPlanId],
-    queryFn: () => api.timeline.get(selectedPlanId),
-    enabled: isAuthUserLoaded,
-  });
 
-  if (!isAuthUserLoaded || overviewLoading || plansLoading || timelineLoading) {
+  if (!isAuthUserLoaded || summaryLoading || plansLoading || timelineLoading) {
     return <TimelineSummarySkeleton />;
   }
 
   const hasSummaryData =
     plans.length > 0 ||
-    timelineData.length > 0 ||
-    (overview?.currentStats?.totalWorkouts ?? 0) > 0 ||
-    (overview?.weeklyCompletedWorkouts ?? 0) > 0 ||
-    (overview?.currentStreak ?? 0) > 0;
+    timelineEntries.length > 0 ||
+    (summary?.weeklyCompletedWorkouts ?? 0) > 0 ||
+    (summary?.currentStreak ?? 0) > 0;
 
   if (!hasSummaryData) return null;
 
-  const todayEntry = getTodayEntry(timelineData, todayStr);
+  const todayEntry = getTodayEntry(timelineEntries, todayStr);
   const selectedPlan = choosePlan(plans, selectedPlanId, todayStr);
   const raceDate = planRaceDate(selectedPlan);
   const phase = planWeekPhase(selectedPlan, todayStr);
-  const weeklyGoal = Math.max(overview?.weeklyGoal ?? 0, 1);
-  const weeklyCompleted = overview?.weeklyCompletedWorkouts ?? 0;
-  const streak = overview?.currentStreak ?? 0;
+  const weeklyGoal = Math.max(summary?.weeklyGoal ?? 0, 1);
+  const weeklyCompleted = summary?.weeklyCompletedWorkouts ?? 0;
+  const streak = summary?.currentStreak ?? 0;
 
-  const stationRadar = buildStationRadar(overview?.stationCoverage ?? []);
+  const stationRadar = buildStationRadar(summary?.stationCoverage ?? [], summary?.coverageLookbackDays);
 
   const todayValue = todayEntry?.focus?.trim() || "No planned session today";
   let todayDetail = selectedPlan?.name;

@@ -1,4 +1,4 @@
-import type { TimelineEntry, TrainingOverview } from "@shared/schema";
+import type { TimelineEntry, TrainingSummary } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -63,14 +63,15 @@ export function CoachPanel({
   // The streak is the server's to compute: it is the only side that knows the
   // athlete's stored timezone. Computing it here from timeline dates against
   // the browser's clock produced a second, sometimes different number in the
-  // same session. Same query key TimelineSummaryCard already reads.
-  const { data: overview } = useQuery<TrainingOverview>({
-    queryKey: QUERY_KEYS.trainingOverview,
-    queryFn: () => api.analytics.getTrainingOverview(),
+  // same session. Same query key TimelineSummaryCard already reads (the
+  // bounded summary, P4, not the all-time overview).
+  const { data: summary } = useQuery<TrainingSummary>({
+    queryKey: QUERY_KEYS.trainingSummary,
+    queryFn: () => api.analytics.getTrainingSummary(),
   });
   const stats = useMemo(
-    () => ({ ...timelineStats, currentStreak: overview?.currentStreak ?? 0 }),
-    [timelineStats, overview?.currentStreak],
+    () => ({ ...timelineStats, currentStreak: summary?.currentStreak ?? 0 }),
+    [timelineStats, summary?.currentStreak],
   );
 
   const {

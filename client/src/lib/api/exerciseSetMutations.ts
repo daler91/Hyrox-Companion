@@ -23,6 +23,12 @@ export type PatchExerciseSetPayload = Partial<{
   groupId: string | null;
   notes: string | null;
   sortOrder: number | null;
+  /**
+   * Optimistic lock (server W18, finding D5): the row version this edit was
+   * made against. The server rejects the PATCH with 409 when another writer
+   * has bumped it since. Omitted only when the client has no version to send.
+   */
+  expectedVersion: number;
 }>;
 
 export interface AddExerciseSetPayload {

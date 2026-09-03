@@ -248,11 +248,11 @@ describe("TimelineStorage standalone workout plan association", () => {
     // Filtering by a specific plan must thread that planId into the standalone
     // fetch so other-plan workouts can be excluded (the bug: it never was).
     await storage.getTimeline("user-1", "plan-2");
-    expect(spy).toHaveBeenLastCalledWith("user-1", "plan-2", undefined);
+    expect(spy).toHaveBeenLastCalledWith("user-1", "plan-2", undefined, undefined);
 
     // All Plans (no planId) leaves the standalone fetch unscoped.
     await storage.getTimeline("user-1");
-    expect(spy).toHaveBeenLastCalledWith("user-1", undefined, undefined);
+    expect(spy).toHaveBeenLastCalledWith("user-1", undefined, undefined, undefined);
   });
 });
 

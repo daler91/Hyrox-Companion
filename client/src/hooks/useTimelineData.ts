@@ -1,8 +1,9 @@
-import type { PersonalRecord,TimelineAnnotation, TimelineEntry, TrainingPlan } from "@shared/schema";
-import { useQuery } from "@tanstack/react-query";
+import type { PersonalRecord, TimelineAnnotation, TrainingPlan } from "@shared/schema";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 
 import { api, QUERY_KEYS } from "@/lib/api";
+import { flattenTimelineCache, type TimelineCache, type TimelinePage } from "@/lib/timelineCache";
 
 import { usePendingWorkoutEntries } from "./usePendingWorkoutEntries";
 
@@ -23,11 +24,28 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
     enabled: isAuthUserLoaded,
   });
 
-  const { data: serverTimelineData = [], isLoading } = useQuery<TimelineEntry[]>({
+  // Cursor-paged (P3): the first page is everything from today forward plus
+  // the most recent past entries; older history loads on demand through
+  // `loadOlderEntries`. An invalidation refetches the loaded pages in order,
+  // so the cost of a write stays proportional to what the athlete has opened
+  // rather than to their whole history.
+  const {
+    data: timelineCache,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery<TimelinePage, Error, TimelineCache, (string | null)[], string | null>({
     queryKey: [...QUERY_KEYS.timeline, selectedPlanId],
-    queryFn: () => api.timeline.get(selectedPlanId),
+    queryFn: ({ pageParam }) => api.timeline.getPage(selectedPlanId, pageParam),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: isAuthUserLoaded,
   });
+  const serverTimelineData = useMemo(() => flattenTimelineCache(timelineCache), [timelineCache]);
+  const loadOlderEntries = useCallback(() => {
+    if (!isFetchingNextPage) void fetchNextPage();
+  }, [fetchNextPage, isFetchingNextPage]);
 
   // Overlay queued-but-unsynced workout creates (offline path) so they show
   // on the timeline immediately instead of vanishing until reconnect. They
@@ -63,5 +81,8 @@ export function useTimelineData(selectedPlanId: string | null, isAuthUserLoaded 
     isNewUser,
     todayRef,
     scrollToToday,
+    hasOlderEntries: hasNextPage,
+    isLoadingOlder: isFetchingNextPage,
+    loadOlderEntries,
   };
 }

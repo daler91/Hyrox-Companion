@@ -71,7 +71,7 @@ before changing anything in this module.
 |-----------|---------------|----------------|
 | **All nutrition is stored per-100g** and scaled by logged grams at read time. | USDA values are immutable per `fdcId`; storing scaled snapshots would invite a wrong-basis bug and drift. Column names literally say `*_per_100g`. | `foods` table; `server/services/nutrition/rollup.ts` (`scaleNutrition`, the single scaling site) |
 | **Numbers never come from AI.** | Trust. The model estimates portion size and writes prose; it never originates a calorie or macro. | `BRD §7`, enforced by routing all macros through `foods` rows |
-| **`logDate` is the user's *local* calendar day**, derived server-side from `users.user_timezone`. | A meal logged at 11pm in UTC+10 must land on the right day's totals. The client sends an instant (`loggedAt`); the server computes the date. | `server/routes/nutrition/nutrition.routes.ts`; `shared/schema/nutrition.ts` |
+| **`logDate` is the user's *local* calendar day**, derived server-side from `users.user_timezone`. | A meal logged at 11pm in UTC+10 must land on the right day's totals. The client sends an instant (`loggedAt`); the server computes the date. | `server/routes/nutrition/nutritionLogs.routes.ts` (every log write, via `getUserTimezone` in `shared.ts`); `shared/schema/nutrition.ts` |
 | **The food cache is shared and non-per-user.** A USDA food is cached once and reused by everyone. | Avoids N copies of "banana"; keeps the DB small and search fast. | `foods.createdByUserId IS NULL` = shared; visibility predicate `visibleTo(userId)` |
 | **Custom foods are private**; visibility is checked on every food resolution. | No cross-user leakage of a user's own foods/recipes. | `NutritionStorage.getVisibleFoodById` etc. |
 | **Logged history is immutable-by-reference.** A food referenced by a log entry can't be deleted (`onDelete: restrict`). | Historical entries must never lose their nutrition source. | FK constraints on `food_log_entries.foodId`, `recipe_ingredients.foodId` |
@@ -468,7 +468,10 @@ The module is heavily unit-tested, with the pure-math core (`rollup.ts`,
 `recipe.ts`, `blockView.ts`, `sessionFuelling.ts`, `micros.ts`) deliberately
 DB-free for fast, exhaustive coverage. There are co-located tests for the external
 clients (`usdaClient.test.ts`, `offClient.test.ts`), the meal parser, the route
-layer (`nutrition.routes.test.ts`), and most client components (e.g.
+layer (`nutrition.routes.test.ts` drives the router composed by
+`registerNutritionRoutes`; `server/routes/__tests__/nutrition.partition.test.ts`
+pins the index export and the full 38-endpoint table across the sub-modules), and
+most client components (e.g.
 `LogFoodDialog.test.tsx`, `ParsedMealReviewSheet.test.tsx`, `MicronutrientPanel.test.tsx`).
 
 ---
@@ -668,8 +671,20 @@ server/services/nutrition/
   nutritionInsightsService.ts   14-day context → reasoning model
 
 server/routes/nutrition/
-  index.ts                      feature-flag gate (404 when disabled)
-  nutrition.routes.ts           all endpoints, rate limits, AI gating
+  index.ts                      feature-flag gate (404 when disabled), then
+                                registerNutritionRoutes on the same router
+  nutrition.routes.ts           composer: registers the sub-modules below in order
+  shared.ts                     not-found messages + getUserTimezone (multi-module)
+  nutritionFoods.routes.ts      search / recent / custom / barcode / food CRUD / servings
+  nutritionFavorites.routes.ts  favorites
+  nutritionLogs.routes.ts       POST /logs, PATCH+DELETE /logs/:id, /logs/repeat, /logs/batch
+  nutritionSummary.routes.ts    /summary (+ effective and per-meal targets), /summary-range,
+                                /block, /session-fuelling/:workoutId,
+                                /planned-session-estimate/:planDayId
+  nutritionParse.routes.ts      /parse/text, /parse/photo, /parse/label (AI-gated)
+  nutritionTargets.routes.ts    /targets, /meal-targets, /micros
+  nutritionInsights.routes.ts   /insights (GET stored, POST regenerate; AI-gated)
+  nutritionRecipes.routes.ts    recipes CRUD
 
 server/storage/nutrition.ts     NutritionStorage (all DB access)
 server/prompts.ts               PARSE_MEAL_PROMPT, MEAL_IMAGE_PREAMBLE,

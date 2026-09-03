@@ -2,11 +2,14 @@ import type { TimelineEntry } from "@shared/schema";
 
 import { QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
+import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 /**
  * Shared plumbing for optimistic timeline mutations: cancel in-flight
  * queries, snapshot the previous state, apply the optimistic update, and
- * return a rollback context.
+ * return a rollback context. `mutate` sees one page's entries at a time
+ * (the cache is paged, see `timelineCache.ts`), which is transparent for the
+ * map/filter updates the callers make.
  */
 export function buildOptimisticTimelineHandlers<TVariables>(
   selectedPlanId: string | null,
@@ -16,19 +19,18 @@ export function buildOptimisticTimelineHandlers<TVariables>(
   return {
     onMutate: async (variables: TVariables) => {
       await queryClient.cancelQueries({ queryKey });
-      const previousTimeline = queryClient.getQueryData<TimelineEntry[]>(queryKey);
+      const previousTimeline = queryClient.getQueryData<TimelineCache>(queryKey);
       if (previousTimeline) {
-        queryClient.setQueryData<TimelineEntry[]>(queryKey, (old) => {
-          if (!old) return old;
-          return mutate(old, variables);
-        });
+        queryClient.setQueryData<TimelineCache>(queryKey, (old) =>
+          mapTimelineCache(old, (entries) => mutate(entries, variables)),
+        );
       }
       return { previousTimeline };
     },
     onError: (
       _err: Error,
       _variables: TVariables,
-      context: { previousTimeline?: TimelineEntry[] } | undefined,
+      context: { previousTimeline?: TimelineCache } | undefined,
     ) => {
       if (context?.previousTimeline) {
         queryClient.setQueryData(queryKey, context.previousTimeline);

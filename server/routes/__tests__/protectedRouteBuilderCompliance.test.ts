@@ -47,10 +47,12 @@ describe("protected route builder compliance", () => {
   // the invariant `budget ⇒ consent` for both styles, across all route files.
   describe("AI consent coverage", () => {
     // Captures the options object (3rd arg) of each protectedPost/Patch/Delete
-    // call. Options never contain nested braces (middleware uses [] and
-    // validators are calls), so `{[^{}]*}` reliably delimits the object even
-    // when the call spans multiple lines.
-    const PROTECTED_OPTIONS = /protected(?:Post|Patch|Delete)\s*\(\s*router\s*,\s*"[^"]*"\s*,\s*(\{[^{}]*\})/g;
+    // call. The path is a string literal or a module constant (a route file
+    // that registers the same path for several verbs names it once). Options
+    // never contain nested braces (middleware uses [] and validators are
+    // calls), so `{[^{}]*}` reliably delimits the object even when the call
+    // spans multiple lines.
+    const PROTECTED_OPTIONS = /protected(?:Post|Patch|Delete)\s*\(\s*router\s*,\s*(?:"[^"]*"|[A-Z][A-Z0-9_]*)\s*,\s*(\{[^{}]*\})/g;
     const burnsBudget = (opts: string) => /aiBudget:\s*true/.test(opts) || /\baiBudgetCheck\b/.test(opts);
     const gatesConsent = (opts: string) => /aiConsent:\s*true/.test(opts) || /\baiConsentCheck\b/.test(opts);
 

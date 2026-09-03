@@ -187,6 +187,22 @@ export interface TrainingOverview {
   trainingLoad: TrainingLoadOverview;
 }
 
+/**
+ * The home summary card's payload (P4): only the numbers the card renders,
+ * computed from bounded reads instead of the all-time training overview.
+ * Streak comes from the distinct completed dates, the weekly count from this
+ * week's logs, and the station radar from a trailing lookback window; a
+ * station last trained before that window reports `lastTrained: null`.
+ */
+export interface TrainingSummary {
+  currentStreak: number;
+  weeklyCompletedWorkouts: number;
+  weeklyGoal: number;
+  stationCoverage: Array<{ station: string; lastTrained: string | null; daysSince: number | null }>;
+  /** Days of history the station coverage was built from. */
+  coverageLookbackDays: number;
+}
+
 // Analytics — Overview AI chart analysis
 //
 // A single AI call produces one plain-language reading per Overview-tab chart,

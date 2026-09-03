@@ -136,6 +136,7 @@ export function LogWorkoutForm({ userKey }: Readonly<LogWorkoutFormProps>) {
     setPlanDayId,
     resetEditor,
     toast,
+    unitPreferences: { weightUnit, distanceUnit },
   });
 
   const [step, setStep] = useState<WorkoutStep>(initialDraft?.step ?? FIRST_STEP);

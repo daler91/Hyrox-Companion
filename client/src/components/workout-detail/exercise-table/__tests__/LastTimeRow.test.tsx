@@ -172,3 +172,56 @@ describe("LastTimeRow", () => {
     expect(screen.queryByTestId("next-target-back_squat")).not.toBeInTheDocument();
   });
 });
+
+describe("LastTimeRow unit stamps (finding D2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reads a kg-stamped session in pounds for a lb athlete, and progresses from the pounds", async () => {
+    vi.mocked(api.exercises.getHistory).mockResolvedValue([
+      set({ id: "l1", date: "2026-06-10", reps: 8, weight: 100, weightUnit: "kg" }),
+    ]);
+    const props = row({
+      weightUnit: "lb",
+      distanceUnit: "miles",
+      currentSets: [set({ id: "c1", reps: null, weight: null })] as ExerciseSet[],
+      showUseLast: true,
+    });
+
+    expect(await screen.findByTestId("last-time-back_squat")).toHaveTextContent(
+      "Last time: 1 × 8 reps · 220 lb",
+    );
+    // 220 lb × 8: a 5 lb plate (6.3 lb of estimated 1RM) is the gentler step
+    // versus a rep (7.3 lb). Read raw as "100 lb" the suggestion was +1 rep.
+    expect(screen.getByTestId("next-target-back_squat")).toHaveTextContent(
+      "Next: 1 × 8 reps · 225 lb",
+    );
+    expect(screen.getByText("+5 lb")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("use-last-back_squat"));
+    expect(props.onUpdateSet).toHaveBeenCalledWith("c1", { reps: 8, weight: 220 });
+
+    await userEvent.click(screen.getByTestId("use-next-back_squat"));
+    expect(props.onUpdateSet).toHaveBeenCalledWith("c1", { reps: 8, weight: 225 });
+  });
+
+  it("reads a feet-stamped run in metres for a km athlete", async () => {
+    vi.mocked(api.exercises.getHistory).mockResolvedValue([
+      set({
+        id: "l1",
+        date: "2026-06-10",
+        exerciseName: "easy_run",
+        category: "running",
+        reps: null,
+        weight: null,
+        distance: 1312,
+        distanceUnit: "ft",
+      }),
+    ]);
+
+    row({ exerciseName: "easy_run", category: "running" });
+
+    expect(await screen.findByTestId("last-time-easy_run")).toHaveTextContent("Last time: 1 × 400 m");
+  });
+});

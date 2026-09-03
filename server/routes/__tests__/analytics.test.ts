@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db";
 import { env } from "../../env";
 import { calculateExerciseAnalytics, calculatePersonalRecords, calculateTrainingOverview } from "../../services/analyticsService";
+import { assembleTrainingSummary } from "../../services/trainingSummaryService";
 import { storage } from "../../storage";
 import analyticsRouter, { _cacheForTesting, _prCacheForTesting, _workoutLogCacheForTesting, addCalendarDays,todayUtcYyyyMmDd, validDate } from "../analytics";
 import { createTestApp, resetRouteTestState } from "./testUtils";
@@ -45,6 +46,10 @@ vi.mock("../../db", () => ({
   },
 }));
 
+vi.mock("../../services/trainingSummaryService", () => ({
+  assembleTrainingSummary: vi.fn(),
+}));
+
 // Mock the analyticsService functions
 vi.mock("../../services/analyticsService", () => ({
   calculatePersonalRecords: vi.fn(),
@@ -65,6 +70,26 @@ describe("Analytics Routes", () => {
     vi.mocked(storage.users.getUser).mockResolvedValue({ weeklyGoal: 5 });
     vi.mocked(storage.analytics.getExerciseLoadTags).mockResolvedValue([]);
     app = createTestApp(analyticsRouter);
+  });
+
+  describe("GET /api/v1/training-overview/summary", () => {
+    it("returns the bounded home summary for the authenticated user (P4)", async () => {
+      const summary = {
+        currentStreak: 2,
+        weeklyCompletedWorkouts: 1,
+        weeklyGoal: 5,
+        stationCoverage: [],
+        coverageLookbackDays: 180,
+      };
+      vi.mocked(assembleTrainingSummary).mockResolvedValue(summary);
+
+      const response = await request(app).get("/api/v1/training-overview/summary");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(summary);
+      expect(assembleTrainingSummary).toHaveBeenCalledWith("test_user_id");
+      expect(calculateTrainingOverview).not.toHaveBeenCalled();
+    });
   });
 
   describe("todayUtcYyyyMmDd", () => {

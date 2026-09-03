@@ -464,9 +464,12 @@ function buildCategoryTotals(
  * counted toward the sled push. `workoutLogs` may be empty while sets are not
  * (several analytics callers pass only sets), so the focus is optional.
  */
-function buildCoverageSources(
-  workoutLogs: WorkoutLog[],
-  exerciseSets: ExerciseSetWithDate[],
+export type CoverageSourceLog = Pick<WorkoutLog, "id" | "date" | "focus">;
+export type CoverageSourceSet = Pick<ExerciseSetWithDate, "workoutLogId" | "date" | "exerciseName" | "customLabel">;
+
+export function buildCoverageSources(
+  workoutLogs: readonly CoverageSourceLog[],
+  exerciseSets: readonly CoverageSourceSet[],
 ): StationCoverageSource[] {
   const focusByLogId = new Map<string, string>();
   for (const log of workoutLogs) {

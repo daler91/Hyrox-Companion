@@ -22,14 +22,14 @@ interface WorkoutPrescriptionSummaryProps {
  * surface since they differ by intent.
  */
 export function WorkoutPrescriptionSummary({ entry }: WorkoutPrescriptionSummaryProps) {
-  const { distanceUnit, weightLabel } = useUnitPreferences();
+  const { weightUnit, distanceUnit, weightLabel } = useUnitPreferences();
 
   const groupedExercises = entry.exerciseSets && entry.exerciseSets.length > 0
     ? groupExerciseSets(entry.exerciseSets)
     : [];
 
   const hasStructuredPrescription = groupedExercises.length > 0;
-  const structuredText = serializeWorkoutStructure(entry.exerciseSets, { distanceUnit });
+  const structuredText = serializeWorkoutStructure(entry.exerciseSets, { weightUnit, distanceUnit });
   const hasMainWorkout = !hasStructuredPrescription && Boolean(entry.mainWorkout);
 
   return (

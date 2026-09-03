@@ -16,7 +16,7 @@ vi.mock("../../storage", async () =>
   (await import("./testUtils")).mockStorageModule({
     workouts: ["listWorkoutLogs", "getExerciseSetsByWorkoutLog", "getWorkoutStructureByWorkoutLog", "getWorkoutLog", "deleteWorkoutLog", "updateWorkoutLog", "getExerciseHistory"],
     plans: ["getPlanDay", "deletePlanDay"],
-    timeline: ["getTimeline"],
+    timeline: ["getTimeline", "getTimelinePage"],
     users: ["getUser", "getCustomExercises"],
   }),
 );
@@ -94,6 +94,10 @@ describe("Workouts Routes", () => {
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" });
     vi.mocked(storage.plans.deletePlanDay).mockResolvedValue(true);
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }]);
+    vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({
+      entries: [{ id: "timeline-1", type: "workout", date: "2026-01-02" }],
+      nextCursor: null,
+    });
     vi.mocked(storage.users.getUser).mockResolvedValue({ id: "test_user_id", aiCoachEnabled: true, weightUnit: "kg" });
     vi.mocked(storage.users.getCustomExercises).mockResolvedValue([]);
     vi.mocked(storage.workouts.getExerciseHistory).mockResolvedValue([]);

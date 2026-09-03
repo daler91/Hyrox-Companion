@@ -13,7 +13,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => ({
   api: {
     timeline: {
-      get: apiMocks.getTimeline,
+      getPage: apiMocks.getTimeline,
     },
     timelineAnnotations: {
       list: apiMocks.listAnnotations,
@@ -70,7 +70,7 @@ function useAuthGatedTimelineData() {
 describe("useTimelineData auth gating", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    apiMocks.getTimeline.mockResolvedValue([]);
+    apiMocks.getTimeline.mockResolvedValue({ entries: [], nextCursor: null });
     apiMocks.listAnnotations.mockResolvedValue([]);
   });
 
@@ -92,7 +92,7 @@ describe("useTimelineData auth gating", () => {
 
     rerender({ isAuthUserLoaded: true });
 
-    await waitFor(() => expect(apiMocks.getTimeline).toHaveBeenCalledWith(null));
+    await waitFor(() => expect(apiMocks.getTimeline).toHaveBeenCalledWith(null, null));
     await waitFor(() => expect(apiMocks.listAnnotations).toHaveBeenCalledTimes(1));
     expect(defaultQueryFn).toHaveBeenCalled();
   });
@@ -118,7 +118,7 @@ describe("useTimelineData auth gating", () => {
       authUserRequest.reject(new Error("auth user unavailable"));
     });
 
-    await waitFor(() => expect(apiMocks.getTimeline).toHaveBeenCalledWith(null));
+    await waitFor(() => expect(apiMocks.getTimeline).toHaveBeenCalledWith(null, null));
     await waitFor(() => expect(apiMocks.listAnnotations).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(result.current.timelineLoading).toBe(false));
   });

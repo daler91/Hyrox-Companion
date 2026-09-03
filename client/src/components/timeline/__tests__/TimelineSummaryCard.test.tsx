@@ -1,3 +1,4 @@
+import type { TimelineEntry, TrainingSummary } from "@shared/schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,35 +6,41 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimelineSummaryCard } from "../TimelineSummaryCard";
 
 const mocks = vi.hoisted(() => ({
-  getOverview: vi.fn(),
+  getSummary: vi.fn(),
   getPlans: vi.fn(),
-  getTimeline: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
     analytics: {
-      getTrainingOverview: mocks.getOverview,
+      getTrainingSummary: mocks.getSummary,
     },
     plans: {
       list: mocks.getPlans,
     },
-    timeline: {
-      get: mocks.getTimeline,
-    },
   },
   QUERY_KEYS: {
-    trainingOverview: ["/api/v1/training-overview"],
+    trainingSummary: ["/api/v1/training-overview", "summary"],
     plans: ["/api/v1/plans"],
-    timeline: ["/api/v1/timeline"],
   },
 }));
+
+const TODAY_ENTRY = {
+  id: "day-1",
+  date: "2026-05-20",
+  status: "planned",
+  focus: "Engine run",
+  mainWorkout: "Easy 45 minute run",
+} as unknown as TimelineEntry;
 
 vi.mock("@/hooks/useAuth", () => ({
   useIsAuthUserLoaded: () => true,
 }));
 
-function renderSummary(selectedPlanId: string | null = "plan-1") {
+function renderSummary(
+  selectedPlanId: string | null = "plan-1",
+  timelineEntries: readonly TimelineEntry[] = [TODAY_ENTRY],
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -42,43 +49,22 @@ function renderSummary(selectedPlanId: string | null = "plan-1") {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <TimelineSummaryCard selectedPlanId={selectedPlanId} />
+      <TimelineSummaryCard
+        selectedPlanId={selectedPlanId}
+        timelineEntries={timelineEntries}
+        timelineLoading={false}
+      />
     </QueryClientProvider>,
   );
 }
 
-const emptyTrainingLoad = {
-  currentUtss: 0,
-  acuteAvg: 0,
-  chronicAvg: 0,
-  acwr: null,
-  zone: "insufficient_data" as const,
-  flaggedVectors: [],
-  activeRestrictions: [],
-  downshiftRationale: null,
-  trend: [],
-};
-
-function makeOverview(overrides: Record<string, unknown> = {}) {
+function makeSummary(overrides: Partial<TrainingSummary> = {}): TrainingSummary {
   return {
-    weeklySummaries: [],
-    workoutDates: [],
-    categoryTotals: {},
     stationCoverage: [],
-    movementPatternCoverage: [],
-    muscleGroupCoverage: [],
-    currentStats: {
-      totalWorkouts: 12,
-      avgPerWeek: 3,
-      totalDuration: 480,
-      avgDuration: 40,
-      avgRpe: 7,
-      avgCompliancePct: null,
-    },
     currentStreak: 4,
     weeklyCompletedWorkouts: 3,
     weeklyGoal: 5,
-    trainingLoad: emptyTrainingLoad,
+    coverageLookbackDays: 180,
     ...overrides,
   };
 }
@@ -87,7 +73,7 @@ describe("TimelineSummaryCard", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-05-20T12:00:00"));
-    mocks.getOverview.mockResolvedValue(makeOverview());
+    mocks.getSummary.mockResolvedValue(makeSummary());
     mocks.getPlans.mockResolvedValue([
       {
         id: "plan-1",
@@ -98,15 +84,6 @@ describe("TimelineSummaryCard", () => {
         goal: null,
         startDate: "2026-05-01",
         endDate: "2026-05-30",
-      },
-    ]);
-    mocks.getTimeline.mockResolvedValue([
-      {
-        id: "day-1",
-        date: "2026-05-20",
-        status: "planned",
-        focus: "Engine run",
-        mainWorkout: "Easy 45 minute run",
       },
     ]);
   });
@@ -135,12 +112,11 @@ describe("TimelineSummaryCard", () => {
     );
     expect(screen.getByText("4 days")).toBeInTheDocument();
     expect(screen.getByText("Race day in 10 days")).toBeInTheDocument();
-    expect(mocks.getTimeline).toHaveBeenCalledWith("plan-1");
   });
 
   it("names the coldest station once there is coverage to report", async () => {
-    mocks.getOverview.mockResolvedValue(
-      makeOverview({
+    mocks.getSummary.mockResolvedValue(
+      makeSummary({
         stationCoverage: [
           { station: "skierg", lastTrained: "2026-05-19", daysSince: 1 },
           { station: "sled_pull", lastTrained: "2026-04-27", daysSince: 23 },
@@ -156,6 +132,26 @@ describe("TimelineSummaryCard", () => {
       "Sled Pull is coldest — 23d ago.",
     );
     expect(screen.getByTestId("station-radar-chip-skierg")).toHaveTextContent("SkiErg Yesterday");
+  });
+
+  it("words a station outside the coverage window as not covered, not never trained (P4)", async () => {
+    mocks.getSummary.mockResolvedValue(
+      makeSummary({
+        stationCoverage: [
+          { station: "skierg", lastTrained: "2026-05-19", daysSince: 1 },
+          { station: "rowing", lastTrained: null, daysSince: null },
+        ],
+      }),
+    );
+    renderSummary("plan-1");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("station-radar")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("station-radar-headline")).toHaveTextContent(
+      "Rowing has not been covered in the last 180 days.",
+    );
+    expect(screen.getByTestId("station-radar-chip-rowing")).toHaveTextContent("Not in 180d");
   });
 
   it("omits the radar entirely before any station has been trained", async () => {
@@ -231,30 +227,10 @@ describe("TimelineSummaryCard", () => {
   });
 
   it("renders nothing when there is no plan, timeline, or workout data", async () => {
-    mocks.getOverview.mockResolvedValue({
-      weeklySummaries: [],
-      workoutDates: [],
-      categoryTotals: {},
-      stationCoverage: [],
-      movementPatternCoverage: [],
-      muscleGroupCoverage: [],
-      currentStats: {
-        totalWorkouts: 0,
-        avgPerWeek: 0,
-        totalDuration: 0,
-        avgDuration: 0,
-        avgRpe: null,
-        avgCompliancePct: null,
-      },
-      currentStreak: 0,
-      weeklyCompletedWorkouts: 0,
-      weeklyGoal: 5,
-      trainingLoad: emptyTrainingLoad,
-    });
+    mocks.getSummary.mockResolvedValue(makeSummary({ currentStreak: 0, weeklyCompletedWorkouts: 0 }));
     mocks.getPlans.mockResolvedValue([]);
-    mocks.getTimeline.mockResolvedValue([]);
 
-    renderSummary(null);
+    renderSummary(null, []);
 
     await waitFor(() => {
       expect(screen.queryByTestId("timeline-summary-skeleton")).not.toBeInTheDocument();
@@ -263,27 +239,4 @@ describe("TimelineSummaryCard", () => {
     expect(screen.queryByTestId("timeline-summary-card")).not.toBeInTheDocument();
   });
 
-  it("tolerates overview responses without current stats", async () => {
-    mocks.getOverview.mockResolvedValue({
-      weeklySummaries: [],
-      workoutDates: [],
-      categoryTotals: {},
-      stationCoverage: [],
-      movementPatternCoverage: [],
-      muscleGroupCoverage: [],
-      currentStreak: 0,
-      weeklyCompletedWorkouts: 0,
-      weeklyGoal: 5,
-    });
-    mocks.getPlans.mockResolvedValue([]);
-    mocks.getTimeline.mockResolvedValue([]);
-
-    renderSummary(null);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("timeline-summary-skeleton")).not.toBeInTheDocument();
-    });
-
-    expect(screen.queryByTestId("timeline-summary-card")).not.toBeInTheDocument();
-  });
 });

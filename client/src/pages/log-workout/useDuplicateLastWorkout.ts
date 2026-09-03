@@ -1,4 +1,5 @@
 import type { StructureBlockInput } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 import { useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 
@@ -26,6 +27,8 @@ interface UseDuplicateLastWorkoutOptions {
     structureBlocks?: StructureBlockInput[],
   ) => void;
   readonly toast: ReturnType<typeof useToast>["toast"];
+  /** The draft has no unit stamp, so copied rows are converted to this first (D2). */
+  readonly unitPreferences?: UnitPreferences;
 }
 
 export function useDuplicateLastWorkout({
@@ -42,6 +45,7 @@ export function useDuplicateLastWorkout({
   setPlanDayId,
   resetEditor,
   toast,
+  unitPreferences,
 }: UseDuplicateLastWorkoutOptions) {
   const duplicateLastMutation = useMutation({
     mutationFn: () => api.workouts.latest(),
@@ -65,7 +69,7 @@ export function useDuplicateLastWorkout({
       const hasStructureBlocks = structureBlocks.length > 0;
       const hasStructuredExercises = latest.exerciseSets && latest.exerciseSets.length > 0;
       if (hasStructuredExercises || hasStructureBlocks) {
-        const { names, data } = exerciseSetsToStructured(latest.exerciseSets);
+        const { names, data } = exerciseSetsToStructured(latest.exerciseSets, { unitPreferences });
         resetEditor(names, data, false, structureBlocks);
         // Preserve text when structure-only records have no row sets yet;
         // otherwise duplicate can land in an empty, unsaveable state.

@@ -42,6 +42,7 @@ vi.mock("@/lib/queryClient", async (importOriginal) => ({
 }));
 
 import { QUERY_KEYS } from "@/lib/api";
+import { flattenTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 import { useWorkoutActionMutations } from "./useWorkoutActionMutations";
 
@@ -68,7 +69,7 @@ describe("updateStatusMutation offline", () => {
     vi.clearAllMocks();
     offlineMocks.createOfflineMutationId.mockReturnValue("queued-id");
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    queryClient.setQueryData(TIMELINE_KEY, [plannedEntry()]);
+    queryClient.setQueryData<TimelineCache>(TIMELINE_KEY, { pages: [{ entries: [plannedEntry()], nextCursor: null }], pageParams: [null] });
     setOnline(true);
   });
 
@@ -84,8 +85,8 @@ describe("updateStatusMutation offline", () => {
 
     // The optimistic onMutate flipped the entry; the queued (synthetic
     // success) resolution means onError never rolled it back.
-    const entries = queryClient.getQueryData<TimelineEntry[]>(TIMELINE_KEY);
-    expect(entries?.[0].status).toBe("skipped");
+    const entries = flattenTimelineCache(queryClient.getQueryData<TimelineCache>(TIMELINE_KEY));
+    expect(entries[0].status).toBe("skipped");
     expect(offlineMocks.enqueueMutation).toHaveBeenCalledWith(
       "PATCH",
       "/api/v1/plans/days/pd-1/status",
@@ -108,7 +109,7 @@ describe("updateStatusMutation offline", () => {
 
     expect(mocks.updateDayStatus).toHaveBeenCalledOnce();
     expect(offlineMocks.enqueueMutation).not.toHaveBeenCalled();
-    const entries = queryClient.getQueryData<TimelineEntry[]>(TIMELINE_KEY);
-    expect(entries?.[0].status).toBe("skipped");
+    const entries = flattenTimelineCache(queryClient.getQueryData<TimelineCache>(TIMELINE_KEY));
+    expect(entries[0].status).toBe("skipped");
   });
 });

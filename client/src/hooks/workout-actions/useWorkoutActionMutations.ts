@@ -5,6 +5,7 @@ import { api, QUERY_KEYS } from "@/lib/api";
 import { runWithOfflineFallback } from "@/lib/offlineMutationFallback";
 import { toastPersonalRecordAchievements } from "@/lib/personalRecordAchievements";
 import { queryClient } from "@/lib/queryClient";
+import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 import { useApiMutation } from "../useApiMutation";
 import { buildBulkDeleteWorkoutTargets } from "./bulkDelete";
@@ -69,16 +70,17 @@ function patchTimelineEntriesForLoggedWorkout(
   workout: CreatedWorkout,
   variables: LogWorkoutVariables,
 ): void {
-  queryClient.setQueriesData<TimelineEntry[]>({ queryKey: QUERY_KEYS.timeline }, (old) => {
-    if (!old) return old;
-    let patched = false;
-    const nextEntries = old.map((entry) => {
-      if (entry.planDayId !== variables.planDayId) return entry;
-      patched = true;
-      return buildLoggedTimelineEntry(workout, entry);
-    });
-    return patched ? nextEntries : old;
-  });
+  queryClient.setQueriesData<TimelineCache>({ queryKey: QUERY_KEYS.timeline }, (old) =>
+    mapTimelineCache(old, (entries) => {
+      let patched = false;
+      const nextEntries = entries.map((entry) => {
+        if (entry.planDayId !== variables.planDayId) return entry;
+        patched = true;
+        return buildLoggedTimelineEntry(workout, entry);
+      });
+      return patched ? nextEntries : entries;
+    }),
+  );
 }
 
 export function useWorkoutActionMutations(selectedPlanId: string | null) {

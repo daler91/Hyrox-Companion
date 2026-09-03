@@ -27,6 +27,9 @@ interface TimelineContentProps {
   setShowAllPast: TimelineFiltersState["setShowAllPast"];
   showAllPast: TimelineFiltersState["showAllPast"];
   pastGroups: TimelineFiltersState["pastGroups"];
+  hasOlderEntries: TimelineData["hasOlderEntries"];
+  isLoadingOlder: TimelineData["isLoadingOlder"];
+  onLoadOlder: TimelineData["loadOlderEntries"];
   hiddenFutureCount: TimelineFiltersState["hiddenFutureCount"];
   setShowAllFuture: TimelineFiltersState["setShowAllFuture"];
   showAllFuture: TimelineFiltersState["showAllFuture"];
@@ -68,6 +71,9 @@ export function TimelineContent({
   setShowAllPast,
   showAllPast,
   pastGroups,
+  hasOlderEntries,
+  isLoadingOlder,
+  onLoadOlder,
   hiddenFutureCount,
   setShowAllFuture,
   showAllFuture,
@@ -137,6 +143,19 @@ export function TimelineContent({
         >
           <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
           Show {hiddenPastCount} more past workout{hiddenPastCount > 1 ? "s" : ""}
+        </Button>
+      )}
+
+      {hiddenPastCount === 0 && hasOlderEntries && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={onLoadOlder}
+          disabled={isLoadingOlder}
+          data-testid="button-load-older"
+        >
+          <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
+          {isLoadingOlder ? "Loading older workouts" : "Load older workouts"}
         </Button>
       )}
 

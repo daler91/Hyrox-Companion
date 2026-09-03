@@ -4,8 +4,8 @@ import { serializeWorkoutStructure } from "./workoutStructureSummary";
 
 // exercise_sets.distance is stored in the athlete's own unit, so the summary
 // requires the preference rather than assuming metric (audit H16).
-const KM = { distanceUnit: "km" } as const;
-const MILES = { distanceUnit: "miles" } as const;
+const KM = { weightUnit: "kg", distanceUnit: "km" } as const;
+const MILES = { weightUnit: "lbs", distanceUnit: "miles" } as const;
 
 describe("serializeWorkoutStructure", () => {
   it("returns null for empty input", () => {
@@ -57,6 +57,20 @@ describe("serializeWorkoutStructure", () => {
     // as "1312m" overstated the distance 3.28x under the wrong label (H16).
     expect(serializeWorkoutStructure(rows, MILES)).toContain("(1312ft)");
     expect(serializeWorkoutStructure(rows, MILES)).not.toContain("1312m");
+  });
+
+  it("labels the weight with the athlete's unit, as the distance already was", () => {
+    const rows = [{ exerciseName: "back_squat", setNumber: 1, reps: 5, weight: 60 }] as never;
+
+    expect(serializeWorkoutStructure(rows, KM)).toBe("S1 Back Squat (5 reps · 60kg)");
+  });
+
+  it("converts a row stamped in another unit before labelling it (finding D2)", () => {
+    const squat = [{ exerciseName: "back_squat", setNumber: 1, weight: 100, weightUnit: "kg" }] as never;
+    const row = [{ exerciseName: "rowing", setNumber: 1, distance: 1312, distanceUnit: "ft" }] as never;
+
+    expect(serializeWorkoutStructure(squat, MILES)).toContain("(220lbs)");
+    expect(serializeWorkoutStructure(row, KM)).toContain("(400m)");
   });
 
   it("renders a sub-minute time target as seconds rather than a fraction", () => {

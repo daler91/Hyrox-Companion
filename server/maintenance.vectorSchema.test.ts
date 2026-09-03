@@ -7,7 +7,7 @@ vi.mock("drizzle-orm/node-postgres", () => ({ drizzle: vi.fn() }));
 vi.mock("drizzle-orm/node-postgres/migrator", () => ({ migrate: vi.fn() }));
 vi.mock("./advisoryLock", () => ({ withPgAdvisoryLock: vi.fn() }));
 vi.mock("./db", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
-vi.mock("./gemini/circuitBreaker", () => ({ loadPersistedBreakerState: vi.fn() }));
+vi.mock("./ai/circuitBreaker", () => ({ loadPersistedBreakerState: vi.fn() }));
 vi.mock("./gemini/client", () => ({ EMBEDDING_DIMENSIONS: 3072 }));
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() },

@@ -1,4 +1,4 @@
-import { retryWithBackoff } from "../../gemini/client";
+import { retryWithBackoff } from "../retry";
 import { contentPartText, readJsonPayload, streamSseTextChunks } from "./http";
 import type {
   ResolvedTextAiRequest,
