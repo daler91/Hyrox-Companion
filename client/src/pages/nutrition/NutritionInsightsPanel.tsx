@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useNutritionInsights, useRegenerateNutritionInsights } from "@/hooks/useNutrition";
+import { describeAiError } from "@/lib/describeAiError";
+
+function describeError(error: unknown): string {
+  return describeAiError(error, {
+    rateLimitActivity: "requesting nutrition insights",
+    slow: "Generating insights is taking longer than expected. Please try again in a moment.",
+    fallback: "Sorry, I couldn't generate your nutrition insights right now. Please try again.",
+  });
+}
 
 /**
  * AI nutrition coaching (FR-5.3). Mirrors Coach Insights: GET paints the last
@@ -21,6 +30,8 @@ export function NutritionInsightsPanel() {
   const hasInsights = data?.insights != null;
   const isGenerating = regenerate.isPending;
   const showInitialSpinner = (query.isLoading || isGenerating) && !hasInsights;
+  const activeError = regenerate.error ?? query.error;
+  const errorMessage = activeError ? describeError(activeError) : null;
 
   const buttonLabel = () => {
     if (isGenerating)
@@ -54,15 +65,36 @@ export function NutritionInsightsPanel() {
         </div>
       );
     }
-    if (hasInsights) {
+    if (errorMessage && !hasInsights) {
       return (
         <div
-          className="prose prose-sm max-w-none dark:prose-invert prose-headings:my-3 prose-p:my-2 prose-ul:my-2 prose-li:my-1"
-          data-testid="nutrition-insights-content"
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          role="alert"
+          data-testid="text-nutrition-insights-error"
         >
-          {/* AI output rendered as Markdown; rehype-sanitize strips scripts and
-              unsafe URLs so a compromised provider can't run JS in the session. */}
-          <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{data?.insights ?? ""}</ReactMarkdown>
+          {errorMessage}
+        </div>
+      );
+    }
+    if (hasInsights) {
+      return (
+        <div className="space-y-4">
+          {errorMessage && (
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+              role="alert"
+            >
+              {errorMessage}
+            </div>
+          )}
+          <div
+            className="prose prose-sm max-w-none dark:prose-invert prose-headings:my-3 prose-p:my-2 prose-ul:my-2 prose-li:my-1"
+            data-testid="nutrition-insights-content"
+          >
+            {/* AI output rendered as Markdown; rehype-sanitize strips scripts and
+                unsafe URLs so a compromised provider can't run JS in the session. */}
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{data?.insights ?? ""}</ReactMarkdown>
+          </div>
         </div>
       );
     }

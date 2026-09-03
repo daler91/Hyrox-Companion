@@ -27,7 +27,17 @@ describe("NutritionInsightsPanel", () => {
     renderPanel();
 
     expect(await screen.findByTestId("nutrition-insights-empty")).toBeInTheDocument();
-    expect(screen.getByTestId("button-generate-nutrition-insights")).toHaveTextContent("Generate insights");
+    expect(screen.getByTestId("button-generate-nutrition-insights")).toHaveTextContent(
+      "Generate insights",
+    );
+  });
+
+  it("shows an inline error when fetching insights fails", async () => {
+    vi.mocked(api.nutrition.getInsights).mockRejectedValue(new Error("network error"));
+    renderPanel();
+
+    expect(await screen.findByTestId("text-nutrition-insights-error")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/network|try again/i);
   });
 
   it("renders stored insights as markdown content with a Regenerate button", async () => {
@@ -39,7 +49,11 @@ describe("NutritionInsightsPanel", () => {
     vi.mocked(api.nutrition.getInsights).mockResolvedValue(data);
     renderPanel();
 
-    expect(await screen.findByTestId("nutrition-insights-content")).toHaveTextContent("Eat more protein");
-    expect(screen.getByTestId("button-generate-nutrition-insights")).toHaveTextContent("Regenerate");
+    expect(await screen.findByTestId("nutrition-insights-content")).toHaveTextContent(
+      "Eat more protein",
+    );
+    expect(screen.getByTestId("button-generate-nutrition-insights")).toHaveTextContent(
+      "Regenerate",
+    );
   });
 });
