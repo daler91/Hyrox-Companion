@@ -11,6 +11,8 @@ function reasonLabel(reason: DroppedMutationInfo["reason"]): string {
       return "it expired after 7 days";
     case "queue_overflow":
       return "the offline queue was full";
+    case "storage_full":
+      return "this device ran out of offline storage";
   }
 }
 

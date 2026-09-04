@@ -1,5 +1,5 @@
-import { type InsertWorkoutLog, planDays, trainingPlans, workoutLogs } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { exerciseSets, type InsertWorkoutLog, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -15,9 +15,10 @@ export interface CombineWorkoutsInput {
 }
 
 /**
- * Merge several logged workouts into one: insert the merged log, delete the
- * sources, and mark any plan days they were linked to (other than the one the
- * merged log keeps) as skipped — all in one transaction, all userId-scoped.
+ * Merge several logged workouts into one: insert the merged log, move the
+ * sources' logged sets onto it, delete the sources, and mark any plan days
+ * they were linked to (other than the one the merged log keeps) as skipped —
+ * all in one transaction, all userId-scoped.
  *
  * Lived inline in the /workouts/combine route handler as the only
  * `db.transaction` in server/routes; its own comment recorded a fix that had
@@ -72,8 +73,65 @@ export async function combineWorkouts({
 
     const [created] = await tx.insert(workoutLogs).values({ ...newWorkout, userId }).returning();
 
+    // Re-parent the sources' logged sets onto the merged workout BEFORE the
+    // delete below. exercise_sets.workout_log_id cascades on delete, so
+    // without this step combining silently destroyed every structured set
+    // both sources carried — the rows every PR, analytics and progression
+    // view is built on, with no warning and a "Workouts combined!" toast.
+    // Ownership stays workoutLog-side, so exercise_set_single_owner_check
+    // holds and this is an in-place update rather than the lossy re-insert
+    // an owner-type change would force: ids, unit stamps (L4), prescription
+    // snapshots and lock versions all survive.
+    const sourceSets = await tx
+      .select({ id: exerciseSets.id, exerciseName: exerciseSets.exerciseName })
+      .from(exerciseSets)
+      .innerJoin(workoutLogs, eq(exerciseSets.workoutLogId, workoutLogs.id))
+      .where(and(inArray(exerciseSets.workoutLogId, [...deleteWorkoutIds]), eq(workoutLogs.userId, userId)))
+      .orderBy(
+        asc(workoutLogs.date),
+        asc(workoutLogs.startedAt),
+        asc(workoutLogs.id),
+        asc(exerciseSets.sortOrder),
+        asc(exerciseSets.setNumber),
+      );
+
+    if (sourceSets.length > 0) {
+      // Renumber across the merged group: sortOrder drives every read path's
+      // ordering, and setNumber is the per-exercise label the set editor
+      // renders and sorts on, so two sources each holding "Squat" sets 1-3
+      // must come out as 1-6 rather than two colliding 1-3 runs.
+      const setNumberByExercise = new Map<string, number>();
+      const renumbered = sourceSets.map((s, index) => {
+        const nextSetNumber = (setNumberByExercise.get(s.exerciseName) ?? 0) + 1;
+        setNumberByExercise.set(s.exerciseName, nextSetNumber);
+        return { id: s.id, sortOrder: index, setNumber: nextSetNumber };
+      });
+
+      // One batch update via CASE rather than a round trip per set (combine
+      // accepts up to 10 sources, so this can be several hundred rows).
+      const sortChunks = [sql`CASE ${exerciseSets.id} `];
+      const numberChunks = [sql`CASE ${exerciseSets.id} `];
+      for (const r of renumbered) {
+        sortChunks.push(sql`WHEN ${r.id} THEN ${r.sortOrder}::integer `);
+        numberChunks.push(sql`WHEN ${r.id} THEN ${r.setNumber}::integer `);
+      }
+      sortChunks.push(sql`END`);
+      numberChunks.push(sql`END`);
+
+      await tx
+        .update(exerciseSets)
+        .set({
+          workoutLogId: created.id,
+          sortOrder: sql.join(sortChunks, sql``),
+          setNumber: sql.join(numberChunks, sql``),
+        })
+        .where(inArray(exerciseSets.id, renumbered.map((r) => r.id)));
+    }
+
     // One `inArray` delete rather than one round trip per source id, so the
     // row locks on workout_logs are held for as short a time as possible.
+    // The sources' exercise_sets have already moved to `created` above, so
+    // the cascade now has nothing of the athlete's to take.
     await tx
       .delete(workoutLogs)
       .where(and(inArray(workoutLogs.id, [...deleteWorkoutIds]), eq(workoutLogs.userId, userId)));

@@ -21,7 +21,7 @@ export interface DroppedMutationInfo {
   method: string;
   url: string;
   retryCount: number;
-  reason: "max_retries" | "max_age" | "queue_overflow";
+  reason: "max_retries" | "max_age" | "queue_overflow" | "storage_full";
   ageMs: number;
 }
 
@@ -116,16 +116,40 @@ function saveQueue(queue: PendingMutation[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
   } catch {
-    // QuotaExceededError — evict oldest half and retry once
-    const trimmed = queue.slice(Math.floor(queue.length / 2));
+    // QuotaExceededError — evict oldest half and retry once.
+    //
+    // Every eviction here is permanent loss of work the athlete believes is
+    // saved, so it has to be announced. The overflow path in enqueueMutation
+    // notifies for exactly this reason; this path used to drop the same rows
+    // in silence, and it drops OLDEST first — the sessions least likely to
+    // still be in the athlete's head.
+    const evictionPoint = Math.floor(queue.length / 2);
+    const trimmed = queue.slice(evictionPoint);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+      notifyDroppedAll(queue.slice(0, evictionPoint));
     } catch {
       // Still failing — clear the queue entirely to recover
       localStorage.removeItem(STORAGE_KEY);
+      notifyDroppedAll(queue);
     }
   }
   notifyQueueChanged();
+}
+
+/** Announce every entry in `evicted` as permanently dropped for storage. */
+function notifyDroppedAll(evicted: PendingMutation[]) {
+  const now = Date.now();
+  for (const mutation of evicted) {
+    notifyDropped({
+      id: mutation.id,
+      method: mutation.method,
+      url: mutation.url,
+      retryCount: mutation.retryCount ?? 0,
+      reason: "storage_full",
+      ageMs: now - mutation.timestamp,
+    });
+  }
 }
 
 export function createOfflineMutationId(): string {

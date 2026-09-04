@@ -349,6 +349,45 @@ describe("AI write unit normalization", () => {
   it("still converts bare m when it is likely distance text", () => {
     expect(normalizeWorkoutTextUnits("100m run", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("328 ft run");
   });
+
+  it("converts BOTH ends of a range, not just the one carrying the unit", () => {
+    const imperial = { weightUnit: "lbs", distanceUnit: "miles" } as const;
+    // The dash used to read as a minus sign, so only the high bound was
+    // converted and the low bound kept its source magnitude under the new
+    // label: "80-90kg" came out as "80-198 lbs", telling an athlete to load
+    // 36kg instead of 80kg.
+    expect(normalizeWorkoutTextUnits("Bench 5 x 3 @ 80-90kg", imperial)).toBe("Bench 5 x 3 @ 176-198 lbs");
+    expect(normalizeWorkoutTextUnits("Run 400-800m repeats", imperial)).toBe("Run 1312-2625 ft repeats");
+    // En dash and em dash separate ranges just as often in generated plans.
+    expect(normalizeWorkoutTextUnits("Back squat 3\u20135kg", imperial)).toBe("Back squat 7\u201311 lbs");
+    expect(normalizeWorkoutTextUnits("Back squat 3\u20145kg", imperial)).toBe("Back squat 7\u201411 lbs");
+  });
+
+  it("leaves a range alone when it is already in the athlete's units", () => {
+    expect(normalizeWorkoutTextUnits("Tempo 3-4km", { weightUnit: "kg", distanceUnit: "km" })).toBe("Tempo 3-4km");
+  });
+
+  it("reads thousands separators as one number", () => {
+    const imperial = { weightUnit: "lbs", distanceUnit: "miles" } as const;
+    // "1,500m" used to tokenize as "1" then "500", printing "1,1640 ft".
+    expect(normalizeWorkoutTextUnits("Sled push 1,500m", imperial)).toBe("Sled push 4921 ft");
+    expect(normalizeWorkoutTextUnits("Row 1,000m", imperial)).toBe("Row 1000 m");
+  });
+
+  it("leaves an ambiguous decimal comma untouched rather than half-reading it", () => {
+    // "7,5kg" is a decimal comma to some athletes and a typo to others.
+    // Either way, converting the "5" alone (the old "7,11 lbs") is worse
+    // than leaving the text as the athlete wrote it.
+    expect(normalizeWorkoutTextUnits("Deadlift 7,5kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
+      "Deadlift 7,5kg",
+    );
+  });
+
+  it("still reads a genuine negative number", () => {
+    expect(normalizeWorkoutTextUnits("Deficit -90kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
+      "Deficit -198 lbs",
+    );
+  });
 });
 
 describe("getWorkoutDistanceDisplay", () => {

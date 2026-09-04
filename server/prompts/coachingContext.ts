@@ -52,12 +52,25 @@ export function buildOverallStats(trainingContext: TrainingContext): string {
   return section;
 }
 
+/**
+ * Cap on the exercise-focus lines rendered into a prompt. The keys here are
+ * athlete-authored `focus` text, not a fixed catalogue, so an athlete with
+ * many distinct focus strings could otherwise push an unbounded section into
+ * the prompt. The sibling renderers cap their lists the same way.
+ */
+const MAX_EXERCISE_FOCUS_ENTRIES = 20;
+
 export function buildExerciseFocus(trainingContext: TrainingContext): string {
-  if (Object.keys(trainingContext.exerciseBreakdown).length === 0) return "";
+  const entries = Object.entries(trainingContext.exerciseBreakdown);
+  if (entries.length === 0) return "";
 
   let section = `\n\nExercise Focus (times trained):`;
-  for (const [exercise, count] of Object.entries(trainingContext.exerciseBreakdown)) {
-    section += `\n- ${exercise}: ${count}x`;
+  // The key is the athlete's own `focus` string whenever it matches no known
+  // functional exercise, so it is user-authored text reaching the SYSTEM
+  // instruction and must be sanitized — buildRecentWorkouts below already
+  // does exactly this to the same field (W1).
+  for (const [exercise, count] of entries.slice(0, MAX_EXERCISE_FOCUS_ENTRIES)) {
+    section += `\n- ${sanitizeUserInput(exercise)}: ${count}x`;
   }
   return section;
 }

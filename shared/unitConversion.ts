@@ -706,17 +706,70 @@ function isWordChar(char: string | undefined): boolean {
 function parseNumberToken(text: string, start: number): NumberToken | null {
   let index = start;
   if (text[index] === "-") {
+    // A dash straight after a digit separates a range ("60-80kg"), it is not
+    // a sign. Reading it as one made the scanner tokenize "-90" out of
+    // "80-90kg" and convert only that half, so the low bound kept its source
+    // magnitude while the label flipped: "80-90kg" came out as "80-198 lbs".
+    if (start > 0 && isDigit(text[start - 1])) return null;
     if (!isDigit(text[index + 1])) return null;
     index += 1;
   }
   if (!isDigit(text[index])) return null;
   while (isDigit(text[index])) index += 1;
+  // Thousands separators: "1,000m" is one number. Without this the scanner
+  // read "1", then "000" as a separate zero, and "Row 1,000m" converted to
+  // "Row 1,0 ft". Only an exact 3-digit group counts, so an ambiguous
+  // decimal comma ("7,5kg") is left for the guard in the main loop.
+  while (
+    text[index] === "," &&
+    isDigit(text[index + 1]) &&
+    isDigit(text[index + 2]) &&
+    isDigit(text[index + 3]) &&
+    !isDigit(text[index + 4])
+  ) {
+    index += 4;
+  }
   if (text[index] === "." && isDigit(text[index + 1])) {
     index += 1;
     while (isDigit(text[index])) index += 1;
   }
-  const value = Number.parseFloat(text.slice(start, index));
+  const value = Number.parseFloat(text.slice(start, index).replaceAll(",", ""));
   return Number.isFinite(value) ? { value, end: index } : null;
+}
+
+/** Hyphen, en dash and em dash all show up as range separators in plans. */
+const RANGE_SEPARATORS = new Set(["-", "\u2013", "\u2014"]);
+
+/**
+ * If the number at `numberStart` is the high bound of a range ("400-800m"),
+ * return the low bound so both halves convert together. Returns null for
+ * anything that is not cleanly `<number><dash>` immediately before it.
+ */
+function findRangeLowBound(text: string, numberStart: number): NumberToken | null {
+  const separatorIndex = numberStart - 1;
+  if (separatorIndex < 0) return null;
+  if (!RANGE_SEPARATORS.has(text[separatorIndex] ?? "")) return null;
+
+  let lowStart = separatorIndex;
+  while (lowStart > 0 && isNumericBodyChar(text[lowStart - 1] ?? "")) lowStart -= 1;
+  if (lowStart === separatorIndex) return null;
+
+  const low = parseNumberToken(text, lowStart);
+  // Must account for the whole span up to the separator, so "Set 3. 80-90kg"
+  // reads 80 and a partial match like ".5-90kg" is declined.
+  if (!low || low.end !== separatorIndex) return null;
+  return { value: low.value, end: lowStart };
+}
+
+function isNumericBodyChar(char: string): boolean {
+  return isDigit(char) || char === "." || char === ",";
+}
+
+/** Split "176 lbs" into its number and unit halves; null if it has no label. */
+function splitConvertedValue(replacement: string): { value: string; unit: string } | null {
+  const lastSpace = replacement.lastIndexOf(" ");
+  if (lastSpace <= 0) return null;
+  return { value: replacement.slice(0, lastSpace), unit: replacement.slice(lastSpace + 1) };
 }
 
 function skipWhitespace(text: string, start: number): number {
@@ -856,6 +909,14 @@ export function normalizeWorkoutTextUnits(
       continue;
     }
 
+    // A number reached through a digit-comma-digit group that was not a
+    // thousands group ("7,5kg") is ambiguous — decimal comma or typo — so
+    // leave it exactly as written rather than convert a half-read number.
+    if (text[index - 1] === "," && isDigit(text[index - 2] ?? "")) {
+      index = numberToken.end;
+      continue;
+    }
+
     const unitStart = skipWhitespace(text, numberToken.end);
     const unitMatch = matchTextUnit(text, lowerText, unitStart);
     if (!unitMatch) {
@@ -874,7 +935,41 @@ export function normalizeWorkoutTextUnits(
     );
 
     if (replacement != null) {
-      result += text.slice(cursor, index) + replacement;
+      // The unit binds to the whole range, so a low bound in front of this
+      // number has to convert with it.
+      const rangeLow = findRangeLowBound(text, index);
+      const lowReplacement =
+        rangeLow == null
+          ? null
+          : getTextUnitReplacement(
+              text,
+              lowerText,
+              rangeLow.end,
+              { value: rangeLow.value, end: index - 1 },
+              unitMatch,
+              targetWeightUnit,
+              targetDistanceUnit,
+            );
+
+      if (rangeLow != null && lowReplacement == null) {
+        // The low bound declined conversion (a pace, ratio or minute
+        // shorthand reading) while the high bound accepted. Converting half
+        // a range is worse than leaving it alone, so emit neither.
+        index = unitMatch.end;
+        continue;
+      }
+
+      if (rangeLow != null && lowReplacement != null) {
+        const low = splitConvertedValue(lowReplacement);
+        const high = splitConvertedValue(replacement);
+        // Drop the low bound's label when both land on the same unit
+        // ("176-198 lbs"); keep both when they don't ("900 m-1.1 km").
+        const lowText =
+          low != null && high != null && low.unit === high.unit ? low.value : lowReplacement;
+        result += text.slice(cursor, rangeLow.end) + lowText + text.slice(index - 1, index) + replacement;
+      } else {
+        result += text.slice(cursor, index) + replacement;
+      }
       cursor = unitMatch.end;
     }
     index = unitMatch.end;

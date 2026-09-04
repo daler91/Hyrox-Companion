@@ -208,6 +208,8 @@ describe("offlineQueue", () => {
   });
 
   it("trims the oldest half of the queue and retries on QuotaExceededError", () => {
+    const dropped = vi.fn();
+    const unsubscribe = onMutationDropped(dropped);
     // Fill the queue with some mutations
     enqueueMutation("POST", "/api/v1/a", { n: "1" }, { id: "1" });
     enqueueMutation("POST", "/api/v1/a", { n: "2" }, { id: "2" });
@@ -233,10 +235,20 @@ describe("offlineQueue", () => {
     expect(getPendingCount()).toBe(3);
     expect(readStoredQueue().map((m) => m.id)).toEqual(["3", "4", "5"]);
 
+    // Evicting is permanent loss of the athlete's logged work, so the two
+    // dropped entries have to be announced the same way a queue-overflow
+    // eviction is — this path used to discard them in silence.
+    expect(dropped).toHaveBeenCalledTimes(2);
+    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "1", reason: "storage_full" }));
+    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "2", reason: "storage_full" }));
+
     setItemSpy.mockRestore();
+    unsubscribe();
   });
 
   it("clears the queue completely if saving trimmed queue still throws QuotaExceededError", () => {
+    const dropped = vi.fn();
+    const unsubscribe = onMutationDropped(dropped);
     enqueueMutation("POST", "/api/v1/a", { n: "1" }, { id: "1" });
     enqueueMutation("POST", "/api/v1/a", { n: "2" }, { id: "2" });
 
@@ -256,6 +268,12 @@ describe("offlineQueue", () => {
     expect(readStoredQueue()).toEqual([]);
     expect(getPendingCount()).toBe(0);
 
+    // The full-clear fallback loses everything, so every entry is announced.
+    expect(dropped).toHaveBeenCalledTimes(3);
+    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "1", reason: "storage_full" }));
+    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "3", reason: "storage_full" }));
+
     setItemSpy.mockRestore();
+    unsubscribe();
   });
 });
