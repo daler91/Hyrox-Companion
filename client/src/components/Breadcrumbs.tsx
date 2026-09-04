@@ -1,7 +1,7 @@
 import type { TimelineEntry } from "@shared/schema";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
-import { useEffect, useReducer } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 
 import { QUERY_KEYS } from "@/lib/api";
@@ -45,21 +45,40 @@ function findEntryInTimelineCache(
 
 function WorkoutBreadcrumbLabel({ id, fallback }: Readonly<{ id: string; fallback: string }>) {
   const queryClient = useQueryClient();
-  // Re-render when any timeline variant's cache updates so the label appears
-  // once Timeline populates it (e.g. on a `/?workout=<id>` deep link).
-  const [, forceRender] = useReducer((n: number) => n + 1, 0);
+  // Re-render when a timeline variant's cache actually gets new data, so the
+  // label appears once Timeline populates it (e.g. on a `/?workout=<id>`
+  // deep link). Gated to `updated`/`success` events only -- the unfiltered
+  // subscription used to also fire on fetch-start/invalidate/error events for
+  // the same query, which the workout-detail dialog triggers repeatedly via
+  // `invalidateQueries({ queryKey: QUERY_KEYS.timeline })` on mark-complete,
+  // delete, and edit while this exact breadcrumb is mounted.
+  const [dataVersion, bumpDataVersion] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
     const cache = queryClient.getQueryCache();
     const [timelinePrefix] = QUERY_KEYS.timeline;
     return cache.subscribe((event) => {
       const queryKey = event.query.queryKey as readonly unknown[];
-      if (queryKey[0] === timelinePrefix) {
-        forceRender();
+      if (queryKey[0] === timelinePrefix && event.type === "updated" && event.action.type === "success") {
+        bumpDataVersion();
       }
     });
   }, [queryClient]);
 
-  const match = findEntryInTimelineCache(queryClient, id);
+  // ⚡ Bolt Optimization: findEntryInTimelineCache flattens every loaded
+  // timeline page (`flatMap`, a fresh array every call) and then linearly
+  // scans it. With paging (`DEFAULT_TIMELINE_PAGE_SIZE` = 200 entries/page)
+  // and "Load older workouts", a long-tenured user's loaded history can reach
+  // into the thousands of entries. This used to run unmemoized directly in
+  // the render body, so it redid the full flatten+scan on every re-render of
+  // this component -- previously including re-renders from cache events that
+  // carried no new data (see the subscribe filter above). Memoizing on
+  // `dataVersion` (bumped only when the timeline cache's data actually
+  // changes) skips that work on every other re-render.
+  const match = useMemo(
+    () => findEntryInTimelineCache(queryClient, id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dataVersion is the cache-change signal, not a data source
+    [queryClient, id, dataVersion],
+  );
   return <>{match ? entryLabel(match) : fallback}</>;
 }
 
