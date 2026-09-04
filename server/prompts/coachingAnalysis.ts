@@ -200,7 +200,11 @@ function formatRaceReadiness(readiness: CoachingInsights["raceReadiness"]): stri
 
 function formatPersonalRecords(insights: CoachingInsights): string | null {
   if (!insights.personalRecords || insights.personalRecords.length === 0) return null;
-  const entries = insights.personalRecords.map((pr) => `${pr.exercise} ${pr.display}`);
+  // `pr.exercise` falls back to the athlete's own free-text `customLabel`
+  // (exercise_sets.customLabel, editable via the custom-exercise UI) when the
+  // set isn't from the canonical catalog — same <user_input>-breakout risk as
+  // every other athlete-authored field in this file (see formatAthleteGoal).
+  const entries = insights.personalRecords.map((pr) => `${sanitizeUserInput(pr.exercise)} ${pr.display}`);
   let line = `PERSONAL RECORDS (recent bests): ${entries.join("; ")}.`;
   if (insights.prsThisWeek && insights.prsThisWeek > 0) {
     line += ` ${insights.prsThisWeek} new best${insights.prsThisWeek === 1 ? "" : "s"} this week — acknowledge it.`;
