@@ -429,7 +429,7 @@ const GroupRow = memo(function GroupRow({
             type="button"
             onClick={handleToggle}
             aria-label={`Edit ${label}: ${prescription.aria}`}
-            className="flex w-full flex-wrap items-center gap-1.5 rounded-md px-3 pb-2 pl-[50px] text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:px-4 sm:pb-3 sm:pl-[54px] sm:text-sm"
+            className="flex w-full flex-wrap items-center gap-1.5 rounded-md px-3 pb-2 pl-[50px] text-left text-xs text-muted-foreground transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:px-4 sm:pb-3 sm:pl-[54px] sm:text-sm"
           >
             {prescriptionSegments}
             {plannedDiffSummary && (
