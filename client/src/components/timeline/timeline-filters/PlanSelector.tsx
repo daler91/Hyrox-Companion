@@ -8,11 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import type { PlanSelectorProps } from "./types";
 
@@ -39,7 +35,12 @@ export function PlanSelector({
           value={selectedPlanId || "__all__"}
           onValueChange={(value) => onPlanChange(value === "__all__" ? null : value)}
         >
-          <SelectTrigger id="plan-select" aria-label="Select training plan" className="flex-1" data-testid="select-plan">
+          <SelectTrigger
+            id="plan-select"
+            aria-label="Select training plan"
+            className="flex-1"
+            data-testid="select-plan"
+          >
             <SelectValue placeholder="All Plans" />
           </SelectTrigger>
           <SelectContent>
@@ -53,20 +54,23 @@ export function PlanSelector({
           </SelectContent>
         </Select>
         {selectedPlanId && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="icon-touch"
-                variant="ghost"
-                className="md:h-9 md:w-9"
-                onClick={openRenameDialog}
-                data-testid="button-rename-plan" aria-label="Rename plan"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Rename plan</TooltipContent>
-          </Tooltip>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-touch"
+                  variant="ghost"
+                  className="md:h-9 md:w-9"
+                  onClick={openRenameDialog}
+                  data-testid="button-rename-plan"
+                  aria-label="Rename plan"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Rename plan</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )}
       </div>
     );

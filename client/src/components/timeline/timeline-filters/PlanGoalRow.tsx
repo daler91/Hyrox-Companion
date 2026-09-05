@@ -2,7 +2,7 @@ import type { TrainingPlan } from "@shared/schema";
 import { Pencil, Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PlanGoalRowProps {
   readonly plan: TrainingPlan | undefined;
@@ -25,21 +25,23 @@ export function PlanGoalRow({ plan, onEditClick }: Readonly<PlanGoalRowProps>) {
       >
         {plan.goal ? plan.goal : <span className="italic">No plan goal set</span>}
       </button>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 shrink-0 md:h-7 md:w-7"
-            onClick={onEditClick}
-            aria-label="Edit plan goal"
-            data-testid="button-edit-goal"
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Edit plan goal</TooltipContent>
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 shrink-0 md:h-7 md:w-7"
+              onClick={onEditClick}
+              aria-label="Edit plan goal"
+              data-testid="button-edit-goal"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Edit plan goal</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }

@@ -65,3 +65,6 @@
 
 **Learning:** `FoodChipRow` was reused for both Favorites (one-tap immediate log) and Recent (opens dialog) chips. Visually identical buttons with different consequences are invisible to screen readers — the section title (`<p>`) isn't formally associated with the button group, so navigating by interactive element strips all context. The `aria-label` only fired for truncated names, leaving short-named foods with zero action context.
 **Action:** When a generic chip/tag component is reused across rows with different onClick behaviors, always pass a distinguishing verb into the aria-label (e.g. "Quick log" vs "Add") — don't rely on surrounding heading text that screen readers skip during button-mode navigation.
+## 2026-09-05 - Missing TooltipProviders
+**Learning:** React UI components from Radix UI using `<Tooltip>` in isolated forms sometimes lose their provider contexts and break functionality if they lack an encompassing `<TooltipProvider>`. Always explicitly include a local `<TooltipProvider>` alongside `<Tooltip>` if no global provider applies.
+**Action:** Consistently review new `<Tooltip>` integrations, particularly in deeply nested or newly extracted layout components, for corresponding local `<TooltipProvider>` enclosures.
