@@ -59,8 +59,21 @@ export async function createWorkout(input: {
 
   let newPersonalRecords: ReturnType<typeof findPersonalRecordAchievements>;
   try {
+    // ⚡ Bolt Optimization: this runs on every single "Log Workout" save, and
+    // previously called getAllExerciseSetsWithDates — the full relational
+    // projection, including four jsonb columns (intensity/load/tempo/standards)
+    // plus notes/planned*/block columns — for a user's ENTIRE set history (up
+    // to MAX_WORKOUT_LOGS_PER_QUERY = 5000 logs' worth of sets, i.e. tens of
+    // thousands of rows for a long-tenured athlete), just to feed
+    // findPersonalRecordAchievements, which only ever passes it through to
+    // calculatePersonalRecords(SlimLoggedExerciseSet[]). The codebase already
+    // built getExerciseSetsForPersonalRecords for exactly this shape (used by
+    // the /personal-records route, weeklyReviewService, trainingSummaryService,
+    // emailScheduler) — this call site was the one left on the fat query.
+    // Switching cuts payload size, DB→JS deserialization, and memory on the
+    // hottest write path proportionally to the user's history size.
     const [allSets, user] = await Promise.all([
-      storage.analytics.getAllExerciseSetsWithDates(input.userId),
+      storage.analytics.getExerciseSetsForPersonalRecords(input.userId),
       storage.users.getUser(input.userId),
     ]);
     const priorSets = allSets.filter((set) => set.workoutLogId !== createdWorkout.id);
