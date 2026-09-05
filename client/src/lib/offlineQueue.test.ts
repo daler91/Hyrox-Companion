@@ -207,6 +207,14 @@ describe("offlineQueue", () => {
     unsubscribe();
   });
 
+  /** Every id given must have been announced as a storage eviction, and no others. */
+  const expectStorageDrops = (dropped: ReturnType<typeof vi.fn>, ids: string[]) => {
+    expect(dropped).toHaveBeenCalledTimes(ids.length);
+    for (const id of ids) {
+      expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id, reason: "storage_full" }));
+    }
+  };
+
   it("trims the oldest half of the queue and retries on QuotaExceededError", () => {
     const dropped = vi.fn();
     const unsubscribe = onMutationDropped(dropped);
@@ -238,9 +246,7 @@ describe("offlineQueue", () => {
     // Evicting is permanent loss of the athlete's logged work, so the two
     // dropped entries have to be announced the same way a queue-overflow
     // eviction is — this path used to discard them in silence.
-    expect(dropped).toHaveBeenCalledTimes(2);
-    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "1", reason: "storage_full" }));
-    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "2", reason: "storage_full" }));
+    expectStorageDrops(dropped, ["1", "2"]);
 
     setItemSpy.mockRestore();
     unsubscribe();
@@ -269,9 +275,7 @@ describe("offlineQueue", () => {
     expect(getPendingCount()).toBe(0);
 
     // The full-clear fallback loses everything, so every entry is announced.
-    expect(dropped).toHaveBeenCalledTimes(3);
-    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "1", reason: "storage_full" }));
-    expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "3", reason: "storage_full" }));
+    expectStorageDrops(dropped, ["1", "2", "3"]);
 
     setItemSpy.mockRestore();
     unsubscribe();

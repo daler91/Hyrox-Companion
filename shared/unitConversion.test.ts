@@ -328,6 +328,9 @@ describe("AI write unit normalization", () => {
     expect(normalizeParsedDistance(5000, "yards", { distanceUnit: "miles" })).toBe(16404);
   });
 
+  const IMPERIAL = { weightUnit: "lbs", distanceUnit: "miles" } as const;
+  const METRIC = { weightUnit: "kg", distanceUnit: "km" } as const;
+
   it("normalizes explicit AI-authored text units for the user's preferences", () => {
     expect(normalizeWorkoutTextUnits("Back squat 3x5 at 75kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
       "Back squat 3x5 at 165 lbs",
@@ -350,37 +353,26 @@ describe("AI write unit normalization", () => {
     expect(normalizeWorkoutTextUnits("100m run", { weightUnit: "lbs", distanceUnit: "miles" })).toBe("328 ft run");
   });
 
-  it("converts BOTH ends of a range, not just the one carrying the unit", () => {
-    const imperial = { weightUnit: "lbs", distanceUnit: "miles" } as const;
-    // The dash used to read as a minus sign, so only the high bound was
-    // converted and the low bound kept its source magnitude under the new
-    // label: "80-90kg" came out as "80-198 lbs", telling an athlete to load
-    // 36kg instead of 80kg.
-    expect(normalizeWorkoutTextUnits("Bench 5 x 3 @ 80-90kg", imperial)).toBe("Bench 5 x 3 @ 176-198 lbs");
-    expect(normalizeWorkoutTextUnits("Run 400-800m repeats", imperial)).toBe("Run 1312-2625 ft repeats");
-    // En dash and em dash separate ranges just as often in generated plans.
-    expect(normalizeWorkoutTextUnits("Back squat 3\u20135kg", imperial)).toBe("Back squat 7\u201311 lbs");
-    expect(normalizeWorkoutTextUnits("Back squat 3\u20145kg", imperial)).toBe("Back squat 7\u201411 lbs");
-  });
-
-  it("leaves a range alone when it is already in the athlete's units", () => {
-    expect(normalizeWorkoutTextUnits("Tempo 3-4km", { weightUnit: "kg", distanceUnit: "km" })).toBe("Tempo 3-4km");
-  });
-
-  it("reads thousands separators as one number", () => {
-    const imperial = { weightUnit: "lbs", distanceUnit: "miles" } as const;
-    // "1,500m" used to tokenize as "1" then "500", printing "1,1640 ft".
-    expect(normalizeWorkoutTextUnits("Sled push 1,500m", imperial)).toBe("Sled push 4921 ft");
-    expect(normalizeWorkoutTextUnits("Row 1,000m", imperial)).toBe("Row 1000 m");
-  });
-
-  it("leaves an ambiguous decimal comma untouched rather than half-reading it", () => {
-    // "7,5kg" is a decimal comma to some athletes and a typo to others.
-    // Either way, converting the "5" alone (the old "7,11 lbs") is worse
-    // than leaving the text as the athlete wrote it.
-    expect(normalizeWorkoutTextUnits("Deadlift 7,5kg", { weightUnit: "lbs", distanceUnit: "miles" })).toBe(
-      "Deadlift 7,5kg",
-    );
+  // Range and separator handling, table-driven: these are pure input -> output
+  // cases, so a table says more than a run of near-identical expect lines.
+  //
+  // Ranges used to convert only the bound carrying the unit, because the dash
+  // parsed as a minus sign — "80-90kg" came out as "80-198 lbs", telling an
+  // athlete to load 36kg instead of 80kg. Thousands separators split the
+  // number in two: "1,500m" tokenized as "1" then "500" and printed
+  // "1,1640 ft". An ambiguous decimal comma is deliberately left alone:
+  // converting the "5" of "7,5kg" on its own is worse than not touching it.
+  it.each([
+    ["a hyphen range", IMPERIAL, "Bench 5 x 3 @ 80-90kg", "Bench 5 x 3 @ 176-198 lbs"],
+    ["a distance range", IMPERIAL, "Run 400-800m repeats", "Run 1312-2625 ft repeats"],
+    ["an en dash range", IMPERIAL, "Back squat 3\u20135kg", "Back squat 7\u201311 lbs"],
+    ["an em dash range", IMPERIAL, "Back squat 3\u20145kg", "Back squat 7\u201411 lbs"],
+    ["a range already in the athlete's units", METRIC, "Tempo 3-4km", "Tempo 3-4km"],
+    ["a thousands separator", IMPERIAL, "Sled push 1,500m", "Sled push 4921 ft"],
+    ["a thousands separator that stays metric", IMPERIAL, "Row 1,000m", "Row 1000 m"],
+    ["an ambiguous decimal comma", IMPERIAL, "Deadlift 7,5kg", "Deadlift 7,5kg"],
+  ])("normalizes %s", (_label, preferences, input, expected) => {
+    expect(normalizeWorkoutTextUnits(input, preferences)).toBe(expected);
   });
 
   it("still reads a genuine negative number", () => {
