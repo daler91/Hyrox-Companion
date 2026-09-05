@@ -430,6 +430,26 @@ describe("planService", () => {
       return mockTx;
     };
 
+    /**
+     * The completed → planned arrangement every un-complete test needs:
+     * a day currently completed, `logs` pointing at it, and optionally the
+     * logged sets to copy back.
+     */
+    const arrangeUncomplete = (
+      logs: Array<Record<string, unknown>>,
+      loggedSets: Array<Record<string, unknown>> = [],
+    ): MockTx =>
+      setupTx(
+        [{ status: "completed" }],
+        logs,
+        [createMockPlanDay({ id: dayId, status: "planned" })],
+        loggedSets,
+      );
+
+    const uncomplete = () => updatePlanDayStatus(dayId, { status: "planned" }, userId);
+
+    const UNLINK_PATCH = { planDayId: null, planId: null };
+
     it("preserves workout log edits on the plan day when switching from completed to planned", async () => {
       const returned = createMockPlanDay({ id: dayId, status: "planned", focus: "Edited Focus" });
       const tx = setupTx(
@@ -450,79 +470,59 @@ describe("planService", () => {
       // folds one back in. The rest must survive as standalone workouts —
       // deleting them cost the athlete their sets, RPE and device activity
       // ids with no confirmation and no way to see it coming.
-      const returned = createMockPlanDay({ id: dayId, status: "planned" });
-      const tx = setupTx(
-        [{ status: "completed" }],
-        [
-          { id: "log-newest", focus: "Newest", mainWorkout: "M", accessory: null, notes: null },
-          { id: "log-older", focus: "Older", mainWorkout: "M2", accessory: null, notes: null },
-        ],
-        [returned],
-      );
+      const tx = arrangeUncomplete([
+        { id: "log-newest", focus: "Newest", mainWorkout: "M", accessory: null, notes: null },
+        { id: "log-older", focus: "Older", mainWorkout: "M2", accessory: null, notes: null },
+      ]);
 
-      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+      await uncomplete();
 
-      expect(tx.updateSet).toHaveBeenCalledWith({ planDayId: null, planId: null });
+      expect(tx.updateSet).toHaveBeenCalledWith(UNLINK_PATCH);
     });
 
     it("does not run the unlink update when only one log is linked", async () => {
-      const returned = createMockPlanDay({ id: dayId, status: "planned" });
-      const tx = setupTx(
-        [{ status: "completed" }],
-        [{ id: "log-only", focus: "F", mainWorkout: "M", accessory: null, notes: null }],
-        [returned],
-      );
+      const tx = arrangeUncomplete([
+        { id: "log-only", focus: "F", mainWorkout: "M", accessory: null, notes: null },
+      ]);
 
-      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
+      await uncomplete();
 
-      expect(tx.updateSet).not.toHaveBeenCalledWith({ planDayId: null, planId: null });
+      expect(tx.updateSet).not.toHaveBeenCalledWith(UNLINK_PATCH);
     });
 
     it("carries the unit stamps and prescription snapshot onto the copied-back sets", async () => {
       // The old explicit field list dropped weightUnit/distanceUnit, so
       // re-completing re-read stored numbers against the athlete's CURRENT
       // preference — the exact misread the L4 stamp exists to prevent.
-      const returned = createMockPlanDay({ id: dayId, status: "planned" });
-      const tx = setupTx(
-        [{ status: "completed" }],
-        [{ id: "log-id", focus: "F", mainWorkout: "M", accessory: null, notes: null }],
-        [returned],
-        [
-          {
-            id: "set-1",
-            workoutLogId: "log-id",
-            planDayId: null,
-            version: 4,
-            exerciseName: "Back Squat",
-            setNumber: 1,
-            reps: 5,
-            weight: 100,
-            weightUnit: "kg",
-            distanceUnit: "m",
-            plannedReps: 5,
-            plannedWeight: 95,
-            blockId: "b1",
-            stepNumber: 1,
-            sortOrder: 0,
-          },
-        ],
-      );
-
-      await updatePlanDayStatus(dayId, { status: "planned" }, userId);
-
-      const rows = (tx as unknown as { insertValues: ReturnType<typeof vi.fn> }).insertValues.mock
-        .calls[0]?.[0] as Array<Record<string, unknown>>;
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({
-        planDayId: dayId,
-        workoutLogId: null,
+      const stampedSet = {
+        id: "set-1",
+        workoutLogId: "log-id",
+        planDayId: null,
+        version: 4,
+        exerciseName: "Back Squat",
+        setNumber: 1,
+        reps: 5,
+        weight: 100,
         weightUnit: "kg",
         distanceUnit: "m",
         plannedReps: 5,
         plannedWeight: 95,
         blockId: "b1",
         stepNumber: 1,
-      });
+        sortOrder: 0,
+      };
+      const tx = arrangeUncomplete(
+        [{ id: "log-id", focus: "F", mainWorkout: "M", accessory: null, notes: null }],
+        [stampedSet],
+      );
+
+      await uncomplete();
+
+      const rows = (tx as unknown as { insertValues: ReturnType<typeof vi.fn> }).insertValues.mock
+        .calls[0]?.[0] as Array<Record<string, unknown>>;
+      expect(rows).toHaveLength(1);
+      const { id: _id, version: _version, workoutLogId: _owner, ...carried } = stampedSet;
+      expect(rows[0]).toMatchObject({ ...carried, planDayId: dayId, workoutLogId: null });
       // Identity and lock columns belong to the row we replaced, not the copy.
       expect(rows[0]).not.toHaveProperty("id");
       expect(rows[0]).not.toHaveProperty("version");
