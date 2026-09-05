@@ -11,6 +11,8 @@ import { dispatchRecomputeAnalytics } from "../recomputeAnalyticsDispatch";
 // ---------------------------------------------------------------------------
 
 vi.mock("../analyticsPersistence", () => ({
+  getWorkoutAnchor: vi.fn().mockResolvedValue({ latestDate: "2026-09-01", entryCount: 3 }),
+  getNutritionAnchor: vi.fn().mockResolvedValue({ latestDate: "2026-09-01", entryCount: 2 }),
   persistCoachInsights: vi.fn().mockResolvedValue(undefined),
   persistNutritionInsights: vi.fn().mockResolvedValue(undefined),
   persistOverviewAnalysis: vi.fn().mockResolvedValue(undefined),
@@ -53,7 +55,10 @@ describe("dispatchRecomputeAnalytics", () => {
     await dispatchRecomputeAnalytics("nutrition_insights", USER, DATE, log);
 
     expect(generateNutritionInsightsIfAllowed).toHaveBeenCalledWith(USER, log);
-    expect(persistNutritionInsights).toHaveBeenCalledWith(USER, result, DATE);
+    expect(persistNutritionInsights).toHaveBeenCalledWith(USER, result, DATE, {
+      latestDate: "2026-09-01",
+      entryCount: 2,
+    });
     // The historical bug: nutrition jobs ran coach-insights generation.
     expect(generateCoachInsightsIfAllowed).not.toHaveBeenCalled();
     expect(persistCoachInsights).not.toHaveBeenCalled();
@@ -84,7 +89,10 @@ describe("dispatchRecomputeAnalytics", () => {
     await dispatchRecomputeAnalytics("coach_insights", USER, DATE, log);
 
     expect(generateCoachInsightsIfAllowed).toHaveBeenCalledWith(USER, log);
-    expect(persistCoachInsights).toHaveBeenCalledWith(USER, result, DATE);
+    expect(persistCoachInsights).toHaveBeenCalledWith(USER, result, DATE, {
+      latestDate: "2026-09-01",
+      entryCount: 3,
+    });
     expect(generateNutritionInsightsIfAllowed).not.toHaveBeenCalled();
     expect(persistNutritionInsights).not.toHaveBeenCalled();
   });
@@ -108,7 +116,10 @@ describe("dispatchRecomputeAnalytics", () => {
     await dispatchRecomputeAnalytics("overview_analysis", USER, DATE, log);
 
     expect(generateOverviewAnalysisIfAllowed).toHaveBeenCalledWith(USER, log);
-    expect(persistOverviewAnalysis).toHaveBeenCalledWith(USER, result, DATE);
+    expect(persistOverviewAnalysis).toHaveBeenCalledWith(USER, result, DATE, {
+      latestDate: "2026-09-01",
+      entryCount: 3,
+    });
     expect(generateCoachInsightsIfAllowed).not.toHaveBeenCalled();
     expect(generateNutritionInsightsIfAllowed).not.toHaveBeenCalled();
   });

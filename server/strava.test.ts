@@ -11,6 +11,7 @@ import {
   computeSyncAfterEpoch,
   createSignedState,
   deauthorizeStravaBestEffort,
+  enrichCaloriesFromDetail,
   fetchStravaActivities,
   verifySignedState,
 } from './strava';
@@ -281,6 +282,61 @@ describe('fetchStravaActivities', () => {
     expect(err.retryAfterMs).toBe(120_000);
     // Initial attempt + 3 retries.
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('enrichCaloriesFromDetail', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  const log = { warn: vi.fn() };
+
+  function candidates(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      stravaActivityId: String(i + 1),
+      calories: null as number | null,
+    })) as unknown as Parameters<typeof enrichCaloriesFromDetail>[1];
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(1700000000000));
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('enriches every candidate while the time budget holds', async () => {
+    fetchMock.mockResolvedValue(stravaResponse({ id: 1, calories: 480.4 }));
+    const workouts = candidates(3);
+
+    await enrichCaloriesFromDetail('token', workouts, log);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(workouts.map((w) => w.calories)).toEqual([480, 480, 480]);
+    expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it('stops once the overall budget is spent, keeping the rows already enriched', async () => {
+    // Each detail call limps along for 12s: the third finishes at 36s, past
+    // the 30s budget, so the fourth and fifth are never attempted.
+    fetchMock.mockImplementation(async () => {
+      vi.setSystemTime(Date.now() + 12_000);
+      return stravaResponse({ id: 1, calories: 500 });
+    });
+    const workouts = candidates(5);
+
+    await enrichCaloriesFromDetail('token', workouts, log);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(workouts.map((w) => w.calories)).toEqual([500, 500, 500, null, null]);
+    expect(log.warn).toHaveBeenCalledWith(
+      { attempted: 3, of: 5 },
+      expect.stringContaining('time budget'),
+    );
   });
 });
 

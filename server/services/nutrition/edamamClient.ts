@@ -183,8 +183,9 @@ export async function searchEdamamFoods(
   }
   // Diagnostic: how many hits Edamam returned vs. how many mapped (a gap means
   // foods were dropped for missing/zero macros).
+  // Counts only — the query is athlete-typed free text (S2).
   logger.info(
-    { query, hintCount: hints.length, mapped: foods.length },
+    { queryLength: query.length, hintCount: hints.length, mapped: foods.length },
     "[nutrition] Edamam search diagnostics",
   );
   return { foods, reached: true };

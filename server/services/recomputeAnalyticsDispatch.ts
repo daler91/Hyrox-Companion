@@ -12,6 +12,8 @@ import type { AnalyticsFeature } from "@shared/schema";
 import type { Logger } from "pino";
 
 import {
+  getNutritionAnchor,
+  getWorkoutAnchor,
   persistCoachInsights,
   persistNutritionInsights,
   persistOverviewAnalysis,
@@ -35,9 +37,12 @@ export async function dispatchRecomputeAnalytics(
     case "overview_analysis": {
       // Self-gated: leave the prior stored analysis intact when consent/budget
       // block the call (the caller's once-per-day claim stops a same-day retry).
+      // The anchor is read before generating for the reason documented on
+      // regenerateAndStoreRacePrediction.
+      const anchor = await getWorkoutAnchor(userId);
       const outcome = await generateOverviewAnalysisIfAllowed(userId, log);
       if (outcome.ok) {
-        await persistOverviewAnalysis(userId, outcome.result, localDate);
+        await persistOverviewAnalysis(userId, outcome.result, localDate, anchor);
       } else {
         // bearer:disable javascript_lang_logger_leak — reason is a fixed enum, no PII
         log.info({ reason: outcome.reason }, "[pg-boss] Overview analysis recompute skipped (gated)");
@@ -45,9 +50,10 @@ export async function dispatchRecomputeAnalytics(
       return;
     }
     case "coach_insights": {
+      const anchor = await getWorkoutAnchor(userId);
       const outcome = await generateCoachInsightsIfAllowed(userId, log);
       if (outcome.ok) {
-        await persistCoachInsights(userId, outcome.result, localDate);
+        await persistCoachInsights(userId, outcome.result, localDate, anchor);
       } else {
         // bearer:disable javascript_lang_logger_leak — reason is a fixed enum, no PII
         log.info({ reason: outcome.reason }, "[pg-boss] Coach insights recompute skipped (gated)");
@@ -55,9 +61,10 @@ export async function dispatchRecomputeAnalytics(
       return;
     }
     case "nutrition_insights": {
+      const anchor = await getNutritionAnchor(userId);
       const outcome = await generateNutritionInsightsIfAllowed(userId, log);
       if (outcome.ok) {
-        await persistNutritionInsights(userId, outcome.result, localDate);
+        await persistNutritionInsights(userId, outcome.result, localDate, anchor);
       } else {
         // bearer:disable javascript_lang_logger_leak — reason is a fixed enum, no PII
         log.info({ reason: outcome.reason }, "[pg-boss] Nutrition insights recompute skipped (gated)");

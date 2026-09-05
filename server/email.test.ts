@@ -1,4 +1,3 @@
-import type { User } from "@shared/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Shared Resend mock. Hoisted so the vi.mock factory below can reference it —
@@ -31,58 +30,20 @@ vi.mock("./logger", () => ({
   },
 }));
 
+import { createMockMissedWorkout, createMockUser, createMockWeeklySummary } from "../test/factories";
 import {
   sendEmail,
   sendMissedWorkoutReminder,
   sendWeeklySummary,
 } from "./email";
-import type {
-  MissedWorkoutData,
-  WeeklySummaryData,
-} from "./emailTemplates";
 import { env } from "./env";
 import { logger } from "./logger";
 
 describe("email sending", () => {
-  const baseUser: User = {
-    id: "user_1",
-    email: "test@example.com",
-    firstName: "John",
-    lastName: "Doe",
-    profileImageUrl: null,
-    weightUnit: "kg",
-    distanceUnit: "km",
-    weeklyGoal: 5,
-    emailNotifications: true,
-    aiCoachEnabled: true,
-    isAutoCoaching: false,
-    lastWeeklySummaryAt: null,
-    lastMissedReminderAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  const baseUser = createMockUser({ id: "user_1", email: "test@example.com", aiCoachEnabled: true });
 
-  const weeklyData: WeeklySummaryData = {
-    completedCount: 3,
-    plannedCount: 4,
-    missedCount: 1,
-    skippedCount: 0,
-    completionRate: 75,
-    currentStreak: 2,
-    prsThisWeek: 1,
-    totalDuration: 125,
-    weekStartDate: "Oct 1",
-    weekEndDate: "Oct 7",
-  };
-
-  const missedWorkouts: MissedWorkoutData[] = [
-    {
-      date: "Oct 3",
-      focus: "Strength",
-      mainWorkout: "Squats, Deadlifts, Bench",
-      planName: "Hyrox Base",
-    },
-  ];
+  const weeklyData = createMockWeeklySummary();
+  const missedWorkouts = [createMockMissedWorkout()];
 
   beforeEach(() => {
     vi.clearAllMocks();

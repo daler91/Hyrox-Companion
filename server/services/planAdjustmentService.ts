@@ -392,6 +392,17 @@ export async function createPlanAdjustmentProposal(
   return { kind: "proposal", proposal };
 }
 
+/**
+ * Thrown inside the apply transaction when the proposal turns out to be
+ * resolved already — the one outcome that genuinely means "not pending".
+ */
+class ProposalNoLongerPendingError extends Error {
+  constructor() {
+    super("proposal no longer pending");
+    this.name = "ProposalNoLongerPendingError";
+  }
+}
+
 const APPLY_FAILURE_MESSAGES: Record<ApplyPlanProposalFailureReason, string> = {
   not_pending: "That proposal was already applied, dismissed, or replaced by a newer one.",
   stale:
@@ -754,14 +765,23 @@ export async function applyPlanAdjustmentProposal(
       });
 
       const resolved = await storage.planProposals.resolve(proposalId, userId, "applied", tx);
-      if (!resolved) throw new Error("proposal no longer pending");
+      if (!resolved) throw new ProposalNoLongerPendingError();
     });
   } catch (err) {
-    // err is a DB/consistency error plus internal identifiers, no message or
-    // workout content.
-    // bearer:disable javascript_lang_logger_leak
-    log.warn({ err, userId, proposalId }, "[plan-adjustment] Apply transaction rolled back");
-    return applyFailure("not_pending");
+    if (err instanceof ProposalNoLongerPendingError) {
+      // internal identifiers only, no message or workout content.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn({ userId, proposalId }, "[plan-adjustment] Proposal resolved elsewhere during apply");
+      return applyFailure("not_pending");
+    }
+    // Anything else — a deadlock, statement timeout, constraint violation,
+    // a plan day deleted mid-apply — is a fault, not a resolution. The
+    // transaction rolled back, so the plan is unchanged; surfacing it as a
+    // 500 lets the client show its retry copy and lets alerting see it.
+    // This used to be folded into "not_pending", which told the athlete the
+    // proposal was "already applied, dismissed, or replaced" behind a 409
+    // while the card re-appeared beneath that very message.
+    throw err;
   }
 
   // Deliberately NOT enqueuing auto-coach for rescheduled days here (unlike

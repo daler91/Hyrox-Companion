@@ -51,6 +51,9 @@ export function usePreferencesForm() {
   // remote preferences never load (e.g. query error) so edits can still
   // surface the sticky save bar.
   const baselineSnapshotRef = useRef<PreferencesSnapshot | null>(null);
+  // Mirror of `hasChanges` readable from the preferences effect without
+  // re-running it on every keystroke.
+  const hasChangesRef = useRef(false);
   // Snapshot of values before the most recent save, used to offer an
   // "Undo" action on the post-save toast.
   const undoSnapshotRef = useRef<PreferencesSnapshot | null>(null);
@@ -75,20 +78,25 @@ export function usePreferencesForm() {
   });
 
   useEffect(() => {
-    if (preferences) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDraft(preferencesToDraft(preferences));
-      // Seed the baseline snapshot on first load. After saves, onSuccess
-      // keeps the baseline in sync with committed values.
-      if (!baselineSnapshotRef.current) {
-        baselineSnapshotRef.current = preferencesToSnapshot(preferences);
-      }
+    if (!preferences) return;
+    // A refetch that lands mid-edit (window focus, another tab's save, the
+    // post-save invalidation racing a fresh keystroke) must not wipe what the
+    // athlete has typed: while the draft is dirty only the baseline is seeded
+    // if it never was, and the draft re-syncs on the next clean refetch.
+    if (hasChangesRef.current) {
+      baselineSnapshotRef.current ??= preferencesToSnapshot(preferences);
+      return;
     }
+    // Clean: the server row IS the committed state, so both move together.
+    baselineSnapshotRef.current = preferencesToSnapshot(preferences);
+    setDraft(preferencesToDraft(preferences));
   }, [preferences]);
 
   useEffect(() => {
     const baseline = baselineSnapshotRef.current ?? DEFAULT_PREFERENCES_SNAPSHOT;
-    setHasChanges(JSON.stringify(draftToSnapshot(draft)) !== JSON.stringify(baseline));
+    const dirty = JSON.stringify(draftToSnapshot(draft)) !== JSON.stringify(baseline);
+    hasChangesRef.current = dirty;
+    setHasChanges(dirty);
   }, [draft]);
 
   const saveMutation = useMutation({
@@ -99,6 +107,7 @@ export function usePreferencesForm() {
       // Promote the saved values to the dirty-state baseline so we don't
       // depend on the invalidating preferences query timing.
       baselineSnapshotRef.current = savePayloadToSnapshot(variables);
+      hasChangesRef.current = false;
       setHasChanges(false);
       if (pendingStyleAuditRef.current) {
         const nextAudit = [pendingStyleAuditRef.current, ...styleAuditEntries].slice(0, 10);

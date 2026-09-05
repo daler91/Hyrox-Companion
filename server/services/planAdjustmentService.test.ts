@@ -336,6 +336,15 @@ function mockStructuredApplyScenario(overrides: Partial<EnrichedPlanAdjustmentCh
   return { day, change };
 }
 
+/** One pending, unstructured change on a day with no sets: apply reaches the update. */
+function mockUnstructuredApplyScenario() {
+  const day = planDayRow();
+  vi.mocked(storage.planProposals.getById).mockResolvedValue(proposalRow([enrichedChange(day)]));
+  vi.mocked(storage.plans.getPlanDaysByIds).mockResolvedValue([day]);
+  vi.mocked(storage.workouts.getExerciseSetsByPlanDays).mockResolvedValue(new Map([["day-1", []]]));
+  return day;
+}
+
 describe("applyPlanAdjustmentProposal", () => {
   it("returns undefined for an unknown proposal", async () => {
     vi.mocked(storage.planProposals.getById).mockResolvedValue(undefined);
@@ -422,6 +431,32 @@ describe("applyPlanAdjustmentProposal", () => {
       dbMockState.tx,
     );
     expect(parseStructuredPlanDaySuggestionRows).not.toHaveBeenCalled();
+  });
+
+  it("reports not_pending only when the proposal was resolved elsewhere mid-apply", async () => {
+    const day = mockUnstructuredApplyScenario();
+    vi.mocked(storage.plans.updatePlanDay).mockResolvedValue(day);
+    // A concurrent dismiss won the race: resolve() finds nothing pending.
+    vi.mocked(storage.planProposals.resolve).mockResolvedValue(undefined);
+
+    const result = await applyPlanAdjustmentProposal("user-1", "prop-1");
+
+    expect(result).toMatchObject({ applied: false, reason: "not_pending" });
+  });
+
+  it("rethrows a transaction fault instead of reporting it as already applied", async () => {
+    mockUnstructuredApplyScenario();
+    // A statement timeout is a fault. It used to come back as not_pending —
+    // a 409 telling the athlete the proposal was "already applied" while the
+    // still-pending card re-rendered under that message.
+    vi.mocked(storage.plans.updatePlanDay).mockRejectedValue(
+      new Error("canceling statement due to statement timeout"),
+    );
+
+    await expect(applyPlanAdjustmentProposal("user-1", "prop-1")).rejects.toThrow(
+      /statement timeout/,
+    );
+    expect(storage.planProposals.resolve).not.toHaveBeenCalled();
   });
 
   it("clears exercise rows when converting a table-backed day to rest", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyAiError, ErrorCode, isLikelyAiProviderFailure } from "./errors";
+import { classifyAiError, ErrorCode, isDatabaseError, isLikelyAiProviderFailure } from "./errors";
 
 describe("isLikelyAiProviderFailure", () => {
   it.each([
@@ -27,6 +27,28 @@ describe("isLikelyAiProviderFailure", () => {
   ])("does not treat %p as an AI provider failure", (message) => {
     expect(isLikelyAiProviderFailure(new Error(message))).toBe(false);
   });
+
+  it.each([
+    ["a statement timeout", { code: "57014", severity: "ERROR", message: "canceling statement due to statement timeout" }],
+    ["a deadlock", { code: "40P01", severity: "ERROR", message: "deadlock detected" }],
+    ["a pool connect timeout wrapped as a cause", { message: "query failed", cause: { code: "57P01", severity: "FATAL", message: "timeout exceeded when trying to connect" } }],
+  ])("does not treat %s as an AI provider failure even though its text says timeout", (_label, err) => {
+    expect(isDatabaseError(err)).toBe(true);
+    expect(isLikelyAiProviderFailure(err)).toBe(false);
+  });
+
+  it("does not mistake a Node errno for a database error", () => {
+    expect(isDatabaseError({ code: "EPIPE", message: "broken pipe" })).toBe(false);
+    expect(isDatabaseError({ code: "ECONNRESET" })).toBe(false);
+  });
+
+  it.each(["activity 84295 could not be fetched", "wrote 5030 bytes", "row 4000 rejected"])(
+    "does not read the digits inside %p as an HTTP status",
+    (message) => {
+      expect(isLikelyAiProviderFailure(new Error(message))).toBe(false);
+      expect(classifyAiError(new Error(message)).code).toBe(ErrorCode.AI_ERROR);
+    },
+  );
 
   it("accepts strings and arbitrary throws", () => {
     expect(isLikelyAiProviderFailure("gemini exploded")).toBe(true);

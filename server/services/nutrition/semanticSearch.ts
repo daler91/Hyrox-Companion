@@ -55,7 +55,11 @@ export async function maybeSemanticSearch(
     const byId = await storage.nutrition.getVisibleFoodsByIds(userId, ids);
     return ids.map((id) => byId.get(id)).filter((food): food is Food => food !== undefined);
   } catch (err) {
-    logger.warn({ err, query }, "[nutrition] semantic search degraded; using keyword results only");
+    // Length only — the query is athlete-typed free text (S2).
+    logger.warn(
+      { err, queryLength: query.length },
+      "[nutrition] semantic search degraded; using keyword results only",
+    );
     return [];
   }
 }

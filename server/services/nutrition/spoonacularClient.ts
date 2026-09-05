@@ -366,7 +366,7 @@ export async function searchSpoonacularFoods(
     .map(String)
     .slice(0, SPOONACULAR_MAX_PRODUCTS);
   if (ids.length === 0) {
-    logger.info({ query, searchHits }, "[nutrition] Spoonacular search: reached, no products");
+    logger.info({ queryLength: query.length, searchHits }, "[nutrition] Spoonacular search: reached, no products");
     return { foods: [], reached: true };
   }
 

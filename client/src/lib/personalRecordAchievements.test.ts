@@ -20,14 +20,30 @@ function achievement(overrides: Partial<PersonalRecordAchievement> = {}): Person
 }
 
 describe("toastPersonalRecordAchievements", () => {
-  it("shows one success toast per achievement", () => {
+  it("shows one success toast for a single achievement", () => {
     const toast = vi.fn();
 
     toastPersonalRecordAchievements(toast, [achievement()]);
 
+    expect(toast).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith({
       title: "New PR",
       description: "Back Squat: Max weight 105",
+    });
+  });
+
+  it("folds several achievements into one toast so none is hidden by the single-toast limit", () => {
+    const toast = vi.fn();
+
+    toastPersonalRecordAchievements(toast, [
+      achievement(),
+      achievement({ exerciseName: "kettlebell_swings", metricLabel: "Est. 1RM", value: 40 }),
+    ]);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith({
+      title: "2 new PRs",
+      description: "Back Squat: Max weight 105 · KB Swings: Est. 1RM 40",
     });
   });
 

@@ -8,7 +8,7 @@ import {
   type TrainingLoadOverview,
   type TrainingPlanWithDays,
 } from "@shared/schema";
-import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
+import { convertWeight, getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences, type WeightUnit } from "@shared/unitConversion";
 import pLimit from "p-limit";
 import { z } from "zod";
 
@@ -426,15 +426,40 @@ export interface ProgressiveOverloadViolation {
  * deload, which the same prompt asks for.
  */
 /** exerciseName -> weekNumber -> heaviest prescribed weight that week. */
-function collectHeaviestWeightsByWeek(days: readonly GeneratedDay[]): Map<string, Map<number, number>> {
+/** The unit a generated set's weight is in: its own stamp, else the default. */
+function generatedSetUnit(set: GeneratedExerciseSet, defaultUnit: WeightUnit): WeightUnit {
+  return set.weightUnit ? standardizeWeightUnit(set.weightUnit) : defaultUnit;
+}
+
+/** A generated set's weight in kilograms, or null when it has none. */
+function generatedSetWeightKg(set: GeneratedExerciseSet, defaultUnit: WeightUnit): number | null {
+  if (typeof set.weight !== "number") return null;
+  return convertWeight(set.weight, generatedSetUnit(set, defaultUnit), "kg");
+}
+
+/**
+ * Heaviest weight per exercise per week, in kilograms.
+ *
+ * Reads each set's own unit stamp: adjacent weeks come from independent
+ * model calls, so one week labelled kg and the next lbs is exactly what the
+ * stamp exists to absorb. Comparing the raw numbers instead read
+ * 100 kg -> 225 lbs (a real 2%) as a 125% jump and clamped week two to 108 —
+ * still labelled lbs, so the athlete was prescribed 49 kg. The mirror case
+ * (100 lbs -> 50 kg, a real 11%) read as a deload and shipped over the
+ * ceiling the clamp exists to enforce.
+ */
+function collectHeaviestWeightsByWeek(
+  days: readonly GeneratedDay[],
+  defaultUnit: WeightUnit,
+): Map<string, Map<number, number>> {
   const byExercise = new Map<string, Map<number, number>>();
   for (const day of days) {
     for (const exercise of day.exercises ?? []) {
       for (const set of exercise.sets ?? []) {
-        const weight = typeof set.weight === "number" ? set.weight : null;
-        if (weight == null || weight < MIN_TRACKED_WEIGHT) continue;
+        const weightKg = generatedSetWeightKg(set, defaultUnit);
+        if (weightKg == null || weightKg < MIN_TRACKED_WEIGHT) continue;
         const weeks = byExercise.get(exercise.exerciseName) ?? new Map<number, number>();
-        weeks.set(day.weekNumber, Math.max(weeks.get(day.weekNumber) ?? 0, weight));
+        weeks.set(day.weekNumber, Math.max(weeks.get(day.weekNumber) ?? 0, weightKg));
         byExercise.set(exercise.exerciseName, weeks);
       }
     }
@@ -445,8 +470,9 @@ function collectHeaviestWeightsByWeek(days: readonly GeneratedDay[]): Map<string
 export function findProgressiveOverloadViolations(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
+  defaultUnit: WeightUnit = "kg",
 ): ProgressiveOverloadViolation[] {
-  const byExercise = collectHeaviestWeightsByWeek(days);
+  const byExercise = collectHeaviestWeightsByWeek(days, defaultUnit);
   const violations: ProgressiveOverloadViolation[] = [];
   for (const [exerciseName, weeks] of byExercise) {
     const ordered = [...weeks.keys()].sort((a, b) => a - b);
@@ -480,7 +506,7 @@ export function findProgressiveOverloadViolations(
   return violations.sort((a, b) => b.increasePct - a.increasePct);
 }
 
-/** One exercise-week whose prescribed weight was reduced to the ceiling. */
+/** One exercise-week whose prescribed weight was reduced to the ceiling. Weights in kg. */
 export interface ProgressiveOverloadClamp {
   exerciseName: string;
   weekNumber: number;
@@ -506,9 +532,10 @@ export interface ProgressiveOverloadClamp {
 export function clampProgressiveOverload(
   days: readonly GeneratedDay[],
   maxIncreasePct: number = MAX_WEEKLY_WEIGHT_INCREASE_PCT,
+  defaultUnit: WeightUnit = "kg",
 ): ProgressiveOverloadClamp[] {
   const clamps: ProgressiveOverloadClamp[] = [];
-  const weeksByExercise = collectHeaviestWeightsByWeek(days);
+  const weeksByExercise = collectHeaviestWeightsByWeek(days, defaultUnit);
 
   for (const [exerciseName, weeks] of weeksByExercise) {
     let previousWeek: number | null = null;
@@ -521,7 +548,7 @@ export function clampProgressiveOverload(
         const ceiling = Math.floor(previousMax * (1 + maxIncreasePct / 100) * 10) / 10;
         if (heaviest > ceiling) {
           clamps.push({ exerciseName, weekNumber, fromWeight: heaviest, toWeight: ceiling, ceiling });
-          applyWeightCeiling(days, exerciseName, weekNumber, ceiling);
+          applyWeightCeiling(days, exerciseName, weekNumber, ceiling, defaultUnit);
           heaviest = ceiling;
         }
       }
@@ -536,25 +563,30 @@ export function clampProgressiveOverload(
 
 type GeneratedExerciseSet = NonNullable<NonNullable<GeneratedDay["exercises"]>[number]["sets"]>[number];
 
-/** Lower every set of `exerciseName` in `weekNumber` that sits above `ceiling`. */
+/** Lower every set of `exerciseName` in `weekNumber` that sits above `ceilingKg`. */
 function applyWeightCeiling(
   days: readonly GeneratedDay[],
   exerciseName: string,
   weekNumber: number,
-  ceiling: number,
+  ceilingKg: number,
+  defaultUnit: WeightUnit,
 ): void {
   for (const day of days) {
     if (day.weekNumber !== weekNumber) continue;
     for (const exercise of day.exercises ?? []) {
-      if (exercise.exerciseName === exerciseName) capSetWeights(exercise.sets ?? [], ceiling);
+      if (exercise.exerciseName === exerciseName) capSetWeights(exercise.sets ?? [], ceilingKg, defaultUnit);
     }
   }
 }
 
 /** Split out to keep `applyWeightCeiling` under the cognitive-complexity ceiling. */
-function capSetWeights(sets: GeneratedExerciseSet[], ceiling: number): void {
+function capSetWeights(sets: GeneratedExerciseSet[], ceilingKg: number, defaultUnit: WeightUnit): void {
   for (const set of sets) {
-    if (typeof set.weight === "number" && set.weight > ceiling) set.weight = ceiling;
+    const weightKg = generatedSetWeightKg(set, defaultUnit);
+    if (weightKg == null || weightKg <= ceilingKg) continue;
+    // Write the ceiling back in the set's OWN unit, floored to one decimal in
+    // that unit so it can never round back above the ceiling.
+    set.weight = Math.floor(convertWeight(ceilingKg, "kg", generatedSetUnit(set, defaultUnit)) * 10) / 10;
   }
 }
 
@@ -681,7 +713,11 @@ async function generatePlanDays(
   // the model wrote, so a coaching rationale referring to a specific load can
   // disagree with the set it describes. Everything clamped is logged.
   const overloadViolations = findProgressiveOverloadViolations(days);
-  const overloadClamps = clampProgressiveOverload(days);
+  const overloadClamps = clampProgressiveOverload(
+    days,
+    MAX_WEEKLY_WEIGHT_INCREASE_PCT,
+    standardizeWeightUnit(unitPreferences.weightUnit),
+  );
   if (overloadViolations.length > 0) {
     // Carries neither the athlete's id nor their prescribed loads. The logger
     // mixin omits userId on purpose (see the S2 note in server/logger.ts) and

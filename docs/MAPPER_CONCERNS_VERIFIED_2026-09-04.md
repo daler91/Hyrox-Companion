@@ -40,6 +40,25 @@ notes, and none was a lens finding.** Two of them were filed as style gripes.
 | `AthleteNoteInput` wiped the textarea mid-typing on a prop change                                                                          | Medium   | The only one of five sibling free-text inputs missing the `lastExternal` guard.                                                 |
 | Plan generation fanned out up to 12 (×2 queue workers = 24) concurrent reasoning calls on a bare `Promise.all`                             | Medium   | Now `pLimit(3)`, matching `AI_PARSE_CONCURRENCY` in the reparse path.                                                           |
 
+## Fixed in the second pass (2026-09-05)
+
+The eleven trivial/small Mediums from the first pass's "still open" list. Every
+fix carries a regression test verified to fail against the pre-fix code.
+
+| Concern                                                                                                     | Severity | Note                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Food-search queries logged in plaintext at info level                                                       | Medium   | All four search clients log `queryLength` only.                                                                                                             |
+| Apply-transaction failures reported as "already applied or dismissed" (409)                                 | Medium   | A typed `ProposalNoLongerPendingError` marks the one lost-race case; any other fault out of the transaction now rethrows as the 500 it is.                    |
+| DB statement timeouts classified as `AI_UPSTREAM_FAILURE`                                                   | Medium   | `isDatabaseError` (SQLSTATE code + pg severity, walking the cause chain) short-circuits the classifier; the message patterns are word-bounded.                |
+| Unit-blind progressive-overload clamp                                                                       | Medium   | Weeks compare in kg via each set's own stamp; the ceiling is written back in the set's unit, floored so it never rounds above the ceiling.                    |
+| Analytics staleness anchor stamped after generation                                                         | Medium   | `regenerateAndStore*` and the cron dispatch capture the anchor before generating and hand it to `persist*`.                                                  |
+| `usePreferencesForm` discards unsaved edits on refetch                                                      | Medium   | A refetch re-syncs draft and baseline only while the form is clean.                                                                                          |
+| `ExerciseTable` snapshots `defaultExpanded` at mount                                                        | Medium   | Rows arriving after mount are opened once; a row the athlete collapsed stays collapsed.                                                                       |
+| `TOAST_LIMIT = 1` eats multi-PR celebrations                                                                | Medium   | One toast per batch ("2 new PRs", every record in the description).                                                                                          |
+| `syncStructureStepMirror` outside the set transaction; delete path never syncs                              | Medium   | Add/update/delete each run the set write and the step mirror in one transaction; delete re-syncs the step from the lowest-ordered surviving sibling.          |
+| Strava calorie enrichment with no overall deadline                                                          | Medium   | 30 s wall-clock budget across the pass; stops with `attempted`/`of` counts, remaining rows import without calories.                                           |
+| Email tests excluded from typechecking with drifted fixtures                                                | Medium   | Both files are back in `tsconfig.test.json`; fixtures come from `createMockUser` / `createMockWeeklySummary` / `createMockMissedWorkout` in `test/factories`. |
+
 ## Refuted
 
 Recorded so they are not re-raised.
@@ -60,28 +79,12 @@ Recorded so they are not re-raised.
 
 Verified real, not addressed in this pass. Roughly cheapest-first within each group.
 
-**Medium.** Food-search queries logged in plaintext at info level, bypassing the
-redaction the S2 fix exists to enforce (trivial). Apply-transaction failures
-reported to the athlete as "already applied or dismissed" behind a 409 that
-defeats retries (trivial). DB statement timeouts misclassified as
-`AI_UPSTREAM_FAILURE` by unanchored message-string matching, misdirecting
-on-call during database incidents (small). Unit-blind progressive-overload
-clamping — a `100kg`/`225lbs` adjacent-week pair clamps to `108 lbs` ≈ 49kg
-(small). Analytics staleness anchors stamped _after_ generation, so a workout
-logged during the window is absorbed but unanalysed (small). `AthleteNoteInput`'s
-siblings: `FieldInput` shows an unsaved number permanently after a failed save,
-`usePreferencesForm` discards unsaved settings edits when the push-notification
-toggles on the same page invalidate preferences, `ExerciseTable` snapshots
-`defaultExpanded` at mount so late-arriving rows never expand (small each).
-`useWorkoutDetail`'s whole-object rollbacks clobber concurrently-saved edits —
-one named interleaving causes real persisted loss (medium). `TOAST_LIMIT = 1`
-eats multi-PR celebrations _and_ the save confirmation (trivial). Clerk identity
-deleted before DB erasure with no webhook, sweep or runbook to recover a
-stranded account (medium). `syncStructureStepMirror` runs outside the set
-transaction, and the delete path never syncs it at all (small). Strava calorie
-enrichment: up to ~13 minutes inside one HTTP request, no overall deadline
-(small). Two email test files excluded from typechecking with fixtures drifted
-off the real schema, missing the H6 completion-rate fields (small).
+**Medium.** `FieldInput` shows an unsaved number permanently after a failed
+save (small; the same family as the `AthleteNoteInput` fix above, needs a small
+state machine rather than a flag). `useWorkoutDetail`'s whole-object rollbacks
+clobber concurrently-saved edits — one named interleaving causes real persisted
+loss (medium). Clerk identity deleted before DB erasure with no webhook, sweep
+or runbook to recover a stranded account (medium).
 
 **Low.** AI circuit breaker counts non-retryable 4xx toward tripping (a blanket
 "ignore 4xx" would be wrong — 401 _should_ trip it). Streaming bypasses the

@@ -132,6 +132,18 @@ export function ExerciseTable({
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() =>
     defaultExpanded ? new Set(rowKeys) : new Set(),
   );
+  // Rows this table has already offered to open. `defaultExpanded` applies to
+  // every row once, including those that arrive after mount (the sets query
+  // resolving behind an already-open sheet, a text parse landing) — but a row
+  // the athlete has collapsed stays collapsed across re-renders.
+  const [seenKeys, setSeenKeys] = useState<Set<string>>(() => new Set(rowKeys));
+  if (defaultExpanded) {
+    const unseen = rowKeys.filter((key) => !seenKeys.has(key));
+    if (unseen.length > 0) {
+      setSeenKeys((prev) => new Set([...prev, ...unseen]));
+      setExpandedKeys((prev) => new Set([...prev, ...unseen]));
+    }
+  }
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [pendingExpand, setPendingExpand] = useState<{
     exerciseName: string;
