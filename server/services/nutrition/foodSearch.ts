@@ -111,9 +111,9 @@ async function resolveProvider(
 ): Promise<{ foods: Food[]; live: boolean }> {
   if (settled.status !== "fulfilled") {
     // The query is free text the athlete typed — diet- and health-revealing —
-    // and the access log deliberately strips it (S2). Log its length only.
-    // bearer:disable javascript_lang_logger_leak — err is the provider
-    // failure; queryLength is a count, not the query.
+    // and the access log deliberately strips it (S2). Log its length only;
+    // err is the provider failure.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ err: settled.reason, queryLength: query.length }, warnMsg);
     return { foods: [], live: false };
   }
