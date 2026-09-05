@@ -6,7 +6,16 @@ import type {
   MealType,
   NutritionMacroTotals,
 } from "@shared/schema";
-import { ChefHat, CopyPlus, Loader2, Pencil, RotateCw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import {
+  ChefHat,
+  CopyPlus,
+  Loader2,
+  Pencil,
+  RotateCw,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/timeline/ConfirmDialog";
@@ -282,7 +291,12 @@ export function MealSection({
               aria-label={`Copy yesterday's ${label.toLowerCase()}`}
               data-testid={`button-copy-yesterday-${mealType}`}
             >
-              <CopyPlus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Copy yesterday&apos;s
+              {copyYesterdayPending ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <CopyPlus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              )}{" "}
+              {copyYesterdayPending ? "Copying…" : "Copy yesterday’s"}
             </Button>
           )}
         </div>

@@ -32,7 +32,13 @@ const ENTRY: FoodLogEntryWithNutrition = {
   mealType: "breakfast",
   entryMethod: "manual",
   // Per-100g source for the entry, the raw input the server scales (audit M22).
-  per100g: { caloriesPer100g: 89, proteinPer100g: 1.1, carbPer100g: 22.8, fatPer100g: 0.3, fiberPer100g: 2.6 },
+  per100g: {
+    caloriesPer100g: 89,
+    proteinPer100g: 1.1,
+    carbPer100g: 22.8,
+    fatPer100g: 0.3,
+    fiberPer100g: 2.6,
+  },
   nutrition: { calories: 105, protein: 1.3, carb: 27, fat: 0.4, fiber: 3.1 },
 };
 
@@ -49,7 +55,13 @@ const TARGET: MealFuelTarget = {
 describe("MealSection", () => {
   it("renders nothing when there are no entries and no target", () => {
     const { container } = render(
-      <MealSection label="Breakfast" mealType="breakfast" entries={[]} onEdit={vi.fn()} onDelete={vi.fn()} />,
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -105,7 +117,13 @@ describe("MealSection", () => {
 
     unmount();
     render(
-      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={vi.fn()} />,
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
     );
     expect(screen.queryByTestId("button-log-again-e1")).not.toBeInTheDocument();
   });
@@ -187,6 +205,24 @@ describe("MealSection", () => {
     expect(screen.queryByTestId("button-save-recipe-breakfast")).not.toBeInTheDocument();
   });
 
+  it("shows a spinner on the copy-yesterday button while pending", () => {
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[]}
+        target={TARGET}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyYesterday={vi.fn()}
+        copyYesterdayPending
+      />,
+    );
+    const btn = screen.getByTestId("button-copy-yesterday-breakfast");
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveTextContent("Copying…");
+  });
+
   it("hides copy-yesterday once the meal has entries", () => {
     render(
       <MealSection
@@ -204,7 +240,15 @@ describe("MealSection", () => {
   it("fires edit callback on edit click", async () => {
     const onEdit = vi.fn();
     const user = userEvent.setup();
-    render(<MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={onEdit} onDelete={vi.fn()} />);
+    render(
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={onEdit}
+        onDelete={vi.fn()}
+      />,
+    );
 
     expect(screen.getByText("Banana")).toBeInTheDocument();
     await user.click(screen.getByTestId("button-edit-e1"));
@@ -215,7 +259,13 @@ describe("MealSection", () => {
     const onDelete = vi.fn();
     const user = userEvent.setup();
     render(
-      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={onDelete}
+      />,
     );
 
     await user.click(screen.getByTestId("button-delete-e1"));
@@ -230,7 +280,13 @@ describe("MealSection", () => {
     const onDelete = vi.fn();
     const user = userEvent.setup();
     render(
-      <MealSection label="Breakfast" mealType="breakfast" entries={[ENTRY]} onEdit={vi.fn()} onDelete={onDelete} />,
+      <MealSection
+        label="Breakfast"
+        mealType="breakfast"
+        entries={[ENTRY]}
+        onEdit={vi.fn()}
+        onDelete={onDelete}
+      />,
     );
 
     await user.click(screen.getByTestId("button-delete-e1"));
