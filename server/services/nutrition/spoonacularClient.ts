@@ -366,6 +366,8 @@ export async function searchSpoonacularFoods(
     .map(String)
     .slice(0, SPOONACULAR_MAX_PRODUCTS);
   if (ids.length === 0) {
+    // bearer:disable javascript_lang_logger_leak — two counts; the query text
+    // itself is athlete-typed free text and is deliberately not logged (S2).
     logger.info({ queryLength: query.length, searchHits }, "[nutrition] Spoonacular search: reached, no products");
     return { foods: [], reached: true };
   }

@@ -56,6 +56,8 @@ export async function maybeSemanticSearch(
     return ids.map((id) => byId.get(id)).filter((food): food is Food => food !== undefined);
   } catch (err) {
     // Length only — the query is athlete-typed free text (S2).
+    // bearer:disable javascript_lang_logger_leak — err is the embedding /
+    // vector-search failure; queryLength is a count, not the query.
     logger.warn(
       { err, queryLength: query.length },
       "[nutrition] semantic search degraded; using keyword results only",
