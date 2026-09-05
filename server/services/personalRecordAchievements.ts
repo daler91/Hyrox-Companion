@@ -7,6 +7,7 @@ import type {
 } from "@shared/schema";
 import type { UnitPreferences } from "@shared/unitConversion";
 
+import type { SlimLoggedExerciseSet } from "../storage/shared";
 import { calculatePersonalRecords, type ExerciseSetWithDate, isTimePrImprovement } from "./analyticsService";
 
 type CreatedWorkoutWithSets = WorkoutLog & { exerciseSets?: ExerciseSet[] };
@@ -54,7 +55,12 @@ function getMetricValue(record: PersonalRecord, metric: PersonalRecordMetric) {
 }
 
 export function findPersonalRecordAchievements(
-  priorSets: ExerciseSetWithDate[],
+  // Slim projection (no jsonb columns, no notes/planned*/block fields): the
+  // only prior-set field this function reads is workoutLogId/date/scalar
+  // metrics, all of which calculatePersonalRecords already accepts via
+  // SlimLoggedExerciseSet. Callers with the full LoggedExerciseSetWithDate
+  // shape still satisfy this structurally.
+  priorSets: SlimLoggedExerciseSet[],
   createdWorkout: CreatedWorkoutWithSets,
   preferences?: UnitPreferences,
 ): PersonalRecordAchievement[] {
