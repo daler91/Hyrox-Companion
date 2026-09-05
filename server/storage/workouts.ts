@@ -16,7 +16,7 @@ import { normalizeExerciseName } from "@shared/schema/exercises";
 import { restampSetPatch, type UnitPreferences } from "@shared/unitConversion";
 import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
-import { db } from "../db";
+import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import {
@@ -625,15 +625,20 @@ export class WorkoutStorage {
     const owns = await adapter.ownsContainer(context.id, context.userId);
     if (!owns) return undefined;
     const baseValues = adapter.buildInsertValues(context.id, set, 0);
-    const [created] = await db
-      .insert(exerciseSets)
-      .values({
-        ...baseValues,
-        sortOrder: sql<number>`(select coalesce(max(${exerciseSets.sortOrder}), -1) + 1 from ${exerciseSets} where ${adapter.scopeWhere(context.id)})`,
-      })
-      .returning();
-    if (created) await this.syncStructureStepMirror(created);
-    return created;
+    // The set row and its structure-step mirror commit together: a sync
+    // failure rolls the insert back rather than leaving a set whose step
+    // still shows the previous prescription.
+    return db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(exerciseSets)
+        .values({
+          ...baseValues,
+          sortOrder: sql<number>`(select coalesce(max(${exerciseSets.sortOrder}), -1) + 1 from ${exerciseSets} where ${adapter.scopeWhere(context.id)})`,
+        })
+        .returning();
+      if (created) await this.syncStructureStepMirror(created, tx);
+      return created;
+    });
   }
 
   async updateExerciseSetNormalized(
@@ -660,29 +665,37 @@ export class WorkoutStorage {
     if (expectedVersion !== undefined) {
       conditions.push(eq(exerciseSets.version, expectedVersion));
     }
-    const [updated] = await db
-      .update(exerciseSets)
-      .set({ ...setData, version: sql`${exerciseSets.version} + 1` })
-      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
-      .returning();
+    // Same transaction as the mirror sync (see addExerciseSetNormalized).
+    return db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(exerciseSets)
+        .set({ ...setData, version: sql`${exerciseSets.version} + 1` })
+        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+        .returning();
 
-    if (!updated && expectedVersion !== undefined) {
-      // Row exists (owned check passed above) but the version condition
-      // didn't match → another writer bumped it. Surface the current
-      // version in the error details so the client can refresh + retry.
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        "Exercise set was modified by another request",
-        409,
-        { currentVersion: owned.version, expectedVersion },
-      );
-    }
+      if (!updated && expectedVersion !== undefined) {
+        // Row exists (owned check passed above) but the version condition
+        // didn't match → another writer bumped it. Surface the current
+        // version in the error details so the client can refresh + retry.
+        throw new AppError(
+          ErrorCode.CONFLICT,
+          "Exercise set was modified by another request",
+          409,
+          { currentVersion: owned.version, expectedVersion },
+        );
+      }
 
-    if (updated) await this.syncStructureStepMirror(updated);
-    return updated;
+      if (updated) await this.syncStructureStepMirror(updated, tx);
+      return updated;
+    });
   }
 
-  private async syncStructureStepMirror(row: ExerciseSet): Promise<void> {
+  /**
+   * Copies a set's prescription onto the structure step it was expanded from,
+   * so the structured view and the flat set list never disagree. Runs on the
+   * caller's executor so it commits (or rolls back) with the set write.
+   */
+  private async syncStructureStepMirror(row: ExerciseSet, executor: DbExecutor = db): Promise<void> {
     if (!row.blockId || row.stepNumber == null) return;
     let ownerCondition = null;
     if (row.workoutLogId) {
@@ -691,13 +704,13 @@ export class WorkoutStorage {
       ownerCondition = eq(workoutStructureBlocks.planDayId, row.planDayId);
     }
     if (!ownerCondition) return;
-    const [block] = await db
+    const [block] = await executor
       .select({ id: workoutStructureBlocks.id })
       .from(workoutStructureBlocks)
       .where(and(eq(workoutStructureBlocks.id, row.blockId), ownerCondition))
       .limit(1);
     if (!block) return;
-    await db
+    await executor
       .update(workoutStructureSteps)
       .set({
         exerciseName: row.exerciseName,
@@ -725,7 +738,26 @@ export class WorkoutStorage {
     const owned = await this.getExerciseSetOwned(setId, context.userId);
     if (!owned) return true;
     if (adapter.getContainerId(owned) !== context.id) return false;
-    await db.delete(exerciseSets).where(eq(exerciseSets.id, setId));
+    await db.transaction(async (tx) => {
+      await tx.delete(exerciseSets).where(eq(exerciseSets.id, setId));
+      // Many sets can mirror one step (EMOM minutes, rounds). When the deleted
+      // set was the one most recently copied onto the step, the step would
+      // keep a prescription no surviving set carries — re-sync it from the
+      // lowest-ordered sibling still on that step. If none survive, the step
+      // stays as the structure's own record of what was prescribed.
+      if (!owned.blockId || owned.stepNumber == null) return;
+      const [sibling] = await tx
+        .select()
+        .from(exerciseSets)
+        .where(and(
+          adapter.scopeWhere(context.id),
+          eq(exerciseSets.blockId, owned.blockId),
+          eq(exerciseSets.stepNumber, owned.stepNumber),
+        ))
+        .orderBy(asc(exerciseSets.sortOrder))
+        .limit(1);
+      if (sibling) await this.syncStructureStepMirror(sibling, tx);
+    });
     return true;
   }
 

@@ -527,6 +527,12 @@ export async function fetchStravaActivities(
 // activities and get fully enriched; a large backfill enriches only the
 // newest 25 (the ones users actually look at).
 const STRAVA_CALORIE_DETAIL_LIMIT = 25;
+// Wall-clock budget for the whole enrichment pass. The per-call timeout only
+// bounds one request; 25 sequential calls that each limp to the timeout (and
+// retry once) would hold the sync request open for minutes. Once spent, the
+// remaining rows import without calories — the same non-fatal outcome as a
+// failed detail call.
+const STRAVA_ENRICHMENT_BUDGET_MS = 30_000;
 
 interface StravaDetailedActivity {
   id: number;
@@ -538,7 +544,8 @@ interface StravaDetailedActivity {
  * (mutated in place). Never throws — a failed detail fetch just leaves the
  * list-derived row as-is.
  */
-async function enrichCaloriesFromDetail(
+/** Exported ONLY for the time-budget regression test (strava.test.ts). */
+export async function enrichCaloriesFromDetail(
   accessToken: string,
   workouts: ReturnType<typeof mapStravaActivityToWorkout>[],
   log: Pick<typeof logger, "warn">,
@@ -549,8 +556,20 @@ async function enrichCaloriesFromDetail(
     .filter((w) => w.calories === null)
     .slice(-STRAVA_CALORIE_DETAIL_LIMIT);
 
+  const startedAt = Date.now();
   let failures = 0;
+  let attempted = 0;
   for (const workout of candidates) {
+    if (Date.now() - startedAt >= STRAVA_ENRICHMENT_BUDGET_MS) {
+      // Only counts are logged; no activity data or token material.
+      // bearer:disable javascript_lang_logger_leak
+      log.warn(
+        { attempted, of: candidates.length },
+        "Strava calorie enrichment stopped early: time budget spent (non-fatal)",
+      );
+      break;
+    }
+    attempted++;
     try {
       const detail = await retryWithJitter(
         async () => {

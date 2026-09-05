@@ -1,5 +1,6 @@
-import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays } from "@shared/schema";
+import type { InsertWorkoutLog, PlanDay,TimelineEntry, TrainingPlan, TrainingPlanWithDays, User } from "@shared/schema";
 
+import type { MissedWorkoutData, WeeklySummaryData } from "../server/emailTemplates";
 import type { UpcomingWorkout } from "../server/gemini/suggestionService";
 import type { TrainingContext } from "../server/gemini/types";
 
@@ -144,6 +145,94 @@ export function createMockTrainingContext(
       weeklyVolume: undefined,
       progressionFlags: [],
     },
+    ...overrides,
+  };
+}
+
+/** A complete `users` row so tests typecheck against the live schema. */
+export function createMockUser(overrides: Partial<User> = {}): User {
+  return {
+    id: "user-1",
+    email: "athlete@example.com",
+    firstName: "John",
+    lastName: "Doe",
+    profileImageUrl: null,
+    weightUnit: "kg",
+    distanceUnit: "km",
+    userTimezone: "UTC",
+    weeklyGoal: 5,
+    mealSchedule: 4,
+    emailNotifications: true,
+    emailWeeklySummary: true,
+    emailMissedReminder: true,
+    showAdherenceInsights: true,
+    aiCoachEnabled: false,
+    coachAutoApplyPlanChanges: false,
+    trainingStyleId: "balanced_default",
+    trainingStylePreviousId: null,
+    trainingStyleChangedAt: null,
+    trainingStyleRecomputeNow: false,
+    onboardingCompleted: true,
+    division: "open",
+    gender: null,
+    age: null,
+    bodyweightKg: null,
+    heightCm: null,
+    restingHr: null,
+    maxHr: null,
+    ftp: null,
+    activityLevel: null,
+    weightGoalDirection: null,
+    weightGoalRateKgPerWeek: null,
+    trainingConstraints: null,
+    mafAge: null,
+    mafInjuryIllnessMedication: null,
+    mafConsistency: null,
+    mafTrend: null,
+    mafCategory: null,
+    mafHrDataAvailable: null,
+    mafHr: null,
+    mafBaselineTestScheduledAt: null,
+    isAutoCoaching: false,
+    lastWeeklySummaryAt: null,
+    lastMissedReminderAt: null,
+    pushRefuelReminder: false,
+    pushLoggingReminder: false,
+    lastRefuelReminderAt: null,
+    lastLoggingReminderAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    ...overrides,
+  };
+}
+
+/** A week with 3 of 4 plan days done (75%), one missed, one PR. */
+export function createMockWeeklySummary(overrides: Partial<WeeklySummaryData> = {}): WeeklySummaryData {
+  return {
+    completedCount: 3,
+    planCompletedCount: 3,
+    dueCount: 4,
+    plannedCount: 0,
+    missedCount: 1,
+    skippedCount: 0,
+    excusedCount: 0,
+    completionRate: 75,
+    currentStreak: 2,
+    prsThisWeek: 1,
+    totalDuration: 125,
+    weekStartDate: "Oct 1",
+    weekEndDate: "Oct 7",
+    ...overrides,
+  };
+}
+
+export function createMockMissedWorkout(overrides: Partial<MissedWorkoutData> = {}): MissedWorkoutData {
+  return {
+    planDayId: "plan-day-1",
+    date: "Oct 3",
+    focus: "Strength",
+    mainWorkout: "Squats, Deadlifts, Bench",
+    planName: "Hyrox Base",
     ...overrides,
   };
 }

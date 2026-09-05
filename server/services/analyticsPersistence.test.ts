@@ -1,20 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { listWorkoutLogs, countWorkoutLogs, getLatestLogDate, countLogEntries } = vi.hoisted(() => ({
-  listWorkoutLogs: vi.fn(),
-  countWorkoutLogs: vi.fn(),
-  getLatestLogDate: vi.fn(),
-  countLogEntries: vi.fn(),
-}));
+const { listWorkoutLogs, countWorkoutLogs, getLatestLogDate, countLogEntries, upsert, generateRacePrediction } =
+  vi.hoisted(() => ({
+    listWorkoutLogs: vi.fn(),
+    countWorkoutLogs: vi.fn(),
+    getLatestLogDate: vi.fn(),
+    countLogEntries: vi.fn(),
+    upsert: vi.fn(),
+    generateRacePrediction: vi.fn(),
+  }));
 
 vi.mock("../storage", () => ({
   storage: {
     workouts: { listWorkoutLogs, countWorkoutLogs },
     nutrition: { getLatestLogDate, countLogEntries },
+    analyticsResults: { upsert },
   },
 }));
 
-import { getNutritionAnchor, getWorkoutAnchor } from "./analyticsPersistence";
+vi.mock("./racePrediction/racePredictionService", () => ({ generateRacePrediction }));
+
+import {
+  getNutritionAnchor,
+  getWorkoutAnchor,
+  persistRacePrediction,
+  regenerateAndStoreRacePrediction,
+} from "./analyticsPersistence";
 
 describe("getWorkoutAnchor", () => {
   it("pairs the latest workout date with the total row count", async () => {
@@ -62,5 +73,43 @@ describe("getNutritionAnchor", () => {
     countLogEntries.mockResolvedValue(0);
 
     expect(await getNutritionAnchor("u1")).toEqual({ latestDate: null, entryCount: 0 });
+  });
+});
+
+describe("regenerateAndStoreRacePrediction", () => {
+  it("captures the anchor BEFORE generating, so a workout logged mid-generation reads as stale", async () => {
+    upsert.mockClear();
+    listWorkoutLogs.mockResolvedValue([{ date: "2026-09-01" }]);
+    countWorkoutLogs.mockResolvedValue(5);
+    generateRacePrediction.mockImplementation(async () => {
+      // A workout lands while the model is thinking (generation runs up to
+      // 90s). Reading the anchor AFTER generating absorbed it, so a result
+      // that never saw this workout was stored as fresh.
+      listWorkoutLogs.mockResolvedValue([{ date: "2026-09-04" }]);
+      countWorkoutLogs.mockResolvedValue(6);
+      return { generatedAt: "2026-09-04T10:00:00.000Z" };
+    });
+
+    await regenerateAndStoreRacePrediction("u1");
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "race_prediction",
+        lastWorkoutDateAtGeneration: "2026-09-01",
+        entryCountAtGeneration: 5,
+      }),
+    );
+  });
+
+  it("persistRacePrediction still reads its own anchor when the caller has none", async () => {
+    upsert.mockClear();
+    listWorkoutLogs.mockResolvedValue([{ date: "2026-09-02" }]);
+    countWorkoutLogs.mockResolvedValue(7);
+
+    await persistRacePrediction("u1", { generatedAt: "2026-09-02T10:00:00.000Z" } as never);
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ lastWorkoutDateAtGeneration: "2026-09-02", entryCountAtGeneration: 7 }),
+    );
   });
 });

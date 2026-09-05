@@ -110,7 +110,11 @@ async function resolveProvider(
   warnMsg: string,
 ): Promise<{ foods: Food[]; live: boolean }> {
   if (settled.status !== "fulfilled") {
-    logger.warn({ err: settled.reason, query }, warnMsg);
+    // The query is free text the athlete typed — diet- and health-revealing —
+    // and the access log deliberately strips it (S2). Log its length only;
+    // err is the provider failure.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn({ err: settled.reason, queryLength: query.length }, warnMsg);
     return { foods: [], live: false };
   }
   return { foods: await cacheResults(settled.value.foods, provider), live: settled.value.live };
@@ -208,10 +212,13 @@ export async function searchFoods(query: string, userId: string): Promise<FoodSe
   // `gate` above aren't rescored here.
   const results = rankByRelevance(query, merged, scoreCache).slice(0, MAX_RESULTS);
   // Diagnostic: where the merged results came from, so it's clear in the logs
-  // which sources are actually contributing hits.
+  // which sources are actually contributing hits. The query itself is not
+  // logged: it is athlete-typed free text on the highest-volume nutrition
+  // endpoint, and the pino request serializer exists to keep exactly this
+  // out of the logs (S2).
   logger.info(
     {
-      query,
+      queryLength: query.length,
       providersSkipped,
       edamamLive,
       usdaLive,

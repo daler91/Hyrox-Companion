@@ -13,6 +13,7 @@ import {
 import { type Request, type Response, Router } from "express";
 
 import { isAuthenticated } from "../../clerkAuth";
+import { AppError, ErrorCode } from "../../errors";
 import { asyncHandler, rateLimiter, sendNotFound, validateBody, validateQuery } from "../../routeUtils";
 import { lookupBarcode } from "../../services/nutrition/barcode";
 import { getFoodWithServings } from "../../services/nutrition/foodDetail";
@@ -39,6 +40,14 @@ export function registerNutritionFoodRoutes(router: Router): void {
     validateQuery(foodSearchQuerySchema),
     asyncHandler(async (req: Request, res: Response) => {
       const { q } = req.query as unknown as FoodSearchQuery;
+      // validateQuery has already replaced req.query with the parsed, trimmed
+      // string, so this cannot trip. Static analysis cannot see that: without
+      // a typeof narrowing at the boundary, `?q=a&q=b` reads as an array
+      // reaching the service's length checks (CodeQL js/type-confusion-
+      // through-parameter-tampering).
+      if (typeof q !== "string") {
+        throw new AppError(ErrorCode.BAD_REQUEST, "q must be a single string", 400);
+      }
       res.json(await searchFoods(q, getUserId(req)));
     }),
   );

@@ -417,3 +417,121 @@ describe("WorkoutStorage.updateExerciseSetNormalized — unit re-stamp (audit L4
     expect(setArg.plannedWeight).toBe(90);
   });
 });
+
+describe("WorkoutStorage exercise-set writes — structure-step mirror (audit M16)", () => {
+  let storage: WorkoutStorage;
+  const CONTEXT = { kind: "workout", id: "workout-1", userId: "user-1" } as const;
+  const MIRRORED = {
+    id: "set-1",
+    workoutLogId: "workout-1",
+    planDayId: null,
+    version: 1,
+    blockId: "block-1",
+    stepNumber: 2,
+    sortOrder: 0,
+    exerciseName: "back_squat",
+    category: "strength",
+    reps: 5,
+    weight: 100,
+  };
+
+  beforeEach(() => {
+    storage = new WorkoutStorage();
+    vi.clearAllMocks();
+  });
+
+  function mockOwned(row: Record<string, unknown>) {
+    vi.spyOn(storage, "getExerciseSetOwned").mockResolvedValue(
+      row as Awaited<ReturnType<WorkoutStorage["getExerciseSetOwned"]>>,
+    );
+  }
+
+  /** One `select().from().where()[.orderBy()].limit()` chain resolving to `rows`. */
+  function selectChain(rows: unknown[]) {
+    const limit = vi.fn().mockResolvedValue(rows);
+    const orderBy = vi.fn().mockReturnValue({ limit });
+    const where = vi.fn().mockReturnValue({ limit, orderBy });
+    const from = vi.fn().mockReturnValue({ where });
+    vi.mocked(db.select).mockReturnValueOnce({ from } as never);
+    return { orderBy, limit };
+  }
+
+  function mockDelete() {
+    const whereMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(db.delete).mockReturnValue({ where: whereMock } as never);
+    return whereMock;
+  }
+
+  it("updates the set and its mirrored step inside one transaction", async () => {
+    mockOwned(MIRRORED);
+    const { setMock } = mockUpdateReturning([{ ...MIRRORED, reps: 8, version: 2 }]);
+    selectChain([{ id: "block-1" }]);
+
+    await storage.updateExerciseSetNormalized(CONTEXT, "set-1", { reps: 8 });
+
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    // First UPDATE is the set row, second is the step mirror.
+    expect(db.update).toHaveBeenCalledTimes(2);
+    expect(setMock.mock.calls[1]?.[0]).toMatchObject({ exerciseName: "back_squat", targetReps: 8 });
+  });
+
+  it("inserts the set and its mirrored step inside one transaction", async () => {
+    vi.spyOn(storage, "getWorkoutLog").mockResolvedValue({ id: "workout-1" } as never);
+    const returning = vi.fn().mockResolvedValue([{ ...MIRRORED, id: "set-2" }]);
+    vi.mocked(db.insert).mockReturnValue({ values: vi.fn().mockReturnValue({ returning }) } as never);
+    const { setMock } = mockUpdateReturning([]);
+    selectChain([{ id: "block-1" }]);
+
+    const created = await storage.addExerciseSetNormalized(CONTEXT, {
+      exerciseName: "back_squat",
+      category: "strength",
+      setNumber: 2,
+      blockId: "block-1",
+      stepNumber: 2,
+    });
+
+    expect(created).toMatchObject({ id: "set-2" });
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(setMock.mock.calls[0]?.[0]).toMatchObject({ exerciseName: "back_squat", targetReps: 5 });
+  });
+
+  it("re-syncs the step from the lowest-ordered surviving sibling after a delete", async () => {
+    mockOwned({ ...MIRRORED, reps: 12 });
+    const whereMock = mockDelete();
+    const sibling = { ...MIRRORED, id: "set-3", sortOrder: 1, reps: 5 };
+    const { orderBy } = selectChain([sibling]); // sibling lookup
+    selectChain([{ id: "block-1" }]); // block ownership check inside the mirror sync
+    const { setMock } = mockUpdateReturning([]);
+
+    const deleted = await storage.deleteExerciseSetNormalized(CONTEXT, "set-1");
+
+    expect(deleted).toBe(true);
+    expect(whereMock).toHaveBeenCalledTimes(1);
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(orderBy).toHaveBeenCalledTimes(1);
+    // The step now reflects the sibling's prescription, not the deleted set's 12 reps.
+    expect(db.update).toHaveBeenCalledTimes(1);
+    expect(setMock.mock.calls[0]?.[0]).toMatchObject({ targetReps: 5 });
+  });
+
+  it("leaves the step alone when the deleted set was the last one mirroring it", async () => {
+    mockOwned(MIRRORED);
+    mockDelete();
+    selectChain([]);
+
+    const deleted = await storage.deleteExerciseSetNormalized(CONTEXT, "set-1");
+
+    expect(deleted).toBe(true);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("skips the sibling lookup entirely for a set that mirrors no step", async () => {
+    mockOwned({ ...MIRRORED, blockId: null, stepNumber: null });
+    mockDelete();
+
+    await storage.deleteExerciseSetNormalized(CONTEXT, "set-1");
+
+    expect(db.select).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+  });
+});

@@ -64,10 +64,38 @@ function errorText(err: unknown): string {
 // plans.ts kept its own copy that had already drifted ("429" matched one and
 // not the other), so a reparse failure could be classified as an AI outage by
 // one helper and as a non-AI error by the other (A6).
-const AI_QUOTA_PATTERN = /quota|rate.?limit|resource.?exhausted|429/;
-const AI_INVALID_PATTERN = /invalid|bad.?request|400|unsupported/;
-const AI_UNAVAILABLE_PATTERN = /unavailable|502|503|504|deadline|timeout|timed.?out|overloaded|upstream/;
+// The numeric codes are word-bounded so they only match as HTTP statuses:
+// unanchored, an activity id like 84295 or a byte count matched "429".
+const AI_QUOTA_PATTERN = /quota|rate.?limit|resource.?exhausted|\b429\b/;
+const AI_INVALID_PATTERN = /invalid|bad.?request|\b400\b|unsupported/;
+const AI_UNAVAILABLE_PATTERN = /unavailable|\b50[234]\b|deadline|timeout|timed.?out|overloaded|upstream/;
 const AI_PROVIDER_PATTERN = /gemini|google\.?genai|\bai\b/;
+
+/** A five-character SQLSTATE: two-character class plus three-character subclass. */
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+
+/**
+ * Whether an error came from Postgres. pg errors carry a SQLSTATE `code`
+ * ("57014" statement timeout, "40P01" deadlock, "23505" unique violation) and
+ * a `severity`; Node's own errno codes ("EPIPE", "ECONNRESET") are letters
+ * only and carry no severity, which keeps them out. Walks the cause chain
+ * because drizzle can wrap the pg error.
+ */
+export function isDatabaseError(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
+    const rec = current as { code?: unknown; severity?: unknown; cause?: unknown };
+    if (
+      typeof rec.code === "string" &&
+      SQLSTATE_PATTERN.test(rec.code) &&
+      (typeof rec.severity === "string" || /^\d/.test(rec.code))
+    ) {
+      return true;
+    }
+    current = rec.cause;
+  }
+  return false;
+}
 
 /**
  * Whether an unknown throw looks like it came from the AI provider (as opposed
@@ -75,6 +103,12 @@ const AI_PROVIDER_PATTERN = /gemini|google\.?genai|\bai\b/;
  * through classifyAiError rather than report a generic 500.
  */
 export function isLikelyAiProviderFailure(err: unknown): boolean {
+  // A Postgres statement timeout says "timeout" and a pool exhaustion says
+  // "timeout exceeded when trying to connect" — matched by the outage pattern
+  // below, so a database incident inside an AI handler was reported to the
+  // athlete as an AI outage and pointed on-call at the wrong system. The
+  // structured code settles it before any message sniffing.
+  if (isDatabaseError(err)) return false;
   const lower = errorText(err).toLowerCase();
   return (
     AI_PROVIDER_PATTERN.test(lower) ||

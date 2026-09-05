@@ -58,16 +58,16 @@ function renderForm(preferences = serverPreferences()) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
-  return renderHook(() => usePreferencesForm(), { wrapper });
+  return { ...renderHook(() => usePreferencesForm(), { wrapper }), qc };
 }
 
 /** Render the form on default server preferences and wait for hydration. */
 async function renderHydratedForm() {
-  const { result } = renderForm();
+  const { result, qc } = renderForm();
   await waitFor(() => {
     expect(result.current.draft.weeklyGoal).toBe("5");
   });
-  return result;
+  return { result, qc };
 }
 
 describe("usePreferencesForm", () => {
@@ -88,7 +88,7 @@ describe("usePreferencesForm", () => {
   });
 
   it("flips hasChanges on edit and back off when the edit is reverted", async () => {
-    const result = await renderHydratedForm();
+    const { result } = await renderHydratedForm();
 
     act(() => {
       result.current.updateField("weeklyGoal", "6");
@@ -120,7 +120,7 @@ describe("usePreferencesForm", () => {
   });
 
   it("saves the draft, resets the dirty flag, and promotes the new baseline", async () => {
-    const result = await renderHydratedForm();
+    const { result } = await renderHydratedForm();
 
     act(() => {
       result.current.updateField("weeklyGoal", "6");
@@ -150,6 +150,39 @@ describe("usePreferencesForm", () => {
     expect(result.current.hasChanges).toBe(false);
   });
 
+  it("keeps unsaved edits when a background refetch delivers changed preferences", async () => {
+    const { result, qc } = await renderHydratedForm();
+
+    act(() => {
+      result.current.updateField("weeklyGoal", "6");
+    });
+    // Another tab saved a unit change; the query cache updates underneath the
+    // half-edited form.
+    act(() => {
+      qc.setQueryData(["preferences"], serverPreferences({ weightUnit: "lbs" }));
+    });
+    await waitFor(() => {
+      expect(result.current.preferences?.weightUnit).toBe("lbs");
+    });
+
+    expect(result.current.draft.weeklyGoal).toBe("6");
+    expect(result.current.hasChanges).toBe(true);
+  });
+
+  it("re-syncs the draft and baseline from a refetch once the form is clean", async () => {
+    const { result, qc } = await renderHydratedForm();
+
+    act(() => {
+      qc.setQueryData(["preferences"], serverPreferences({ weightUnit: "lbs" }));
+    });
+
+    await waitFor(() => {
+      expect(result.current.draft.weightUnit).toBe("lbs");
+    });
+    // The server row is the committed state, so adopting it is not a change.
+    expect(result.current.hasChanges).toBe(false);
+  });
+
   it("blocks saving MAF style without valid MAF inputs", async () => {
     const { result } = renderForm();
     await waitFor(() => {
@@ -171,7 +204,7 @@ describe("usePreferencesForm", () => {
   });
 
   it("offers Undo after save that restores and persists the previous values", async () => {
-    const result = await renderHydratedForm();
+    const { result } = await renderHydratedForm();
 
     act(() => {
       result.current.updateField("weeklyGoal", "7");

@@ -1,6 +1,6 @@
-import type { User } from "@shared/schema";
 import { afterEach,describe, expect, it } from "vitest";
 
+import { createMockMissedWorkout, createMockUser, createMockWeeklySummary } from "../test/factories";
 import {
   buildMissedWorkoutEmail,
   buildWeeklySummaryEmail,
@@ -11,39 +11,12 @@ import {
 import { env } from "./env";
 
 describe("email generation", () => {
-  const baseUser: User = {
-    id: 1,
-    email: "test@example.com",
-    firstName: "John",
-    lastName: "Doe",
-    password: "dummy_hash_value",
-    role: "user",
-    unitPreference: "metric",
-    targetRaceId: null,
-    createdAt: new Date(),
-    currentStreak: 0,
-    highestStreak: 0,
-    lastWorkoutDate: null,
-  };
+  const baseUser = createMockUser({ email: "test@example.com" });
 
-  const baseData: WeeklySummaryData = {
-    completedCount: 3,
-    // The rate is now plan days completed / plan days due, from one table
-    // (audit H6): 3 of 4 due = 75%, the same figure this fixture always
-    // asserted but no longer arrived at by dividing workout_logs by plan_days.
-    planCompletedCount: 3,
-    dueCount: 4,
-    plannedCount: 0,
-    missedCount: 1,
-    skippedCount: 0,
-    excusedCount: 0,
-    completionRate: 75,
-    currentStreak: 2,
-    prsThisWeek: 1,
-    totalDuration: 125, // 2h 5m
-    weekStartDate: "Oct 1",
-    weekEndDate: "Oct 7",
-  };
+  // The rate is plan days completed / plan days due, from one table (audit
+  // H6): 3 of 4 due = 75%, the same figure this fixture always asserted but
+  // no longer arrived at by dividing workout_logs by plan_days.
+  const baseData = createMockWeeklySummary();
 
   describe("getAppUrl", () => {
     const originalAppUrl = env.APP_URL;
@@ -235,14 +208,7 @@ describe("email generation", () => {
   });
 
   describe("buildMissedWorkoutEmail", () => {
-    const missedWorkouts: MissedWorkoutData[] = [
-      {
-        date: "Oct 3",
-        focus: "Strength",
-        mainWorkout: "Squats, Deadlifts, Bench",
-        planName: "Hyrox Base",
-      },
-    ];
+    const missedWorkouts = [createMockMissedWorkout()];
 
     it("generates HTML snapshot correctly", () => {
       const { html, subject } = buildMissedWorkoutEmail(
@@ -261,7 +227,7 @@ describe("email generation", () => {
     it("formats subject correctly for plural workouts", () => {
       const missed = [
         ...missedWorkouts,
-        { date: "Oct 4", focus: "Run", mainWorkout: "5k easy pace" },
+        { planDayId: "plan-day-2", date: "Oct 4", focus: "Run", mainWorkout: "5k easy pace" },
       ];
       const { subject } = buildMissedWorkoutEmail(baseUser, missed);
       expect(subject).toBe("2 missed workouts — get back on track");

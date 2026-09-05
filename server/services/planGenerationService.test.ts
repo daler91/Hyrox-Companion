@@ -864,6 +864,56 @@ describe("clampProgressiveOverload (audit H17, M7 — enforcement)", () => {
     expect(days[1].exercises[0].sets.map((s) => s.weight)).toEqual([60, 90, 108]);
   });
 
+  /** `day(...)` with each set carrying its own unit stamp. */
+  const stampedDay = (
+    weekNumber: number,
+    exerciseName: string,
+    sets: Array<{ weight: number; weightUnit: string }>,
+  ) => {
+    const built = day(weekNumber, exerciseName, sets.map((set) => set.weight));
+    built.exercises[0].sets = built.exercises[0].sets.map((set, i) => ({ ...set, weightUnit: sets[i].weightUnit }));
+    return built;
+  };
+
+  /** Two back-squat weeks, one stamped set each; returns the pair and a reader for week two's weight. */
+  const backSquatWeeks = (weekOne: { weight: number; weightUnit: string }, weekTwo: { weight: number; weightUnit: string }) => {
+    const days = [stampedDay(1, "back_squat", [weekOne]), stampedDay(2, "back_squat", [weekTwo])];
+    return { days, weekTwoWeight: () => days[1].exercises[0].sets[0].weight };
+  };
+
+  it("reads each set's unit stamp, so a kg week followed by a lbs week is not a false jump", () => {
+    // 100 kg -> 225 lbs is a real 2% increase (225 lb = 102 kg). Comparing the
+    // raw numbers read it as 125%, clamped week two to 108 — still labelled
+    // lbs — and prescribed the athlete 49 kg. Adjacent weeks come from
+    // independent model calls, so mixed labels are the expected case.
+    const { days, weekTwoWeight } = backSquatWeeks({ weight: 100, weightUnit: "kg" }, { weight: 225, weightUnit: "lbs" });
+
+    expect(clampProgressiveOverload(days)).toEqual([]);
+    expect(weekTwoWeight()).toBe(225);
+    expect(findProgressiveOverloadViolations(days)).toEqual([]);
+  });
+
+  it("catches a real jump the unit change used to hide, and writes the ceiling in the set's own unit", () => {
+    // 100 lbs (45.4 kg) -> 50 kg is an 11% jump; the raw comparison saw
+    // 100 -> 50 and let it through as a deload.
+    const { days, weekTwoWeight } = backSquatWeeks({ weight: 100, weightUnit: "lbs" }, { weight: 50, weightUnit: "kg" });
+
+    expect(clampProgressiveOverload(days)).toHaveLength(1);
+    // 45.36 kg x 1.08 = 48.98, floored to 48.9 kg and written back as kg.
+    expect(weekTwoWeight()).toBeCloseTo(48.9, 1);
+    expect(findProgressiveOverloadViolations(days)).toEqual([]);
+  });
+
+  it("writes the ceiling back in lbs for a lbs-stamped set", () => {
+    const { days, weekTwoWeight } = backSquatWeeks({ weight: 100, weightUnit: "kg" }, { weight: 300, weightUnit: "lbs" });
+
+    clampProgressiveOverload(days);
+
+    // Ceiling 108 kg = 238.099 lbs, floored to 238.0 in the set's own unit —
+    // 238.1 lbs would convert back to 108.004 kg, above the ceiling.
+    expect(weekTwoWeight()).toBe(238);
+  });
+
   it("leaves a plan that already respects the ceiling untouched", () => {
     const days = [day(1, "back_squat", [100]), day(2, "back_squat", [105])];
 

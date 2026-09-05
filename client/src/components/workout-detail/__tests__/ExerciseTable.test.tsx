@@ -116,6 +116,39 @@ describe("ExerciseTable drag handle", () => {
     expect(screen.getByTestId("planned-weight-set-diff")).toHaveTextContent("planned 100 kg");
   });
 
+  it("opens rows that arrive after mount when defaultExpanded is set, without re-opening a collapsed one", async () => {
+    // A log sheet mounts with defaultExpanded before its sets query resolves.
+    const props = {
+      workoutId: "log-1",
+      weightUnit: "kg" as const,
+      onUpdateSet: vi.fn(),
+      onAddSet: vi.fn(),
+      onDeleteSet: vi.fn(),
+      defaultExpanded: true,
+    };
+    const { rerender } = render(<ExerciseTable {...props} exerciseSets={[]} />);
+
+    rerender(<ExerciseTable {...props} exerciseSets={[makeSet({ id: "late-1" })]} />);
+    expect(screen.getByTestId("set-row-late-1")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText(/Collapse Back Squat/i));
+    expect(screen.queryByTestId("set-row-late-1")).not.toBeInTheDocument();
+
+    // A second late row opens; the collapsed one is left alone.
+    rerender(
+      <ExerciseTable
+        {...props}
+        exerciseSets={[
+          makeSet({ id: "late-1" }),
+          makeSet({ id: "late-2", exerciseName: "kettlebell_swings", sortOrder: 1 }),
+        ]}
+      />,
+    );
+    expect(screen.queryByTestId("set-row-late-1")).not.toBeInTheDocument();
+    expect(screen.getByTestId("set-row-late-2")).toBeInTheDocument();
+  });
+
   it("renders dynamic distance units in collapsed prescriptions and planned diffs", () => {
     const sets: ExerciseSet[] = [
       makeSet({

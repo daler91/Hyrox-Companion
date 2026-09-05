@@ -40,8 +40,6 @@
     "server/bootstrap/observability.test.ts",
     "server/bootstrap/startup.test.ts",
     "server/clerkAuth.test.ts",
-    "server/email.test.ts",
-    "server/emailTemplates.test.ts",
     "server/routeUtils.test.ts",
     "server/routes.test.ts",
     "server/routes/__tests__/account.test.ts",
