@@ -3,18 +3,14 @@ import { useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import { type DroppedMutationInfo,onMutationDropped } from "@/lib/offlineQueue";
 
-function reasonLabel(reason: DroppedMutationInfo["reason"]): string {
-  switch (reason) {
-    case "max_retries":
-      return "too many failed attempts";
-    case "max_age":
-      return "it expired after 7 days";
-    case "queue_overflow":
-      return "the offline queue was full";
-    case "storage_full":
-      return "this device ran out of offline storage";
-  }
-}
+// A Record over the union keeps the exhaustiveness the switch gave us — a new
+// drop reason fails to compile until it is given a label here.
+const REASON_LABELS: Record<DroppedMutationInfo["reason"], string> = {
+  max_retries: "too many failed attempts",
+  max_age: "it expired after 7 days",
+  queue_overflow: "the offline queue was full",
+  storage_full: "this device ran out of offline storage",
+};
 
 /**
  * Subscribe to the offline mutation queue and show a toast whenever a
@@ -26,7 +22,7 @@ export function useOfflineDropNotifier() {
       toast({
         variant: "destructive",
         title: "Unsaved change lost",
-        description: `A ${info.method} request to ${info.url} was dropped because ${reasonLabel(info.reason)} (${info.retryCount} retries).`,
+        description: `A ${info.method} request to ${info.url} was dropped because ${REASON_LABELS[info.reason]} (${info.retryCount} retries).`,
       });
     });
     return unsubscribe;
