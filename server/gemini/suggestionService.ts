@@ -89,12 +89,20 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
   return validated;
 }
 
+/** Mirrors MAX_EXERCISE_FOCUS_ENTRIES in prompts/coachingContext.ts. */
+const MAX_EXERCISE_FREQUENCY_ENTRIES = 20;
+
 function formatExerciseFrequency(breakdown: Record<string, number>): string {
   const entries = Object.entries(breakdown);
   if (entries.length === 0) return "";
   return (
     "\nExercise frequency:\n" +
-    entries.map(([exercise, count]) => `- ${exercise}: ${count}x`).join("\n") +
+    entries
+      .slice(0, MAX_EXERCISE_FREQUENCY_ENTRIES)
+      // Athlete-authored focus text when it matches no known exercise, so
+      // it is sanitized like every other free-text field on these lines.
+      .map(([exercise, count]) => `- ${sanitizeUserInput(exercise)}: ${count}x`)
+      .join("\n") +
     "\n"
   );
 }
@@ -181,7 +189,11 @@ function formatModificationContext(
 function formatPriorAiContext(workout: UpcomingWorkout): string {
   const prior: string[] = [];
   if (workout.aiRationale?.trim()) {
-    prior.push(`Prior AI review: ${workout.aiRationale.trim()}`);
+    // Despite the name this is NOT model output: `rationale` is a field on
+    // the POST /timeline/ai-suggestions/apply body, so an athlete can write
+    // it directly and have it replayed into the next prompt. Sanitized like
+    // the focus/main/accessory/notes fields on the same rendered line.
+    prior.push(`Prior AI review: ${sanitizeUserInput(workout.aiRationale.trim())}`);
   }
 
   const lastModificationContext = formatModificationContext(

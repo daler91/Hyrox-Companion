@@ -207,7 +207,17 @@ describe("offlineQueue", () => {
     unsubscribe();
   });
 
+  /** Every id given must have been announced as a storage eviction, and no others. */
+  const expectStorageDrops = (dropped: ReturnType<typeof vi.fn>, ids: string[]) => {
+    expect(dropped).toHaveBeenCalledTimes(ids.length);
+    for (const id of ids) {
+      expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id, reason: "storage_full" }));
+    }
+  };
+
   it("trims the oldest half of the queue and retries on QuotaExceededError", () => {
+    const dropped = vi.fn();
+    const unsubscribe = onMutationDropped(dropped);
     // Fill the queue with some mutations
     enqueueMutation("POST", "/api/v1/a", { n: "1" }, { id: "1" });
     enqueueMutation("POST", "/api/v1/a", { n: "2" }, { id: "2" });
@@ -233,10 +243,18 @@ describe("offlineQueue", () => {
     expect(getPendingCount()).toBe(3);
     expect(readStoredQueue().map((m) => m.id)).toEqual(["3", "4", "5"]);
 
+    // Evicting is permanent loss of the athlete's logged work, so the two
+    // dropped entries have to be announced the same way a queue-overflow
+    // eviction is — this path used to discard them in silence.
+    expectStorageDrops(dropped, ["1", "2"]);
+
     setItemSpy.mockRestore();
+    unsubscribe();
   });
 
   it("clears the queue completely if saving trimmed queue still throws QuotaExceededError", () => {
+    const dropped = vi.fn();
+    const unsubscribe = onMutationDropped(dropped);
     enqueueMutation("POST", "/api/v1/a", { n: "1" }, { id: "1" });
     enqueueMutation("POST", "/api/v1/a", { n: "2" }, { id: "2" });
 
@@ -256,6 +274,10 @@ describe("offlineQueue", () => {
     expect(readStoredQueue()).toEqual([]);
     expect(getPendingCount()).toBe(0);
 
+    // The full-clear fallback loses everything, so every entry is announced.
+    expectStorageDrops(dropped, ["1", "2", "3"]);
+
     setItemSpy.mockRestore();
+    unsubscribe();
   });
 });

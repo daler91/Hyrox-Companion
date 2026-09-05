@@ -9,6 +9,7 @@ import {
   type TrainingPlanWithDays,
 } from "@shared/schema";
 import { getStoredDistanceUnit, normalizeParsedDistance, normalizeParsedWeight, normalizeWorkoutTextUnits, standardizeDistanceUnit, standardizeWeightUnit, type UnitPreferences } from "@shared/unitConversion";
+import pLimit from "p-limit";
 import { z } from "zod";
 
 import { generateJsonText } from "../ai/providers";
@@ -25,6 +26,12 @@ import { calculateTrainingLoad } from "./trainingLoadService";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
 
 const PLAN_GENERATION_CHUNK_WEEKS = 2;
+/**
+ * Max plan chunks generated concurrently. Mirrors AI_PARSE_CONCURRENCY in
+ * workoutService/reparse.ts — the provider sees at most this many reasoning
+ * calls in flight from one generation regardless of plan length.
+ */
+const PLAN_CHUNK_CONCURRENCY = 3;
 // Look-back window for the athlete's current training-load posture, matching the
 // coach/analytics load context.
 const LOAD_WINDOW_DAYS = 70;
@@ -646,8 +653,17 @@ async function generatePlanDays(
   signal?: AbortSignal,
 ): Promise<GeneratedDay[]> {
   const ranges = buildWeekRanges(input.totalWeeks);
+  // Bounded like the reparse fan-out (AI_PARSE_CONCURRENCY): a 24-week plan
+  // at PLAN_GENERATION_CHUNK_WEEKS=2 is 12 ranges, and the queue runs plan
+  // jobs two at a time, so an unbounded Promise.all put up to 24 reasoning
+  // calls in flight at once — enough to draw provider 429s that trip the
+  // shared circuit breaker for every user, while the other chunks keep
+  // burning tokens on a generation that can no longer succeed.
+  const limit = pLimit(PLAN_CHUNK_CONCURRENCY);
   const dayChunks = await Promise.all(
-    ranges.map((range) => generatePlanChunk(input, userId, range, unitPreferences, calibration, absences, signal)),
+    ranges.map((range) =>
+      limit(() => generatePlanChunk(input, userId, range, unitPreferences, calibration, absences, signal)),
+    ),
   );
   const days = validateAndOrderGeneratedDays(dayChunks.flat(), input.totalWeeks);
   if (days.length === 0) {

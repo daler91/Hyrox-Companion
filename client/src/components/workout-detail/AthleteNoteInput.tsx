@@ -1,5 +1,5 @@
 import { Pencil } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,13 +40,21 @@ function AthleteNoteInputView({
   const [draft, setDraft] = useState(value ?? "");
   const [isEditing, setIsEditing] = useState(!reviewFirst);
 
-  // Re-sync when the workout prop changes (e.g. the dialog opens on a
-  // different workout). A plain useEffect on `value` is enough — we don't
-  // need to track the previous workout id.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(value ?? "");
-  }, [value]);
+  // Sync from props when the upstream value changes (the dialog opening on a
+  // different workout, an optimistic cache update, a refetch) WITHOUT
+  // fighting an active edit: accept the new prop only when the draft still
+  // matches the last prop we saw, otherwise the in-progress edit wins.
+  //
+  // The unconditional effect this replaces wiped the textarea mid-sentence:
+  // a failed note PATCH rolls the cache back, the prop reverts, and every
+  // character typed since the debounce fired was discarded. The same guard
+  // is used by EditablePrescription, CustomLabelField, NotesField and
+  // WorkoutEffortNotes — this was the one free-text input missing it.
+  const [lastExternal, setLastExternal] = useState(value ?? "");
+  if ((value ?? "") !== lastExternal) {
+    setLastExternal(value ?? "");
+    if (draft === lastExternal) setDraft(value ?? "");
+  }
 
   if (mode === "form") {
     return (

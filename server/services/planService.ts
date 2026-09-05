@@ -1,9 +1,9 @@
 import type { InsertPlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { parse } from "csv-parse/sync";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 
-import { db } from "../db";
+import { db, type Tx } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
@@ -299,6 +299,101 @@ const ALLOWED_TRANSITIONS: Record<PlanDayStatus, readonly PlanDayStatus[]> = {
   skipped: ["planned", "completed"],
 };
 
+/**
+ * Leaving "completed" folds one linked log's content back onto the plan day
+ * and releases the rest. Returns the plan-day columns the caller should
+ * write; extracted from updatePlanDayStatus so that transition reads as one
+ * step rather than inlining the whole cleanup.
+ */
+async function foldLinkedLogsBackOntoPlanDay(
+  tx: Tx,
+  dayId: string,
+  userId: string,
+): Promise<Partial<UpdatePlanDay>> {
+  const carried: Partial<UpdatePlanDay> = {};
+    // Newest-first, and deliberately NOT limited to one row: nothing stops
+    // several logs pointing at one plan day (there is no unique index on
+    // workout_logs.plan_day_id, and the plan-day picker offers days that
+    // already have a log, labelled "(logged)"). The timeline renders a
+    // plan day's log through a last-write-wins Map and hides standalone
+    // logs whose planDayId is set, so the extra rows are invisible here —
+    // which is exactly why deleting them all while copying only one back
+    // destroyed athlete data nobody could see was at risk.
+    const linkedLogs = await tx
+      .select()
+      .from(workoutLogs)
+      .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)))
+      .orderBy(desc(workoutLogs.date), desc(workoutLogs.startedAt), desc(workoutLogs.id));
+    const [existingLog] = linkedLogs;
+    if (existingLog) {
+      // Preserve edits made on the workout log back onto the plan day so
+      // the un-completed day reflects the user's last-known content —
+      // both the free-text fields AND the structured exercise_sets.
+      // Previously only the text survived; the athlete's actual logged
+      // sets got wiped when they toggled status back to planned, which
+      // made re-completing restart from the coach's original prescription
+      // instead of their edits.
+      carried.focus = existingLog.focus;
+      carried.mainWorkout = existingLog.mainWorkout;
+      carried.accessory = existingLog.accessory;
+      carried.notes = existingLog.notes;
+
+      // Snapshot the logged sets, then replace the plan day's prescribed
+      // sets with them. We re-map the rows from workoutLogId-owned to
+      // planDayId-owned by inserting fresh rows (the exercise_set_single_
+      // owner_check constraint makes in-place ownership swaps illegal).
+      const loggedSets = await tx
+        .select()
+        .from(exerciseSets)
+        .where(eq(exerciseSets.workoutLogId, existingLog.id))
+        .orderBy(asc(exerciseSets.sortOrder));
+
+      await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, dayId));
+
+      if (loggedSets.length > 0) {
+        // Carry every column across by spreading the row and overriding
+        // only ownership. The previous explicit field list silently
+        // dropped 17 of them — including the L4 weightUnit/distanceUnit
+        // stamps (so re-completing re-read the numbers against the
+        // athlete's CURRENT preference, the exact ~2.2x misread the stamp
+        // exists to prevent), the planned* prescription snapshot, and the
+        // block/step/group structure columns. Spreading also means a
+        // column added later is carried by default rather than quietly
+        // lost here.
+        await tx.insert(exerciseSets).values(
+          loggedSets.map(({ id: _id, workoutLogId: _workoutLogId, planDayId: _planDayId, version: _version, ...rest }) => ({
+            ...rest,
+            workoutLogId: null,
+            planDayId: dayId,
+          })),
+        );
+      }
+
+      // Delete ONLY the log we just copied onto the plan day — its
+      // exercise_sets cascade, but they are already on the day above.
+      await tx.delete(workoutLogs).where(eq(workoutLogs.id, existingLog.id));
+
+      // Any other log that pointed at this day keeps all of its data and
+      // simply stops being plan-linked, surfacing as a standalone timeline
+      // entry. Unlinking rather than deleting is what makes "Reopen
+      // workout" the reversible action its button implies: the athlete's
+      // sets, RPE, heart-rate and Strava/Garmin activity ids all survive.
+      if (linkedLogs.length > 1) {
+        await tx
+          .update(workoutLogs)
+          .set({ planDayId: null, planId: null })
+          .where(
+            and(
+              eq(workoutLogs.planDayId, dayId),
+              eq(workoutLogs.userId, userId),
+              ne(workoutLogs.id, existingLog.id),
+            ),
+          );
+      }
+    }
+  return carried;
+}
+
 export async function updatePlanDayStatus(
   dayId: string,
   {
@@ -371,63 +466,12 @@ export async function updatePlanDayStatus(
     // Running this on same-state idempotent writes (e.g. planned → planned)
     // or transitions that don't involve "completed" would silently destroy
     // user data (R8).
+    // Only clean up the linked workout log when actually leaving "completed".
+    // Running this on same-state idempotent writes (e.g. planned → planned)
+    // or transitions that don't involve "completed" would silently destroy
+    // user data (R8).
     if (from === "completed" && status !== "completed") {
-      const [existingLog] = await tx
-        .select()
-        .from(workoutLogs)
-        .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)))
-        .limit(1);
-      if (existingLog) {
-        // Preserve edits made on the workout log back onto the plan day so
-        // the un-completed day reflects the user's last-known content —
-        // both the free-text fields AND the structured exercise_sets.
-        // Previously only the text survived; the athlete's actual logged
-        // sets got wiped when they toggled status back to planned, which
-        // made re-completing restart from the coach's original prescription
-        // instead of their edits.
-        updates.focus = existingLog.focus;
-        updates.mainWorkout = existingLog.mainWorkout;
-        updates.accessory = existingLog.accessory;
-        updates.notes = existingLog.notes;
-
-        // Snapshot the logged sets, then replace the plan day's prescribed
-        // sets with them. We re-map the rows from workoutLogId-owned to
-        // planDayId-owned by inserting fresh rows (the exercise_set_single_
-        // owner_check constraint makes in-place ownership swaps illegal).
-        const loggedSets = await tx
-          .select()
-          .from(exerciseSets)
-          .where(eq(exerciseSets.workoutLogId, existingLog.id))
-          .orderBy(asc(exerciseSets.sortOrder));
-
-        await tx.delete(exerciseSets).where(eq(exerciseSets.planDayId, dayId));
-
-        if (loggedSets.length > 0) {
-          await tx.insert(exerciseSets).values(
-            loggedSets.map((s) => ({
-              workoutLogId: null,
-              planDayId: dayId,
-              exerciseName: s.exerciseName,
-              customLabel: s.customLabel,
-              category: s.category,
-              setNumber: s.setNumber,
-              reps: s.reps,
-              weight: s.weight,
-              distance: s.distance,
-              time: s.time,
-              notes: s.notes,
-              confidence: s.confidence,
-              sortOrder: s.sortOrder,
-            })),
-          );
-        }
-
-        // Delete the log last — its exercise_sets cascade, but we've
-        // already copied them to the plan day above.
-        await tx
-          .delete(workoutLogs)
-          .where(and(eq(workoutLogs.planDayId, dayId), eq(workoutLogs.userId, userId)));
-      }
+      Object.assign(updates, await foldLinkedLogsBackOntoPlanDay(tx, dayId, userId));
     }
 
     const [row] = await tx.update(planDays).set(updates).where(eq(planDays.id, dayId)).returning();
