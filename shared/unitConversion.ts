@@ -890,6 +890,110 @@ function getTextUnitReplacement(
   );
 }
 
+/**
+ * One position in the scan: either nothing convertible starts here (and the
+ * cursor moves to `next`), or a number and its unit do, with the converted
+ * text if that unit needs converting at all.
+ */
+type ScanStep =
+  | { kind: "skip"; next: number }
+  | { kind: "match"; unitMatch: TextUnitMatch; replacement: string | null };
+
+function scanConvertibleAt(
+  text: string,
+  lowerText: string,
+  index: number,
+  targetWeightUnit: WeightUnit,
+  targetDistanceUnit: DistanceUnit,
+): ScanStep {
+  const numberToken = parseNumberToken(text, index);
+  if (!numberToken) return { kind: "skip", next: index + 1 };
+
+  // A number reached through a digit-comma-digit group that was not a
+  // thousands group ("7,5kg") is ambiguous — decimal comma or typo — so
+  // leave it exactly as written rather than convert a half-read number.
+  if (text[index - 1] === "," && isDigit(text[index - 2] ?? "")) {
+    return { kind: "skip", next: numberToken.end };
+  }
+
+  const unitStart = skipWhitespace(text, numberToken.end);
+  const unitMatch = matchTextUnit(text, lowerText, unitStart);
+  if (!unitMatch) return { kind: "skip", next: numberToken.end };
+
+  return {
+    kind: "match",
+    unitMatch,
+    replacement: getTextUnitReplacement(
+      text,
+      lowerText,
+      index,
+      numberToken,
+      unitMatch,
+      targetWeightUnit,
+      targetDistanceUnit,
+    ),
+  };
+}
+
+/**
+ * How the scanner should emit a converted value: on its own, together with
+ * the low bound of a range in front of it, or not at all.
+ */
+type RangeEmission =
+  | { kind: "single" }
+  | { kind: "range"; start: number; text: string }
+  | { kind: "decline" };
+
+interface RangeEmissionInput {
+  text: string;
+  lowerText: string;
+  numberStart: number;
+  unitMatch: TextUnitMatch;
+  replacement: string;
+  targetWeightUnit: WeightUnit;
+  targetDistanceUnit: DistanceUnit;
+}
+
+/** The unit binds to the whole range, so a low bound in front of the matched
+ * number has to convert with it. */
+function planRangeEmission({
+  text,
+  lowerText,
+  numberStart,
+  unitMatch,
+  replacement,
+  targetWeightUnit,
+  targetDistanceUnit,
+}: RangeEmissionInput): RangeEmission {
+  const rangeLow = findRangeLowBound(text, numberStart);
+  if (rangeLow == null) return { kind: "single" };
+
+  const lowReplacement = getTextUnitReplacement(
+    text,
+    lowerText,
+    rangeLow.end,
+    { value: rangeLow.value, end: numberStart - 1 },
+    unitMatch,
+    targetWeightUnit,
+    targetDistanceUnit,
+  );
+  // The low bound declined conversion (a pace, ratio or minute shorthand
+  // reading) while the high bound accepted. Converting half a range is worse
+  // than leaving it alone, so emit neither.
+  if (lowReplacement == null) return { kind: "decline" };
+
+  const low = splitConvertedValue(lowReplacement);
+  const high = splitConvertedValue(replacement);
+  // Drop the low bound's label when both land on the same unit
+  // ("176-198 lbs"); keep both when they don't ("900 m-1.1 km").
+  const lowText = low != null && high != null && low.unit === high.unit ? low.value : lowReplacement;
+  return {
+    kind: "range",
+    start: rangeLow.end,
+    text: lowText + text.slice(numberStart - 1, numberStart) + replacement,
+  };
+}
+
 export function normalizeWorkoutTextUnits(
   text: string | null | undefined,
   preferences: UnitPreferences,
@@ -903,73 +1007,33 @@ export function normalizeWorkoutTextUnits(
   let index = 0;
 
   while (index < text.length) {
-    const numberToken = parseNumberToken(text, index);
-    if (!numberToken) {
-      index += 1;
+    const step = scanConvertibleAt(text, lowerText, index, targetWeightUnit, targetDistanceUnit);
+    if (step.kind === "skip") {
+      index = step.next;
       continue;
     }
-
-    // A number reached through a digit-comma-digit group that was not a
-    // thousands group ("7,5kg") is ambiguous — decimal comma or typo — so
-    // leave it exactly as written rather than convert a half-read number.
-    if (text[index - 1] === "," && isDigit(text[index - 2] ?? "")) {
-      index = numberToken.end;
-      continue;
-    }
-
-    const unitStart = skipWhitespace(text, numberToken.end);
-    const unitMatch = matchTextUnit(text, lowerText, unitStart);
-    if (!unitMatch) {
-      index = numberToken.end;
-      continue;
-    }
-
-    const replacement = getTextUnitReplacement(
-      text,
-      lowerText,
-      index,
-      numberToken,
-      unitMatch,
-      targetWeightUnit,
-      targetDistanceUnit,
-    );
+    const { unitMatch, replacement } = step;
 
     if (replacement != null) {
-      // The unit binds to the whole range, so a low bound in front of this
-      // number has to convert with it.
-      const rangeLow = findRangeLowBound(text, index);
-      const lowReplacement =
-        rangeLow == null
-          ? null
-          : getTextUnitReplacement(
-              text,
-              lowerText,
-              rangeLow.end,
-              { value: rangeLow.value, end: index - 1 },
-              unitMatch,
-              targetWeightUnit,
-              targetDistanceUnit,
-            );
+      const emission = planRangeEmission({
+        text,
+        lowerText,
+        numberStart: index,
+        unitMatch,
+        replacement,
+        targetWeightUnit,
+        targetDistanceUnit,
+      });
 
-      if (rangeLow != null && lowReplacement == null) {
-        // The low bound declined conversion (a pace, ratio or minute
-        // shorthand reading) while the high bound accepted. Converting half
-        // a range is worse than leaving it alone, so emit neither.
+      if (emission.kind === "decline") {
         index = unitMatch.end;
         continue;
       }
 
-      if (rangeLow != null && lowReplacement != null) {
-        const low = splitConvertedValue(lowReplacement);
-        const high = splitConvertedValue(replacement);
-        // Drop the low bound's label when both land on the same unit
-        // ("176-198 lbs"); keep both when they don't ("900 m-1.1 km").
-        const lowText =
-          low != null && high != null && low.unit === high.unit ? low.value : lowReplacement;
-        result += text.slice(cursor, rangeLow.end) + lowText + text.slice(index - 1, index) + replacement;
-      } else {
-        result += text.slice(cursor, index) + replacement;
-      }
+      result +=
+        emission.kind === "range"
+          ? text.slice(cursor, emission.start) + emission.text
+          : text.slice(cursor, index) + replacement;
       cursor = unitMatch.end;
     }
     index = unitMatch.end;
