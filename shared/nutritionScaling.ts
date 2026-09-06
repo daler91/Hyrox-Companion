@@ -24,13 +24,25 @@ const PER_100G = 100;
 /**
  * Atwater general factors — the kcal each gram of a macronutrient yields.
  *
- * The single definition in the codebase: `nutritionTargets.ts` imports these
- * rather than declaring its own copy, so a target and a logged total can never
- * be computed against different factors.
+ * The single definition in the codebase: every consumer — `nutritionTargets.ts`,
+ * `mealFuelling.ts`, the nutrition page's macro-share ring — imports from here
+ * rather than declaring its own copy, so a target, a fuelling plan and a logged
+ * total can never be computed against different factors.
  */
 export const KCAL_PER_G_PROTEIN = 4;
 export const KCAL_PER_G_CARB = 4;
 export const KCAL_PER_G_FAT = 9;
+
+/**
+ * The same factors keyed by macro, for the call sites that multiply a whole
+ * macro map at once. Derived from the constants above rather than restated, so
+ * the two forms cannot drift apart.
+ */
+export const KCAL_PER_G = {
+  protein: KCAL_PER_G_PROTEIN,
+  carb: KCAL_PER_G_CARB,
+  fat: KCAL_PER_G_FAT,
+} as const;
 
 /** Macro grams per 100 g of food, plus a rounding allowance. See below. */
 const MAX_MACRO_MASS_PER_100G = 101;

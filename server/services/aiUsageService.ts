@@ -18,10 +18,35 @@ const MODEL_PRICING: Record<string, { inputPerM: number; outputPerM: number }> =
 // Fallback for unknown models — use the most expensive rate to be safe
 const DEFAULT_PRICING = { inputPerM: 5, outputPerM: 25 };
 
-// Unknown models fall back to the most expensive rate, which is safe for the
-// budget cap but drains users' daily allowance ~10-17x too fast. Warn once per
-// model so a missing MODEL_PRICING entry is visible in logs instead of silent.
+// Falling back is safe for the budget cap but brutal for the athlete: against
+// the fast model most calls use it bills 67x the input and 83x the output rate,
+// so the $2 daily allowance is spent after roughly three cents of real usage
+// and every AI feature goes dark for the day. Warn once per model so a missing
+// entry is visible in logs instead of silent.
 const warnedUnknownModels = new Set<string>();
+
+/**
+ * Resolve a model id to its pricing, exact match first and then longest
+ * matching family prefix.
+ *
+ * Providers version their models by appending a suffix — `gemini-2.5-flash`
+ * ships as `gemini-2.5-flash-002` — so without the prefix step a routine
+ * version bump reads as "unknown model" and triggers the punitive fallback
+ * above, with no code change and nothing to notice but a single log line.
+ * Longest-prefix is load-bearing: `gemini-2.5-flash-lite-002` matches both
+ * `gemini-2.5-flash` and `gemini-2.5-flash-lite`, and the lite rate is the
+ * right one (the shorter match would bill it 4x over).
+ */
+export function resolveModelPricing(model: string): { inputPerM: number; outputPerM: number } | undefined {
+  const exact = MODEL_PRICING[model];
+  if (exact) return exact;
+  let bestKey: string | undefined;
+  for (const key of Object.keys(MODEL_PRICING)) {
+    if (!model.startsWith(key)) continue;
+    if (!bestKey || key.length > bestKey.length) bestKey = key;
+  }
+  return bestKey ? MODEL_PRICING[bestKey] : undefined;
+}
 
 /** Daily AI spend hard cap in cents. */
 export const DAILY_LIMIT_CENTS = 200; // $2.00
@@ -37,10 +62,13 @@ export function estimateCostCents(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const pricing = MODEL_PRICING[model];
+  const pricing = resolveModelPricing(model);
   if (!pricing && !warnedUnknownModels.has(model)) {
     warnedUnknownModels.add(model);
-    logger.warn({ model }, "AI usage: no MODEL_PRICING entry; applying conservative DEFAULT_PRICING");
+    logger.warn(
+      { model },
+      "AI usage: no MODEL_PRICING entry or family prefix; applying conservative DEFAULT_PRICING",
+    );
   }
   const effective = pricing ?? DEFAULT_PRICING;
   const inputCost = (inputTokens / 1_000_000) * effective.inputPerM;

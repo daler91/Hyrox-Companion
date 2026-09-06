@@ -21,6 +21,7 @@
  * The numbers are coaching guidance (the daily target split, with the session
  * anchors placed first) — not prescriptions.
  */
+import { KCAL_PER_G } from "./nutritionScaling";
 import type { MealType } from "./schema/tables";
 
 export type WorkoutTiming = "am_pre_breakfast" | "midday" | "evening" | "none";
@@ -93,7 +94,7 @@ export function resolveEatingMeals(schedule: MealScheduleCount): MealType[] {
   }
 }
 
-const KCAL_PER_G = { protein: 4, carb: 4, fat: 9 } as const;
+
 
 // Even protein across meals already encodes bodyweight (the daily target is
 // ~1.8 g/kg); the g/kg anchor is only the fallback when no daily protein is set.

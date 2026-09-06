@@ -1,5 +1,6 @@
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 import type { MealType } from "@shared/schema/enums";
+import { KCAL_PER_G } from "@shared/nutritionScaling";
 import { MICRO_DISPLAY_DEFS } from "@shared/schema/micros";
 
 const YMD = new Intl.DateTimeFormat("en-CA", {
@@ -106,8 +107,7 @@ export function buildPreviewMicroRows(microsScaled: Record<string, number>): Mic
   return rows;
 }
 
-/** Atwater factors: protein & carb 4 kcal/g, fat 9 kcal/g. */
-const KCAL_PER_G = { protein: 4, carb: 4, fat: 9 } as const;
+
 
 export interface MacroEnergyShare {
   g: number;

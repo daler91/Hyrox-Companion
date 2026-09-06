@@ -262,7 +262,7 @@ export function ExerciseProgressionCharts({
                 {analyticsData.totalReps}
               </p>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Avg Reps / Session <TrendArrow trend={analyticsData.repsTrend} />
+                Total Reps <TrendArrow trend={analyticsData.repsTrend} />
               </p>
               <p className="text-sm text-muted-foreground mt-1">{analyticsData.avgReps}/session</p>
             </div>

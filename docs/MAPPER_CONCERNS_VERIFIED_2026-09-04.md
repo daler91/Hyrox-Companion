@@ -70,6 +70,24 @@ decision first. Regression tests as before.
 | `FieldInput` shows an unsaved number permanently after a failed save           | Medium   | The commit machine gains an "optimistic write observed" state. Before it, a stored value equal to the pre-edit one means the debounce hasn't fired; after it, the same value means a rollback — so the field stops showing a rejected number. |
 | Clerk identity deleted before DB erasure, no way to recover a stranded account | Medium   | `users.erasure_requested_at` is stamped before the point of no return, and an hourly sweep re-runs the (idempotent) erasure for any row still carrying it. The steps moved into `accountErasureService` so route and sweep share one implementation. Runbook: `docs/operations/account-erasure.md`. |
 
+## Fixed in the fourth pass (2026-09-06)
+
+The Low list, cheapest-last. Two of the notes did not survive contact with the
+code — recorded below rather than quietly fixed to match the note.
+
+| Concern                                                            | Note                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AI breaker counts non-retryable 4xx toward tripping                | `recordBreakerFailure` now takes the error and ignores caller-side rejections (400/404/422, by structured status first and message second). 401/403/429/5xx still count, as the note required — those make the provider unusable for everyone. |
+| Streaming bypasses the breaker entirely                            | `streamText` asserts the breaker before starting and records the outcome. It still can't retry (a retry would re-emit text the caller already has), but it is no longer invisible in both directions.                                        |
+| `isRetryableError`'s unanchored status matching                    | Found while fixing the above, same family as the `errors.ts` fix in the second pass: `includes("500")` also matches the `1500ms` in this module's own timeout message. Word-bounded.                                                          |
+| `MODEL_PRICING` bills unknown model ids at 67-83x                  | Resolves the longest matching family prefix before falling back, so a version suffix (`gemini-2.5-flash-002`) is priced as its family. Longest-prefix is load-bearing: `-lite` must not be billed at the `flash` rate.                        |
+| `purgeUserJobs` fails silently while erasure returns success       | **Partly refuted.** pg-boss v12 has no `archive` table (verified against the installed schema), so the purge does reach completed jobs — the existing comment was right. What was real: the failure was swallowed at `warn`, and this step runs after the erasure marker is deleted, so nothing retries it. Now returns a count and logs failures at `error` as a retention issue. |
+| `server/garmin.ts` unbounded `includes("401")`                     | Now `looksLikeUnauthorized`, mirroring its properly-bounded `looksLike429` sibling: structured status first, word-bounded message second. It used to tell an athlete their credentials were rejected because an activity id contained `401`.  |
+| Duplicate Atwater factors in three places                          | `mealFuelling.ts` and the nutrition page's utils now import `KCAL_PER_G` from `nutritionScaling.ts`, which derives it from the three scalar constants. The "single definition in the codebase" comment there is now true.                     |
+| Mislabeled "Avg Reps / Session" tile                               | The tile renders `totalReps` (its own test id says so) with the average on the line below; relabelled "Total Reps".                                                                                                                          |
+| Stale test counts in `docs/testing.md` and `README.md`             | The note's diagnosis was off — ripgrep matches these globs against the basename, so nothing is wrong with the dot. The exclusion is broken for a different reason: the smoke test is named exactly `smoke.test.ts`, so `!*.smoke.test.ts` matches nothing and leaves it in the unit count. The table now carries the command for each row, the corrected `!smoke.test.ts` glob, the real path (`server/routes/tests/smoke.test.ts` — the one the doc named does not exist) and dated figures. |
+| `TECHNICAL_DEBT` #29 lists Cypress as blocking                     | Condition (iii) marked satisfied (repo is on Cypress ≥ 15.21.1); (i) TS 7.1 stable API and (ii) typescript-eslint TS 7 support still block, so the entry stays open.                                                                          |
+
 ## Refuted
 
 Recorded so they are not re-raised.
@@ -93,7 +111,20 @@ Verified real, not addressed in this pass. Roughly cheapest-first within each gr
 **Medium.** None outstanding — the three that remained after the second pass
 were fixed in the third (see above).
 
-**Low.** AI circuit breaker counts non-retryable 4xx toward tripping (a blanket
+**Low (remaining).** Anthropic JSON path has no fence-stripping (latent:
+non-default provider). FatSecret + Spoonacular: 928 LOC unreachable, with a
+**fatal** boot refinement for an integration that does nothing. Unverified
+sled-pull loads feeding predicted finish times behind a stale "verify against
+the rulebook" marker. `reconcileToDaily` discards the clamp signal for protein
+and fat. `sortOrder` MAX+1 race. Check constraints duplicating TS enums.
+Hover-only `title` explanations on five cards, inaccessible to touch, keyboard
+and screen readers. 74 auto-generated "⚡ Bolt Performance Optimization"
+comments across 51 files, two of which now describe code that was extracted
+away. `timeline-benchmark-check.ts` parses `console.table` box-drawing output by
+column position and is wired into no workflow — wiring it as-is would likely
+flake, since its thresholds are absolute dev-machine milliseconds.
+
+**Fixed in the fourth pass, previously listed here:** AI circuit breaker counts non-retryable 4xx toward tripping (a blanket
 "ignore 4xx" would be wrong — 401 _should_ trip it). Streaming bypasses the
 breaker entirely. Anthropic JSON path has no fence-stripping (latent: non-default
 provider). `MODEL_PRICING` bills unknown model ids at 67-83× the fast default,

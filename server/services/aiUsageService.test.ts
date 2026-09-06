@@ -62,3 +62,30 @@ describe("estimateCostCents", () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 });
+
+describe("estimateCostCents model-family resolution", () => {
+  it("prices a version-suffixed model at its family rate, not the unknown-model fallback", () => {
+    // Providers append version suffixes without warning. Treating that as an
+    // unknown model bills 67x input / 83x output and burns the athlete's whole
+    // daily allowance after a few cents of real usage.
+    const family = estimateCostCents("gemini-2.5-flash", 1_000_000, 1_000_000);
+    const versioned = estimateCostCents("gemini-2.5-flash-002", 1_000_000, 1_000_000);
+
+    expect(versioned).toBeCloseTo(family, 6);
+  });
+
+  it("prefers the longest matching family, so lite is not billed at the flash rate", () => {
+    const lite = estimateCostCents("gemini-2.5-flash-lite", 1_000_000, 0);
+    const versionedLite = estimateCostCents("gemini-2.5-flash-lite-002", 1_000_000, 0);
+
+    expect(versionedLite).toBeCloseTo(lite, 6);
+    // The shorter "gemini-2.5-flash" prefix also matches and costs 4x more.
+    expect(versionedLite).toBeLessThan(estimateCostCents("gemini-2.5-flash", 1_000_000, 0));
+  });
+
+  it("still falls back to the conservative rate for a genuinely unknown family", () => {
+    const unknown = estimateCostCents("some-new-provider-model", 1_000_000, 0);
+
+    expect(unknown).toBeCloseTo(5 * 100 / 1, 6);
+  });
+});
