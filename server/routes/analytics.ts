@@ -151,13 +151,22 @@ router.get("/api/v1/personal-records", isAuthenticated, rateLimiter("analytics",
     res.json(calculatePersonalRecords(prSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }));
   }));
 
+// ⚡ Bolt Optimization: calculateExerciseAnalytics only reads the same scalar
+// fields as calculatePersonalRecords (see the SlimLoggedExerciseSet narrowing
+// in analyticsService.ts), so this route shares the column-slim
+// getPersonalRecordSetsCoalesced cache instead of the fat getExerciseSetsCoalesced
+// one below (which stays fat only for /training-overview, whose trainingLoad
+// calc needs the planned*/setNumber columns Slim doesn't carry). For the same
+// (userId, from, to) as a concurrent /personal-records request, this also
+// collapses what used to be two separate full-row-width DB fetches into one
+// shared slim one.
 router.get("/api/v1/exercise-analytics", isAuthenticated, rateLimiter("analytics", 20), asyncHandler(async (req: DateReq, res: Response) => {
     const userId = getUserId(req);
     const dates = parseDateParams(req, res);
     if (!dates) return;
 
     const [allSets, user] = await Promise.all([
-      getExerciseSetsCoalesced(userId, dates.from, dates.to),
+      getPersonalRecordSetsCoalesced(userId, dates.from, dates.to),
       storage.users.getUser(userId),
     ]);
     res.json(calculateExerciseAnalytics(allSets, { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit }));
