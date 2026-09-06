@@ -65,6 +65,9 @@ export function estimateCostCents(
   const pricing = resolveModelPricing(model);
   if (!pricing && !warnedUnknownModels.has(model)) {
     warnedUnknownModels.add(model);
+    // `model` is a provider model identifier, not athlete data — and it is the
+    // whole point of the line: without it nobody can tell which id fell through.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn(
       { model },
       "AI usage: no MODEL_PRICING entry or family prefix; applying conservative DEFAULT_PRICING",
