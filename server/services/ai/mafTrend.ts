@@ -48,7 +48,9 @@ export function summarizeMafTrend(
 ): MafTrendSummary {
   const lastTestAt = tests.reduce<Date | null>((latest, t) => {
     if (!t.createdAt) return latest;
-    const d = new Date(t.createdAt);
+    // ⚡ Bolt Performance Optimization:
+    // `createdAt` is already a Date. Avoid allocating new Date objects here.
+    const d = t.createdAt;
     return latest == null || d > latest ? d : latest;
   }, null);
 
