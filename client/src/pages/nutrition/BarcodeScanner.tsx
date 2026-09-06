@@ -3,7 +3,13 @@ import { Loader2 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBarcodeLookup } from "@/hooks/useNutrition";
@@ -149,6 +155,7 @@ export function BarcodeScanner({
               <video
                 ref={videoRef}
                 className="aspect-video w-full object-cover"
+                aria-label="Camera viewfinder for barcode scanning"
                 muted
                 playsInline
               />

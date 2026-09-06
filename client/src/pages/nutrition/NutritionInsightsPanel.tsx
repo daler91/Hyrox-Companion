@@ -23,9 +23,26 @@ export function NutritionInsightsPanel() {
   const showInitialSpinner = (query.isLoading || isGenerating) && !hasInsights;
 
   const buttonLabel = () => {
-    if (isGenerating) return (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Analyzing…</>);
-    if (hasInsights) return (<><RefreshCw className="mr-2 h-4 w-4" />Regenerate</>);
-    return (<><Sparkles className="mr-2 h-4 w-4" />Generate insights</>);
+    if (isGenerating)
+      return (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          Analyzing…
+        </>
+      );
+    if (hasInsights)
+      return (
+        <>
+          <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+          Regenerate
+        </>
+      );
+    return (
+      <>
+        <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
+        Generate insights
+      </>
+    );
   };
 
   const body = () => {
@@ -54,7 +71,7 @@ export function NutritionInsightsPanel() {
         className="space-y-3 rounded-lg border border-dashed bg-muted/20 py-8 text-center"
         data-testid="nutrition-insights-empty"
       >
-        <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" />
+        <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
         <p className="px-4 text-sm text-muted-foreground">
           Generate a personalized analysis of your fuelling — how your intake tracks your training,
           where you&rsquo;re falling short, and what to focus on next.
@@ -68,7 +85,7 @@ export function NutritionInsightsPanel() {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
             <CardTitle as="h2">Nutrition Insights</CardTitle>
           </div>
           <div className="ml-auto flex flex-col items-end gap-1">
@@ -77,6 +94,7 @@ export function NutritionInsightsPanel() {
               size="sm"
               onClick={() => regenerate.mutate()}
               disabled={isGenerating}
+              aria-busy={isGenerating}
               data-testid="button-generate-nutrition-insights"
             >
               {buttonLabel()}
