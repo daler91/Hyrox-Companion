@@ -145,7 +145,7 @@ export function LandingHeader() {
               Log In
             </Button>
           </SignInButton>
-          <TooltipProvider delayDuration={200}>
+          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
