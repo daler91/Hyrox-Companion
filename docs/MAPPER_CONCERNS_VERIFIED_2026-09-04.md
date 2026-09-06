@@ -59,6 +59,17 @@ fix carries a regression test verified to fail against the pre-fix code.
 | Strava calorie enrichment with no overall deadline                                                          | Medium   | 30 s wall-clock budget across the pass; stops with `attempted`/`of` counts, remaining rows import without calories.                                           |
 | Email tests excluded from typechecking with drifted fixtures                                                | Medium   | Both files are back in `tsconfig.test.json`; fixtures come from `createMockUser` / `createMockWeeklySummary` / `createMockMissedWorkout` in `test/factories`. |
 
+## Fixed in the third pass (2026-09-06)
+
+The three Mediums the second pass deferred because each needed a design
+decision first. Regression tests as before.
+
+| Concern                                                                       | Severity | Note                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useWorkoutDetail`'s whole-object rollbacks clobber concurrently-saved edits   | Medium   | Every field mutation snapshots and restores only the keys it writes, through one pair of helpers. `updateFocus` had always done this; it is the rule now.                                                                                    |
+| `FieldInput` shows an unsaved number permanently after a failed save           | Medium   | The commit machine gains an "optimistic write observed" state. Before it, a stored value equal to the pre-edit one means the debounce hasn't fired; after it, the same value means a rollback — so the field stops showing a rejected number. |
+| Clerk identity deleted before DB erasure, no way to recover a stranded account | Medium   | `users.erasure_requested_at` is stamped before the point of no return, and an hourly sweep re-runs the (idempotent) erasure for any row still carrying it. The steps moved into `accountErasureService` so route and sweep share one implementation. Runbook: `docs/operations/account-erasure.md`. |
+
 ## Refuted
 
 Recorded so they are not re-raised.
@@ -79,12 +90,8 @@ Recorded so they are not re-raised.
 
 Verified real, not addressed in this pass. Roughly cheapest-first within each group.
 
-**Medium.** `FieldInput` shows an unsaved number permanently after a failed
-save (small; the same family as the `AthleteNoteInput` fix above, needs a small
-state machine rather than a flag). `useWorkoutDetail`'s whole-object rollbacks
-clobber concurrently-saved edits — one named interleaving causes real persisted
-loss (medium). Clerk identity deleted before DB erasure with no webhook, sweep
-or runbook to recover a stranded account (medium).
+**Medium.** None outstanding — the three that remained after the second pass
+were fixed in the third (see above).
 
 **Low.** AI circuit breaker counts non-retryable 4xx toward tripping (a blanket
 "ignore 4xx" would be wrong — 401 _should_ trip it). Streaming bypasses the

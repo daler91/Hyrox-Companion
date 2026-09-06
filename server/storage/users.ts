@@ -139,6 +139,39 @@ export class UserStorage {
     return result.rowCount ?? 0;
   }
 
+  /**
+   * Stamp the account as mid-erasure. Called before the first irreversible
+   * step of DELETE /api/v1/account so a run that dies afterwards leaves a
+   * trail the sweep can finish. Keeps an existing stamp rather than refreshing
+   * it, so "stranded since" stays honest across retries.
+   */
+  async markErasureRequested(id: string, now: Date = new Date()): Promise<void> {
+    await db
+      .update(users)
+      .set({ erasureRequestedAt: now })
+      .where(and(eq(users.id, id), isNull(users.erasureRequestedAt)));
+  }
+
+  /**
+   * Accounts whose erasure was stamped before `before` and never completed —
+   * the row should have been deleted by now. Oldest first, bounded, so one
+   * sweep pass can't monopolise a worker.
+   */
+  async listStrandedErasures(
+    before: Date,
+    limit = 50,
+  ): Promise<{ id: string; erasureRequestedAt: Date }[]> {
+    const rows = await db
+      .select({ id: users.id, erasureRequestedAt: users.erasureRequestedAt })
+      .from(users)
+      .where(and(isNotNull(users.erasureRequestedAt), lt(users.erasureRequestedAt, before)))
+      .orderBy(users.erasureRequestedAt)
+      .limit(limit);
+    return rows.flatMap((row) =>
+      row.erasureRequestedAt ? [{ id: row.id, erasureRequestedAt: row.erasureRequestedAt }] : [],
+    );
+  }
+
   private async upsertUserRow(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)

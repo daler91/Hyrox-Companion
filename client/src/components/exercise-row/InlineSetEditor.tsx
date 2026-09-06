@@ -374,6 +374,9 @@ const FieldInput = memo(function FieldInput({
   const [isDirty, setIsDirty] = useState(false);
   const [suppressTransientEmpty, setSuppressTransientEmpty] = useState(false);
   const [commitBaseValue, setCommitBaseValue] = useState<number | undefined>(currentDisplay);
+  // Whether the optimistic cache write for the pending commit has been seen
+  // yet. See the note on `externalNewerWhilePending` below.
+  const [commitObserved, setCommitObserved] = useState(false);
 
   const hasPending = pendingCommit !== undefined;
 
@@ -390,8 +393,18 @@ const FieldInput = memo(function FieldInput({
     suppressTransientEmpty &&
     (currentDisplay == null || formatInitial(currentDisplay) === "");
   const commitMatched = hasPending && currentDisplay === pendingCommit;
+  if (commitMatched && !commitObserved) setCommitObserved(true);
+  // A stored value that still equals `commitBaseValue` is ambiguous: either the
+  // debounced PATCH hasn't fired yet (keep showing what the athlete typed), or
+  // the save failed and the optimistic write was rolled back (show the stored
+  // value — the typed one was never accepted). Once the optimistic write has
+  // been observed, only the second reading is possible, so the base-value
+  // guard is dropped and the rollback surfaces. Without that, the field kept
+  // displaying a number the server had rejected until the row was remounted.
   const externalNewerWhilePending =
-    hasPending && currentDisplay !== pendingCommit && currentDisplay !== commitBaseValue;
+    hasPending &&
+    currentDisplay !== pendingCommit &&
+    (commitObserved || currentDisplay !== commitBaseValue);
   const externalNewerAndNotPending = !hasPending && currentDisplay !== lastCommitted;
   const shouldUseExternal =
     !isDirty &&
@@ -412,6 +425,7 @@ const FieldInput = memo(function FieldInput({
       setCommittedDraft(nextDraft);
       setDraft(nextDraft);
       setPendingCommit(next);
+      setCommitObserved(false);
       setCommitBaseValue(lastCommitted);
       setSuppressTransientEmpty(nextDraft.trim() !== "");
       if (storedNext !== current) {

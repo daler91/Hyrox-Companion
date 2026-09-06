@@ -97,6 +97,45 @@ export function useWorkoutDetail(workoutId: string | null) {
     );
   };
 
+  // Snapshot ONLY the fields a mutation writes, so its rollback restores
+  // exactly those. Every field of the workout — the sets, the title, each
+  // block score — lives in this one cache entry, so restoring a whole-workout
+  // snapshot on error silently reverts whatever succeeded while the failing
+  // request was in flight. updateFocus has always scoped its rollback for
+  // that reason; these helpers make it the rule for every field mutation.
+  const snapshotWorkoutFields = (
+    keys: readonly (keyof WorkoutWithSets)[],
+  ): Partial<WorkoutWithSets> | undefined => {
+    if (!workoutId) return undefined;
+    const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+    if (!prev) return undefined;
+    return Object.fromEntries(keys.map((key) => [key, prev[key]]));
+  };
+
+  const restoreWorkoutFields = (snapshot: Partial<WorkoutWithSets> | undefined) => {
+    if (!workoutId || !snapshot) return;
+    queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (curr) =>
+      curr ? { ...curr, ...snapshot } : curr,
+    );
+  };
+
+  /**
+   * onMutate for every field mutation: stop in-flight refetches, snapshot the
+   * fields this patch is about to overwrite, then apply it optimistically.
+   */
+  const beginFieldPatch = async (patch: Partial<WorkoutWithSets>) => {
+    if (!workoutId) return undefined;
+    await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
+    const prev = snapshotWorkoutFields(Object.keys(patch) as (keyof WorkoutWithSets)[]);
+    patchCachedWorkout(patch);
+    return { prev };
+  };
+
+  /** onError partner of beginFieldPatch. */
+  const rollbackFields = (ctx: unknown) => {
+    restoreWorkoutFields((ctx as { prev?: Partial<WorkoutWithSets> } | undefined)?.prev);
+  };
+
   const patchCachedSets = (updater: (sets: ExerciseSet[]) => ExerciseSet[]) => {
     if (!workoutId) return;
     queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (prev) => {
@@ -209,19 +248,8 @@ export function useWorkoutDetail(workoutId: string | null) {
   // would dismiss the dialog after the first keystroke lands.
   const updateNote = useApiMutation({
     mutationFn: (notes: string | null) => api.workouts.update(workoutId!, { notes }),
-    onMutate: async (notes) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      patchCachedWorkout({ notes });
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-      }
-    },
+    onMutate: (notes) => beginFieldPatch({ notes }),
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     errorToast: "Couldn't save that note",
   });
 
@@ -229,10 +257,8 @@ export function useWorkoutDetail(workoutId: string | null) {
   // workoutSetsMutationKey so the ExerciseTable's save pill reflects title
   // edits too — one unified "Saving…/Saved" signal across the whole dialog.
   // Optimistic: patches the cached workout so the heading updates without a
-  // round-trip; rollback restores ONLY the focus field on error. We
-  // deliberately don't snapshot the whole workout here — if a set-level
-  // mutation succeeded concurrently, restoring the full prior snapshot
-  // would clobber those newer successful changes. Timeline is invalidated
+  // round-trip; rollback restores ONLY the focus field on error, so a
+  // concurrently-succeeded set edit survives this one failing. Timeline is invalidated
   // in onSuccess so card copy reflects the new title within a refetch (we
   // don't have selectedPlanId here, so optimistic timeline patching would
   // have to traverse every cached variant — invalidate is simpler and the
@@ -240,27 +266,12 @@ export function useWorkoutDetail(workoutId: string | null) {
   const updateFocus = useApiMutation({
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (focus: string) => api.workouts.update(workoutId!, { focus }),
-    onMutate: async (focus) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prevFocus = queryClient.getQueryData<WorkoutWithSets>(
-        QUERY_KEYS.workout(workoutId),
-      )?.focus;
-      patchCachedWorkout({ focus });
-      return { prevFocus };
-    },
+    onMutate: (focus) => beginFieldPatch({ focus }),
     onSuccess: async () => {
       markSaved();
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
     },
-    onError: (_err, _vars, ctx) => {
-      const prevFocus = (ctx as { prevFocus?: string } | undefined)?.prevFocus;
-      if (workoutId && prevFocus !== undefined) {
-        queryClient.setQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId), (curr) =>
-          curr ? { ...curr, focus: prevFocus } : curr,
-        );
-      }
-    },
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     errorToast: "Couldn't save title",
   });
 
@@ -276,23 +287,14 @@ export function useWorkoutDetail(workoutId: string | null) {
       if (patch.notes !== undefined) normalized.notes = patch.notes;
       return api.workouts.update(workoutId!, normalized);
     },
-    onMutate: async (patch) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
+    onMutate: (patch) => {
       const optimistic: Partial<WorkoutWithSets> = {};
       if (patch.mainWorkout !== undefined) optimistic.mainWorkout = patch.mainWorkout ?? "";
       if (patch.accessory !== undefined) optimistic.accessory = patch.accessory;
       if (patch.notes !== undefined) optimistic.notes = patch.notes;
-      patchCachedWorkout(optimistic);
-      return { prev };
+      return beginFieldPatch(optimistic);
     },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-      }
-    },
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     errorToast: (error) =>
       isWorkoutNotFoundError(error)
         ? {
@@ -306,13 +308,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (structureBlocks: StructureBlockInput[]) =>
       api.workouts.update(workoutId!, { structureBlocks }),
-    onMutate: async (structureBlocks) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      patchCachedWorkout({ structureBlocks });
-      return { prev };
-    },
+    onMutate: (structureBlocks) => beginFieldPatch({ structureBlocks }),
     onSuccess: () => {
       markSaved();
       if (workoutId) {
@@ -320,10 +316,7 @@ export function useWorkoutDetail(workoutId: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => undefined);
       }
     },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-    },
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     errorToast: "Couldn't save workout blocks",
   });
 
@@ -359,19 +352,8 @@ export function useWorkoutDetail(workoutId: string | null) {
     mutationKey: workoutId ? workoutSetsMutationKey(workoutId) : undefined,
     mutationFn: (patch: WorkoutReferenceTextPayload) =>
       api.workouts.update(workoutId!, patch),
-    onMutate: async (patch) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      patchCachedWorkout(patch);
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-      }
-    },
+    onMutate: (patch) => beginFieldPatch(patch),
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     onSuccess: () => {
       markSaved();
     },
@@ -440,25 +422,11 @@ export function useWorkoutDetail(workoutId: string | null) {
   const updateTimeOfDay = useApiMutation({
     mutationFn: (timeOfDayMin: number | null) =>
       api.workouts.update(workoutId!, { timeOfDayMin }),
-    onMutate: async (timeOfDayMin) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prevTimeOfDayMin = queryClient.getQueryData<WorkoutWithSets>(
-        QUERY_KEYS.workout(workoutId),
-      )?.timeOfDayMin;
-      patchCachedWorkout({ timeOfDayMin });
-      return { prevTimeOfDayMin };
-    },
+    onMutate: (timeOfDayMin) => beginFieldPatch({ timeOfDayMin }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline });
     },
-    onError: (_err, _vars, ctx) => {
-      const prevTimeOfDayMin = (ctx as { prevTimeOfDayMin?: number | null } | undefined)
-        ?.prevTimeOfDayMin;
-      if (workoutId && prevTimeOfDayMin !== undefined) {
-        patchCachedWorkout({ timeOfDayMin: prevTimeOfDayMin });
-      }
-    },
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     errorToast: "Couldn't save the session time",
   });
 
@@ -470,19 +438,9 @@ export function useWorkoutDetail(workoutId: string | null) {
   const updatePlanDay = useApiMutation({
     mutationFn: ({ planDayId }: { planId: string | null; planDayId: string | null }) =>
       api.workouts.assignPlanDay(workoutId!, planDayId),
-    onMutate: async ({ planId, planDayId }: { planId: string | null; planDayId: string | null }) => {
-      if (!workoutId) return undefined;
-      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.workout(workoutId) });
-      const prev = queryClient.getQueryData<WorkoutWithSets>(QUERY_KEYS.workout(workoutId));
-      patchCachedWorkout({ planId, planDayId });
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      const prev = (ctx as { prev?: WorkoutWithSets } | undefined)?.prev;
-      if (workoutId && prev) {
-        queryClient.setQueryData(QUERY_KEYS.workout(workoutId), prev);
-      }
-    },
+    onMutate: ({ planId, planDayId }: { planId: string | null; planDayId: string | null }) =>
+      beginFieldPatch({ planId, planDayId }),
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
     invalidateQueries: workoutId
       ? [QUERY_KEYS.workout(workoutId), QUERY_KEYS.timeline, QUERY_KEYS.plans]
       : [QUERY_KEYS.timeline, QUERY_KEYS.plans],
