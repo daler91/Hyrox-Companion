@@ -239,9 +239,13 @@ describe("Analytics Routes", () => {
   };
 
   testEndpoint("/api/v1/personal-records", calculatePersonalRecords, { Squat: { weight: "100", reps: 10, estimated1RM: 133 } }, storage.analytics.getExerciseSetsForPersonalRecords);
-  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } }, storage.analytics.getAllExerciseSetsWithDates);
+  // ⚡ Bolt Optimization: /exercise-analytics now shares the column-slim
+  // getPersonalRecordSetsCoalesced cache with /personal-records (both routes'
+  // calculators only read the same scalar fields) instead of the fat
+  // getExerciseSetsCoalesced one, so its storage mock moves to match.
+  testEndpoint("/api/v1/exercise-analytics", calculateExerciseAnalytics, { "Bench Press": { totalVolume: 1000, setsCount: 1, history: [] } }, storage.analytics.getExerciseSetsForPersonalRecords);
 
-  describe("getExerciseSetsCoalesced caching logic", () => {
+  describe("getPersonalRecordSetsCoalesced caching logic (exercised via /exercise-analytics)", () => {
     const makeRequest = () => request(app).get("/api/v1/exercise-analytics");
 
     beforeEach(() => {
@@ -253,13 +257,13 @@ describe("Analytics Routes", () => {
     });
 
     it("should coalesce concurrent requests to the database", async () => {
-      type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.analytics.getAllExerciseSetsWithDates>>;
+      type ExerciseSetWithDate = Awaited<ReturnType<typeof storage.analytics.getExerciseSetsForPersonalRecords>>;
       let resolvePromise: (value: ExerciseSetWithDate) => void;
       const delayedPromise = new Promise<ExerciseSetWithDate>((resolve) => {
         resolvePromise = resolve;
       });
 
-      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockImplementation(() => delayedPromise);
+      vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockImplementation(() => delayedPromise);
 
       const p1 = makeRequest();
       const p2 = makeRequest();
@@ -280,20 +284,20 @@ describe("Analytics Routes", () => {
       expect(res2.status).toBe(200);
       expect(res3.status).toBe(200);
 
-      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
+      expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledTimes(1);
     });
 
     it("should coalesce sequential requests within the 5-minute TTL", async () => {
-      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockResolvedValue([]);
 
       await makeRequest();
       await makeRequest();
 
-      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(1);
+      expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledTimes(1);
     });
 
     it("should refetch from DB after the 5-minute TTL expires", async () => {
-      vi.mocked(storage.analytics.getAllExerciseSetsWithDates).mockResolvedValue([]);
+      vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords).mockResolvedValue([]);
 
       await makeRequest();
 
@@ -302,11 +306,11 @@ describe("Analytics Routes", () => {
 
       await makeRequest();
 
-      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
+      expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledTimes(2);
     });
 
     it("should clear cache if the promise rejects so subsequent requests retry immediately", async () => {
-      vi.mocked(storage.analytics.getAllExerciseSetsWithDates)
+      vi.mocked(storage.analytics.getExerciseSetsForPersonalRecords)
         .mockRejectedValueOnce(new Error("Database error"))
         .mockResolvedValueOnce([]);
 
@@ -317,7 +321,7 @@ describe("Analytics Routes", () => {
       expect(res2.status).toBe(200);
 
       // Even without advancing time, the cache should clear on failure
-      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledTimes(2);
+      expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledTimes(2);
     });
   });
 

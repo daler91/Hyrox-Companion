@@ -230,7 +230,15 @@ interface DayAnalytics {
   totalDistance: number;
 }
 
-function accumulateSet(day: DayAnalytics, s: ExerciseSetWithDate, preferences?: UnitPreferences): void {
+// ⚡ Bolt Optimization: accumulateSet/calculateExerciseAnalytics only ever read
+// the scalar fields below (via getExerciseKey/displayWeight/displayDistance) —
+// never the jsonb intensity/load/tempo/standards columns or the planned*/block*
+// columns that make up most of a full ExerciseSetWithDate row. Narrowing the
+// param to SlimLoggedExerciseSet (already defined and used by the sibling
+// calculatePersonalRecords above) lets the one production caller
+// (GET /api/v1/exercise-analytics) fetch the column-slim projection instead of
+// hydrating every column for a user's entire lifetime of sets.
+function accumulateSet(day: DayAnalytics, s: SlimLoggedExerciseSet, preferences?: UnitPreferences): void {
   day.totalSets += 1;
   // Same stamp-aware read as the PR path: a chart must not show a ~2.2x step
   // on the day the athlete toggled kg/lbs.
@@ -257,7 +265,7 @@ function sortByDateAsc(a: DayAnalytics, b: DayAnalytics): number {
 }
 
 export function calculateExerciseAnalytics(
-  allSets: ExerciseSetWithDate[],
+  allSets: SlimLoggedExerciseSet[],
   preferences?: UnitPreferences,
 ): Record<string, DayAnalytics[]> {
   const analytics: Record<string, Record<string, DayAnalytics>> = {};
