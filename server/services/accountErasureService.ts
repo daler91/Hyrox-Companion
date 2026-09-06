@@ -96,6 +96,8 @@ export async function eraseAccount(
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
       if (status !== 404) throw err;
+      // userId is the app-wide correlation id logged throughout this erasure.
+      // bearer:disable javascript_lang_logger_leak
       log.info({ userId }, "Clerk user already deleted, continuing with DB cleanup");
     }
   }
@@ -110,6 +112,9 @@ export async function eraseAccount(
       await deauthorizeStravaBestEffort(stravaConn.accessToken, log);
     }
   } catch (err) {
+    // err is the Strava/decrypt failure and userId the correlation id; the
+    // token itself is never logged.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ err, userId }, "Strava deauthorization failed during account deletion");
   }
 
@@ -137,6 +142,8 @@ export async function eraseAccount(
   // call here alongside the Strava deauth in step 3 above.
   const hadGarminConnection = Boolean(await storage.users.getGarminConnection(userId));
   if (hadGarminConnection) {
+    // The correlation id plus three static strings — no credentials.
+    // bearer:disable javascript_lang_logger_leak
     log.info(
       { userId, upstream: "garmin", revoked: false, reason: "no_sdk_revocation_method" },
       "Garmin credentials removed from local storage; upstream tokens will expire naturally",
