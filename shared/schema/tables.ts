@@ -142,6 +142,13 @@ export const users = pgTable("users", {
   pushLoggingReminder: boolean("push_logging_reminder").default(false),
   lastRefuelReminderAt: timestamp("last_refuel_reminder_at"),
   lastLoggingReminderAt: timestamp("last_logging_reminder_at"),
+  // Stamped immediately BEFORE the Clerk identity is deleted during account
+  // erasure, and only ever cleared by the row itself disappearing. A row still
+  // carrying this stamp is an erasure that stopped after the point of no
+  // return: the athlete has no identity left to authenticate with, so they can
+  // never retry it and their data would sit here forever. The erasure sweep
+  // (server/cron.ts) finishes any such row — see docs/operations/account-erasure.md.
+  erasureRequestedAt: timestamp("erasure_requested_at", { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

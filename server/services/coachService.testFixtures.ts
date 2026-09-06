@@ -27,6 +27,7 @@ export function mockEnabledUser(storage: StorageMock) {
     pushLoggingReminder: null,
     lastRefuelReminderAt: null,
     lastLoggingReminderAt: null,
+    erasureRequestedAt: null,
     showAdherenceInsights: null,
     aiCoachEnabled: true,
     coachAutoApplyPlanChanges: false,

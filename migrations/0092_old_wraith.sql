@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "erasure_requested_at" timestamp with time zone;

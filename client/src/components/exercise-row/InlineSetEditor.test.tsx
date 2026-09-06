@@ -289,3 +289,75 @@ describe("InlineSetEditor field commit flow", () => {
     expect(screen.getByTestId("unit-distance-set-1")).toHaveTextContent("m");
   });
 });
+
+/**
+ * A cell save is fire-and-forget: the debounced PATCH lands ~350ms later, the
+ * mutation patches the cache optimistically, and a failure rolls that patch
+ * back. The field has to tell those two "the stored value equals what it was
+ * before I typed" moments apart, or a rejected edit sits in the input looking
+ * saved.
+ */
+describe("InlineSetEditor failed-save reconciliation", () => {
+  /** Render the row (stored reps: 10), type `reps` into the cell and blur. */
+  function typeReps(reps: number) {
+    const onUpdateSet = vi.fn();
+    const editor = (set: ExerciseSet) => (
+      <InlineSetEditor
+        sets={[set]}
+        exerciseName="wall_balls"
+        customLabel={null}
+        category="functional"
+        weightUnit="kg"
+        onUpdateSet={onUpdateSet}
+        onAddSet={vi.fn()}
+        onDeleteSet={vi.fn()}
+      />
+    );
+    const { rerender } = render(editor(baseSet));
+    const input = () => screen.getByTestId("input-reps-set-1");
+    fireEvent.change(input(), { target: { value: String(reps) } });
+    fireEvent.blur(input());
+    return {
+      onUpdateSet,
+      input,
+      /** What the row carries after a cache write — the save, or its rollback. */
+      storedRepsBecome: (stored: number) => rerender(editor({ ...baseSet, reps: stored })),
+    };
+  }
+
+  it("keeps the typed value while the debounced save is still out", () => {
+    const { input, storedRepsBecome } = typeReps(42);
+
+    // The PATCH hasn't fired, so the row still carries the pre-edit value.
+    // That is not a rollback and must not clear what the athlete typed.
+    storedRepsBecome(10);
+
+    expect(input()).toHaveValue(42);
+  });
+
+  it("returns to the stored value when the save fails and the optimistic write is rolled back", () => {
+    const { onUpdateSet, input, storedRepsBecome } = typeReps(42);
+    expect(onUpdateSet).toHaveBeenCalledWith("set-1", { reps: 42 });
+
+    // The mutation patches the cache optimistically...
+    storedRepsBecome(42);
+    expect(input()).toHaveValue(42);
+
+    // ...then the request fails and the patch is rolled back. 42 was never
+    // stored, so the field must stop showing it.
+    storedRepsBecome(10);
+
+    expect(input()).toHaveValue(10);
+  });
+
+  it("honours another device reverting the value back to what it was before the edit", () => {
+    const { input, storedRepsBecome } = typeReps(42);
+    storedRepsBecome(42);
+
+    // 42 saved, then the phone sets it back to 10. Comparing against the
+    // pre-edit value alone would alias this onto "nothing changed".
+    storedRepsBecome(10);
+
+    expect(input()).toHaveValue(10);
+  });
+});

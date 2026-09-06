@@ -6,6 +6,7 @@ import { runEmailCronJob } from "./emailScheduler";
 import { env } from "./env";
 import { logger } from "./logger";
 import { queue } from "./queue";
+import { runStrandedErasureSweep } from "./services/accountErasureService";
 import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
 import { embedMissingFoods, pruneDanglingFoodEmbeddings } from "./services/nutrition/foodEmbeddings";
 import { runNutritionReminderCron } from "./services/nutrition/reminders";
@@ -24,6 +25,7 @@ let analyticsRecomputeTask: ReturnType<typeof cron.schedule> | null = null;
 let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
 let nutritionRemindersTask: ReturnType<typeof cron.schedule> | null = null;
 let ragChunkPruneTask: ReturnType<typeof cron.schedule> | null = null;
+let accountErasureSweepTask: ReturnType<typeof cron.schedule> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -34,7 +36,7 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_015. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_016. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -51,6 +53,7 @@ export const CRON_LOCK_KEYS = {
   nutritionEmbeddingBackfill: 42_010_012n,
   nutritionReminders: 42_010_013n,
   ragChunkPrune: 42_010_014n,
+  accountErasureSweep: 42_010_015n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -63,6 +66,33 @@ export async function runCronJobWithLock<T>(
     logger.error({ context: "cron", err, job: name }, "Cron advisory lock execution failed");
     return { acquired: false, value: undefined };
   }
+}
+
+/**
+ * Schedule a task that holds its named advisory lock for the run and never
+ * lets a throw reach the scheduler. The tasks below still inline this shape
+ * for historical reasons; new ones should be registered through here.
+ */
+function scheduleLockedCronJob(
+  name: keyof typeof CRON_LOCK_KEYS,
+  expression: string,
+  run: () => Promise<void>,
+): ReturnType<typeof cron.schedule> {
+  return cron.schedule(
+    expression,
+    async () => {
+      await runCronJobWithLock(name, async () => {
+        try {
+          await run();
+        } catch (err) {
+          // The job name is a static key and err is a DB/upstream error; no PII.
+          // bearer:disable javascript_lang_logger_leak
+          logger.error({ context: "cron", err, job: name }, "Cron job failed");
+        }
+      });
+    },
+    { timezone: "Etc/UTC" },
+  );
 }
 
 /** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
@@ -325,6 +355,27 @@ export function startCron(storage: IStorage): void {
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "RAG chunk prune scheduled: daily at 03:50 UTC");
 
+  // Self-healing sweep for accounts stranded mid-erasure. DELETE /api/v1/account
+  // stamps users.erasure_requested_at before deleting the Clerk identity, so a
+  // row still carrying that stamp is an erasure that stopped past its point of
+  // no return: the athlete has no identity left to sign in and ask again, and
+  // their data would otherwise sit here indefinitely (GDPR Art. 17). Hourly,
+  // because nothing else will ever finish these — the route erases inline and
+  // this only catches its failures.
+  accountErasureSweepTask = scheduleLockedCronJob("accountErasureSweep", "35 * * * *", async () => {
+    const { swept, failed } = await runStrandedErasureSweep();
+    if (swept === 0 && failed === 0) return;
+    // Counts and a static context only, no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn(
+      { context: "cron", swept, failed },
+      `Account erasure sweep: finished ${swept} stranded erasure(s), ${failed} still failing`,
+    );
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Account erasure sweep scheduled: hourly at :35 UTC");
+
   // Nutrition push reminders (post-workout refuel + evening logging nudge).
   // Ticks hourly; per-user timing (refuel window, 20:00 local evening slot) is
   // resolved inside the runner, mirroring the analytics-recompute pattern.
@@ -429,5 +480,9 @@ export async function stopCron(): Promise<void> {
   if (ragChunkPruneTask) {
     await ragChunkPruneTask.stop();
     ragChunkPruneTask = null;
+  }
+  if (accountErasureSweepTask) {
+    await accountErasureSweepTask.stop();
+    accountErasureSweepTask = null;
   }
 }

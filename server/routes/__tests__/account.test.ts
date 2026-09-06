@@ -54,6 +54,8 @@ vi.mock("../../storage", () => ({
     coaching: { deleteChunksByUserId: vi.fn() },
     nutrition: { listPrivateCustomFoodIds: vi.fn() },
     users: {
+      markErasureRequested: vi.fn(),
+      listStrandedErasures: vi.fn(),
       deleteUserAndPrivateCustomFoods: vi.fn(),
       getStravaConnection: vi.fn(),
       getGarminConnection: vi.fn(),
