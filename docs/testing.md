@@ -26,17 +26,30 @@ The project follows a testing pyramid with three layers:
 - **Integration tests (Vitest, separate config)** -- Tests that exercise API routes against a real PostgreSQL database with the full Express app wired up.
 - **End-to-end tests (Cypress)** -- Browser-based tests that verify complete user flows against a running server.
 
-### Test counts (approximate)
+### Test counts
 
-| Layer                               | Count     | Location                                                                                                              |
-| ----------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| Unit/component/route tests (Vitest) | 262 files | `client/src`, `server`, and `shared` `*.test.{ts,tsx}` files, excluding `*.integration.test.ts` and `*.smoke.test.ts` |
-| Integration tests                   | 7 files   | `server/routes/tests/*.integration.test.ts` (HTTP) and `server/storage/__tests__/*.integration.test.ts` (storage SQL) |
-| Smoke tests                         | 1 file    | `server/routes/__tests__/routeRegistration.smoke.test.ts` — run as `pnpm test:smoke` for fast pre-push feedback       |
-| Cypress E2E specs                   | 12 files  | `cypress/e2e/*.cy.ts`                                                                                                 |
+Every number below is stale the moment a test lands, so **derive it, don't trust
+it**. The commands are the source of truth; the figures are only a sanity check,
+measured on `main` at the date given.
 
-The exact Vitest assertion count changes frequently as review-fix branches land.
-Use `rg --files -g "*.test.ts" -g "*.test.tsx"` for a current total test-file count, and add `-g "!*.integration.test.ts" -g "!*.smoke.test.ts"` when you need the unit/component/route count.
+| Layer                      | Count (2026-09-06) | How to count it                                                     |
+| -------------------------- | ------------------- | -------------------------------------------------------------------- |
+| All Vitest test files      | 442                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
+| Unit/component/route tests | 434                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
+| Integration tests          | 7                   | `rg --files -g '*.integration.test.ts'`                              |
+| Smoke test                 | 1                   | `rg --files -g 'smoke.test.ts'`                                      |
+| Cypress E2E specs          | 12                  | `ls cypress/e2e/*.cy.ts`                                             |
+
+Locations: integration tests live in `server/routes/tests/` (HTTP) and
+`server/storage/__tests__/` (storage SQL); the smoke test is
+`server/routes/tests/smoke.test.ts`, run as `pnpm test:smoke` for fast pre-push
+feedback.
+
+> The smoke exclusion is `!smoke.test.ts`, **not** `!*.smoke.test.ts`. The file
+> is named exactly `smoke.test.ts`, which is also what `vitest.smoke.config.ts`
+> includes and `vitest.config.ts` excludes — a `*.`-prefixed glob matches
+> nothing and silently leaves the smoke test in the unit count. An earlier
+> version of this doc used that glob and named a path that does not exist.
 
 ### Coverage thresholds
 

@@ -218,6 +218,20 @@ function errorHttpStatus(err: unknown): number | undefined {
 }
 
 /**
+ * The 401 counterpart of looksLike429, and word-bounded for the same reason: a
+ * loose `includes("401")` matched any error whose text merely contained those
+ * digits — an activity id, a distance, a timestamp — and told the athlete their
+ * Garmin credentials were rejected, sending them to re-enter a password that
+ * was never the problem.
+ */
+function looksLikeUnauthorized(err: unknown): boolean {
+  const status = errorHttpStatus(err);
+  if (status !== undefined) return status === 401 || status === 403;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /(?:^|\D)40[13](?:\D|$)/.test(msg) || /unauthor|forbidden/i.test(msg);
+}
+
+/**
  * Sniffs an unknown error to decide if it's a Garmin 429. A structured status
  * wins; the message is only consulted when there is none. The message check is
  * word-bounded: a loose `includes("429")` used to trip the GLOBAL breaker — a
@@ -334,7 +348,7 @@ function translateGarminError(err: unknown): string {
   if (looksLike429(err)) {
     return "Garmin temporarily blocked us due to rate limits. Please try again in about 30 minutes.";
   }
-  if (lower.includes("401") || lower.includes("unauthor")) {
+  if (looksLikeUnauthorized(err)) {
     return "Garmin rejected the credentials. Double-check your email and password, then disconnect and reconnect.";
   }
   if (

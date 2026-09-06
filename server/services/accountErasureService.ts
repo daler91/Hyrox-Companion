@@ -58,7 +58,8 @@ const SWEEP_BATCH_SIZE = 50;
  *    and OAuth tokens), then a best-effort second embeddings purge for foods
  *    created or re-privatized between steps 0 and 5.
  * 6. Best-effort purge of the user's rate-limit buckets.
- * 7. Best-effort purge of the user's pending pg-boss jobs.
+ * 7. Best-effort purge of the user's pg-boss jobs (logged at error on failure —
+ *    it runs after the marker is gone, so nothing retries it).
  * 8. Evict the user from the auth seen-cache so stale sessions can't
  *    re-provision them.
  */
@@ -185,11 +186,23 @@ export async function eraseAccount(
   // after erasure. Non-fatal — every handler already no-ops for a deleted user
   // (W17).
   try {
-    await purgeUserJobs(userId);
+    const purgedJobs = await purgeUserJobs(userId);
+    if (purgedJobs > 0) {
+      // A count and the correlation id; the job payloads themselves are never logged.
+      // bearer:disable javascript_lang_logger_leak
+      log.info({ userId, purgedJobs }, "Purged queued jobs during account deletion");
+    }
   } catch (err) {
+    // Non-fatal for the request — the account row is already gone — but NOT
+    // routine: those rows hold the athlete's id and job inputs, and this step
+    // runs after the erasure marker was deleted, so nothing retries it. Logged
+    // at error so it pages like the stranded-erasure sweep does.
     // userId is the app-wide correlation id and err is a DB error; no secrets.
     // bearer:disable javascript_lang_logger_leak
-    log.warn({ err, userId }, "Failed to purge queued jobs during account deletion");
+    log.error(
+      { err, userId },
+      "Failed to purge queued jobs during account deletion — personal data may remain in the job queue",
+    );
   }
 
   // Step 8: evict from the auth seen-cache so stale sessions can't trigger
