@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import type { TimelineEntry } from '@shared/schema';
 
 import { sortAndWindowTimelineEntries } from '../server/storage/timelineWindow';
+import { BENCHMARK_RESULT_PREFIX, type BenchmarkRow } from './timelineBenchmarkFormat';
 
 type Entry = Pick<TimelineEntry, 'id' | 'date' | 'type'>;
 
@@ -29,7 +30,7 @@ function legacySortAndSlice(entries: Entry[], limit?: number, offset?: number) {
   return copy.slice(start, start + limit);
 }
 
-function runCase(name: string, planned: number, logged: number, limit?: number, offset?: number) {
+function runCase(name: string, planned: number, logged: number, limit?: number, offset?: number): BenchmarkRow {
   const mem0 = process.memoryUsage().heapUsed;
   const t0 = performance.now();
   const data = buildDataset(planned, logged);
@@ -53,3 +54,6 @@ const cases = [
 ];
 
 console.table(cases);
+// Printed after the table so a human sees the readable form first; this is the
+// line the checker actually reads (see ./timelineBenchmarkFormat).
+console.log(`${BENCHMARK_RESULT_PREFIX}${JSON.stringify(cases)}`);

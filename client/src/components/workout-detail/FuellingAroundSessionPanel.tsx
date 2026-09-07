@@ -8,6 +8,7 @@ import { useSessionFuelling } from "@/hooks/useNutrition";
 import { cn } from "@/lib/utils";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
+import { FuellingGuidanceNote } from "./FuellingGuidanceNote";
 
 const MACRO_CHIPS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
   { key: "calories", label: "kcal" },
@@ -159,13 +160,7 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
           )}
 
           {target && (
-            <p
-              className="text-[11px] text-muted-foreground"
-              title={target.explanation}
-              data-testid="fuelling-guidance"
-            >
-              Targets are guidance based on this session.
-            </p>
+            <FuellingGuidanceNote explanation={target.explanation} testId="fuelling-guidance" />
           )}
 
           {!data.usedStartTime && (

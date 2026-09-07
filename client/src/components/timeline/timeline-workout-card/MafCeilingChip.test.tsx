@@ -45,6 +45,19 @@ describe("MafCeilingChip", () => {
     expect(screen.getByTestId("maf-ceiling-chip-entry-1")).toHaveTextContent("MAF ceiling 145 bpm");
   });
 
+  it("stays a focusable button whose name carries the whole explanation", () => {
+    // The chip shares ExplanationTooltip's trigger with the info-icon callers.
+    // Only a real interactive element may take focus (Sonar S6845), and the
+    // explanation has to be reachable without a mouse, so both survive the
+    // shared component rather than being re-established per caller.
+    render(<MafCeilingChip entry={makeEntry()} />);
+    const chip = screen.getByTestId("maf-ceiling-chip-entry-1");
+    expect(chip.tagName).toBe("BUTTON");
+    expect(chip).toHaveAccessibleName(/MAF aerobic ceiling is 145 bpm/);
+    // No `subject` prefix: the chip's own text already names the number.
+    expect(chip).toHaveAccessibleName(/^Your MAF/);
+  });
+
   it("counts every running exercise, not just the common ones", () => {
     // run_1k was absent from the hard-coded running list this replaced.
     render(<MafCeilingChip entry={makeEntry({ exerciseSets: [setOf("run_1k")] })} />);

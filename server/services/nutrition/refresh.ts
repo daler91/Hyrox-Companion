@@ -3,9 +3,7 @@ import type { Food } from "@shared/schema";
 import { logger } from "../../logger";
 import { storage } from "../../storage";
 import { getEdamamFoodById } from "./edamamClient";
-import { getFatSecretFoodById } from "./fatsecretClient";
 import { resolveBarcode } from "./offClient";
-import { getSpoonacularFoodById } from "./spoonacularClient";
 import type { MappedFood } from "./types";
 import { fetchUsdaFoodById } from "./usdaClient";
 
@@ -40,14 +38,15 @@ async function refetch(food: Food): Promise<MappedFood | null> {
   switch (food.source) {
     case "off":
       return resolveBarcode(food.sourceId); // OFF foods are keyed by the barcode
-    case "fatsecret":
-      return getFatSecretFoodById(food.sourceId); // keyed by FatSecret food_id
-    case "spoonacular":
-      return getSpoonacularFoodById(food.sourceId); // keyed by Spoonacular product id
     case "edamam":
       return getEdamamFoodById(food.sourceId, food.name); // re-search by name, match foodId
     case "usda":
       return fetchUsdaFoodById(food.sourceId); // keyed by fdcId
+    // `fatsecret` and `spoonacular` are still legal `foods.source` values but
+    // have no client any more (nothing ever created a row with either — their
+    // search paths were never wired in). Such a row would fall through to
+    // `default` and simply keep serving its cached values, which is what an
+    // un-refreshable row should do.
     default:
       return null;
   }

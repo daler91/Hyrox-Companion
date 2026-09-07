@@ -7,6 +7,7 @@ import { Gauge } from "lucide-react";
 import { useMemo } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 
 /** "−0.9 lower (felt easier)" / "no clear difference" style qualifier for RPE. */
 function rpeDeltaText(c: FuellingMetricComparison): string {
@@ -79,11 +80,16 @@ export function FuellingCorrelationCard({
   if (result.eligibleDays === 0) return null;
 
   return (
-    <Card data-testid="fuelling-correlation-card" title={result.explanation}>
+    <Card data-testid="fuelling-correlation-card">
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <Gauge className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <h3 className="text-sm font-semibold">Fuelling and performance</h3>
+          <ExplanationTooltip
+            subject="Fuelling and performance"
+            explanation={result.explanation}
+            testId="fuelling-correlation-explanation"
+          />
         </div>
 
         {result.status === "ok" ? (

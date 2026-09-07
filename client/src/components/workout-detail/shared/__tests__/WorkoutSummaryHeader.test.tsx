@@ -131,7 +131,7 @@ describe("buildWorkoutSummaryStats", () => {
       // The compliance is in the label, not only in the colour.
       expect(avgHr?.label).toBe("Avg HR · 5 over MAF");
       expect(avgHr?.accentClassName).toContain("rose");
-      expect(avgHr?.title).toBeTruthy();
+      expect(avgHr?.explanation).toBeTruthy();
     });
 
     it("tones a run that held under the ceiling", () => {

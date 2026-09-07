@@ -12,6 +12,7 @@ import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
+import { FuellingGuidanceNote } from "./FuellingGuidanceNote";
 
 interface ExpectedSessionUpdate {
   expectedDurationMin?: number | null;
@@ -256,13 +257,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
         </div>
       </details>
 
-      <p
-        className="text-[11px] text-muted-foreground"
-        title={target.explanation}
-        data-testid="fuelling-plan-guidance"
-      >
-        Targets are guidance based on this session.
-      </p>
+      <FuellingGuidanceNote explanation={target.explanation} testId="fuelling-plan-guidance" />
     </section>
   );
 }

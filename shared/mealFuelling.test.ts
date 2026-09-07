@@ -282,3 +282,31 @@ describe("applyMealTargetOverrides", () => {
     expect(merged.dinner).toBe(base.dinner);
   });
 });
+
+describe("computeMealFuelTargets reconciliation transparency", () => {
+  /** Generous carbs so the carb reconciliation cannot be what clamps. */
+  const CARBS_TO_SPARE = 600;
+
+  function flexMealFor(proteinG: number, fatG: number): MealFuelTargets[keyof MealFuelTargets] {
+    const targets = computeMealFuelTargets({
+      daily: { calories: 2600, proteinG, carbG: CARBS_TO_SPARE, fatG },
+      session: AM_SESSION,
+      bodyweightKg: 75,
+      workoutTiming: "am_pre_breakfast",
+      hasWorkout: true,
+    }) as MealFuelTargets;
+    return targets.snack;
+  }
+
+  it("reports the clamp when protein and fat overshoot but carbs do not", () => {
+    // The session's protein floor alone exceeds this athlete's whole daily
+    // target, so the flex meal is pushed below zero and clamped. Reading only
+    // the carb reconciliation called that "nothing was clamped" and the meal
+    // carried no explanation for a plan that no longer sums to the target.
+    expect(flexMealFor(1, 1)?.reasonCodes).toContain("reconcile_clamped");
+  });
+
+  it("stays quiet when every macro reconciles cleanly", () => {
+    expect(flexMealFor(180, 80)?.reasonCodes).not.toContain("reconcile_clamped");
+  });
+});

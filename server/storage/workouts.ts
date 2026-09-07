@@ -18,6 +18,12 @@ import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, ne, or, sql } from 
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
+import {
+  getMutationOwnerAdapter,
+  type MutationOwnerAdapter,
+  type MutationOwnerContext,
+  type NormalizedSetCreateInput,
+} from "./exerciseSetOwners";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import {
   prescribedSetToLogRow,
@@ -115,12 +121,6 @@ export function countPrSets(
   return prs;
 }
 
-type MutationOwnerContext =
-  | { kind: "workout"; id: string; userId: string }
-  | { kind: "planDay"; id: string; userId: string };
-
-type NormalizedSetCreateInput = Omit<InsertExerciseSet, "id" | "workoutLogId" | "planDayId" | "sortOrder">;
-
 /**
  * Update payload accepted by updateExerciseSetNormalized. `version` is
  * explicitly excluded because storage manages it (always bumps by one on
@@ -137,17 +137,6 @@ type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutL
    * reaches the SET clause itself.
    */
   readonly unitPreferences?: UnitPreferences;
-};
-
-type MutationOwnerAdapter = {
-  getContainerId: (set: ExerciseSet) => string | null;
-  ownsContainer: (containerId: string, userId: string) => Promise<boolean>;
-  buildInsertValues: (
-    containerId: string,
-    set: NormalizedSetCreateInput,
-    sortOrder: number,
-  ) => InsertExerciseSet;
-  scopeWhere: (containerId: string) => ReturnType<typeof eq>;
 };
 
 
@@ -585,50 +574,32 @@ export class WorkoutStorage {
     return rows.map((r) => ({ ...r.set, date: r.date, timeOfDayMin: r.timeOfDayMin }));
   }
 
-  private getMutationOwnerAdapter(context: MutationOwnerContext): MutationOwnerAdapter {
-    if (context.kind === "workout") {
-      return {
-        getContainerId: (set) => set.workoutLogId,
-        ownsContainer: (containerId, userId) => this.getWorkoutLog(containerId, userId).then(Boolean),
-        buildInsertValues: (containerId, set, sortOrder) => ({
-          ...set,
-          workoutLogId: containerId,
-          planDayId: null,
-          sortOrder,
-        }),
-        scopeWhere: (containerId) => eq(exerciseSets.workoutLogId, containerId),
-      };
-    }
-
-    return {
-      getContainerId: (set) => set.planDayId,
-      ownsContainer: (containerId, userId) => this.ownsPlanDay(containerId, userId),
-      buildInsertValues: (containerId, set, sortOrder) => ({
-        ...set,
-        planDayId: containerId,
-        workoutLogId: null,
-        sortOrder,
-      }),
-      scopeWhere: (containerId) => eq(exerciseSets.planDayId, containerId),
-    };
-  }
 
   async addExerciseSetNormalized(
     context: MutationOwnerContext,
     set: NormalizedSetCreateInput,
-    adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
+    adapter: MutationOwnerAdapter = getMutationOwnerAdapter(context),
   ): Promise<ExerciseSet | undefined> {
-    // W10: after the ownership check, fold the next-sort-order lookup into the
-    // INSERT as a correlated subquery. That drops the separate MAX round-trip
-    // (one ownership read + one INSERT instead of three queries) and computes
-    // sortOrder atomically at insert time rather than read-then-write.
-    const owns = await adapter.ownsContainer(context.id, context.userId);
-    if (!owns) return undefined;
+    // W10: fold the next-sort-order lookup into the INSERT as a correlated
+    // subquery. That drops the separate MAX round-trip and computes sortOrder
+    // at insert time rather than read-then-write.
+    //
+    // Folding it in is not by itself enough to make it correct: under READ
+    // COMMITTED the subquery cannot see another transaction's uncommitted row,
+    // so two inserts racing on the same container both read the same MAX and
+    // both land on N — after which the two sets have no defined order relative
+    // to each other and the next insert collides with them too. Tapping "add
+    // set" twice is enough to hit it. So take a row lock on the container
+    // first, the same way seedExerciseSetsFromPlanDay does for the same reason,
+    // which serializes inserts per container while leaving other containers
+    // untouched. The lock doubles as the ownership check, so this is still one
+    // read plus one INSERT.
     const baseValues = adapter.buildInsertValues(context.id, set, 0);
     // The set row and its structure-step mirror commit together: a sync
     // failure rolls the insert back rather than leaving a set whose step
     // still shows the previous prescription.
     return db.transaction(async (tx) => {
+      if (!(await adapter.lockOwnedContainer(tx, context.id, context.userId))) return undefined;
       const [created] = await tx
         .insert(exerciseSets)
         .values({
@@ -645,7 +616,7 @@ export class WorkoutStorage {
     context: MutationOwnerContext,
     setId: string,
     updates: NormalizedSetUpdateInput,
-    adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
+    adapter: MutationOwnerAdapter = getMutationOwnerAdapter(context),
   ): Promise<ExerciseSet | undefined> {
     const owned = await this.getExerciseSetOwned(setId, context.userId);
     if (!owned || adapter.getContainerId(owned) !== context.id) return undefined;
@@ -733,7 +704,7 @@ export class WorkoutStorage {
   async deleteExerciseSetNormalized(
     context: MutationOwnerContext,
     setId: string,
-    adapter: MutationOwnerAdapter = this.getMutationOwnerAdapter(context),
+    adapter: MutationOwnerAdapter = getMutationOwnerAdapter(context),
   ): Promise<boolean> {
     const owned = await this.getExerciseSetOwned(setId, context.userId);
     if (!owned) return true;

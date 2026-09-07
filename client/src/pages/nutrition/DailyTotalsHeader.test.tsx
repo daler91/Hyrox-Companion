@@ -97,4 +97,33 @@ describe("DailyTotalsHeader", () => {
     );
     expect(screen.queryByTestId("button-set-targets-cta")).not.toBeInTheDocument();
   });
+
+  it("exposes each macro note's explanation to keyboard and screen readers, not hover alone", () => {
+    render(
+      <DailyTotalsHeader
+        totals={{ calories: 1000, protein: 80, carb: 150, fat: 40, fiber: 25 }}
+        effectiveTarget={{
+          calories: 2010, proteinG: 172.5, carbG: 230, fatG: 60,
+          carbDeltaG: 30, baseLoadDeltaG: -50, recoveryDeltaG: 80, preloadDeltaG: 0,
+          proteinDeltaG: 22.5, utss: 0, scaled: true,
+          reasonCodes: ["recovery_topup"],
+          explanation: "Base 200g, -50g lighter day, +80g recovery top-up.",
+          phase: null,
+        }}
+      />,
+    );
+    for (const [testId, note] of [
+      ["carb-load-explanation", "+30g for recovery"],
+      ["protein-recovery-explanation", "+22.5g recovery"],
+    ] as const) {
+      const trigger = screen.getByTestId(testId);
+      expect(trigger.tagName).toBe("BUTTON");
+      expect(trigger).toHaveAccessibleName(
+        `${note}: Base 200g, -50g lighter day, +80g recovery top-up.`,
+      );
+    }
+    // The old hover-only affordance is gone: no note carries a bare title.
+    expect(screen.getByTestId("carb-load-note")).not.toHaveAttribute("title");
+    expect(screen.getByTestId("protein-recovery-note")).not.toHaveAttribute("title");
+  });
 });
