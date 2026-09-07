@@ -50,9 +50,12 @@ describe("WorkoutStorage.addExerciseSetNormalized — container lock", () => {
     } as never);
   }
 
-  const CREATED = {
+  const WORKOUT_ID = "workout-1";
+const PLAN_DAY_ID = "plan-day-1";
+
+const CREATED = {
     id: "set-9",
-    workoutLogId: "workout-1",
+    workoutLogId: WORKOUT_ID,
     planDayId: null,
     blockId: null,
     stepNumber: null,
@@ -60,11 +63,11 @@ describe("WorkoutStorage.addExerciseSetNormalized — container lock", () => {
   };
 
   it("row-locks the workout before deriving sortOrder from its current MAX", async () => {
-    const lock = lockChain([{ id: "workout-1" }]);
+    const lock = lockChain([{ id: WORKOUT_ID }]);
     mockInsertReturning([CREATED]);
 
     const created = await storage.addExerciseSetNormalized(
-      { kind: "workout", id: "workout-1", userId: "user-1" },
+      { kind: "workout", id: WORKOUT_ID, userId: "user-1" },
       { exerciseName: "back_squat", category: "strength", setNumber: 1 },
     );
 
@@ -77,11 +80,11 @@ describe("WorkoutStorage.addExerciseSetNormalized — container lock", () => {
   it("locks the plan day itself, not the training plan it belongs to", async () => {
     // Locking the joined training_plans row would serialize inserts across
     // every day in the plan instead of just the one being written.
-    const lock = lockChain([{ id: "plan-day-1" }]);
-    mockInsertReturning([{ ...CREATED, workoutLogId: null, planDayId: "plan-day-1" }]);
+    const lock = lockChain([{ id: PLAN_DAY_ID }]);
+    mockInsertReturning([{ ...CREATED, workoutLogId: null, planDayId: PLAN_DAY_ID }]);
 
     await storage.addExerciseSetNormalized(
-      { kind: "planDay", id: "plan-day-1", userId: "user-1" },
+      { kind: "planDay", id: PLAN_DAY_ID, userId: "user-1" },
       { exerciseName: "run_1k", category: "running", setNumber: 1 },
     );
 
@@ -98,7 +101,7 @@ describe("WorkoutStorage.addExerciseSetNormalized — container lock", () => {
     mockInsertReturning([CREATED]);
 
     const created = await storage.addExerciseSetNormalized(
-      { kind: "workout", id: "workout-1", userId: "someone-else" },
+      { kind: "workout", id: WORKOUT_ID, userId: "someone-else" },
       { exerciseName: "back_squat", category: "strength", setNumber: 1 },
     );
 

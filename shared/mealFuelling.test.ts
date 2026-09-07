@@ -289,7 +289,7 @@ describe("computeMealFuelTargets reconciliation transparency", () => {
 
   function flexMealFor(proteinG: number, fatG: number): MealFuelTargets[keyof MealFuelTargets] {
     const targets = computeMealFuelTargets({
-      daily: { calories: 2600, proteinG, carbG: CARBS_TO_SPARE, fatG },
+      daily: { calories: 2600, carbG: CARBS_TO_SPARE, proteinG, fatG },
       session: AM_SESSION,
       bodyweightKg: 75,
       workoutTiming: "am_pre_breakfast",

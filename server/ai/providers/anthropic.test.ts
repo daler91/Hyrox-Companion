@@ -126,4 +126,23 @@ describe("anthropic JSON responses", () => {
     const mixed = 'Here you go:\n```json\n{"ok":true}\n```\nHope that helps.';
     expect(stripJsonCodeFence(mixed)).toBe(mixed);
   });
+
+  it("stays linear on an unclosed fence (no catastrophic backtracking)", () => {
+    // A truncated reply is an opening fence with nothing closing it. The regex
+    // this replaced was cubic on exactly that shape — 145ms at 1k trailing
+    // spaces, 1.1s at 2k, 8.8s at 4k — because its whitespace classes and lazy
+    // body all matched the same characters. 20k spaces would have taken hours;
+    // the bound below is ~5000x what the slicing version needs.
+    const truncated = "```" + " ".repeat(20_000);
+    const started = performance.now();
+    expect(stripJsonCodeFence(truncated)).toBe(truncated);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it("unwraps a fence whose body is only whitespace", () => {
+    // The degenerate closed case, adjacent to the one above: it must terminate
+    // AND still be treated as an empty payload rather than passed through.
+    expect(stripJsonCodeFence("```json\n   \n```")).toBe("");
+    expect(stripJsonCodeFence("``````")).toBe("");
+  });
 });
