@@ -7,6 +7,7 @@ import { db } from "../db";
 import { logger } from "../logger";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
+import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
 import { createSamplePlan, importPlanFromCSV, updatePlanDayStatus, updatePlanDayWithCleanup,validateAndMapCSVRows } from "./planService";
 
 vi.mock("csv-parse/sync", () => {
@@ -39,9 +40,19 @@ vi.mock("../storage", () => {
       getWorkoutLogByPlanDayId: vi.fn(),
       deleteWorkoutLogByPlanDayId: vi.fn(),
     },
+    users: {
+      getUser: vi.fn(),
+    },
   },
   };
 });
+
+// The reopen path hands a linked recording to the device-link service; its
+// row-building is covered in deviceActivityLink.test.ts, so here it is a spy.
+vi.mock("./deviceActivityLink", () => ({
+  releaseStravaActivityInTx: vi.fn(),
+  stripStravaActivityLabel: vi.fn(),
+}));
 
 vi.mock("../queue", () => {
   return {
@@ -488,6 +499,50 @@ describe("planService", () => {
       await uncomplete();
 
       expect(tx.updateSet).not.toHaveBeenCalledWith(UNLINK_PATCH);
+    });
+
+    it("releases a linked Strava recording as its own row instead of deleting it with the log", async () => {
+      // The log the sync built for this day carries the recording. Reopening
+      // still deletes the log (its content is folded back onto the day), but
+      // the recording is a measurement the athlete cannot type back in.
+      const linked = {
+        id: "log-id",
+        focus: "Easy run",
+        mainWorkout: "6 km easy",
+        accessory: null,
+        notes: "Keep it conversational\nStrava: Morning Run",
+        stravaActivityId: "9001",
+        deviceLinkSource: "auto",
+      };
+      vi.mocked(stripStravaActivityLabel).mockReturnValue("Keep it conversational");
+      vi.mocked(storage.users.getUser).mockResolvedValue({ distanceUnit: "mi" } as never);
+      const tx = arrangeUncomplete([linked]);
+
+      await uncomplete();
+
+      expect(releaseStravaActivityInTx).toHaveBeenCalledWith(tx, linked, userId, "mi");
+      // Only once the log holding the same activity id is gone: the partial
+      // unique index on (user_id, strava_activity_id) refuses the row before.
+      const lastDelete = Math.max(...tx.deleteWhere.mock.invocationCallOrder);
+      expect(vi.mocked(releaseStravaActivityInTx).mock.invocationCallOrder[0]).toBeGreaterThan(lastDelete);
+      // The "Strava: <name>" line leaves with the recording; the rest stays.
+      expect(stripStravaActivityLabel).toHaveBeenCalledWith(linked.notes, linked);
+      expect(tx.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "planned", notes: "Keep it conversational" }),
+      );
+    });
+
+    it("leaves the device-link service alone when the folded log carries no recording", async () => {
+      const tx = arrangeUncomplete([
+        { id: "log-plain", focus: "F", mainWorkout: "M", accessory: null, notes: "Felt good", stravaActivityId: null },
+      ]);
+
+      await uncomplete();
+
+      expect(releaseStravaActivityInTx).not.toHaveBeenCalled();
+      expect(stripStravaActivityLabel).not.toHaveBeenCalled();
+      expect(storage.users.getUser).not.toHaveBeenCalled();
+      expect(tx.updateSet).toHaveBeenCalledWith(expect.objectContaining({ notes: "Felt good" }));
     });
 
     it("carries the unit stamps and prescription snapshot onto the copied-back sets", async () => {

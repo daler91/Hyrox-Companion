@@ -9,6 +9,8 @@ import {
   legacyRawFromLog,
   linkStandaloneDeviceLog,
   pickDeviceMetrics,
+  releaseStravaActivityInTx,
+  stripStravaActivityLabel,
   unlinkDeviceActivity,
 } from "./deviceActivityLink";
 import { mapStravaActivityToWorkout } from "./stravaMapper";
@@ -273,6 +275,63 @@ describe("linkStandaloneDeviceLog", () => {
       }),
     ).rejects.toMatchObject({ status: 409 });
     expect(tx.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("releaseStravaActivityInTx", () => {
+  it("rebuilds the standalone row from a log imported before the snapshot column existed", async () => {
+    const tx = makeTx();
+    tx.returning.mockResolvedValueOnce([
+      makeWorkoutLog({ id: "standalone", stravaActivityId: "9001", source: "strava" }),
+    ]);
+    const legacy = makeWorkoutLog({
+      id: "log-9",
+      source: "strava",
+      planDayId: "pd-1",
+      stravaActivityId: "9001",
+      focus: "Run",
+      notes: "Morning Run | Avg HR: 152 bpm",
+      distanceMeters: 8100,
+      duration: 45,
+      deviceActivity: null,
+    });
+
+    const standalone = await releaseStravaActivityInTx(tx as never, legacy, USER, "km");
+
+    const [inserted] = tx.values.mock.calls[0];
+    expect(inserted).toMatchObject({
+      userId: USER,
+      source: "strava",
+      stravaActivityId: "9001",
+      planDayId: null,
+      distanceMeters: 8100,
+    });
+    expect(inserted.deviceActivity).toMatchObject({
+      provider: "strava",
+      filledColumns: [],
+      raw: { id: 9001, name: "Morning Run" },
+    });
+    expect(standalone.id).toBe("standalone");
+  });
+});
+
+describe("stripStravaActivityLabel", () => {
+  const linked = makeWorkoutLog({
+    deviceActivity: { provider: "strava", raw: RAW, filledColumns: [], linkedAt: "2026-09-08T12:00:00Z" },
+  });
+
+  it("drops exactly the label line the sync appended", () => {
+    expect(stripStravaActivityLabel("Keep it easy\nStrava: Morning Run", linked)).toBe("Keep it easy");
+  });
+
+  it("returns null when the label was the only line", () => {
+    expect(stripStravaActivityLabel("Strava: Morning Run", linked)).toBeNull();
+  });
+
+  it("leaves the notes alone without a snapshot to name the activity", () => {
+    const legacy = makeWorkoutLog({ deviceActivity: null });
+    expect(stripStravaActivityLabel("Strava: Morning Run", legacy)).toBe("Strava: Morning Run");
+    expect(stripStravaActivityLabel(null, linked)).toBeNull();
   });
 });
 
