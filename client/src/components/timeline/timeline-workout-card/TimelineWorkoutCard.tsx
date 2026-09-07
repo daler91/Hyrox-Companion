@@ -669,7 +669,9 @@ function TimelineCardWorkoutBody({
 }
 
 function getWorkoutMetricsText(entry: TimelineWorkoutEntry): string | null {
-  if (entry.source === "strava") return null;
+  // A Strava import's duration is already in its description ("8.1 km,
+  // 45:00") and its stats row; only an RPE the athlete set adds anything.
+  if (entry.source === "strava") return entry.rpe ? `RPE: ${entry.rpe}` : null;
   const metrics = [
     entry.duration ? `Duration: ${entry.duration} min` : null,
     entry.rpe ? `RPE: ${entry.rpe}` : null,

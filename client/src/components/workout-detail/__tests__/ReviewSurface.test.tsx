@@ -328,6 +328,65 @@ describe("ReviewSurface", () => {
     expect(screen.queryByTestId("input-review-time-of-day")).not.toBeInTheDocument();
   });
 
+  it("keeps a Strava import fully editable, with the recording's stats alongside", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({
+          mainWorkout: "8.1 km, 45:00",
+          prescribedMainWorkout: null,
+          startedAt: new Date("2026-05-06T06:30:00Z"),
+          // The provenance hint only renders once the log has rows.
+          exerciseSets: [makeExerciseSet({ workoutLogId: "workout-1", exerciseName: "easy_run" })],
+        }),
+      }),
+    );
+
+    render(
+      <ReviewSurface
+        entry={makeEntry({
+          source: "strava",
+          stravaActivityId: "9001",
+          planDayId: null,
+          focus: "Workout",
+          mainWorkout: "8.1 km, 45:00",
+          calories: 610,
+          avgSpeed: 3,
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // A generic Strava "Workout" is a stub the athlete fills in: the results
+    // editor, RPE and notes all render, labelled as coming from the device.
+    expect(screen.getByTestId("review-results-entry-1")).toBeInTheDocument();
+    expect(screen.getByText(/from Strava/)).toBeInTheDocument();
+    expect(screen.getByTestId("rpe-selector")).toBeInTheDocument();
+    expect(screen.getByLabelText("Athlete note")).toBeInTheDocument();
+    expect(screen.getByTestId("review-strava-entry-1")).toBeInTheDocument();
+    // The device start time wins, so there is no manual session-time picker.
+    expect(screen.queryByTestId("input-review-time-of-day")).not.toBeInTheDocument();
+  });
+
+  it("shows the Strava session stats on a manual log a recording enriched", () => {
+    mockUseWorkoutDetail.mockReturnValue(
+      makeDetail({
+        workout: makeWorkout({
+          exerciseSets: [makeExerciseSet({ workoutLogId: "workout-1", exerciseName: "back_squat" })],
+        }),
+      }),
+    );
+
+    render(
+      <ReviewSurface
+        entry={makeEntry({ source: "manual", stravaActivityId: "9002", calories: 500 })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("review-strava-entry-1")).toBeInTheDocument();
+    expect(screen.getByText(/from coach text/)).toBeInTheDocument();
+  });
+
   it("hides the delete action when no onDelete handler is wired up", () => {
     mockUseWorkoutDetail.mockReturnValue(makeDetail());
 

@@ -246,6 +246,22 @@ describe("TimelineWorkoutCard — device link affordances", () => {
     expect(screen.queryByTestId("device-link-suggestion-log-s1")).toBeNull();
   });
 
+  it("shows an athlete-set RPE on a Strava import, and nothing when unset", () => {
+    const unsuggested = {
+      ...stravaImport,
+      suggestedPlanDayId: null,
+      suggestedLinkConfidence: null,
+    } as TimelineEntry;
+    const { unmount } = renderCard(unsuggested, [unsuggested]);
+    expect(screen.queryByText(/RPE:/)).toBeNull();
+    expect(screen.queryByText(/Duration:/)).toBeNull();
+    unmount();
+
+    renderCard({ ...unsuggested, rpe: 7 }, [unsuggested]);
+    expect(screen.getByText("RPE: 7")).toBeInTheDocument();
+    expect(screen.queryByText(/Duration:/)).toBeNull();
+  });
+
   it("shows no Strava controls on a plain manual log", () => {
     renderCard(manualSibling, [manualSibling, plannedSibling]);
 
