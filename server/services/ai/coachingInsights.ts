@@ -17,6 +17,7 @@ import { formatMinutes, minutes, minutesToSeconds, unitless } from "@shared/unit
 import type { TrainingContext } from "../../gemini/index";
 import { addDaysLocal, getLocalDateStrSafe } from "../../timezone";
 import { toDateStr } from "../../types";
+import { sanitizeUserInput } from "../../utils/sanitize";
 import { getMondayWeekBoundaries } from "../weeklyProgress";
 import type { TimelineEntry } from "./types";
 
@@ -90,7 +91,8 @@ export function computeExerciseGaps(
     sources.push({
       date: entry.date,
       exerciseNames: (entry.exerciseSets ?? []).map(es => es.exerciseName),
-      freeText: entry.focus ? [entry.focus] : [],
+      // 🛡️ Sentinel: Sanitize free-text user input to prevent prompt injection before passing to AI.
+      freeText: entry.focus ? [sanitizeUserInput(entry.focus)] : [],
     });
   }
 
