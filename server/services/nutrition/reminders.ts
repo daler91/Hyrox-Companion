@@ -76,7 +76,10 @@ export async function processRefuelReminder(
   );
   if (!workout?.startedAt) return false;
 
-  const startMs = new Date(workout.startedAt).getTime();
+  // ⚡ Bolt Performance Optimization:
+  // `workout.startedAt` is already parsed as a Date object by Drizzle.
+  // Using `.getTime()` directly prevents unnecessary intermediate Date object allocation.
+  const startMs = workout.startedAt.getTime();
   const durationMin = workout.duration ?? DEFAULT_SESSION_DURATION_MIN;
   const endMs = startMs + durationMin * 60 * 1000;
   const sinceEnd = now.getTime() - endMs;
