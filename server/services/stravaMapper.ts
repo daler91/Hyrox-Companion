@@ -1,3 +1,4 @@
+import type { StravaActivitySummary } from "@shared/schema";
 import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
 
 import {
@@ -6,29 +7,10 @@ import {
   formatActivityPace,
 } from "./activityFormatting";
 
-interface StravaActivity {
-  id: number;
-  name: string;
-  type: string;
-  sport_type: string;
-  start_date: string;
-  start_date_local: string;
-  distance: number;
-  moving_time: number;
-  elapsed_time: number;
-  total_elevation_gain: number;
-  average_speed: number;
-  max_speed: number;
-  average_heartrate?: number;
-  max_heartrate?: number;
-  average_cadence?: number;
-  average_watts?: number;
-  kilojoules?: number;
-  calories?: number;
-  suffer_score?: number;
-  pr_count?: number;
-  achievement_count?: number;
-}
+// The list-row shape lives in shared (StravaActivitySummary) because the
+// device-link snapshot column stores it verbatim; this alias keeps the
+// mapper's existing import surface.
+type StravaActivity = StravaActivitySummary;
 
 export function formatStravaPace(metersPerSecond: number, distanceUnit: DistanceUnit): string {
   return formatActivityPace(metersPerSecond, distanceUnit);

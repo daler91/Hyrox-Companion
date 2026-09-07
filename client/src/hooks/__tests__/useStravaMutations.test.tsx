@@ -123,6 +123,28 @@ describe("useStravaMutations", () => {
       );
     });
 
+    it("says where the activities landed when the server reports the enrichment breakdown", async () => {
+      apiMocks.sync.mockResolvedValue({
+        imported: 4,
+        skipped: 1,
+        hasMore: false,
+        enriched: 1,
+        completedPlanDays: 2,
+        suggested: 1,
+        standalone: 0,
+      });
+      const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
+      await act(async () => {
+        await result.current.syncStravaMutation.mutateAsync();
+      });
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description:
+            "Imported 4 new activities (1 added to a workout you logged, 2 completed planned sessions, 1 added as new). 1 already existed.",
+        }),
+      );
+    });
+
     it("omits the run-again hint when the sync drained the backlog", async () => {
       apiMocks.sync.mockResolvedValue({ imported: 1, skipped: 0, hasMore: false });
       const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });

@@ -42,6 +42,12 @@ export function makeWorkoutLog(overrides: Partial<WorkoutLog> = {}): WorkoutLog 
     sufferScore: null,
     startedAt: null,
     timeOfDayMin: null,
+    deviceLinkSource: null,
+    deviceLinkConfidence: null,
+    deviceActivity: null,
+    suggestedPlanDayId: null,
+    suggestedWorkoutLogId: null,
+    suggestedLinkConfidence: null,
     ...overrides,
   };
 }

@@ -213,7 +213,7 @@ Individual workout days within a training plan.
 
 ### workout_logs
 
-Logged workouts, either entered manually or synced from Strava.
+Logged workouts, entered manually or synced from Strava/Garmin. A synced Strava recording is not necessarily a row of its own: the sync first tries to *link* it to the same day's manual log (filling that row's NULL metric columns) or to make it the log of the day's open plan day, and only imports it standalone when nothing plausible matches. The device-link columns record that link so it can be undone exactly (see [Integrations → Activity Sync](integrations.md#activity-sync)).
 
 | Column | Type | Constraints |
 |---|---|---|
@@ -250,6 +250,14 @@ Logged workouts, either entered manually or synced from Strava.
 | `avg_cadence` | `real` | nullable |
 | `avg_watts` | `integer` | nullable |
 | `suffer_score` | `integer` | nullable |
+| `started_at` | `timestamptz` | nullable — true session start instant from Strava/Garmin |
+| `time_of_day_min` | `integer` | nullable — manual log's local start, minutes from midnight (0–1439) |
+| `device_link_source` | `text` | nullable — `'auto'` (matcher) or `'manual'` (athlete); NULL when no device activity is linked, including a standalone import |
+| `device_link_confidence` | `real` | nullable — matcher score in [0, 1] for auto links |
+| `device_activity` | `jsonb` | nullable — `DeviceActivitySnapshot`: the raw provider row plus the metric columns the link filled, so an unlink can NULL exactly those |
+| `suggested_plan_day_id` | `varchar(255)` | nullable, FK -> `plan_days.id` ON DELETE SET NULL — on a standalone import, the plausible match the sync did not act on |
+| `suggested_workout_log_id` | `varchar(255)` | nullable, FK -> `workout_logs.id` ON DELETE SET NULL — same, when the candidate is a manual log |
+| `suggested_link_confidence` | `real` | nullable — matcher score for the suggestion |
 
 **Indexes:**
 - `idx_workout_logs_user_id` on (`user_id`)
@@ -262,9 +270,13 @@ Logged workouts, either entered manually or synced from Strava.
 - `idx_workout_logs_source` on (`source`)
 - `idx_workout_logs_user_strava_unique` on (`user_id`, `strava_activity_id`) -- partial unique where `strava_activity_id IS NOT NULL`, guarantees per-user dedupe of Strava imports
 - `idx_workout_logs_user_garmin_unique` on (`user_id`, `garmin_activity_id`) -- partial unique where `garmin_activity_id IS NOT NULL`, same guarantee for Garmin imports
+- `idx_workout_logs_suggested_plan_day_id` on (`suggested_plan_day_id`)
+- `idx_workout_logs_suggested_workout_log_id` on (`suggested_workout_log_id`)
 
 **Check constraints:**
 - `rpe_range_check`: `rpe IS NULL OR (rpe >= 1 AND rpe <= 10)`
+- `workout_logs_time_of_day_check`: `time_of_day_min IS NULL OR (time_of_day_min >= 0 AND time_of_day_min <= 1439)`
+- `workout_logs_device_link_source_check`: `device_link_source IS NULL OR device_link_source IN ('auto', 'manual')` -- rendered from `deviceLinkSourceEnum`, pinned by `checkConstraints.test.ts`
 
 ---
 

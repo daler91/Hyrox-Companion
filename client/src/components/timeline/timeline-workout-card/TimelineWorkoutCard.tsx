@@ -556,8 +556,14 @@ function TimelineCardHeader({
       {/* The "AI Modifying" badge is rendered once, by FloatingAiCoachBadge at
           the card root (W9). A second copy here produced a duplicate DOM node
           and a duplicate data-testid="badge-ai-coach-${id}". */}
-      {entry.source === "strava" && (
-        <Badge className="bg-[#FC4C02]/10 text-[#FC4C02]">
+      {/* Standalone imports and manual logs a recording enriched both carry
+          the activity id, so the badge keys off that rather than `source`. */}
+      {(entry.source === "strava" || Boolean(entry.stravaActivityId)) && (
+        <Badge
+          className="bg-[#FC4C02]/10 text-[#FC4C02]"
+          title={entry.deviceActivityName ?? undefined}
+          data-testid={`badge-strava-${entry.id}`}
+        >
           <StravaIcon className="h-3 w-3 mr-1" aria-hidden="true" />
           Strava
         </Badge>

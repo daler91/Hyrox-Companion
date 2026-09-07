@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   customType,
@@ -16,7 +17,8 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import { MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
+import type { DeviceActivitySnapshot } from "./deviceActivity";
+import { deviceLinkSourceEnum, MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
 import type { CoachNoteInputs, PlanAdjustmentProposalPayload } from "./types";
 
 /**
@@ -458,6 +460,35 @@ export const workoutLogs = pgTable(
     // pre_workout/post_workout meal-type tags on the calendar day for the
     // fuelling-around-session views (FR-3.1/3.2). No manual entry UI this phase.
     startedAt: timestamp("started_at", { withTimezone: true }),
+    // ── Device activity link ────────────────────────────────────────────────
+    // A Strava (later Garmin) recording is a MEASUREMENT of a session the
+    // athlete planned or logged, not a workout of its own. When the sync
+    // matches an activity to an existing row it fills the NULL metric columns
+    // above and records the link here; a standalone import (no match) carries
+    // a suggestion instead. Server-written only — omitted from the client
+    // insert/update schemas (see WorkoutLogDeviceLinkColumns).
+    //
+    // How the activity came to sit on this row: "auto" (matcher) or "manual"
+    // (athlete). NULL when no device activity is linked, which includes a
+    // standalone import — that row IS the activity, nothing is linked to it.
+    deviceLinkSource: text("device_link_source"),
+    // Matcher score in [0, 1] for auto links; NULL for manual links.
+    deviceLinkConfidence: real("device_link_confidence"),
+    // The raw provider row plus the metric columns the link filled, so an
+    // unlink can NULL exactly those and re-create the activity as its own row.
+    deviceActivity: jsonb("device_activity").$type<DeviceActivitySnapshot>(),
+    // On a standalone device import: the plausible-but-uncertain match the
+    // sync did not act on, for the timeline to offer ("Was this your Tuesday
+    // intervals?"). Cleared when the athlete links or the row is enriched.
+    suggestedPlanDayId: varchar("suggested_plan_day_id", { length: 255 }).references(
+      () => planDays.id,
+      { onDelete: "set null" },
+    ),
+    suggestedWorkoutLogId: varchar("suggested_workout_log_id", { length: 255 }).references(
+      (): AnyPgColumn => workoutLogs.id,
+      { onDelete: "set null" },
+    ),
+    suggestedLinkConfidence: real("suggested_link_confidence"),
   },
   (table) => [
     index("idx_workout_logs_user_id").on(table.userId),
@@ -486,6 +517,12 @@ export const workoutLogs = pgTable(
     check(
       "workout_logs_time_of_day_check",
       sql`${table.timeOfDayMin} IS NULL OR (${table.timeOfDayMin} >= 0 AND ${table.timeOfDayMin} <= 1439)`,
+    ),
+    index("idx_workout_logs_suggested_plan_day_id").on(table.suggestedPlanDayId),
+    index("idx_workout_logs_suggested_workout_log_id").on(table.suggestedWorkoutLogId),
+    check(
+      "workout_logs_device_link_source_check",
+      sql`device_link_source IS NULL OR device_link_source IN (${inValues(deviceLinkSourceEnum)})`,
     ),
   ],
 );

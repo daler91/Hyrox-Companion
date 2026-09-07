@@ -203,6 +203,60 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "deviceLinkSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceLinkConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "deviceActivity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          },
+          "suggestedPlanDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "suggestedWorkoutLogId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "suggestedLinkConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
           }
         },
         "required": [
@@ -240,7 +294,13 @@
           "avgCadence",
           "avgWatts",
           "sufferScore",
-          "startedAt"
+          "startedAt",
+          "deviceLinkSource",
+          "deviceLinkConfidence",
+          "deviceActivity",
+          "suggestedPlanDayId",
+          "suggestedWorkoutLogId",
+          "suggestedLinkConfidence"
         ],
         "title": "WorkoutLog",
         "description": "A stored workout log row"
@@ -428,6 +488,60 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "deviceLinkSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceLinkConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "deviceActivity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          },
+          "suggestedPlanDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "suggestedWorkoutLogId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "suggestedLinkConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
           },
           "exerciseSets": {
             "type": "array",
@@ -645,7 +759,13 @@
           "avgCadence",
           "avgWatts",
           "sufferScore",
-          "startedAt"
+          "startedAt",
+          "deviceLinkSource",
+          "deviceLinkConfidence",
+          "deviceActivity",
+          "suggestedPlanDayId",
+          "suggestedWorkoutLogId",
+          "suggestedLinkConfidence"
         ],
         "title": "WorkoutLogWithSets",
         "description": "A workout log with the exercise sets it owns"
@@ -834,6 +954,60 @@
             "nullable": true,
             "format": "date-time"
           },
+          "deviceLinkSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceLinkConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
+          "deviceActivity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "nullable": true
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "nullable": true
+                }
+              }
+            ]
+          },
+          "suggestedPlanDayId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "suggestedWorkoutLogId": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 255
+          },
+          "suggestedLinkConfidence": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -8388608,
+            "maximum": 8388607
+          },
           "exerciseSets": {
             "type": "array",
             "items": {
@@ -1018,6 +1192,12 @@
           "avgWatts",
           "sufferScore",
           "startedAt",
+          "deviceLinkSource",
+          "deviceLinkConfidence",
+          "deviceActivity",
+          "suggestedPlanDayId",
+          "suggestedWorkoutLogId",
+          "suggestedLinkConfidence",
           "exerciseSets",
           "structureBlocks"
         ],

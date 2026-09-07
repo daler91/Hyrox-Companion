@@ -4,7 +4,9 @@ import { Activity, Flame, TrendingUp,Zap } from "lucide-react";
 import type { WorkoutStravaStatsProps } from "./types";
 
 export function WorkoutStravaStats({ entry, distanceUnit }: Readonly<WorkoutStravaStatsProps>) {
-  if (entry.source !== "strava") return null;
+  // Keyed off the linked activity, not `source`: a manual log that a Strava
+  // recording enriched carries the same device stats as a standalone import.
+  if (!entry.stravaActivityId && entry.source !== "strava") return null;
 
   const hasStravaStats =
     entry.calories ||

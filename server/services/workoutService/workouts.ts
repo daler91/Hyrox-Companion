@@ -10,6 +10,7 @@ import {
   type UpdateWorkoutLog,
   users,
   type WorkoutLog,
+  type WorkoutLogDeviceLinkColumns,
   workoutLogs,
 } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
@@ -123,9 +124,20 @@ async function insertClientSuppliedExercises(
   return savedSets;
 }
 
-async function createWorkoutInTx(
+/**
+ * The payload createWorkoutInTx accepts: what a client may send, plus the
+ * server-only device-link columns the Strava reconciler and link routes set
+ * when the log they create IS the recording of a plan day. Clients never
+ * reach this type — the routes validate against insertWorkoutLogSchema, which
+ * omits those columns.
+ */
+export type CreateWorkoutInTxPayload = InsertWorkoutLog & Partial<WorkoutLogDeviceLinkColumns>;
+
+// Exported for the device-link paths (deviceActivityLink.ts), which build a
+// plan day's log from a Strava recording exactly the way a manual confirm does.
+export async function createWorkoutInTx(
   tx: WorkoutTx,
-  enrichedData: InsertWorkoutLog,
+  enrichedData: CreateWorkoutInTxPayload,
   exercises: ParsedExercise[] | undefined,
   structureBlocks: StructureBlockInput[] | undefined,
   userId: string,

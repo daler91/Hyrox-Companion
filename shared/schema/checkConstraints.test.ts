@@ -2,11 +2,11 @@ import { sql } from "drizzle-orm";
 import { getTableConfig,PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
-import { FOOD_SOURCES, foodLogEntries, foods, inValues, mealTargets, planDays } from "./tables";
+import { deviceLinkSourceEnum, MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
+import { FOOD_SOURCES, foodLogEntries, foods, inValues, mealTargets, planDays, workoutLogs } from "./tables";
 
 /**
- * Five CHECK constraints enumerate values that also exist as TypeScript
+ * Six CHECK constraints enumerate values that also exist as TypeScript
  * constants. They used to hold a hand-copied second list — the copy in
  * `foods_source_check` was dropped and re-added across migrations 0069-0071
  * chasing the TS side — so they are now rendered from the constant itself.
@@ -43,6 +43,13 @@ describe("enum-backed CHECK constraints", () => {
       "skip_reason IS NULL OR skip_reason IN ('ill', 'injured', 'schedule', 'low_energy')",
     );
     expect(planDaySkipReasonEnum).toEqual(["ill", "injured", "schedule", "low_energy"]);
+  });
+
+  it("renders workout_logs.device_link_source from deviceLinkSourceEnum", () => {
+    expect(checkSql(workoutLogs, "workout_logs_device_link_source_check")).toBe(
+      "device_link_source IS NULL OR device_link_source IN ('auto', 'manual')",
+    );
+    expect(deviceLinkSourceEnum).toEqual(["auto", "manual"]);
   });
 
   it("renders foods.source from FOOD_SOURCES", () => {

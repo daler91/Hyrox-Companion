@@ -3,6 +3,7 @@
 // and "Missed" there.
 import { type AbsenceRange, isDateExcused, isExcusedFromMissed } from "@shared/absence";
 import {
+  type DeviceLinkSource,
   type ExerciseSet,
   exerciseSets,
   type PlanDay,
@@ -27,6 +28,15 @@ import type { WorkoutStorage } from "./workouts";
 function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
   return {
     source: (log.source as "manual" | "strava") || "manual",
+    // A Strava recording sits on a standalone import (source "strava") or on a
+    // manual log it enriched; the card keys its Strava badge and device stats
+    // off the activity id, not `source`, so both read the same.
+    stravaActivityId: log.stravaActivityId,
+    deviceLinkSource: (log.deviceLinkSource as DeviceLinkSource | null) ?? null,
+    deviceActivityName: log.deviceActivity?.raw?.name ?? null,
+    suggestedPlanDayId: log.suggestedPlanDayId,
+    suggestedWorkoutLogId: log.suggestedWorkoutLogId,
+    suggestedLinkConfidence: log.suggestedLinkConfidence,
     calories: log.calories,
     distanceMeters: log.distanceMeters,
     elevationGain: log.elevationGain,

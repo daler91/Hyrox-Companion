@@ -388,6 +388,25 @@ Seed a workout log's exercise sets from its linked plan day.
 - **Rate limit:** `workoutSet` category, 20/min
 - **Response:** `{ seededCount: number }`
 
+### POST /api/v1/workouts/:id/device-link
+
+Merge a standalone Strava import (`:id`) into the plan day or the manually logged workout it was a recording of. The recording's metrics fill only the target's NULL columns and the standalone row is removed. A manual link is never revisited by the sync. See [Integrations → Activity Sync](integrations.md#activity-sync) for how the sync links automatically.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 40/min
+- **Body:** exactly one of `{ planDayId: string }` or `{ workoutLogId: string }`
+- **Response:** the merged `WorkoutLog`
+- **Errors:** `400` (no target, both targets, or unknown fields), `404` (import or plan day not found), `409` (not a Strava import, already linked, or the target already carries a device activity)
+
+### DELETE /api/v1/workouts/:id/device-link
+
+Take the linked Strava activity off workout log `:id` and give it back its own row. An enriched manual log keeps everything the athlete typed and loses exactly the columns the link filled; a plan-day log the sync created is deleted and the day's status re-derived.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 40/min
+- **Response:** `{ log: WorkoutLog | null, standalone: WorkoutLog }` — `log` is `null` when the row only existed because of the link
+- **Errors:** `404` (workout not found), `409` (no linked activity to remove)
+
 ### PATCH /api/v1/workouts/:id/structure-blocks/:blockId/score
 
 Set or clear the score on a single structure block of a workout log.
@@ -1287,8 +1306,8 @@ Incrementally sync Strava activities into workout logs (since `lastSyncedAt` wit
 
 - **Auth:** Required
 - **Rate limit:** IP-based, 5 per 15 minutes
-- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, advances the `lastSyncedAt` cursor.
-- **Response:** `{ success: true, imported: number, skipped: number, total: number, hasMore: boolean }` — `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
+- **Side effects:** Fetches activities from Strava API, maps to WorkoutLog format, deduplicates by `stravaActivityId`, auto-refreshes expired tokens (serialized under a per-user advisory lock), enriches calories for the newest ≤25 imports from the activity-detail endpoint, then reconciles each new activity against that day's logged workouts and open plan days — attaching the recording to the workout the athlete already logged (filling only NULL metrics), completing the open plan day with a log built like a manual confirm, or importing standalone (with a suggested match when one was plausible but not certain; see [Integrations → Activity Sync](integrations.md#activity-sync)) — and advances the `lastSyncedAt` cursor.
+- **Response:** `{ success: true, imported: number, enriched: number, completedPlanDays: number, suggested: number, standalone: number, skipped: number, total: number, hasMore: boolean }` — `imported` is the sum of the four landing counts; `hasMore: true` means the page cap was hit and another sync will continue where this one stopped.
 - **Errors:** `401 { code: "STRAVA_REAUTH_REQUIRED" }` (revoked — reconnect needed), `401 { code: "UNAUTHORIZED" }` (not connected), `429 { code: "RATE_LIMITED", retryAfterSeconds }` (Strava rate limit, after retries), `502 { code: "EXTERNAL_API_ERROR" }` (transient upstream failure).
 
 ### DELETE /api/v1/strava/disconnect

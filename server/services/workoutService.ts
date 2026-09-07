@@ -24,5 +24,13 @@ export {
   shouldDeriveStructureExerciseSets,
   updateWorkoutStructureBlockScore,
 } from "./workoutService/structure";
-export type { CreateWorkoutResult, UpdateWorkoutResult } from "./workoutService/types";
-export { assignWorkoutPlanDay, createWorkout, createWorkoutAndScheduleCoaching, isDateWithinPlanWindow, updateWorkout } from "./workoutService/workouts";
+export type { CreateWorkoutResult, UpdateWorkoutResult, WorkoutTx } from "./workoutService/types";
+export type { CreateWorkoutInTxPayload } from "./workoutService/workouts";
+export {
+  assignWorkoutPlanDay,
+  createWorkout,
+  createWorkoutAndScheduleCoaching,
+  createWorkoutInTx,
+  isDateWithinPlanWindow,
+  updateWorkout,
+} from "./workoutService/workouts";

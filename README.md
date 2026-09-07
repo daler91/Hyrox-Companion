@@ -57,7 +57,7 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 ### Activity Sync
 
-- **Strava** - OAuth sync imports recent activities, deduplicates them per user, and stores encrypted tokens.
+- **Strava** - OAuth sync imports recent activities, deduplicates them per user, and stores encrypted tokens. Each synced activity is matched to that day's training first: it enriches the workout you already logged (filling only the metrics you left blank) or completes the planned session, and only lands as a separate workout when nothing plausible matches.
 - **Garmin Connect** - Email/password Garmin SSO sync imports recent activities with encrypted credentials and a strict safety stack: per-user locks, rate limits, minimum sync interval, global 429 circuit breaker, and audit logging.
 
 ### Nutrition & Fuelling
