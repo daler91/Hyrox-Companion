@@ -107,7 +107,11 @@ export function sendJobNoRetry(name: string, data: Record<string, unknown>) {
  * this deletes from its job table directly via the app pool (same database).
  * `userId` is stored at the job-data top level for every queue (getUserIdFromJob).
  * Every handler already no-ops for a deleted user, so callers may treat a
- * failure here as non-fatal (W17).
+ * failure here as non-fatal (W17) — but not as unremarkable: the rows hold the
+ * athlete's id and job inputs, so a failed purge leaves personal data at rest
+ * after an erasure that reported success. Callers surface that at error level.
+ *
+ * Returns the number of rows removed so the caller can record it.
  *
  * Note: pg-boss v12 keeps completed/failed jobs in per-queue partitions of
  * `pgboss.job` until its retention maintenance deletes them — there is no
@@ -115,8 +119,9 @@ export function sendJobNoRetry(name: string, data: Record<string, unknown>) {
  * partitioned parent propagates to all partitions, so this purge reaches
  * completed jobs too.
  */
-export async function purgeUserJobs(userId: string): Promise<void> {
-  await pool.query(`DELETE FROM pgboss.job WHERE data->>'userId' = $1`, [userId]);
+export async function purgeUserJobs(userId: string): Promise<number> {
+  const result = await pool.query(`DELETE FROM pgboss.job WHERE data->>'userId' = $1`, [userId]);
+  return result.rowCount ?? 0;
 }
 
 queue.on("error", (error: Error) => {

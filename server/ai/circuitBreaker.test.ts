@@ -16,6 +16,7 @@ import {
   assertBreakerClosed,
   CircuitBreakerOpenError,
   loadPersistedBreakerState,
+  isProviderHealthSignal,
   recordBreakerFailure,
   recordBreakerSuccess,
 } from "./circuitBreaker";
@@ -53,6 +54,50 @@ describe("circuit breaker", () => {
       recordBreakerSuccess();
       // 4 fresh failures should NOT trip — counter was reset.
       for (let i = 0; i < 4; i += 1) recordBreakerFailure();
+      expect(() => assertBreakerClosed()).not.toThrow();
+    });
+  });
+
+  describe("what counts as a provider-health failure", () => {
+    it("ignores a request the provider rejected as malformed, however many times", () => {
+      // One caller's bad prompt must not cut every other feature off from AI:
+      // a 400 fails the same way against a perfectly healthy provider.
+      for (let i = 0; i < 10; i++) {
+        recordBreakerFailure(Object.assign(new Error("invalid request"), { status: 400 }));
+      }
+
+      expect(() => assertBreakerClosed()).not.toThrow();
+    });
+
+    it("counts an auth failure, which does make the provider unusable for everyone", () => {
+      for (let i = 0; i < 5; i++) {
+        recordBreakerFailure(Object.assign(new Error("unauthorized"), { status: 401 }));
+      }
+
+      expect(() => assertBreakerClosed()).toThrow(CircuitBreakerOpenError);
+    });
+
+    it("reads the message when the provider attaches no status", () => {
+      expect(isProviderHealthSignal(new Error("400 Bad Request: unknown field"))).toBe(false);
+      expect(isProviderHealthSignal(new Error("500 Internal Server Error"))).toBe(true);
+      // Rate limits and auth are health signals, not caller errors.
+      expect(isProviderHealthSignal(new Error("429 Too Many Requests"))).toBe(true);
+      // Unknown shapes count — the breaker fails safe.
+      expect(isProviderHealthSignal("something odd")).toBe(true);
+      expect(isProviderHealthSignal(undefined)).toBe(true);
+    });
+
+    it("releases a half-open probe that failed for a caller-side reason", () => {
+      for (let i = 0; i < 5; i++) recordBreakerFailure(new Error("503"));
+      vi.advanceTimersByTime(30_000); // COOLDOWN_MS
+      assertBreakerClosed(); // -> half-open, probe in flight
+      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(true);
+
+      recordBreakerFailure(Object.assign(new Error("invalid request"), { status: 422 }));
+
+      // The probe learned nothing, so it neither closed nor re-opened the
+      // breaker — but it must not stay wedged either.
+      expect(__circuitBreakerInternalsForTests.isProbeInFlight()).toBe(false);
       expect(() => assertBreakerClosed()).not.toThrow();
     });
   });

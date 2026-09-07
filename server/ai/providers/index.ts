@@ -1,5 +1,10 @@
 import { env } from "../../env";
 import { recordAiUsage } from "../../services/aiUsageService";
+import {
+  assertBreakerClosed,
+  recordBreakerFailure,
+  recordBreakerSuccess,
+} from "../circuitBreaker";
 import { createAnthropicTextProvider } from "./anthropic";
 import {
   configuredTextProviderHasApiKey,
@@ -95,6 +100,13 @@ export async function generateJsonText(request: Omit<TextAiRequest, "json">): Pr
 
 export async function* streamText(request: TextAiRequest): AsyncGenerator<string> {
   const resolved = resolveRequest(request);
+  // Streaming cannot go through retryWithBackoff — a retry would re-emit text
+  // the caller has already received — but it still has to take part in the
+  // circuit breaker, which retryWithBackoff was the only thing driving. Without
+  // this the breaker is blind in both directions: streaming callers keep
+  // hammering a provider it has already given up on, and their failures never
+  // count toward opening it for anyone else.
+  assertBreakerClosed();
   let latestUsage: TextAiUsage | undefined;
   let model = resolved.model;
   try {
@@ -103,6 +115,10 @@ export async function* streamText(request: TextAiRequest): AsyncGenerator<string
       if (chunk.usage) latestUsage = chunk.usage;
       if (chunk.text) yield chunk.text;
     }
+    recordBreakerSuccess();
+  } catch (error) {
+    recordBreakerFailure(error);
+    throw error;
   } finally {
     trackTextUsage(resolved.userId, resolved.feature, model, latestUsage);
   }

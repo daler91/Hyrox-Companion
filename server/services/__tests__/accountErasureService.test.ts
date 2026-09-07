@@ -1,5 +1,7 @@
+import type { Logger } from "pino";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { purgeUserJobs } from "../../queue";
 import { storage } from "../../storage";
 import {
   eraseAccount,
@@ -23,7 +25,7 @@ vi.mock("@clerk/express", () => ({
 vi.mock("../../clerkAuth", () => ({
   evictUserFromSeenCache: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../../queue", () => ({ purgeUserJobs: vi.fn() }));
+vi.mock("../../queue", () => ({ purgeUserJobs: vi.fn().mockResolvedValue(0) }));
 vi.mock("../../strava", () => ({ deauthorizeStravaBestEffort: vi.fn() }));
 vi.mock("../nutrition/foodEmbeddings", () => ({ deleteFoodEmbeddingsByFoodIds: vi.fn() }));
 
@@ -80,6 +82,21 @@ describe("eraseAccount", () => {
     // exactly the state the sweep looks for.
     expect(clerkDeleteUser).toHaveBeenCalledWith("user-1");
     expect(users.markErasureRequested).toHaveBeenCalledWith("user-1");
+  });
+
+  it("reports a failed job purge at error, since nothing will retry it", async () => {
+    // Step 7 runs after the erasure marker was deleted with the user row, so
+    // the sweep cannot pick this up — the rows hold the athlete's id and job
+    // inputs, and a warn would let that sit unnoticed behind a 200.
+    vi.mocked(purgeUserJobs).mockRejectedValue(new Error("queue unreachable"));
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+
+    await expect(eraseAccount("user-1", log)).resolves.toEqual({ deleted: true });
+
+    expect(log.error).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1" }),
+      expect.stringContaining("personal data may remain"),
+    );
   });
 
   it("reports a missing user row rather than throwing", async () => {

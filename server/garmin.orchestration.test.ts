@@ -352,4 +352,26 @@ describe("translateGarminError", () => {
   ])("maps %s to a friendly message", (raw, expected) => {
     expect(__testing.translateGarminError(new Error(raw))).toMatch(expected);
   });
+
+  // Every branch ends with "disconnect and reconnect", so the credentials
+  // message is only distinguishable by its own wording.
+  const CREDENTIALS_MESSAGE = /rejected the credentials/i;
+
+  it.each([
+    "Activity 8401123 could not be parsed",
+    "Synced 1401 activities but the last page failed",
+    "Upload of 4013 samples timed out",
+  ])("does not blame the athlete's credentials for %s", (raw) => {
+    // A loose includes("401") matched any error whose text merely contained
+    // those digits and told the athlete to re-enter a password that was never
+    // the problem.
+    expect(__testing.translateGarminError(new Error(raw))).not.toMatch(CREDENTIALS_MESSAGE);
+  });
+
+  it("still reads a structured 401/403 status even when the message says nothing", () => {
+    const err = Object.assign(new Error("request failed"), { status: 401 });
+    expect(__testing.translateGarminError(err)).toMatch(CREDENTIALS_MESSAGE);
+    const forbidden = Object.assign(new Error("request failed"), { response: { status: 403 } });
+    expect(__testing.translateGarminError(forbidden)).toMatch(CREDENTIALS_MESSAGE);
+  });
 });

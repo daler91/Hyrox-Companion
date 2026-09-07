@@ -36,12 +36,10 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string, o
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
-    if (msg.includes("429") || msg.includes("rate limit")) return true;
-    if (
-      msg.includes("500") ||
-      msg.includes("503") ||
-      msg.includes("internal server error")
-    )
+    // Status numbers are word-bounded: an unanchored `includes("500")` also
+    // matches the "1500ms" in this module's own timeout message.
+    if (/\b429\b/.test(msg) || msg.includes("rate limit")) return true;
+    if (/\b(?:500|503)\b/.test(msg) || msg.includes("internal server error"))
       return true;
     if (
       msg.includes("network") ||
@@ -109,7 +107,9 @@ export async function retryWithBackoff<T>(
     }
   }
   // Only count a logical failure (after all retries exhausted) against the
-  // breaker — individual retry attempts should not accelerate tripping.
-  recordBreakerFailure();
+  // breaker — individual retry attempts should not accelerate tripping. The
+  // error goes with it so a request the provider rejected as malformed doesn't
+  // push the breaker toward cutting off every other caller.
+  recordBreakerFailure(lastError);
   throw lastError;
 }

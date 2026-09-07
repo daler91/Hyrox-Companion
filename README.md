@@ -395,7 +395,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The current suite includes 330 Vitest test files plus 12 Cypress E2E specs. See [Testing](docs/testing.md) for exact setup, local database requirements, Cypress conventions, and CI details.
+The suite is around 440 Vitest test files plus 12 Cypress E2E specs (2026-09-06). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 

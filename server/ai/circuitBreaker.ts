@@ -139,6 +139,44 @@ function startProbeDeadline(): void {
   probeDeadlineTimer.unref?.();
 }
 
+/**
+ * HTTP statuses that mean "this request was wrong", not "this provider is
+ * unwell". A 400/404/422 fails identically against a perfectly healthy
+ * provider and will fail the same way on the next attempt, so counting one
+ * toward the threshold lets a single caller's malformed prompt cut every
+ * other feature off from AI.
+ *
+ * Auth (401/403) and rate limits (429) are deliberately NOT here: a revoked
+ * key or an exhausted quota makes the provider unusable for everyone, which
+ * is exactly the outage the breaker exists to absorb.
+ */
+const CALLER_ERROR_STATUSES = new Set([400, 404, 422]);
+
+/** Message fallback for providers that don't attach a status to the error. */
+const CALLER_ERROR_PATTERN = /\b(?:400|404|422)\b|invalid[ _-]?request|invalid[ _-]?argument|bad[ _-]?request/i;
+
+function errorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const rec = error as { status?: unknown; statusCode?: unknown };
+  if (typeof rec.status === "number") return rec.status;
+  if (typeof rec.statusCode === "number") return rec.statusCode;
+  return undefined;
+}
+
+/**
+ * Does this failure carry information about the PROVIDER's health? Structured
+ * status wins; the message is only consulted when there isn't one. An error of
+ * unknown shape counts — the breaker's job is to fail safe.
+ *
+ * Exported for the regression test.
+ */
+export function isProviderHealthSignal(error: unknown): boolean {
+  const status = errorStatus(error);
+  if (status !== undefined) return !CALLER_ERROR_STATUSES.has(status);
+  if (!(error instanceof Error)) return true;
+  return !CALLER_ERROR_PATTERN.test(error.message);
+}
+
 export class CircuitBreakerOpenError extends Error {
   constructor() {
     super("AI provider temporarily unavailable (circuit breaker open)");
@@ -174,8 +212,22 @@ export function recordBreakerSuccess(): void {
   }
 }
 
-/** Called after a failed request. */
-export function recordBreakerFailure(): void {
+/**
+ * Called after a failed request. `error` lets the breaker ignore failures that
+ * say nothing about the provider (see isProviderHealthSignal); omit it and the
+ * failure always counts.
+ */
+export function recordBreakerFailure(error?: unknown): void {
+  if (!isProviderHealthSignal(error)) {
+    if (state === "half-open") {
+      // The probe learned nothing about the provider, so it must neither close
+      // the breaker nor re-open it. Release the slot so the next call can still
+      // prove recovery instead of leaving the probe wedged until its deadline.
+      probeInFlight = false;
+      clearProbeDeadline();
+    }
+    return;
+  }
   if (state === "half-open") {
     state = "open";
     openedAt = Date.now();
