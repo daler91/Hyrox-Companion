@@ -5,6 +5,7 @@ import { db } from "../db";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
 import {
   attachStravaActivityToLogInTx,
+  dismissDeviceLinkSuggestion,
   legacyRawFromLog,
   linkStandaloneDeviceLog,
   pickDeviceMetrics,
@@ -14,7 +15,7 @@ import { mapStravaActivityToWorkout } from "./stravaMapper";
 import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
 import { createWorkoutInTx } from "./workoutService";
 
-vi.mock("../db", () => ({ db: { transaction: vi.fn() } }));
+vi.mock("../db", () => ({ db: { transaction: vi.fn(), update: vi.fn() } }));
 vi.mock("../storage", () => ({ storage: { plans: { getPlanDay: vi.fn() } } }));
 vi.mock("../storage/planDayStatus", () => ({ syncPlanDayStatusFromWorkouts: vi.fn() }));
 vi.mock("./workoutService", () => ({ createWorkoutInTx: vi.fn() }));
@@ -272,6 +273,39 @@ describe("linkStandaloneDeviceLog", () => {
       }),
     ).rejects.toMatchObject({ status: 409 });
     expect(tx.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("dismissDeviceLinkSuggestion", () => {
+  function dbUpdateChain(returning: WorkoutLog[]) {
+    const chain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue(returning),
+    };
+    vi.mocked(db.update).mockReturnValue(chain as never);
+    return chain;
+  }
+
+  it("clears only the suggestion columns on the athlete's own row", async () => {
+    const cleared = makeWorkoutLog({ id: "import-1", stravaActivityId: "9001", source: "strava" });
+    const chain = dbUpdateChain([cleared]);
+
+    const result = await dismissDeviceLinkSuggestion({ userId: USER, logId: "import-1" });
+
+    expect(result).toBe(cleared);
+    expect(chain.set).toHaveBeenCalledWith({
+      suggestedPlanDayId: null,
+      suggestedWorkoutLogId: null,
+      suggestedLinkConfidence: null,
+    });
+  });
+
+  it("404s when the row is missing or belongs to someone else", async () => {
+    dbUpdateChain([]);
+    await expect(
+      dismissDeviceLinkSuggestion({ userId: USER, logId: "nope" }),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 
