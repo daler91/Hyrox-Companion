@@ -175,8 +175,14 @@ export function ReviewSurface({
   const rpe = workout?.rpe ?? entry.rpe ?? null;
   const notes = workout?.notes ?? entry.notes ?? null;
 
-  const isStrava = entry.source === "strava";
-  const canEditActuals = !isStrava && !!workoutLogId;
+  // A device recording is a measurement of the session, not the last word
+  // on it: a Strava "Workout" often arrives as a generic stub, and the
+  // athlete has to be able to describe it, add the exercises they did, and
+  // rate it. So every logged workout is editable; the recording's stats
+  // simply sit alongside (and on a manual log a recording enriched).
+  const hasStravaActivity = entry.source === "strava" || Boolean(entry.stravaActivityId);
+  const deviceProvider = resolveDeviceProvider(entry);
+  const canEditActuals = !!workoutLogId;
 
   const handleRpeChange = (next: number | null) => {
     if (!workoutLogId) return;
@@ -241,7 +247,8 @@ export function ReviewSurface({
         structureBlocks={structureBlocks}
         rpe={rpe}
         notes={notes}
-        isStrava={isStrava}
+        hasStravaActivity={hasStravaActivity}
+        deviceProvider={deviceProvider}
         canEditActuals={canEditActuals}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
@@ -281,6 +288,19 @@ function CompletionSuccessCallout({ visible }: { readonly visible: boolean }) {
   );
 }
 
+type DeviceProvider = "Strava" | "Garmin";
+
+/**
+ * Which device wrote this log's own description, for the provenance hint.
+ * Only when the row IS the recording: a manual log that a recording enriched
+ * keeps the athlete's or coach's text, so it stays "from coach text".
+ */
+function resolveDeviceProvider(entry: TimelineEntry): DeviceProvider | null {
+  if (entry.source === "garmin") return "Garmin";
+  if (entry.source === "strava") return "Strava";
+  return null;
+}
+
 interface ReviewDetailsColumnProps {
   readonly entry: TimelineEntry;
   readonly detail: WorkoutDetailState;
@@ -289,7 +309,8 @@ interface ReviewDetailsColumnProps {
   readonly structureBlocks: TimelineEntry["structureBlocks"];
   readonly rpe: number | null;
   readonly notes: string | null;
-  readonly isStrava: boolean;
+  readonly hasStravaActivity: boolean;
+  readonly deviceProvider: DeviceProvider | null;
   readonly canEditActuals: boolean;
   readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnitPreference;
@@ -317,7 +338,8 @@ function ReviewDetailsColumn({
   structureBlocks,
   rpe,
   notes,
-  isStrava,
+  hasStravaActivity,
+  deviceProvider,
   canEditActuals,
   weightUnit,
   distanceUnit,
@@ -353,7 +375,11 @@ function ReviewDetailsColumn({
         })}
         testId={`review-summary-${entry.id}`}
       />
-      <ReviewStravaSection entry={entry} distanceUnit={distanceUnit} isStrava={isStrava} />
+      <ReviewStravaSection
+        entry={entry}
+        distanceUnit={distanceUnit}
+        hasStravaActivity={hasStravaActivity}
+      />
       <ReviewActualsSection
         entry={entry}
         detail={detail}
@@ -361,12 +387,12 @@ function ReviewDetailsColumn({
         exerciseSets={exerciseSets}
         structureBlocks={structureBlocks ?? []}
         canEditActuals={canEditActuals}
+        deviceProvider={deviceProvider}
         weightUnit={weightUnit}
         distanceUnit={distanceUnit}
         showPlannedDiffs={showPlannedDiffs}
       />
       <ReviewEffortNotes
-        isStrava={isStrava}
         rpe={rpe}
         notes={notes}
         timeOfDayMin={timeOfDayMin}
@@ -408,10 +434,10 @@ function ReviewDetailsColumn({
 interface ReviewStravaSectionProps {
   readonly entry: TimelineEntry;
   readonly distanceUnit: DistanceUnitPreference;
-  readonly isStrava: boolean;
+  readonly hasStravaActivity: boolean;
 }
 
-function ReviewStravaSection({ entry, distanceUnit, isStrava }: ReviewStravaSectionProps) {
+function ReviewStravaSection({ entry, distanceUnit, hasStravaActivity }: ReviewStravaSectionProps) {
   // WorkoutStravaStats renders nothing without chip-level stats; gate
   // here too so we never paint an empty titled card.
   const hasChipStats =
@@ -420,7 +446,7 @@ function ReviewStravaSection({ entry, distanceUnit, isStrava }: ReviewStravaSect
     !!entry.sufferScore ||
     !!entry.avgCadence ||
     !!entry.avgSpeed;
-  if (!isStrava || !hasChipStats) return null;
+  if (!hasStravaActivity || !hasChipStats) return null;
 
   return (
     <DetailSection title="Strava session" icon={Activity} testId={`review-strava-${entry.id}`}>
@@ -430,7 +456,6 @@ function ReviewStravaSection({ entry, distanceUnit, isStrava }: ReviewStravaSect
 }
 
 interface ReviewEffortNotesProps {
-  readonly isStrava: boolean;
   readonly rpe: number | null;
   readonly notes: string | null;
   readonly timeOfDayMin: number | null;
@@ -443,10 +468,10 @@ interface ReviewEffortNotesProps {
  * Effort + notes wrap-up for a logged workout. Sits below the actuals
  * editor — the same position the block holds on LogSheet/AdhocLogSheet —
  * so RPE and notes are found in one consistent place across the whole
- * logging flow. Hidden for Strava sessions, which carry neither.
+ * logging flow. Shown for device imports too: a watch cannot rate the
+ * effort, so the athlete does.
  */
 function ReviewEffortNotes({
-  isStrava,
   rpe,
   notes,
   timeOfDayMin,
@@ -454,8 +479,6 @@ function ReviewEffortNotes({
   onSaveNote,
   onTimeOfDayChange,
 }: ReviewEffortNotesProps) {
-  if (isStrava) return null;
-
   return (
     <DetailSection title="Effort & notes" icon={Gauge}>
       <div className="space-y-4">
@@ -530,6 +553,7 @@ interface ReviewActualsSectionProps {
   readonly exerciseSets: ExerciseSet[];
   readonly structureBlocks: TimelineEntry["structureBlocks"];
   readonly canEditActuals: boolean;
+  readonly deviceProvider: DeviceProvider | null;
   readonly weightUnit: WeightUnit;
   readonly distanceUnit: DistanceUnitPreference;
   readonly showPlannedDiffs: boolean;
@@ -542,6 +566,7 @@ function ReviewActualsSection({
   exerciseSets,
   structureBlocks = [],
   canEditActuals,
+  deviceProvider,
   weightUnit,
   distanceUnit,
   showPlannedDiffs,
@@ -572,7 +597,7 @@ function ReviewActualsSection({
     <DetailSection title="Results" icon={Dumbbell} testId={`review-results-${entry.id}`}>
       <WorkoutContentsLayout
         exerciseSets={exerciseSets}
-        sourceLabel={hasReferenceText ? "from coach text" : null}
+        sourceLabel={sourceLabelFor(hasReferenceText, deviceProvider)}
         structureBlockCount={(structureBlocks ?? []).length}
         summaryLabel="Results contents"
         isParsing={detail.reparseFreeText.isPending || detail.reparseFromImage.isPending}
@@ -649,6 +674,13 @@ function ReviewActualsSection({
 
 function hasText(value: string | null | undefined): boolean {
   return !!value && value.trim().length > 0;
+}
+
+// A device import's description is the recording's own summary ("8.1 km,
+// 45:00"), not a coach's prescription, so the provenance hint says so.
+function sourceLabelFor(hasReferenceText: boolean, deviceProvider: DeviceProvider | null): string | null {
+  if (!hasReferenceText) return null;
+  return deviceProvider ? `from ${deviceProvider}` : "from coach text";
 }
 
 interface MigrationReviewCalloutProps {
