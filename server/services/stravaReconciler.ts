@@ -249,6 +249,55 @@ function standaloneRow(
   };
 }
 
+type StandaloneRow = ReturnType<typeof standaloneRow>;
+
+/** What applying one decision did: a count to bump now, or a row to insert with the batch. */
+type ApplyOutcome = { counted: "enriched" | "completedPlanDays" } | { standalone: StandaloneRow };
+
+/**
+ * Apply one activity's decision. A link is attempted in its own transaction;
+ * when its target was claimed meanwhile (a concurrent sync, or the athlete
+ * confirming the day) the activity falls through to a plain import, exactly
+ * as if nothing had matched.
+ */
+async function applyDecision(
+  userId: string,
+  item: StravaImportItem,
+  decision: MatchDecision,
+  planDaysById: ReadonlyMap<string, PlanDay>,
+): Promise<ApplyOutcome> {
+  if (decision.outcome === "suggest") return { standalone: standaloneRow(item, decision) };
+  if (decision.outcome !== "link") return { standalone: standaloneRow(item) };
+
+  if (decision.candidate.kind === "workout_log") {
+    const attached = await applyLogLink(userId, item, decision.candidate.id, decision.score);
+    return attached ? { counted: "enriched" } : { standalone: standaloneRow(item) };
+  }
+
+  const planDay = planDaysById.get(decision.candidate.id);
+  const result = planDay
+    ? await applyPlanDayLink(userId, item, planDay, decision.score)
+    : undefined;
+  if (!result) return { standalone: standaloneRow(item) };
+  return { counted: result.enrichedExisting ? "enriched" : "completedPlanDays" };
+}
+
+/**
+ * Insert the standalone rows and count what actually landed. onConflictDoNothing
+ * on (user_id, strava_activity_id) means only rows this call created come back,
+ * so a race with another sync shows up as `skipped`, never as an optimistic count.
+ */
+async function insertStandaloneRows(rows: StandaloneRow[], counts: ReconcileCounts): Promise<void> {
+  if (rows.length === 0) return;
+  const created = await storage.workouts.createWorkoutLogs(rows);
+  const createdIds = new Set(created.map((c) => c.stravaActivityId));
+  for (const row of rows) {
+    if (!createdIds.has(row.stravaActivityId)) counts.skipped++;
+    else if (row.suggestedLinkConfidence != null) counts.suggested++;
+    else counts.standalone++;
+  }
+}
+
 export async function reconcileStravaActivities(
   userId: string,
   items: readonly StravaImportItem[],
@@ -272,65 +321,19 @@ export async function reconcileStravaActivities(
     thresholds,
   );
 
-  const standalone: ReturnType<typeof standaloneRow>[] = [];
-
+  const standalone: StandaloneRow[] = [];
   for (const [index, { decision }] of planned.entries()) {
-    const item = items[index];
     try {
-      if (decision.outcome === "link" && decision.candidate.kind === "workout_log") {
-        const attached = await applyLogLink(userId, item, decision.candidate.id, decision.score);
-        if (attached) {
-          counts.enriched++;
-          continue;
-        }
-        // Row was claimed meanwhile; fall through to a plain import.
-        standalone.push(standaloneRow(item));
-        continue;
-      }
-      if (decision.outcome === "link" && decision.candidate.kind === "plan_day") {
-        const planDay = candidates.planDays.get(decision.candidate.id);
-        const result = planDay
-          ? await applyPlanDayLink(userId, item, planDay, decision.score)
-          : undefined;
-        if (result) {
-          if (result.enrichedExisting) counts.enriched++;
-          else counts.completedPlanDays++;
-          continue;
-        }
-        standalone.push(standaloneRow(item));
-        continue;
-      }
-      if (decision.outcome === "suggest") {
-        standalone.push(standaloneRow(item, decision));
-        continue;
-      }
-      standalone.push(standaloneRow(item));
+      const outcome = await applyDecision(userId, items[index], decision, candidates.planDays);
+      if ("standalone" in outcome) standalone.push(outcome.standalone);
+      else counts[outcome.counted]++;
     } catch (err) {
-      if (isUniqueViolation(err)) {
-        // A concurrent sync imported this activity first. Counts only.
-        counts.skipped++;
-        continue;
-      }
-      throw err;
+      // A concurrent sync imported this activity first. Counts only.
+      if (!isUniqueViolation(err)) throw err;
+      counts.skipped++;
     }
   }
-
-  if (standalone.length > 0) {
-    // onConflictDoNothing on (user_id, strava_activity_id): only rows this
-    // call actually created come back, so a race with another sync shows up
-    // as `skipped` rather than an optimistic count.
-    const created = await storage.workouts.createWorkoutLogs(standalone);
-    const createdIds = new Set(created.map((c) => c.stravaActivityId));
-    for (const row of standalone) {
-      if (!createdIds.has(row.stravaActivityId)) {
-        counts.skipped++;
-      } else if (row.suggestedLinkConfidence != null) {
-        counts.suggested++;
-      } else {
-        counts.standalone++;
-      }
-    }
-  }
+  await insertStandaloneRows(standalone, counts);
 
   // Counts only; no activity data or token material.
   // bearer:disable javascript_lang_logger_leak

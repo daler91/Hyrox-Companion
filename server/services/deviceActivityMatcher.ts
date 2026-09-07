@@ -104,15 +104,26 @@ export function classifyDeviceSport(sportType: string | null | undefined): Devic
 
 // Hyrox stations and the metcon vocabulary. These outrank the run words
 // because a sim is prescribed as "8 x 1 km run + stations" and is still a
-// conditioning session, not a run.
-const CONDITIONING_RE =
-  /\b(hyrox|sim(ulation)?|station|sled|wall ?ball|farmers?|sandbag|burpee|ski ?erg|roxzone|compromised|metcon|wod|amrap|emom|for time|circuit|hiit|conditioning|engine|intervals? (?:on the )?(?:bike|erg|rower)|assault|echo bike)\b/i;
+// conditioning session, not a run. One literal per theme keeps each pattern
+// readable; a prescription is conditioning when ANY of them hits.
+const HYROX_STATION_RE = /\b(?:hyrox|roxzone|sim(?:ulation)?|station|sled|wall ?ball|ski ?erg)\b/i;
+const HYROX_MOVEMENT_RE = /\b(?:farmers?|sandbag|burpee|compromised|assault|echo bike)\b/i;
+const METCON_FORMAT_RE = /\b(?:metcon|wod|amrap|emom|for time|circuit|hiit|conditioning|engine)\b/i;
+const ERG_INTERVAL_RE = /\bintervals? (?:on the )?(?:bike|erg|rower)\b/i;
+const CONDITIONING_RES = [HYROX_STATION_RE, HYROX_MOVEMENT_RE, METCON_FORMAT_RE, ERG_INTERVAL_RE];
 const RUN_RE =
   /\b(run|running|tempo|fartlek|strides|track|treadmill|long run|easy miles|threshold|intervals?|repeats|5k|10k|half marathon|marathon)\b/i;
-const STRENGTH_RE =
-  /\b(strength|lift|lifting|squat|deadlift|bench|press|rdl|pull[- ]?ups?|chin[- ]?ups?|push[- ]?ups?|kettlebell|kb|dumbbell|db|barbell|hypertrophy|accessory|upper body|lower body|full body|reps?|sets?)\b/i;
+// Lifts, bodyweight movements, equipment, and the set/rep vocabulary.
+const LIFT_RE =
+  /\b(?:strength|lift|lifting|squat|deadlift|bench|press|rdl|hypertrophy|accessory)\b/i;
+const BODYWEIGHT_RE = /\b(?:pull|chin|push)[- ]?ups?\b/i;
+const EQUIPMENT_RE = /\b(?:kettlebell|kb|dumbbell|db|barbell|upper body|lower body|full body)\b/i;
+const SETS_REPS_RE = /\b(?:reps?|sets?)\b/i;
+const STRENGTH_RES = [LIFT_RE, BODYWEIGHT_RE, EQUIPMENT_RE, SETS_REPS_RE];
 const RIDE_RE = /\b(bike|cycling|ride|spin|zwift|turbo)\b/i;
-const ROW_RE = /\b(rowing|rower|row erg|erg row|\d+ ?m row)\b/i;
+// Bounded digits: an unbounded run followed by a literal backtracks
+// quadratically on long digit strings (Sonar S5852).
+const ROW_RE = /\b(rowing|rower|row erg|erg row|\d{1,5} ?m row)\b/i;
 const SWIM_RE = /\b(swim|swimming|pool)\b/i;
 const WALK_RE = /\b(walk|walking|hike|hiking|ruck|rucking)\b/i;
 const REST_RE = /\b(rest|off day|day off|recovery day)\b/i;
@@ -144,15 +155,19 @@ export function classifyPrescription(
   return "unknown";
 }
 
+function matchesAny(text: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 function kindFromText(text: string): PrescriptionKind {
   if (!text.trim()) return "unknown";
-  if (CONDITIONING_RE.test(text)) return "conditioning";
+  if (matchesAny(text, CONDITIONING_RES)) return "conditioning";
   if (SWIM_RE.test(text)) return "swim";
   if (ROW_RE.test(text)) return "row";
   if (RIDE_RE.test(text)) return "ride";
   if (RUN_RE.test(text)) return "run";
   if (WALK_RE.test(text)) return "walk";
-  if (STRENGTH_RE.test(text)) return "strength";
+  if (matchesAny(text, STRENGTH_RES)) return "strength";
   return "unknown";
 }
 
@@ -282,8 +297,12 @@ export function timeOfDayProximity(aMin: number, bMin: number): number {
   return clamp01(1 - (diff - 60) / 300);
 }
 
-const KM_RE = /(\d+(?:[.,]\d+)?)\s*(km|k|kilomet(?:er|re)s?|mi|mile|miles)\b/gi;
-const MULTIPLIER_RE = /\d+\s*[x×]\s*\d/i;
+// Both patterns start at a word boundary and bound their digit runs, so a
+// failed attempt cannot be retried from every digit of a long number (that
+// was quadratic — Sonar S5852). Four integer digits and three decimals cover
+// any distance a prescription names; a "5 x" multiplier never needs more.
+const KM_RE = /\b(\d{1,4}(?:[.,]\d{1,3})?)\s{0,3}(km|k|kilomet(?:er|re)s?|mi|miles?)\b/gi;
+const MULTIPLIER_RE = /\b\d{1,3}\s{0,3}[x×]\s{0,3}\d/i;
 
 /**
  * A single explicit "8 km" / "5 miles" in a prescription, as metres. Returns
