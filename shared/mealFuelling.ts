@@ -390,7 +390,8 @@ interface MealReasonFlags {
   isWorkout: boolean;
   floorBound: boolean;
   anchorExceeds: boolean;
-  carbClamped: boolean;
+  /** Any macro's reconciliation had to clamp the flex meal at zero. */
+  reconcileClamped: boolean;
   usedBodyweightFallback: boolean;
 }
 
@@ -410,7 +411,7 @@ function buildMealReasonCodes(role: MealRole, isPreMeal: boolean, flags: MealRea
     [isStandardSplit && flags.isWorkout, "standard_split"],
     [isStandardSplit && !flags.isWorkout, "rest_day_even"],
     [role === "flex_remainder", "flex_remainder"],
-    [role === "flex_remainder" && flags.carbClamped, "reconcile_clamped"],
+    [role === "flex_remainder" && flags.reconcileClamped, "reconcile_clamped"],
     [flags.usedBodyweightFallback, "no_bodyweight_defaults"],
   ];
   return candidates.filter(([cond]) => cond).map(([, code]) => code);
@@ -458,9 +459,14 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
   );
   const fatMap = allocateFat(daily.fatG, plan, hasPreSlot, eatingMeals);
 
+  // Every macro reconciles the same way and any of them can clamp the flex meal
+  // at zero — a protein floor on the recovery meal can overshoot the daily
+  // target just as a carb anchor can. Reading only the carb result claimed
+  // "nothing was clamped" for two thirds of the plan.
   const carbClamped = reconcileToDaily(carbMap, daily.carbG, flexMeal);
-  reconcileToDaily(proteinMap, daily.proteinG, flexMeal);
-  reconcileToDaily(fatMap, daily.fatG, flexMeal);
+  const proteinClamped = reconcileToDaily(proteinMap, daily.proteinG, flexMeal);
+  const fatClamped = reconcileToDaily(fatMap, daily.fatG, flexMeal);
+  const reconcileClamped = carbClamped || proteinClamped || fatClamped;
 
   const usedBodyweightFallback =
     daily.proteinG == null && (input.bodyweightKg == null || input.bodyweightKg <= 0);
@@ -486,7 +492,7 @@ export function computeMealFuelTargets(input: MealFuelInput): MealFuelTargets | 
         isWorkout,
         floorBound,
         anchorExceeds,
-        carbClamped,
+        reconcileClamped,
         usedBodyweightFallback,
       }),
       rationale: buildRationale(role, { carbG, proteinG, calories }, isPreMeal),

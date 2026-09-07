@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createAnthropicTextProvider } from "./anthropic";
+import { createAnthropicTextProvider, stripJsonCodeFence } from "./anthropic";
 import { collectTextChunks, makeProviderRequest, mockJsonResponse, requestJsonBody } from "./testHelpers";
 import type { TextAiStreamChunk } from "./types";
 
@@ -84,5 +84,46 @@ describe("anthropic text provider", () => {
     const provider = createAnthropicTextProvider({});
 
     await expect(provider.generateText(baseRequest)).rejects.toThrow("ANTHROPIC_API_KEY");
+  });
+});
+
+describe("anthropic JSON responses", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** One Messages-API reply carrying `text`, read back through generateText. */
+  async function textFor(text: string, json: boolean): Promise<string> {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockJsonResponse({
+      content: [{ type: "text", text }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    }));
+    const provider = createAnthropicTextProvider({ apiKey: "anthropic-key" });
+    const response = await provider.generateText({ ...baseRequest, json });
+    return response.text;
+  }
+
+  it("unwraps a fenced JSON reply so callers can parse it", async () => {
+    // Anthropic has no JSON mode — the adapter can only ask for unfenced JSON,
+    // and the model fences anyway often enough that every caller's JSON.parse
+    // would throw on the backticks.
+    await expect(textFor('```json\n{"ok":true}\n```', true)).resolves.toBe('{"ok":true}');
+    await expect(textFor('```\n{"ok":true}\n```', true)).resolves.toBe('{"ok":true}');
+  });
+
+  it("leaves an already-raw JSON reply untouched", async () => {
+    await expect(textFor('{"ok":true}', true)).resolves.toBe('{"ok":true}');
+  });
+
+  it("does not unwrap fences when JSON was not requested", async () => {
+    // A fenced code block is legitimate output for a prose request.
+    await expect(textFor('```js\nconst a = 1;\n```', false)).resolves.toBe('```js\nconst a = 1;\n```');
+  });
+
+  it("leaves a reply whose fence does not wrap the whole response alone", () => {
+    // Prose around a snippet is not a JSON payload; reinterpreting it would
+    // hand the caller something the model never claimed to return.
+    const mixed = 'Here you go:\n```json\n{"ok":true}\n```\nHope that helps.';
+    expect(stripJsonCodeFence(mixed)).toBe(mixed);
   });
 });

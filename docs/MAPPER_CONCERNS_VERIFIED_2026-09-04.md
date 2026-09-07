@@ -88,6 +88,19 @@ code — recorded below rather than quietly fixed to match the note.
 | Stale test counts in `docs/testing.md` and `README.md`             | The note's diagnosis was off — ripgrep matches these globs against the basename, so nothing is wrong with the dot. The exclusion is broken for a different reason: the smoke test is named exactly `smoke.test.ts`, so `!*.smoke.test.ts` matches nothing and leaves it in the unit count. The table now carries the command for each row, the corrected `!smoke.test.ts` glob, the real path (`server/routes/tests/smoke.test.ts` — the one the doc named does not exist) and dated figures. |
 | `TECHNICAL_DEBT` #29 lists Cypress as blocking                     | Condition (iii) marked satisfied (repo is on Cypress ≥ 15.21.1); (i) TS 7.1 stable API and (ii) typescript-eslint TS 7 support still block, so the entry stays open.                                                                          |
 
+## Fixed in the fifth pass (2026-09-07)
+
+The rest of the Low list that is cheap and unambiguous. What is left after this
+pass is either a delete/keep decision that is not mine to make, or a design
+change (see **Still open**).
+
+| Concern                                                            | Note                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Anthropic JSON path has no fence-stripping                         | The note was half right: `anthropicSystemInstruction` *does* honour `request.json` — it appends "Return only valid JSON. Do not wrap the JSON in Markdown fences." The gap is on the way back, where a model that fences anyway hands the caller unparseable text. `stripJsonCodeFence` now unwraps a reply that is *entirely* one fenced block, and leaves anything else untouched so prose containing a fence is not silently truncated. |
+| `reconcileToDaily` discards the protein and fat clamp signals       | All three macros' return values are now OR-ed into one flag. Renamed `carbClamped` → `reconcileClamped`, since it never described only carbs and the old name is why the other two were dropped. A protein-or-fat-only clamp is reachable — the added test drives one.                                       |
+| Hover-only `title` explanations on five fuelling surfaces           | One `ExplanationTooltip` (a real `<button>` with an `aria-label` carrying subject and explanation) replaces the bare `title` on `FuellingCorrelationCard`, `FuellingAroundSessionPanel`, `FuellingPlanPanel`, `DailyTotalsHeader` (both macro notes) and `WorkoutSummaryHeader`'s stat tiles. `title` is mouse-only: touch and keyboard users had no way to reach the explanation, and screen readers announce it inconsistently. Modelled on `MafCeilingChip`, which already got this right. |
+| Two Bolt comments describing extracted-away code                    | Removed at the two `computeAdherencePct` call sites in `analyticsService.ts`, where the described loop no longer exists. The H10 rationale that shares the first site is real and stays. 74 → 72.                                              |
+
 ## Refuted
 
 Recorded so they are not re-raised.
@@ -111,38 +124,44 @@ Verified real, not addressed in this pass. Roughly cheapest-first within each gr
 **Medium.** None outstanding — the three that remained after the second pass
 were fixed in the third (see above).
 
-**Low (remaining).** Anthropic JSON path has no fence-stripping (latent:
-non-default provider). FatSecret + Spoonacular: 928 LOC unreachable, with a
-**fatal** boot refinement for an integration that does nothing. Unverified
-sled-pull loads feeding predicted finish times behind a stale "verify against
-the rulebook" marker. `reconcileToDaily` discards the clamp signal for protein
-and fat. `sortOrder` MAX+1 race. Check constraints duplicating TS enums.
-Hover-only `title` explanations on five cards, inaccessible to touch, keyboard
-and screen readers. 74 auto-generated "⚡ Bolt Performance Optimization"
-comments across 51 files, two of which now describe code that was extracted
-away. `timeline-benchmark-check.ts` parses `console.table` box-drawing output by
-column position and is wired into no workflow — wiring it as-is would likely
-flake, since its thresholds are absolute dev-machine milliseconds.
+**Low (remaining).** Nothing cheap is left; each of these needs a decision
+rather than a patch.
 
-**Fixed in the fourth pass, previously listed here:** AI circuit breaker counts non-retryable 4xx toward tripping (a blanket
-"ignore 4xx" would be wrong — 401 _should_ trip it). Streaming bypasses the
-breaker entirely. Anthropic JSON path has no fence-stripping (latent: non-default
-provider). `MODEL_PRICING` bills unknown model ids at 67-83× the fast default,
-warned once per process. FatSecret + Spoonacular: 928 LOC unreachable, with a
-**fatal** boot refinement for an integration that does nothing. `purgeUserJobs`
-couples GDPR erasure to pg-boss internals and fails silently while still
-returning success. `server/garmin.ts:337`'s unbounded `includes("401")`.
-Duplicate Atwater factors in three places with nothing to catch divergence.
-Unverified sled-pull loads feeding predicted finish times behind a stale
-"verify against the rulebook" marker. `reconcileToDaily` discards the clamp
-signal for protein and fat — though `reconcile_clamped` has exactly one hit
-repo-wide (its own definition), so carbs are equally silent. `sortOrder` MAX+1
-race. Check constraints duplicating TS enums. Mislabeled "Avg Reps / Session"
-tile rendering the total. Hover-only `title` explanations on five cards,
-inaccessible to touch, keyboard and screen readers. 74 auto-generated "⚡ Bolt
-Performance Optimization" comments across 51 files, two of which now describe
-code that was extracted away. Stale test counts in `docs/testing.md` (claims 262) and `README.md` (claims 330) — the real unit-test figure was 426 when this pass ran, and it moves every time a test lands, which is the actual problem: `testing.md`'s own recipe is wrong (its `-g "!*.smoke.test.ts"` glob needs a literal dot and so excludes nothing, and it names a smoke-test path that does not exist), so anyone re-deriving the number gets a different wrong answer. `TECHNICAL_DEBT` #29 still
-lists Cypress as blocking though 15.21.1 satisfies the condition.
-`timeline-benchmark-check.ts` parses `console.table` box-drawing output by
-column position and is wired into no workflow — note that wiring it as-is would
-likely flake, since its thresholds are absolute dev-machine milliseconds.
+- **FatSecret + Spoonacular: 928 LOC unreachable, with a _fatal_ boot
+  refinement for an integration that does nothing.** Delete or wire up — that
+  is the owner's call, not a mechanical fix.
+- **Unverified sled-pull loads** feeding predicted finish times behind a stale
+  "verify against the rulebook" marker. Needs the rulebook, not code.
+- **`sortOrder` MAX+1 race.** Correct under concurrent inserts only with a
+  schema or locking change.
+- **Check constraints duplicating TS enums.** Real drift risk; closing it means
+  picking a generator or a runtime assertion, which is a design choice.
+- **72 auto-generated "⚡ Bolt Performance Optimization" comments across 51
+  files.** Noise, but a mass edit touches 51 files for no behaviour change; the
+  two that were actively *wrong* are gone.
+- **`timeline-benchmark-check.ts`** parses `console.table` box-drawing output by
+  column position and is wired into no workflow — wiring it as-is would likely
+  flake, since its thresholds are absolute dev-machine milliseconds.
+
+**Removed from this list by the fourth pass (2026-09-06):** AI circuit breaker
+counts non-retryable 4xx toward tripping (a blanket "ignore 4xx" would be wrong
+— 401 _should_ trip it). Streaming bypasses the breaker entirely.
+`MODEL_PRICING` bills unknown model ids at 67-83× the fast default, warned once
+per process. `purgeUserJobs` couples GDPR erasure to pg-boss internals and fails
+silently while still returning success. `server/garmin.ts:337`'s unbounded
+`includes("401")`. Duplicate Atwater factors in three places with nothing to
+catch divergence. Mislabeled "Avg Reps / Session" tile rendering the total.
+Stale test counts in `docs/testing.md` (claimed 262) and `README.md` (claimed
+330) — the real unit-test figure was 426 when that pass ran, and it moves every
+time a test lands, which was the actual problem: `testing.md`'s own recipe was
+wrong, so anyone re-deriving the number got a different wrong answer.
+`TECHNICAL_DEBT` #29 listing Cypress as blocking though 15.21.1 satisfies that
+condition.
+
+**Removed from this list by the fifth pass (2026-09-07):** Anthropic JSON path
+has no fence-stripping (latent: non-default provider). `reconcileToDaily`
+discards the clamp signal for protein and fat — noted then as near-moot because
+`reconcile_clamped` had one hit repo-wide (its own definition), which is exactly
+why the two dropped signals had gone unnoticed. Hover-only `title` explanations
+on five cards, inaccessible to touch, keyboard and screen readers. Two of the
+Bolt comments describing code that was extracted away.

@@ -74,6 +74,29 @@ function anthropicText(value: unknown): string {
   return content.map(contentPartText).join("");
 }
 
+/**
+ * Strip one wrapping Markdown code fence from a JSON response.
+ *
+ * Gemini and the OpenAI-compatible providers get a machine-enforced JSON mode
+ * (`responseMimeType` / `response_format`), so their output is raw by
+ * construction. Anthropic's Messages API has no such mode — the best this
+ * adapter can do is ASK for unfenced JSON in the system instruction, and a
+ * request is not a guarantee. When the model fences anyway, every caller's
+ * `JSON.parse` throws on the leading backticks, and the request has already
+ * been paid for. Unwrapping here keeps the `json: true` contract the same
+ * across providers instead of leaving each caller to discover the difference.
+ *
+ * Only a fence that wraps the WHOLE response is removed: a fence in the middle
+ * means the model returned prose we should not silently reinterpret.
+ *
+ * Exported for the regression test.
+ */
+export function stripJsonCodeFence(text: string): string {
+  const trimmed = text.trim();
+  const match = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/i.exec(trimmed);
+  return match ? match[1].trim() : text;
+}
+
 function requestBody(request: ResolvedTextAiRequest, stream: boolean) {
   return {
     model: request.model,
@@ -145,8 +168,9 @@ export function createAnthropicTextProvider(options: AnthropicAdapterOptions): T
         request.timeoutMs,
       );
       const payload = await readJsonPayload(response);
+      const text = anthropicText(payload);
       return {
-        text: anthropicText(payload),
+        text: request.json ? stripJsonCodeFence(text) : text,
         model: request.model,
         usage: usageFromAnthropic(payload),
       };

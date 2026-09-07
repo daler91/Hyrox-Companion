@@ -758,9 +758,6 @@ export function calculateTrainingOverview(
   // scope here for the coverage dates.
   const { thisMondayStr } = getMondayWeekBoundaries(new Date(), userTimezone);
   const weeklyCompletedWorkouts = workoutLogs.filter((log) => log.date >= thisMondayStr).length;
-  // ⚡ Bolt Performance Optimization:
-  // Replaced chained .map().filter().reduce() with a single for...of loop
-  // to avoid intermediate array allocations and O(3N) passes.
   // "Avg Adherence" over the sessions the athlete was DUE, not the ones they
   // logged. Dividing by logged sessions let skipping the plan remove sessions
   // from adherence's own denominator: complete one session at 90% and skip the
@@ -778,9 +775,6 @@ export function calculateTrainingOverview(
   const previousStats = previousWorkoutLogs
     ? (() => {
       const stats = computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries);
-      // ⚡ Bolt Performance Optimization:
-      // Replaced chained .map().filter().reduce() with a single for...of loop
-      // to avoid intermediate array allocations and O(3N) passes.
       stats.avgCompliancePct = computeAdherencePct(previousWorkoutLogs, previousDueSessionCount);
       return stats;
     })()

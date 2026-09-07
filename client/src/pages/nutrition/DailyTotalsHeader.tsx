@@ -3,6 +3,7 @@ import { Target } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 
 import { MacroProgressBar } from "./MacroProgressBar";
 import { computeTargetProgress, type TargetProgressRow } from "./utils";
@@ -38,6 +39,37 @@ function carbLoadNote(effectiveTarget: EffectiveTargetSummary | null): string | 
 function proteinRecoveryNote(effectiveTarget: EffectiveTargetSummary | null): string | null {
   if (!effectiveTarget?.scaled || effectiveTarget.proteinDeltaG <= 0) return null;
   return `+${effectiveTarget.proteinDeltaG}g recovery`;
+}
+
+/**
+ * A macro's fuelling note, with its explanation reachable by touch, keyboard
+ * and screen readers rather than on mouse hover alone.
+ */
+function MacroNote({
+  note,
+  explanation,
+  testId,
+}: {
+  readonly note: string | null | undefined;
+  readonly explanation: string | null | undefined;
+  readonly testId: string;
+}) {
+  if (!note) return null;
+  return (
+    <span
+      className="mt-0.5 flex items-center justify-center gap-1 text-center text-[10px] font-medium text-primary"
+      data-testid={`${testId}-note`}
+    >
+      {note}
+      {explanation && (
+        <ExplanationTooltip
+          subject={note}
+          explanation={explanation}
+          testId={`${testId}-explanation`}
+        />
+      )}
+    </span>
+  );
 }
 
 /** Running daily totals for calories + macros (FR-1.3), with progress toward the
@@ -89,23 +121,19 @@ export function DailyTotalsHeader({
                   </span>
                 </div>
               )}
-              {m.key === "carb" && carbNote && (
-                <span
-                  className="mt-0.5 block text-center text-[10px] font-medium text-primary"
-                  data-testid="carb-load-note"
-                  title={effectiveTarget?.explanation || undefined}
-                >
-                  {carbNote}
-                </span>
+              {m.key === "carb" && (
+                <MacroNote
+                  note={carbNote}
+                  explanation={effectiveTarget?.explanation}
+                  testId="carb-load"
+                />
               )}
-              {m.key === "protein" && proteinNote && (
-                <span
-                  className="mt-0.5 block text-center text-[10px] font-medium text-primary"
-                  data-testid="protein-recovery-note"
-                  title={effectiveTarget?.explanation || undefined}
-                >
-                  {proteinNote}
-                </span>
+              {m.key === "protein" && (
+                <MacroNote
+                  note={proteinNote}
+                  explanation={effectiveTarget?.explanation}
+                  testId="protein-recovery"
+                />
               )}
             </div>
           );

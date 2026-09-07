@@ -4,6 +4,7 @@ import { metersToUserDistance } from "@shared/unitConversion";
 import type { LucideIcon } from "lucide-react";
 import { Flame, Gauge, HeartPulse, ListChecks, MapPin, Target, Timer } from "lucide-react";
 
+import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
 import { summariseMafTile } from "@/lib/mafFormat";
 import { cn } from "@/lib/utils";
@@ -16,8 +17,8 @@ export interface SummaryStat {
   readonly value: string;
   /** Optional accent (e.g. adherence colour coding) applied to the tile. */
   readonly accentClassName?: string;
-  /** Optional hover explanation for an accented tile. */
-  readonly title?: string;
+  /** Optional explanation for an accented tile, surfaced as a tooltip. */
+  readonly explanation?: string;
 }
 
 export type SummaryVariant = "completed" | "planned" | "preview";
@@ -100,7 +101,7 @@ function buildAvgHrStat(entry: TimelineEntry, mafCeiling: number | null): Summar
     // never the only thing carrying it.
     label: `Avg HR${maf.labelSuffix}`,
     accentClassName: maf.accentClassName,
-    title: maf.title,
+    explanation: maf.title,
   };
 }
 
@@ -204,14 +205,13 @@ export function WorkoutSummaryHeader({ stats, testId }: WorkoutSummaryHeaderProp
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" data-testid={testId}>
-      {stats.map(({ key, icon: Icon, label, value, accentClassName, title }) => (
+      {stats.map(({ key, icon: Icon, label, value, accentClassName, explanation }) => (
         <div
           key={key}
           className={cn(
             "flex items-center gap-2.5 rounded-lg border bg-muted/40 px-3 py-2",
             accentClassName,
           )}
-          title={title}
           data-testid={`summary-stat-${key}`}
         >
           <Icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
@@ -221,6 +221,14 @@ export function WorkoutSummaryHeader({ stats, testId }: WorkoutSummaryHeaderProp
               {label}
             </span>
           </span>
+          {explanation && (
+            <ExplanationTooltip
+              subject={label}
+              explanation={explanation}
+              className="ml-auto"
+              testId={`summary-stat-${key}-explanation`}
+            />
+          )}
         </div>
       ))}
     </div>

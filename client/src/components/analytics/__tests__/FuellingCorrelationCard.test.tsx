@@ -62,3 +62,17 @@ describe("FuellingCorrelationCard", () => {
     expect(screen.queryByTestId("fuelling-correlation-card")).not.toBeInTheDocument();
   });
 });
+
+describe("FuellingCorrelationCard explanation accessibility", () => {
+  it("exposes the explanation through a focusable control, not a hover-only title", () => {
+    render(<FuellingCorrelationCard points={POINTS} />);
+
+    // The card's explanation used to live in a `title` attribute on the Card
+    // itself: a non-focusable element, so touch and keyboard users had no way
+    // to reveal it and screen readers routinely skipped it.
+    const trigger = screen.getByTestId("fuelling-correlation-explanation");
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger).toHaveAccessibleName(/Fuelling and performance:/);
+    expect(screen.getByTestId("fuelling-correlation-card")).not.toHaveAttribute("title");
+  });
+});
