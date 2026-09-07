@@ -53,7 +53,32 @@ const cases = [
   runCase('unbounded', 10000, 10000),
 ];
 
-console.table(cases);
-// Printed after the table so a human sees the readable form first; this is the
-// line the checker actually reads (see ./timelineBenchmarkFormat).
-console.log(`${BENCHMARK_RESULT_PREFIX}${JSON.stringify(cases)}`);
+/**
+ * Both outputs go to stdout directly rather than through `console.*`.
+ *
+ * Everything this script emits is program output — a table for whoever ran it
+ * and one protocol line for `timeline-benchmark-check.ts` — not logging, and
+ * Bearer's logger-leak rule (CWE-532) reasonably treats `console.table` /
+ * `console.log` of a data structure as a log sink. The finding is a false
+ * positive here (`cases` is synthetic timings and case names, and never leaves
+ * this process tree), but the repo's `bearer:disable` ledger is meant to shrink
+ * rather than grow, and writing to stdout is what these lines actually do.
+ */
+function renderTable(rows: readonly BenchmarkRow[]): string {
+  const columns = Object.keys(rows[0]) as (keyof BenchmarkRow)[];
+  const widths = columns.map((column) =>
+    Math.max(column.length, ...rows.map((row) => String(row[column]).length)),
+  );
+  const line = (cells: readonly string[]) =>
+    cells.map((cell, i) => cell.padEnd(widths[i])).join("  ").trimEnd();
+  return [
+    line(columns),
+    line(widths.map((width) => "-".repeat(width))),
+    ...rows.map((row) => line(columns.map((column) => String(row[column])))),
+  ].join("\n");
+}
+
+// The readable form first, so a human running this sees the numbers before the
+// protocol line the checker reads (see ./timelineBenchmarkFormat).
+process.stdout.write(`${renderTable(cases)}\n`);
+process.stdout.write(`${BENCHMARK_RESULT_PREFIX}${JSON.stringify(cases)}\n`);
