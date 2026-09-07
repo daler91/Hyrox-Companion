@@ -137,13 +137,29 @@ describe("suggestionService - parseAndValidateSuggestions", () => {
     expect(result).toHaveLength(1);
     expect(result[0].workoutId).toBe("123");
 
-    // Warning should be logged for the dropped invalid item
+    // Warning should be logged for the dropped invalid item. Both values go
+    // through the log-injection boundary now (see utils/sanitize): `issues` is
+    // a flattened `path:message` string rather than the raw issue array, and
+    // the item preview has its control characters stripped.
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        issues: expect.any(Array),
+        issues: expect.stringContaining("targetField:"),
         item: expect.stringContaining("unknown_field")
       }),
       "[gemini] Dropping invalid suggestion:"
     );
+  });
+
+  it("does not let a newline in the model's output forge a log record", () => {
+    // The item is model output shaped by the athlete's own text. An unsanitized
+    // preview let a newline in it open a second, attacker-chosen log line.
+    const forged = JSON.stringify([{ workoutFocus: "x\nlevel=error msg=\"forged\"", targetField: "nope" }]);
+
+    parseAndValidateSuggestions(forged);
+
+    const logged = vi.mocked(logger.warn).mock.calls.at(-1)?.[0] as { item: string; issues: string };
+    expect(logged.item).toContain("forged");
+    expect(logged.item).not.toContain("\n");
+    expect(logged.issues).not.toContain("\n");
   });
 });

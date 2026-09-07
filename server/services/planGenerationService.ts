@@ -20,7 +20,7 @@ import { logger } from "../logger";
 import { PLAN_GENERATION_PROMPT, VALID_CATEGORIES, VALID_EXERCISE_NAMES } from "../prompts";
 import { storage } from "../storage";
 import { getLocalDateStrSafe } from "../timezone";
-import { sanitizeUserInput } from "../utils/sanitize";
+import { formatZodIssues, sanitizeUserInput } from "../utils/sanitize";
 import { buildLoadAnchors, describeLoadAnchorLines, type LoadAnchor } from "./loadAnchors";
 import { calculateTrainingLoad } from "./trainingLoadService";
 import { expandExercisesToPlanDaySetRows } from "./workoutService";
@@ -332,7 +332,9 @@ function validateDayExercises(rawDay: Record<string, unknown> | null | undefined
       validated.push(result.data);
     } else {
       logger.warn(
-        { issues: result.error.issues, index: i },
+        // `path` elements are keys straight from the model's JSON, so they can
+        // carry newlines; formatZodIssues is the log-injection boundary.
+        { issues: formatZodIssues(result.error.issues), index: i },
         "[planGen] Dropping invalid exercise entry",
       );
     }
@@ -368,7 +370,7 @@ function parseAndValidateDays(text: string): GeneratedDay[] {
       });
     } else {
       logger.warn(
-        { issues: result.error.issues },
+        { issues: formatZodIssues(result.error.issues) },
         "[planGen] Dropping invalid day",
       );
     }

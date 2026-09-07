@@ -114,6 +114,62 @@ the dead branded-food clients are deleted; the remaining Bolt comments stay.
 | `timeline-benchmark-check.ts` parses `console.table` by column position | The benchmark emits its rows as one JSON line; the checker reads that. The old reader sliced `│`-delimited cells counting from the right, so a renamed or reordered column, or a value long enough to wrap, produced NaN or the wrong field — and `parity` had to be compared against the STRING `"true"`. The shared format lives in its own module because the benchmark runs its whole workload at import time: importing it from the checker for a constant ran the benchmark twice. Still wired into no workflow, and the file now says why — the thresholds are absolute developer-machine milliseconds, so shared CI hardware would report noise as regressions. |
 | Duplication introduced by the fifth pass                           | Found by the pre-push duplication check, not by the audit. `ExplanationTooltip` had reproduced `MafCeilingChip`'s Radix trigger boilerplate, and the two fuelling panels had two copies of the same guidance paragraph. The tooltip now takes trigger content (the chip passes its own; `subject` is optional, since the chip's text already names the number), and the paragraph is one `FuellingGuidanceNote`. |
 
+## The three concerns this pass had missed (2026-09-07)
+
+Writing the outcomes back into the 2026-08-31 analysis surfaced three of its
+mapper concerns that were never carried into this document at all — neither
+verified nor refuted. They are done now, to the same standard: refute first,
+and report a defect only with a concrete input producing a wrong output.
+
+| Concern                                                            | Verdict | Note                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `saveParsedWorkoutsBatch` claims "a single transaction" but runs delete and insert as two non-transactional statements | **Real, and worse than filed** | The claim is verbatim, in the Bolt comment directly above the function. The audit called it "safe only because the sole caller pre-filters" — the pre-filter does not make it safe, it only makes it hard to reach. The insert is one multi-row statement across the whole chunk, so one rejected row (a negative weight, a `set_number` of 0 — any CHECK the misparse trips) fails it for all five workouts; the delete had already committed, so those workouts were left with no sets and the function returned `failed`, having destroyed rows it could not put back. Reaching it needs the delete to have something to delete, and `batchReparseWorkouts` obliges: it snapshots "workouts with no sets" **once**, then spends minutes on AI parses working through chunks of five, so an athlete who opens one of those workouts mid-run and logs sets by hand has written exactly the rows the later delete removes. **Fixed** — delete and insert now share a transaction, which is what the two sibling functions twenty lines below already did. |
+| The global handler sends every 4xx to Sentry unconditionally        | **Real**  | `server/index.ts` called `Sentry.captureException(err)` on every path, and `beforeSend` (`scrubSentryEvent`) only strips PII — no status filter, no `ignoreErrors`. So every zod rejection, unauthenticated request, stale-id 404 and idempotency 409 became an event: the API correctly refusing a request, reported as a fault, burying the 500s worth paging on. **Fixed** — `shouldReportToSentry` keeps 5xx and 429 (a single rate-limited request is noise; a sustained stream is a runaway client and is not visible anywhere else) and drops the rest. Reporting only: every status is still logged and still returned unchanged. The threshold was the owner's call. |
+| Idempotency caching only intercepts `res.json`, latent for any future `res.send` route | **Refuted** | The premise is true and the conclusion is not. `idempotencyMiddleware` already registers `finish` and `close` listeners that release the claim when a response completes without passing through the patched `res.json`, and its own comment names the three cases — "an error sent via res.end, a streamed/redirect response, or a client abort". A test pins it. So a `res.send` route degrades to *not cached*, which is the safe direction, rather than pinning the claim or caching a wrong reply. The residual, narrower than filed: such a route would silently lose retry **dedupe** — a retried offline-queue mutation would re-execute instead of replaying — and nothing enforces that mutating routes reply via `res.json`. No current route is affected: `protectedMutationGuards` is applied to mutations only, the sole `res.send` route is a GET export behind `isAuthenticated` alone, and the `res.end` calls are SSE streams, where re-executing is the wanted behaviour anyway. |
+
+## Bearer logger-leak backlog, triaged (2026-09-07)
+
+Not a mapper concern — a separate sweep, recorded here so nobody repeats it.
+Bearer reports only on **changed** code, so the repo carries a standing
+backlog its CI never surfaces: 255 `javascript_lang_logger_leak` findings in
+`server/` (plus ~16 in `script/`), invisible until someone edits the line. That
+is how the timeline-benchmark one ambushed us.
+
+Classified all 255 by what the log call actually passes:
+
+| Shape | Count | Verdict |
+| --- | --- | --- |
+| Only string/number literals (`{ context: "cron" }` and a static message) | 62 | False positive with no dynamic data at all. |
+| Only an `err`/`error` object | 49 | Bearer flags the shape, not a leak; pino's `redact` list covers credential paths. |
+| Carries values | 144 | Reviewed by key name (below). |
+
+The 144 log `context`, `jobId` (25), `userId` (23), `lockKey`, `planId`,
+`materialId`, `workoutLogId`, counts and durations. **No key carries
+user-authored content** — no `email`, `name`, `query`, `note`, `title`,
+`prompt`. That is the important negative result, and it is consistent with the
+food-search-query leak having already been fixed in the second pass.
+
+Five sites did need fixing, for a different reason than a data leak:
+
+`server/gemini/exerciseParser/validation.ts` had established a log-injection
+boundary — `sanitizeForLog`, plus zod issues flattened to `path:message` —
+with a docstring naming the threat: model output echoes whatever the athlete
+typed, so a newline in it forges a second log record. Four other sites logged
+`result.error.issues` raw, two of them alongside
+`JSON.stringify(item).slice(0, 200)` of the model's coaching text, and a fifth
+carried a `bearer:disable` whose rationale was that paths and messages are
+safe.
+
+Half of that rationale is right. Checked against zod 4: issue **messages**
+never echo the offending value (`Invalid option: expected one of "a"|"b"` — the
+allowed set, not the input), so there is no data leak there. But a **path**
+element is an object key straight from the parsed payload, so a model emitting
+`{"a\nFORGED": 1}` puts a newline into the log line. `sanitizeForLog` and
+`formatZodIssues` now live in `server/utils/sanitize.ts` beside the XSS and
+prompt-injection boundaries, and all five sites use them. The two `item`
+previews are sanitized as well — that content is the model's coaching text
+about the athlete, and it was going to logs verbatim.
+
 ## Refuted
 
 Recorded so they are not re-raised.

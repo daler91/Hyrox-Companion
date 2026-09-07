@@ -1,6 +1,5 @@
-import { z } from "zod";
-
 import { logger } from "../../logger";
+import { formatZodIssues, sanitizeForLog } from "../../utils/sanitize";
 import { parsedExerciseSchema, type ParserExercise } from "./schema";
 
 export interface ValidatedRows {
@@ -18,17 +17,6 @@ interface MalformedRowSummary {
   setsType: string;
   setsLength: number | null;
   rawPreview: string;
-}
-
-/**
- * Model output is attacker-influenceable (it echoes whatever the user typed
- * into the parser), so anything from it that reaches a log line has newlines
- * and control characters stripped to keep one dropped row from forging extra
- * log records.
- */
-function sanitizeForLog(value: string): string {
-  // eslint-disable-next-line no-control-regex
-  return value.replace(/[\u0000-\u001f\u007f]/g, " ");
 }
 
 function summarizeMalformedRow(row: unknown): MalformedRowSummary {
@@ -61,13 +49,6 @@ function summarizeMalformedRow(row: unknown): MalformedRowSummary {
   };
 }
 
-function formatZodIssues(error: z.ZodError): string {
-  return error.issues
-    .slice(0, 4)
-    .map((issue) => `${issue.path.join(".") || "<root>"}:${issue.message}`)
-    .join(" | ");
-}
-
 export function validateRowsDetailed(rawArray: unknown[]): ValidatedRows {
   const acceptedRows: ParserExercise[] = [];
   const rejectedRows: { index: number; reason: string }[] = [];
@@ -81,7 +62,7 @@ export function validateRowsDetailed(rawArray: unknown[]): ValidatedRows {
       continue;
     }
 
-    const issuesSummary = sanitizeForLog(formatZodIssues(parsed.error));
+    const issuesSummary = formatZodIssues(parsed.error.issues);
     const rowSummary = summarizeMalformedRow(row);
     // The row's content stays in the sanitized structured fields; the message
     // string carries only our own values so a crafted row can't reshape it.

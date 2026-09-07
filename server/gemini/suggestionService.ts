@@ -15,6 +15,7 @@ import {
 } from "../prompts/exerciseSetFormatter";
 import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
+import { formatZodIssues, sanitizeForLog } from "../utils/sanitize";
 import { sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
@@ -81,7 +82,9 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
       });
     } else {
       logger.warn(
-        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        // The item is model output shaped by the athlete's own text, so it goes
+        // through the log-injection boundary rather than straight into the line.
+        { issues: formatZodIssues(result.error.issues), item: previewForLog(item) },
         "[gemini] Dropping invalid suggestion:",
       );
     }
@@ -91,6 +94,26 @@ export function parseAndValidateSuggestions(text: string): WorkoutSuggestion[] {
 
 /** Mirrors MAX_EXERCISE_FOCUS_ENTRIES in prompts/coachingContext.ts. */
 const MAX_EXERCISE_FREQUENCY_ENTRIES = 20;
+
+
+/**
+ * A short, control-character-free preview of a rejected model item, for working
+ * out why the schema refused it.
+ *
+ * This used to be `JSON.stringify(item).slice(0, 200)` logged raw. The content
+ * is the model's coaching text about the athlete — `recommendation`,
+ * `rationale`, `workoutFocus`, a review `note` — so an unsanitized dump both
+ * put that text in the logs verbatim and let a newline in it forge a log
+ * record. Mirrors `summarizeMalformedRow`'s `rawPreview` in the exercise
+ * parser, which had already been hardened this way.
+ */
+function previewForLog(item: unknown): string {
+  try {
+    return sanitizeForLog(JSON.stringify(item) ?? String(item)).slice(0, 200);
+  } catch {
+    return sanitizeForLog(String(item)).slice(0, 200);
+  }
+}
 
 function formatExerciseFrequency(breakdown: Record<string, number>): string {
   const entries = Object.entries(breakdown);
@@ -373,7 +396,9 @@ export function parseAndValidateReviewNotes(text: string): ReviewNote[] {
       });
     } else {
       logger.warn(
-        { issues: result.error.issues, item: JSON.stringify(item).slice(0, 200) },
+        // The item is model output shaped by the athlete's own text, so it goes
+        // through the log-injection boundary rather than straight into the line.
+        { issues: formatZodIssues(result.error.issues), item: previewForLog(item) },
         "[gemini] Dropping invalid review note:",
       );
     }

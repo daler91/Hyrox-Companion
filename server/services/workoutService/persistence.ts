@@ -14,35 +14,53 @@ export async function saveParsedWorkout(
   return replaceExerciseSetsByOwner({ workoutLogId: workoutId }, setRows);
 }
 
-// ⚡ Bolt Performance Optimization:
-// Batch replace exercise sets for multiple workouts in a single transaction
-// to avoid N+1 query overhead during batch reparsing.
+/**
+ * Batch replace exercise sets for several workouts at once, so a chunked
+ * reparse pays one DELETE and one INSERT rather than two per workout.
+ *
+ * The delete and the insert MUST share a transaction, which the comment here
+ * used to claim and the code did not do. The insert is one multi-row statement
+ * across the whole chunk, so a single bad parsed row (a negative weight, a
+ * `set_number` of 0 — anything the CHECK constraints reject) fails the insert
+ * for every workout in it. With the delete already committed, that left those
+ * workouts with no sets at all and returned `failed`, having destroyed rows it
+ * could not put back.
+ *
+ * Reaching it needs the delete to have something to delete. `batchReparse-
+ * Workouts` snapshots "workouts with no sets" once, then works through chunks
+ * of five with AI parses in between, so minutes can pass between the snapshot
+ * and a late chunk's delete — long enough for the athlete to open one of those
+ * workouts and log sets by hand. Those are the rows that went missing.
+ *
+ * `replaceExerciseSetsByOwner` and `replaceExerciseSetsAndStructureByOwner`
+ * below already do this correctly; this is the same shape.
+ */
 export async function saveParsedWorkoutsBatch(
   workouts: { workoutId: string; setRows: InsertExerciseSet[] }[],
 ): Promise<{ saved: number; failed: number }> {
   if (workouts.length === 0) return { saved: 0, failed: 0 };
 
   const workoutIds = workouts.map((w) => w.workoutId);
-  let saved = 0;
-  let failed = 0;
-
-  // Drop existing sets in one query, then bulk insert all new sets
-  await db.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
 
   try {
-    const allSetRows = workouts.flatMap(w => w.setRows);
-    if (allSetRows.length > 0) {
-      await db.insert(exerciseSets).values(allSetRows);
-    }
-    saved = workouts.length;
+    await db.transaction(async (tx) => {
+      await tx.delete(exerciseSets).where(inArray(exerciseSets.workoutLogId, workoutIds));
+      const allSetRows = workouts.flatMap((w) => w.setRows);
+      if (allSetRows.length > 0) {
+        await tx.insert(exerciseSets).values(allSetRows);
+      }
+    });
+    return { saved: workouts.length, failed: 0 };
   } catch (err) {
-    failed = workouts.length;
+    // The transaction rolled back, so the existing sets are still there; the
+    // caller counts these workouts as unparsed and they stay eligible for a
+    // later reparse.
     logger.error(
-      "Failed to persist parsed exercise sets for workouts during batch reparse: " + (err instanceof Error ? err.message : "Unknown error")
+      { err, workoutCount: workouts.length },
+      "Failed to persist parsed exercise sets during batch reparse; rolled back",
     );
+    return { saved: 0, failed: workouts.length };
   }
-
-  return { saved, failed };
 }
 
 // Replace-all semantics for an owner (either a logged workout or a plan day):

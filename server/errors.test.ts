@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyAiError, ErrorCode, isDatabaseError, isLikelyAiProviderFailure } from "./errors";
+import { classifyAiError, ErrorCode, isDatabaseError, isLikelyAiProviderFailure, shouldReportToSentry } from "./errors";
 
 describe("isLikelyAiProviderFailure", () => {
   it.each([
@@ -71,5 +71,42 @@ describe("classifyAiError", () => {
     expect(classifyAiError(new Error("400 bad request")).code).toBe(ErrorCode.AI_INVALID_INPUT);
     expect(classifyAiError(new Error("model overloaded")).code).toBe(ErrorCode.AI_UNAVAILABLE);
     expect(classifyAiError(new Error("something else")).code).toBe(ErrorCode.AI_ERROR);
+  });
+});
+
+describe("shouldReportToSentry", () => {
+  /**
+   * The global handler used to call `Sentry.captureException` for every error
+   * it saw. `beforeSend` scrubs PII but does not filter by status and there is
+   * no `ignoreErrors`, so a zod rejection, an unauthenticated request, a stale
+   * id and an idempotency conflict each became an event — the API correctly
+   * refusing a request, reported as a fault.
+   */
+
+  it("reports server faults", () => {
+    for (const status of [500, 502, 503, 504]) {
+      expect(shouldReportToSentry(status)).toBe(true);
+    }
+  });
+
+  it("does not report the client-fault 4xx that made up the noise", () => {
+    // 400 zod, 401 unauthenticated, 403 forbidden, 404 stale id,
+    // 409 idempotency conflict, 413 oversized body, 422 unprocessable.
+    for (const status of [400, 401, 403, 404, 409, 413, 422]) {
+      expect(shouldReportToSentry(status)).toBe(false);
+    }
+  });
+
+  it("keeps 429, the one 4xx worth paging on", () => {
+    // A single rate-limited request is noise; a sustained stream of them is a
+    // runaway client, and nothing else surfaces that.
+    expect(shouldReportToSentry(429)).toBe(true);
+  });
+
+  it("stays quiet for a non-error status that somehow reached the handler", () => {
+    // Nothing should throw with one of these, but if it does, the wrong status
+    // is the bug rather than the error, and a Sentry event would not say so.
+    expect(shouldReportToSentry(200)).toBe(false);
+    expect(shouldReportToSentry(302)).toBe(false);
   });
 });
