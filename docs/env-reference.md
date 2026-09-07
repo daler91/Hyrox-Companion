@@ -137,16 +137,12 @@ Garmin has **no environment variables**. The integration uses per-user email+pas
 
 The nutrition module (food logging, targets, fuelling) ships on by default. It is gated by `NUTRITION_ENABLED` (server) and `VITE_NUTRITION_ENABLED` (client) — see [Feature Flags](#feature-flags) for those plus the two search-quality flags. Everything below is optional: with no provider configured, food search still works against the local cache plus Open Food Facts (no key required), flagging `apiDegraded` only when no provider is reachable. See [Nutrition & Fuelling](nutrition.md) for the full subsystem.
 
-Edamam is the active branded/packaged + barcode source when configured; USDA and Open Food Facts are the always-on fallbacks. Spoonacular and FatSecret are **superseded by Edamam and no longer wired into search/barcode** — their settings are retained for reference only.
+Edamam is the active branded/packaged + barcode source when configured; USDA and Open Food Facts are the always-on fallbacks. Spoonacular and FatSecret were superseded by Edamam and their clients have been **deleted** — the `foods.source` CHECK still accepts both values, but no code produces or refreshes them.
 
 | Variable | Req? | Default | Notes |
 |---|---|---|---|
 | `USDA_API_KEY` | Optional | — | USDA FoodData Central live food search ([free key](https://fdc.nal.usda.gov/api-key-signup)). Absent ⇒ graceful degradation to cached-only results. |
 | `EDAMAM_APP_ID` / `EDAMAM_APP_KEY` | Optional | — | Active branded/barcode source (nutrients returned per-100g). **Both or neither** — a half-configuration is a fatal boot error. |
-| `SPOONACULAR_API_KEY` | Optional | — | **Superseded by Edamam**; retained for reference, no longer wired into search/barcode. |
-| `FATSECRET_CLIENT_ID` / `FATSECRET_CLIENT_SECRET` | Optional | — | **Superseded by Edamam**; retained for reference. OAuth2 client-credentials; **both or neither** (half-config is fatal). Requires egress-IP whitelisting at the provider when used. |
-| `FATSECRET_SCOPE` | Optional | `basic` | Space-delimited OAuth scopes; `premier` / `barcode` unlock structured macros + barcode lookup. |
-| `FATSECRET_REGION` / `FATSECRET_LANGUAGE` | Optional | — | Optional localization (localization-enabled tier only). |
 
 Open Food Facts needs no key (their policy requires a custom `User-Agent`) and keeps search live even when no keyed provider is configured.
 

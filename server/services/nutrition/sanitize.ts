@@ -4,7 +4,7 @@ import type { MappedFood } from "./types";
 
 /**
  * Import sanity guard, shared by every external-food mapper (USDA, Open Food
- * Facts, FatSecret). External sources occasionally carry NaN / negative / absurd
+ * Facts, Edamam). External sources occasionally carry NaN / negative / absurd
  * macros — a mis-scaled serving, a bad crowd-sourced edit, a label typo. Because
  * a cached `foods` row is reused for every future log of that food, a single
  * poisoned import would silently corrupt every downstream daily total. This is

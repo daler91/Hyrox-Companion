@@ -101,6 +101,19 @@ change (see **Still open**).
 | Hover-only `title` explanations on five fuelling surfaces           | One `ExplanationTooltip` (a real `<button>` with an `aria-label` carrying subject and explanation) replaces the bare `title` on `FuellingCorrelationCard`, `FuellingAroundSessionPanel`, `FuellingPlanPanel`, `DailyTotalsHeader` (both macro notes) and `WorkoutSummaryHeader`'s stat tiles. `title` is mouse-only: touch and keyboard users had no way to reach the explanation, and screen readers announce it inconsistently. Modelled on `MafCeilingChip`, which already got this right. |
 | Two Bolt comments describing extracted-away code                    | Removed at the two `computeAdherencePct` call sites in `analyticsService.ts`, where the described loop no longer exists. The H10 rationale that shares the first site is real and stays. 74 → 72.                                              |
 
+## Fixed in the sixth pass (2026-09-07)
+
+What was left needed a decision rather than a patch. Two were put to the owner:
+the dead branded-food clients are deleted; the remaining Bolt comments stay.
+
+| Concern                                                            | Note                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FatSecret + Spoonacular: ~1,600 LOC unreachable, with a **fatal** boot refinement | Deleted, on the owner's call. `foodSearch.ts` wires USDA/OFF/Edamam and `barcode.ts` Edamam/OFF — neither client had a search caller, so the only reference was `refresh.ts` re-fetching rows whose `source` is `fatsecret`/`spoonacular`, which nothing could ever create. Gone with them: the two `refresh` cases (an unknown source already falls through to `default` and keeps serving its cached row, so a hypothetical legacy row degrades rather than breaks), the `FATSECRET_*`/`SPOONACULAR_*` env vars, the refinement that killed boot on a half-set FatSecret credential pair, the two dead provider columns on `MICRO_DEFS`, and the two dead members of `MappedFood["source"]`. Both values stay legal in `foods_source_check`: narrowing a CHECK is a migration that fails on any surviving row and buys nothing. |
+| `sortOrder` MAX+1 race                                             | The MAX+1 was already folded into the INSERT as a correlated subquery, which is not enough — under READ COMMITTED it cannot see another transaction's uncommitted row, so two inserts racing on one container both land on N and the two sets end up with no defined order. `addExerciseSetNormalized` now row-locks the container first, exactly as `seedExerciseSetsFromPlanDay` already did against the same failure. The lock replaces the old un-locked ownership read rather than adding a query, and locks the plan day itself rather than the joined plan, so it doesn't serialize a whole plan. The owner-adapter machinery moved to `storage/exerciseSetOwners.ts` — it no longer touched `this`, and the file was over its line budget. |
+| Check constraints duplicating TS enums                             | The five CHECKs that mirror a TS constant now render from it (`inValues`), so there is no second list to update: `status_check` ← `workoutStatusEnum`, `plan_days_skip_reason_check` ← `planDaySkipReasonEnum`, `foods_source_check` ← `FOOD_SOURCES`, and both `meal_type` CHECKs ← the one `MEAL_TYPES`. `sql.raw` is unavoidable for DDL text, so every value is checked against a bare-identifier pattern first. `drizzle-kit generate` reports **no schema changes**, so the switch implies no migration; `checkConstraints.test.ts` pins each rendered constraint to the deployed text, which is what now forces a migration when a constant changes. |
+| `timeline-benchmark-check.ts` parses `console.table` by column position | The benchmark emits its rows as one JSON line; the checker reads that. The old reader sliced `│`-delimited cells counting from the right, so a renamed or reordered column, or a value long enough to wrap, produced NaN or the wrong field — and `parity` had to be compared against the STRING `"true"`. The shared format lives in its own module because the benchmark runs its whole workload at import time: importing it from the checker for a constant ran the benchmark twice. Still wired into no workflow, and the file now says why — the thresholds are absolute developer-machine milliseconds, so shared CI hardware would report noise as regressions. |
+| Duplication introduced by the fifth pass                           | Found by the pre-push duplication check, not by the audit. `ExplanationTooltip` had reproduced `MafCeilingChip`'s Radix trigger boilerplate, and the two fuelling panels had two copies of the same guidance paragraph. The tooltip now takes trigger content (the chip passes its own; `subject` is optional, since the chip's text already names the number), and the paragraph is one `FuellingGuidanceNote`. |
+
 ## Refuted
 
 Recorded so they are not re-raised.
@@ -119,29 +132,32 @@ Recorded so they are not re-raised.
 
 ## Still open
 
-Verified real, not addressed in this pass. Roughly cheapest-first within each group.
+One item, and it is not a code change.
 
-**Medium.** None outstanding — the three that remained after the second pass
-were fixed in the third (see above).
+**Unverified sled-pull loads.** `STATION_LOADS_KG` in `shared/raceConstants.ts`
+marks every `sled_pull` value with ⚠️ and a header note to verify it against the
+official rulebook; the other stations are confirmed. These are rulebook facts
+that feed predicted finish times, so they need the rulebook, not a judgement
+call — the marker stays until someone checks it against the current one. It is
+at least honest: the uncertainty is visible at each value rather than implied.
 
-**Low (remaining).** Nothing cheap is left; each of these needs a decision
-rather than a patch.
+Everything else this document verified as real has been addressed across the six
+passes above, or is recorded under **Refuted**. The Highs and Mediums went in
+passes one to three, the Lows in passes four to six.
 
-- **FatSecret + Spoonacular: 928 LOC unreachable, with a _fatal_ boot
-  refinement for an integration that does nothing.** Delete or wire up — that
-  is the owner's call, not a mechanical fix.
-- **Unverified sled-pull loads** feeding predicted finish times behind a stale
-  "verify against the rulebook" marker. Needs the rulebook, not code.
-- **`sortOrder` MAX+1 race.** Correct under concurrent inserts only with a
-  schema or locking change.
-- **Check constraints duplicating TS enums.** Real drift risk; closing it means
-  picking a generator or a runtime assertion, which is a design choice.
-- **72 auto-generated "⚡ Bolt Performance Optimization" comments across 51
-  files.** Noise, but a mass edit touches 51 files for no behaviour change; the
-  two that were actively *wrong* are gone.
-- **`timeline-benchmark-check.ts`** parses `console.table` box-drawing output by
-  column position and is wired into no workflow — wiring it as-is would likely
-  flake, since its thresholds are absolute dev-machine milliseconds.
+Two were closed by a decision rather than a fix, both the owner's:
+
+- **FatSecret + Spoonacular** — deleted rather than wired up (sixth pass above).
+- **The remaining 72 "⚡ Bolt Performance Optimization" comments across 51
+  files** — left in place. They are noise, but a comment-only edit touching 51
+  files is review burden for no behaviour change. The two that actively
+  described code extracted away are already gone (fifth pass).
+
+And one thing the sixth pass improved without closing:
+`timeline-benchmark-check.ts` now parses reliably but is still wired into no
+workflow, because its thresholds are absolute developer-machine milliseconds.
+Wiring it needs budgets measured relative to a baseline in the same run; the
+script says so at the top.
 
 **Removed from this list by the fourth pass (2026-09-06):** AI circuit breaker
 counts non-retryable 4xx toward tripping (a blanket "ignore 4xx" would be wrong
@@ -165,3 +181,13 @@ discards the clamp signal for protein and fat — noted then as near-moot becaus
 why the two dropped signals had gone unnoticed. Hover-only `title` explanations
 on five cards, inaccessible to touch, keyboard and screen readers. Two of the
 Bolt comments describing code that was extracted away.
+
+**Removed from this list by the sixth pass (2026-09-07):** FatSecret +
+Spoonacular: 928 LOC unreachable, with a **fatal** boot refinement for an
+integration that does nothing. `sortOrder` MAX+1 race. Check constraints
+duplicating TS enums. `timeline-benchmark-check.ts` parsing `console.table`
+box-drawing output by column position.
+
+**Left open deliberately:** the 72 remaining Bolt comments (the owner's call),
+and the unverified sled-pull loads, which need the rulebook rather than a code
+change. See **Still open**.

@@ -6,13 +6,13 @@ import { ChevronDown, UtensilsCrossed } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { RpeSelector } from "@/components/RpeSelector";
-import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 import { NumberStepper } from "@/components/ui/number-stepper";
 import { useApiMutation } from "@/hooks/useApiMutation";
 import { api, QUERY_KEYS, type UserPreferences } from "@/lib/api";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/timeOfDay";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
+import { FuellingGuidanceNote } from "./FuellingGuidanceNote";
 
 interface ExpectedSessionUpdate {
   expectedDurationMin?: number | null;
@@ -257,17 +257,7 @@ export function FuellingPlanPanel({ entry }: { readonly entry: TimelineEntry }) 
         </div>
       </details>
 
-      <p
-        className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-        data-testid="fuelling-plan-guidance"
-      >
-        Targets are guidance based on this session.
-        <ExplanationTooltip
-          subject="Fuelling targets"
-          explanation={target.explanation}
-          testId="fuelling-plan-explanation"
-        />
-      </p>
+      <FuellingGuidanceNote explanation={target.explanation} testId="fuelling-plan-guidance" />
     </section>
   );
 }

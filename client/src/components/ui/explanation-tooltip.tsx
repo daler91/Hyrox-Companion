@@ -1,15 +1,22 @@
 import { Info } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface ExplanationTooltipProps {
-  /** The full explanation. Shown in the tooltip and read as the button's name. */
+  /** The full explanation. Shown in the tooltip and read as the trigger's name. */
   readonly explanation: string;
-  /** What is being explained, so the control has a name when the tooltip is closed. */
-  readonly subject: string;
+  /**
+   * What is being explained, prefixed to the accessible name so the control is
+   * identifiable with the tooltip closed. Omit when the trigger's own content
+   * already says what it is (a labelled chip, say).
+   */
+  readonly subject?: string;
   readonly className?: string;
   readonly testId?: string;
+  /** Trigger content. Defaults to a small info icon. */
+  readonly children?: ReactNode;
 }
 
 /**
@@ -31,20 +38,21 @@ export function ExplanationTooltip({
   subject,
   className,
   testId,
+  children,
 }: ExplanationTooltipProps) {
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger
           type="button"
-          aria-label={`${subject}: ${explanation}`}
+          aria-label={subject ? `${subject}: ${explanation}` : explanation}
           className={cn(
             "inline-flex shrink-0 items-center rounded text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             className,
           )}
           data-testid={testId}
         >
-          <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          {children ?? <Info className="h-3.5 w-3.5" aria-hidden="true" />}
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
           <p>{explanation}</p>

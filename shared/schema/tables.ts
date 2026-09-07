@@ -16,7 +16,35 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+import { MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
 import type { CoachNoteInputs, PlanAdjustmentProposalPayload } from "./types";
+
+/**
+ * Render a TS value list as the quoted literal list inside a CHECK constraint's
+ * `IN (...)`, so the constraint and the constant it mirrors cannot drift apart.
+ *
+ * Several CHECKs used to hardcode a copy of a list that also exists in
+ * TypeScript — `foods_source_check` was dropped and re-added across three
+ * consecutive migrations chasing one such copy. Deriving the SQL means adding a
+ * value to the constant is the only edit; `checkConstraints.test.ts` then fails
+ * until the matching migration is written, so the DB side can't be forgotten.
+ *
+ * `sql.raw` is required here (the values are part of the DDL text, not bound
+ * parameters), so every value is checked against a strict identifier pattern
+ * first. These lists are compile-time constants, not input, and this keeps it
+ * that way.
+ *
+ * `separator` exists only to reproduce each constraint's existing formatting
+ * byte for byte, so switching to this helper implies no migration.
+ */
+export function inValues(values: readonly string[], separator: ", " | "," = ", ") {
+  for (const value of values) {
+    if (!/^[a-z0-9_]+$/.test(value)) {
+      throw new Error(`unsafe CHECK constraint value: ${JSON.stringify(value)}`);
+    }
+  }
+  return sql.raw(values.map((value) => `'${value}'`).join(separator));
+}
 
 // pgvector custom type: maps PostgreSQL vector(N) ↔ TypeScript number[]
 const vector = customType<{
@@ -345,10 +373,10 @@ export const planDays = pgTable(
     skipReason: text("skip_reason"),
   },
   (table) => [
-    check("status_check", sql`status IN ('planned', 'completed', 'missed', 'skipped')`),
+    check("status_check", sql`status IN (${inValues(workoutStatusEnum)})`),
     check(
       "plan_days_skip_reason_check",
-      sql`skip_reason IS NULL OR skip_reason IN ('ill', 'injured', 'schedule', 'low_energy')`,
+      sql`skip_reason IS NULL OR skip_reason IN (${inValues(planDaySkipReasonEnum)})`,
     ),
     check(
       "plan_days_expected_duration_check",
@@ -1282,9 +1310,14 @@ export const mafWorkoutAnalysis = pgTable(
 // ---------------------------------------------------------------------------
 
 // Where a food's reference data came from. `usda` (FoodData Central) and `off`
-// (Open Food Facts) are the original cached external sources; `fatsecret`,
-// `spoonacular`, and `edamam` are branded/barcode sources (FR — higher-quality
-// branded data); `custom` is a user-entered food / recipe-backing food.
+// (Open Food Facts) are the always-on cached external sources; `edamam` is the
+// active branded/barcode source; `custom` is a user-entered food / recipe-backing
+// food.
+//
+// `fatsecret` and `spoonacular` no longer have clients — both were superseded by
+// Edamam and their (never-wired) code was deleted. The values stay in the enum
+// and the CHECK constraint on purpose: removing a value from a CHECK is a
+// migration that fails if any row still holds it, and buys nothing.
 export const FOOD_SOURCES = [
   "usda",
   "off",
@@ -1368,7 +1401,7 @@ export const foods = pgTable(
     index("idx_foods_created_by_user_id").on(table.createdByUserId),
     check(
       "foods_source_check",
-      sql`source IN ('usda', 'off', 'fatsecret', 'spoonacular', 'edamam', 'custom')`,
+      sql`source IN (${inValues(FOOD_SOURCES)})`,
     ),
   ],
 );
@@ -1447,7 +1480,7 @@ export const foodLogEntries = pgTable(
     check("food_log_entries_quantity_positive_check", sql`quantity_g > 0`),
     check(
       "food_log_entries_meal_type_check",
-      sql`meal_type IN ('breakfast','lunch','dinner','snack','snack_pm','pre_workout','post_workout')`,
+      sql`meal_type IN (${inValues(MEAL_TYPES, ",")})`,
     ),
     check(
       "food_log_entries_entry_method_check",
@@ -1528,7 +1561,7 @@ export const mealTargets = pgTable(
     index("idx_meal_targets_user_effective").on(table.userId, table.effectiveFrom),
     check(
       "meal_targets_meal_type_check",
-      sql`meal_type IN ('breakfast','lunch','dinner','snack','snack_pm','pre_workout','post_workout')`,
+      sql`meal_type IN (${inValues(MEAL_TYPES, ",")})`,
     ),
     // Same concurrent-save guard as uq_nutrition_targets_user_effective, keyed
     // per meal to match upsertMealTarget's delete-then-insert.

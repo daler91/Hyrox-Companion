@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
-import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 import { useSessionFuelling } from "@/hooks/useNutrition";
 import { cn } from "@/lib/utils";
 
 import { PostTargetLine, PreCarbTargetLine } from "./fuelling/targetLines";
+import { FuellingGuidanceNote } from "./FuellingGuidanceNote";
 
 const MACRO_CHIPS: ReadonlyArray<{ key: keyof NutritionMacroTotals; label: string }> = [
   { key: "calories", label: "kcal" },
@@ -160,17 +160,7 @@ export function FuellingAroundSessionPanel({ workoutLogId }: { readonly workoutL
           )}
 
           {target && (
-            <p
-              className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-              data-testid="fuelling-guidance"
-            >
-              Targets are guidance based on this session.
-              <ExplanationTooltip
-                subject="Fuelling targets"
-                explanation={target.explanation}
-                testId="fuelling-guidance-explanation"
-              />
-            </p>
+            <FuellingGuidanceNote explanation={target.explanation} testId="fuelling-guidance" />
           )}
 
           {!data.usedStartTime && (

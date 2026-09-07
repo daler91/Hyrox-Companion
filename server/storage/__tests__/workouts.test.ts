@@ -456,6 +456,20 @@ describe("WorkoutStorage exercise-set writes — structure-step mirror (audit M1
     return { orderBy, limit };
   }
 
+  /**
+   * The container-lock read the insert path opens its transaction with:
+   * `select().from()[.innerJoin()].where().for("update").limit()`.
+   */
+  function lockChain(rows: unknown[]) {
+    const limit = vi.fn().mockResolvedValue(rows);
+    const forMock = vi.fn().mockReturnValue({ limit });
+    const where = vi.fn().mockReturnValue({ for: forMock });
+    const innerJoin = vi.fn().mockReturnValue({ where });
+    const from = vi.fn().mockReturnValue({ where, innerJoin });
+    vi.mocked(db.select).mockReturnValueOnce({ from } as never);
+    return { for: forMock, limit };
+  }
+
   function mockDelete() {
     const whereMock = vi.fn().mockResolvedValue(undefined);
     vi.mocked(db.delete).mockReturnValue({ where: whereMock } as never);
@@ -476,7 +490,7 @@ describe("WorkoutStorage exercise-set writes — structure-step mirror (audit M1
   });
 
   it("inserts the set and its mirrored step inside one transaction", async () => {
-    vi.spyOn(storage, "getWorkoutLog").mockResolvedValue({ id: "workout-1" } as never);
+    lockChain([{ id: "workout-1" }]);
     const returning = vi.fn().mockResolvedValue([{ ...MIRRORED, id: "set-2" }]);
     vi.mocked(db.insert).mockReturnValue({ values: vi.fn().mockReturnValue({ returning }) } as never);
     const { setMock } = mockUpdateReturning([]);

@@ -1,9 +1,9 @@
 import { parseRetryAfter, RetryableHttpError } from "../../utils/httpRetry";
 
 /**
- * Small shared helpers for the external nutrition clients (USDA, OFF, FatSecret,
- * Spoonacular, Edamam). Kept in one place so the numeric coercion, the oz→grams
- * factor, and the shared GET-attempt policy can't drift between providers.
+ * Small shared helpers for the external nutrition clients (USDA, OFF, Edamam).
+ * Kept in one place so the numeric coercion, the oz→grams factor, and the
+ * shared GET-attempt policy can't drift between providers.
  */
 
 /**
@@ -26,8 +26,8 @@ export const OZ_TO_GRAMS = 28.349523125;
 
 /**
  * One JSON GET attempt with the retry policy the key-authenticated clients
- * (Edamam, Spoonacular) share: a fresh per-attempt timeout combined with any
- * caller signal, RetryableHttpError on 429/5xx (so `retryWithJitter` retries),
+ * (Edamam) use: a fresh per-attempt timeout combined with any caller signal,
+ * RetryableHttpError on 429/5xx (so `retryWithJitter` retries),
  * null on 404 (an unknown food/barcode — a normal "no result"), and a plain,
  * deliberately non-retryable Error on any other failure (401 bad key, 402/403
  * plan or quota, …) for the caller's catch to degrade on. The URL — which

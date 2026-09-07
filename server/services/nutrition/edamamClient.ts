@@ -6,10 +6,9 @@ import { num, providerGetJson } from "./utils";
 
 /**
  * Edamam Food Database client. A curated source of branded/packaged + generic
- * foods and UPC barcodes. Its key advantage over the per-serving providers
- * (FatSecret/Spoonacular): the parser returns each food's macros ALREADY ON A
- * PER-100-GRAM basis, so there is no serving-weight to recover — it maps straight
- * into our `foods` columns.
+ * foods and UPC barcodes. Its key advantage over a per-serving provider: the
+ * parser returns each food's macros ALREADY ON A PER-100-GRAM basis, so there is
+ * no serving-weight to recover — it maps straight into our `foods` columns.
  *
  * Auth is an app id + app key passed as query params. Like the other clients,
  * every failure mode (no credentials, a bad key/plan, a provider hiccup, an
