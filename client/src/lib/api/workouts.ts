@@ -115,6 +115,16 @@ export const workouts = {
   update: (id: string, data: UpdateWorkoutLog & { exercises?: ParsedExercise[]; structureBlocks?: StructureBlockInput[] }) =>
     typedRequest<WorkoutLog>("PATCH", `/api/v1/workouts/${id}`, data),
 
+  // Device-activity links. A standalone Strava import can be merged by hand
+  // into a plan day or a log the athlete wrote (POST), and a linked recording
+  // can be split back out into its own row (DELETE). Both are the athlete's
+  // call and outrank the sync's matcher, which never revisits a manual link.
+  linkDeviceActivity: (id: string, target: { planDayId: string } | { workoutLogId: string }) =>
+    typedRequest<WorkoutLog>("POST", `/api/v1/workouts/${id}/device-link`, target),
+
+  unlinkDeviceActivity: (id: string) =>
+    typedRequest<{ log: WorkoutLog | null; standalone: WorkoutLog }>("DELETE", `/api/v1/workouts/${id}/device-link`),
+
   // Connect a logged workout to a specific plan day, or clear the link
   // (planDayId === null). The server derives planId from the day and handles
   // plan-day completion + adherence side effects.

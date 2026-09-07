@@ -9,15 +9,16 @@ import {
   type TrainingPlanWithDays,
   type UpdatePlanDay,
   users,
+  workoutLogs,
 } from "@shared/schema";
-import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notExists, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { logger } from "../logger";
 import { getLocalDateStrSafe } from "../timezone";
 import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
-import { missedSweepRetirementGuard, planLiveForDate } from "./planRetirement";
+import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
 
 // Re-export for callers that already reach for it via PlanStorage's neighbours.
 export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
@@ -484,6 +485,34 @@ export class PlanStorage {
       .limit(1);
 
     return match;
+  }
+
+  /**
+   * Plan days scheduled on `dates` that a device recording could complete
+   * (stravaReconciler): status planned or missed — skipped is the athlete's
+   * decision and completed already has its log — with no workout log pointing
+   * at them, inside their plan's lifetime. Ownership via the parent plan. One
+   * query for the whole sync batch.
+   */
+  async listOpenPlanDaysForDates(userId: string, dates: readonly string[]): Promise<PlanDay[]> {
+    if (dates.length === 0) return [];
+    const rows = await db
+      .select({ day: planDays })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          inArray(planDays.scheduledDate, [...dates]),
+          inArray(planDays.status, ["planned", "missed"]),
+          planDayWithinPlanLifetime(),
+          notExists(
+            db.select({ one: sql`1` }).from(workoutLogs).where(eq(workoutLogs.planDayId, planDays.id)),
+          ),
+        ),
+      )
+      .orderBy(asc(planDays.scheduledDate), asc(planDays.id));
+    return rows.map((row) => row.day);
   }
 
   async getActivePlan(userId: string): Promise<TrainingPlan | undefined> {

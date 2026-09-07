@@ -14,6 +14,7 @@ import { logger, reqLogger } from "./logger";
 import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
+import { reconcileStravaActivities, type StravaImportItem } from "./services/stravaReconciler";
 import { claimRuntimeCacheKey, runtimeCacheKey } from "./sharedRuntimeState";
 import { storage } from "./storage";
 import { getUserId } from "./types";
@@ -668,12 +669,16 @@ function sendStravaTokenFailure(res: Response, reason: StravaTokenFailureReason)
   });
 }
 
-/** Drop activities already imported for this athlete; map the rest for insert. */
-async function selectStravaWorkoutsToImport(
+/**
+ * Drop activities already imported for this athlete; map the rest for the
+ * reconciler. Dedup by (user, strava_activity_id) is what makes a manual
+ * link or unlink sticky: either way the activity's id is already on a row.
+ */
+async function selectStravaActivitiesToImport(
   activities: StravaActivity[],
   userId: string,
   distanceUnit: DistanceUnit,
-) {
+): Promise<{ items: StravaImportItem[]; skipped: number }> {
   const existingStravaIds = new Set(
     await storage.workouts.getExistingStravaActivityIds(
       userId,
@@ -682,7 +687,10 @@ async function selectStravaWorkoutsToImport(
   );
   const fresh = activities.filter((a) => !existingStravaIds.has(String(a.id)));
   return {
-    workoutsToImport: fresh.map((a) => mapStravaActivityToWorkout(a, userId, distanceUnit)),
+    items: fresh.map((activity) => ({
+      activity,
+      row: mapStravaActivityToWorkout(activity, userId, distanceUnit),
+    })),
     skipped: activities.length - fresh.length,
   };
 }
@@ -733,38 +741,39 @@ async function handleStravaSync(req: Request, res: Response) {
       return sendStravaFetchError(res, err);
     }
 
-    const { workoutsToImport, skipped } = await selectStravaWorkoutsToImport(
-      activities,
-      userId,
-      distanceUnit,
-    );
+    const { items, skipped } = await selectStravaActivitiesToImport(activities, userId, distanceUnit);
 
-    if (workoutsToImport.length > 0) {
-      await enrichCaloriesFromDetail(accessToken, workoutsToImport, reqLogger(req));
+    if (items.length > 0) {
+      await enrichCaloriesFromDetail(accessToken, items.map((item) => item.row), reqLogger(req));
     }
 
-    const createdLogs = workoutsToImport.length > 0
-      ? await storage.workouts.createWorkoutLogs(workoutsToImport)
-      : [];
-    // onConflictDoNothing returns only the rows this insert actually
-    // created; concurrent Strava syncs can drop rows here and we want the
-    // response to reflect the truth, not the optimistic pre-insert count
-    // (S2). `skipped` sums the pre-dedup hits plus any race-condition
-    // duplicates the DB rejected.
-    const imported = createdLogs.length;
-    const raceSkipped = workoutsToImport.length - createdLogs.length;
+    // Each new activity is matched against the day's existing rows before
+    // anything is inserted: it enriches the log the athlete already wrote,
+    // completes the open plan day, or lands standalone (carrying a suggestion
+    // when a match was plausible but not certain). See stravaReconciler.ts.
+    const counts = await reconcileStravaActivities(userId, items, reqLogger(req));
+    // `imported` keeps meaning "activities now on the timeline", wherever
+    // they landed. `skipped` sums the pre-dedup hits plus any rows a
+    // concurrent sync got to first — the reconciler reports only what it
+    // actually wrote, not an optimistic pre-insert count (S2).
+    const imported = counts.enriched + counts.completedPlanDays + counts.suggested + counts.standalone;
+    const totalSkipped = skipped + counts.skipped;
 
     await advanceStravaSyncCursor(userId, activities, hasMore);
 
     reqLogger(req).info(
-      { context: "strava", userId, imported, skipped: skipped + raceSkipped, total: activities.length, hasMore },
+      { context: "strava", userId, imported, ...counts, skipped: totalSkipped, total: activities.length, hasMore },
       "strava.sync.ok",
     );
 
     res.json({
       success: true,
       imported,
-      skipped: skipped + raceSkipped,
+      enriched: counts.enriched,
+      completedPlanDays: counts.completedPlanDays,
+      suggested: counts.suggested,
+      standalone: counts.standalone,
+      skipped: totalSkipped,
       total: activities.length,
       hasMore,
     });

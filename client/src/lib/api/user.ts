@@ -3,11 +3,20 @@ import type { User } from "@shared/schema";
 import { rawRequest,typedRequest } from "./client";
 
 export interface StravaSyncResponse {
+  /** Activities now on the timeline, wherever they landed (the four counts below). */
   imported: number;
   skipped: number;
   total: number;
   /** True when a capped sync left older activities unfetched — run Sync again to continue. */
   hasMore?: boolean;
+  /** Recordings attached to workouts the athlete had already logged. */
+  enriched?: number;
+  /** Open plan days completed by a recording. */
+  completedPlanDays?: number;
+  /** Standalone imports that carry a suggested plan day or log to confirm. */
+  suggested?: number;
+  /** Standalone imports with nothing to match. */
+  standalone?: number;
 }
 
 export interface StravaStatus {

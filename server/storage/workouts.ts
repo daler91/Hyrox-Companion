@@ -8,6 +8,7 @@ import {
   trainingPlans,
   type UpdateWorkoutLog,
   type WorkoutLog,
+  type WorkoutLogDeviceLinkColumns,
   workoutLogs,
   workoutStructureBlocks,
   workoutStructureSteps,
@@ -220,7 +221,14 @@ export class WorkoutStorage {
     });
   }
 
-  async createWorkoutLogs(logs: (InsertWorkoutLog & { userId: string })[]): Promise<WorkoutLog[]> {
+  /**
+   * Bulk insert for the Strava sync. Rows may carry the server-only device-link
+   * columns (the raw-activity snapshot and a suggested match) — those never
+   * come from a client, which is why they sit outside InsertWorkoutLog.
+   */
+  async createWorkoutLogs(
+    logs: (InsertWorkoutLog & { userId: string } & Partial<WorkoutLogDeviceLinkColumns>)[],
+  ): Promise<WorkoutLog[]> {
     if (logs.length === 0) return [];
 
     // Use onConflictDoNothing against the (user_id, strava_activity_id) unique
@@ -424,6 +432,28 @@ export class WorkoutStorage {
       .from(workoutLogs)
       .where(and(eq(workoutLogs.userId, userId), eq(workoutLogs.stravaActivityId, stravaActivityId)));
     return log;
+  }
+
+  /**
+   * The athlete's logs on `dates` that carry no device activity yet — the rows
+   * a freshly synced Strava activity may be a recording of (stravaReconciler).
+   * Both device-id columns must be NULL: a row holds at most one recording.
+   * One query for the whole sync batch, not one per activity.
+   */
+  async listDeviceUnlinkedLogsForDates(userId: string, dates: readonly string[]): Promise<WorkoutLog[]> {
+    if (dates.length === 0) return [];
+    return await db
+      .select()
+      .from(workoutLogs)
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          inArray(workoutLogs.date, [...dates]),
+          isNull(workoutLogs.stravaActivityId),
+          isNull(workoutLogs.garminActivityId),
+        ),
+      )
+      .orderBy(asc(workoutLogs.date), asc(workoutLogs.id));
   }
 
   async getExistingStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<string[]> {

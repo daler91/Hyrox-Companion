@@ -1,3 +1,4 @@
+export * from "./deviceActivity";
 export * from "./enums";
 export * from "./exercises";
 export * from "./nutrition";

@@ -46,3 +46,12 @@ export const MEAL_TYPES = [
   "post_workout",
 ] as const;
 export type MealType = (typeof MEAL_TYPES)[number];
+
+/**
+ * How a device activity (Strava today, Garmin later) came to sit on a
+ * workout_logs row. `auto` is the sync's matcher; `manual` is the athlete's
+ * own link, which the sync never revisits. NULL on the row means no linked
+ * activity — a standalone import is not a link.
+ */
+export const deviceLinkSourceEnum = ["auto", "manual"] as const;
+export type DeviceLinkSource = (typeof deviceLinkSourceEnum)[number];

@@ -40,6 +40,10 @@ Gemini AI provider behavior — model names, retry/jitter, circuit breaker, embe
 
 - `server/strava.ts` -- OAuth routes, token management, activity sync endpoint
 - `server/services/stravaMapper.ts` -- Maps Strava activity JSON to the internal `WorkoutLog` shape
+- `server/services/stravaReconciler.ts` -- Matches each synced activity to the day's logged workouts and open plan days before anything is inserted
+- `server/services/deviceActivityMatcher.ts` -- The pure scoring engine behind that matching (no DB, no clock)
+- `server/services/deviceActivityLink.ts` -- Attach / create-from-plan-day / manual link / lossless unlink, with the invariants in one place
+- `server/routes/workouts/workoutsDeviceLink.routes.ts` -- `POST`/`DELETE /api/v1/workouts/:id/device-link`, the athlete's override of the matcher
 - `server/crypto.ts` -- AES-256-GCM encryption/decryption for tokens at rest
 - `shared/schema/tables.ts` -- `stravaConnections` table definition
 
@@ -135,7 +139,7 @@ Triggered by `POST /api/v1/strava/sync` (rate-limited to 5 requests per 15 minut
    - First sync (`last_synced_at` is null): `now − 90 days` (`STRAVA_FIRST_SYNC_BACKFILL_DAYS`)
    - Subsequent syncs: `last_synced_at − 7 days` (`STRAVA_SYNC_OVERLAP_MS`) — the overlap catches activities uploaded late by a device (e.g. a watch synced days after the workout); the DB dedup absorbs the re-fetched rows
 2. Fetches `GET https://www.strava.com/api/v3/athlete/activities?after=…&per_page=200&page=N`, paginating up to 5 pages per sync (`STRAVA_MAX_SYNC_PAGES`, ≤1000 activities / ≤5 read requests — well inside Strava's 100-reads-per-15-min app budget). With `after`, Strava returns activities in **ascending** `start_date` order. A short page ends pagination; 5 full pages sets `hasMore: true` in the response.
-3. Checks which activity IDs already exist in the database via `storage.getExistingStravaActivityIds()` to avoid duplicates
+3. Checks which activity IDs already exist in the database via `storage.workouts.getExistingStravaActivityIds()` to avoid duplicates. This dedup is also what makes a manual link or unlink sticky: either way the activity's id is already on a row, so a re-sync never revisits it
 4. New activities are mapped through `mapStravaActivityToWorkout()` which extracts:
    - Date (from `start_date_local`)
    - Focus (from `sport_type` or `type`)
@@ -145,10 +149,18 @@ Triggered by `POST /api/v1/strava/sync` (rate-limited to 5 requests per 15 minut
    - Metrics: calories, distance (meters), elevation gain, avg/max heart rate, avg/max speed, cadence, watts, suffer score
 5. **Calorie enrichment**: the list endpoint never returns `calories` (and `kilojoules` only exists for power-meter rides), so the newest ≤25 imported activities (`STRAVA_CALORIE_DETAIL_LIMIT`) get a best-effort `GET /api/v3/activities/{id}` detail fetch to fill in calories. Failures are non-fatal; a `429` stops the enrichment loop without failing the sync.
 6. Distance and pace are formatted according to the user's preferred `distanceUnit` (km or miles)
-7. All new workouts are batch-inserted via `storage.createWorkoutLogs()`
+7. **Reconciliation** (`server/services/stravaReconciler.ts`): a recording is a *measurement* of a session the athlete planned or logged, not a workout of its own, so before anything is inserted each new activity is scored against that local calendar day's rows — the day's workout logs that carry no device activity yet (`storage.workouts.listDeviceUnlinkedLogsForDates()`) and its open plan days (planned or missed, unlogged, plan still live — `storage.plans.listOpenPlanDaysForDates()`); two queries for the whole batch. The matcher (`deviceActivityMatcher.ts`, pure functions) classifies the Strava `sport_type` and the prescription text (Hyrox-aware: sled, wall ball, ski erg and "sim" read as conditioning, so "8 x 1 km" inside a sim is not a run) and takes a weighted mean over the signals available for the pair — type compatibility 0.4, duration 0.35, time of day 0.15, distance 0.2 (only when the prescription names one unambiguous "8 km"), activity-name overlap 0.05. Incompatible types are damped so the numbers cannot rescue a ride onto a strength day, rest days score zero, and activities under 5 minutes never match. Across a batch the assignment is one-to-one, greedy by score (a warm-up and the session itself cannot both claim the plan day). Then, per activity:
+   - **link → workout log** (score ≥ 0.75): the athlete already logged it. The recording is attached to that row, filling only the metric columns that are NULL — nothing the athlete typed is overwritten — and the raw activity plus the list of filled columns is snapshotted into `device_activity` so the link can be undone exactly.
+   - **link → plan day** (score ≥ 0.75): not logged yet. The activity becomes the day's log, built the way a manual confirm builds one (`createWorkoutInTx`: prescription text, copied sets and structure, adherence snapshot, day marked completed) with the recording's metrics on top. RPE stays NULL — a watch cannot say how it felt. The plan day's row is locked first, so a confirm racing the sync attaches to the athlete's log instead of creating a second one.
+   - **suggest** (0.45 ≤ score < 0.75): imported standalone, with the candidate recorded in `suggested_plan_day_id` / `suggested_workout_log_id` / `suggested_link_confidence` for the timeline to offer as a one-tap link.
+   - **none**: imported standalone, exactly as before.
+
+   Standalone rows are batch-inserted via `storage.workouts.createWorkoutLogs()` (`onConflictDoNothing` on the per-user Strava unique index, so a concurrent sync shows up as `skipped` rather than as a duplicate). The thresholds are the one constant `DEFAULT_MATCH_THRESHOLDS`.
 8. The `lastSyncedAt` cursor is updated: to *now* after a complete sync, or — when the page cap was hit — to the newest fetched activity's `start_date`, so the next sync resumes exactly where this one stopped and nothing is ever silently skipped
 
-The response includes counts of imported, skipped, and total activities, plus `hasMore` (true when a capped sync left older activities to fetch — the client hints to run Sync again).
+The response reports `imported` (activities now on the timeline, wherever they landed) broken down into `enriched` (attached to workouts the athlete had logged), `completedPlanDays`, `suggested` and `standalone`, plus `skipped` (already imported, or claimed by a concurrent sync), `total`, and `hasMore` (true when a capped sync left older activities to fetch — the client hints to run Sync again).
+
+**Manual override.** The athlete's judgement outranks the matcher. `POST /api/v1/workouts/:id/device-link` merges a standalone Strava import into a plan day or a workout they logged themselves (`device_link_source = 'manual'`, which the sync never revisits), and `DELETE /api/v1/workouts/:id/device-link` unlinks losslessly: an enriched manual log gets exactly the filled columns set back to NULL, a plan-day log the sync created is deleted and the day's status re-derived, and either way the activity comes back as its own row (`server/services/deviceActivityLink.ts`). The timeline keys its Strava badge and device stats off `stravaActivityId` rather than `source`, so an enriched manual log shows them too. Garmin still uses the older bulk-insert path; the matcher is provider-agnostic, so wiring it is a normaliser plus the same reconciler call.
 
 ### Disconnect Flow
 

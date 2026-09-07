@@ -1,4 +1,4 @@
-﻿import type { PlanDaySkipReason, WorkoutStatus } from "../enums";
+﻿import type { DeviceLinkSource, PlanDaySkipReason, WorkoutStatus } from "../enums";
 import { customExercises, exerciseLoadTags, exerciseSets, workoutLogs, workoutStructureBlocks } from "../tables";
 import { createInsertSchema, z } from "../zod";
 import type { CoachNoteInputs } from "./plans";
@@ -48,6 +48,14 @@ export const insertWorkoutLogSchema = createInsertSchema(workoutLogs)
     addedSetCount: true,
     removedSetCount: true,
     compliancePct: true,
+    // Device-link columns are written only by the Strava sync and the link
+    // routes; a client must not be able to forge a link or a suggestion.
+    deviceLinkSource: true,
+    deviceLinkConfidence: true,
+    deviceActivity: true,
+    suggestedPlanDayId: true,
+    suggestedWorkoutLogId: true,
+    suggestedLinkConfidence: true,
   })
   .extend({
     date: workoutDateNotFuture,
@@ -101,6 +109,21 @@ export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
 export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
+
+/**
+ * The device-link columns the client can never set (omitted from the insert
+ * and update schemas above). The Strava sync and the link/unlink routes write
+ * them through this type, so a link stays something only the server creates.
+ */
+export type WorkoutLogDeviceLinkColumns = Pick<
+  WorkoutLog,
+  | "deviceLinkSource"
+  | "deviceLinkConfidence"
+  | "deviceActivity"
+  | "suggestedPlanDayId"
+  | "suggestedWorkoutLogId"
+  | "suggestedLinkConfidence"
+>;
 export type WorkoutStructureBlock = typeof workoutStructureBlocks.$inferSelect;
 export type ExerciseLoadTag = typeof exerciseLoadTags.$inferSelect;
 
@@ -153,6 +176,20 @@ export type TimelineEntry = {
   planName?: string | null;
   planId?: string | null;
   source?: "manual" | "strava" | "garmin";
+  /**
+   * The Strava activity on this logged entry, when any. Set on a standalone
+   * Strava import AND on a manual log that a Strava recording enriched, so the
+   * card keys its Strava badge and device stats off this rather than `source`.
+   */
+  stravaActivityId?: string | null;
+  deviceLinkSource?: DeviceLinkSource | null;
+  /** The provider's own activity name ("Morning Run"), from the link snapshot. */
+  deviceActivityName?: string | null;
+  // On a standalone device import: the plausible match the sync did not act on,
+  // for the timeline to offer as a one-tap link.
+  suggestedPlanDayId?: string | null;
+  suggestedWorkoutLogId?: string | null;
+  suggestedLinkConfidence?: number | null;
   aiSource?: "rag" | "legacy" | "review" | "load_governor" | null;
   aiRationale?: string | null;
   aiNoteUpdatedAt?: string | Date | null;
