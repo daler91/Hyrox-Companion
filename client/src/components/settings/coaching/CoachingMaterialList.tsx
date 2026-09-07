@@ -43,11 +43,12 @@ export function CoachingMaterialList({
                 className="flex items-center justify-between p-3 rounded-lg border bg-card"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{material.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {material.type === "principles" ? "Principles" : "Document"} &middot; {Math.round(material.content.length / 1000)}k chars
+                      {material.type === "principles" ? "Principles" : "Document"} &middot;{" "}
+                      {Math.round(material.content.length / 1000)}k chars
                     </p>
                   </div>
                 </div>
@@ -73,17 +74,18 @@ export function CoachingMaterialList({
         </TooltipProvider>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No coaching materials added yet. Add training principles or upload reference documents to help the AI coach make better decisions.
+          No coaching materials added yet. Add training principles or upload reference documents to
+          help the AI coach make better decisions.
         </p>
       )}
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={openPrinciplesDialog}>
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
           Add Principles
         </Button>
         <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-          <Upload className="h-4 w-4 mr-1" />
+          <Upload className="h-4 w-4 mr-1" aria-hidden="true" />
           Upload Document
         </Button>
         <input
@@ -99,7 +101,9 @@ export function CoachingMaterialList({
 
       <ConfirmDialog
         open={pendingDeleteId !== null}
-        onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
         title="Delete coaching material?"
         description={`"${pendingMaterial?.title ?? ""}" will be permanently removed. The AI coach will no longer reference it.`}
         confirmText="Delete"

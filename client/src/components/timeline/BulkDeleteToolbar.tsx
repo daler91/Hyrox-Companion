@@ -44,7 +44,7 @@ export function BulkDeleteToolbar({
           disabled={isPending || visibleCount === 0 || selectedCount === visibleCount}
           data-testid="button-bulk-select-all"
         >
-          <ListChecks className="mr-2 h-4 w-4" />
+          <ListChecks className="mr-2 h-4 w-4" aria-hidden="true" />
           Select all
         </Button>
         <Button
@@ -56,7 +56,7 @@ export function BulkDeleteToolbar({
           disabled={isPending || selectedCount === 0}
           data-testid="button-bulk-clear"
         >
-          <X className="mr-2 h-4 w-4" />
+          <X className="mr-2 h-4 w-4" aria-hidden="true" />
           Clear
         </Button>
         <Button
@@ -72,7 +72,7 @@ export function BulkDeleteToolbar({
           {isPending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
-            <Trash2 className="mr-2 h-4 w-4" />
+            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
           {isPending ? "Deleting…" : "Delete selected"}
         </Button>
