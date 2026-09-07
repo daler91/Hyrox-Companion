@@ -147,3 +147,24 @@ export class AppError extends Error {
     this.name = "AppError";
   }
 }
+
+/**
+ * Whether an error that reached the global handler is worth a Sentry event.
+ *
+ * The handler used to capture every error unconditionally, so each zod
+ * rejection (400), unauthenticated request (401), stale-id lookup (404) and
+ * idempotency conflict (409) became an event. Those are the API correctly
+ * refusing a request — ordinary client behaviour, not a fault — and at volume
+ * they bury the 500s that are worth paging on and burn the quota that would
+ * have carried them.
+ *
+ * 429 is the one 4xx kept: a single rate-limited request is noise, but a
+ * sustained stream of them is a runaway client or an attack, and it is not
+ * visible anywhere else.
+ *
+ * This decides reporting only. Every status is still logged and still returned
+ * to the caller unchanged.
+ */
+export function shouldReportToSentry(status: number): boolean {
+  return status >= 500 || status === 429;
+}

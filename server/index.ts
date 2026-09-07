@@ -19,7 +19,7 @@ import { configureObservability, registerProcessErrorHandlers } from "./bootstra
 import { startCron, stopCron } from "./cron";
 import { pool } from "./db";
 import { env } from "./env";
-import { AppError } from "./errors";
+import { AppError, shouldReportToSentry } from "./errors";
 import { isImageParsePath } from "./imageParsePaths";
 import { logger } from "./logger";
 import { getVectorSchemaStatus, runStartupMaintenance } from "./maintenance";
@@ -406,14 +406,15 @@ try {
     // which gives the user no hint about the per-route limit (100kb default,
     // 2mb for coaching materials). Rewrite to something actionable.
     if (status === 413) {
-      Sentry.captureException(err);
       return res.status(413).json({
         error: "Request body too large for this endpoint — try a smaller payload or split the upload.",
         code: "PAYLOAD_TOO_LARGE",
       });
     }
 
-    Sentry.captureException(err);
+    // Only server faults and sustained rate-limiting are Sentry-worthy; see
+    // shouldReportToSentry. Everything is still logged and still returned.
+    if (shouldReportToSentry(status)) Sentry.captureException(err);
     res.status(status).json({ error: message, code, ...(status < 500 && details ? { details } : {}) });
   });
 
