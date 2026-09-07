@@ -25,6 +25,11 @@ export interface TimelineWorkoutCardProps {
   readonly isBulkSelected?: boolean;
   readonly canBulkSelect?: boolean;
   readonly onBulkSelectToggle?: (entry: TimelineEntry) => void;
+  /**
+   * Every entry on this card's date, so a Strava import can name the planned
+   * session or logged workout it might belong to and offer to link to it.
+   */
+  readonly dayEntries?: readonly TimelineEntry[];
 }
 
 export interface WorkoutStravaStatsProps {

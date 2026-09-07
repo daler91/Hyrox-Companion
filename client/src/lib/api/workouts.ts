@@ -125,6 +125,10 @@ export const workouts = {
   unlinkDeviceActivity: (id: string) =>
     typedRequest<{ log: WorkoutLog | null; standalone: WorkoutLog }>("DELETE", `/api/v1/workouts/${id}/device-link`),
 
+  // "Not this one": drop the match the sync suggested for a standalone import.
+  dismissDeviceLinkSuggestion: (id: string) =>
+    typedRequest<WorkoutLog>("DELETE", `/api/v1/workouts/${id}/device-link/suggestion`),
+
   // Connect a logged workout to a specific plan day, or clear the link
   // (planDayId === null). The server derives planId from the day and handles
   // plan-day completion + adherence side effects.

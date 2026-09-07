@@ -3,7 +3,11 @@ import type { Request, Response, Router } from "express";
 import { z } from "zod";
 
 import { rateLimiter, validateBody } from "../../routeUtils";
-import { linkStandaloneDeviceLog, unlinkDeviceActivity } from "../../services/deviceActivityLink";
+import {
+  dismissDeviceLinkSuggestion,
+  linkStandaloneDeviceLog,
+  unlinkDeviceActivity,
+} from "../../services/deviceActivityLink";
 import { storage } from "../../storage";
 import { getUserId } from "../../types";
 import { protectedDelete, protectedPost } from "../_helpers/protectedRouteBuilder";
@@ -30,6 +34,9 @@ export const linkDeviceActivitySchema = z
  *                                            into a plan day or a manual log
  *  DELETE /api/v1/workouts/:id/device-link   take the Strava activity off log
  *                                            :id and give it its own row again
+ *  DELETE /api/v1/workouts/:id/device-link/suggestion
+ *                                            "not this one": drop the match the
+ *                                            sync suggested for standalone import :id
  *
  * Both return the row the athlete will look at next: the merged log, or the
  * activity's new standalone row (plus what remains of the unlinked log).
@@ -66,6 +73,19 @@ export function registerWorkoutDeviceLinkRoutes(router: Router): void {
         distanceUnit: (user?.distanceUnit || "km") as DistanceUnit,
       });
       res.json(result);
+    },
+  );
+
+  protectedDelete(
+    router,
+    "/api/v1/workouts/:id/device-link/suggestion",
+    { limiter: rateLimiter("workout", 40) },
+    async (req: Request<{ id: string }>, res: Response) => {
+      const log = await dismissDeviceLinkSuggestion({
+        userId: getUserId(req),
+        logId: req.params.id,
+      });
+      res.json(log);
     },
   );
 }

@@ -190,6 +190,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
             <TimelineWorkoutCard
               key={entry.id}
               entry={entry}
+              dayEntries={entries}
               onMarkComplete={onMarkComplete}
               onClick={onClick}
               onCombineSelect={onCombineSelect}

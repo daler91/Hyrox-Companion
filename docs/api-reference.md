@@ -407,6 +407,15 @@ Take the linked Strava activity off workout log `:id` and give it back its own r
 - **Response:** `{ log: WorkoutLog | null, standalone: WorkoutLog }` — `log` is `null` when the row only existed because of the link
 - **Errors:** `404` (workout not found), `409` (no linked activity to remove)
 
+### DELETE /api/v1/workouts/:id/device-link/suggestion
+
+"Not this one": drop the plan day or workout the sync suggested for standalone Strava import `:id`. The import itself is untouched; the suggestion columns go back to NULL so the timeline stops offering it, and a re-sync cannot revive it because the activity is already imported.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 40/min
+- **Response:** the updated `WorkoutLog`
+- **Errors:** `404` (workout not found)
+
 ### PATCH /api/v1/workouts/:id/structure-blocks/:blockId/score
 
 Set or clear the score on a single structure block of a workout log.

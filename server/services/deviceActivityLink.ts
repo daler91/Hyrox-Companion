@@ -400,3 +400,22 @@ export async function unlinkDeviceActivity(input: {
     return { log: remaining ?? null, standalone };
   });
 }
+
+/**
+ * The athlete says the suggested match is wrong ("Not this one"). Clears the
+ * suggestion so the timeline stops offering it; the standalone import itself
+ * is untouched, and the row keeps its activity so a re-sync cannot revive
+ * the suggestion. Idempotent; 404 when the row is not the athlete's.
+ */
+export async function dismissDeviceLinkSuggestion(input: {
+  userId: string;
+  logId: string;
+}): Promise<WorkoutLog> {
+  const [updated] = await db
+    .update(workoutLogs)
+    .set(CLEARED_SUGGESTION)
+    .where(and(eq(workoutLogs.id, input.logId), eq(workoutLogs.userId, input.userId)))
+    .returning();
+  if (!updated) throw new AppError(ErrorCode.NOT_FOUND, "Workout not found", 404);
+  return updated;
+}

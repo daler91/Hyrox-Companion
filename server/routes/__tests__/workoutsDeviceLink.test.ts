@@ -25,6 +25,7 @@ vi.mock("../../storage", async () =>
 vi.mock("../../services/deviceActivityLink", () => ({
   linkStandaloneDeviceLog: vi.fn(),
   unlinkDeviceActivity: vi.fn(),
+  dismissDeviceLinkSuggestion: vi.fn(),
 }));
 
 /**
@@ -184,6 +185,35 @@ describe("Workout device-link routes", () => {
       const res = await request(app).delete("/api/v1/workouts/log-3/device-link");
 
       expect(res.status).toBe(409);
+    });
+  });
+
+  describe("DELETE /api/v1/workouts/:id/device-link/suggestion", () => {
+    it("drops the suggested match for the authenticated athlete", async () => {
+      const { dismissDeviceLinkSuggestion } = await import("../../services/deviceActivityLink");
+      vi.mocked(dismissDeviceLinkSuggestion).mockResolvedValue(
+        makeWorkoutLog({ id: "import-1", suggestedPlanDayId: null }),
+      );
+
+      const res = await request(app).delete("/api/v1/workouts/import-1/device-link/suggestion");
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ id: "import-1", suggestedPlanDayId: null });
+      expect(dismissDeviceLinkSuggestion).toHaveBeenCalledWith({
+        userId: "test_user_id",
+        logId: "import-1",
+      });
+    });
+
+    it("404s when the import is not the athlete's", async () => {
+      const { dismissDeviceLinkSuggestion } = await import("../../services/deviceActivityLink");
+      vi.mocked(dismissDeviceLinkSuggestion).mockRejectedValue(
+        new AppError(ErrorCode.NOT_FOUND, "Workout not found", 404),
+      );
+
+      const res = await request(app).delete("/api/v1/workouts/nope/device-link/suggestion");
+
+      expect(res.status).toBe(404);
     });
   });
 });

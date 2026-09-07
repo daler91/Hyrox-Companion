@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
-import { StravaIcon } from "@/components/icons/StravaIcon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,6 +41,7 @@ import { isPendingTimelineEntry } from "@/lib/pendingWorkouts";
 import { cn } from "@/lib/utils";
 
 import { CoachNote } from "./CoachNote";
+import { DeviceLinkSuggestion, StravaLinkBadge } from "./DeviceLinkControls";
 import { ExerciseChips } from "./ExerciseChips";
 import { FuellingTargetChip } from "./FuellingTargetChip";
 import { MafCeilingChip } from "./MafCeilingChip";
@@ -67,6 +67,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
   isBulkSelected,
   canBulkSelect,
   onBulkSelectToggle,
+  dayEntries,
 }: Readonly<TimelineWorkoutCardProps>) {
   const { distanceUnit, weightLabel, showAdherenceInsights } = useUnitPreferences();
   const [movePickerOpen, setMovePickerOpen] = useState(false);
@@ -215,6 +216,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               canMove={Boolean(canMove)}
               adherenceBadge={adherenceBadge}
               isPending={isPending}
+              dayEntries={dayEntries}
             />
             <TimelineCardWorkoutBody
               entry={entry}
@@ -222,6 +224,7 @@ const TimelineWorkoutCard = React.memo(function TimelineWorkoutCard({
               personalRecords={personalRecords}
               weightLabel={weightLabel}
               distanceUnit={distanceUnit}
+              dayEntries={dayEntries}
             />
           </div>
         </div>
@@ -532,6 +535,7 @@ interface TimelineCardHeaderProps {
   readonly canMove: boolean;
   readonly adherenceBadge: ReturnType<typeof getAdherenceBadge>;
   readonly isPending?: boolean;
+  readonly dayEntries?: TimelineWorkoutCardProps["dayEntries"];
 }
 
 function TimelineCardHeader({
@@ -539,6 +543,7 @@ function TimelineCardHeader({
   canMove,
   adherenceBadge,
   isPending,
+  dayEntries,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
     <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
@@ -557,16 +562,10 @@ function TimelineCardHeader({
           the card root (W9). A second copy here produced a duplicate DOM node
           and a duplicate data-testid="badge-ai-coach-${id}". */}
       {/* Standalone imports and manual logs a recording enriched both carry
-          the activity id, so the badge keys off that rather than `source`. */}
+          the activity id, so the badge keys off that rather than `source`.
+          Linked entries and imports with a same-day match get a menu. */}
       {(entry.source === "strava" || Boolean(entry.stravaActivityId)) && (
-        <Badge
-          className="bg-[#FC4C02]/10 text-[#FC4C02]"
-          title={entry.deviceActivityName ?? undefined}
-          data-testid={`badge-strava-${entry.id}`}
-        >
-          <StravaIcon className="h-3 w-3 mr-1" aria-hidden="true" />
-          Strava
-        </Badge>
+        <StravaLinkBadge entry={entry} dayEntries={dayEntries} />
       )}
       {entry.planName && (
         <Badge
@@ -617,6 +616,7 @@ interface TimelineCardWorkoutBodyProps {
   readonly personalRecords: TimelineWorkoutCardProps["personalRecords"];
   readonly weightLabel: string;
   readonly distanceUnit: DistanceUnit;
+  readonly dayEntries?: TimelineWorkoutCardProps["dayEntries"];
 }
 
 function TimelineCardWorkoutBody({
@@ -625,6 +625,7 @@ function TimelineCardWorkoutBody({
   personalRecords,
   weightLabel,
   distanceUnit,
+  dayEntries,
 }: Readonly<TimelineCardWorkoutBodyProps>) {
   const metricsText = getWorkoutMetricsText(entry);
   const hasExerciseSets = Boolean(entry.exerciseSets?.length);
@@ -653,6 +654,7 @@ function TimelineCardWorkoutBody({
           ceiling, and the session actually containing running work. */}
       {isPlannedTimelineEntry(entry) && <MafCeilingChip entry={entry} />}
       <WorkoutStravaStats entry={entry} distanceUnit={distanceUnit} />
+      <DeviceLinkSuggestion entry={entry} dayEntries={dayEntries} />
       {entry.aiRationale && (
         <CoachNote
           entryId={entry.id}
