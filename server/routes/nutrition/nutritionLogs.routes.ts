@@ -33,14 +33,23 @@ export function registerNutritionLogRoutes(router: Router): void {
     async (req: Request, res: Response) => {
       const userId = getUserId(req);
       const body = req.body as CreateFoodLogInput;
-      const food = await storage.nutrition.getVisibleFoodById(userId, body.foodId);
+      // ⚡ Bolt Optimization: the food lookup and the timezone lookup read
+      // unrelated tables (foods vs. users) and neither depends on the
+      // other's result, but were previously awaited sequentially on every
+      // "log a food" request -- one of the most frequent writes in the app.
+      // Running them concurrently halves this route's DB round-trip latency
+      // on the common (food found) path.
+      const [food, timezone] = await Promise.all([
+        storage.nutrition.getVisibleFoodById(userId, body.foodId),
+        getUserTimezone(userId),
+      ]);
       if (!food) {
         sendNotFound(res, FOOD_NOT_FOUND);
         return;
       }
 
       const loggedAt = new Date(body.loggedAt);
-      const logDate = getLocalDateStr(loggedAt, await getUserTimezone(userId));
+      const logDate = getLocalDateStr(loggedAt, timezone);
       const entry = await storage.nutrition.createLogEntry(userId, {
         foodId: body.foodId,
         quantityG: body.quantityG,
@@ -133,14 +142,21 @@ export function registerNutritionLogRoutes(router: Router): void {
       const body = req.body as CreateFoodLogBatchInput;
       // Every food must be visible to the user (no cross-user / unknown foods).
       const ids = body.items.map((i) => i.foodId);
-      const visible = await storage.nutrition.getVisibleFoodsByIds(userId, ids);
+      // ⚡ Bolt Optimization: same independent-reads shape as the single-log
+      // route above -- the visibility check and the timezone lookup touch
+      // different tables with no data dependency between them, so run them
+      // concurrently instead of paying two sequential round trips.
+      const [visible, timezone] = await Promise.all([
+        storage.nutrition.getVisibleFoodsByIds(userId, ids),
+        getUserTimezone(userId),
+      ]);
       if (ids.some((id) => !visible.has(id))) {
         sendNotFound(res, FOOD_NOT_FOUND);
         return;
       }
 
       const loggedAt = new Date(body.loggedAt);
-      const logDate = getLocalDateStr(loggedAt, await getUserTimezone(userId));
+      const logDate = getLocalDateStr(loggedAt, timezone);
       const created = await storage.nutrition.createLogEntriesBatch(userId, {
         entryMethod: body.entryMethod,
         rawInput: body.rawInput ?? null,
