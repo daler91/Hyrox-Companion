@@ -128,3 +128,48 @@ export function createStreamingOutputValidator(): (chunk: string) => void {
     tail = window.slice(-(LONGEST_PATTERN_LENGTH - 1));
   };
 }
+
+/**
+ * Strip control characters from a value on its way into a log line.
+ *
+ * Anything derived from model output is attacker-influenceable — the parsers
+ * echo whatever the athlete typed — and a newline inside a logged string forges
+ * a second log record. `server/gemini/exerciseParser/validation.ts` established
+ * this boundary; it lives here so the other sites that log model output share
+ * one implementation rather than each remembering.
+ *
+ * This is the log-injection boundary, the third in this file alongside
+ * `sanitizeHtml` (XSS) and `sanitizeUserInput` (prompt injection).
+ */
+export function sanitizeForLog(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f]/g, " ");
+}
+
+/** One zod issue, structurally — avoids importing zod into this module. */
+interface LoggableZodIssue {
+  readonly path: readonly PropertyKey[];
+  readonly message: string;
+}
+
+/**
+ * Reduce zod issues to a single sanitized `path:message | path:message` line.
+ *
+ * The issue objects themselves do not echo the offending input — checked
+ * against zod 4: `code`, `expected`, `values` (the ALLOWED set) and `message`
+ * describe the constraint, not the value. What they do carry is `path`, and a
+ * path element is an object key straight from the parsed payload, so a model
+ * that emits `{"a\nFORGED": 1}` puts a newline into the log line. Hence the
+ * sanitize, and hence formatting here rather than logging `error.issues` raw.
+ *
+ * Capped at four issues: a badly-shaped row produces one per field, and the
+ * first few are enough to tell which schema it failed.
+ */
+export function formatZodIssues(issues: readonly LoggableZodIssue[]): string {
+  return sanitizeForLog(
+    issues
+      .slice(0, 4)
+      .map((issue) => `${issue.path.map(String).join(".") || "<root>"}:${issue.message}`)
+      .join(" | "),
+  );
+}

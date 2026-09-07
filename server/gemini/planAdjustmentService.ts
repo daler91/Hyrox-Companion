@@ -10,7 +10,7 @@ import { z } from "zod";
 import { generateJsonText } from "../ai/providers";
 import { logger } from "../logger";
 import { PLAN_ADJUSTMENT_PROMPT } from "../prompts";
-import { sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
+import { formatZodIssues, sanitizeUserInput, validateAiOutput } from "../utils/sanitize";
 import { buildPromptDataSections, type UpcomingWorkout } from "./suggestionService";
 import type { TrainingContext } from "./types";
 
@@ -144,11 +144,15 @@ export function parseAndValidatePlanAdjustment(text: string): PlanAdjustmentLlmO
     if (result.success) {
       changes.push(normalizeChangeText(result.data));
     } else {
-      // zod issue paths/messages on the AI output schema only; the change
-      // payload itself is deliberately NOT logged.
+      // The change payload itself is deliberately NOT logged. The issues are,
+      // and the rationale here used to be that paths and messages are safe.
+      // Messages are (zod 4 describes the constraint, never the value), but a
+      // path element is an object key straight from the model's JSON, so
+      // `{"a\nFORGED": 1}` would put a newline into this line — hence
+      // formatZodIssues, which flattens and strips control characters.
       // bearer:disable javascript_lang_logger_leak
       logger.warn(
-        { issues: result.error.issues },
+        { issues: formatZodIssues(result.error.issues) },
         "[gemini] Dropping invalid plan-adjustment change:",
       );
     }
