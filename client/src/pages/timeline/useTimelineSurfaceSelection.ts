@@ -83,8 +83,22 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
     if (sheetEverOpenedRef.current && openWorkoutId !== null) setOpenWorkoutId(null);
   }, [openSheetEntryId, openWorkoutId, setOpenWorkoutId]);
 
+  // URL → surface. The effect above writes the URL a render AFTER the sheet
+  // state changes, so on the render where the page closes a sheet (or switches
+  // to another one) the param still names the old surface. Reading it back
+  // here would resurrect that sheet with the entry the page just dropped —
+  // after "Reopen workout" the entry's log no longer exists, so every edit in
+  // the revived sheet 404s. So this effect acts only when the param itself
+  // changed (deep link, browser back/forward), or when a param it could not
+  // satisfy yet (deep link before the timeline loaded) becomes satisfiable.
+  const handledWorkoutIdRef = useRef<string | null | undefined>(undefined);
+  const unresolvedWorkoutIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    const urlChanged = handledWorkoutIdRef.current !== openWorkoutId;
+    handledWorkoutIdRef.current = openWorkoutId;
     if (!openWorkoutId) {
+      unresolvedWorkoutIdRef.current = null;
       if (globalThis.window !== undefined) {
         const liveWorkoutId = new URLSearchParams(globalThis.window.location.search).get("workout");
         if (liveWorkoutId !== null) return;
@@ -93,9 +107,19 @@ export function useTimelineSurfaceSelection(timelineData: TimelineEntry[]) {
       if (openSheetEntryId !== null) closeAllSurfaces();
       return;
     }
-    if (openSheetEntryId === openWorkoutId) return;
+    if (openSheetEntryId === openWorkoutId) {
+      unresolvedWorkoutIdRef.current = null;
+      return;
+    }
+    // The sheet state moved away from the URL; the effect above reconciles
+    // the URL, not this one.
+    if (!urlChanged && unresolvedWorkoutIdRef.current !== openWorkoutId) return;
     const target = timelineData.find((e) => surfaceId(e) === openWorkoutId || entryId(e) === openWorkoutId);
-    if (!target) return;
+    if (!target) {
+      unresolvedWorkoutIdRef.current = openWorkoutId;
+      return;
+    }
+    unresolvedWorkoutIdRef.current = null;
     if (openSheetEntry && surfaceId(openSheetEntry) === surfaceId(target)) return;
     openSurface(target);
   }, [openWorkoutId, openSheetEntry, openSheetEntryId, timelineData, openSurface, closeAllSurfaces]);

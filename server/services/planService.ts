@@ -1,5 +1,6 @@
 import type { InsertPlanDay, PlanDaySkipReason, TrainingPlanWithDays, UpdatePlanDay } from "@shared/schema";
 import { exerciseSets, planDays, trainingPlans, workoutLogs } from "@shared/schema";
+import type { DistanceUnit } from "@shared/unitConversion";
 import { parse } from "csv-parse/sync";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ import { logger } from "../logger";
 import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
+import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
 
 // Shared with workoutService: moving a plan day or logged workout changes
 // the shape of the athlete's upcoming schedule, so re-run the auto-coach
@@ -333,10 +335,18 @@ async function foldLinkedLogsBackOntoPlanDay(
       // sets got wiped when they toggled status back to planned, which
       // made re-completing restart from the coach's original prescription
       // instead of their edits.
+      // A device recording on the log is a measurement the athlete did not
+      // type and cannot re-create, so it is not deleted with the log below:
+      // it gets its own row back (exactly what "Unlink Strava activity"
+      // does), and the "Strava: <name>" line the sync wrote into the notes
+      // goes with it — the day is no longer the recording.
+      const releasesRecording = Boolean(existingLog.stravaActivityId);
       carried.focus = existingLog.focus;
       carried.mainWorkout = existingLog.mainWorkout;
       carried.accessory = existingLog.accessory;
-      carried.notes = existingLog.notes;
+      carried.notes = releasesRecording
+        ? stripStravaActivityLabel(existingLog.notes, existingLog)
+        : existingLog.notes;
 
       // Snapshot the logged sets, then replace the plan day's prescribed
       // sets with them. We re-map the rows from workoutLogId-owned to
@@ -373,6 +383,14 @@ async function foldLinkedLogsBackOntoPlanDay(
       // exercise_sets cascade, but they are already on the day above.
       await tx.delete(workoutLogs).where(eq(workoutLogs.id, existingLog.id));
 
+      // After the delete: the recording's row can only exist once no other
+      // row of the athlete's carries the same activity id. The released row
+      // keeps that id, so the next sync neither re-imports the activity nor
+      // re-completes the day the athlete just reopened.
+      if (releasesRecording) {
+        await releaseStravaActivityInTx(tx, existingLog, userId, await userDistanceUnit(userId));
+      }
+
       // Any other log that pointed at this day keeps all of its data and
       // simply stops being plan-linked, surfacing as a standalone timeline
       // entry. Unlinking rather than deleting is what makes "Reopen
@@ -392,6 +410,11 @@ async function foldLinkedLogsBackOntoPlanDay(
       }
     }
   return carried;
+}
+
+async function userDistanceUnit(userId: string): Promise<DistanceUnit> {
+  const user = await storage.users.getUser(userId);
+  return (user?.distanceUnit || "km") as DistanceUnit;
 }
 
 export async function updatePlanDayStatus(

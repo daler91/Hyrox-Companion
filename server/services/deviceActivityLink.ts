@@ -110,6 +110,26 @@ function joinNotes(...parts: Array<string | null | undefined>): string | null {
   return kept.length > 0 ? kept.join("\n") : null;
 }
 
+/** The line a plan-day log created from a recording carries in its notes. */
+export function stravaActivityLabel(raw: Pick<StravaActivitySummary, "name">): string | null {
+  const name = raw.name?.trim();
+  return name ? `Strava: ${name}` : null;
+}
+
+/**
+ * Notes without the activity label, for a log whose recording is being
+ * released: the label says "this session is the recording", which stops
+ * being true the moment the recording gets its own row again. Only the
+ * exact label line goes; anything the athlete typed stays.
+ */
+export function stripStravaActivityLabel(notes: string | null, log: WorkoutLog): string | null {
+  const raw = log.deviceActivity?.raw;
+  const label = raw ? stravaActivityLabel(raw) : null;
+  if (!notes || !label) return notes;
+  const kept = notes.split("\n").filter((line) => line.trim() !== label);
+  return kept.length > 0 ? kept.join("\n") : null;
+}
+
 const CLEARED_SUGGESTION = {
   suggestedPlanDayId: null,
   suggestedWorkoutLogId: null,
@@ -194,7 +214,7 @@ export async function createLogFromPlanDayWithStravaInTx(
   input: CreateFromPlanDayInput,
 ): Promise<WorkoutLog> {
   const { planDay, raw, metrics } = input;
-  const activityLabel = raw.name?.trim() ? `Strava: ${raw.name.trim()}` : null;
+  const activityLabel = stravaActivityLabel(raw);
   return await createWorkoutInTx(
     tx,
     {
@@ -362,14 +382,6 @@ export async function unlinkDeviceActivity(input: {
       );
     }
     const snapshot = log.deviceActivity;
-    const raw = snapshot?.raw ?? legacyRawFromLog(log);
-
-    const standaloneRow = mapStravaActivityToWorkout(raw, userId, distanceUnit);
-    // The list row never carries calories; the linked row does if the link
-    // fetched them. Carry them across so the split loses nothing.
-    if (standaloneRow.calories == null && snapshot?.filledColumns.includes("calories")) {
-      standaloneRow.calories = log.calories;
-    }
 
     let remaining: WorkoutLog | null;
     if (log.source === "strava" && log.planDayId) {
@@ -392,13 +404,45 @@ export async function unlinkDeviceActivity(input: {
         .returning();
     }
 
-    const [standalone] = await tx
-      .insert(workoutLogs)
-      .values({ ...standaloneRow, deviceActivity: stravaSnapshot(raw, []) })
-      .returning();
+    const standalone = await releaseStravaActivityInTx(tx, log, userId, distanceUnit);
 
     return { log: remaining ?? null, standalone };
   });
+}
+
+/**
+ * Re-materialise a linked recording as the standalone device log the sync
+ * would have produced had it never matched. The caller must already have
+ * taken the activity off (or deleted) the linked row: the partial unique
+ * index on (user_id, strava_activity_id) refuses a second row otherwise.
+ *
+ * Shared by unlink and by "Reopen workout" (planService), which folds a
+ * completed day's log back onto the day and deletes the log — the recording
+ * is a measurement the athlete cannot type back in, so it survives the
+ * reopen as its own row, and because that row keeps the activity id the next
+ * sync neither re-imports it nor re-completes the day just reopened.
+ */
+export async function releaseStravaActivityInTx(
+  tx: WorkoutTx,
+  log: WorkoutLog,
+  userId: string,
+  distanceUnit: DistanceUnit,
+): Promise<WorkoutLog> {
+  const snapshot = log.deviceActivity;
+  const raw = snapshot?.raw ?? legacyRawFromLog(log);
+
+  const standaloneRow = mapStravaActivityToWorkout(raw, userId, distanceUnit);
+  // The list row never carries calories; the linked row does if the link
+  // fetched them. Carry them across so the split loses nothing.
+  if (standaloneRow.calories == null && snapshot?.filledColumns.includes("calories")) {
+    standaloneRow.calories = log.calories;
+  }
+
+  const [standalone] = await tx
+    .insert(workoutLogs)
+    .values({ ...standaloneRow, deviceActivity: stravaSnapshot(raw, []) })
+    .returning();
+  return standalone;
 }
 
 /**
