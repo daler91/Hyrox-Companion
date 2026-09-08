@@ -1,6 +1,6 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { Check, Dumbbell, Gauge, Loader2, MessageSquare, SkipForward } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -53,6 +53,12 @@ type LogSheetProps = LogSheetBaseProps & LogSheetModeProps;
 type PlanDayExerciseState = ReturnType<typeof usePlanDayExercises>;
 type WorkoutWeightUnit = "kg" | "lb";
 type WorkoutDistanceUnit = "km" | "miles";
+
+// Stable empty-array reference so the "no exercise sets" fallback below
+// doesn't allocate a fresh `[]` every render — a fresh literal would defeat
+// the useMemo dependency check on `currentCoachSeedText` just as surely as
+// a fresh object would (same pattern as ReviewSurface.tsx).
+const EMPTY_EXERCISE_SETS: ExerciseSet[] = [];
 
 // Local draft for the completion form (RPE + note). Both are seeded from
 // the entry and reset when the sheet is reused for a different workout.
@@ -471,7 +477,7 @@ function LogSheetFooter({
 
 function getCoachExerciseSets(entry: TimelineEntry, planSets: PlanDayExerciseState) {
   if (entry.planDayId) return planSets.exerciseSets;
-  return entry.exerciseSets ?? [];
+  return entry.exerciseSets ?? EMPTY_EXERCISE_SETS;
 }
 
 function getAskCoachHandler(
@@ -511,6 +517,24 @@ export function LogSheet({
   const completionEntryIdRef = useRef<string | null>(null);
 
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+  const coachExerciseSets = entry ? getCoachExerciseSets(entry, planSets) : EMPTY_EXERCISE_SETS;
+
+  // ⚡ Bolt Performance Optimization: buildWorkoutCoachSeedMessage() copies,
+  // sorts, and groups exerciseSets — the exact same grouping work
+  // ExerciseTable already memoizes one level down via useMemo (the same
+  // issue already fixed in the sibling ReviewSurface.tsx). LogSheet is the
+  // app's primary "Log Workout" sheet: usePlanDayExercises applies debounced
+  // (350ms) optimistic patches on every set-cell edit, and RPE/note edits
+  // are local state here too, so nearly every interaction re-renders this
+  // component — yet the resulting seed text is only ever read if the
+  // athlete opens "Ask coach". Memoizing collapses the regrouping to once
+  // per real data change instead of once per render. Hooks must run
+  // unconditionally, so this reads off `entry` (which can still be null
+  // here) rather than the post-early-return value below.
+  const currentCoachSeedText = useMemo(() => {
+    if (!entry) return "";
+    return buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
+  }, [entry, coachExerciseSets]);
 
   if (!entry) return null;
 
@@ -557,8 +581,6 @@ export function LogSheet({
       isRenamingTitle={isRenamingTitle}
     />
   );
-  const coachExerciseSets = getCoachExerciseSets(entry, planSets);
-  const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
   const handleAskCoach = getAskCoachHandler(onAskCoach, currentCoachSeedText);
 
   return (
