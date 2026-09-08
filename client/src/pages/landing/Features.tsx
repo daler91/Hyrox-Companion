@@ -1,4 +1,19 @@
-import { Activity, Apple, BarChart3, BookOpen, Brain, Calendar, Camera, CheckCircle2, Flame, Mic, RefreshCw, Sparkles, TrendingUp, Wand2 } from "lucide-react";
+import {
+  Activity,
+  Apple,
+  BarChart3,
+  BookOpen,
+  Brain,
+  Calendar,
+  Camera,
+  CheckCircle2,
+  Flame,
+  Mic,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  Wand2,
+} from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { featureFlags } from "@/lib/featureFlags";
@@ -23,7 +38,7 @@ export function SocialProof() {
               key={label}
               className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3.5 py-1.5"
             >
-              <CheckCircle2 className="h-4 w-4 text-success" />
+              <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
               <span className="text-sm font-medium tabular-nums">{label}</span>
             </div>
           ))}
@@ -47,15 +62,17 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <Brain className="h-6 w-6 text-primary" />
+                  <Brain className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-heading font-semibold text-lg mb-2">AI Auto-Coach</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    Log a workout and your AI coach reviews your performance, fatigue signals, and station gaps — then automatically adjusts your upcoming sessions to keep you progressing.
+                    Log a workout and your AI coach reviews your performance, fatigue signals, and
+                    station gaps — then automatically adjusts your upcoming sessions to keep you
+                    progressing.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                     Adapts your plan in real-time
                   </div>
                 </div>
@@ -67,15 +84,17 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <Calendar className="h-6 w-6 text-primary" />
+                  <Calendar className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-heading font-semibold text-lg mb-2">Training Timeline</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    See your whole training journey in one view. Planned, completed, missed, and skipped sessions stay in chronological order — and timeline annotations capture injury, illness, or travel.
+                    See your whole training journey in one view. Planned, completed, missed, and
+                    skipped sessions stay in chronological order — and timeline annotations capture
+                    injury, illness, or travel.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <Calendar className="h-3.5 w-3.5" />
+                    <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
                     Past, present, and future
                   </div>
                 </div>
@@ -87,15 +106,19 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <Mic className="h-6 w-6 text-primary" />
+                  <Mic className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-heading font-semibold text-lg mb-2">Voice &amp; Photo Logging</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">
+                    Voice &amp; Photo Logging
+                  </h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    Log a session by typing, dictating, or snapping a photo of a whiteboard or printed plan. AI structures it into exercises, sets, reps, and loads for you to review.
+                    Log a session by typing, dictating, or snapping a photo of a whiteboard or
+                    printed plan. AI structures it into exercises, sets, reps, and loads for you to
+                    review.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <Camera className="h-3.5 w-3.5" />
+                    <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                     Text, voice, or photo
                   </div>
                 </div>
@@ -107,15 +130,18 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <RefreshCw className="h-6 w-6 text-primary" />
+                  <RefreshCw className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-heading font-semibold text-lg mb-2">Strava &amp; Garmin Sync</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">
+                    Strava &amp; Garmin Sync
+                  </h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    Connect Strava or Garmin Connect and completed activities import automatically. Heart rate, pace, power, and effort data flow straight to your timeline.
+                    Connect Strava or Garmin Connect and completed activities import automatically.
+                    Heart rate, pace, power, and effort data flow straight to your timeline.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <Activity className="h-3.5 w-3.5" />
+                    <Activity className="h-3.5 w-3.5" aria-hidden="true" />
                     Auto-sync your activities
                   </div>
                 </div>
@@ -127,15 +153,16 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <BarChart3 className="h-6 w-6 text-primary" />
+                  <BarChart3 className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-heading font-semibold text-lg mb-2">Analytics &amp; PRs</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    Track completion rates, training streaks, and personal records across every exercise. See your volume, progression, and trends visualized over time.
+                    Track completion rates, training streaks, and personal records across every
+                    exercise. See your volume, progression, and trends visualized over time.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <TrendingUp className="h-3.5 w-3.5" />
+                    <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
                     Data-driven improvement
                   </div>
                 </div>
@@ -147,15 +174,16 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <Wand2 className="h-6 w-6 text-primary" />
+                  <Wand2 className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-heading font-semibold text-lg mb-2">AI Plan Builder</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    Generate a personalized plan from your goal and schedule, import a CSV, or start from a built-in 8-week template. Your timeline is ready in minutes.
+                    Generate a personalized plan from your goal and schedule, import a CSV, or start
+                    from a built-in 8-week template. Your timeline is ready in minutes.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                     Generate, import, or template
                   </div>
                 </div>
@@ -168,15 +196,19 @@ export function Features() {
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                    <Apple className="h-6 w-6 text-primary" />
+                    <Apple className="h-6 w-6 text-primary" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="font-heading font-semibold text-lg mb-2">Nutrition &amp; Fuelling</h3>
+                    <h3 className="font-heading font-semibold text-lg mb-2">
+                      Nutrition &amp; Fuelling
+                    </h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">
-                      Log meals by describing them, snapping a photo, or scanning a barcode — AI breaks down calories and macros. Set training-aware targets that scale your carbs to each day&apos;s load.
+                      Log meals by describing them, snapping a photo, or scanning a barcode — AI
+                      breaks down calories and macros. Set training-aware targets that scale your
+                      carbs to each day&apos;s load.
                     </p>
                     <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                      <Flame className="h-3.5 w-3.5" />
+                      <Flame className="h-3.5 w-3.5" aria-hidden="true" />
                       AI macro tracking
                     </div>
                   </div>
@@ -189,15 +221,18 @@ export function Features() {
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-accent/15 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/25 transition-colors">
-                  <BookOpen className="h-6 w-6 text-primary" />
+                  <BookOpen className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-heading font-semibold text-lg mb-2">Your Coaching Playbook</h3>
+                  <h3 className="font-heading font-semibold text-lg mb-2">
+                    Your Coaching Playbook
+                  </h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    Upload your own coaching principles and documents. Your AI coach reads them and grounds its advice in your methodology — not generic templates.
+                    Upload your own coaching principles and documents. Your AI coach reads them and
+                    grounds its advice in your methodology — not generic templates.
                   </p>
                   <div className="mt-3 flex items-center gap-1.5 text-primary text-sm font-medium">
-                    <BookOpen className="h-3.5 w-3.5" />
+                    <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
                     RAG-powered coaching
                   </div>
                 </div>
