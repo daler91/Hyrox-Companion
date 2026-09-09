@@ -25,8 +25,18 @@ import {
   resolveStravaWebhookConfig,
   type StravaWebhookConfig,
 } from "../server/stravaWebhook";
+import { sanitizeForLog } from "../server/utils/sanitize";
 
 const USAGE = "Usage: pnpm strava:webhook <status|register|delete>";
+
+/**
+ * Everything printed here came back in a Strava response body, so each string
+ * crosses the log-injection boundary (server/utils/sanitize.ts) on its way to
+ * the terminal — the same rule the server's own log lines follow.
+ */
+function printable(value: string | number): string {
+  return sanitizeForLog(String(value));
+}
 
 /**
  * `status` and `delete` only need the application credentials; the callback
@@ -60,8 +70,8 @@ async function status(): Promise<number> {
         registrationEnabled: resolved.ok,
         ...(resolved.ok ? {} : { registrationBlockedBy: resolved.reason }),
         subscriptions: subscriptions.map((s) => ({
-          id: s.id,
-          callbackUrl: s.callback_url,
+          id: printable(s.id),
+          callbackUrl: printable(s.callback_url),
           ours: s.callback_url === config.callbackUrl,
         })),
       },
@@ -76,7 +86,19 @@ async function register(): Promise<number> {
   const result = await ensureStravaWebhookSubscription();
   // Operator output: status, subscription id and callback URL only.
   // bearer:disable javascript_lang_logger_leak
-  console.log(JSON.stringify(result, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        ...result,
+        ...("subscriptionId" in result ? { subscriptionId: printable(result.subscriptionId) } : {}),
+        ...("existingCallbackUrl" in result
+          ? { existingCallbackUrl: printable(result.existingCallbackUrl) }
+          : {}),
+      },
+      null,
+      2,
+    ),
+  );
   return result.status === "active" || result.status === "created" ? 0 : 1;
 }
 
@@ -96,7 +118,7 @@ async function remove(): Promise<number> {
     // Operator output: Strava's subscription id and its (public) callback URL.
     // bearer:disable javascript_lang_logger_leak
     console.log(
-      `Deleted Strava webhook subscription ${subscription.id} (${subscription.callback_url}).`,
+      `Deleted Strava webhook subscription ${printable(subscription.id)} (${printable(subscription.callback_url)}).`,
     );
   }
   console.log(
@@ -126,7 +148,7 @@ main().then(
     // StravaWebhookApiError carries operation + status only, never the URL
     // (and so never the client secret in its query string).
     // bearer:disable javascript_lang_logger_leak
-    console.error(err instanceof Error ? err.message : String(err));
+    console.error(sanitizeForLog(err instanceof Error ? err.message : String(err)));
     process.exit(1);
   },
 );

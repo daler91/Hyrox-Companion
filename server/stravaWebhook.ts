@@ -11,6 +11,7 @@ import { enqueueStravaSync, isStravaAutoSyncEnabled } from "./services/stravaSyn
 import { deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
 import { checkSafeOutboundUrl } from "./ssrfGuard";
 import { storage } from "./storage";
+import { sanitizeForLog } from "./utils/sanitize";
 
 // =============================================================================
 // Strava webhook push subscription — the near-real-time half of automatic sync
@@ -338,10 +339,11 @@ export async function ensureStravaWebhookSubscription(
 
     const other = subscriptions[0];
     if (other) {
-      // Only the callback URL (a public address) and Strava's id are logged.
+      // The callback URL is a public address, but it arrives in Strava's
+      // response body, so it crosses the log-injection boundary first.
       // bearer:disable javascript_lang_logger_leak
       log.error(
-        { context: LOG_CTX, subscriptionId: other.id, existingCallbackUrl: other.callback_url },
+        { context: LOG_CTX, existingCallbackUrl: sanitizeForLog(other.callback_url) },
         "Strava webhook subscription belongs to another callback URL — automatic sync falls back to polling until it is removed (pnpm strava:webhook delete)",
       );
       await rememberStravaWebhookState(null);
@@ -358,9 +360,13 @@ export async function ensureStravaWebhookSubscription(
       callbackUrl: config.callbackUrl,
       verifiedAt: Date.now(),
     });
-    // Static message plus Strava's subscription id; no PII or secrets.
+    // Static message plus Strava's subscription id (from its response body,
+    // hence the log-injection boundary); no PII or secrets.
     // bearer:disable javascript_lang_logger_leak
-    log.info({ context: LOG_CTX, subscriptionId }, "Strava webhook subscription created");
+    log.info(
+      { context: LOG_CTX, subscriptionId: sanitizeForLog(String(subscriptionId)) },
+      "Strava webhook subscription created",
+    );
     return { status: "created", subscriptionId };
   } catch (err) {
     // err is a StravaWebhookApiError (operation + status, never the URL).
