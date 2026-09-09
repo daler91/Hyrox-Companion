@@ -19,12 +19,24 @@ export interface StravaSyncResponse {
   standalone?: number;
 }
 
+/** How the deployment keeps Strava in sync without the athlete pressing Sync. */
+export interface StravaAutoSyncInfo {
+  /** False only when the operator switched automatic sync off. */
+  enabled: boolean;
+  /** True once Strava's push subscription is verified: activities land within about a minute. */
+  webhook: boolean;
+  /** Cadence of the polling fallback that runs when there is no push subscription. */
+  intervalMinutes: number;
+}
+
 export interface StravaStatus {
   connected: boolean;
   athleteId?: string;
   lastSyncedAt?: string | null;
   /** Strava rejected our stored credentials (user revoked the app) — the user must reconnect. */
   requiresReauth?: boolean;
+  /** Absent from servers that predate automatic sync. */
+  autoSync?: StravaAutoSyncInfo;
 }
 
 export const auth = {

@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStravaMutations } from "@/hooks/useStravaMutations";
-import type { StravaStatus } from "@/lib/api";
+import type { StravaAutoSyncInfo, StravaStatus } from "@/lib/api";
 
 interface StravaSectionProps {
   readonly stravaStatus: StravaStatus | undefined;
@@ -19,15 +19,60 @@ interface StravaSectionProps {
 
 type StravaMutations = ReturnType<typeof useStravaMutations>;
 
-/** The one line of prose under the "Strava" label. */
-function describeStravaStatus(
+/** "every hour", "every 30 minutes", "every 2 hours". */
+function describeInterval(minutes: number): string {
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return hours === 1 ? "every hour" : `every ${hours} hours`;
+  }
+  return `every ${minutes} minutes`;
+}
+
+/**
+ * The second line under the "Strava" label: what happens without pressing
+ * Sync. Nothing for a server that predates automatic sync or has it switched
+ * off, so the section then reads exactly as it used to.
+ */
+function describeAutoSync(
+  autoSync: StravaAutoSyncInfo | undefined,
+  connected: boolean,
+): string | null {
+  if (!autoSync?.enabled) return null;
+  if (!connected) return "Connect once — new activities then sync automatically.";
+  if (autoSync.webhook) {
+    return "New activities sync automatically, usually within a minute of finishing.";
+  }
+  return `New activities sync automatically — checked ${describeInterval(autoSync.intervalMinutes)}.`;
+}
+
+export interface StravaStatusCopy {
+  status: string;
+  hint: string | null;
+}
+
+/** The prose under the "Strava" label. Exported for tests. */
+export function describeStravaStatus(
   stravaStatus: StravaStatus | undefined,
   requiresReauth: boolean,
-): string {
-  if (requiresReauth) return "Strava access was revoked. Reconnect to resume syncing.";
-  if (!stravaStatus?.connected) return "Import activities from Strava";
-  if (!stravaStatus.lastSyncedAt) return "Not yet synced";
-  return `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`;
+): StravaStatusCopy {
+  if (requiresReauth) {
+    return { status: "Strava access was revoked. Reconnect to resume syncing.", hint: null };
+  }
+  const autoSync = stravaStatus?.autoSync;
+  if (!stravaStatus?.connected) {
+    return { status: "Import activities from Strava", hint: describeAutoSync(autoSync, false) };
+  }
+  const hint = describeAutoSync(autoSync, true);
+  if (!stravaStatus.lastSyncedAt) {
+    // The first import is queued the moment the OAuth callback lands, so a
+    // connected-but-unsynced row means it is on its way (or the polling
+    // fallback will get to it), not that nothing will happen.
+    return { status: hint ? "Importing your recent activities…" : "Not yet synced", hint };
+  }
+  return {
+    status: `Last synced ${formatDistanceToNow(new Date(stravaStatus.lastSyncedAt), { addSuffix: true })}`,
+    hint,
+  };
 }
 
 export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSectionProps>) {
@@ -35,7 +80,10 @@ export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSe
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
 
   const requiresReauth = Boolean(stravaStatus?.connected && stravaStatus.requiresReauth);
-  const statusText = describeStravaStatus(stravaStatus, requiresReauth);
+  const { status: statusText, hint: autoSyncHint } = describeStravaStatus(
+    stravaStatus,
+    requiresReauth,
+  );
 
   return (
     <Card>
@@ -60,7 +108,14 @@ export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSe
                   connected={Boolean(stravaStatus?.connected)}
                 />
               </div>
-              <p className="text-sm text-muted-foreground">{statusText}</p>
+              <p className="text-sm text-muted-foreground" data-testid="text-strava-status">
+                {statusText}
+              </p>
+              {autoSyncHint && (
+                <p className="text-xs text-muted-foreground" data-testid="text-strava-auto-sync">
+                  {autoSyncHint}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -203,7 +258,7 @@ function SyncStravaButton({
       ) : (
         <RefreshCw className="h-4 w-4" aria-hidden="true" />
       )}
-      <span className="ml-1.5">{syncStravaMutation.isPending ? "Syncing…" : "Sync"}</span>
+      <span className="ml-1.5">{syncStravaMutation.isPending ? "Syncing…" : "Sync now"}</span>
     </Button>
   );
 }

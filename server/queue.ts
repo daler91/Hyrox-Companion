@@ -85,7 +85,12 @@ export interface RecomputeAnalyticsJobData {
 // that enqueued them.
 const TRACE_REQUEST_ID_KEY = "__requestId";
 
-function withTrace(data: Record<string, unknown>): Record<string, unknown> {
+/**
+ * Stamp the originating request's correlation id onto a job payload. Exported
+ * for producers that call `queue.send` with bespoke options (debounce keys,
+ * custom retry policies) instead of going through sendJob/sendJobNoRetry.
+ */
+export function withTrace(data: Record<string, unknown>): Record<string, unknown> {
   const requestId = getRequestContext()?.requestId;
   return requestId ? { ...data, [TRACE_REQUEST_ID_KEY]: requestId } : data;
 }
@@ -146,7 +151,7 @@ const IN_BATCH_CONCURRENCY = 2;
 // (CODEBASE_AUDIT.md Warning-17).
 const JOB_TIMEOUT_MS = 50 * 60 * 1000;
 
-async function runWithTimeout<T>(
+export async function runWithTimeout<T>(
   label: string,
   fn: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
@@ -188,11 +193,11 @@ function jobRequestId(job: Job): string {
 
 // Field names present on a job payload, for diagnostics — WITHOUT logging the
 // values, which carry userId and (for plan-generation) user input (W17).
-function jobDataKeys(job: Job): string[] {
+export function jobDataKeys(job: Job): string[] {
   return job.data && typeof job.data === "object" ? Object.keys(job.data) : [];
 }
 
-async function runBatch<T>(
+export async function runBatch<T>(
   queueName: string,
   jobs: Job[],
   processJob: (job: Job) => Promise<T>,

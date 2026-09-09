@@ -20,6 +20,7 @@ import pushRoutes from "./routes/push";
 import timelineAnnotationsRoutes from "./routes/timelineAnnotations";
 import workoutRoutes from "./routes/workouts/index";
 import { registerStravaRoutes } from "./strava";
+import { registerStravaWebhookRoutes } from "./stravaWebhook";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -30,6 +31,12 @@ export async function registerRoutes(
   // CSRF token issuance must be mounted BEFORE the protecting middleware so
   // the safe-method GET can set the cookie without needing a token first.
   app.get("/api/v1/csrf-token", csrfTokenHandler);
+
+  // Strava's webhook deliveries carry neither a session cookie nor a CSRF
+  // token, so the receiver mounts ahead of the guard. It is unauthenticated
+  // by design and treats every event as a hint only — see the trust model in
+  // server/stravaWebhook.ts.
+  registerStravaWebhookRoutes(app);
 
   // All /api/v1 mutating requests (POST/PUT/PATCH/DELETE) must carry a
   // matching x-csrf-token header. Safe methods pass through via the

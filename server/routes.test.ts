@@ -22,11 +22,13 @@ import pushRoutes from "./routes/push";
 import timelineAnnotationsRoutes from "./routes/timelineAnnotations";
 import workoutRoutes from "./routes/workouts/index";
 import { registerStravaRoutes } from "./strava";
+import { registerStravaWebhookRoutes } from "./stravaWebhook";
 
 // Mock dependencies
 vi.mock("./clerkAuth", () => ({ setupAuth: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("./garmin", () => ({ registerGarminRoutes: vi.fn() }));
 vi.mock("./strava", () => ({ registerStravaRoutes: vi.fn() }));
+vi.mock("./stravaWebhook", () => ({ registerStravaWebhookRoutes: vi.fn() }));
 vi.mock("./middleware/csrf", () => ({
   csrfProtection: vi.fn(),
   csrfTokenHandler: vi.fn()
@@ -81,6 +83,22 @@ describe("registerRoutes", () => {
 
     expect(registerStravaRoutes).toHaveBeenCalledWith(app);
     expect(registerGarminRoutes).toHaveBeenCalledWith(app);
+    expect(registerStravaWebhookRoutes).toHaveBeenCalledWith(app);
+  });
+
+  it("mounts the Strava webhook receiver before the CSRF guard", async () => {
+    await registerRoutes(httpServer, app);
+
+    // Strava's event POSTs carry no CSRF token, so the receiver must be
+    // registered ahead of `app.use("/api/v1", csrfProtection)`.
+    const webhookOrder = (registerStravaWebhookRoutes as unknown as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const useMock = app.use as unknown as ReturnType<typeof vi.fn>;
+    const csrfIndex = useMock.mock.calls.findIndex(
+      (call: unknown[]) => call[0] === "/api/v1" && call[1] === csrfProtection,
+    );
+    expect(csrfIndex).toBeGreaterThanOrEqual(0);
+    expect(webhookOrder).toBeLessThan(useMock.mock.invocationCallOrder[csrfIndex]);
   });
 
   it("should mount all application routers", async () => {

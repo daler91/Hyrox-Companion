@@ -1288,7 +1288,7 @@ Dispatch a test notification to every registered subscription for the authentica
 Check if the current user has a Strava connection.
 
 - **Auth:** Required
-- **Response:** `{ connected: boolean, athleteId?: string, lastSyncedAt?: string, requiresReauth?: boolean }` — `requiresReauth: true` means Strava rejected our stored credentials (the user revoked the app on strava.com); the client should offer a Reconnect flow.
+- **Response:** `{ connected: boolean, athleteId?: string, lastSyncedAt?: string, requiresReauth?: boolean, autoSync: { enabled: boolean, webhook: boolean, intervalMinutes: number } }` — `requiresReauth: true` means Strava rejected our stored credentials (the user revoked the app on strava.com); the client should offer a Reconnect flow. `autoSync` describes how the deployment keeps Strava current without the Sync button (see [Integrations → Automatic Sync](integrations.md#automatic-sync)): `webhook` is true once the push subscription is verified, otherwise the polling fallback runs every `intervalMinutes`.
 
 ### GET /api/v1/strava/auth
 
@@ -1311,7 +1311,7 @@ OAuth callback handler. Exchanges authorization code for tokens, encrypts and st
 
 ### POST /api/v1/strava/sync
 
-Incrementally sync Strava activities into workout logs (since `lastSyncedAt` with a 7-day overlap; 90-day backfill on first sync; up to 5 × 200-activity pages per call).
+Incrementally sync Strava activities into workout logs (since `lastSyncedAt` with a 7-day overlap; 90-day backfill on first sync; up to 5 × 200-activity pages per call). Runs the same `syncStravaForUser()` engine as the background [automatic sync](integrations.md#automatic-sync); the button remains for an on-demand refresh.
 
 - **Auth:** Required
 - **Rate limit:** IP-based, 5 per 15 minutes
@@ -1327,6 +1327,24 @@ Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/
 - **Response:** `{ success: true }`
 
 ---
+
+### GET /api/v1/strava/webhook
+
+Strava's subscription-validation challenge, sent once (synchronously) while the server registers its push subscription.
+
+- **Auth:** Not required (the request comes from Strava)
+- **Rate limit:** IP-based, 300 per minute (shared with the POST below)
+- **Query:** `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`
+- **Response:** `200 { "hub.challenge": string }` when `hub.verify_token` matches this deployment's token (`STRAVA_WEBHOOK_VERIFY_TOKEN`, or the value derived from `STRAVA_CLIENT_SECRET`); `403` otherwise
+
+### POST /api/v1/strava/webhook
+
+Strava webhook event receiver — the push half of [automatic sync](integrations.md#automatic-sync). Mounted ahead of the CSRF guard because Strava's deliveries carry neither cookie nor token.
+
+- **Auth:** Not required and unsigned — the payload is treated as a hint only. An event never writes anything itself: it enqueues a debounced `strava-sync` job for the connected account(s) behind `owner_id`, and that job fetches from Strava with the athlete's own token and dedups like any other sync.
+- **Rate limit:** IP-based, 300 per minute
+- **Body:** `{ object_type: "activity" | "athlete", object_id: number, aspect_type: "create" | "update" | "delete", owner_id: number, subscription_id: number, event_time?: number, updates?: object }`
+- **Response:** `200 { received: true }` immediately, for well-formed and malformed bodies alike (Strava retries non-2xx responses up to three times). Processing happens after the acknowledgement: `delete` events, unknown athletes, tombstoned connections and events for a `subscription_id` other than the verified one are ignored; an athlete deauthorization enqueues a sync whose 401 handling tombstones the connection.
 
 ## Garmin Routes
 

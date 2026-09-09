@@ -33,6 +33,7 @@ export { timelineAnnotations } from "./timelineAnnotations";
 export type {
   GarminStatus,
   GarminSyncResponse,
+  StravaAutoSyncInfo,
   StravaStatus,
   StravaSyncResponse,
   UpdateUserPreferencesPayload,

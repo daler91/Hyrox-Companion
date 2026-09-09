@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   withPgAdvisoryLock: vi.fn(),
   cronSchedule: vi.fn(),
   runNutritionReminderCron: vi.fn(),
+  runStravaAutoSyncScan: vi.fn(),
+  ensureStravaWebhookSubscription: vi.fn(),
 }));
 
 vi.mock("./advisoryLock", () => ({
@@ -42,6 +44,14 @@ vi.mock("./services/nutrition/reminders", () => ({
 
 vi.mock("./sharedRuntimeState", () => ({
   cleanupExpiredSharedRuntimeState: vi.fn(),
+}));
+
+vi.mock("./services/stravaAutoSync", () => ({
+  runStravaAutoSyncScan: mocks.runStravaAutoSyncScan,
+}));
+
+vi.mock("./stravaWebhook", () => ({
+  ensureStravaWebhookSubscription: mocks.ensureStravaWebhookSubscription,
 }));
 
 // A real schedule would fire on a timer; the wiring tests below need to grab
@@ -182,5 +192,88 @@ describe("nutrition reminders cron job", () => {
       { context: "cron", err: error },
       "Nutrition reminder cron failed",
     );
+  });
+});
+
+describe("strava auto-sync cron jobs", () => {
+  let scanCallback: () => Promise<void>;
+  let ensureCallback: () => Promise<void>;
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+
+    // No-op when an earlier describe already started the scheduler; the
+    // registered callbacks are still on the schedule mock either way.
+    startCron({} as never);
+
+    const scanCall = mocks.cronSchedule.mock.calls.find(
+      ([expression]) => expression === "7,22,37,52 * * * *",
+    );
+    if (!scanCall) throw new Error("strava auto-sync scan was not scheduled");
+    scanCallback = scanCall[1];
+
+    const ensureCall = mocks.cronSchedule.mock.calls.find(
+      ([expression]) => expression === "20 */6 * * *",
+    );
+    if (!ensureCall) throw new Error("strava webhook ensure was not scheduled");
+    ensureCallback = ensureCall[1];
+  });
+
+  beforeEach(() => {
+    mocks.runStravaAutoSyncScan.mockReset();
+    mocks.ensureStravaWebhookSubscription.mockReset();
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("runs the polling scan under its own advisory lock and logs what it enqueued", async () => {
+    mocks.runStravaAutoSyncScan.mockResolvedValueOnce({ usersChecked: 3, enqueued: 2, skipped: null });
+
+    await scanCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.stravaAutoSync, name: "stravaAutoSync" },
+      expect.any(Function),
+    );
+    expect(mocks.runStravaAutoSyncScan).toHaveBeenCalledWith({}, expect.any(Date));
+    expect(logger.info).toHaveBeenCalledWith(
+      { context: "cron", usersChecked: 3, enqueued: 2, skipped: null },
+      "Strava auto-sync: enqueued 2 sync job(s) for 3 due connection(s)",
+    );
+  });
+
+  it("stays quiet on a tick that enqueues nothing", async () => {
+    mocks.runStravaAutoSyncScan.mockResolvedValueOnce({ usersChecked: 0, enqueued: 0, skipped: "cooldown" });
+
+    await scanCallback();
+
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it("logs and swallows a scan failure instead of throwing into the scheduler", async () => {
+    const error = new Error("db unavailable");
+    mocks.runStravaAutoSyncScan.mockRejectedValueOnce(error);
+
+    await expect(scanCallback()).resolves.toBeUndefined();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      { context: "cron", err: error, job: "stravaAutoSync" },
+      "Cron job failed",
+    );
+  });
+
+  it("re-verifies the webhook subscription under its own advisory lock", async () => {
+    mocks.ensureStravaWebhookSubscription.mockResolvedValueOnce({ status: "active", subscriptionId: 1 });
+
+    await ensureCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.stravaWebhookEnsure, name: "stravaWebhookEnsure" },
+      expect.any(Function),
+    );
+    expect(mocks.ensureStravaWebhookSubscription).toHaveBeenCalledWith(logger);
   });
 });
