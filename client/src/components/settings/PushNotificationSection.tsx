@@ -80,7 +80,7 @@ export function PushNotificationSection() {
       <Card>
         <CardHeader>
           <CardTitle as="h2" className="flex items-center gap-2">
-            <BellOff className="h-5 w-5 text-muted-foreground" />
+            <BellOff className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
             Push Notifications
           </CardTitle>
           <CardDescription>Push notifications are not supported in this browser.</CardDescription>
@@ -126,7 +126,7 @@ export function PushNotificationSection() {
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-primary" />
+          <Bell className="h-5 w-5 text-primary" aria-hidden="true" />
           Push Notifications
         </CardTitle>
         <CardDescription>

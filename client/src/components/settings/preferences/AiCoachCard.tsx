@@ -21,7 +21,7 @@ export function AiCoachCard({
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <BrainCircuit className="h-5 w-5 text-primary" />
+          <BrainCircuit className="h-5 w-5 text-primary" aria-hidden="true" />
           AI Coach
         </CardTitle>
         <CardDescription>Intelligent workout adjustments powered by the configured AI provider</CardDescription>

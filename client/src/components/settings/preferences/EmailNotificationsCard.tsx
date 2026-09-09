@@ -25,7 +25,7 @@ export function EmailNotificationsCard({
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <Mail className="h-5 w-5 text-primary" />
+          <Mail className="h-5 w-5 text-primary" aria-hidden="true" />
           Email Notifications
         </CardTitle>
         <CardDescription>Choose which training emails you want to receive</CardDescription>

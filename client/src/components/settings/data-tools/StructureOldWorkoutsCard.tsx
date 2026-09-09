@@ -28,7 +28,7 @@ export function StructureOldWorkoutsCard({
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
+          <Sparkles className="h-5 w-5" aria-hidden="true" />
           Structure Old Workouts
         </CardTitle>
         <CardDescription>

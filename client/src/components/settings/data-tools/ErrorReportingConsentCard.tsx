@@ -34,7 +34,7 @@ export function ErrorReportingConsentCard() {
     <Card>
       <CardHeader>
         <CardTitle as="h2" className="flex items-center gap-2">
-          <ShieldAlert className="h-5 w-5" />
+          <ShieldAlert className="h-5 w-5" aria-hidden="true" />
           Error Reporting
         </CardTitle>
         <CardDescription>
