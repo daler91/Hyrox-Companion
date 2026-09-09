@@ -1,7 +1,7 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import type { LucideIcon } from "lucide-react";
 import { Dumbbell } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -63,6 +63,8 @@ export function ReadOnlyWorkoutActionGrid({
   );
 }
 
+const EMPTY_EXERCISE_SETS: ExerciseSet[] = [];
+
 export function ReadOnlyWorkoutDetailSheet({
   detailsTestId,
   entry,
@@ -76,7 +78,17 @@ export function ReadOnlyWorkoutDetailSheet({
   ...coachChat
 }: ReadOnlyWorkoutDetailSheetProps) {
   const { distanceUnit } = useUnitPreferences();
-  const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, entry.exerciseSets ?? []);
+
+  // ⚡ Bolt Performance Optimization: buildWorkoutCoachSeedMessage() copies,
+  // stringifies, and formats exercise sets which creates unnecessary overhead
+  // if run on every sheet re-render (e.g. from context changes). Memoizing this
+  // on the stable entry to avoid the cost.
+  const sourceExerciseSets = entry?.exerciseSets ?? EMPTY_EXERCISE_SETS;
+  const currentCoachSeedText = useMemo(
+    () => (entry ? buildWorkoutCoachSeedMessage(entry, sourceExerciseSets) : ""),
+    [entry, sourceExerciseSets],
+  );
+
   const hasPrescription =
     (entry.exerciseSets?.length ?? 0) > 0 || hasText(entry.mainWorkout) || hasText(entry.accessory);
 
