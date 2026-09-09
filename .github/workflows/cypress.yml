@@ -169,11 +169,36 @@ jobs:
         env:
           PORT: 5000
 
+      - name: Derive Cypress parallel-group id
+        # Cypress Cloud only load-balances specs across machines whose
+        # environment matches exactly: spec list, OS name, OS version, browser
+        # name and browser major. The checkout, the lockfile and the cached
+        # binary pin all of those except the OS version. `ubuntu-latest` is
+        # rolled out gradually, so mid-rollout the two matrix containers can
+        # land on different Ubuntu point releases (24.04.4 vs 24.04.5), and the
+        # second one to register is turned away with "we do not parallelize
+        # tests across different environments" before it runs a single spec -
+        # the recorded run still passes on the other container, so the red job
+        # is the only casualty. Folding the point release into the build id
+        # makes a mismatched container open its own (full, unsplit) run
+        # instead; when both containers match, as they normally do, they share
+        # the id and split the specs as before. run_id keeps the push-event and
+        # pull_request-event runs on one commit apart, and run_attempt gives
+        # each re-run a fresh id, which Cypress asks for (re-using one fails
+        # with "Build already finished"). Consumed only on the recorded path:
+        # without a record key the input below stays empty and the action's
+        # default id applies, as it did before this step existed.
+        id: cypress-group
+        run: |
+          . /etc/os-release
+          echo "id=${{ github.run_id }}-${{ github.run_attempt }}-ubuntu-${VERSION%% *}" >> "$GITHUB_OUTPUT"
+
       - name: Cypress run
         uses: cypress-io/github-action@09090944bd8aaa2a517cefb6e38bf1aae336b42b # v7.4.3
         with:
           record: ${{ needs.plan.outputs.record == 'true' }}
           parallel: ${{ needs.plan.outputs.record == 'true' }}
+          ci-build-id: ${{ needs.plan.outputs.record == 'true' && steps.cypress-group.outputs.id || '' }}
           install: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
