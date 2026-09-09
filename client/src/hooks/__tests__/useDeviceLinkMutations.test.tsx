@@ -55,17 +55,28 @@ const DEVICE_LINK_KEYS = [
   ["/api/v1/training-overview"],
 ];
 
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
+// No-retry client for every mutation under test: renderHook's `wrapper` option
+// wants a component, so this hands back one closed over a fresh QueryClient.
+function createWrapper() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return ({ children }: Readonly<{ children: React.ReactNode }>) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+type DeviceLinkMutations = ReturnType<typeof useDeviceLinkMutations>;
+
+/** Renders the hook and drives one mutation to settled, swallowing a rejection
+ *  the way the UI does (the toast, not a thrown promise, carries the error). */
+async function runMutation(
+  pick: (mutations: DeviceLinkMutations) => { mutateAsync: (variables: any) => Promise<unknown> },
+  variables: unknown,
+): Promise<void> {
+  const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
+  await act(async () => {
+    await pick(result.current).mutateAsync(variables).catch(() => {});
   });
-  return function Wrapper({ children }: Readonly<{ children: React.ReactNode }>) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
-};
+}
 
 describe("useDeviceLinkMutations", () => {
   beforeEach(() => {
@@ -75,14 +86,11 @@ describe("useDeviceLinkMutations", () => {
   describe("linkMutation", () => {
     it("links to the given target and invalidates everything the link can move", async () => {
       apiMocks.linkDeviceActivity.mockResolvedValue({ id: "log-1" });
-      const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
 
-      await act(async () => {
-        await result.current.linkMutation.mutateAsync({
-          workoutLogId: "log-1",
-          target: { planDayId: "day-1" },
-          targetLabel: "Tuesday's run",
-        });
+      await runMutation((m) => m.linkMutation, {
+        workoutLogId: "log-1",
+        target: { planDayId: "day-1" },
+        targetLabel: "Tuesday's run",
       });
 
       expect(apiMocks.linkDeviceActivity).toHaveBeenCalledWith("log-1", { planDayId: "day-1" });
@@ -97,16 +105,11 @@ describe("useDeviceLinkMutations", () => {
 
     it("shows an error toast and does not invalidate on failure", async () => {
       apiMocks.linkDeviceActivity.mockRejectedValue(new Error("Not found"));
-      const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
 
-      await act(async () => {
-        await result.current.linkMutation
-          .mutateAsync({
-            workoutLogId: "log-1",
-            target: { workoutLogId: "log-2" },
-            targetLabel: "Monday's workout",
-          })
-          .catch(() => {});
+      await runMutation((m) => m.linkMutation, {
+        workoutLogId: "log-1",
+        target: { workoutLogId: "log-2" },
+        targetLabel: "Monday's workout",
       });
 
       expect(mockToast).toHaveBeenCalledWith(
@@ -123,11 +126,8 @@ describe("useDeviceLinkMutations", () => {
   describe("unlinkMutation", () => {
     it("unlinks and invalidates the same query set, with a fixed success toast", async () => {
       apiMocks.unlinkDeviceActivity.mockResolvedValue({ log: null, standalone: { id: "log-3" } });
-      const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
 
-      await act(async () => {
-        await result.current.unlinkMutation.mutateAsync({ workoutLogId: "log-1" });
-      });
+      await runMutation((m) => m.unlinkMutation, { workoutLogId: "log-1" });
 
       expect(apiMocks.unlinkDeviceActivity).toHaveBeenCalledWith("log-1");
       expect(invalidatedKeys()).toEqual(DEVICE_LINK_KEYS);
@@ -141,11 +141,8 @@ describe("useDeviceLinkMutations", () => {
 
     it("shows an error toast on unlink failure", async () => {
       apiMocks.unlinkDeviceActivity.mockRejectedValue(new Error("Network error"));
-      const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
 
-      await act(async () => {
-        await result.current.unlinkMutation.mutateAsync({ workoutLogId: "log-1" }).catch(() => {});
-      });
+      await runMutation((m) => m.unlinkMutation, { workoutLogId: "log-1" });
 
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -160,11 +157,8 @@ describe("useDeviceLinkMutations", () => {
   describe("dismissMutation", () => {
     it("dismisses silently on success: only the timeline is invalidated, no toast", async () => {
       apiMocks.dismissDeviceLinkSuggestion.mockResolvedValue({ id: "log-1" });
-      const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
 
-      await act(async () => {
-        await result.current.dismissMutation.mutateAsync({ workoutLogId: "log-1" });
-      });
+      await runMutation((m) => m.dismissMutation, { workoutLogId: "log-1" });
 
       expect(apiMocks.dismissDeviceLinkSuggestion).toHaveBeenCalledWith("log-1");
       expect(invalidatedKeys()).toEqual([["/api/v1/timeline"]]);
@@ -173,11 +167,8 @@ describe("useDeviceLinkMutations", () => {
 
     it("shows an error toast on dismiss failure", async () => {
       apiMocks.dismissDeviceLinkSuggestion.mockRejectedValue(new Error("Gone"));
-      const { result } = renderHook(() => useDeviceLinkMutations(), { wrapper: createWrapper() });
 
-      await act(async () => {
-        await result.current.dismissMutation.mutateAsync({ workoutLogId: "log-1" }).catch(() => {});
-      });
+      await runMutation((m) => m.dismissMutation, { workoutLogId: "log-1" });
 
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
