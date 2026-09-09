@@ -426,10 +426,12 @@ export async function processStravaWebhookEvent(
   for (const target of targets) {
     await enqueueStravaSync(target.userId, "webhook");
   }
-  // A count and a static context only — nothing from the request body, so a
-  // crafted event cannot forge a second log record.
+  // A static context and message only. Nothing derived from the
+  // (unauthenticated) body — not even a count of the rows its owner_id
+  // looked up — reaches the log line, so a crafted event cannot forge a
+  // second log record.
   // bearer:disable javascript_lang_logger_leak
-  log.info({ context: LOG_CTX, users: targets.length }, "strava.webhook.enqueued");
+  log.info({ context: LOG_CTX }, "strava.webhook.enqueued");
   return "enqueued";
 }
 
@@ -481,10 +483,29 @@ async function handleStravaWebhookEvent(req: Request, res: Response) {
   }
   try {
     const disposition = await processStravaWebhookEvent(parsed.data, log);
-    if (disposition !== "enqueued") {
-      // Disposition is one of a fixed set of strings; no PII.
+    // The outcome only steers control flow here; the log line itself is one
+    // of these literals, so nothing derived from the body is written out.
+    let skipped: string | null = null;
+    switch (disposition) {
+      case "enqueued":
+        break;
+      case "disabled":
+        skipped = "strava.webhook.skipped: automatic sync is switched off";
+        break;
+      case "ignored_subscription":
+        skipped = "strava.webhook.skipped: not this deployment's subscription";
+        break;
+      case "ignored_delete":
+        skipped = "strava.webhook.skipped: activity deletion";
+        break;
+      case "unknown_owner":
+        skipped = "strava.webhook.skipped: athlete not connected here";
+        break;
+    }
+    if (skipped) {
+      // Static context and a literal message; no PII.
       // bearer:disable javascript_lang_logger_leak
-      log.info({ context: LOG_CTX, disposition }, "strava.webhook.skipped");
+      log.info({ context: LOG_CTX }, skipped);
     }
   } catch (err) {
     // Already acknowledged to Strava; the polling fallback covers this athlete.
