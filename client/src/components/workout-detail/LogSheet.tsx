@@ -1,6 +1,6 @@
-import type { TimelineEntry } from "@shared/schema";
+import type { ExerciseSet, TimelineEntry } from "@shared/schema";
 import { Check, Dumbbell, Gauge, Loader2, MessageSquare, SkipForward } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -469,9 +469,15 @@ function LogSheetFooter({
   );
 }
 
-function getCoachExerciseSets(entry: TimelineEntry, planSets: PlanDayExerciseState) {
-  if (entry.planDayId) return planSets.exerciseSets;
-  return entry.exerciseSets ?? [];
+// ⚡ Bolt Performance Optimization: stable reference so the useMemo below
+// doesn't see a "changed" dependency just because a fallback `?? []`
+// literal allocates a fresh empty array every render (same fix applied in
+// ReviewSurface.tsx, see .jules/bolt.md 2026-08-21).
+const EMPTY_EXERCISE_SETS: ExerciseSet[] = [];
+
+function getCoachExerciseSets(entry: TimelineEntry, planExerciseSets: ExerciseSet[]) {
+  if (entry.planDayId) return planExerciseSets;
+  return entry.exerciseSets ?? EMPTY_EXERCISE_SETS;
 }
 
 function getAskCoachHandler(
@@ -511,6 +517,26 @@ export function LogSheet({
   const completionEntryIdRef = useRef<string | null>(null);
 
   const planSets = usePlanDayExercises(entry?.planDayId ?? null);
+
+  // ⚡ Bolt Performance Optimization: buildWorkoutCoachSeedMessage() copies,
+  // sorts, and groups exerciseSets — the same grouping ExerciseTable already
+  // memoizes one level down. LogSheet is the sheet rendered for every
+  // planned-workout "Log"/"Edit" flow (sibling of ReviewSurface, which got
+  // this exact fix on 2026-08-21 — see .jules/bolt.md), so it re-renders on
+  // every debounced set-cell edit, RPE change, or note save via
+  // usePlanDayExercises's query-cache updates. The call was previously
+  // unconditional in the render body, redoing the grouping on renders where
+  // the "Ask coach" seed text is never read. Hooks must run unconditionally,
+  // so this reads straight off `entry` (pre-null-check) rather than a
+  // post-early-return variable.
+  const coachExerciseSets = useMemo(
+    () => (entry ? getCoachExerciseSets(entry, planSets.exerciseSets) : EMPTY_EXERCISE_SETS),
+    [entry, planSets.exerciseSets],
+  );
+  const currentCoachSeedText = useMemo(
+    () => (entry ? buildWorkoutCoachSeedMessage(entry, coachExerciseSets) : ""),
+    [entry, coachExerciseSets],
+  );
 
   if (!entry) return null;
 
@@ -557,8 +583,6 @@ export function LogSheet({
       isRenamingTitle={isRenamingTitle}
     />
   );
-  const coachExerciseSets = getCoachExerciseSets(entry, planSets);
-  const currentCoachSeedText = buildWorkoutCoachSeedMessage(entry, coachExerciseSets);
   const handleAskCoach = getAskCoachHandler(onAskCoach, currentCoachSeedText);
 
   return (
