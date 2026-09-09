@@ -451,6 +451,8 @@ export function startCron(storage: IStorage): void {
     stravaWebhookStartupTimer = null;
     runCronJobWithLock("stravaWebhookEnsure", () => ensureStravaWebhookSubscription(logger)).catch(
       (err: unknown) => {
+        // err is a DB/upstream error; no PII.
+        // bearer:disable javascript_lang_logger_leak
         logger.error({ context: "cron", err }, "Startup Strava webhook subscription check failed");
       },
     );

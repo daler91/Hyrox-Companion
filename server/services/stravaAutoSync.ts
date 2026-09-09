@@ -79,6 +79,8 @@ async function startStravaSyncCooldown(retryAfterSeconds: number): Promise<numbe
       durationMs,
     );
   } catch (err) {
+    // err is a shared-cache (DB) error; no PII or token material.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: LOG_CTX, err }, "Failed to persist the Strava sync cooldown");
   }
   return until;
@@ -135,7 +137,8 @@ export async function runStravaSyncJob(
     case "reauth_required":
       // The connection is tombstoned; Settings now offers Reconnect, and the
       // scan's query excludes the row until then.
-      // bearer:disable javascript_lang_logger_leak — internal user id only, for support triage
+      // Internal user id only, for support triage; no PII or token material.
+      // bearer:disable javascript_lang_logger_leak
       log.warn(
         { context: LOG_CTX, userId: data.userId },
         "Strava access revoked — athlete must reconnect",
@@ -145,7 +148,8 @@ export async function runStravaSyncJob(
       // Disconnected between enqueue and run.
       return { status: "not_connected" };
     case "transient":
-      // bearer:disable javascript_lang_logger_leak — internal user id only, for support triage
+      // Internal user id only, for support triage; no PII or token material.
+      // bearer:disable javascript_lang_logger_leak
       log.warn(
         { context: LOG_CTX, userId: data.userId },
         "Strava sync hit a transient failure; the next scan retries",
@@ -227,6 +231,8 @@ export async function registerStravaAutoSyncWorker(): Promise<void> {
           "[pg-boss] Completed strava-sync job",
         );
       } catch (error) {
+        // err is a DB/upstream error bound to a jobId child logger; no PII.
+        // bearer:disable javascript_lang_logger_leak
         log.error({ err: error }, "[pg-boss] Failed strava-sync job");
         throw error; // Let pg-boss handle the retry
       }

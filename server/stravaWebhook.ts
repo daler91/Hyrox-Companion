@@ -276,6 +276,8 @@ async function rememberStravaWebhookState(state: StravaWebhookState | null): Pro
       await deleteRuntimeCache(STRAVA_WEBHOOK_STATE_CACHE_KEY);
     }
   } catch (err) {
+    // err is a shared-cache (DB) error; no PII or token material.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ context: LOG_CTX, err }, "Failed to persist shared Strava webhook state");
   }
 }
@@ -406,12 +408,11 @@ export async function processStravaWebhookEvent(
 
   const state = await getStravaWebhookState();
   if (state && state.subscriptionId !== event.subscription_id) {
-    // Static context plus Strava-assigned ids; no PII.
+    // Nothing from the (unauthenticated) request body goes into the log line —
+    // a static context and message only, so a crafted event cannot forge a
+    // second log record.
     // bearer:disable javascript_lang_logger_leak
-    log.warn(
-      { context: LOG_CTX, subscriptionId: event.subscription_id },
-      "Ignoring Strava webhook event for an unknown subscription",
-    );
+    log.warn({ context: LOG_CTX }, "Ignoring Strava webhook event for an unknown subscription");
     return "ignored_subscription";
   }
   if (event.object_type === "activity" && event.aspect_type === "delete") return "ignored_delete";
@@ -425,17 +426,10 @@ export async function processStravaWebhookEvent(
   for (const target of targets) {
     await enqueueStravaSync(target.userId, "webhook");
   }
-  // Event kind and a count only; no athlete or activity identifiers.
+  // A count and a static context only — nothing from the request body, so a
+  // crafted event cannot forge a second log record.
   // bearer:disable javascript_lang_logger_leak
-  log.info(
-    {
-      context: LOG_CTX,
-      objectType: event.object_type,
-      aspectType: event.aspect_type,
-      users: targets.length,
-    },
-    "strava.webhook.enqueued",
-  );
+  log.info({ context: LOG_CTX, users: targets.length }, "strava.webhook.enqueued");
   return "enqueued";
 }
 
@@ -446,23 +440,29 @@ function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(aHash, bHash);
 }
 
+/** The query of Strava's subscription challenge, or null when it is not one. */
+function readHubChallenge(
+  query: Request["query"],
+): { verifyToken: string; challenge: string } | null {
+  if (query["hub.mode"] !== "subscribe") return null;
+  const verifyToken = query["hub.verify_token"];
+  const challenge = query["hub.challenge"];
+  // Shape checks only — the token's value is compared in constant time by
+  // safeEqual, never here.
+  // bearer:disable javascript_lang_observable_timing
+  if (typeof verifyToken !== "string" || typeof challenge !== "string") return null;
+  return { verifyToken, challenge };
+}
+
 /** Strava's subscription challenge: echo hub.challenge when hub.verify_token is ours. */
 function handleStravaWebhookValidation(req: Request, res: Response) {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+  const params = readHubChallenge(req.query);
   const expected = getStravaWebhookVerifyToken();
-  if (
-    mode !== "subscribe" ||
-    typeof token !== "string" ||
-    typeof challenge !== "string" ||
-    !expected ||
-    !safeEqual(token, expected)
-  ) {
+  if (!params || !expected || !safeEqual(params.verifyToken, expected)) {
     reqLogger(req).warn({ context: LOG_CTX }, "Rejected Strava webhook validation request");
     return res.status(403).json({ error: "Invalid verify token", code: "FORBIDDEN" });
   }
-  res.json({ "hub.challenge": challenge });
+  res.json({ "hub.challenge": params.challenge });
 }
 
 async function handleStravaWebhookEvent(req: Request, res: Response) {
@@ -474,6 +474,8 @@ async function handleStravaWebhookEvent(req: Request, res: Response) {
 
   const log = reqLogger(req);
   if (!parsed.success) {
+    // Static context and message only; the body is never echoed.
+    // bearer:disable javascript_lang_logger_leak
     log.warn({ context: LOG_CTX }, "Ignoring malformed Strava webhook event");
     return;
   }

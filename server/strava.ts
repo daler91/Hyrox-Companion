@@ -791,6 +791,9 @@ export async function syncStravaForUser(
       computeSyncAfterEpoch(connection.lastSyncedAt),
     ));
   } catch (err) {
+    // err is the upstream HTTP/network error (status only — fetchStravaActivities
+    // never puts a response body on it); no token material.
+    // bearer:disable javascript_lang_logger_leak
     log.error({ err }, "Failed to fetch Strava activities after retries:");
     if (err instanceof AppError && err.status === 401) {
       // Authorization revoked upstream mid-flight — tombstone the
@@ -828,6 +831,8 @@ export async function syncStravaForUser(
 
   await advanceStravaSyncCursor(userId, activities, hasMore);
 
+  // Counts, the internal user id and a static context only; no activity data.
+  // bearer:disable javascript_lang_logger_leak
   log.info(
     { context: "strava", userId, imported, ...counts, skipped: totalSkipped, total: activities.length, hasMore },
     "strava.sync.ok",

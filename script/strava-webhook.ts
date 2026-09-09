@@ -50,6 +50,9 @@ async function status(): Promise<number> {
   }
   const resolved = resolveStravaWebhookConfig();
   const subscriptions = await listStravaWebhookSubscriptions(config);
+  // Operator output: callback URLs and Strava's subscription ids only; the
+  // client secret never leaves `config`.
+  // bearer:disable javascript_lang_logger_leak
   console.log(
     JSON.stringify(
       {
@@ -71,6 +74,8 @@ async function status(): Promise<number> {
 
 async function register(): Promise<number> {
   const result = await ensureStravaWebhookSubscription();
+  // Operator output: status, subscription id and callback URL only.
+  // bearer:disable javascript_lang_logger_leak
   console.log(JSON.stringify(result, null, 2));
   return result.status === "active" || result.status === "created" ? 0 : 1;
 }
@@ -88,6 +93,8 @@ async function remove(): Promise<number> {
   }
   for (const subscription of subscriptions) {
     await deleteStravaWebhookSubscription(config, subscription.id);
+    // Operator output: Strava's subscription id and its (public) callback URL.
+    // bearer:disable javascript_lang_logger_leak
     console.log(
       `Deleted Strava webhook subscription ${subscription.id} (${subscription.callback_url}).`,
     );
@@ -116,6 +123,9 @@ async function main(): Promise<number> {
 main().then(
   (code) => process.exit(code),
   (err: unknown) => {
+    // StravaWebhookApiError carries operation + status only, never the URL
+    // (and so never the client secret in its query string).
+    // bearer:disable javascript_lang_logger_leak
     console.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   },
