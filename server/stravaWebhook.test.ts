@@ -141,8 +141,8 @@ describe("webhook configuration", () => {
     mocks.env.APP_URL = "https://app.example.com/";
     expect(getStravaWebhookCallbackUrl()).toBe(CALLBACK_URL);
 
-    // Plain http: Strava will not deliver to it.
-    mocks.env.APP_URL = "http://app.example.com";
+    // Plain http: Strava will not deliver to it (the insecure scheme is the point).
+    mocks.env.APP_URL = "http://app.example.com"; // DevSkim: ignore DS137138
     expect(getStravaWebhookCallbackUrl()).toBeNull();
 
     // A loopback host (the dev default) is unreachable from Strava's side.
@@ -168,7 +168,7 @@ describe("webhook configuration", () => {
       },
     });
 
-    mocks.env.APP_URL = "http://app.example.com";
+    mocks.env.APP_URL = undefined;
     expect(resolveStravaWebhookConfig()).toEqual({ ok: false, reason: "app_url_not_public" });
 
     mocks.env.STRAVA_CLIENT_ID = undefined;
@@ -409,7 +409,7 @@ describe("ensureStravaWebhookSubscription", () => {
   });
 
   it("stays out of Strava's way when the deployment cannot receive webhooks", async () => {
-    mocks.env.APP_URL = "http://app.example.com";
+    mocks.env.APP_URL = undefined;
 
     await expect(ensureStravaWebhookSubscription(mocks.logger)).resolves.toEqual({
       status: "disabled",
