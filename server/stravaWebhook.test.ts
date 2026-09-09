@@ -141,10 +141,16 @@ describe("webhook configuration", () => {
     mocks.env.APP_URL = "https://app.example.com/";
     expect(getStravaWebhookCallbackUrl()).toBe(CALLBACK_URL);
 
-    mocks.env.APP_URL = "http://localhost:5000";
+    // Plain http: Strava will not deliver to it.
+    mocks.env.APP_URL = "http://app.example.com";
     expect(getStravaWebhookCallbackUrl()).toBeNull();
 
-    mocks.env.APP_URL = "https://localhost";
+    // A loopback host (the dev default) is unreachable from Strava's side.
+    mocks.env.APP_URL = "https://localhost"; // DevSkim: ignore DS162092
+    expect(getStravaWebhookCallbackUrl()).toBeNull();
+
+    // So is anything on a private range, via the shared SSRF guard.
+    mocks.env.APP_URL = "https://10.0.0.5";
     expect(getStravaWebhookCallbackUrl()).toBeNull();
 
     mocks.env.APP_URL = undefined;
@@ -162,7 +168,7 @@ describe("webhook configuration", () => {
       },
     });
 
-    mocks.env.APP_URL = "http://localhost:5000";
+    mocks.env.APP_URL = "http://app.example.com";
     expect(resolveStravaWebhookConfig()).toEqual({ ok: false, reason: "app_url_not_public" });
 
     mocks.env.STRAVA_CLIENT_ID = undefined;
@@ -181,11 +187,11 @@ describe("GET /api/v1/strava/webhook (subscription validation)", () => {
     const res = await request(buildApp()).get(STRAVA_WEBHOOK_PATH).query({
       "hub.mode": "subscribe",
       "hub.verify_token": derivedVerifyToken(),
-      "hub.challenge": "15f7d1a91c1f40f8a748fd134752feb3",
+      "hub.challenge": "challenge-123",
     });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ "hub.challenge": "15f7d1a91c1f40f8a748fd134752feb3" });
+    expect(res.body).toEqual({ "hub.challenge": "challenge-123" });
   });
 
   it("rejects a wrong token, a missing challenge, and an unknown mode", async () => {
@@ -403,7 +409,7 @@ describe("ensureStravaWebhookSubscription", () => {
   });
 
   it("stays out of Strava's way when the deployment cannot receive webhooks", async () => {
-    mocks.env.APP_URL = "http://localhost:5000";
+    mocks.env.APP_URL = "http://app.example.com";
 
     await expect(ensureStravaWebhookSubscription(mocks.logger)).resolves.toEqual({
       status: "disabled",

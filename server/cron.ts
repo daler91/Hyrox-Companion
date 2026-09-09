@@ -445,7 +445,9 @@ export function startCron(storage: IStorage): void {
   // Static message and static context only.
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Strava webhook subscription check scheduled: every 6 hours and 30s after boot");
-  stravaWebhookStartupTimer = setTimeout(() => {
+  // STARTUP_CATCH_UP_DELAY_MS is a compile-time constant, never request data,
+  // so the DevSkim untrusted-delay review does not apply here.
+  stravaWebhookStartupTimer = setTimeout(() => { // DevSkim: ignore DS172411
     stravaWebhookStartupTimer = null;
     runCronJobWithLock("stravaWebhookEnsure", () => ensureStravaWebhookSubscription(logger)).catch(
       (err: unknown) => {

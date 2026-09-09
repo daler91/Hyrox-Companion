@@ -9,6 +9,7 @@ import { logger, reqLogger } from "./logger";
 import { asyncHandler, rateLimiter } from "./routeUtils";
 import { enqueueStravaSync, isStravaAutoSyncEnabled } from "./services/stravaSyncQueue";
 import { deleteRuntimeCache, getRuntimeCache, setRuntimeCache } from "./sharedRuntimeState";
+import { checkSafeOutboundUrl } from "./ssrfGuard";
 import { storage } from "./storage";
 
 // =============================================================================
@@ -56,8 +57,6 @@ const STRAVA_WEBHOOK_STATE_MEMO_MS = 10 * 60 * 1000;
 // this app produces.
 const stravaWebhookLimiter = rateLimiter("stravaWebhook", 300, DEFAULT_RATE_LIMIT_WINDOW_MS);
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
-
 export interface StravaWebhookConfig {
   clientId: string;
   clientSecret: string;
@@ -90,9 +89,9 @@ export function getStravaWebhookVerifyToken(): string | null {
 
 /**
  * `${APP_URL}/api/v1/strava/webhook`, but only when Strava could actually
- * reach it: https, and not a loopback host. Local development and CI keep
- * APP_URL on localhost, and a subscription pointing there would fail
- * Strava's validation anyway.
+ * reach it: https, and not a loopback or private host (the SSRF guard's own
+ * test, reused). Local development and CI keep APP_URL on a loopback host,
+ * and a subscription pointing there would fail Strava's validation anyway.
  */
 export function getStravaWebhookCallbackUrl(): string | null {
   if (!env.APP_URL) return null;
@@ -102,7 +101,7 @@ export function getStravaWebhookCallbackUrl(): string | null {
   } catch {
     return null;
   }
-  if (base.protocol !== "https:" || LOOPBACK_HOSTS.has(base.hostname)) return null;
+  if (base.protocol !== "https:" || !checkSafeOutboundUrl(env.APP_URL).ok) return null;
   return `${env.APP_URL.replace(/\/$/, "")}${STRAVA_WEBHOOK_PATH}`;
 }
 
