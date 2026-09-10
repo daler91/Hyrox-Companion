@@ -111,7 +111,11 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 | `STRAVA_CLIENT_ID` | Optional | — | OAuth client id. Required for the integration. |
 | `STRAVA_CLIENT_SECRET` | Optional | — | OAuth client secret. |
 | `STRAVA_STATE_SECRET` | Optional | auto-generated at boot | 32+ char secret used to sign OAuth `state`. Setting it keeps signatures stable across restarts. |
-| `APP_URL` | Optional | `http://localhost:5000` | Base URL for the OAuth redirect (`${APP_URL}/api/v1/strava/callback`). |
+| `APP_URL` | Optional | `http://localhost:5000` | Base URL for the OAuth redirect (`${APP_URL}/api/v1/strava/callback`) and the webhook callback (`${APP_URL}/api/v1/strava/webhook`). The push subscription is only registered when this is a public `https://` origin. |
+| `STRAVA_AUTO_SYNC_ENABLED` | Optional | `true` | Master switch for automatic sync (webhook push, polling fallback, post-connect import). `false` leaves only the manual Sync button. |
+| `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | Optional | `60` | Polling fallback: how stale a connection's cursor may get before it is re-synced (minimum 5). Each connected athlete costs about `1440 / interval` Strava reads a day out of the app's 1,000/day budget; raise it as the athlete base grows. |
+| `STRAVA_WEBHOOKS_ENABLED` | Optional | `true` | `false` stops the server from registering (and acting on) the Strava push subscription; polling still runs. |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN` | Optional | derived from `STRAVA_CLIENT_SECRET` | Token Strava echoes back when validating the callback URL (8+ chars). Only needed to pin a specific value. |
 
 ### Resend (email)
 

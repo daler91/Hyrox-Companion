@@ -55,7 +55,8 @@
     "data:race-benchmarks": "tsx script/race-benchmarks/generate.ts",
     "data:race-benchmarks:backtest": "tsx script/race-benchmarks/backtest.ts",
     "ops:restore-drill": "tsx script/restore-drill.ts",
-    "ops:reembed": "tsx script/reembed-materials.ts"
+    "ops:reembed": "tsx script/reembed-materials.ts",
+    "strava:webhook": "tsx --env-file=.env script/strava-webhook.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",

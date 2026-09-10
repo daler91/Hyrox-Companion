@@ -1,5 +1,6 @@
 import { calculateMafHr } from '@shared/maf';
-import { type InsertStravaConnection, type UpdateUserPreferences, type User,users } from '@shared/schema';
+import { type InsertStravaConnection, stravaConnections, type UpdateUserPreferences, type User,users } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 import { beforeEach,describe, expect, it, vi } from 'vitest';
 
 import * as crypto from '../crypto';
@@ -204,6 +205,58 @@ describe('UserStorage', () => {
         await userStorage.setStravaReauthRequired('user-1');
 
         expect(setMock).toHaveBeenCalledWith({ requiresReauth: true });
+      });
+    });
+
+    describe('listStravaConnectionsDueForSync', () => {
+      it('selects working connections with a stale or missing cursor, stalest first, capped', async () => {
+        const rows = [
+          { userId: 'u-never', lastSyncedAt: null },
+          { userId: 'u-stale', lastSyncedAt: new Date('2026-09-01T00:00:00Z') },
+        ];
+        const limitMock = vi.fn().mockResolvedValue(rows);
+        const orderByMock = vi.fn().mockReturnValue({ limit: limitMock });
+        const whereMock = vi.fn().mockReturnValue({ orderBy: orderByMock });
+        const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+        vi.mocked(db.select).mockReturnValue({ from: fromMock });
+
+        const staleBefore = new Date('2026-09-09T10:00:00Z');
+        const result = await userStorage.listStravaConnectionsDueForSync(staleBefore, 10);
+
+        expect(result).toEqual(rows);
+        // Ids and the cursor only — never the encrypted token columns.
+        expect(db.select).toHaveBeenCalledWith({
+          userId: stravaConnections.userId,
+          lastSyncedAt: stravaConnections.lastSyncedAt,
+        });
+        expect(fromMock).toHaveBeenCalledWith(stravaConnections);
+        expect(eq).toHaveBeenCalledWith(stravaConnections.requiresReauth, false);
+        expect(orderByMock).toHaveBeenCalledTimes(1);
+        expect(limitMock).toHaveBeenCalledWith(10);
+        expect(crypto.decryptToken).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('listStravaConnectionUsersByAthleteId', () => {
+      it('maps a Strava athlete id to every account that connected it', async () => {
+        const rows = [
+          { userId: 'user-1', requiresReauth: false },
+          { userId: 'user-2', requiresReauth: true },
+        ];
+        const whereMock = vi.fn().mockResolvedValue(rows);
+        const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+        vi.mocked(db.select).mockReturnValue({ from: fromMock });
+
+        const result = await userStorage.listStravaConnectionUsersByAthleteId('athlete-9');
+
+        expect(result).toEqual(rows);
+        expect(db.select).toHaveBeenCalledWith({
+          userId: stravaConnections.userId,
+          requiresReauth: stravaConnections.requiresReauth,
+        });
+        expect(fromMock).toHaveBeenCalledWith(stravaConnections);
+        expect(eq).toHaveBeenCalledWith(stravaConnections.stravaAthleteId, 'athlete-9');
+        expect(crypto.decryptToken).not.toHaveBeenCalled();
       });
     });
 

@@ -498,6 +498,51 @@ export class UserStorage {
       .where(eq(stravaConnections.userId, userId));
   }
 
+  /**
+   * Athletes the automatic-sync polling fallback should sync next: working
+   * connections (no reauth tombstone) whose cursor is older than
+   * `staleBefore`. Never-synced connections come first, then the stalest,
+   * capped at `limit` so one tick cannot spend the app's shared Strava read
+   * budget. Ids only — the worker re-reads (and decrypts) the connection
+   * when the job runs.
+   */
+  async listStravaConnectionsDueForSync(
+    staleBefore: Date,
+    limit: number,
+  ): Promise<Array<{ userId: string; lastSyncedAt: Date | null }>> {
+    return await db
+      .select({
+        userId: stravaConnections.userId,
+        lastSyncedAt: stravaConnections.lastSyncedAt,
+      })
+      .from(stravaConnections)
+      .where(
+        and(
+          eq(stravaConnections.requiresReauth, false),
+          or(isNull(stravaConnections.lastSyncedAt), lt(stravaConnections.lastSyncedAt, staleBefore)),
+        ),
+      )
+      .orderBy(sql`${stravaConnections.lastSyncedAt} asc nulls first`)
+      .limit(limit);
+  }
+
+  /**
+   * Webhook `owner_id` → app users. One Strava athlete can be connected to
+   * more than one account (strava_athlete_id carries no unique index), so
+   * this is a list. Ids and the reauth flag only — no token material.
+   */
+  async listStravaConnectionUsersByAthleteId(
+    stravaAthleteId: string,
+  ): Promise<Array<{ userId: string; requiresReauth: boolean }>> {
+    return await db
+      .select({
+        userId: stravaConnections.userId,
+        requiresReauth: stravaConnections.requiresReauth,
+      })
+      .from(stravaConnections)
+      .where(eq(stravaConnections.stravaAthleteId, stravaAthleteId));
+  }
+
   // ---------------------------------------------------------------------------
   // Garmin Connect — credential-based session storage.
   //

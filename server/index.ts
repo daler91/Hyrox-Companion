@@ -28,6 +28,7 @@ import { cspNonceMiddleware } from "./middleware/cspNonce";
 import { queue,startQueue } from "./queue";
 import { runWithRequestContext } from "./requestContext";
 import { registerRoutes } from "./routes";
+import { registerStravaAutoSyncWorker } from "./services/stravaAutoSync";
 import { drainSseStreams } from "./sseRegistry";
 import { assertResolvedHostIsPublic } from "./ssrfGuard";
 import { serveStatic } from "./static";
@@ -347,6 +348,10 @@ try {
   startupState.startupPhase = "queue";
   logger.info("Startup phase: queue");
   await startQueue();
+  // Registered here rather than inside startQueue(): the worker imports the
+  // sync engine in server/strava.ts, which would otherwise pull the whole
+  // Strava route module into server/queue.ts's import graph.
+  await registerStravaAutoSyncWorker();
 
   startupState.startupPhase = "cron";
   logger.info("Startup phase: cron");

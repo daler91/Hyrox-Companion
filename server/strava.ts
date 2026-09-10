@@ -15,8 +15,14 @@ import { protectedMutationGuards } from "./routeGuards";
 import { asyncHandler, rateLimiter } from "./routeUtils";
 import { mapStravaActivityToWorkout, type StravaActivity } from "./services/stravaMapper";
 import { reconcileStravaActivities, type StravaImportItem } from "./services/stravaReconciler";
+import {
+  enqueueStravaSync,
+  getStravaAutoSyncIntervalMs,
+  isStravaAutoSyncEnabled,
+} from "./services/stravaSyncQueue";
 import { claimRuntimeCacheKey, runtimeCacheKey } from "./sharedRuntimeState";
 import { storage } from "./storage";
+import { getStravaWebhookState } from "./stravaWebhook";
 import { getUserId } from "./types";
 import { parseRetryAfter,RetryableHttpError, retryWithJitter } from "./utils/httpRetry";
 
@@ -33,6 +39,9 @@ const STRAVA_API_BASE = "https://www.strava.com/api/v3";
 // Requested at /auth AND persisted on the connection at /callback — keep the
 // two in lockstep via this single constant so they cannot drift.
 const STRAVA_SCOPE = "activity:read_all";
+// One message for every "Strava rejected our credentials" surface (the
+// activities request, the sync route, the client's toast matcher).
+const STRAVA_REAUTH_MESSAGE = "Strava authorization was revoked — please reconnect your account";
 
 const STATE_SECRET = env.STRAVA_STATE_SECRET ?? crypto.randomBytes(32).toString("hex");
 if (!env.STRAVA_STATE_SECRET) {
@@ -251,13 +260,34 @@ export async function getValidAccessToken(userId: string): Promise<StravaAccessR
   return { ok: false, reason: "transient" };
 }
 
+export interface StravaAutoSyncInfo {
+  /** False only under the STRAVA_AUTO_SYNC_ENABLED=false kill switch. */
+  enabled: boolean;
+  /** True once the push subscription is verified — activities land within about a minute of upload. */
+  webhook: boolean;
+  /** The polling fallback's cadence, for the Settings copy. */
+  intervalMinutes: number;
+}
+
+/**
+ * How this deployment keeps Strava in sync without the athlete pressing
+ * Sync. Deployment-wide rather than per user: the webhook subscription is
+ * one per Strava application, and the polling interval is an env setting.
+ */
+async function describeStravaAutoSync(): Promise<StravaAutoSyncInfo> {
+  const enabled = isStravaAutoSyncEnabled();
+  const webhook = enabled && (await getStravaWebhookState()) !== null;
+  return { enabled, webhook, intervalMinutes: Math.round(getStravaAutoSyncIntervalMs() / 60_000) };
+}
+
 async function handleStravaStatus(req: Request, res: Response) {
   // Errors propagate to asyncHandler → central error middleware.
   const userId = getUserId(req);
   const connection = await storage.users.getStravaConnection(userId);
+  const autoSync = await describeStravaAutoSync();
 
   if (!connection) {
-    return res.json({ connected: false });
+    return res.json({ connected: false, autoSync });
   }
 
   res.json({
@@ -265,6 +295,7 @@ async function handleStravaStatus(req: Request, res: Response) {
     athleteId: connection.stravaAthleteId,
     lastSyncedAt: connection.lastSyncedAt,
     requiresReauth: connection.requiresReauth,
+    autoSync,
   });
 }
 
@@ -369,6 +400,14 @@ async function handleStravaCallback(req: Request, res: Response) {
       scope: STRAVA_SCOPE,
       lastSyncedAt: null,
     });
+
+    // Start the first import straight away so the timeline fills in without
+    // a trip to the Sync button. The OAuth redirect must never depend on it.
+    try {
+      await enqueueStravaSync(userId, "connect");
+    } catch (err) {
+      reqLogger(req).warn({ err }, "Failed to enqueue the post-connect Strava sync (non-fatal)");
+    }
 
     res.redirect("/settings?strava=connected");
   } catch (error) {
@@ -482,11 +521,7 @@ export async function fetchStravaActivities(
         if (response.status === 401 || response.status === 403) {
           // Token was revoked on Strava's side (user removed our app) — a
           // refresh won't help, we need the user to reconnect. Non-retryable.
-          throw new AppError(
-            ErrorCode.UNAUTHORIZED,
-            "Strava authorization was revoked — please reconnect your account",
-            401,
-          );
+          throw new AppError(ErrorCode.UNAUTHORIZED, STRAVA_REAUTH_MESSAGE, 401);
         }
         if (!response.ok) {
           // Do NOT log the raw response body (same rationale as the token
@@ -622,51 +657,36 @@ export async function enrichCaloriesFromDetail(
   }
 }
 
-// Translate upstream errors into actionable client responses instead
-// of a blanket 500 (Warning-13):
-//  - 429 after retry exhaustion → surface Retry-After so the UI can
-//    schedule a reconnect instead of nagging the user to retry.
-//  - 401/403 → explicit "reconnect Strava" path.
-function sendStravaFetchError(res: Response, err: unknown): Response {
-  if (err instanceof RetryableHttpError && err.status === 429) {
-    const retrySeconds = err.retryAfterMs ? Math.ceil(err.retryAfterMs / 1000) : 60;
-    res.setHeader("Retry-After", String(retrySeconds));
-    return res.status(429).json({
-      error: `Strava rate-limited the request. Please retry in about ${Math.ceil(retrySeconds / 60)} minute(s).`,
-      code: "RATE_LIMITED",
-      retryAfterSeconds: retrySeconds,
-    });
-  }
-  if (err instanceof AppError && err.status === 401) {
-    return res.status(401).json({
-      error: err.message,
-      code: "STRAVA_REAUTH_REQUIRED",
-    });
-  }
-  return res.status(502).json({
-    error: "Strava is temporarily unavailable. Please try again shortly.",
-    code: "EXTERNAL_API_ERROR",
-  });
-}
+type StravaSyncFailure = Extract<StravaSyncOutcome, { ok: false }>;
 
-type StravaTokenFailureReason = Extract<StravaAccessResult, { ok: false }>["reason"];
-
-function sendStravaTokenFailure(res: Response, reason: StravaTokenFailureReason): Response {
-  if (reason === "reauth_required") {
-    return res.status(401).json({
-      error: "Strava authorization was revoked — please reconnect your account",
-      code: "STRAVA_REAUTH_REQUIRED",
-    });
+// Translate sync failures into actionable client responses instead of a
+// blanket 500 (Warning-13):
+//  - rate-limited after retry exhaustion → surface Retry-After so the UI can
+//    schedule a retry instead of nagging the user.
+//  - revoked credentials → explicit "reconnect Strava" path.
+//  - transient (network, 5xx after retries, a refresh that lost its race and
+//    never saw the winner's token) → the client can simply retry.
+function sendStravaSyncFailure(res: Response, failure: StravaSyncFailure): Response {
+  switch (failure.reason) {
+    case "rate_limited": {
+      const retrySeconds = failure.retryAfterSeconds;
+      res.setHeader("Retry-After", String(retrySeconds));
+      return res.status(429).json({
+        error: `Strava rate-limited the request. Please retry in about ${Math.ceil(retrySeconds / 60)} minute(s).`,
+        code: "RATE_LIMITED",
+        retryAfterSeconds: retrySeconds,
+      });
+    }
+    case "reauth_required":
+      return res.status(401).json({ error: STRAVA_REAUTH_MESSAGE, code: "STRAVA_REAUTH_REQUIRED" });
+    case "not_connected":
+      return res.status(401).json({ error: "Strava not connected", code: "UNAUTHORIZED" });
+    case "transient":
+      return res.status(502).json({
+        error: "Strava is temporarily unavailable. Please try again shortly.",
+        code: "EXTERNAL_API_ERROR",
+      });
   }
-  if (reason === "not_connected") {
-    return res.status(401).json({ error: "Strava not connected", code: "UNAUTHORIZED" });
-  }
-  // transient: refresh failed on a retryable error or a concurrent
-  // refresh didn't land in time — the client can simply retry.
-  return res.status(502).json({
-    error: "Strava is temporarily unavailable. Please try again shortly.",
-    code: "EXTERNAL_API_ERROR",
-  });
 }
 
 /**
@@ -712,71 +732,131 @@ async function advanceStravaSyncCursor(
   await storage.users.updateStravaLastSync(userId);
 }
 
+export interface StravaSyncCounts {
+  /** Activities now on the timeline, wherever they landed (the four counts below). */
+  imported: number;
+  /** Recordings attached to workouts the athlete had already logged. */
+  enriched: number;
+  /** Open plan days completed by a recording. */
+  completedPlanDays: number;
+  /** Standalone imports carrying a suggested plan day or log to confirm. */
+  suggested: number;
+  /** Standalone imports with nothing to match. */
+  standalone: number;
+  /** Already imported before this sync, or claimed by a concurrent one. */
+  skipped: number;
+  total: number;
+  /** True when the page cap left older activities unfetched. */
+  hasMore: boolean;
+}
+
+export type StravaSyncOutcome =
+  | ({ ok: true } & StravaSyncCounts)
+  // The token failure reasons, plus what the activities request can add on
+  // its own: Strava revoked our access mid-flight (already tombstoned by the
+  // time this returns) or throttled us (retryAfterSeconds from its
+  // Retry-After header, 60 when absent).
+  | { ok: false; reason: "not_connected" | "reauth_required" | "transient" }
+  | { ok: false; reason: "rate_limited"; retryAfterSeconds: number };
+
+type StravaSyncLogger = Pick<typeof logger, "info" | "warn" | "error">;
+
+/**
+ * One incremental sync for one athlete: cursor → fetch → dedup → calorie
+ * enrichment → reconcile → advance cursor. The single engine behind the
+ * manual Sync button (handleStravaSync) and the background jobs
+ * (server/services/stravaAutoSync.ts), so both paths import identically.
+ *
+ * Never throws for a Strava-side problem — those come back as an outcome the
+ * caller maps to an HTTP response or a job result. Anything else (a DB
+ * failure inside the reconciler) propagates.
+ */
+export async function syncStravaForUser(
+  userId: string,
+  log: StravaSyncLogger,
+): Promise<StravaSyncOutcome> {
+  const tokenResult = await getValidAccessToken(userId);
+  if (!tokenResult.ok) return { ok: false, reason: tokenResult.reason };
+  const { accessToken, connection } = tokenResult;
+
+  const user = await storage.users.getUser(userId);
+  const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
+
+  let activities: StravaActivity[];
+  let hasMore: boolean;
+  try {
+    ({ activities, hasMore } = await fetchStravaActivities(
+      accessToken,
+      log,
+      computeSyncAfterEpoch(connection.lastSyncedAt),
+    ));
+  } catch (err) {
+    // err is the upstream HTTP/network error (status only — fetchStravaActivities
+    // never puts a response body on it); no token material.
+    // bearer:disable javascript_lang_logger_leak
+    log.error({ err }, "Failed to fetch Strava activities after retries:");
+    if (err instanceof AppError && err.status === 401) {
+      // Authorization revoked upstream mid-flight — tombstone the
+      // connection so /status flips to "reconnect needed" too.
+      await storage.users.setStravaReauthRequired(userId);
+      return { ok: false, reason: "reauth_required" };
+    }
+    if (err instanceof RetryableHttpError && err.status === 429) {
+      return {
+        ok: false,
+        reason: "rate_limited",
+        retryAfterSeconds: err.retryAfterMs ? Math.ceil(err.retryAfterMs / 1000) : 60,
+      };
+    }
+    return { ok: false, reason: "transient" };
+  }
+
+  const { items, skipped } = await selectStravaActivitiesToImport(activities, userId, distanceUnit);
+
+  if (items.length > 0) {
+    await enrichCaloriesFromDetail(accessToken, items.map((item) => item.row), log);
+  }
+
+  // Each new activity is matched against the day's existing rows before
+  // anything is inserted: it enriches the log the athlete already wrote,
+  // completes the open plan day, or lands standalone (carrying a suggestion
+  // when a match was plausible but not certain). See stravaReconciler.ts.
+  const counts = await reconcileStravaActivities(userId, items, log);
+  // `imported` keeps meaning "activities now on the timeline", wherever
+  // they landed. `skipped` sums the pre-dedup hits plus any rows a
+  // concurrent sync got to first — the reconciler reports only what it
+  // actually wrote, not an optimistic pre-insert count (S2).
+  const imported = counts.enriched + counts.completedPlanDays + counts.suggested + counts.standalone;
+  const totalSkipped = skipped + counts.skipped;
+
+  await advanceStravaSyncCursor(userId, activities, hasMore);
+
+  // Counts, the internal user id and a static context only; no activity data.
+  // bearer:disable javascript_lang_logger_leak
+  log.info(
+    { context: "strava", userId, imported, ...counts, skipped: totalSkipped, total: activities.length, hasMore },
+    "strava.sync.ok",
+  );
+
+  return {
+    ok: true,
+    imported,
+    enriched: counts.enriched,
+    completedPlanDays: counts.completedPlanDays,
+    suggested: counts.suggested,
+    standalone: counts.standalone,
+    skipped: totalSkipped,
+    total: activities.length,
+    hasMore,
+  };
+}
+
 async function handleStravaSync(req: Request, res: Response) {
   try {
-    const userId = getUserId(req);
-    const tokenResult = await getValidAccessToken(userId);
-
-    if (!tokenResult.ok) return sendStravaTokenFailure(res, tokenResult.reason);
-    const { accessToken, connection } = tokenResult;
-
-    const user = await storage.users.getUser(userId);
-    const distanceUnit = (user?.distanceUnit || "km") as DistanceUnit;
-
-    let activities: StravaActivity[];
-    let hasMore: boolean;
-    try {
-      ({ activities, hasMore } = await fetchStravaActivities(
-        accessToken,
-        reqLogger(req),
-        computeSyncAfterEpoch(connection.lastSyncedAt),
-      ));
-    } catch (err) {
-      reqLogger(req).error({ err }, "Failed to fetch Strava activities after retries:");
-      if (err instanceof AppError && err.status === 401) {
-        // Authorization revoked upstream mid-flight — tombstone the
-        // connection so /status flips to "reconnect needed" too.
-        await storage.users.setStravaReauthRequired(userId);
-      }
-      return sendStravaFetchError(res, err);
-    }
-
-    const { items, skipped } = await selectStravaActivitiesToImport(activities, userId, distanceUnit);
-
-    if (items.length > 0) {
-      await enrichCaloriesFromDetail(accessToken, items.map((item) => item.row), reqLogger(req));
-    }
-
-    // Each new activity is matched against the day's existing rows before
-    // anything is inserted: it enriches the log the athlete already wrote,
-    // completes the open plan day, or lands standalone (carrying a suggestion
-    // when a match was plausible but not certain). See stravaReconciler.ts.
-    const counts = await reconcileStravaActivities(userId, items, reqLogger(req));
-    // `imported` keeps meaning "activities now on the timeline", wherever
-    // they landed. `skipped` sums the pre-dedup hits plus any rows a
-    // concurrent sync got to first — the reconciler reports only what it
-    // actually wrote, not an optimistic pre-insert count (S2).
-    const imported = counts.enriched + counts.completedPlanDays + counts.suggested + counts.standalone;
-    const totalSkipped = skipped + counts.skipped;
-
-    await advanceStravaSyncCursor(userId, activities, hasMore);
-
-    reqLogger(req).info(
-      { context: "strava", userId, imported, ...counts, skipped: totalSkipped, total: activities.length, hasMore },
-      "strava.sync.ok",
-    );
-
-    res.json({
-      success: true,
-      imported,
-      enriched: counts.enriched,
-      completedPlanDays: counts.completedPlanDays,
-      suggested: counts.suggested,
-      standalone: counts.standalone,
-      skipped: totalSkipped,
-      total: activities.length,
-      hasMore,
-    });
+    const outcome = await syncStravaForUser(getUserId(req), reqLogger(req));
+    if (!outcome.ok) return sendStravaSyncFailure(res, outcome);
+    const { ok: _ok, ...counts } = outcome;
+    res.json({ success: true, ...counts });
   } catch (error) {
     reqLogger(req).error({ err: error }, "Strava sync error:");
     res.status(500).json({ error: "Failed to sync Strava activities", code: "INTERNAL_SERVER_ERROR" });

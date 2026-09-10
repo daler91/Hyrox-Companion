@@ -21,7 +21,7 @@ This document covers the external service integrations used by the fitai.coach a
 
 The application relies on six external integration layers:
 
-- **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts.
+- **Strava** -- OAuth 2.0 integration for importing workout activities from athletes' Strava accounts, kept current automatically by Strava's webhook push plus a polling fallback.
 - **Garmin Connect** -- Email/password sign-in against Garmin's reverse-engineered SSO (no public OAuth) to import activities. Wrapped in a strict safety stack because every request goes out through the same shared server IP.
 - **Resend** -- Transactional email delivery for weekly training summaries and missed workout reminders.
 - **pg-boss** -- PostgreSQL-backed persistent job queue for background processing (auto-coaching, embedding generation, and the two transactional email sends). Retries are scoped to idempotent handlers only.
@@ -38,7 +38,10 @@ Gemini AI provider behavior — model names, retry/jitter, circuit breaker, embe
 
 **Key files:**
 
-- `server/strava.ts` -- OAuth routes, token management, activity sync endpoint
+- `server/strava.ts` -- OAuth routes, token management, the sync engine (`syncStravaForUser()`) and the manual sync endpoint
+- `server/stravaWebhook.ts` -- Webhook push subscription: callback validation, event receipt, idempotent subscription registration
+- `server/services/stravaSyncQueue.ts` -- `strava-sync` queue producer (per-athlete debounce)
+- `server/services/stravaAutoSync.ts` -- `strava-sync` worker, polling-fallback scan, shared 429 cooldown
 - `server/services/stravaMapper.ts` -- Maps Strava activity JSON to the internal `WorkoutLog` shape
 - `server/services/stravaReconciler.ts` -- Matches each synced activity to the day's logged workouts and open plan days before anything is inserted
 - `server/services/deviceActivityMatcher.ts` -- The pure scoring engine behind that matching (no DB, no clock)
@@ -79,7 +82,11 @@ sequenceDiagram
 | `STRAVA_CLIENT_ID` | Yes | Strava API application client ID |
 | `STRAVA_CLIENT_SECRET` | Yes | Strava API application client secret |
 | `STRAVA_STATE_SECRET` | Recommended | HMAC secret for signing OAuth state tokens. If not set, a random secret is generated at boot (not safe across multiple server instances). |
-| `APP_URL` | Recommended | Base URL of the application (e.g. `https://fitai.coach`). Used to construct the OAuth redirect URI. Defaults to `http://localhost:5000`. |
+| `APP_URL` | Recommended | Base URL of the application (e.g. `https://fitai.coach`). Used to construct the OAuth redirect URI and the webhook callback URL. Defaults to `http://localhost:5000`; the push subscription is only registered when this is a public `https://` origin. |
+| `STRAVA_AUTO_SYNC_ENABLED` | Optional (default `true`) | Master switch for [automatic sync](#automatic-sync): webhook push, polling fallback and the post-connect import. `false` leaves only the manual Sync button. |
+| `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | Optional (default `60`) | Polling fallback: how stale a connection's `last_synced_at` may get before it is re-synced (minimum 5). Each connected athlete costs about `1440 / interval` Strava reads a day. |
+| `STRAVA_WEBHOOKS_ENABLED` | Optional (default `true`) | `false` stops the server from registering, and acting on, the Strava push subscription; polling still runs. |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN` | Optional | Token Strava echoes back when validating the callback URL (8+ chars). Derived from `STRAVA_CLIENT_SECRET` when unset, so it only needs setting to pin a specific value. |
 | `ENCRYPTION_KEY` | Yes | 32-byte hex string used for AES-256-GCM encryption of stored tokens. If not valid hex or wrong length, a SHA-256 hash of the value is derived. |
 
 ### OAuth 2.0 Flow
@@ -133,7 +140,7 @@ All external Strava API calls use `AbortSignal.timeout(15000)` (the `EXTERNAL_AP
 
 ### Activity Sync
 
-Triggered by `POST /api/v1/strava/sync` (rate-limited to 5 requests per 15 minutes). The sync is **incremental**:
+The engine is `syncStravaForUser()` in `server/strava.ts`, shared by the manual `POST /api/v1/strava/sync` route (rate-limited to 5 requests per 15 minutes) and the background `strava-sync` jobs described under [Automatic Sync](#automatic-sync), so a background import lands exactly as a manual one would. Every sync is **incremental**:
 
 1. Computes an `after` cursor (`computeSyncAfterEpoch()`, epoch seconds):
    - First sync (`last_synced_at` is null): `now − 90 days` (`STRAVA_FIRST_SYNC_BACKFILL_DAYS`)
@@ -181,6 +188,27 @@ The response reports `imported` (activities now on the timeline, wherever they l
 | DELETE | `/api/v1/strava/disconnect` | Required | Remove Strava connection |
 | POST | `/api/v1/strava/sync` | Required | Import recent activities from Strava |
 
+### Automatic Sync
+
+Connected athletes no longer need the Sync button: activities are imported in the background by three cooperating paths, all of which end in the same `strava-sync` pg-boss job (`server/services/stravaSyncQueue.ts` → `server/services/stravaAutoSync.ts`) and therefore in the same engine as a manual sync.
+
+1. **Webhook push** (`server/stravaWebhook.ts`) — near real time. Strava's Webhook Events API POSTs one event per activity create/update/delete (and per athlete deauthorization) to `POST /api/v1/strava/webhook`. The receiver answers `200` immediately (Strava expects it within two seconds and retries anything else up to three times), then maps `owner_id` → connected accounts (`storage.users.listStravaConnectionUsersByAthleteId()`) and enqueues a debounced sync for each. Events are unsigned, so nothing in the payload is trusted: an event only ever *triggers an incremental sync for the athlete it names*, which fetches with that athlete's own token and dedups like any other sync. The worst a forged event can do is one extra debounced sync, bounded by a 300-per-minute-per-IP limiter. Athlete deauthorizations get the same treatment — the sync's own 401 handling tombstones the connection — and `delete` events are ignored (see Known Limitations). Events whose `subscription_id` differs from the verified subscription are dropped.
+   - **Subscription registration** is automatic and idempotent (`ensureStravaWebhookSubscription()`): 30 seconds after boot and every six hours (cron `stravaWebhookEnsure`), the server lists the application's push subscriptions via `GET https://www.strava.com/api/v3/push_subscriptions`, verifies the one pointing at `${APP_URL}/api/v1/strava/webhook`, and creates it when none exists (`POST …/push_subscriptions` with `client_id`, `client_secret`, `callback_url`, `verify_token`; Strava validates the callback synchronously with `GET …/webhook?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…`, which the receiver answers with `{ "hub.challenge": … }` when the token matches). Strava allows **one subscription per API application**: an existing subscription for a different callback URL is never replaced — it is logged as a mismatch and the deployment stays on the polling fallback until an operator resolves it with `pnpm strava:webhook delete`. Registration is skipped (polling only) unless `STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` are set and `APP_URL` is a public `https://` origin, or when `STRAVA_WEBHOOKS_ENABLED=false`.
+   - The **verify token** is `STRAVA_WEBHOOK_VERIFY_TOKEN` when set, otherwise an HMAC-SHA256 of a fixed label keyed by `STRAVA_CLIENT_SECRET` — stable across restarts and replicas with nothing extra to configure.
+   - The verified subscription (id + callback URL) is memoised in-process and shared across replicas through `server_runtime_cache` (`strava:webhook-subscription`), which is also what `/status` reports as `autoSync.webhook`.
+2. **Polling fallback** (cron `stravaAutoSync`, every 15 minutes) — covers deployments that cannot receive webhooks (no public https `APP_URL`), any event Strava drops, and a job that hit a transient failure. `runStravaAutoSyncScan()` selects working connections (no `requires_reauth` tombstone) whose `last_synced_at` is older than `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` (default 60) or null, never-synced first and then stalest first (`storage.users.listStravaConnectionsDueForSync()`), capped at **10 per tick** (`STRAVA_AUTO_SYNC_MAX_USERS_PER_TICK`), and enqueues a sync for each.
+3. **Post-connect import** — the OAuth callback enqueues a sync the moment the connection is stored, so the 90-day backfill runs without a trip to the Sync button.
+
+**Debounce.** `enqueueStravaSync()` uses pg-boss's `sendDebounced` with `singletonKey: strava-sync:<userId>` and a 60-second window (`STRAVA_SYNC_DEBOUNCE_SECONDS`): at most one job per athlete per window, and a request that lands in a window whose job already exists (queued, running or done) schedules exactly one more run in the next window. A Strava upload typically fires a `create` and one or more `update` events seconds apart; they collapse into one sync, and an activity that finished uploading after the running sync listed activities is still picked up by the follow-up run. Webhook, poll and connect triggers share the key, so they coalesce with each other too.
+
+**Budget.** Strava meters the whole application — 100 read requests per 15 minutes and 1,000 per day, shared by every athlete and every manual Sync. A sync costs one `athlete/activities` read when nothing is new, plus one activity-detail read per newly imported activity (≤25). The per-tick cap keeps the fallback under 40 reads an hour; each connected athlete costs about `1440 / STRAVA_AUTO_SYNC_INTERVAL_MINUTES` polling reads a day, so raise the interval as the athlete base grows (webhooks make polling a safety net, not the primary path). When any background sync gets a `429`, `runStravaSyncJob()` records a shared **cooldown** in `server_runtime_cache` (`strava:sync-cooldown`) for `max(Retry-After, 15 minutes)`; jobs and scan ticks skip until it lapses. Manual syncs are not gated by the cooldown (they have their own 5-per-15-minutes route limit).
+
+**Failure handling in the worker.** Strava-side outcomes never fail the job: `rate_limited` starts the cooldown; `reauth_required` means the engine already tombstoned the connection (Settings shows Reconnect, and the scan's query excludes the row); `not_connected` means the athlete disconnected between enqueue and run; `transient` is left for the next scan tick — the cursor is untouched, so the athlete is still due. Only unexpected errors (a DB failure inside the reconciler) propagate, and pg-boss retries them with backoff (`DEFAULT_JOB_OPTIONS`). Account erasure purges pending `strava-sync` jobs like every other queue (`userId` is top-level in the payload).
+
+**Kill switch.** `STRAVA_AUTO_SYNC_ENABLED=false` disables all three paths (no subscription registration, no polling, no post-connect job; events are still acknowledged but ignored), leaving the manual Sync button as the only import path. `GET /api/v1/strava/status` reports the active mode as `autoSync: { enabled, webhook, intervalMinutes }`, which the Settings page turns into "usually within a minute of finishing" vs "checked every hour" copy.
+
+**Operator tool.** `pnpm strava:webhook status | register | delete` (`script/strava-webhook.ts`) shows what Strava holds for the application, forces a registration, or removes the current subscription.
+
 ### Database Schema
 
 The `strava_connections` table (`shared/schema/tables.ts`):
@@ -200,7 +228,8 @@ The `strava_connections` table (`shared/schema/tables.ts`):
 
 ### Known Limitations / Future Work
 
-- **No webhook auto-import**: syncing is user-triggered. Strava's webhook Push API could import new activities automatically, but requires a webhook subscription on the Strava API application (callback URL + verify token) and a publicly reachable endpoint — a deliberate follow-up.
+- **Deletions do not propagate**: a `delete` webhook event is acknowledged and ignored. The athlete may have enriched their own log with that recording, so removing it is left to the timeline's unlink control.
+- **One push subscription per Strava application**: a staging deployment sharing the production client id cannot receive webhooks at the same time. Whichever deployment registered first keeps the subscription; the other logs a mismatch and stays on the polling fallback (see [Automatic Sync](#automatic-sync)).
 - **Garmin parity**: the incremental-cursor and pagination semantics added to Strava sync have no Garmin equivalent yet.
 
 ---
@@ -408,7 +437,7 @@ const queue = new PgBoss(env.DATABASE_URL);
 The queue is started via `startQueue()`, which:
 
 1. Calls `queue.start()` to initialize pg-boss tables and begin polling (wrapped in a 30s timeout that calls `queue.stop()` on failure to avoid leaking the connection pool)
-2. Creates the seven named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `plan-generation`, `recompute-analytics`
+2. Creates the seven named queues: `auto-coach`, `embed-coaching-material`, `send-weekly-summary`, `send-missed-reminder`, `send-maf-test-reminder`, `plan-generation`, `recompute-analytics`. An eighth, `strava-sync`, is created by `registerStravaAutoSyncWorker()`, which `server/index.ts` calls right after `startQueue()` — the worker imports the sync engine in `server/strava.ts`, which must stay out of `server/queue.ts`'s import graph.
 3. Registers a worker function for each queue
 
 Errors on the queue emit to a global error handler that logs via the application logger.
@@ -465,6 +494,13 @@ Errors on the queue emit to a global error handler that logs via the application
 - **Worker**: Performs an atomic once-per-day claim via `storage.analyticsResults.markRecomputedOn(userId, feature, localDate)` (skips silently if already claimed today or the row was deleted), then regenerates: `regenerateAndStoreRacePrediction()` for `race_prediction` (always refreshes — deterministic fallback when AI is unavailable) or `generateCoachInsightsIfAllowed()` for `coach_insights` (self-gates on AI consent/budget, leaving the previous insight intact when skipped).
 - **Enqueued via**: `queue.send()` with `DEFAULT_JOB_OPTIONS` plus `singletonKey: recompute:<feature>:<userId>` and `singletonSeconds: 3600`, which coalesces duplicate enqueues for the same user+feature within the hour. Combined with the per-day claim, this makes the job safely idempotent. See [API Reference — Coach Insights / Race Prediction](api-reference.md) for the stored-first read endpoints this keeps warm.
 
+#### `strava-sync`
+
+- **Purpose**: One incremental Strava sync for one athlete, in the background — the automatic-sync counterpart of `POST /api/v1/strava/sync`, running the same `syncStravaForUser()` engine (see [Strava → Automatic Sync](#automatic-sync)).
+- **Payload**: `{ userId: string, trigger: "webhook" | "poll" | "connect" }`
+- **Worker**: `registerStravaAutoSyncWorker()` in `server/services/stravaAutoSync.ts`. Calls `runStravaSyncJob()`, which skips during the shared 429 cooldown, runs the engine, and absorbs Strava-side outcomes (`rate_limited` starts the cooldown; `reauth_required`, `not_connected` and `transient` are logged and left for the next polling scan) rather than failing the job.
+- **Enqueued via**: `enqueueStravaSync()` → `queue.sendDebounced()` with `DEFAULT_JOB_OPTIONS`, `singletonKey: strava-sync:<userId>` and a 60-second window (`singletonNextSlot` on), so bursts collapse to one job per athlete per window plus one follow-up. Retries apply only to unexpected errors (DB failures); the engine's dedup and reconciler make a replay safe.
+
 ### Job Processing Pattern
 
 Every worker receives an array of `Job[]` objects and processes them concurrently via the shared `runBatch()` helper, which uses a bounded `p-limit` pool (`IN_BATCH_CONCURRENCY = 2`) and `Promise.allSettled` semantics so a single poison job does not discard the whole batch. Failed jobs still aggregate into a thrown summary error so pg-boss sees the batch as failed and can retry only the failed ones on the next poll. Each job is additionally wrapped in a 50-minute wall-clock timeout (`JOB_TIMEOUT_MS`) that aborts the job — deliberately 10 minutes below the 60-minute `expireInMinutes` so an orphaned upstream call can tear down before pg-boss treats the job as re-dispatchable.
@@ -490,7 +526,7 @@ All `queue.send()` calls are properly `await`-ed to ensure job enqueue operation
 
 ### Overview
 
-The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **eleven recurring** scheduled jobs (the daily email check plus ten maintenance/telemetry jobs) and one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
+The application uses [node-cron](https://github.com/node-cron/node-cron) for in-process scheduled task execution. There are **thirteen recurring** scheduled jobs (the daily email check plus twelve maintenance/telemetry/sync jobs), one **conditional startup catch-up** that only fires when the server starts after 09:00 UTC, and a one-shot Strava webhook subscription check 30 seconds after every boot. Cron is safe for multi-replica production because each job body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`), so duplicate schedulers skip work when more than one app instance is running. Route rate limits and short-lived auth/AI/RAG caches are also backed by Postgres shared state.
 
 ### Registered Cron Jobs
 
@@ -516,6 +552,8 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 | RAG chunk prune | `50 3 * * *` UTC | `ragChunkPrune` |
 | Account erasure sweep | `35 * * * *` UTC (hourly) | `accountErasureSweep` |
 | Nutrition push reminders | `25 * * * *` UTC (hourly; per-user refuel window + 20:00 local logging nudge) | `nutritionReminders` |
+| Strava auto-sync polling scan | `7,22,37,52 * * * *` UTC (every 15 minutes) | `stravaAutoSync` |
+| Strava webhook subscription check | `20 */6 * * *` UTC (six-hourly, plus 30 s after boot) | `stravaWebhookEnsure` |
 
 #### Analytics Recompute Scan
 
@@ -524,6 +562,11 @@ The application uses [node-cron](https://github.com/node-cron/node-cron) for in-
 - **Scope**: Only users who already have a stored `analytics_results` row (i.e. who have opened Coach Insights or the Race Predictor) **and** whose stored result is stale — a workout was logged after `last_workout_date_at_generation`, or the workout-log count no longer matches `entry_count_at_generation` (catches a change, like a same-day second session, that leaves the date untouched). AI is therefore never spent for users who never used the feature.
 - **Effect**: Enqueues a [`recompute-analytics`](#job-types) job per stale (user, feature). The job's atomic per-day claim plus the queue `singletonKey` prevent duplicate recomputes (e.g. from a DST-doubled local hour or at-least-once delivery).
 - **Advisory lock**: `analyticsRecompute`
+
+#### Strava Automatic Sync
+
+- **Polling scan** — `7,22,37,52 * * * *` (every 15 minutes) in `Etc/UTC`, advisory lock `stravaAutoSync`. Calls `runStravaAutoSyncScan(storage, now)` (`server/services/stravaAutoSync.ts`), which enqueues a [`strava-sync`](#strava-sync) job for up to 10 connections whose cursor is older than `STRAVA_AUTO_SYNC_INTERVAL_MINUTES`, stalest first. No-ops under `STRAVA_AUTO_SYNC_ENABLED=false` and while the shared 429 cooldown is in force. See [Strava → Automatic Sync](#automatic-sync).
+- **Webhook subscription check** — `20 */6 * * *` (six-hourly) in `Etc/UTC`, advisory lock `stravaWebhookEnsure`, plus a one-shot run 30 seconds after every boot under the same lock. Calls `ensureStravaWebhookSubscription()` (`server/stravaWebhook.ts`): verifies the push subscription for this deployment's callback URL and creates it when missing. It runs after boot rather than as a startup phase because Strava validates the callback synchronously while creating the subscription, so the server must already be serving requests.
 
 ### Startup Catch-Up
 

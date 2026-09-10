@@ -10,9 +10,11 @@ import { runStrandedErasureSweep } from "./services/accountErasureService";
 import { runAnalyticsRecomputeScan } from "./services/analyticsRecomputeScheduler";
 import { embedMissingFoods, pruneDanglingFoodEmbeddings } from "./services/nutrition/foodEmbeddings";
 import { runNutritionReminderCron } from "./services/nutrition/reminders";
+import { runStravaAutoSyncScan } from "./services/stravaAutoSync";
 import { runStructuredExerciseDailyRollup } from "./services/structuredExerciseHealth";
 import { cleanupExpiredSharedRuntimeState } from "./sharedRuntimeState";
 import type { IStorage } from "./storage";
+import { ensureStravaWebhookSubscription } from "./stravaWebhook";
 
 let task: ReturnType<typeof cron.schedule> | null = null;
 let idempotencyCleanupTask: ReturnType<typeof cron.schedule> | null = null;
@@ -26,6 +28,9 @@ let nutritionEmbeddingTask: ReturnType<typeof cron.schedule> | null = null;
 let nutritionRemindersTask: ReturnType<typeof cron.schedule> | null = null;
 let ragChunkPruneTask: ReturnType<typeof cron.schedule> | null = null;
 let accountErasureSweepTask: ReturnType<typeof cron.schedule> | null = null;
+let stravaAutoSyncTask: ReturnType<typeof cron.schedule> | null = null;
+let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
+let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -36,7 +41,7 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_016. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_018. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -54,6 +59,8 @@ export const CRON_LOCK_KEYS = {
   nutritionReminders: 42_010_013n,
   ragChunkPrune: 42_010_014n,
   accountErasureSweep: 42_010_015n,
+  stravaAutoSync: 42_010_016n,
+  stravaWebhookEnsure: 42_010_017n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -407,6 +414,52 @@ export function startCron(storage: IStorage): void {
   // bearer:disable javascript_lang_logger_leak — static schedule copy only
   logger.info({ context: "cron" }, "Nutrition reminders scheduled: hourly (refuel window + 20:00 local logging nudge)");
 
+  // Strava automatic sync — the polling fallback behind the webhook push
+  // (server/services/stravaAutoSync.ts). Every 15 minutes, queue a sync for
+  // the athletes whose cursor is older than STRAVA_AUTO_SYNC_INTERVAL_MINUTES,
+  // stalest first and capped per tick so a large user base can never spend
+  // the app's shared Strava read budget in one go. No-ops under the kill
+  // switch and while a Strava 429 cooldown is in force.
+  stravaAutoSyncTask = scheduleLockedCronJob("stravaAutoSync", "7,22,37,52 * * * *", async () => {
+    const result = await runStravaAutoSyncScan(storage, new Date());
+    if (result.enqueued === 0) return;
+    // Counts and a static context only, no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info(
+      { context: "cron", ...result },
+      `Strava auto-sync: enqueued ${result.enqueued} sync job(s) for ${result.usersChecked} due connection(s)`,
+    );
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Strava auto-sync scan scheduled: every 15 minutes");
+
+  // Keep the Strava webhook push subscription registered (one per Strava
+  // application: created once, then just re-verified). Six-hourly, plus once
+  // shortly after boot — Strava validates the callback URL synchronously
+  // while creating the subscription, so the server has to be serving
+  // requests first, which is why this cannot run in the startup sequence.
+  stravaWebhookEnsureTask = scheduleLockedCronJob("stravaWebhookEnsure", "20 */6 * * *", async () => {
+    await ensureStravaWebhookSubscription(logger);
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Strava webhook subscription check scheduled: every 6 hours and 30s after boot");
+  // STARTUP_CATCH_UP_DELAY_MS is a compile-time constant, never request data,
+  // so the DevSkim untrusted-delay review does not apply here.
+  stravaWebhookStartupTimer = setTimeout(() => { // DevSkim: ignore DS172411
+    stravaWebhookStartupTimer = null;
+    runCronJobWithLock("stravaWebhookEnsure", () => ensureStravaWebhookSubscription(logger)).catch(
+      (err: unknown) => {
+        // err is a DB/upstream error; no PII.
+        // bearer:disable javascript_lang_logger_leak
+        logger.error({ context: "cron", err }, "Startup Strava webhook subscription check failed");
+      },
+    );
+  }, STARTUP_CATCH_UP_DELAY_MS);
+  // A pending boot-time check must never hold the process open on shutdown.
+  stravaWebhookStartupTimer.unref();
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -484,5 +537,17 @@ export async function stopCron(): Promise<void> {
   if (accountErasureSweepTask) {
     await accountErasureSweepTask.stop();
     accountErasureSweepTask = null;
+  }
+  if (stravaAutoSyncTask) {
+    await stravaAutoSyncTask.stop();
+    stravaAutoSyncTask = null;
+  }
+  if (stravaWebhookEnsureTask) {
+    await stravaWebhookEnsureTask.stop();
+    stravaWebhookEnsureTask = null;
+  }
+  if (stravaWebhookStartupTimer) {
+    clearTimeout(stravaWebhookStartupTimer);
+    stravaWebhookStartupTimer = null;
   }
 }

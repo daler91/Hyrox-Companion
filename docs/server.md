@@ -93,7 +93,7 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 
 1. **Clerk auth setup** -- `setupAuth(app)` from `server/clerkAuth.ts`
 2. **CSRF token endpoint** -- `GET /api/v1/csrf-token` is mounted before the protecting middleware so the safe-method request can set the cookie.
-3. **CSRF protection** -- `app.use("/api/v1", csrfProtection)` guards every mutating `/api/v1` request.
+3. **CSRF protection** -- `app.use("/api/v1", csrfProtection)` guards every mutating `/api/v1` request. The one exception mounts just before it: `registerStravaWebhookRoutes(app)` from `server/stravaWebhook.ts` registers `GET`/`POST /api/v1/strava/webhook`, which Strava calls without a token (see [Integrations → Automatic Sync](integrations.md#automatic-sync)).
 4. **Strava + Garmin OAuth routes** -- `registerStravaRoutes(app)` from `server/strava.ts` and `registerGarminRoutes(app)` from `server/garmin.ts`.
 5. **API route modules** -- Each mounted via `app.use(router)`:
 
@@ -328,6 +328,10 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
 | `STRAVA_STATE_SECRET` | No | Secret for signing Strava OAuth state tokens |
+| `STRAVA_AUTO_SYNC_ENABLED` | No | Master switch for automatic Strava sync (default `true`) |
+| `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | No | Polling-fallback staleness threshold (default `60`) |
+| `STRAVA_WEBHOOKS_ENABLED` | No | Register and act on the Strava push subscription (default `true`) |
+| `STRAVA_WEBHOOK_VERIFY_TOKEN` | No | Webhook validation token; derived from the client secret when unset |
 | `APP_URL` | No | Public application URL (used for CORS, OAuth callbacks) |
 | `ALLOWED_ORIGINS` | No | Comma-separated list of additional CORS origins |
 | `TRUST_PROXY` | No | Express `trust proxy` setting for client IP derivation (default `1`) |
@@ -391,6 +395,8 @@ Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); 
 | Stale auto-coach recovery | Every 10 minutes | `staleAutoCoaching` |
 | pg-boss queue-depth telemetry | Every 5 minutes | `queueDepthTelemetry` |
 | Structured exercise health rollup | Daily at 02:10 UTC | `structuredExerciseRollup` |
+| Strava auto-sync polling scan | Every 15 minutes | `stravaAutoSync` |
+| Strava webhook subscription check | Every 6 hours, plus 30 seconds after boot | `stravaWebhookEnsure` |
 | Startup email catch-up | 30 seconds after late startup | `startupEmailCatchUp` |
 
 Cron jobs run in-process on each app replica, but each job body is wrapped in a PostgreSQL advisory lock so only one replica performs the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.

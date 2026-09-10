@@ -76,6 +76,24 @@ const envSchema = z
     STRAVA_CLIENT_ID: z.string().optional(),
     STRAVA_CLIENT_SECRET: z.string().optional(),
     STRAVA_STATE_SECRET: z.string().min(32).optional(),
+    // Automatic Strava sync (server/services/stravaAutoSync.ts). "false" turns
+    // the whole thing off — no webhook subscription, no polling, no
+    // post-connect import — leaving the manual Sync button as the only path.
+    STRAVA_AUTO_SYNC_ENABLED: z.enum(["true", "false"]).default("true"),
+    // How stale a connection's last_synced_at may get before the polling
+    // fallback re-syncs it. Webhooks make this a safety net, so the default
+    // is deliberately relaxed: every connected athlete costs about
+    // 1440 / interval Strava read requests per day out of the app's shared
+    // 1000-reads/day budget.
+    STRAVA_AUTO_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(5).default(60),
+    // Strava webhook push subscription (server/stravaWebhook.ts). "false"
+    // stops the server from registering a subscription; the polling fallback
+    // still runs. The callback route stays mounted either way.
+    STRAVA_WEBHOOKS_ENABLED: z.enum(["true", "false"]).default("true"),
+    // Verify token Strava echoes back when it validates the callback URL.
+    // Optional: when unset it is derived from STRAVA_CLIENT_SECRET, which is
+    // stable across restarts and replicas.
+    STRAVA_WEBHOOK_VERIFY_TOKEN: z.string().min(8).optional(),
     APP_URL: z.url().optional(),
     VECTOR_DATABASE_URL: z.url().optional(),
     ALLOWED_ORIGINS: z.string().optional(),

@@ -6,7 +6,12 @@ export function setupAuthIntercepts(overrides?: {
   personalRecords?: any[];
   exerciseAnalytics?: any[];
   trainingOverview?: any;
-  stravaStatus?: { connected: boolean; athleteId?: string; lastSyncedAt?: string | null };
+  stravaStatus?: {
+    connected: boolean;
+    athleteId?: string;
+    lastSyncedAt?: string | null;
+    autoSync?: { enabled: boolean; webhook: boolean; intervalMinutes: number };
+  };
   preferences?: {
     weightUnit: string;
     distanceUnit: string;

@@ -91,7 +91,8 @@ export default function Settings() {
     if (stravaResult === "connected") {
       toast({
         title: "Strava Connected",
-        description: "Your Strava account has been successfully connected.",
+        description:
+          "Your recent activities are importing now, and new ones will sync automatically.",
       });
     } else {
       toast({

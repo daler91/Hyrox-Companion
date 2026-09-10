@@ -549,3 +549,218 @@ describe('getValidAccessToken', () => {
     await expect(promise).resolves.toEqual({ ok: false, reason: 'transient' });
   });
 });
+
+describe('syncStravaForUser', () => {
+  const FIXED_NOW = 1700000000000;
+
+  const connection = {
+    id: 'conn-1',
+    userId: 'user-1',
+    stravaAthleteId: 'athlete-1',
+    accessToken: 'stored-access',
+    refreshToken: 'stored-refresh',
+    expiresAt: new Date(FIXED_NOW + 3_600_000),
+    scope: 'activity:read_all',
+    lastSyncedAt: new Date(FIXED_NOW - 2 * MS_PER_DAY),
+    requiresReauth: false,
+    createdAt: new Date(FIXED_NOW - 10 * MS_PER_DAY),
+  };
+
+  /** A list-endpoint activity row; higher ids are newer. */
+  function activity(id: number) {
+    const startedAt = new Date(FIXED_NOW - (100 - id) * 3_600_000);
+    return {
+      id,
+      name: `Run ${id}`,
+      type: 'Run',
+      sport_type: 'Run',
+      start_date: startedAt.toISOString(),
+      start_date_local: startedAt.toISOString(),
+      distance: 5000,
+      moving_time: 1500,
+      elapsed_time: 1600,
+      total_elevation_gain: 20,
+      average_speed: 3.3,
+      max_speed: 4.1,
+    };
+  }
+
+  const zeroCounts = { enriched: 0, completedPlanDays: 0, suggested: 0, standalone: 0, skipped: 0 };
+  const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+  let getStravaConnection: ReturnType<typeof vi.fn>;
+  let getExistingStravaActivityIds: ReturnType<typeof vi.fn>;
+  let updateStravaLastSync: ReturnType<typeof vi.fn>;
+  let setStravaReauthRequired: ReturnType<typeof vi.fn>;
+  let reconcileStravaActivities: ReturnType<typeof vi.fn>;
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let syncStravaForUser: typeof import('./strava')['syncStravaForUser'];
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(FIXED_NOW));
+    vi.resetModules();
+
+    getStravaConnection = vi.fn().mockResolvedValue(connection);
+    getExistingStravaActivityIds = vi.fn().mockResolvedValue([]);
+    updateStravaLastSync = vi.fn().mockResolvedValue(undefined);
+    setStravaReauthRequired = vi.fn().mockResolvedValue(undefined);
+    reconcileStravaActivities = vi.fn().mockResolvedValue({ ...zeroCounts });
+
+    vi.doMock('./env', () => ({
+      env: {
+        STRAVA_CLIENT_ID: 'client-id',
+        STRAVA_CLIENT_SECRET: 'client-secret',
+        STRAVA_STATE_SECRET: 'dedicated-strava-secret-12345678', // gitleaks:allow — fake test-only value, not a credential
+        DATABASE_URL: 'postgres://dummy',
+        APP_URL: 'https://app.example.com',
+      },
+    }));
+    vi.doMock('./storage', () => ({
+      storage: {
+        users: {
+          getStravaConnection,
+          getUser: vi.fn().mockResolvedValue({ id: 'user-1', distanceUnit: 'km' }),
+          updateStravaTokens: vi.fn(),
+          updateStravaLastSync,
+          setStravaReauthRequired,
+        },
+        workouts: { getExistingStravaActivityIds },
+      },
+    }));
+    vi.doMock('./advisoryLock', () => ({
+      withPgAdvisoryLock: vi.fn(async (_pool, _opts, run) => ({ acquired: true, value: await run() })),
+    }));
+    vi.doMock('./services/stravaReconciler', () => ({ reconcileStravaActivities }));
+    // The producer pulls in pg-boss; the engine never enqueues anything itself.
+    vi.doMock('./services/stravaSyncQueue', () => ({
+      enqueueStravaSync: vi.fn(),
+      getStravaAutoSyncIntervalMs: () => 3_600_000,
+      isStravaAutoSyncEnabled: () => true,
+    }));
+    vi.doMock('./stravaWebhook', () => ({ getStravaWebhookState: vi.fn().mockResolvedValue(null) }));
+
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    ({ syncStravaForUser } = await import('./strava'));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.doUnmock('./env');
+    vi.doUnmock('./storage');
+    vi.doUnmock('./advisoryLock');
+    vi.doUnmock('./services/stravaReconciler');
+    vi.doUnmock('./services/stravaSyncQueue');
+    vi.doUnmock('./stravaWebhook');
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('fetches from the overlap cursor, dedups, enriches calories, reconciles and advances the cursor', async () => {
+    fetchMock
+      // The activities page (short → single page).
+      .mockResolvedValueOnce(stravaResponse([activity(1), activity(2)]))
+      // Calorie detail for the one new activity.
+      .mockResolvedValueOnce(stravaResponse({ id: 2, calories: 321.4 }));
+    getExistingStravaActivityIds.mockResolvedValue(['1']);
+    reconcileStravaActivities.mockResolvedValue({ ...zeroCounts, enriched: 1 });
+
+    const outcome = await syncStravaForUser('user-1', log);
+
+    expect(outcome).toEqual({
+      ok: true,
+      imported: 1,
+      enriched: 1,
+      completedPlanDays: 0,
+      suggested: 0,
+      standalone: 0,
+      skipped: 1,
+      total: 2,
+      hasMore: false,
+    });
+
+    const listUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(listUrl.searchParams.get('after')).toBe(
+      String(Math.floor((connection.lastSyncedAt.getTime() - 7 * MS_PER_DAY) / 1000)),
+    );
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/api/v3/activities/2');
+
+    expect(getExistingStravaActivityIds).toHaveBeenCalledWith('user-1', ['1', '2']);
+    const [userId, items] = reconcileStravaActivities.mock.calls[0];
+    expect(userId).toBe('user-1');
+    expect(items).toHaveLength(1);
+    expect(items[0].activity.id).toBe(2);
+    expect(items[0].row.stravaActivityId).toBe('2');
+    expect(items[0].row.calories).toBe(321);
+    // A complete sync moves the cursor to "now" (no explicit cursor argument).
+    expect(updateStravaLastSync).toHaveBeenCalledWith('user-1');
+    expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ imported: 1 }), 'strava.sync.ok');
+  });
+
+  it('advances the cursor only through the fetched window when the page cap is hit', async () => {
+    const fullPage = Array.from({ length: 200 }, (_, i) => activity(i + 1));
+    fetchMock.mockImplementation(async () => stravaResponse(fullPage));
+    getExistingStravaActivityIds.mockImplementation(async (_userId: string, ids: string[]) => ids);
+
+    const outcome = await syncStravaForUser('user-1', log);
+
+    expect(outcome).toMatchObject({ ok: true, hasMore: true, total: 1000, imported: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(updateStravaLastSync).toHaveBeenCalledWith('user-1', new Date(activity(200).start_date));
+  });
+
+  it('reports the token failure without touching Strava when nothing is connected', async () => {
+    getStravaConnection.mockResolvedValue(undefined);
+
+    await expect(syncStravaForUser('user-1', log)).resolves.toEqual({
+      ok: false,
+      reason: 'not_connected',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a 429 after retries as rate_limited with the Retry-After hint', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 429, '120'));
+
+    await expect(syncStravaForUser('user-1', log)).resolves.toEqual({
+      ok: false,
+      reason: 'rate_limited',
+      retryAfterSeconds: 120,
+    });
+    expect(updateStravaLastSync).not.toHaveBeenCalled();
+    expect(setStravaReauthRequired).not.toHaveBeenCalled();
+  });
+
+  it('tombstones the connection and reports reauth_required when Strava revoked access', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 401));
+
+    await expect(syncStravaForUser('user-1', log)).resolves.toEqual({
+      ok: false,
+      reason: 'reauth_required',
+    });
+    expect(setStravaReauthRequired).toHaveBeenCalledWith('user-1');
+    expect(updateStravaLastSync).not.toHaveBeenCalled();
+  });
+
+  it('reports an upstream outage as transient and leaves the cursor alone', async () => {
+    fetchMock.mockResolvedValue(stravaResponse(null, 503));
+
+    await expect(syncStravaForUser('user-1', log)).resolves.toEqual({
+      ok: false,
+      reason: 'transient',
+    });
+    expect(updateStravaLastSync).not.toHaveBeenCalled();
+  });
+
+  it('lets a reconciler failure propagate instead of advancing the cursor past it', async () => {
+    fetchMock.mockResolvedValueOnce(stravaResponse([activity(3)]));
+    // No calorie detail: the enrichment fetch fails softly.
+    fetchMock.mockResolvedValueOnce(stravaResponse(null, 404));
+    reconcileStravaActivities.mockRejectedValue(new Error('db down'));
+
+    await expect(syncStravaForUser('user-1', log)).rejects.toThrow('db down');
+    expect(updateStravaLastSync).not.toHaveBeenCalled();
+  });
+});
