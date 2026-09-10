@@ -15,8 +15,8 @@ import {
   __resetCircuitBreakerForTests,
   assertBreakerClosed,
   CircuitBreakerOpenError,
-  loadPersistedBreakerState,
   isProviderHealthSignal,
+  loadPersistedBreakerState,
   recordBreakerFailure,
   recordBreakerSuccess,
 } from "./circuitBreaker";

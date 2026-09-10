@@ -1,6 +1,6 @@
+import { KCAL_PER_G } from "@shared/nutritionScaling";
 import type { Food, MicroSummaryRow, NutritionMacroTotals, NutritionTarget } from "@shared/schema";
 import type { MealType } from "@shared/schema/enums";
-import { KCAL_PER_G } from "@shared/nutritionScaling";
 import { MICRO_DISPLAY_DEFS } from "@shared/schema/micros";
 
 const YMD = new Intl.DateTimeFormat("en-CA", {
