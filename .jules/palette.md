@@ -68,3 +68,6 @@
 ## 2026-09-05 - Missing TooltipProviders
 **Learning:** React UI components from Radix UI using `<Tooltip>` in isolated forms sometimes lose their provider contexts and break functionality if they lack an encompassing `<TooltipProvider>`. Always explicitly include a local `<TooltipProvider>` alongside `<Tooltip>` if no global provider applies.
 **Action:** Consistently review new `<Tooltip>` integrations, particularly in deeply nested or newly extracted layout components, for corresponding local `<TooltipProvider>` enclosures.
+## 2026-09-09 - Fix Radix Tooltips on disabled buttons
+**Learning:** Radix UI tooltips attached to disabled buttons will not fire because the disabled attribute sets `pointer-events: none`, meaning they don't capture `mouseenter`/`mouseleave`.
+**Action:** When adding tooltips to buttons that can be disabled, wrap the disabled button in a `<span>` element to capture the pointer event, setting `tabIndex={isDeleting ? 0 : -1}` to ensure keyboard accessibility isn't lost. And apply `disabled:pointer-events-none` to the button to override standard cursor styles while ensuring the span still fires the tooltip.
