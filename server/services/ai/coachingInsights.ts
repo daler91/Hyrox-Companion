@@ -30,11 +30,28 @@ export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"
     return { rpeTrend: "insufficient_data", fatigueFlag: false, undertrainingFlag: false };
   }
 
-  const last3 = withRpe.slice(0, 3);
-  const prior3 = withRpe.slice(3, 6);
-  const avgLast3 = Math.round((last3.reduce((s, w) => s + (w.rpe ?? 0), 0) / last3.length) * 10) / 10;
+  // ⚡ Bolt Performance Optimization: Replace slice().reduce() with standard for loops
+  // to avoid intermediate array allocations and O(N) memory overhead, improving RPE trend
+  // calculation performance in coaching insights.
+  let sumLast3 = 0;
+  let last3Count = 0;
+  let sumPrior3 = 0;
+  let prior3Count = 0;
 
-  if (prior3.length < 2) {
+  for (let i = 0; i < withRpe.length && i < 6; i++) {
+    if (i < 3) {
+      sumLast3 += withRpe[i].rpe ?? 0;
+      last3Count++;
+    } else {
+      sumPrior3 += withRpe[i].rpe ?? 0;
+      prior3Count++;
+    }
+  }
+
+  const avgLast3 = Math.round((sumLast3 / last3Count) * 10) / 10;
+
+
+  if (prior3Count < 2) {
     return {
       rpeTrend: "insufficient_data",
       avgRpeLast3: avgLast3,
@@ -43,7 +60,7 @@ export function computeRpeTrend(recentWorkouts: TrainingContext["recentWorkouts"
     };
   }
 
-  const avgPrior3 = Math.round((prior3.reduce((s, w) => s + (w.rpe ?? 0), 0) / prior3.length) * 10) / 10;
+  const avgPrior3 = Math.round((sumPrior3 / prior3Count) * 10) / 10;
   const diff = avgLast3 - avgPrior3;
 
   let rpeTrend: "rising" | "stable" | "falling";
