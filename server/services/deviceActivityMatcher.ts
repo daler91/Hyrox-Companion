@@ -470,11 +470,20 @@ export function planDeviceActivityMatches(
 ): PlannedMatch[] {
   const decisions: MatchDecision[] = activities.map(() => ({ outcome: "none", score: null }));
   const pairs: Array<{ index: number; scored: CandidateScore }> = [];
+  // rankCandidates is pure and only depends on (activity, candidatesByDate),
+  // so cache each activity's ranked list as it's computed here rather than
+  // recomputing it below for every activity that ends up undecided. On a
+  // full-history Strava backfill (hundreds of activities per sync), most
+  // activities score below the suggest threshold against every candidate on
+  // their date, so without this every one of those was ranked twice.
+  const rankedByIndex = new Map<number, CandidateScore[]>();
 
   activities.forEach((activity, index) => {
     if (activity.movingTimeSec < MIN_MATCHABLE_MOVING_SEC) return;
     const candidates = candidatesByDate.get(activity.localDate) ?? [];
-    for (const scored of rankCandidates(activity, candidates)) {
+    const ranked = rankCandidates(activity, candidates);
+    rankedByIndex.set(index, ranked);
+    for (const scored of ranked) {
       if (scored.score >= thresholds.suggest) pairs.push({ index, scored });
     }
   });
@@ -498,10 +507,14 @@ export function planDeviceActivityMatches(
   }
 
   // Record the best score even for activities that matched nothing, so the
-  // sync log can show how close a "none" came.
+  // sync log can show how close a "none" came. Reuse the ranking computed
+  // above when we have it; only activities under MIN_MATCHABLE_MOVING_SEC
+  // (skipped by the loop above) still need a fresh rankCandidates call.
   activities.forEach((activity, index) => {
     if (decided.has(index)) return;
-    const best = rankCandidates(activity, candidatesByDate.get(activity.localDate) ?? [])[0];
+    const best =
+      rankedByIndex.get(index)?.[0] ??
+      rankCandidates(activity, candidatesByDate.get(activity.localDate) ?? [])[0];
     decisions[index] = { outcome: "none", score: best?.score ?? null };
   });
 
