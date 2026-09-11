@@ -11,11 +11,29 @@ The load governor runs first. If it modifies an upcoming workout, provider sugge
 
 ---
 
+## What Triggers A Pass
+
+Every producer goes through `enqueueAutoCoach` / `enqueueAutoCoachInBackground` in `server/services/autoCoachQueue.ts`, which owns the singleton key (`auto-coach:<userId>`) and the 60-second window. Sharing one key is what guarantees an athlete never gets two concurrent passes — and two AI bills — for a single change.
+
+| Trigger | Fired from |
+| --- | --- |
+| `workout-created` | `createWorkoutAndScheduleCoaching` |
+| `workout-date-changed` | `updateWorkout`, when the date actually moves |
+| `plan-day-completed` | `updatePlanDayStatus`, on the transition into completed |
+| `plan-day-rescheduled` | `updatePlanDayWithCleanup` / `updatePlanDayStatus`, on a date change |
+| `logged-sets-edited` | a set added, patched, or deleted on an existing workout log |
+
+`logged-sets-edited` is what keeps a corrected session honest. Editing a completed workout's sets used to drop the analytics caches and stop there, leaving the coach note and the adherence percentage describing the sets that were replaced — so the only way to re-run either was to reopen the day, which on a Strava-linked day splits the recording back out into its own entry. The re-derivation lives in `refreshDerivedStateAfterLoggedSetChange`, which also rewrites the adherence snapshot.
+
+It does not multiply passes across a logging session: logging a planned day edits plan-day sets and an ad-hoc session is created whole on save, so neither reaches this trigger. Only the review surface for an already-completed workout does.
+
+---
+
 ## End-To-End Flow
 
 ```mermaid
 flowchart TD
-    A["User logs workout or moves scheduled workout"] --> B["Server writes workout or plan-day date change"]
+    A["User logs a workout, moves a scheduled one,<br/>or edits the sets on one already logged"] --> B["Server writes the workout,<br/>plan-day date change, or set edit"]
     B --> C["Queue auto-coach job<br/>pg-boss: auto-coach<br/>singleton per user for 60s"]
     C --> D["triggerAutoCoach(userId)<br/>server/services/coachService.ts"]
 

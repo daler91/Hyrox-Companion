@@ -4,7 +4,12 @@ vi.mock("../../../services/analyticsRouteCache", () => ({
   invalidateAnalyticsCachesForUser: vi.fn(),
 }));
 
+vi.mock("../../../services/workoutService/loggedSetChange", () => ({
+  refreshDerivedStateAfterLoggedSetChange: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { invalidateAnalyticsCachesForUser } from "../../../services/analyticsRouteCache";
+import { refreshDerivedStateAfterLoggedSetChange } from "../../../services/workoutService/loggedSetChange";
 import { createMutateExerciseSetUseCase } from "../mutateExerciseSet.usecase";
 
 const WORKOUT = { kind: "workoutLog" as const, ownerId: "w1" };
@@ -69,6 +74,61 @@ describe("mutateExerciseSet use case — derived-cache invalidation", () => {
       id: "s1",
     });
     await expect(useCase.deleteSet(WORKOUT, "s1", "user-1")).resolves.toBe(true);
+  });
+});
+
+describe("mutateExerciseSet use case — adherence and coach refresh", () => {
+  it("re-derives adherence and the coach note after every successful logged-set write", async () => {
+    // Without this an athlete correcting a session to the exercises they
+    // actually did kept a compliance percentage measured against the sets they
+    // replaced, and a coach note describing them. Re-completing the day was the
+    // only way to re-run either — and on a Strava-linked day that meant
+    // reopening, which splits the recording back into its own entry.
+    const { useCase } = makeUseCase();
+
+    await useCase.updateSet(WORKOUT, "s1", { reps: 5 }, "user-1");
+    await useCase.addSet(WORKOUT, { exerciseName: "squat" } as never, "user-1");
+    await useCase.deleteSet(WORKOUT, "s1", "user-1");
+
+    expect(refreshDerivedStateAfterLoggedSetChange).toHaveBeenCalledTimes(3);
+    expect(refreshDerivedStateAfterLoggedSetChange).toHaveBeenCalledWith("w1", "user-1");
+  });
+
+  it("leaves planned-day sets alone — a prescription has no adherence to itself", async () => {
+    const { useCase } = makeUseCase();
+
+    await useCase.updateSet(PLAN_DAY, "s1", { reps: 5 }, "user-1");
+    await useCase.addSet(PLAN_DAY, { exerciseName: "squat" } as never, "user-1");
+    await useCase.deleteSet(PLAN_DAY, "s1", "user-1");
+
+    expect(refreshDerivedStateAfterLoggedSetChange).not.toHaveBeenCalled();
+  });
+
+  it("does not re-derive when the write found nothing to change", async () => {
+    const { useCase } = makeUseCase({
+      updateSet: vi.fn().mockResolvedValue(undefined),
+      deleteSet: vi.fn().mockResolvedValue(false),
+    });
+
+    await useCase.updateSet(WORKOUT, "missing", { reps: 5 }, "user-1");
+    await useCase.deleteSet(WORKOUT, "missing", "user-1");
+
+    expect(refreshDerivedStateAfterLoggedSetChange).not.toHaveBeenCalled();
+  });
+
+  it("waits for the refresh before returning, so the client's refetch sees fresh adherence", async () => {
+    let settled = false;
+    vi.mocked(refreshDerivedStateAfterLoggedSetChange).mockImplementationOnce(
+      async () => {
+        await Promise.resolve();
+        settled = true;
+      },
+    );
+    const { useCase } = makeUseCase();
+
+    await useCase.updateSet(WORKOUT, "s1", { reps: 5 }, "user-1");
+
+    expect(settled).toBe(true);
   });
 });
 
