@@ -375,7 +375,7 @@ pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection st
 
 | Queue | Worker | Description |
 |-------|--------|-------------|
-| `auto-coach` | `triggerAutoCoach(userId)` | Runs AI-driven coaching adjustments for a user |
+| `auto-coach` | `triggerAutoCoach(userId)` | Runs AI-driven coaching adjustments for a user. Enqueue only through `server/services/autoCoachQueue.ts`, which owns the per-user singleton key that keeps concurrent triggers to one pass. See [AI Coach Auto-Regulation Flow](./ai-coach-auto-regulation-flow.md) for the full trigger list |
 | `embed-coaching-material` | `embedCoachingMaterial(material)` | Generates and stores vector embeddings for coaching documents |
 | `send-weekly-summary` | `processWeeklySummary(...)` | Sends one user's weekly training summary email |
 | `send-missed-reminder` | `processMissedWorkoutReminder(...)` | Sends one user's missed-workout reminder email |

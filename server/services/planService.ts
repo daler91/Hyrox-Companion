@@ -7,24 +7,18 @@ import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { db, type Tx } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { logger } from "../logger";
-import { DEFAULT_JOB_OPTIONS, queue } from "../queue";
 import { samplePlanDays } from "../samplePlan";
 import { storage } from "../storage";
+import { enqueueAutoCoachInBackground } from "./autoCoachQueue";
 import { releaseStravaActivityInTx, stripStravaActivityLabel } from "./deviceActivityLink";
 
-// Shared with workoutService: moving a plan day or logged workout changes
-// the shape of the athlete's upcoming schedule, so re-run the auto-coach
-// so its suggestions/review notes reflect the new order. Singleton-keyed
-// per-user with a 60s window so a burst of reschedules (e.g. dragging
-// three workouts in a row) collapses into a single job.
+// Moving a plan day changes the shape of the athlete's upcoming schedule, so
+// re-run the auto-coach and let its suggestions/review notes reflect the new
+// order. enqueueAutoCoachInBackground owns the singleton key and window that
+// collapse a burst of reschedules (dragging three workouts in a row) into one
+// job — see services/autoCoachQueue.
 function enqueueAutoCoachForReschedule(userId: string): void {
-  queue
-    .send(
-      "auto-coach",
-      { userId },
-      { ...DEFAULT_JOB_OPTIONS, singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
-    )
-    .catch((err) => logger.error({ err }, "Failed to queue auto-coach job after reschedule"));
+  enqueueAutoCoachInBackground(userId, "plan-day-rescheduled");
 }
 
 interface CSVRow {
@@ -506,7 +500,10 @@ export async function updatePlanDayStatus(
   });
 
   if (updatedDay && (status === "completed" || dateChanged)) {
-    enqueueAutoCoachForReschedule(userId);
+    enqueueAutoCoachInBackground(
+      userId,
+      status === "completed" ? "plan-day-completed" : "plan-day-rescheduled",
+    );
   }
 
   return updatedDay;

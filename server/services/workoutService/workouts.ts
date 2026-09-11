@@ -18,8 +18,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { AppError, ErrorCode } from "../../errors";
 import { logger } from "../../logger";
-import { DEFAULT_JOB_OPTIONS, queue } from "../../queue";
 import { storage } from "../../storage";
+import { enqueueAutoCoach, enqueueAutoCoachInBackground } from "../autoCoachQueue";
 import { loadUnitPreferences } from "../unitPreferences";
 import { persistAdherenceSnapshot } from "./adherence";
 import { expandExercisesToSetRows,extractAndDeduplicateCustomExercises } from "./setRows";
@@ -253,23 +253,23 @@ export async function createWorkoutAndScheduleCoaching(
   });
 
   if (shouldCoach) {
-    // Post-commit enqueue. On failure we reset the flag so the client stops
-    // polling for a coaching result that will never arrive.
-    // singletonKey + singletonSeconds coalesces rapid-fire workout creation
-    // (e.g. bulk CSV import) into a single auto-coach invocation per user
-    // within the debounce window (TECHNICAL_DEBT #23).
-    queue
-      .send(
-        "auto-coach",
-        { userId },
-        { ...DEFAULT_JOB_OPTIONS, singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
-      )
-      .catch((err) => {
-        logger.error({ err }, "Failed to queue auto-coach job after workout creation");
-        storage.users.updateIsAutoCoaching(userId, false).catch((resetErr) => {
-          logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
-        });
+    // Post-commit enqueue, and the one auto-coach producer that can't be
+    // fire-and-forget: this path pre-set isAutoCoaching inside the transaction,
+    // so a failed enqueue has to clear it or the client polls forever for a
+    // coaching result that will never arrive. The singleton key and window that
+    // coalesce rapid-fire creation (e.g. bulk CSV import) live in
+    // services/autoCoachQueue (TECHNICAL_DEBT #23).
+    enqueueAutoCoach(userId, "workout-created").catch((err) => {
+      // Only the pg-boss rejection is logged — no payload, athlete data, or
+      // secrets. Marker must stay bare and on the line directly above the call.
+      // bearer:disable javascript_lang_logger_leak
+      logger.error({ err }, "Failed to queue auto-coach job after workout creation");
+      storage.users.updateIsAutoCoaching(userId, false).catch((resetErr) => {
+        // As above: the reset failure is a DB error, not athlete data.
+        // bearer:disable javascript_lang_logger_leak
+        logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
       });
+    });
   }
 
   return workout;
@@ -364,15 +364,7 @@ function maybeEnqueueAutoCoachOnDateChange(
   const next = nextDate ?? null;
   if (prev === next) return;
 
-  queue
-    .send(
-      "auto-coach",
-      { userId },
-      { ...DEFAULT_JOB_OPTIONS, singletonKey: `auto-coach:${userId}`, singletonSeconds: 60 },
-    )
-    .catch((err) =>
-      logger.error({ err }, "Failed to queue auto-coach job after workout date change"),
-    );
+  enqueueAutoCoachInBackground(userId, "workout-date-changed");
 }
 
 // Adherence columns are recomputed only while a workout fulfils a plan day.
