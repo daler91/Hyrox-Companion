@@ -71,3 +71,6 @@
 ## 2026-09-09 - Fix Radix Tooltips on disabled buttons
 **Learning:** Radix UI tooltips attached to disabled buttons will not fire because the disabled attribute sets `pointer-events: none`, meaning they don't capture `mouseenter`/`mouseleave`.
 **Action:** When adding tooltips to buttons that can be disabled, wrap the disabled button in a `<span>` element to capture the pointer event, setting `tabIndex={isDeleting ? 0 : -1}` to ensure keyboard accessibility isn't lost. And apply `disabled:pointer-events-none` to the button to override standard cursor styles while ensuring the span still fires the tooltip.
+## 2026-09-11 - Make explicitly added whitespace string nodes renderable outside elements
+**Learning:** Adding an explicit `{" "}` string literal within a `<span>` to try and appease a linter formatting (e.g. adjacent to an icon) can unintentionally render as a stray gap (~4px) in an inline layout context, slightly throwing off alignment of UI elements without obvious CSS causes.
+**Action:** Let Prettier handle whitespace formatting without forcing `{" "}` empty string nodes unless explicitly intending to add visible whitespace in inline layout contexts, especially inside wrapper spans like disabled `Tooltip` wrappers.
