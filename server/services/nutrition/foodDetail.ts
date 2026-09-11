@@ -14,10 +14,22 @@ export async function getFoodWithServings(
   userId: string,
   id: string,
 ): Promise<FoodWithServingsResponse | null> {
-  const food = await storage.nutrition.getVisibleFoodById(userId, id);
+  // ⚡ Bolt Performance Optimization: `getServings(id, userId)` queries
+  // `food_servings` by the raw `id`/`userId` params, not by anything read
+  // off the `foods` row — so it doesn't actually depend on
+  // `getVisibleFoodById`'s result. The two were awaited sequentially (one
+  // full DB round trip each) on every food-log-dialog open; running them
+  // via `Promise.all` halves that round-trip latency on the common (food
+  // found) path. On the rare "food not visible" 404 path this now fires one
+  // extra, harmless `getServings` query instead of skipping it — the same
+  // trade-off already made for the "stored-first" analytics routes.
+  const [food, initialServings] = await Promise.all([
+    storage.nutrition.getVisibleFoodById(userId, id),
+    storage.nutrition.getServings(id, userId),
+  ]);
   if (!food) return null;
 
-  let servings = await storage.nutrition.getServings(id, userId);
+  let servings = initialServings;
   if (servings.length === 0 && food.source === "usda" && food.sourceId) {
     const portions = await fetchUsdaFoodPortions(food.sourceId);
     if (portions.length > 0) {
