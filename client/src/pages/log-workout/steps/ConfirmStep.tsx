@@ -113,15 +113,18 @@ export function ConfirmStep({
       emomDurationMinutes;
     const guessedStep = firstLegacy?.customLabel || emomStepLabel;
     const blockId = crypto.randomUUID();
-    const converted = [...structureBlocks, {
-      id: blockId,
-      sectionType: "main" as const,
-      formatType: "emom" as const,
-      durationMinutes: guessedDuration,
-      sequenceOrder: structureBlocks.length,
-      sortOrder: structureBlocks.length,
-      steps: [{ stepNumber: 1, stepType: "work" as const, exerciseName: guessedStep }],
-    }];
+    const converted = [
+      ...structureBlocks,
+      {
+        id: blockId,
+        sectionType: "main" as const,
+        formatType: "emom" as const,
+        durationMinutes: guessedDuration,
+        sequenceOrder: structureBlocks.length,
+        sortOrder: structureBlocks.length,
+        steps: [{ stepNumber: 1, stepType: "work" as const, exerciseName: guessedStep }],
+      },
+    ];
     setStructureBlocks(converted);
     for (const id of legacyEmomRowIds) {
       const ex = exerciseData[id];
@@ -140,7 +143,15 @@ export function ConfirmStep({
       });
     }
     setConversionDone(true);
-  }, [legacyEmomRowIds, exerciseData, emomDurationMinutes, emomStepLabel, structureBlocks, setStructureBlocks, updateBlock]);
+  }, [
+    legacyEmomRowIds,
+    exerciseData,
+    emomDurationMinutes,
+    emomStepLabel,
+    structureBlocks,
+    setStructureBlocks,
+    updateBlock,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -177,20 +188,28 @@ export function ConfirmStep({
               data-testid="confirm-step-legacy-emom-warning"
             >
               <p className="font-medium">Compatibility warning: legacy EMOM rows</p>
-              <span>Older EMOM rows are supported for display/editing, but new EMOM should be saved as structured blocks.</span>
+              <span>
+                Older EMOM rows are supported for display/editing, but new EMOM should be saved as
+                structured blocks.
+              </span>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="legacy-emom-duration" className="text-xs">Duration (min)</Label>
+                  <Label htmlFor="legacy-emom-duration" className="text-xs">
+                    Duration (min)
+                  </Label>
                   <Input
                     id="legacy-emom-duration"
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     value={emomDurationMinutes}
                     onChange={(e) => setEmomDurationMinutes(Number(e.target.value) || 1)}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="legacy-emom-step-label" className="text-xs">Step label</Label>
+                  <Label htmlFor="legacy-emom-step-label" className="text-xs">
+                    Step label
+                  </Label>
                   <Input
                     id="legacy-emom-step-label"
                     value={emomStepLabel}
