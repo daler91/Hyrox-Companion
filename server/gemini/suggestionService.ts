@@ -205,7 +205,11 @@ function formatModificationContext(
   if (typeof modification.fatigueFlag === "boolean") {
     details.push(`fatigueFlagAtEdit=${modification.fatigueFlag}`);
   }
-  if (modification.reason) details.push(`reason=${modification.reason}`);
+  // modification.reason is `rationale` from the POST /timeline/ai-suggestions/apply
+  // and plan-adjustment-proposal request bodies (see aiModificationGuard.ts), so it is
+  // athlete-controllable free text that reaches this prompt on the *next* suggestion
+  // call — same prompt-injection risk as aiRationale above, sanitize before interpolating.
+  if (modification.reason) details.push(`reason=${sanitizeUserInput(modification.reason)}`);
   return `${label}: ${details.join("; ")}`;
 }
 
