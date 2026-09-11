@@ -96,6 +96,10 @@ export function GoalStep(props: Readonly<GoalStepProps>) {
           <p className="text-sm font-medium">MAF onboarding</p>
           <Input
             id="onboarding-maf-age"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={120}
             placeholder="Age"
             aria-label="Age"
             value={props.mafAge}

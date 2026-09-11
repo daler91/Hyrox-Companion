@@ -22,8 +22,7 @@ import { removeAt, updateAt } from "./utils";
 export type CustomFoodDialogState =
   // `prefill` carries a scanned nutrition label (label-scan flow): the form is
   // seeded from its per-100g suggestion for review before saving.
-  | { mode: "create"; prefill?: ParseLabelResponse }
-  | { mode: "edit"; food: Food };
+  { mode: "create"; prefill?: ParseLabelResponse } | { mode: "edit"; food: Food };
 
 type ServingDraft = { id: string; label: string; grams: string };
 
@@ -170,10 +169,7 @@ function CustomFoodForm({
           </div>
         )}
         {perServing && (
-          <div
-            className="rounded-md border p-3 text-xs"
-            data-testid="label-per-serving-values"
-          >
+          <div className="rounded-md border p-3 text-xs" data-testid="label-per-serving-values">
             <p className="mb-1 font-medium">
               Printed per serving
               {prefill?.label?.servingSizeText ? ` (${prefill.label.servingSizeText})` : ""}
@@ -286,6 +282,7 @@ function CustomFoodForm({
                 />
                 <Input
                   type="number"
+                  inputMode="numeric"
                   min={0}
                   placeholder="grams"
                   aria-label={`Serving ${i + 1} weight in grams`}
@@ -366,7 +363,9 @@ export function CustomFoodDialog({
       }}
     >
       <DialogContent data-testid="dialog-custom-food">
-        {state && <CustomFoodForm key={key} state={state} onClose={onClose} onCreated={onCreated} />}
+        {state && (
+          <CustomFoodForm key={key} state={state} onClose={onClose} onCreated={onCreated} />
+        )}
       </DialogContent>
     </Dialog>
   );

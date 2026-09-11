@@ -149,7 +149,9 @@ function RecipeBuilderForm({
       <DialogHeader>
         <DialogTitle>{initial ? "Edit recipe" : "New recipe"}</DialogTitle>
         <DialogDescription className="sr-only">
-          {initial ? "Edit recipe ingredients and servings" : "Create a recipe from individual foods"}
+          {initial
+            ? "Edit recipe ingredients and servings"
+            : "Create a recipe from individual foods"}
         </DialogDescription>
       </DialogHeader>
 
@@ -188,6 +190,7 @@ function RecipeBuilderForm({
               <span className="min-w-0 flex-1 truncate text-sm">{ing.name}</span>
               <Input
                 type="number"
+                inputMode="numeric"
                 min={1}
                 className="w-24"
                 value={ing.quantityG}

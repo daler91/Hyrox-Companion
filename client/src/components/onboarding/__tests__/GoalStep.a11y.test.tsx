@@ -39,7 +39,7 @@ describe("GoalStep accessibility", () => {
     const { container } = renderGoalStep({ trainingStyleId: "maf_method" });
 
     expect(screen.getByRole("combobox", { name: "Training style" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Age" })).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "Age" })).toBeInTheDocument();
     expect(
       screen.getByRole("combobox", { name: "Maffetone health and training category" }),
     ).toBeInTheDocument();
