@@ -91,11 +91,12 @@ export default function Review() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span>
+                <span tabIndex={isAtCurrentWeek ? 0 : -1}> {/* NOSONAR */}
                   <Button
                     variant="outline"
                     size="icon"
                     aria-label="Next week"
+                    className="disabled:pointer-events-none"
                     data-testid="weekly-review-next"
                     // The current week is the last one worth opening — there is nothing
                     // to review in a week that has not started.
@@ -107,7 +108,7 @@ export default function Review() {
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Next week</p>
+                <p>{isAtCurrentWeek ? "Cannot review future weeks" : "Next week"}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
