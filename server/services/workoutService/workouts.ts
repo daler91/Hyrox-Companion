@@ -260,8 +260,13 @@ export async function createWorkoutAndScheduleCoaching(
     // coalesce rapid-fire creation (e.g. bulk CSV import) live in
     // services/autoCoachQueue (TECHNICAL_DEBT #23).
     enqueueAutoCoach(userId, "workout-created").catch((err) => {
+      // Only the pg-boss rejection is logged — no payload, athlete data, or
+      // secrets. Marker must stay bare and on the line directly above the call.
+      // bearer:disable javascript_lang_logger_leak
       logger.error({ err }, "Failed to queue auto-coach job after workout creation");
       storage.users.updateIsAutoCoaching(userId, false).catch((resetErr) => {
+        // As above: the reset failure is a DB error, not athlete data.
+        // bearer:disable javascript_lang_logger_leak
         logger.error({ err: resetErr }, "Failed to reset isAutoCoaching flag after queue error");
       });
     });
