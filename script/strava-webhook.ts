@@ -142,13 +142,12 @@ async function main(): Promise<number> {
   }
 }
 
-main().then(
-  (code) => process.exit(code),
-  (err: unknown) => {
-    // StravaWebhookApiError carries operation + status only, never the URL
-    // (and so never the client secret in its query string).
-    // bearer:disable javascript_lang_logger_leak
-    console.error(sanitizeForLog(err instanceof Error ? err.message : String(err)));
-    process.exit(1);
-  },
-);
+try {
+  process.exit(await main());
+} catch (err: unknown) {
+  // StravaWebhookApiError carries operation + status only, never the URL
+  // (and so never the client secret in its query string).
+  // bearer:disable javascript_lang_logger_leak
+  console.error(sanitizeForLog(err instanceof Error ? err.message : String(err)));
+  process.exit(1);
+}

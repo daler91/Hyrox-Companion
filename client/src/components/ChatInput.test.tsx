@@ -49,17 +49,28 @@ describe("ChatInput", () => {
     expect(screen.queryByTestId("text-keyboard-hint")).not.toBeInTheDocument();
   });
 
-  it("disables the send button until there is trimmed text to send", async () => {
+  it("marks the send button aria-disabled until there is trimmed text to send", async () => {
     const user = userEvent.setup();
     render(<ChatInput onSend={vi.fn()} />);
 
-    expect(screen.getByTestId("button-send-message")).toBeDisabled();
+    expect(screen.getByTestId("button-send-message")).toHaveAttribute("aria-disabled", "true");
 
     await user.type(screen.getByTestId("input-chat-message"), "   ");
-    expect(screen.getByTestId("button-send-message")).toBeDisabled();
+    expect(screen.getByTestId("button-send-message")).toHaveAttribute("aria-disabled", "true");
 
     await user.type(screen.getByTestId("input-chat-message"), "Row 500m");
-    expect(screen.getByTestId("button-send-message")).toBeEnabled();
+    expect(screen.getByTestId("button-send-message")).toHaveAttribute("aria-disabled", "false");
+  });
+
+  it("does not send when the button is clicked with no trimmed text", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} />);
+
+    await user.type(screen.getByTestId("input-chat-message"), "   ");
+    await user.click(screen.getByTestId("button-send-message"));
+
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it("sends the trimmed message on submit and clears the input", async () => {

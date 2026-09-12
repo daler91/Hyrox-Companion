@@ -15,8 +15,7 @@ import {
 } from "../prompts/exerciseSetFormatter";
 import { formatMafContext } from "../prompts/mafContext";
 import { buildNutritionSection } from "../prompts/nutritionContext";
-import { formatZodIssues, sanitizeForLog } from "../utils/sanitize";
-import { sanitizeUserInput } from "../utils/sanitize";
+import { formatZodIssues, sanitizeForLog, sanitizeUserInput } from "../utils/sanitize";
 import type { TrainingContext } from "./types";
 
 export interface SuggestionPromptOptions {

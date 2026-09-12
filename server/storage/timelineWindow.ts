@@ -59,5 +59,5 @@ export function windowTimelinePage(
     if (firstOfGroup > start) pageEnd = firstOfGroup;
   }
   const page = entries.slice(start, pageEnd);
-  return { entries: page, nextCursor: page.length > 0 ? page[page.length - 1].date : null };
+  return { entries: page, nextCursor: page.at(-1)?.date ?? null };
 }

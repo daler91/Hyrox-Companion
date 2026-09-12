@@ -114,11 +114,7 @@ export function suggestNextTarget(
     // recorded numbers, and two prescriptions that differ at all are a changed
     // plan, not a stall.
     const previousUnmet = args.previousSets ? unmetPrescription(args.previousSets) : null;
-    if (
-      previousUnmet &&
-      previousUnmet.reps === unmet.reps &&
-      previousUnmet.weight === unmet.weight
-    ) {
+    if (previousUnmet?.reps === unmet.reps && previousUnmet?.weight === unmet.weight) {
       const deload = deloadFrom(lastSets.length, unmet, args.weightUnit);
       if (deload) return deload;
     }

@@ -42,6 +42,7 @@ export function ChatInput({
 }: Readonly<ChatInputProps>) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
+  const cannotSend = message.trim() === "" || !!isLoading;
 
   // Re-seed the textarea whenever the caller bumps the nonce, so clicking
   // "Ask coach" repeatedly pre-fills each time even when the text matches
@@ -143,24 +144,24 @@ export function ChatInput({
                   <Square className="h-4 w-4" aria-hidden="true" />
                 </Button>
               ) : (
-                <span tabIndex={message.trim() === "" || isLoading ? 0 : -1}>
-                  {" "}
-                  {/* NOSONAR */}
-                  <Button
-                    type="submit"
-                    size="icon"
-                    disabled={message.trim() === "" || isLoading}
-                    data-testid="button-send-message"
-                    aria-label="Send message"
-                    className="disabled:pointer-events-none"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Send className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </Button>
-                </span>
+                /* Marked aria-disabled rather than disabled: a natively disabled
+                   button is neither hoverable nor focusable, so the tooltip
+                   explaining *why* it can't be used would never appear. The
+                   submit handler already no-ops while there's nothing to send. */
+                <Button
+                  type="submit"
+                  size="icon"
+                  aria-disabled={cannotSend}
+                  data-testid="button-send-message"
+                  aria-label="Send message"
+                  className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </Button>
               )}
             </TooltipTrigger>
             <TooltipContent>
