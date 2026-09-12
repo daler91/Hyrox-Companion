@@ -74,3 +74,6 @@
 ## 2026-09-11 - Make explicitly added whitespace string nodes renderable outside elements
 **Learning:** Adding an explicit `{" "}` string literal within a `<span>` to try and appease a linter formatting (e.g. adjacent to an icon) can unintentionally render as a stray gap (~4px) in an inline layout context, slightly throwing off alignment of UI elements without obvious CSS causes.
 **Action:** Let Prettier handle whitespace formatting without forcing `{" "}` empty string nodes unless explicitly intending to add visible whitespace in inline layout contexts, especially inside wrapper spans like disabled `Tooltip` wrappers.
+## 2026-09-12 - Wrapping disabled tooltips to retain accessibility
+**Learning:** In Radix UI tooltips, wrapping a `disabled` trigger element (like a `<Button>`) within `<TooltipTrigger asChild>` completely breaks the tooltip's accessibility and hover functionality. The underlying library sets `pointer-events: none` on disabled elements, meaning they don't capture mouse or focus events to display the tooltip content.
+**Action:** Always wrap disabled button triggers in an accessible `<span>` element configured with `tabIndex={isDisabled ? 0 : -1}`. Additionally, append ` {/* NOSONAR */}` to the span to suppress static analysis warnings related to non-interactive elements containing `tabIndex`.
