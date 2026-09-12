@@ -795,10 +795,17 @@ export function getExerciseMovementPatterns(exerciseName: string): readonly Move
   ];
 }
 
-export function getExerciseHeatMapMuscles(exerciseName: string): readonly HeatMapMuscle[] {
-  const normalizedExerciseName = normalizeExerciseName(exerciseName);
-  if (!normalizedExerciseName) return [];
+// ⚡ Bolt: unlike normalizeExerciseNameCache above (keyed on raw free-text, so
+// FIFO-bounded), this is keyed on the already-normalized ExerciseName — a
+// closed enum of ~211 values — so every possible key is known ahead of time
+// and no eviction is needed. Without this, buildMuscleGroupCoverage (the
+// Training Overview / AI coach-context muscle heat-map) re-derives the same
+// Set-build + MUSCLE_HEAT_MAP_ORDER filter from scratch once per exerciseSet,
+// even though the input domain repeats constantly (e.g. every "Back Squat"
+// set an athlete has ever logged redoes the identical computation).
+const heatMapMusclesCache = new Map<ExerciseName, readonly HeatMapMuscle[]>();
 
+function computeExerciseHeatMapMuscles(normalizedExerciseName: ExerciseName): readonly HeatMapMuscle[] {
   const definition = EXERCISE_DEFINITIONS[normalizedExerciseName];
   if (!definition || normalizedExerciseName === "custom") return [];
 
@@ -809,4 +816,16 @@ export function getExerciseHeatMapMuscles(exerciseName: string): readonly HeatMa
   }
 
   return MUSCLE_HEAT_MAP_ORDER.filter((muscle) => muscles.has(muscle));
+}
+
+export function getExerciseHeatMapMuscles(exerciseName: string): readonly HeatMapMuscle[] {
+  const normalizedExerciseName = normalizeExerciseName(exerciseName);
+  if (!normalizedExerciseName) return [];
+
+  const cached = heatMapMusclesCache.get(normalizedExerciseName);
+  if (cached !== undefined) return cached;
+
+  const result = computeExerciseHeatMapMuscles(normalizedExerciseName);
+  heatMapMusclesCache.set(normalizedExerciseName, result);
+  return result;
 }
