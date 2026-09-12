@@ -24,6 +24,7 @@ vi.mock("../storage", () => ({
     workouts: {
       listDeviceUnlinkedLogsForDates: vi.fn(),
       createWorkoutLogs: vi.fn(),
+      createDeviceActivitySets: vi.fn(),
     },
     plans: { listOpenPlanDaysForDates: vi.fn() },
   },
@@ -283,6 +284,49 @@ describe("reconcileStravaActivities", () => {
       suggestedWorkoutLogId: null,
       suggestedLinkConfidence: null,
     });
+  });
+
+  it("gives a standalone import its one exercise set, so the set-derived analytics see it", async () => {
+    await reconcileStravaActivities(USER, [item(stravaRun())], silentLog, {
+      preferences: { weightUnit: "kg", distanceUnit: "km" },
+    });
+
+    const [setRows] = vi.mocked(storage.workouts.createDeviceActivitySets).mock.calls[0];
+    expect(setRows).toHaveLength(1);
+    expect(setRows[0]).toMatchObject({
+      workoutLogId: "created-0",
+      exerciseName: "run",
+      category: "running",
+      distance: 8100,
+      reps: null,
+      weight: null,
+    });
+  });
+
+  it("writes no set for an enriched log — the athlete's own session describes itself", async () => {
+    const logged = makeWorkoutLog({ id: "log-1", date: DATE, focus: "Easy Run", duration: 45 });
+    vi.mocked(storage.workouts.listDeviceUnlinkedLogsForDates).mockResolvedValue([logged]);
+    vi.mocked(attachStravaActivityToLogInTx).mockResolvedValue({
+      ...logged,
+      stravaActivityId: "9001",
+    });
+
+    const counts = await reconcileStravaActivities(USER, [item(stravaRun())], silentLog);
+
+    expect(counts).toMatchObject({ enriched: 1, standalone: 0 });
+    // Nothing was inserted standalone, so nothing reaches the set writer at all.
+    expect(storage.workouts.createDeviceActivitySets).not.toHaveBeenCalled();
+  });
+
+  it("writes no set for an import whose sport the recording does not describe", async () => {
+    await reconcileStravaActivities(
+      USER,
+      [item(stravaRun({ sport_type: "WeightTraining", type: "WeightTraining", distance: 0 }))],
+      silentLog,
+    );
+
+    const [setRows] = vi.mocked(storage.workouts.createDeviceActivitySets).mock.calls[0];
+    expect(setRows).toEqual([]);
   });
 
   it("never completes a rest day with a walk", async () => {

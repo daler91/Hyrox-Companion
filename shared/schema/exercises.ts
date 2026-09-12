@@ -22,6 +22,13 @@ export const EXERCISE_DEFINITIONS = {
   box_step_over: { label: "Box Step Over", category: "functional" as const, fields: ["sets", "reps", "weight", "time"] as const, muscleGroups: ["Quads", "Glutes"] as const },
   dumbbell_thruster: { label: "Dumbbell Thruster", category: "functional" as const, fields: ["sets", "reps", "weight"] as const, muscleGroups: ["Quads", "Shoulders"] as const },
   kettlebell_thruster: { label: "Kettlebell Thruster", category: "functional" as const, fields: ["sets", "reps", "weight"] as const, muscleGroups: ["Quads", "Shoulders"] as const },
+  // A run with no claim about its intensity. The other nine running entries all
+  // assert something the athlete chose ("easy", "tempo", "long", "1K"), which
+  // is right for a session they typed and wrong for one a watch recorded: a
+  // device import knows the distance and the clock and nothing about intent.
+  // Without this entry every Strava/Garmin run had to borrow one of those
+  // labels, so a race PB filed itself under "Easy Run".
+  run: { label: "Run", category: "running" as const, fields: ["distance", "time"] as const, muscleGroups: ["Legs", "Cardio"] as const },
   run_1k: { label: "Run 1K", category: "running" as const, fields: ["distance", "time"] as const, muscleGroups: ["Legs", "Cardio"] as const },
   easy_run: { label: "Easy Run", category: "running" as const, fields: ["distance", "time"] as const, muscleGroups: ["Legs", "Cardio"] as const },
   recovery_run: { label: "Recovery Run", category: "running" as const, fields: ["distance", "time"] as const, muscleGroups: ["Legs", "Cardio"] as const },
@@ -475,6 +482,10 @@ export const EXERCISE_MOVEMENT_PATTERNS = {
 } satisfies Partial<Record<ExerciseName, readonly MovementPattern[]>>;
 
 export const EXERCISE_NAME_ALIASES: Record<string, ExerciseName> = {
+  running: "run",
+  runs: "run",
+  road_run: "run",
+  trail_run: "run",
   rdl: "romanian_deadlift",
   romanian_deadlifts: "romanian_deadlift",
   air_squats: "air_squat",

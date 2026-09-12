@@ -27,9 +27,11 @@ interface HeuristicSetExpression {
 }
 
 // Hyrox / erg movements whose common phrasing the shared exercise normalizer
-// does not alias on its own — bare "run"/"row", spaced "ski erg", and a few
-// singular/plural variants. Scoped to this fallback because these mappings are
-// only safe to assume inside a functional-fitness workout paste.
+// either misses or reads more generically than this context warrants — bare
+// "run"/"row", spaced "ski erg", and a few singular/plural variants. Scoped to
+// this fallback because these mappings are only safe to assume inside a
+// functional-fitness workout paste: that is exactly the assumption that makes
+// them OUTRANK the shared normalizer in `canonicalExerciseName`.
 const FALLBACK_EXERCISE_ALIASES: Record<string, string> = {
   run: "run_1k",
   runs: "run_1k",
@@ -56,10 +58,17 @@ function normalizeToken(label: string): string {
 }
 
 function canonicalExerciseName(label: string): string {
-  const known = normalizeExerciseName(label);
-  if (known) return known;
+  // The circuit-scoped alias wins over the shared normalizer, because this
+  // function only ever runs on a functional-fitness paste and the alias encodes
+  // what the word means THERE. "Run" on its own line of a Hyrox circuit is the
+  // 1 km race leg, not running in general — and `run_1k` is the bucket the race
+  // predictor reads (RUN_EXERCISE_NAME), so the generic reading would quietly
+  // empty its run leg. Only run/runs/running are affected: every other key here
+  // is still a word the shared normalizer does not resolve at all.
+  const scoped = FALLBACK_EXERCISE_ALIASES[normalizeToken(label)];
+  if (scoped) return scoped;
 
-  return FALLBACK_EXERCISE_ALIASES[normalizeToken(label)] ?? "custom";
+  return normalizeExerciseName(label) ?? "custom";
 }
 
 function categoryForExercise(exerciseName: string, rawName: string): string {

@@ -26,6 +26,7 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
+import type { UnitPreferences } from "@shared/unitConversion";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -45,6 +46,7 @@ import {
   type MatchThresholds,
   planDeviceActivityMatches,
 } from "./deviceActivityMatcher";
+import { deviceActivitySetRows } from "./deviceActivitySets";
 import type { mapStravaActivityToWorkout } from "./stravaMapper";
 
 export type MappedStravaRow = ReturnType<typeof mapStravaActivityToWorkout>;
@@ -286,8 +288,19 @@ async function applyDecision(
  * Insert the standalone rows and count what actually landed. onConflictDoNothing
  * on (user_id, strava_activity_id) means only rows this call created come back,
  * so a race with another sync shows up as `skipped`, never as an optimistic count.
+ *
+ * Each row that landed also gets its one synthesised exercise set, so the
+ * set-derived half of Analytics (the distribution pie, the muscle heat map, PRs,
+ * the progression charts) sees the import instead of silently dropping it — see
+ * deviceActivitySets.ts. Only rows that actually came back from the insert get
+ * one, so a race with a concurrent sync cannot double-write sets for the same
+ * activity.
  */
-async function insertStandaloneRows(rows: StandaloneRow[], counts: ReconcileCounts): Promise<void> {
+async function insertStandaloneRows(
+  rows: StandaloneRow[],
+  counts: ReconcileCounts,
+  preferences: UnitPreferences,
+): Promise<void> {
   if (rows.length === 0) return;
   const created = await storage.workouts.createWorkoutLogs(rows);
   const createdIds = new Set(created.map((c) => c.stravaActivityId));
@@ -296,14 +309,27 @@ async function insertStandaloneRows(rows: StandaloneRow[], counts: ReconcileCoun
     else if (row.suggestedLinkConfidence != null) counts.suggested++;
     else counts.standalone++;
   }
+  await storage.workouts.createDeviceActivitySets(deviceActivitySetRows(created, preferences));
+}
+
+export interface ReconcileOptions {
+  /**
+   * The athlete's units. Every synthesised set is stamped with them like any
+   * other set the product writes (L4), so a later km/miles switch converts the
+   * row instead of reinterpreting it. Defaulted rather than required because a
+   * missing preference means "metric", which is also the storage default.
+   */
+  preferences?: UnitPreferences;
+  thresholds?: MatchThresholds;
 }
 
 export async function reconcileStravaActivities(
   userId: string,
   items: readonly StravaImportItem[],
   log: SyncLogger,
-  thresholds: MatchThresholds = DEFAULT_MATCH_THRESHOLDS,
+  options: ReconcileOptions = {},
 ): Promise<ReconcileCounts> {
+  const { preferences = {}, thresholds = DEFAULT_MATCH_THRESHOLDS } = options;
   const counts: ReconcileCounts = {
     enriched: 0,
     completedPlanDays: 0,
@@ -333,7 +359,7 @@ export async function reconcileStravaActivities(
       counts.skipped++;
     }
   }
-  await insertStandaloneRows(standalone, counts);
+  await insertStandaloneRows(standalone, counts, preferences);
 
   // Counts only; no activity data or token material.
   // bearer:disable javascript_lang_logger_leak

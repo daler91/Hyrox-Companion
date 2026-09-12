@@ -1065,6 +1065,51 @@ export class WorkoutStorage {
     });
   }
 
+  /**
+   * Standalone device imports that carry no exercise set — the population the
+   * synthesised-set backfill exists for.
+   *
+   * "Standalone" is `device_link_source IS NULL`: a recording that attached to a
+   * log the athlete wrote, or completed a plan day, has a link source and its
+   * sets (or deliberate lack of them) belong to the athlete, not to us. The
+   * anti-join is what keeps the backfill idempotent AND what keeps it from
+   * writing a second set onto a row the sync has already handled.
+   */
+  async getStandaloneDeviceLogsWithoutSets(userId: string): Promise<WorkoutLog[]> {
+    const results = await db
+      .select({ workoutLog: workoutLogs })
+      .from(workoutLogs)
+      .leftJoin(exerciseSets, eq(workoutLogs.id, exerciseSets.workoutLogId))
+      .where(
+        and(
+          eq(workoutLogs.userId, userId),
+          isNull(exerciseSets.id),
+          isNull(workoutLogs.deviceLinkSource),
+          isNotNull(workoutLogs.stravaActivityId),
+          eq(workoutLogs.source, "strava"),
+        ),
+      );
+    return results.map((r) => r.workoutLog);
+  }
+
+  /**
+   * Bulk-insert the synthesised sets a batch of device imports carries (see
+   * services/deviceActivitySets.ts).
+   *
+   * There is no unique constraint to lean on here — `exercise_sets` is keyed by
+   * a generated id and a log may legitimately hold many rows — so "exactly one
+   * synthesised set per log" is the CALLER's invariant, not the column's. The
+   * sync satisfies it by only passing logs its own INSERT just created; the
+   * backfill satisfies it with an anti-join against the same table. Anything
+   * else that calls this has to establish it too, because a second row for one
+   * log doubles that session in every set-derived panel.
+   */
+  async createDeviceActivitySets(rows: InsertExerciseSet[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    const inserted = await db.insert(exerciseSets).values(rows).returning({ id: exerciseSets.id });
+    return inserted.length;
+  }
+
   async getWorkoutsWithoutExerciseSets(userId: string): Promise<WorkoutLog[]> {
     const results = await db
       .select({ workoutLog: workoutLogs })
