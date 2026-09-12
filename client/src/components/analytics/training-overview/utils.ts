@@ -64,10 +64,14 @@ export function buildTrendData(overview: TrainingOverview | undefined) {
     return {
       rpeData: [] as Array<{ weekStart: string; avgRpe: number | null }>,
       durationData: [] as Array<{ weekStart: string; avgDuration: number }>,
+      mileageData: [] as Array<{ weekStart: string; runningMeters: number }>,
     };
   }
   const rpeData: Array<{ weekStart: string; avgRpe: number | null }> = [];
   const durationData: Array<{ weekStart: string; avgDuration: number }> = [];
+  // Kept in metres and converted at the render edge, so the chart and the stat
+  // card cannot disagree about rounding.
+  const mileageData: Array<{ weekStart: string; runningMeters: number }> = [];
   for (const week of overview.weeklySummaries) {
     if (week.avgRpe !== null) {
       rpeData.push({ weekStart: week.weekStart, avgRpe: week.avgRpe });
@@ -78,6 +82,14 @@ export function buildTrendData(overview: TrainingOverview | undefined) {
         avgDuration: week.workoutCount > 0 ? Math.round(week.totalDuration / week.workoutCount) : 0,
       });
     }
+    // Unlike RPE and duration, a zero week is meaningful here: a week with no
+    // running is exactly what a mileage chart should show, and skipping it
+    // would silently redraw a layoff as though it never happened (audit M10,
+    // the same reason the weekly rollup zero-fills).
+    mileageData.push({ weekStart: week.weekStart, runningMeters: week.runningMeters });
   }
-  return { rpeData, durationData };
+  // All-zero means the athlete logs no running at all — draw nothing rather
+  // than a flat line along the axis.
+  const hasRunning = mileageData.some((week) => week.runningMeters > 0);
+  return { rpeData, durationData, mileageData: hasRunning ? mileageData : [] };
 }

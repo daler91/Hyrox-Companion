@@ -182,6 +182,23 @@ export function formatDistance(value: number, unit: string, decimals: number = 2
   return formatNumberWithUnit(value, standardUnit, decimals);
 }
 
+/**
+ * Render a canonical-metres distance in the athlete's own unit ("142.5 km",
+ * "88.6 miles").
+ *
+ * Sibling of `formatElevation`: analytics accumulates distance in metres (one
+ * unit, whatever each row was stamped in) and converts once, here, at the
+ * display edge. One decimal by default — weekly mileage to the centimetre is
+ * noise.
+ */
+export function formatDistanceFromMeters(
+  meters: number,
+  distanceUnit: string,
+  decimals: number = 1,
+): string {
+  return formatDistance(metersToUserDistance(meters, distanceUnit), distanceUnit, decimals);
+}
+
 export function formatElevation(meters: number, distanceUnit: string): string {
   const standardUnit = standardizeDistanceUnit(distanceUnit);
   if (standardUnit === "miles") {

@@ -12,7 +12,7 @@ import { addDaysToISODate } from "@shared/dateUtils";
 import type { TrainingOverview, WorkoutLog } from "@shared/schema";
 
 import { storage } from "../storage";
-import { calculateTrainingOverview, type ExerciseSetWithDate } from "./analyticsService";
+import { calculateTrainingOverview, type DistanceSet, type ExerciseSetWithDate } from "./analyticsService";
 
 /** Today's date (UTC) as YYYY-MM-DD. */
 export function todayUtcYyyyMmDd(): string {
@@ -25,13 +25,19 @@ export function todayUtcYyyyMmDd(): string {
 /** Add (or subtract) whole calendar days to a YYYY-MM-DD string, in UTC. */
 export const addCalendarDays = addDaysToISODate;
 
+/** The equal-length period immediately before the selected one. */
+export interface PreviousWindow {
+  readonly from: string;
+  readonly to: string;
+}
+
 /**
  * Returns the pair of ISO dates that bound the period immediately BEFORE
  * [from, to], with the same length. Returns null when we can't derive a
  * meaningful previous window (e.g. the user picked "all time" so there's no
  * lower bound to anchor the comparison).
  */
-export function computePreviousWindow(from?: string, to?: string): { from: string; to: string } | null {
+export function computePreviousWindow(from?: string, to?: string): PreviousWindow | null {
   if (!from) return null;
   const fromDate = new Date(`${from}T00:00:00Z`);
   // When `to` is absent (the common ?from=... flow), anchor the current window's
@@ -85,6 +91,15 @@ type RangeFetcher<T> = (userId: string, from?: string, to?: string) => Promise<T
 export interface TrainingOverviewFetchers {
   workoutLogs: RangeFetcher<WorkoutLog[]>;
   exerciseSets: RangeFetcher<ExerciseSetWithDate[]>;
+  /**
+   * Column-slim sets, used only for the previous window's mileage delta.
+   *
+   * Slim on purpose: that window needs distance and a unit stamp, nothing the
+   * fat relational projection adds, and this path already pays for one fat
+   * sets fetch. Frequently it costs nothing at all — see the coverage check at
+   * the call site.
+   */
+  slimExerciseSets: RangeFetcher<DistanceSet[]>;
 }
 
 const defaultFetchers: TrainingOverviewFetchers = {
@@ -94,7 +109,49 @@ const defaultFetchers: TrainingOverviewFetchers = {
     storage.analytics.getWorkoutLogsByDateRange(userId, from, to, { onlyTraining: true }),
   exerciseSets: (userId, from, to) =>
     storage.analytics.getAllExerciseSetsWithDates(userId, from, to, { onlyTraining: true }),
+  slimExerciseSets: (userId, from, to) =>
+    storage.analytics.getExerciseSetsForPersonalRecords(userId, from, to, { onlyTraining: true }),
 };
+
+/**
+ * Fetch the previous window's sets for the mileage delta — but only when the
+ * wide fetch above does not already cover them.
+ *
+ * Usually it does, so this usually costs nothing. For a short range the wide
+ * fetch reaches back 70 days, which swallows the previous window whole:
+ * "Last 30 days" compares against days 30-59, well inside it. Only a range
+ * long enough to start before the load window (90 days and up) puts the
+ * previous window out of reach, and that one pays for the column-slim
+ * projection rather than a second fat relational fetch.
+ *
+ * Returns undefined when there is nothing to fetch, which tells the caller to
+ * slice the sets it already has.
+ */
+function fetchPreviousSetsIfUncovered(
+  userId: string,
+  previousWindow: PreviousWindow | null,
+  wideFrom: string | undefined,
+  fetchers: TrainingOverviewFetchers,
+): Promise<DistanceSet[] | undefined> {
+  if (previousWindow === null) return Promise.resolve(undefined);
+  const coveredByWideFetch = wideFrom !== undefined && previousWindow.from >= wideFrom;
+  if (coveredByWideFetch) return Promise.resolve(undefined);
+  return fetchers.slimExerciseSets(userId, previousWindow.from, previousWindow.to);
+}
+
+/** The previous window's sets: whatever was fetched for it, else the slice of
+ *  the wide fetch that falls inside it. */
+function resolvePreviousSets(
+  previousWindow: PreviousWindow | null,
+  fetched: DistanceSet[] | undefined,
+  wideSets: readonly ExerciseSetWithDate[],
+): DistanceSet[] | undefined {
+  if (previousWindow === null) return undefined;
+  return (
+    fetched ??
+    wideSets.filter((set) => set.date >= previousWindow.from && set.date <= previousWindow.to)
+  );
+}
 
 /**
  * Load + compute the full Training Overview for a user over [from, to]
@@ -125,15 +182,17 @@ export async function assembleTrainingOverview(
       ? [loadHistoryStart, loadCurrentDate]
       : [from, to];
 
-  const [wideWorkoutLogs, wideSets, previousWorkoutLogs, user, loadTags] = await Promise.all([
-    fetchers.workoutLogs(userId, wideFrom, wideTo),
-    fetchers.exerciseSets(userId, wideFrom, wideTo),
-    previousWindow
-      ? fetchers.workoutLogs(userId, previousWindow.from, previousWindow.to)
-      : Promise.resolve(undefined),
-    storage.users.getUser(userId),
-    storage.analytics.getExerciseLoadTags(),
-  ]);
+  const [wideWorkoutLogs, wideSets, previousWorkoutLogs, fetchedPreviousSets, user, loadTags] =
+    await Promise.all([
+      fetchers.workoutLogs(userId, wideFrom, wideTo),
+      fetchers.exerciseSets(userId, wideFrom, wideTo),
+      previousWindow
+        ? fetchers.workoutLogs(userId, previousWindow.from, previousWindow.to)
+        : Promise.resolve(undefined),
+      fetchPreviousSetsIfUncovered(userId, previousWindow, wideFrom, fetchers),
+      storage.users.getUser(userId),
+      storage.analytics.getExerciseLoadTags(),
+    ]);
 
   let workoutLogs: WorkoutLog[];
   let allSets: ExerciseSetWithDate[];
@@ -170,12 +229,15 @@ export async function assembleTrainingOverview(
       : Promise.resolve(undefined),
   ]);
 
+  const previousExerciseSets = resolvePreviousSets(previousWindow, fetchedPreviousSets, wideSets);
+
   return calculateTrainingOverview(workoutLogs, allSets, previousWorkoutLogs, {
     // Pass the selected window through so rest weeks at either end of it are
     // counted rather than dropped (audit H7, M10).
     period: { ...(from ? { from } : {}), ...(to ? { to } : {}) },
     ...(dueSessionCount != null ? { dueSessionCount } : {}),
     ...(previousDueSessionCount != null ? { previousDueSessionCount } : {}),
+    ...(previousExerciseSets ? { previousExerciseSets } : {}),
     weeklyGoal: user?.weeklyGoal ?? 5,
     loadTags,
     trainingLoadInput: {

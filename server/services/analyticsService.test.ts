@@ -30,6 +30,7 @@ describe("computeOverviewStats (fresh-user / zero-workout state)", () => {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     });
   });
@@ -721,6 +722,7 @@ describe("calculateTrainingOverview", () => {
       // (6*2 + 8*1)/3 = 6.7. The old form let the single-session week carry the
       // same influence as the two-session one.
       avgRpe: 6.7,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     });
   });
@@ -756,6 +758,7 @@ describe("calculateTrainingOverview", () => {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     });
   });
@@ -769,6 +772,7 @@ describe("computeOverviewStats", () => {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     });
   });
