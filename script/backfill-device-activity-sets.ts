@@ -33,6 +33,16 @@
  * operator watching a migration wants a readable report, not pino JSON, and the
  * repo's logger is a server sink this script has no reason to reach for.
  *
+ * It also keeps this file out of `javascript_lang_logger_leak`, which fires on
+ * ANY non-string-literal argument to a `log`/`logger`/`console` call regardless
+ * of whether the data is sensitive. Suppressing it would have worked — but only
+ * written as a BARE `// bearer:disable javascript_lang_logger_leak` line, since
+ * Bearer reads everything after the directive as the rule id, so a trailing
+ * "— why" silently kills the suppression (.jules/sentinel.md, 2026-08-12; the
+ * ratchet in server/__tests__/bearerDisableSuppressions.test.ts caps how many
+ * such dead directives the repo carries). Not needing a suppression at all is
+ * the sturdier answer for a script that never wanted a server logger anyway.
+ *
  * Usage:
  *   pnpm tsx script/backfill-device-activity-sets.ts              # dry run
  *   pnpm tsx script/backfill-device-activity-sets.ts --apply      # write
