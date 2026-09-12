@@ -250,85 +250,111 @@ describe("calculateStreak", () => {
     vi.useRealTimers();
   });
 
-  it("returns 0 for empty set", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set())).toBe(0);
-  });
-
-  it("returns 1 when only today is completed", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-15"]))).toBe(1);
-  });
-
-  it("returns 1 when only yesterday is completed", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-14"]))).toBe(1);
-  });
-
-  it("returns 2 when today and yesterday are completed", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-14", "2026-01-15"]))).toBe(2);
-  });
-
-  it("returns 0 when neither today nor yesterday is completed", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-13"]))).toBe(0);
-  });
-
-  it("stops at gaps (today + 2 days ago = streak of 1)", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-15", "2026-01-13"]))).toBe(1);
-  });
-
-  it("counts long consecutive streaks", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    const dates = new Set([
-      "2026-01-15",
-      "2026-01-14",
-      "2026-01-13",
-      "2026-01-12",
-      "2026-01-11",
-    ]);
-    expect(calculateStreak(dates)).toBe(5);
-  });
-
-  it("streak from yesterday counts backwards correctly", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    const dates = new Set(["2026-01-14", "2026-01-13", "2026-01-12"]);
-    expect(calculateStreak(dates)).toBe(3);
-  });
-
-  it("counts across leap year boundary (Feb 29 to Mar 1)", () => {
-    vi.setSystemTime(new Date("2024-03-02T12:00:00Z"));
-    const dates = new Set(["2024-03-02", "2024-03-01", "2024-02-29", "2024-02-28"]);
-    expect(calculateStreak(dates)).toBe(4);
-  });
-
-  it("counts across non-leap year boundary (Feb 28 to Mar 1)", () => {
-    vi.setSystemTime(new Date("2025-03-02T12:00:00Z"));
-    const dates = new Set(["2025-03-02", "2025-03-01", "2025-02-28", "2025-02-27"]);
-    expect(calculateStreak(dates)).toBe(4);
-  });
-
-  it("counts across year boundary (Dec 31 to Jan 1)", () => {
-    vi.setSystemTime(new Date("2026-01-02T12:00:00Z"));
-    const dates = new Set(["2026-01-02", "2026-01-01", "2025-12-31", "2025-12-30"]);
-    expect(calculateStreak(dates)).toBe(4);
-  });
-
-  it("ignores future dates", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    const dates = new Set(["2026-01-16", "2026-01-15", "2026-01-14"]);
-    expect(calculateStreak(dates)).toBe(2);
-  });
-
-  it("single old date far in the past returns 0", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2025-01-01"]))).toBe(0);
-  });
-
-
+  // Each row: the frozen clock, the completed-day set, and the streak it should
+  // produce. The suite freezes time in beforeEach, so every case sets its own.
   it.each([
+    { name: "returns 0 for an empty set", now: "2026-01-15T12:00:00Z", dates: [], expected: 0 },
+    {
+      name: "returns 1 when only today is completed",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-15"],
+      expected: 1,
+    },
+    {
+      name: "returns 1 when only yesterday is completed",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-14"],
+      expected: 1,
+    },
+    {
+      name: "returns 2 when today and yesterday are completed",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-14", "2026-01-15"],
+      expected: 2,
+    },
+    {
+      name: "returns 0 when neither today nor yesterday is completed",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-13"],
+      expected: 0,
+    },
+    {
+      name: "stops at gaps (today + 2 days ago = streak of 1)",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-15", "2026-01-13"],
+      expected: 1,
+    },
+    {
+      name: "counts long consecutive streaks",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-15", "2026-01-14", "2026-01-13", "2026-01-12", "2026-01-11"],
+      expected: 5,
+    },
+    {
+      name: "counts backwards correctly from yesterday",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-14", "2026-01-13", "2026-01-12"],
+      expected: 3,
+    },
+    {
+      name: "counts across a leap-year boundary (Feb 29 to Mar 1)",
+      now: "2024-03-02T12:00:00Z",
+      dates: ["2024-03-02", "2024-03-01", "2024-02-29", "2024-02-28"],
+      expected: 4,
+    },
+    {
+      name: "counts across a non-leap-year boundary (Feb 28 to Mar 1)",
+      now: "2025-03-02T12:00:00Z",
+      dates: ["2025-03-02", "2025-03-01", "2025-02-28", "2025-02-27"],
+      expected: 4,
+    },
+    {
+      name: "counts across a year boundary (Dec 31 to Jan 1)",
+      now: "2026-01-02T12:00:00Z",
+      dates: ["2026-01-02", "2026-01-01", "2025-12-31", "2025-12-30"],
+      expected: 4,
+    },
+    {
+      name: "ignores future dates",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-16", "2026-01-15", "2026-01-14"],
+      expected: 2,
+    },
+    {
+      name: "returns 0 for a single date far in the past",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2025-01-01"],
+      expected: 0,
+    },
+    {
+      // Today is the 15th, completed the 15th and 13th — the 14th is missing.
+      name: "breaks the streak on a single missing day",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-15", "2026-01-13", "2026-01-12"],
+      expected: 1,
+    },
+    {
+      // Completed the 14th, 13th and 11th — the 12th is missing, so the streak
+      // runs back from yesterday and stops there.
+      name: "counts from yesterday and ignores earlier gaps",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-14", "2026-01-13", "2026-01-11"],
+      expected: 2,
+    },
+    {
+      // "2026/01/14" is not the "YYYY-MM-DD" the streak walks back through, so
+      // the day after the 15th's hit is missing and the streak stops at 1.
+      name: "ignores unrelated string formats or invalid dates safely",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-15", "hello", "2026/01/14", "2026-01-13"],
+      expected: 1,
+    },
+    {
+      name: "defaults to UTC when no timezone is supplied (W19 back-compat)",
+      now: "2026-01-15T12:00:00Z",
+      dates: ["2026-01-15", "2026-01-14"],
+      expected: 2,
+    },
     {
       name: "maintains streak when run at 11:59 PM",
       now: "2026-01-15T23:59:59.999Z",
@@ -353,28 +379,6 @@ describe("calculateStreak", () => {
     expect(calculateStreak(new Set(dates))).toBe(expected);
   });
 
-  it("handles a single gap of 1 day correctly (streak broken)", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    // Today is 15th, completed 15th and 13th. 14th is missing.
-    // So streak should be 1.
-    expect(calculateStreak(new Set(["2026-01-15", "2026-01-13", "2026-01-12"]))).toBe(1);
-  });
-
-  it("streak from yesterday ignores earlier gaps", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    // Today is 15th. Completed 14th, 13th, 11th. Missing 12th.
-    // Streak from yesterday is 2.
-    expect(calculateStreak(new Set(["2026-01-14", "2026-01-13", "2026-01-11"]))).toBe(2);
-  });
-
-  it("ignores completely unrelated string formats or invalid dates safely", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    const dates = new Set(["2026-01-15", "hello", "2026/01/14", "2026-01-13"]);
-    // Since "2026-01-14" is not correctly formatted as "YYYY-MM-DD" in the set, it breaks the streak.
-    // "2026-01-15" is found, so streak is 1. The next expected is "2026-01-14", which is missing (only "2026/01/14" is there).
-    expect(calculateStreak(dates)).toBe(1);
-  });
-
   it("anchors today/yesterday to the user's timezone (W19)", () => {
     // 23:30 UTC on the 15th is already the 16th in Kiritimati (UTC+14) but still
     // the 15th in UTC. A log dated the 16th must count for the UTC+14 athlete.
@@ -384,11 +388,6 @@ describe("calculateStreak", () => {
     expect(calculateStreak(dates, "UTC")).toBe(1);
     // UTC+14: it is already the 16th locally, so both days count → streak 2.
     expect(calculateStreak(dates, "Pacific/Kiritimati")).toBe(2);
-  });
-
-  it("defaults to UTC when no timezone is supplied (W19 back-compat)", () => {
-    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
-    expect(calculateStreak(new Set(["2026-01-15", "2026-01-14"]))).toBe(2);
   });
 });
 

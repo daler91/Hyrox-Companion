@@ -1,6 +1,8 @@
 // Importing queue.ts triggers `new PgBoss(...)` at module load, which would
 // try to connect to a real DB. Mock pg-boss to a no-op class so the import
-// resolves cleanly and we can exercise the pure job-running helpers below.
+// resolves cleanly and we can exercise the pure helpers below. Connection-string
+// building and the job-running helpers share this preamble, so they share a file
+// rather than duplicating it.
 import type { Job } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,8 +19,64 @@ vi.mock("./services/planGenerationService", () => ({ executePlanGeneration: vi.f
 vi.mock("./services/ragService", () => ({ embedCoachingMaterial: vi.fn() }));
 vi.mock("./db", () => ({ pool: { query: vi.fn().mockResolvedValue({ rowCount: 0 }) } }));
 
-import { jobDataKeys, runBatch, runWithTimeout, withTrace } from "./queue";
+import { PGBOSS_STATEMENT_TIMEOUT_MS } from "./constants";
+import { pool } from "./db";
+import {
+  buildQueueConnectionString,
+  jobDataKeys,
+  purgeUserJobs,
+  runBatch,
+  runWithTimeout,
+  withTrace,
+} from "./queue";
 import { runWithRequestContext } from "./requestContext";
+
+describe("buildQueueConnectionString (W12)", () => {
+  it("appends a PG statement_timeout option matching PGBOSS_STATEMENT_TIMEOUT_MS", () => {
+    const url = new URL(buildQueueConnectionString("postgres://u:p@h:5432/db"));
+    expect(url.searchParams.get("options")).toBe(`-c statement_timeout=${PGBOSS_STATEMENT_TIMEOUT_MS}`);
+  });
+
+  it("preserves an operator-supplied options param by prepending it", () => {
+    const url = new URL(
+      buildQueueConnectionString("postgres://u:p@h:5432/db?options=-c%20search_path%3Dpublic"),
+    );
+    const opts = url.searchParams.get("options") ?? "";
+    expect(opts).toContain("-c search_path=public");
+    expect(opts).toContain(`-c statement_timeout=${PGBOSS_STATEMENT_TIMEOUT_MS}`);
+    // Our option must come AFTER the existing one so it wins on conflict
+    // (libpq applies options left-to-right; later -c overrides earlier).
+    expect(opts.indexOf("statement_timeout")).toBeGreaterThan(opts.indexOf("search_path"));
+  });
+
+  it("preserves other URL components (host/port/db/user/password/query params)", () => {
+    const result = buildQueueConnectionString("postgres://user:pass@host:5432/mydb?sslmode=require");
+    const url = new URL(result);
+    expect(url.username).toBe("user");
+    expect(url.password).toBe("pass");
+    expect(url.hostname).toBe("host");
+    expect(url.port).toBe("5432");
+    expect(url.pathname).toBe("/mydb");
+    expect(url.searchParams.get("sslmode")).toBe("require");
+  });
+
+  it("uses a timeout below pg-boss expireInMinutes=60 so PG kills before pg-boss reaps", () => {
+    expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeLessThan(60 * 60 * 1000);
+    // And above the longest legitimate job query (plan-gen retries ~5min).
+    expect(PGBOSS_STATEMENT_TIMEOUT_MS).toBeGreaterThan(10 * 60 * 1000);
+  });
+});
+
+describe("purgeUserJobs (W17 — erase queued job payloads on account deletion)", () => {
+  it("deletes the user's pending pg-boss jobs filtered by data->>'userId'", async () => {
+    vi.mocked(pool.query).mockClear();
+    await purgeUserJobs("user-9");
+    expect(pool.query).toHaveBeenCalledWith(
+      "DELETE FROM pgboss.job WHERE data->>'userId' = $1",
+      ["user-9"],
+    );
+  });
+});
 
 /**
  * withTrace, jobDataKeys, runWithTimeout and runBatch were promoted from

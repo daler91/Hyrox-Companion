@@ -1,6 +1,12 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  createWrapper,
+  invalidatedKeys,
+  invalidateQueriesSpy,
+  mockToast,
+} from "@/test/support/mutationHookMocks";
 
 import { useDeviceLinkMutations } from "../useDeviceLinkMutations";
 
@@ -8,10 +14,6 @@ const apiMocks = vi.hoisted(() => ({
   linkDeviceActivity: vi.fn(),
   unlinkDeviceActivity: vi.fn(),
   dismissDeviceLinkSuggestion: vi.fn(),
-}));
-
-const queryClientMocks = vi.hoisted(() => ({
-  invalidateQueries: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -32,19 +34,12 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-vi.mock("@/lib/queryClient", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/queryClient")>()),
-  queryClient: { invalidateQueries: queryClientMocks.invalidateQueries },
-}));
-
-const mockToast = vi.fn();
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: vi.fn(() => ({ toast: mockToast })),
-}));
-
-function invalidatedKeys(): unknown[] {
-  return queryClientMocks.invalidateQueries.mock.calls.map((call) => call[0].queryKey);
-}
+vi.mock("@/lib/queryClient", async (importOriginal) =>
+  (await import("@/test/support/mutationHookMocks")).makeQueryClientSingletonMock(importOriginal),
+);
+vi.mock("@/hooks/use-toast", async () =>
+  (await import("@/test/support/mutationHookMocks")).makeToastMock(),
+);
 
 const DEVICE_LINK_KEYS = [
   ["/api/v1/timeline"],
@@ -54,15 +49,6 @@ const DEVICE_LINK_KEYS = [
   ["/api/v1/exercise-analytics"],
   ["/api/v1/training-overview"],
 ];
-
-// No-retry client for every mutation under test: renderHook's `wrapper` option
-// wants a component, so this hands back one closed over a fresh QueryClient.
-function createWrapper() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return ({ children }: Readonly<{ children: React.ReactNode }>) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
 
 type DeviceLinkMutations = ReturnType<typeof useDeviceLinkMutations>;
 
@@ -119,7 +105,7 @@ describe("useDeviceLinkMutations", () => {
           variant: "destructive",
         }),
       );
-      expect(queryClientMocks.invalidateQueries).not.toHaveBeenCalled();
+      expect(invalidateQueriesSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createWrapper, mockToast } from "@/test/support/mutationHookMocks";
 
 import { useGarminMutations } from "../useGarminMutations";
 
@@ -27,24 +28,25 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-const mockToast = vi.fn();
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: vi.fn(() => ({
-    toast: mockToast,
-  })),
-}));
+vi.mock("@/hooks/use-toast", async () =>
+  (await import("@/test/support/mutationHookMocks")).makeToastMock(),
+);
 
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
+type GarminMutations = ReturnType<typeof useGarminMutations>;
+
+/** Renders the hook and drives one mutation to settled, swallowing a rejection
+ *  the way the UI does (the toast, not a thrown promise, carries the error). */
+async function runMutation(
+  pick: (mutations: GarminMutations) => { mutateAsync: (variables: never) => Promise<unknown> },
+  variables?: unknown,
+): Promise<void> {
+  const { result } = renderHook(() => useGarminMutations(), { wrapper: createWrapper() });
+  await act(async () => {
+    await pick(result.current)
+      .mutateAsync(variables as never)
+      .catch(() => {});
   });
-  return function Wrapper({ children }: Readonly<{ children: React.ReactNode }>) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
-};
+}
 
 describe("useGarminMutations", () => {
   beforeEach(() => {
@@ -54,15 +56,9 @@ describe("useGarminMutations", () => {
   describe("connectGarminMutation", () => {
     it("calls api.garmin.connect on success and triggers success toast", async () => {
       apiMocks.connect.mockResolvedValue({ success: true, garminDisplayName: "John Doe" });
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.connectGarminMutation.mutateAsync({
-          email: "test@example.com",
-          password: "password123",
-        });
+      await runMutation((m) => m.connectGarminMutation, {
+        email: "test@example.com",
+        password: "password123",
       });
 
       expect(apiMocks.connect).toHaveBeenCalledWith("test@example.com", "password123");
@@ -76,15 +72,9 @@ describe("useGarminMutations", () => {
 
     it("triggers error toast with error message on failure", async () => {
       apiMocks.connect.mockRejectedValue(new Error("Invalid credentials"));
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.connectGarminMutation.mutateAsync({
-          email: "test@example.com",
-          password: "password123",
-        }).catch(() => {});
+      await runMutation((m) => m.connectGarminMutation, {
+        email: "test@example.com",
+        password: "password123",
       });
 
       expect(mockToast).toHaveBeenCalledWith(
@@ -98,15 +88,9 @@ describe("useGarminMutations", () => {
 
     it("triggers error toast with fallback generic message on failure when not an Error", async () => {
       apiMocks.connect.mockRejectedValue("String error");
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.connectGarminMutation.mutateAsync({
-          email: "test@example.com",
-          password: "password123",
-        }).catch(() => {});
+      await runMutation((m) => m.connectGarminMutation, {
+        email: "test@example.com",
+        password: "password123",
       });
 
       expect(mockToast).toHaveBeenCalledWith(
@@ -122,13 +106,7 @@ describe("useGarminMutations", () => {
   describe("disconnectGarminMutation", () => {
     it("calls api.garmin.disconnect on success and triggers success toast", async () => {
       apiMocks.disconnect.mockResolvedValue(undefined);
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.disconnectGarminMutation.mutateAsync();
-      });
+      await runMutation((m) => m.disconnectGarminMutation);
 
       expect(apiMocks.disconnect).toHaveBeenCalled();
       expect(mockToast).toHaveBeenCalledWith(
@@ -141,13 +119,7 @@ describe("useGarminMutations", () => {
 
     it("triggers error toast on disconnect failure", async () => {
       apiMocks.disconnect.mockRejectedValue(new Error("Network error"));
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.disconnectGarminMutation.mutateAsync().catch(() => {});
-      });
+      await runMutation((m) => m.disconnectGarminMutation);
 
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -162,13 +134,7 @@ describe("useGarminMutations", () => {
   describe("syncGarminMutation", () => {
     it("calls api.garmin.sync on success and triggers success toast", async () => {
       apiMocks.sync.mockResolvedValue({ imported: 5, skipped: 2, total: 7 });
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.syncGarminMutation.mutateAsync();
-      });
+      await runMutation((m) => m.syncGarminMutation);
 
       expect(apiMocks.sync).toHaveBeenCalled();
       expect(mockToast).toHaveBeenCalledWith(
@@ -181,13 +147,7 @@ describe("useGarminMutations", () => {
 
     it("triggers error toast on sync failure", async () => {
       apiMocks.sync.mockRejectedValue(new Error("Rate limited"));
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.syncGarminMutation.mutateAsync().catch(() => {});
-      });
+      await runMutation((m) => m.syncGarminMutation);
 
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -200,13 +160,7 @@ describe("useGarminMutations", () => {
 
     it("triggers error toast with fallback generic message on failure when not an Error", async () => {
       apiMocks.sync.mockRejectedValue("String error");
-      const { result } = renderHook(() => useGarminMutations(), {
-        wrapper: createWrapper(),
-      });
-
-      await act(async () => {
-        await result.current.syncGarminMutation.mutateAsync().catch(() => {});
-      });
+      await runMutation((m) => m.syncGarminMutation);
 
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({

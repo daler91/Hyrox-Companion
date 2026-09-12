@@ -327,59 +327,56 @@ describe("buildLoadGovernorSuggestions — on-ramp cap", () => {
 });
 
 describe("buildLoadGovernorSuggestions — cross-pass dedup and precedence", () => {
-  it("posterior (pass 1) wins over acwr_danger_lock (pass 3) for the same workout", () => {
+  // Each row: two active restrictions that both match the same workout, and the
+  // rationale the winner must carry. One workout in, one suggestion out.
+  it.each([
+    {
+      name: "posterior (pass 1) wins over acwr_danger_lock (pass 3) for the same workout",
+      restrictions: ["posterior_chain_velocity_lock", "acwr_danger_lock"],
+      mainWorkout: "Hill repeats",
+      winner: "posterior_chain_velocity_lock",
+    },
+    {
+      // The passes ran vector rules first and the danger lock last, and each pass
+      // claims the workouts it acts on. So anterior_chain_braking_guard — a
+      // "reduce" — could take a session and leave the danger-level ACWR lock, a
+      // full "recovery" downshift, unable to touch it. The athlete got the milder
+      // of two restrictions exactly when the more serious one applied.
+      // The workout matches BOTH rules: "tempo" makes it a high-intensity run
+      // (danger lock) and "road run" makes it a braking run (anterior guard).
+      name: "acwr_danger_lock outranks a merely REDUCING vector rule (audit M23)",
+      restrictions: ["anterior_chain_braking_guard", "acwr_danger_lock"],
+      mainWorkout: "Tempo road run",
+      winner: "acwr_danger_lock",
+    },
+    {
+      name: "acwr_danger_lock outranks acwr_yellow_guard for the same workout",
+      restrictions: ["acwr_yellow_guard", "acwr_danger_lock"],
+      mainWorkout: "Hill repeats",
+      winner: "acwr_danger_lock",
+    },
+    {
+      // Rules are declared in fixed order (posterior, anterior, elastic); a
+      // workout matching several gets the first, independent of how the
+      // restrictions are ordered in the summary.
+      name: "within pass 1, posterior wins over elastic regardless of restriction order",
+      restrictions: ["elastic_tendon_speed_guard", "posterior_chain_velocity_lock"],
+      mainWorkout: "Hill repeats",
+      winner: "posterior_chain_velocity_lock",
+    },
+    {
+      name: "a workout claimed by an earlier pass is skipped by the on-ramp pass",
+      restrictions: ["posterior_chain_velocity_lock", "acwr_onramp"],
+      mainWorkout: "Hill repeats",
+      winner: "posterior_chain_velocity_lock",
+    },
+  ])("$name", ({ restrictions, mainWorkout, winner }) => {
     const result = runGovernor(
-      [restriction("posterior_chain_velocity_lock"), restriction("acwr_danger_lock")],
-      [nextDay({ mainWorkout: "Hill repeats" })],
+      restrictions.map((id) => restriction(id)),
+      [nextDay({ mainWorkout })],
     );
     expect(result).toHaveLength(1);
-    expect(result[0].rationaleCode).toBe("posterior_chain_velocity_lock");
-  });
-
-  it("acwr_danger_lock outranks a merely REDUCING vector rule (audit M23)", () => {
-    // The passes ran vector rules first and the danger lock last, and each pass
-    // claims the workouts it acts on. So anterior_chain_braking_guard — a
-    // "reduce" — could take a session and leave the danger-level ACWR lock, a
-    // full "recovery" downshift, unable to touch it. The athlete got the milder
-    // of two restrictions exactly when the more serious one applied.
-    const result = runGovernor(
-      [restriction("anterior_chain_braking_guard"), restriction("acwr_danger_lock")],
-      // Matches BOTH rules: "tempo" makes it a high-intensity run (danger lock)
-      // and "road run" makes it a braking run (anterior guard).
-      [nextDay({ mainWorkout: "Tempo road run" })],
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].rationaleCode).toBe("acwr_danger_lock");
-  });
-
-  it("acwr_danger_lock outranks acwr_yellow_guard for the same workout", () => {
-    const result = runGovernor(
-      [restriction("acwr_yellow_guard"), restriction("acwr_danger_lock")],
-      [nextDay({ mainWorkout: "Hill repeats" })],
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].rationaleCode).toBe("acwr_danger_lock");
-  });
-
-  it("within pass 1, posterior wins over elastic regardless of restriction order", () => {
-    // Rules are declared in fixed order (posterior, anterior, elastic); a
-    // workout matching several gets the first, independent of how the
-    // restrictions are ordered in the summary.
-    const result = runGovernor(
-      [restriction("elastic_tendon_speed_guard"), restriction("posterior_chain_velocity_lock")],
-      [nextDay({ mainWorkout: "Hill repeats" })],
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].rationaleCode).toBe("posterior_chain_velocity_lock");
-  });
-
-  it("a workout claimed by an earlier pass is skipped by the on-ramp pass", () => {
-    const result = runGovernor(
-      [restriction("posterior_chain_velocity_lock"), restriction("acwr_onramp")],
-      [workout({ id: "claimed", date: D1, mainWorkout: "Hill repeats" })],
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0].rationaleCode).toBe("posterior_chain_velocity_lock");
+    expect(result[0].rationaleCode).toBe(winner);
   });
 
   it("different workouts are assigned to the passes they each match", () => {

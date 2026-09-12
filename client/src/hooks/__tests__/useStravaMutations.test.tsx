@@ -1,6 +1,12 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import {
+  createWrapper,
+  invalidatedKeys,
+  invalidateQueriesSpy,
+  mockToast,
+} from "@/test/support/mutationHookMocks";
 
 import { useStravaMutations } from "../useStravaMutations";
 
@@ -8,10 +14,6 @@ const apiMocks = vi.hoisted(() => ({
   auth: vi.fn(),
   disconnect: vi.fn(),
   sync: vi.fn(),
-}));
-
-const queryClientMocks = vi.hoisted(() => ({
-  invalidateQueries: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -31,39 +33,26 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-// The hook reaches the module-level queryClient directly in its onError (a
-// revoked connection must refetch /status even though the mutation failed),
-// so that singleton is what the invalidation assertions watch.
-vi.mock("@/lib/queryClient", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/queryClient")>()),
-  queryClient: { invalidateQueries: queryClientMocks.invalidateQueries },
-}));
+vi.mock("@/lib/queryClient", async (importOriginal) =>
+  (await import("@/test/support/mutationHookMocks")).makeQueryClientSingletonMock(importOriginal),
+);
+vi.mock("@/hooks/use-toast", async () =>
+  (await import("@/test/support/mutationHookMocks")).makeToastMock(),
+);
 
-const mockToast = vi.fn();
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: vi.fn(() => ({ toast: mockToast })),
-}));
-
-function invalidatedKeys(): unknown[] {
-  return queryClientMocks.invalidateQueries.mock.calls.map((call) => call[0].queryKey);
-}
-
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
+/** Renders the hook and drives the sync mutation to settled, swallowing a
+ *  rejection the way the UI does (the toast, not a thrown promise, carries it). */
+async function runSync(): Promise<void> {
+  const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
+  await act(async () => {
+    await result.current.syncStravaMutation.mutateAsync().catch(() => {});
   });
-  return function Wrapper({ children }: Readonly<{ children: React.ReactNode }>) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  };
-};
+}
 
 describe("useStravaMutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    queryClientMocks.invalidateQueries.mockResolvedValue(undefined);
+    invalidateQueriesSpy.mockResolvedValue(undefined);
   });
 
   describe("connectStravaMutation", () => {
@@ -111,10 +100,7 @@ describe("useStravaMutations", () => {
   describe("syncStravaMutation", () => {
     it("reports the import counts and hints at a further sync when more remain", async () => {
       apiMocks.sync.mockResolvedValue({ imported: 3, skipped: 2, hasMore: true });
-      const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
-      await act(async () => {
-        await result.current.syncStravaMutation.mutateAsync();
-      });
+      await runSync();
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Sync Complete",
@@ -133,10 +119,7 @@ describe("useStravaMutations", () => {
         suggested: 1,
         standalone: 0,
       });
-      const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
-      await act(async () => {
-        await result.current.syncStravaMutation.mutateAsync();
-      });
+      await runSync();
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           description:
@@ -147,10 +130,7 @@ describe("useStravaMutations", () => {
 
     it("omits the run-again hint when the sync drained the backlog", async () => {
       apiMocks.sync.mockResolvedValue({ imported: 1, skipped: 0, hasMore: false });
-      const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
-      await act(async () => {
-        await result.current.syncStravaMutation.mutateAsync();
-      });
+      await runSync();
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({ description: "Imported 1 new activities. 0 already existed." }),
       );
@@ -158,10 +138,7 @@ describe("useStravaMutations", () => {
 
     it("asks for a reconnect and refetches /status when the server reports a revoked token", async () => {
       apiMocks.sync.mockRejectedValue(new Error('401: {"error":"Strava access revoked","code":"STRAVA_REAUTH_REQUIRED"}'));
-      const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
-      await act(async () => {
-        await result.current.syncStravaMutation.mutateAsync().catch(() => {});
-      });
+      await runSync();
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Strava reconnection needed",
@@ -174,10 +151,7 @@ describe("useStravaMutations", () => {
 
     it("humanises any other sync failure and still refetches /status", async () => {
       apiMocks.sync.mockRejectedValue(new Error("502: Strava is down"));
-      const { result } = renderHook(() => useStravaMutations(), { wrapper: createWrapper() });
-      await act(async () => {
-        await result.current.syncStravaMutation.mutateAsync().catch(() => {});
-      });
+      await runSync();
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Failed to sync activities from Strava.", variant: "destructive" }),
       );
