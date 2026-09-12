@@ -42,26 +42,7 @@ import { workoutLogs } from "@shared/schema";
 import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 
 import { db } from "../server/db";
-
-interface Flags {
-  apply: boolean;
-  userId?: string;
-  quiet: boolean;
-}
-
-function parseFlags(argv: string[]): Flags {
-  const flags: Flags = { apply: false, quiet: false };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--apply") flags.apply = true;
-    else if (argv[i] === "--user-id") flags.userId = argv[++i];
-    else if (argv[i] === "--quiet") flags.quiet = true;
-  }
-  return flags;
-}
-
-function say(line: string): void {
-  process.stdout.write(`${line}\n`);
-}
+import { type BackfillFlags, runBackfill, say } from "./backfillCli";
 
 /** The provider's own sport for a row, or null when there is nothing to read. */
 function sportTypeOf(log: {
@@ -72,9 +53,7 @@ function sportTypeOf(log: {
   return raw?.sport_type || raw?.type || log.focus || null;
 }
 
-async function main(): Promise<void> {
-  const flags = parseFlags(process.argv.slice(2));
-
+async function main(flags: BackfillFlags): Promise<void> {
   // Device rows only, and only those still at the default. A row already set
   // false needs nothing; a row an athlete set is not ours to revisit.
   const conditions = [
@@ -125,9 +104,4 @@ async function main(): Promise<void> {
   );
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err: unknown) => {
-    process.stderr.write(`Backfill failed: ${err instanceof Error ? err.stack : String(err)}\n`);
-    process.exit(1);
-  });
+runBackfill(main);

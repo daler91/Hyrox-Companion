@@ -100,6 +100,25 @@ export type LoggedExerciseSetWithDate = Omit<ExerciseSet, "workoutLogId"> & {
 // detect users pushing past the limit and proactively offer pagination.
 export const MAX_WORKOUT_LOGS_PER_QUERY = 5000;
 
+/**
+ * The scope every logged-set query shares: this athlete, optionally a date
+ * window, optionally training sessions only.
+ *
+ * One copy so the fat and slim projections cannot drift — they must agree on
+ * which sessions exist, or the PR table and the progression chart start
+ * describing different histories.
+ */
+function loggedSetScope(
+  userId: string,
+  filters?: { from?: string; to?: string; onlyTraining?: boolean },
+): SQL[] {
+  const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
+  if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
+  if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
+  if (filters?.onlyTraining) conditions.push(eq(workoutLogs.countsAsTraining, true));
+  return conditions;
+}
+
 export async function queryExerciseSetsWithDates(
   userId: string,
   filters?: {
@@ -116,10 +135,7 @@ export async function queryExerciseSetsWithDates(
   // and pull their exercise sets. The output flattens sets + the parent log's
   // date to match the prior shape. An optional exerciseName filter is applied
   // at the nested-relation level so it runs in SQL.
-  const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
-  if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
-  if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
-  if (filters?.onlyTraining) conditions.push(eq(workoutLogs.countsAsTraining, true));
+  const conditions = loggedSetScope(userId, filters);
 
   const logs = await db.query.workoutLogs.findMany({
     where: and(...conditions),
@@ -197,10 +213,7 @@ export async function querySlimExerciseSetsWithDates(
   userId: string,
   filters?: { from?: string; to?: string; onlyTraining?: boolean },
 ): Promise<SlimLoggedExerciseSet[]> {
-  const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
-  if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
-  if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
-  if (filters?.onlyTraining) conditions.push(eq(workoutLogs.countsAsTraining, true));
+  const conditions = loggedSetScope(userId, filters);
 
   const logs = await db.query.workoutLogs.findMany({
     where: and(...conditions),

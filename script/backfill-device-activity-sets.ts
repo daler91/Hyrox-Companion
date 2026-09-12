@@ -29,19 +29,7 @@
  * `listBackfillAthletes` — never one operator-supplied unit for the table, which
  * is the corruption the L4 stamp exists to prevent.
  *
- * Output goes to stdout as plain lines rather than through the app logger: an
- * operator watching a migration wants a readable report, not pino JSON, and the
- * repo's logger is a server sink this script has no reason to reach for.
- *
- * It also keeps this file out of `javascript_lang_logger_leak`, which fires on
- * ANY non-string-literal argument to a `log`/`logger`/`console` call regardless
- * of whether the data is sensitive. Suppressing it would have worked — but only
- * written as a BARE `// bearer:disable javascript_lang_logger_leak` line, since
- * Bearer reads everything after the directive as the rule id, so a trailing
- * "— why" silently kills the suppression (.jules/sentinel.md, 2026-08-12; the
- * ratchet in server/__tests__/bearerDisableSuppressions.test.ts caps how many
- * such dead directives the repo carries). Not needing a suppression at all is
- * the sturdier answer for a script that never wanted a server logger anyway.
+ * Reporting goes through `say` (stdout, not the app logger) — see backfillCli.
  *
  * Usage:
  *   pnpm tsx script/backfill-device-activity-sets.ts              # dry run
@@ -57,29 +45,9 @@ import {
   backfillDeviceActivitySets,
   listBackfillAthletes,
 } from "../server/services/deviceActivitySets";
+import { type BackfillFlags, runBackfill, say } from "./backfillCli";
 
-interface Flags {
-  apply: boolean;
-  userId?: string;
-  quiet: boolean;
-}
-
-function parseFlags(argv: string[]): Flags {
-  const flags: Flags = { apply: false, quiet: false };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--apply") flags.apply = true;
-    else if (argv[i] === "--user-id") flags.userId = argv[++i];
-    else if (argv[i] === "--quiet") flags.quiet = true;
-  }
-  return flags;
-}
-
-function say(line: string): void {
-  process.stdout.write(`${line}\n`);
-}
-
-async function main(): Promise<void> {
-  const flags = parseFlags(process.argv.slice(2));
+async function main(flags: BackfillFlags): Promise<void> {
   const athletes = await listBackfillAthletes(flags.userId);
 
   let totalCandidates = 0;
@@ -112,11 +80,4 @@ async function main(): Promise<void> {
   );
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err: unknown) => {
-    // Straight to stderr: a data migration that dies without saying why is the
-    // one that cannot be diagnosed.
-    process.stderr.write(`Backfill failed: ${err instanceof Error ? err.stack : String(err)}\n`);
-    process.exit(1);
-  });
+runBackfill(main);
