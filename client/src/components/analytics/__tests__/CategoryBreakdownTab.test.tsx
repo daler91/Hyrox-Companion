@@ -93,6 +93,7 @@ function makeOverview(overrides: Partial<TrainingOverview> = {}): TrainingOvervi
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     },
     trainingLoad: emptyTrainingLoad,

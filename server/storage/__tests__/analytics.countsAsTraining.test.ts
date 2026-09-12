@@ -38,6 +38,26 @@ describe("counts_as_training", () => {
     expect(optsIntoFiltering(file)).toBe(false);
   });
 
+  it("filters on the live route path, not only in the loader's defaults", () => {
+    // The bug this exists for: trainingOverviewLoader's defaultFetchers carried
+    // `onlyTraining: true`, but /api/v1/training-overview INJECTS its own
+    // coalescing caches, which did not — so the filter was real in the defaults
+    // and absent from every actual request. A test that only read the loader
+    // passed the whole time. Assert on the file that actually runs.
+    const route = readFileSync("server/routes/analytics.ts", "utf8");
+    for (const call of [
+      "getAllExerciseSetsWithDates",
+      "getExerciseSetsForPersonalRecords",
+      "getWorkoutLogsByDateRange",
+    ]) {
+      const at = route.indexOf(call);
+      expect(at, `${call} not found in the route`).toBeGreaterThan(-1);
+      // The option rides on the same call expression, within the next line or
+      // two — close enough that a call added without it fails here.
+      expect(route.slice(at, at + 160), call).toContain("onlyTraining: true");
+    }
+  });
+
   it.each([
     ["server/services/trainingOverviewLoader.ts"],
     ["server/services/trainingSummaryService.ts"],

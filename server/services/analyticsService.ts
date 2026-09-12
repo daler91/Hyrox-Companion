@@ -20,7 +20,12 @@ import {
   normalizeExerciseName,
 } from "@shared/schema";
 import { buildStationCoverage, type StationCoverageSource } from "@shared/stationCoverage";
-import { storedDistanceToDisplay, storedWeightToDisplay, type UnitPreferences } from "@shared/unitConversion";
+import {
+  storedDistanceToDisplay,
+  storedDistanceToMetersStamped,
+  storedWeightToDisplay,
+  type UnitPreferences,
+} from "@shared/unitConversion";
 
 import { calculateStreak } from "../routeUtils";
 import type { LoggedExerciseSetWithDate, SlimLoggedExerciseSet } from "../storage/shared";
@@ -323,7 +328,7 @@ function getMonday(dateStr: string): string {
   return res;
 }
 
-type WeekAccumulator = { count: number; totalDuration: number; durationCount: number; rpeSum: number; rpeCount: number; categoryBreakdown: Record<string, number> };
+type WeekAccumulator = { count: number; totalDuration: number; durationCount: number; rpeSum: number; rpeCount: number; categoryBreakdown: Record<string, number>; runningMeters: number };
 
 const emptyWeek = (): WeekAccumulator => ({
   count: 0,
@@ -332,6 +337,7 @@ const emptyWeek = (): WeekAccumulator => ({
   rpeSum: 0,
   rpeCount: 0,
   categoryBreakdown: {},
+  runningMeters: 0,
 });
 
 /**
@@ -376,6 +382,42 @@ function mondaysBetween(fromMonday: string, toMonday: string): string[] {
   return weeks;
 }
 
+/** The fields a set needs for the mileage rollup — nothing that forces the fat
+ *  projection, so the previous-period window can use the column-slim query. */
+export type DistanceSet = Pick<
+  SlimLoggedExerciseSet,
+  "date" | "category" | "distance" | "distanceUnit" | "weightUnit"
+>;
+
+/**
+ * Add each running set's distance to its week, in canonical metres.
+ *
+ * `category === "running"` is the whole filter: the catalogue already decides
+ * what running is (ten entries, treadmill included), so nothing here has to
+ * keep a second list in sync. Every set is read through its OWN unit stamp, so
+ * a history written partly in feet — an athlete who switched to miles midway —
+ * still totals correctly rather than adding feet to metres.
+ */
+function accumulateRunningMeters(
+  weekMap: Map<string, WeekAccumulator>,
+  sets: readonly DistanceSet[],
+  preferences: UnitPreferences,
+): void {
+  for (const set of sets) {
+    if (set.category !== "running" || !set.distance) continue;
+    const weekStart = getMonday(set.date);
+    let week = weekMap.get(weekStart);
+    if (!week) {
+      // A running set whose parent log is outside the log window (or filtered
+      // out of it) still belongs to a week; give it one rather than dropping
+      // the distance on the floor.
+      week = emptyWeek();
+      weekMap.set(weekStart, week);
+    }
+    week.runningMeters += storedDistanceToMetersStamped(set.distance, set, preferences);
+  }
+}
+
 /**
  * Build the per-week rollup, INCLUDING weeks the athlete did not train.
  *
@@ -395,6 +437,8 @@ function mondaysBetween(fromMonday: string, toMonday: string): string[] {
 function buildWeeklySummaries(
   workoutLogs: WorkoutLog[],
   period?: { from?: string; to?: string },
+  exerciseSets: readonly DistanceSet[] = [],
+  preferences: UnitPreferences = {},
 ): { summaries: WeeklySummary[]; workoutDates: string[] } {
   const weekMap = new Map<string, WeekAccumulator>();
   const workoutDates: string[] = [];
@@ -419,6 +463,7 @@ function buildWeeklySummaries(
     workoutDates.push(log.date);
   }
 
+  accumulateRunningMeters(weekMap, exerciseSets, preferences);
   zeroFillWeeks(weekMap, period);
 
   const summaries: WeeklySummary[] = Array.from(weekMap.entries())
@@ -430,6 +475,9 @@ function buildWeeklySummaries(
       categoryBreakdown: w.categoryBreakdown,
       workoutsWithDuration: w.durationCount,
       rpeCount: w.rpeCount,
+      // Rounded to the metre: the sum of many stamped reads carries float
+      // noise, and no one needs a weekly mileage to the micron.
+      runningMeters: Math.round(w.runningMeters),
     }))
     .sort((a, b) => {
       if (b.weekStart < a.weekStart) return 1;
@@ -626,6 +674,7 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     };
   }
@@ -636,10 +685,12 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
   let totalWorkouts = 0;
   let totalDuration = 0;
   let workoutsWithDuration = 0;
+  let totalRunningMeters = 0;
   for (const w of weeklySummaries) {
     totalWorkouts += w.workoutCount;
     totalDuration += w.totalDuration;
     workoutsWithDuration += w.workoutsWithDuration;
+    totalRunningMeters += w.runningMeters;
   }
   // `weeklySummaries` is now zero-filled across the period, so rest weeks are
   // in the denominator and this can fall below 1.0 (audit H7).
@@ -660,7 +711,7 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
     1,
   );
 
-  return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, avgCompliancePct: null };
+  return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, totalRunningMeters, avgCompliancePct: null };
 }
 
 export interface TrainingOverviewOptions {
@@ -679,6 +730,16 @@ export interface TrainingOverviewOptions {
    */
   dueSessionCount?: number;
   previousDueSessionCount?: number;
+  /**
+   * The previous window's sets, for the weekly-mileage delta.
+   *
+   * Separate from `previousWorkoutLogs` because mileage lives on the sets, and
+   * typed to `DistanceSet` so the loader can satisfy it with the column-slim
+   * projection rather than repeating the fat relational fetch. Omitted → the
+   * previous period simply reports zero mileage, which the client renders as
+   * no delta rather than as a 100% drop.
+   */
+  previousExerciseSets?: readonly DistanceSet[];
   weeklyGoal?: number;
   loadTags?: ExerciseLoadTag[];
   trainingLoadInput?: {
@@ -722,6 +783,7 @@ export function calculateTrainingOverview(
     period,
     dueSessionCount,
     previousDueSessionCount,
+    previousExerciseSets,
     weeklyGoal = 5,
     loadTags = [],
     trainingLoadInput,
@@ -730,7 +792,13 @@ export function calculateTrainingOverview(
     distanceUnit,
     athlete,
   } = options;
-  const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(workoutLogs, period);
+  const unitPreferences: UnitPreferences = { weightUnit, distanceUnit };
+  const { summaries: weeklySummaries, workoutDates } = buildWeeklySummaries(
+    workoutLogs,
+    period,
+    exerciseSets,
+    unitPreferences,
+  );
   const categoryTotals = buildCategoryTotals(exerciseSets);
   // "Days since last trained" is counted from the ATHLETE's today; the option
   // was already accepted here and used for the streak, while these three
@@ -774,7 +842,10 @@ export function calculateTrainingOverview(
   // previous window).
   const previousStats = previousWorkoutLogs
     ? (() => {
-      const stats = computeOverviewStats(buildWeeklySummaries(previousWorkoutLogs).summaries);
+      const stats = computeOverviewStats(
+        buildWeeklySummaries(previousWorkoutLogs, undefined, previousExerciseSets, unitPreferences)
+          .summaries,
+      );
       stats.avgCompliancePct = computeAdherencePct(previousWorkoutLogs, previousDueSessionCount);
       return stats;
     })()

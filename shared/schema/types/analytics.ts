@@ -18,6 +18,22 @@ export interface WeeklySummary {
   // (audit H9). Weeks with no training are present with zero counts.
   workoutsWithDuration: number;
   rpeCount: number;
+  /**
+   * The week's RUNNING distance, in canonical metres.
+   *
+   * Running only — not every distance-carrying set. Summing all of them would
+   * fold 4x50 m of sled push and a sandbag carry into "mileage", which is not
+   * what the word means and not a number anyone could act on. Ergs are excluded
+   * for the same reason in reverse: 5 km on a rower is real work but it is not
+   * 5 km of running, and averaging the two hides both.
+   *
+   * Read from the SETS, not from `workout_logs.distance_meters`: that column is
+   * only populated on device imports, so a manually logged "5 km easy" would
+   * silently not count. Every set carries its own unit stamp, so each is read
+   * through `storedDistanceToMetersStamped` into metres before summing — a
+   * history written partly in feet still totals correctly.
+   */
+  runningMeters: number;
 }
 
 export type LoadGovernorAcwrZone =
@@ -162,6 +178,9 @@ export interface OverviewStats {
   avgDuration: number;
   /** Mean of the per-week avgRpe values that had at least one RPE entry. */
   avgRpe: number | null;
+  /** Running distance across the period, in canonical metres. See
+   *  WeeklySummary.runningMeters for what is and is not counted. */
+  totalRunningMeters: number;
   /** Mean adherence % across workouts that have compliance snapshots. */
   avgCompliancePct: number | null;
 }

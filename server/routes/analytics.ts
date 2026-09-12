@@ -30,7 +30,10 @@ export const _cacheForTesting = new Map<string, CacheEntry<ExerciseSetWithDate[]
 const getExerciseSetsCoalesced = createCoalescedCache(
   _cacheForTesting,
   "",
-  (userId, from, to) => storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
+  // `onlyTraining` here, not just in the loader's defaults: this route INJECTS
+  // its caches, so a filter applied only there never reaches the live path.
+  (userId, from, to) =>
+    storage.analytics.getAllExerciseSetsWithDates(userId, from, to, { onlyTraining: true }),
 );
 
 // Personal Records use a column-slim fetch (only the fields calculatePersonalRecords
@@ -39,7 +42,10 @@ export const _prCacheForTesting = new Map<string, CacheEntry<SlimLoggedExerciseS
 const getPersonalRecordSetsCoalesced = createCoalescedCache(
   _prCacheForTesting,
   "pr-",
-  (userId, from, to) => storage.analytics.getExerciseSetsForPersonalRecords(userId, from, to),
+  // Serves /personal-records, /exercise-analytics and the training-overview
+  // mileage delta — all training surfaces, so all filtered.
+  (userId, from, to) =>
+    storage.analytics.getExerciseSetsForPersonalRecords(userId, from, to, { onlyTraining: true }),
 );
 
 export function validDate(val: unknown): string | undefined {
@@ -214,7 +220,8 @@ export const _workoutLogCacheForTesting = new Map<string, CacheEntry<WorkoutLog[
 const getWorkoutLogsCoalesced = createCoalescedCache(
   _workoutLogCacheForTesting,
   "wl-",
-  (userId, from, to) => storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
+  (userId, from, to) =>
+    storage.analytics.getWorkoutLogsByDateRange(userId, from, to, { onlyTraining: true }),
 );
 
 // The home summary card's bounded payload (P4). Registered under the
@@ -236,6 +243,9 @@ router.get("/api/v1/training-overview", isAuthenticated, rateLimiter("analytics"
       await assembleTrainingOverview(userId, dates.from, dates.to, {
         workoutLogs: getWorkoutLogsCoalesced,
         exerciseSets: getExerciseSetsCoalesced,
+        // Shares the slim cache with /personal-records: when both fire for the
+        // same window they collapse to one fetch instead of two.
+        slimExerciseSets: getPersonalRecordSetsCoalesced,
       }),
     );
   }));

@@ -19,8 +19,16 @@ interface TrainingOverviewTabProps {
 }
 
 export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverviewTabProps) {
-  const { overview, isLoading, stats, previousStats, rpeData, durationData, annotationBands } =
-    useTrainingOverviewData(dateParams);
+  const {
+    overview,
+    isLoading,
+    stats,
+    previousStats,
+    rpeData,
+    durationData,
+    mileageData,
+    annotationBands,
+  } = useTrainingOverviewData(dateParams);
   const analysis = useOverviewAnalysis();
   const sections = analysis.sections;
 
@@ -81,6 +89,7 @@ export function TrainingOverviewTab({ dateParams, weeklyGoal }: TrainingOverview
       <OverviewTrendCharts
         rpeData={rpeData}
         durationData={durationData}
+        mileageData={mileageData}
         explanation={sections?.rpeDuration}
       />
       <WorkoutHeatmap workoutDates={overview.workoutDates} explanation={sections?.consistency} />

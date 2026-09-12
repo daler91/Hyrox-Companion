@@ -189,7 +189,9 @@ describe("Analytics Routes", () => {
         const response = await request(app).get(endpoint);
 
         expect(response.status).toBe(200);
-        expect(storageMethod).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+        expect(storageMethod).toHaveBeenCalledWith("test_user_id", undefined, undefined, {
+          onlyTraining: true,
+        });
         expect(mockMethod).toHaveBeenCalledWith(
           [expect.objectContaining({ id: "set1", exerciseName: "Test", weight: "100", reps: 10 })],
           { weightUnit: "lbs", distanceUnit: "miles" },
@@ -204,7 +206,9 @@ describe("Analytics Routes", () => {
         const response = await request(app).get(`${endpoint}?from=2024-01-01&to=2024-12-31`);
 
         expect(response.status).toBe(200);
-        expect(storageMethod).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31");
+        expect(storageMethod).toHaveBeenCalledWith("test_user_id", "2024-01-01", "2024-12-31", {
+          onlyTraining: true,
+        });
       });
 
       it("clamps a future 'to' date to today", async () => {
@@ -388,8 +392,12 @@ describe("Analytics Routes", () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockOverview);
       // No `from` query param → no previous-window fetch.
-      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined);
-      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined);
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", undefined, undefined, {
+        onlyTraining: true,
+      });
+      expect(storage.analytics.getAllExerciseSetsWithDates).toHaveBeenCalledWith("test_user_id", undefined, undefined, {
+        onlyTraining: true,
+      });
       expect(storage.analytics.getExerciseLoadTags).toHaveBeenCalled();
       expect(storage.users.getUser).toHaveBeenCalledWith("test_user_id");
       expect(calculateTrainingOverview).toHaveBeenCalled();
@@ -434,7 +442,9 @@ describe("Analytics Routes", () => {
       const response = await request(app).get("/api/v1/training-overview?from=2026-01-01&to=2026-03-31");
 
       expect(response.status).toBe(200);
-      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", "2026-01-01", "2026-03-31");
+      expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("test_user_id", "2026-01-01", "2026-03-31", {
+        onlyTraining: true,
+      });
     });
 
     it("fetches a same-length previous window when `from` is set", async () => {
@@ -455,8 +465,9 @@ describe("Analytics Routes", () => {
       // Previous window must end one day before 2026-02-01 and be 28 days long.
       // That gives 2026-01-04 → 2026-01-31.
       const calls = vi.mocked(storage.analytics.getWorkoutLogsByDateRange).mock.calls;
-      expect(calls).toContainEqual(["test_user_id", "2025-12-20", "2026-02-28"]);
-      expect(calls).toContainEqual(["test_user_id", "2026-01-04", "2026-01-31"]);
+      const TRAINING_ONLY = { onlyTraining: true };
+      expect(calls).toContainEqual(["test_user_id", "2025-12-20", "2026-02-28", TRAINING_ONLY]);
+      expect(calls).toContainEqual(["test_user_id", "2026-01-04", "2026-01-31", TRAINING_ONLY]);
       // calculateTrainingOverview is invoked with the previous logs as the 3rd arg.
       expect(vi.mocked(calculateTrainingOverview).mock.calls[0][2]).toEqual([]);
     });

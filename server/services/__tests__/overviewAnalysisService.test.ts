@@ -57,6 +57,7 @@ function weekly(overrides: Partial<WeeklySummary> = {}): WeeklySummary {
     workoutCount: 3,
     totalDuration: 180,
     avgRpe: 7,
+    runningMeters: 0,
     categoryBreakdown: {},
     // Denominators for the period-level pooled aggregates (audit H8, H9).
     workoutsWithDuration: 3,
@@ -82,6 +83,7 @@ function overview(overrides: Partial<TrainingOverview> = {}): TrainingOverview {
       totalDuration: 0,
       avgDuration: 0,
       avgRpe: null,
+      totalRunningMeters: 0,
       avgCompliancePct: null,
     },
     trainingLoad: trainingLoad(),

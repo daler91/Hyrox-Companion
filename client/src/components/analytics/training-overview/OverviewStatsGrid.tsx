@@ -1,5 +1,8 @@
 import type { OverviewStats } from "@shared/schema";
-import { BarChart3, Clock, Flame, ShieldCheck, Zap } from "lucide-react";
+import { formatDistanceFromMeters, metersToUserDistance } from "@shared/unitConversion";
+import { BarChart3, Clock, Flame, Footprints, ShieldCheck, Zap } from "lucide-react";
+
+import { useUnitPreferences } from "@/hooks/useUnitPreferences";
 
 import { DeltaIndicator } from "../DeltaIndicator";
 
@@ -9,9 +12,18 @@ interface OverviewStatsGridProps {
 }
 
 export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridProps) {
+  const { distanceUnit, distanceLabel } = useUnitPreferences();
+  // The delta compares in the athlete's own unit so its tooltip reads "+12.4 km"
+  // rather than "+12400 m".
+  const runningDisplay = metersToUserDistance(stats.totalRunningMeters, distanceUnit);
+  const previousRunningDisplay =
+    previousStats === undefined
+      ? undefined
+      : metersToUserDistance(previousStats.totalRunningMeters, distanceUnit);
+
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <BarChart3 className="h-5 w-5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
@@ -49,6 +61,27 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
             </div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Total Workouts
+            </p>
+          </div>
+        </div>
+        <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
+          <Footprints className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="flex-1">
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold" data-testid="text-total-running">
+                {formatDistanceFromMeters(stats.totalRunningMeters, distanceUnit)}
+              </p>
+              {previousRunningDisplay !== undefined ? (
+                <DeltaIndicator
+                  current={runningDisplay}
+                  previous={previousRunningDisplay}
+                  unit={distanceLabel}
+                  testIdSuffix="total-running"
+                />
+              ) : null}
+            </div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Running
             </p>
           </div>
         </div>

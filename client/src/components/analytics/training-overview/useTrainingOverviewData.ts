@@ -17,7 +17,7 @@ export function useTrainingOverviewData(dateParams: string) {
     queryFn: () => api.timelineAnnotations.list(),
   });
 
-  const { rpeData, durationData } = useMemo(() => buildTrendData(overview), [overview]);
+  const { rpeData, durationData, mileageData } = useMemo(() => buildTrendData(overview), [overview]);
 
   const annotationBands = useMemo(
     () => buildAnnotationBands(overview, annotations),
@@ -31,6 +31,7 @@ export function useTrainingOverviewData(dateParams: string) {
     previousStats: overview?.previousStats,
     rpeData,
     durationData,
+    mileageData,
     annotationBands,
   };
 }
