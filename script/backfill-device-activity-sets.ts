@@ -98,6 +98,11 @@ async function main(): Promise<void> {
     if (written > 0) athletesTouched++;
 
     if (!flags.quiet && candidates > 0) {
+      // bearer:disable javascript_lang_logger_leak — counts only, plus the
+      // internal user id as the correlation key (same convention as the
+      // storage/analytics and strava sync logs). No activity data, no athlete
+      // text, no credentials: the operator needs to know WHICH athlete a row
+      // count belongs to in order to act on an unexpected one.
       logger.info(
         { userId: athlete.id, candidates, sets: written, skipped: candidates - written },
         flags.apply ? "backfill.user.written" : "backfill.user.would-write",
@@ -105,6 +110,8 @@ async function main(): Promise<void> {
     }
   }
 
+  // bearer:disable javascript_lang_logger_leak — aggregate counts and one
+  // boolean. Nothing here is derived from any athlete's data.
   logger.info(
     {
       athletes: athletes.length,
@@ -121,6 +128,10 @@ async function main(): Promise<void> {
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
+    // bearer:disable javascript_lang_logger_leak — err is the backfill's own
+    // failure (a DB error or a bad flag). A one-off operator script that died
+    // silently would be worse than one that prints why, and the alternative —
+    // swallowing the cause — is what makes a failed migration undiagnosable.
     logger.error({ err }, "backfill.failed");
     process.exit(1);
   });
