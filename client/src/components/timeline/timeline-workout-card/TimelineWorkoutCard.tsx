@@ -535,7 +535,7 @@ interface TimelineCardHeaderProps {
   readonly canMove: boolean;
   readonly adherenceBadge: ReturnType<typeof getAdherenceBadge>;
   readonly isPending?: boolean;
-  readonly dayEntries?: TimelineWorkoutCardProps["dayEntries"];
+  readonly dayEntries: TimelineWorkoutCardProps["dayEntries"];
 }
 
 function TimelineCardHeader({
@@ -616,7 +616,7 @@ interface TimelineCardWorkoutBodyProps {
   readonly personalRecords: TimelineWorkoutCardProps["personalRecords"];
   readonly weightLabel: string;
   readonly distanceUnit: DistanceUnit;
-  readonly dayEntries?: TimelineWorkoutCardProps["dayEntries"];
+  readonly dayEntries: TimelineWorkoutCardProps["dayEntries"];
 }
 
 function TimelineCardWorkoutBody({

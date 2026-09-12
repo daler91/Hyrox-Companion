@@ -774,7 +774,7 @@ function findRangeLowBound(text: string, numberStart: number): NumberToken | nul
   const low = parseNumberToken(text, lowStart);
   // Must account for the whole span up to the separator, so "Set 3. 80-90kg"
   // reads 80 and a partial match like ".5-90kg" is declined.
-  if (!low || low.end !== separatorIndex) return null;
+  if (low?.end !== separatorIndex) return null;
   return { value: low.value, end: lowStart };
 }
 
@@ -783,6 +783,19 @@ function isNumericBodyChar(char: string): boolean {
 }
 
 /** Split "176 lbs" into its number and unit halves; null if it has no label. */
+/**
+ * The low bound stripped of its unit label, for a range whose two bounds
+ * converted to the same unit ("176-198 lbs"); null when they differ
+ * ("900 m-1.1 km") or either side carries no label, so the caller keeps the
+ * low bound as it converted.
+ */
+function sharedUnitLowBound(lowReplacement: string, highReplacement: string): string | null {
+  const low = splitConvertedValue(lowReplacement);
+  const high = splitConvertedValue(highReplacement);
+  if (low == null || high == null) return null;
+  return low.unit === high.unit ? low.value : null;
+}
+
 function splitConvertedValue(replacement: string): { value: string; unit: string } | null {
   const lastSpace = replacement.lastIndexOf(" ");
   if (lastSpace <= 0) return null;
@@ -999,11 +1012,9 @@ function planRangeEmission({
   // than leaving it alone, so emit neither.
   if (lowReplacement == null) return { kind: "decline" };
 
-  const low = splitConvertedValue(lowReplacement);
-  const high = splitConvertedValue(replacement);
   // Drop the low bound's label when both land on the same unit
   // ("176-198 lbs"); keep both when they don't ("900 m-1.1 km").
-  const lowText = low != null && high != null && low.unit === high.unit ? low.value : lowReplacement;
+  const lowText = sharedUnitLowBound(lowReplacement, replacement) ?? lowReplacement;
   return {
     kind: "range",
     start: rangeLow.end,

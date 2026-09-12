@@ -309,6 +309,45 @@ function collectDerivedRowsForBlock(args: {
   return { rows, nextSortOrder: sortOrder };
 }
 
+/**
+ * Fans the persisted blocks out into the three row sets the caller needs:
+ * the structure-step inserts, the exercise-set rows derived from those steps
+ * (only when this owner's sets are block-derived), and the `blockId:stepNumber`
+ * keys that stay valid, used to prune links to steps that no longer exist.
+ */
+function collectStructurePersistRows(args: {
+  owner: SetOwner;
+  blocks: StructureBlockInput[];
+  blockIds: string[];
+  deriveExerciseSets: boolean;
+  startSortOrder: number;
+}): {
+  stepRows: ReturnType<typeof structureStepInsertValues>;
+  derivedRows: InsertExerciseSet[];
+  validStepKeys: Set<string>;
+} {
+  const stepRows: ReturnType<typeof structureStepInsertValues> = [];
+  const derivedRows: InsertExerciseSet[] = [];
+  const validStepKeys = new Set<string>();
+  let sortOrder = args.startSortOrder;
+
+  for (const [idx, block] of args.blocks.entries()) {
+    const blockId = args.blockIds[idx];
+    const steps = block.steps ?? [];
+    if (steps.length === 0) continue;
+    for (const step of steps) {
+      validStepKeys.add(`${blockId}:${step.stepNumber}`);
+    }
+    stepRows.push(...structureStepInsertValues(blockId, steps));
+    if (!args.deriveExerciseSets) continue;
+    const derived = collectDerivedRowsForBlock({ owner: args.owner, blockId, block, startSortOrder: sortOrder });
+    derivedRows.push(...derived.rows);
+    sortOrder = derived.nextSortOrder;
+  }
+
+  return { stepRows, derivedRows, validStepKeys };
+}
+
 export async function replaceStructureForOwner(
   tx: WorkoutTx,
   owner: SetOwner,
@@ -326,7 +365,7 @@ export async function replaceStructureForOwner(
     return 0;
   }
 
-  let sortOrder = deriveExerciseSets ? await nextSortOrderForOwner(tx, owner) : 0;
+  const startSortOrder = deriveExerciseSets ? await nextSortOrderForOwner(tx, owner) : 0;
 
   // ⚡ Bolt Optimization: the old loop awaited one `INSERT ... RETURNING` per
   // block plus one `INSERT` for that block's steps, sequentially, inside the
@@ -342,23 +381,13 @@ export async function replaceStructureForOwner(
     blocksForPersist.map((block, idx) => structureBlockInsertValues(owner, { ...block, id: blockIds[idx] }, idx)),
   );
 
-  const derivedRows: InsertExerciseSet[] = [];
-  const validStepKeys = new Set<string>();
-  const stepRows: ReturnType<typeof structureStepInsertValues> = [];
-  for (const [idx, block] of blocksForPersist.entries()) {
-    const blockId = blockIds[idx];
-    const steps = block.steps ?? [];
-    if (steps.length === 0) continue;
-    for (const step of steps) {
-      validStepKeys.add(`${blockId}:${step.stepNumber}`);
-    }
-    stepRows.push(...structureStepInsertValues(blockId, steps));
-    if (deriveExerciseSets) {
-      const derived = collectDerivedRowsForBlock({ owner, blockId, block, startSortOrder: sortOrder });
-      derivedRows.push(...derived.rows);
-      sortOrder = derived.nextSortOrder;
-    }
-  }
+  const { stepRows, derivedRows, validStepKeys } = collectStructurePersistRows({
+    owner,
+    blocks: blocksForPersist,
+    blockIds,
+    deriveExerciseSets,
+    startSortOrder,
+  });
   if (stepRows.length > 0) {
     await tx.insert(workoutStructureSteps).values(stepRows);
   }
