@@ -2,8 +2,8 @@ import { setupAuthIntercepts } from "../support/authIntercepts";
 
 // Smoke coverage for the Coach panel. SSE streaming mocking in Cypress is
 // fragile, so this tests the affordances rather than end-to-end stream
-// consumption: panel opens, welcome renders, send button disabled on empty
-// input, quick-action buttons visible.
+// consumption: panel opens, welcome renders, send button reads disabled on
+// empty input, quick-action buttons visible.
 describe("AI Coach Panel", () => {
   beforeEach(() => {
     setupAuthIntercepts();
@@ -42,13 +42,15 @@ describe("AI Coach Panel", () => {
     cy.getBySel("input-chat-message").should("be.visible");
   });
 
-  it("disables the send button when the input is empty", () => {
+  it("marks the send button aria-disabled when the input is empty", () => {
     visitWithOnboardingSkipped("/");
     cy.wait("@authUser");
     cy.wait("@timeline");
 
     cy.getBySel("button-coach-fab").should("be.visible").click();
-    cy.get("[aria-label='Send message']").should("be.disabled");
+    // aria-disabled, not the native attribute: the button stays focusable so
+    // its "Type a message to send" tooltip can explain why it's unavailable.
+    cy.get("[aria-label='Send message']").should("have.attr", "aria-disabled", "true");
   });
 
   it("renders quick-action buttons that athletes can tap", () => {
