@@ -821,7 +821,9 @@ export async function syncStravaForUser(
   // anything is inserted: it enriches the log the athlete already wrote,
   // completes the open plan day, or lands standalone (carrying a suggestion
   // when a match was plausible but not certain). See stravaReconciler.ts.
-  const counts = await reconcileStravaActivities(userId, items, log);
+  const counts = await reconcileStravaActivities(userId, items, log, {
+    preferences: { weightUnit: user?.weightUnit, distanceUnit: user?.distanceUnit },
+  });
   // `imported` keeps meaning "activities now on the timeline", wherever
   // they landed. `skipped` sums the pre-dedup hits plus any rows a
   // concurrent sync got to first — the reconciler reports only what it

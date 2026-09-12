@@ -19,6 +19,7 @@
 import {
   type DeviceActivitySnapshot,
   type DeviceLinkSource,
+  exerciseSets,
   type PlanDay,
   type StravaActivitySummary,
   type WorkoutLog,
@@ -31,6 +32,7 @@ import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { storage } from "../storage";
 import { syncPlanDayStatusFromWorkouts } from "../storage/planDayStatus";
+import { deviceActivitySetRow } from "./deviceActivitySets";
 import { mapStravaActivityToWorkout } from "./stravaMapper";
 import { createWorkoutInTx, type WorkoutTx } from "./workoutService";
 
@@ -442,6 +444,15 @@ export async function releaseStravaActivityInTx(
     .insert(workoutLogs)
     .values({ ...standaloneRow, deviceActivity: stravaSnapshot(raw, []) })
     .returning();
+
+  // Give it the same synthesised set a fresh standalone import gets, so an
+  // unlink lands the activity in the set-derived analytics panels rather than
+  // leaving a row only the overview cards can see. Written in the same
+  // transaction as the log: a released recording with no set would be
+  // indistinguishable from a pre-change import and never get one later.
+  const setRow = deviceActivitySetRow(standalone, { distanceUnit });
+  if (setRow) await tx.insert(exerciseSets).values(setRow);
+
   return standalone;
 }
 
