@@ -8,6 +8,7 @@ import {
   exerciseSets,
   type PlanDay,
   planDays,
+  stoppedSecondsFor,
   timelineAnnotations,
   type TimelineEntry,
   trainingPlans,
@@ -37,6 +38,9 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
     // without a second fetch.
     countsAsTraining: log.countsAsTraining,
     deviceActivityName: log.deviceActivity?.raw?.name ?? null,
+    // `duration` is moving time, so the stop it drops is worth showing next to
+    // it — see the workout_logs.duration column note.
+    stoppedSeconds: stoppedSecondsFor(log.deviceActivity),
     suggestedPlanDayId: log.suggestedPlanDayId,
     suggestedWorkoutLogId: log.suggestedWorkoutLogId,
     suggestedLinkConfidence: log.suggestedLinkConfidence,

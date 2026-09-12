@@ -7,6 +7,7 @@ import { Flame, Gauge, HeartPulse, ListChecks, MapPin, Target, Timer } from "luc
 import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 import { getAdherenceToneClassName } from "@/lib/adherenceFormat";
 import { summariseMafTile } from "@/lib/mafFormat";
+import { formatSecondsToMmSs } from "@/lib/statsUtils";
 import { cn } from "@/lib/utils";
 
 export interface SummaryStat {
@@ -44,6 +45,16 @@ interface BuildWorkoutSummaryStatsArgs {
 }
 
 const MAX_SUMMARY_STATS = 6;
+
+/**
+ * Below this, a stop is not worth mentioning.
+ *
+ * Outdoor recordings routinely carry a few seconds of difference between their
+ * two clocks — a GPS fix settling, not a rest. Labelling every run "(moving)"
+ * for two seconds would put a caveat on the one tile nobody should have to
+ * think about.
+ */
+const MIN_REPORTABLE_STOPPED_SEC = 60;
 
 /**
  * Derives the at-a-glance tiles for the top of a workout-detail sheet.
@@ -105,6 +116,35 @@ function buildAvgHrStat(entry: TimelineEntry, mafCeiling: number | null): Summar
   };
 }
 
+/**
+ * The duration tile, named as moving time when the recording also knows how
+ * long the athlete stood still.
+ *
+ * The value is unchanged — it is the same figure every other surface shows,
+ * and `workout_logs.duration` is moving time by design (see the column note).
+ * What the stop buys is context: a 16 km run with half an hour standing at an
+ * aid station otherwise reads exactly like one run straight through. It rides
+ * in the label and the tooltip rather than taking a tile of its own, which
+ * would push another stat off the end of the six.
+ */
+function buildDurationStat(entry: TimelineEntry): SummaryStat {
+  const base: SummaryStat = {
+    key: "duration",
+    icon: Timer,
+    label: "Duration",
+    value: `${entry.duration} min`,
+  };
+  const stoppedSeconds = entry.stoppedSeconds ?? 0;
+  if (stoppedSeconds < MIN_REPORTABLE_STOPPED_SEC) return base;
+  return {
+    ...base,
+    // Qualified in the visible label, so the tooltip is never the only thing
+    // saying this figure excludes the stop.
+    label: "Duration (moving)",
+    explanation: `${formatSecondsToMmSs(stoppedSeconds)} of this session was spent stopped. Duration counts moving time only, so the stop is not in it.`,
+  };
+}
+
 function buildCompletedStats(
   entry: TimelineEntry,
   rpe: number | null,
@@ -115,7 +155,7 @@ function buildCompletedStats(
   const stats: SummaryStat[] = [];
 
   if (entry.duration) {
-    stats.push({ key: "duration", icon: Timer, label: "Duration", value: `${entry.duration} min` });
+    stats.push(buildDurationStat(entry));
   }
   if (rpe) {
     stats.push({ key: "rpe", icon: Gauge, label: "RPE", value: `${rpe}/10` });

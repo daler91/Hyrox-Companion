@@ -427,8 +427,20 @@ export const workoutLogs = pgTable(
     addedSetCount: integer("added_set_count"),
     removedSetCount: integer("removed_set_count"),
     compliancePct: integer("compliance_pct"),
-    // Session length in MINUTES (Strava/Garmin sync writes moving_time / 60;
-    // session-fuelling targets and cardio load both read it as minutes).
+    // Session length in MINUTES, and specifically MOVING time (Strava/Garmin
+    // sync writes moving_time / 60; session-fuelling targets and cardio load
+    // both read it as minutes).
+    //
+    // Moving, not elapsed, on purpose. The two differ only where the provider
+    // can tell them apart — every non-GPS sport type reports a single clock
+    // for both — so the choice only ever bites on outdoor work, and there the
+    // gap is time spent standing still. Counting that as training time would
+    // inflate HR-TSS and cardio stress, slow the pace fallback in
+    // sessionEstimate/runPace, and pad the weekly duration totals in
+    // Analytics; it would also disagree with Strava, which shows moving time
+    // as a run's headline. The dropped stopped time is not lost: read it back
+    // with `stoppedSecondsFor` on the link snapshot, which is what the
+    // workout-detail header surfaces.
     duration: integer("duration"),
     rpe: integer("rpe"),
     // Manual log's local start time as minutes-from-midnight (0–1439), nullable.

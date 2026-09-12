@@ -213,3 +213,72 @@ describe("WorkoutSummaryHeader", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe("the duration tile's stopped time", () => {
+  /** The duration tile for an entry, whatever else the entry carries. */
+  function durationStat(overrides: Partial<TimelineEntry>) {
+    const stats = buildWorkoutSummaryStats({
+      entry: makeEntry({ duration: 99, ...overrides }),
+      variant: "completed",
+      distanceUnit: "km",
+      showAdherence: false,
+    });
+    return stats.find((stat) => stat.key === "duration");
+  }
+
+  it("names the duration as moving time when the session held a real stop", () => {
+    // The real 16.1 km run: 98m 42s moving inside 2h 09m elapsed.
+    const stat = durationStat({ stoppedSeconds: 1816 });
+    expect(stat?.label).toBe("Duration (moving)");
+    expect(stat?.explanation).toContain("30:16");
+  });
+
+  it("leaves the value alone — the stop is context, not a correction", () => {
+    // Every other surface shows this same figure; the tile must not start
+    // disagreeing with them.
+    expect(durationStat({ stoppedSeconds: 1816 })?.value).toBe("99 min");
+    expect(durationStat({ stoppedSeconds: 0 })?.value).toBe("99 min");
+  });
+
+  it("says nothing about a stop too short to be one", () => {
+    // A second of GPS settling is not a rest, and captioning every outdoor run
+    // for it would be noise.
+    const stat = durationStat({ stoppedSeconds: 1 });
+    expect(stat?.label).toBe("Duration");
+    expect(stat?.explanation).toBeUndefined();
+  });
+
+  it("says nothing when the recording cannot tell moving from still", () => {
+    // Every non-GPS sport type: the provider reports one clock for both.
+    expect(durationStat({ stoppedSeconds: 0 })?.label).toBe("Duration");
+    expect(durationStat({ stoppedSeconds: null })?.label).toBe("Duration");
+    expect(durationStat({})?.label).toBe("Duration");
+  });
+
+  it("keeps the stop from costing another stat its tile", () => {
+    // It rides in the label rather than taking a seventh slot, so a fully
+    // populated session still shows all six.
+    const stats = buildWorkoutSummaryStats({
+      entry: makeEntry({
+        duration: 99,
+        rpe: 7,
+        compliancePct: 92,
+        distanceMeters: 16_115,
+        avgHeartrate: 151,
+        calories: 1403,
+        stoppedSeconds: 1816,
+      }),
+      variant: "completed",
+      distanceUnit: "km",
+      showAdherence: true,
+    });
+    expect(stats.map((stat) => stat.key)).toEqual([
+      "duration",
+      "rpe",
+      "adherence",
+      "distance",
+      "avg-hr",
+      "calories",
+    ]);
+  });
+});
