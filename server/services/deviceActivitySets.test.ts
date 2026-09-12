@@ -122,6 +122,15 @@ describe("deviceActivitySetRow", () => {
   it("writes no set for a recording with a stopped clock", () => {
     // A zero-minute set would enter the PR table as an unbeatable "best time".
     expect(deviceActivitySetRow(importedLog(raw({ moving_time: 0 })), KM)).toBeNull();
+    expect(deviceActivitySetRow(importedLog(raw({ moving_time: -1 })), KM)).toBeNull();
+  });
+
+  it("writes no set for a snapshot whose clock is not a number", () => {
+    // NaN fails every comparison, so a bare `<= 0` guard would wave it straight
+    // into the time column and put NaN in the PR table.
+    expect(
+      deviceActivitySetRow(importedLog(raw({ moving_time: Number.NaN })), KM),
+    ).toBeNull();
   });
 
   it("keeps a distance-less recording, with no distance rather than a zero", () => {

@@ -130,8 +130,10 @@ export function deviceActivitySetRow(
   if (!exerciseName) return null;
   // A recording with no elapsed movement describes no effort. Guard rather than
   // write a zero-minute set, which would land in the PR table as an unbeatable
-  // "best time".
-  if (!(measurements.movingSeconds > 0)) return null;
+  // "best time". The finite check is not redundant with `<= 0`: a malformed
+  // snapshot can carry a NaN, and NaN fails every comparison, so `<= 0` alone
+  // would wave it through into the `time` column.
+  if (!Number.isFinite(measurements.movingSeconds) || measurements.movingSeconds <= 0) return null;
 
   const stamp = stampForPreferences(preferences);
   return {
