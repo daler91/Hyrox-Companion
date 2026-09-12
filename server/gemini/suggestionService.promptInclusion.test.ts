@@ -142,66 +142,76 @@ describe("buildSuggestionsPrompt — input inclusion regression guard", () => {
       "FINGERPRINT_RAG_CHUNK\nZone 2 guidance body",
     );
 
-    // Athlete constraints — the standing limitations and the dated absences.
-    // This is the path that rewrites upcoming sessions, so an injury the
-    // athlete declared has to be in front of the model before it decides.
-    expect(prompt).toContain("FINGERPRINT_STANDING_CONSTRAINT");
-    expect(prompt).toContain("FINGERPRINT_ABSENCE_NOTE");
-    expect(prompt).toContain("FINGERPRINT_UPCOMING_TRAVEL");
-    expect(prompt).toContain("CURRENTLY AFFECTED");
-    // Specifically the constraints block's own line — "UPCOMING" alone would
-    // be satisfied by the unrelated "UPCOMING WORKOUTS" header.
-    expect(prompt).toContain("UPCOMING: Travel, 2026-05-02 to 2026-05-06");
+    // Every fragment the prompt has to carry, grouped by the block it comes
+    // from. Asserted in one loop rather than ~40 copies of the same
+    // `expect(prompt).toContain(...)` statement; the failing fragment is
+    // named by the assertion message either way.
+    const requiredFragments = [
+      // Athlete constraints — the standing limitations and the dated absences.
+      // This is the path that rewrites upcoming sessions, so an injury the
+      // athlete declared has to be in front of the model before it decides.
+      "FINGERPRINT_STANDING_CONSTRAINT",
+      "FINGERPRINT_ABSENCE_NOTE",
+      "FINGERPRINT_UPCOMING_TRAVEL",
+      "CURRENTLY AFFECTED",
+      // Specifically the constraints block's own line — "UPCOMING" alone would
+      // be satisfied by the unrelated "UPCOMING WORKOUTS" header.
+      "UPCOMING: Travel, 2026-05-02 to 2026-05-06",
 
-    // MAF method — the ceiling and test cadence. These two fields sat on
-    // TrainingContext rendered by NEITHER assembler until formatMafContext.
-    expect(prompt).toContain("Aerobic ceiling: 137 bpm");
-    expect(prompt).toContain("MAF tests: 4 logged");
+      // MAF method — the ceiling and test cadence. These two fields sat on
+      // TrainingContext rendered by NEITHER assembler until formatMafContext.
+      "Aerobic ceiling: 137 bpm",
+      "MAF tests: 4 logged",
 
-    // Athlete-stated skip reasons — invisible to the coach before recentSkips.
-    expect(prompt).toContain("RECENT SKIPS");
-    expect(prompt).toContain("FINGERPRINT_SKIPPED_FOCUS");
-    expect(prompt).toContain("(injured)");
+      // Athlete-stated skip reasons — invisible to the coach before recentSkips.
+      "RECENT SKIPS",
+      "FINGERPRINT_SKIPPED_FOCUS",
+      "(injured)",
 
-    // Header signals
-    expect(prompt).toContain("FINGERPRINT_GOAL_SUB90");
-    expect(prompt).toContain("Completion rate: 73%");
-    expect(prompt).toContain("Current streak: 11 days");
-    expect(prompt).toContain("Completed workouts: 41");
-    expect(prompt).toContain("Weekly goal: 6");
+      // Header signals
+      "FINGERPRINT_GOAL_SUB90",
+      "Completion rate: 73%",
+      "Current streak: 11 days",
+      "Completed workouts: 41",
+      "Weekly goal: 6",
 
-    // Exercise frequency + per-exercise stats
-    expect(prompt).toContain("FINGERPRINT_EXERCISE_SKIERG");
-    expect(prompt).toContain("max weight: 1234");
-    expect(prompt).toContain("max distance: 2500m");
+      // Exercise frequency + per-exercise stats
+      "FINGERPRINT_EXERCISE_SKIERG",
+      "max weight: 1234",
+      "max distance: 2500m",
 
-    // Recent workouts block
-    expect(prompt).toContain("FINGERPRINT_RECENT_MAINWORKOUT");
-    expect(prompt).toContain("FINGERPRINT_ATHLETE_NOTE");
-    expect(prompt).toContain("RPE: 8");
-    expect(prompt).toContain("Duration: 62min");
+      // Recent workouts block
+      "FINGERPRINT_RECENT_MAINWORKOUT",
+      "FINGERPRINT_ATHLETE_NOTE",
+      "RPE: 8",
+      "Duration: 62min",
 
-    // Coaching analysis block
-    expect(prompt).toContain("RPE TREND: RISING");
-    expect(prompt).toContain("avg 8.7 last 3");
-    expect(prompt).toContain("FATIGUE FLAG ACTIVE");
-    expect(prompt).toContain("Wall Balls (22 days");
-    expect(prompt).toContain("Sled Push (NEVER TRAINED");
-    expect(prompt).toContain("TAPER phase");
-    expect(prompt).toContain("Week 9 of 10");
-    expect(prompt).toContain("Remaining phases: RACE_WEEK");
-    expect(prompt).toContain("FINGERPRINT_EX_PLATEAU: PLATEAU");
-    expect(prompt).toContain("WEEKLY VOLUME: 4/6 goal");
-    expect(prompt).toContain("last week: 2/6");
-    expect(prompt).toContain("Trend: increasing");
+      // Coaching analysis block
+      "RPE TREND: RISING",
+      "avg 8.7 last 3",
+      "FATIGUE FLAG ACTIVE",
+      "Wall Balls (22 days",
+      "Sled Push (NEVER TRAINED",
+      "TAPER phase",
+      "Week 9 of 10",
+      "Remaining phases: RACE_WEEK",
+      "FINGERPRINT_EX_PLATEAU: PLATEAU",
+      "WEEKLY VOLUME: 4/6 goal",
+      "last week: 2/6",
+      "Trend: increasing",
 
-    // Upcoming workouts block
-    expect(prompt).toContain("ID: FINGERPRINT_UP_DAY_1");
-    expect(prompt).toContain("ID: FINGERPRINT_UP_DAY_2");
-    expect(prompt).toContain("FINGERPRINT_UP_NOTES_1");
+      // Upcoming workouts block
+      "ID: FINGERPRINT_UP_DAY_1",
+      "ID: FINGERPRINT_UP_DAY_2",
+      "FINGERPRINT_UP_NOTES_1",
 
-    // RAG materials
-    expect(prompt).toContain("FINGERPRINT_RAG_CHUNK");
+      // RAG materials
+      "FINGERPRINT_RAG_CHUNK",
+    ];
+
+    for (const fragment of requiredFragments) {
+      expect(prompt, `prompt is missing ${fragment}`).toContain(fragment);
+    }
   });
 
   it("omits RPE trend details when rpeTrend=insufficient_data", () => {

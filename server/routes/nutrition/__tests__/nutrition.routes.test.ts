@@ -1,3 +1,4 @@
+import { OAT_BAR_LABEL_SCAN } from "@shared/nutritionTestFixtures";
 import express, { Router } from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -692,19 +693,15 @@ describe("nutrition routes", () => {
 
     it("merges intake and training load into zero-filled daily points", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDateRange).mockResolvedValue([
-        {
-          id: "e1", userId: "test_user", foodId: "f1",
-          loggedAt: new Date("2026-06-02T12:00:00Z"), logDate: "2026-06-02",
-          quantityG: 100, mealType: "lunch", entryMethod: "manual",
-          rawInput: null, parseConfidence: null, pendingReview: false,
-          createdAt: new Date(), updatedAt: new Date(),
-          food: {
-            id: "f1", source: "usda", sourceId: "1", name: "Banana", brand: null,
-            servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 10, carbPer100g: 20,
-            fatPer100g: 5, fiberPer100g: 2, micros: null, createdByUserId: null,
-            createdAt: new Date(), updatedAt: new Date(),
+        makeLogRow(
+          {
+            userId: "test_user",
+            loggedAt: new Date("2026-06-02T12:00:00Z"),
+            logDate: "2026-06-02",
+            mealType: "lunch",
           },
-        },
+          { name: "Banana" },
+        ),
       ]);
 
       const res = await request(app).get("/api/v1/nutrition/block?from=2026-06-01&to=2026-06-03");
@@ -848,19 +845,17 @@ describe("nutrition routes", () => {
   describe("Phase 5: micros (FR-5.1)", () => {
     it("returns the day's micronutrient summary vs RDI", async () => {
       vi.mocked(storage.nutrition.listEntriesWithFoodForDate).mockResolvedValue([
-        {
-          id: "e1", userId: "test_user", foodId: "f1",
-          loggedAt: new Date("2026-06-07T08:00:00Z"), logDate: "2026-06-07",
-          quantityG: 200, mealType: "breakfast", entryMethod: "manual",
-          rawInput: null, parseConfidence: null, pendingReview: false,
-          createdAt: new Date(), updatedAt: new Date(),
-          food: {
-            id: "f1", source: "usda", sourceId: "1", name: "Salty", brand: null,
-            servingSizeG: null, caloriesPer100g: 100, proteinPer100g: 1, carbPer100g: 1,
-            fatPer100g: 1, fiberPer100g: 0, micros: { sodium: 1000 }, createdByUserId: null,
-            createdAt: new Date(), updatedAt: new Date(),
+        makeLogRow(
+          { userId: "test_user", quantityG: 200 },
+          {
+            name: "Salty",
+            proteinPer100g: 1,
+            carbPer100g: 1,
+            fatPer100g: 1,
+            fiberPer100g: 0,
+            micros: { sodium: 1000 },
           },
-        },
+        ),
       ] as never);
 
       const res = await request(app).get("/api/v1/nutrition/micros?date=2026-06-07");
@@ -1013,31 +1008,7 @@ describe("nutrition label parsing (label scan)", () => {
   });
 
   it("transcribes a label photo into a review payload", async () => {
-    vi.mocked(parseNutritionLabel).mockResolvedValue({
-      label: {
-        productName: "Oat Bar",
-        brand: null,
-        servingSizeText: "1 bar (45g)",
-        servingSizeG: 45,
-        servingsPerContainer: null,
-        per100g: { calories: 400, protein: 10, carb: 60, fat: 12, fiber: 6 },
-        perServing: null,
-        basis: "per100g",
-        confidence: 90,
-      },
-      suggestion: {
-        name: "Oat Bar",
-        brand: null,
-        caloriesPer100g: 400,
-        proteinPer100g: 10,
-        carbPer100g: 60,
-        fatPer100g: 12,
-        fiberPer100g: 6,
-        servingSizeG: 45,
-        servings: [],
-      },
-      warnings: [],
-    });
+    vi.mocked(parseNutritionLabel).mockResolvedValue(OAT_BAR_LABEL_SCAN);
 
     const res = await request(app)
       .post("/api/v1/nutrition/parse/label")

@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect,it, vi } from 'vitest';
 
-import type { StructuredExercise } from '@/components/ExerciseInput';
+import type { SetData, StructuredExercise } from '@/components/ExerciseInput';
 import { api, type ParseWorkoutStructureResponse } from '@/lib/api';
 
 import { exerciseToPayload,generateSummary, getBlockExerciseName, makeBlockId, mergeParsedWithEdits, useWorkoutEditor } from '../useWorkoutEditor';
@@ -51,176 +51,104 @@ afterEach(() => {
 });
 
 describe('generateSummary', () => {
-  it('should handle exercises with no sets', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'skierg',
-        category: 'functional',
-        sets: []
-      }
-    ];
+  /** One logged exercise; each set takes its 1-based setNumber from its position. */
+  function ex(
+    exerciseName: string,
+    sets: Omit<SetData, 'setNumber'>[],
+    over: Partial<StructuredExercise> = {},
+  ): StructuredExercise {
+    return {
+      exerciseName: exerciseName as StructuredExercise['exerciseName'],
+      category: 'functional',
+      sets: sets.map((set, index) => ({ setNumber: index + 1, ...set })),
+      ...over,
+    };
+  }
 
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('SkiErg: completed');
-  });
-
-  it('should format single set with reps', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'wall_balls',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, reps: 15 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Wall Balls: 15 reps');
-  });
-
-  it('should format multiple sets with identical reps and weight', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'sandbag_lunges',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, reps: 10, weight: 20 },
-          { setNumber: 2, reps: 10, weight: 20 },
-          { setNumber: 3, reps: 10, weight: 20 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Sandbag Lunges: 3x10, 20kg');
-  });
-
-  it('should format multiple sets with different reps/weights as just count', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'sandbag_lunges',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, reps: 10, weight: 20 },
-          { setNumber: 2, reps: 8, weight: 20 },
-          { setNumber: 3, reps: 6, weight: 25 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Sandbag Lunges: 3 sets, 10 reps');
-  });
-
-  it('should handle distance and time', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'rowing',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, distance: 1000, time: 4.5 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Rowing: 1000 m, 4.5min');
-  });
-
-  it('should convert distance labels correctly (mi -> ft)', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'sled_push',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, distance: 50 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'lbs', 'mi')).toBe('Sled Push: 50 ft');
-  });
-
-  it('should convert distance labels correctly (km -> m)', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'sled_push',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, distance: 50 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Sled Push: 50 m');
-  });
-
-  it('should format custom exercises with and without labels', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'custom',
-        category: 'custom',
-        customLabel: 'My Special Move',
-        sets: [
-          { setNumber: 1, reps: 10 }
-        ]
-      },
-      {
-        exerciseName: 'custom',
-        category: 'custom',
-        sets: [
-          { setNumber: 1, time: 2 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('My Special Move: 10 reps; Custom: 2min');
-  });
-
-  it('should combine multiple exercises separated by semicolons', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'skierg',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, distance: 1000 }
-        ]
-      },
-      {
-        exerciseName: 'wall_balls',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, reps: 20, weight: 14 }
-        ]
-      }
-    ];
-
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('SkiErg: 1000 m; Wall Balls: 20 reps, 14kg');
-  });
-
-  it('should format multiple sets with only reps but no weight correctly', () => {
-    const exercises: StructuredExercise[] = [
-      {
-        exerciseName: 'burpee_broad_jump',
-        category: 'functional',
-        sets: [
-          { setNumber: 1, reps: 20 },
-          { setNumber: 2, reps: 20 }
-        ]
-      }
-    ];
-    // allSame is true (undefined weight === undefined weight)
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Burpee Broad Jump: 2x20');
-  });
-
-  it('should format multiple sets without reps or time as just N sets', () => {
-    const exercises: StructuredExercise[] = [
-       {
-        exerciseName: 'easy_run',
-        category: 'running',
-        sets: [
-          { setNumber: 1, distance: 5000 },
-          { setNumber: 2, distance: 5000 }
-        ]
-       }
-    ];
-    expect(generateSummary(exercises, 'kg', 'km')).toBe('Easy Run: 2 sets, 5000 m');
+  // Each row: the logged exercises and the one-line summary they render as.
+  // Units default to the metric pair; the imperial row passes its own.
+  it.each<{
+    name: string;
+    exercises: StructuredExercise[];
+    units?: [weight: string, distance: string];
+    expected: string;
+  }>([
+    {
+      name: 'exercises with no sets',
+      exercises: [ex('skierg', [])],
+      expected: 'SkiErg: completed',
+    },
+    {
+      name: 'a single set with reps',
+      exercises: [ex('wall_balls', [{ reps: 15 }])],
+      expected: 'Wall Balls: 15 reps',
+    },
+    {
+      name: 'multiple sets with identical reps and weight',
+      exercises: [
+        ex('sandbag_lunges', [
+          { reps: 10, weight: 20 },
+          { reps: 10, weight: 20 },
+          { reps: 10, weight: 20 },
+        ]),
+      ],
+      expected: 'Sandbag Lunges: 3x10, 20kg',
+    },
+    {
+      name: 'multiple sets with different reps/weights as just a count',
+      exercises: [
+        ex('sandbag_lunges', [
+          { reps: 10, weight: 20 },
+          { reps: 8, weight: 20 },
+          { reps: 6, weight: 25 },
+        ]),
+      ],
+      expected: 'Sandbag Lunges: 3 sets, 10 reps',
+    },
+    {
+      name: 'distance and time',
+      exercises: [ex('rowing', [{ distance: 1000, time: 4.5 }])],
+      expected: 'Rowing: 1000 m, 4.5min',
+    },
+    {
+      name: 'a distance label converted for imperial units (mi -> ft)',
+      exercises: [ex('sled_push', [{ distance: 50 }])],
+      units: ['lbs', 'mi'],
+      expected: 'Sled Push: 50 ft',
+    },
+    {
+      name: 'a distance label converted for metric units (km -> m)',
+      exercises: [ex('sled_push', [{ distance: 50 }])],
+      expected: 'Sled Push: 50 m',
+    },
+    {
+      name: 'custom exercises with and without labels',
+      exercises: [
+        ex('custom', [{ reps: 10 }], { category: 'custom', customLabel: 'My Special Move' }),
+        ex('custom', [{ time: 2 }], { category: 'custom' }),
+      ],
+      expected: 'My Special Move: 10 reps; Custom: 2min',
+    },
+    {
+      name: 'multiple exercises separated by semicolons',
+      exercises: [ex('skierg', [{ distance: 1000 }]), ex('wall_balls', [{ reps: 20, weight: 14 }])],
+      expected: 'SkiErg: 1000 m; Wall Balls: 20 reps, 14kg',
+    },
+    {
+      // allSame is true here (undefined weight === undefined weight).
+      name: 'multiple sets with only reps and no weight',
+      exercises: [ex('burpee_broad_jump', [{ reps: 20 }, { reps: 20 }])],
+      expected: 'Burpee Broad Jump: 2x20',
+    },
+    {
+      name: 'multiple sets without reps or time as just N sets',
+      exercises: [
+        ex('easy_run', [{ distance: 5000 }, { distance: 5000 }], { category: 'running' }),
+      ],
+      expected: 'Easy Run: 2 sets, 5000 m',
+    },
+  ])('should format $name', ({ exercises, units = ['kg', 'km'], expected }) => {
+    expect(generateSummary(exercises, units[0], units[1])).toBe(expected);
   });
 });
 

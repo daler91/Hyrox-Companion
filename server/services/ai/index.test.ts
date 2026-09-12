@@ -740,21 +740,14 @@ describe("buildTrainingContext declared absences", () => {
     return decideMock.mock.calls[0][0].recoveryMarkers.illnessFlag ?? false;
   }
 
-  it("raises the recovery flag during a declared injury", async () => {
+  // Hardcoded false before this, so a declared injury or illness left the engine
+  // happily permitting intensity.
+  it.each([
+    { name: "raises the recovery flag during a declared injury", type: "injury" },
+    { name: "raises it for a declared illness too", type: "illness" },
+  ])("$name", async ({ type }) => {
     vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
-      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type: "injury" }),
-    ]);
-
-    await buildTrainingContext(USER_ID);
-
-    // Hardcoded false before this, so a declared injury left the engine
-    // happily permitting intensity.
-    expect(illnessFlagPassedToEngine()).toBe(true);
-  });
-
-  it("raises it for a declared illness too", async () => {
-    vi.mocked(storage.timelineAnnotations.list).mockResolvedValue([
-      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type: "illness" }),
+      annotation({ startDate: "2026-06-10", endDate: "2026-06-20", type }),
     ]);
 
     await buildTrainingContext(USER_ID);
