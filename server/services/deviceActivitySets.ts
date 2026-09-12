@@ -39,11 +39,14 @@ import {
   type ExerciseName,
   type InsertExerciseSet,
   type StravaActivitySummary,
+  users,
   type WorkoutLog,
 } from "@shared/schema";
 import { normalizeParsedDistance, stampForPreferences, type UnitPreferences } from "@shared/unitConversion";
 import { seconds, secondsToMinutes, unitless } from "@shared/units";
+import { eq } from "drizzle-orm";
 
+import { db } from "../db";
 import { storage } from "../storage";
 
 /**
@@ -172,6 +175,32 @@ export function deviceActivitySetRows(
   return rows;
 }
 
+/** One athlete the backfill has to visit, with the units their rows get stamped in. */
+export interface BackfillAthlete {
+  id: string;
+  preferences: UnitPreferences;
+}
+
+/**
+ * Every athlete the backfill should walk, with their own units.
+ *
+ * Lives here rather than in the script for the same reason `legacyUnitBackfill`
+ * owns its queries: the operator entry point should choose flags and print, not
+ * reach into tables. Reading each athlete's units HERE is also what keeps the
+ * per-athlete stamp honest — one operator-supplied unit applied to the whole
+ * table is the exact corruption the L4 stamp exists to prevent.
+ */
+export async function listBackfillAthletes(userId?: string): Promise<BackfillAthlete[]> {
+  const query = db
+    .select({ id: users.id, weightUnit: users.weightUnit, distanceUnit: users.distanceUnit })
+    .from(users);
+  const rows = userId ? await query.where(eq(users.id, userId)) : await query;
+  return rows.map((row) => ({
+    id: row.id,
+    preferences: { weightUnit: row.weightUnit, distanceUnit: row.distanceUnit },
+  }));
+}
+
 /**
  * Give every standalone device import that predates this module its set.
  *
@@ -181,13 +210,17 @@ export function deviceActivitySetRows(
  *
  * Idempotent: the query is an anti-join against `exercise_sets`, so a second run
  * finds nothing. Returns the counts so a caller can report them.
+ *
+ * `apply: false` resolves exactly the rows a write would and reports them
+ * without touching the database, so an operator's dry run and their subsequent
+ * `--apply` cannot disagree about what is about to happen.
  */
 export async function backfillDeviceActivitySets(
-  userId: string,
-  preferences: UnitPreferences,
+  athlete: BackfillAthlete,
+  apply: boolean,
 ): Promise<{ candidates: number; written: number }> {
-  const logs = await storage.workouts.getStandaloneDeviceLogsWithoutSets(userId);
-  const rows = deviceActivitySetRows(logs, preferences);
-  const written = await storage.workouts.createDeviceActivitySets(rows);
+  const logs = await storage.workouts.getStandaloneDeviceLogsWithoutSets(athlete.id);
+  const rows = deviceActivitySetRows(logs, athlete.preferences);
+  const written = apply ? await storage.workouts.createDeviceActivitySets(rows) : rows.length;
   return { candidates: logs.length, written };
 }

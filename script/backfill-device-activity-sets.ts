@@ -25,8 +25,13 @@
  *     hour happened and nothing about what was in it, and is skipped rather than
  *     invented.
  *
- * Each athlete's rows are stamped with THAT athlete's units (L4), read per user
- * immediately before writing — never one operator-supplied unit for the table.
+ * Each athlete's rows are stamped with THAT athlete's units, read per athlete by
+ * `listBackfillAthletes` — never one operator-supplied unit for the table, which
+ * is the corruption the L4 stamp exists to prevent.
+ *
+ * Output goes to stdout as plain lines rather than through the app logger: an
+ * operator watching a migration wants a readable report, not pino JSON, and the
+ * repo's logger is a server sink this script has no reason to reach for.
  *
  * Usage:
  *   pnpm tsx script/backfill-device-activity-sets.ts              # dry run
@@ -38,16 +43,10 @@
  *   --quiet          Summary only; skip the per-athlete lines.
  */
 
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
-
-import { db } from "../server/db";
-import { logger } from "../server/logger";
 import {
   backfillDeviceActivitySets,
-  deviceActivitySetRows,
+  listBackfillAthletes,
 } from "../server/services/deviceActivitySets";
-import { storage } from "../server/storage";
 
 interface Flags {
   apply: boolean;
@@ -65,73 +64,49 @@ function parseFlags(argv: string[]): Flags {
   return flags;
 }
 
-async function loadAthletes(userId?: string) {
-  const rows = db
-    .select({ id: users.id, weightUnit: users.weightUnit, distanceUnit: users.distanceUnit })
-    .from(users);
-  return userId ? await rows.where(eq(users.id, userId)) : await rows;
+function say(line: string): void {
+  process.stdout.write(`${line}\n`);
 }
 
 async function main(): Promise<void> {
   const flags = parseFlags(process.argv.slice(2));
-  const athletes = await loadAthletes(flags.userId);
+  const athletes = await listBackfillAthletes(flags.userId);
 
   let totalCandidates = 0;
   let totalWritten = 0;
   let athletesTouched = 0;
 
   for (const athlete of athletes) {
-    const preferences = { weightUnit: athlete.weightUnit, distanceUnit: athlete.distanceUnit };
-
     // The dry run resolves exactly the rows the write would, so "would write N"
     // is the same number `--apply` goes on to write — not an estimate from the
     // candidate count, which is larger (it includes the sports we skip).
-    const { candidates, written } = flags.apply
-      ? await backfillDeviceActivitySets(athlete.id, preferences)
-      : await (async () => {
-          const logs = await storage.workouts.getStandaloneDeviceLogsWithoutSets(athlete.id);
-          return { candidates: logs.length, written: deviceActivitySetRows(logs, preferences).length };
-        })();
+    const { candidates, written } = await backfillDeviceActivitySets(athlete, flags.apply);
 
     totalCandidates += candidates;
     totalWritten += written;
     if (written > 0) athletesTouched++;
 
     if (!flags.quiet && candidates > 0) {
-      // bearer:disable javascript_lang_logger_leak — counts only, plus the
-      // internal user id as the correlation key (same convention as the
-      // storage/analytics and strava sync logs). No activity data, no athlete
-      // text, no credentials: the operator needs to know WHICH athlete a row
-      // count belongs to in order to act on an unexpected one.
-      logger.info(
-        { userId: athlete.id, candidates, sets: written, skipped: candidates - written },
-        flags.apply ? "backfill.user.written" : "backfill.user.would-write",
+      const verb = flags.apply ? "wrote" : "would write";
+      say(
+        `  ${athlete.id}: ${verb} ${written} set(s) from ${candidates} standalone import(s)` +
+          ` (${candidates - written} skipped — sport not describable as a set)`,
       );
     }
   }
 
-  // bearer:disable javascript_lang_logger_leak — aggregate counts and one
-  // boolean. Nothing here is derived from any athlete's data.
-  logger.info(
-    {
-      athletes: athletes.length,
-      athletesTouched,
-      candidates: totalCandidates,
-      sets: totalWritten,
-      skipped: totalCandidates - totalWritten,
-      apply: flags.apply,
-    },
-    flags.apply ? "backfill.done" : "backfill.dry-run (re-run with --apply to write)",
+  say(
+    `${flags.apply ? "Backfill complete" : "Dry run (re-run with --apply to write)"}: ` +
+      `${totalWritten} set(s) across ${athletesTouched} of ${athletes.length} athlete(s); ` +
+      `${totalCandidates} standalone import(s) examined, ${totalCandidates - totalWritten} skipped.`,
   );
 }
 
 main()
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    // bearer:disable javascript_lang_logger_leak — err is the backfill's own
-    // failure (a DB error or a bad flag). A one-off operator script that died
-    // silently would be worse than one that prints why, and the alternative —
-    // swallowing the cause — is what makes a failed migration undiagnosable.
-    logger.error({ err }, "backfill.failed");
+    // Straight to stderr: a data migration that dies without saying why is the
+    // one that cannot be diagnosed.
+    process.stderr.write(`Backfill failed: ${err instanceof Error ? err.stack : String(err)}\n`);
     process.exit(1);
   });
