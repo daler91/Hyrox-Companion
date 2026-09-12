@@ -44,8 +44,12 @@ describe("assembleTrainingSummary (P4)", () => {
     await assembleTrainingSummary("user-1");
 
     const windowStart = "2025-11-21"; // 180 days before 2026-05-20
-    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("user-1", windowStart, "2026-05-20");
-    expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledWith("user-1", windowStart, "2026-05-20");
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("user-1", windowStart, "2026-05-20", {
+      onlyTraining: true,
+    });
+    expect(storage.analytics.getExerciseSetsForPersonalRecords).toHaveBeenCalledWith("user-1", windowStart, "2026-05-20", {
+      onlyTraining: true,
+    });
     expect(SUMMARY_COVERAGE_LOOKBACK_DAYS).toBe(180);
   });
 

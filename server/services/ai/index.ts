@@ -483,12 +483,31 @@ export async function buildTrainingContext(userId: string): Promise<TrainingCont
     },
   });
 
+  // The load reads above deliberately include sessions the athlete does not
+  // count as training, because `loadGovernor` is built from them and a walk is
+  // real (if small) load — under-counting it there would soften a safety
+  // signal. The supplementary insights below are the other kind of question
+  // (what did I train, what am I neglecting, what are my bests), so they get
+  // the training-only subset. Narrowed in memory from rows already fetched, so
+  // the split costs no extra query on the coach's hot path.
+  // Phrased as EXCLUDE-the-known-walks rather than include-the-known-training,
+  // on both halves. The column is NOT NULL, so in production the two are the
+  // same set — but the include form silently empties when a row arrives without
+  // the field (a narrower projection, a partial fixture) and, for sets, when a
+  // set's parent log is missing from the logs fetch. Losing an athlete's entire
+  // PR map to a shape mismatch is a much worse failure than leaving one walk in.
+  const trainingLogs = loadWorkoutLogs.filter((log) => log.countsAsTraining !== false);
+  const nonTrainingLogIds = new Set(
+    loadWorkoutLogs.filter((log) => log.countsAsTraining === false).map((log) => log.id),
+  );
+  const trainingSets = loadExerciseSets.filter((set) => !nonTrainingLogIds.has(set.workoutLogId));
+
   // Supplementary signals (PRs/e1RM, compliance, coverage gaps, race readiness)
   // derived from data already loaded above — no extra IO. Each self-suppresses
   // when absent. Extracted to keep this function's complexity bounded.
   const supplementaryInsights = buildSupplementaryInsights({
-    loadExerciseSets,
-    loadWorkoutLogs,
+    loadExerciseSets: trainingSets,
+    loadWorkoutLogs: trainingLogs,
     loadGovernor,
     totalWorkouts,
     weightUnit,

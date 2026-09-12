@@ -1,0 +1,1 @@
+ALTER TABLE "workout_logs" ADD COLUMN "counts_as_training" boolean DEFAULT true NOT NULL;

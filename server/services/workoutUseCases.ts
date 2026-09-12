@@ -73,7 +73,7 @@ export async function createWorkout(input: {
     // Switching cuts payload size, DB→JS deserialization, and memory on the
     // hottest write path proportionally to the user's history size.
     const [allSets, user] = await Promise.all([
-      storage.analytics.getExerciseSetsForPersonalRecords(input.userId),
+      storage.analytics.getExerciseSetsForPersonalRecords(input.userId, undefined, undefined, { onlyTraining: true }),
       storage.users.getUser(input.userId),
     ]);
     const priorSets = allSets.filter((set) => set.workoutLogId !== createdWorkout.id);

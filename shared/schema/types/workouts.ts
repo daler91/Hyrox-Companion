@@ -183,6 +183,10 @@ export type TimelineEntry = {
    */
   stravaActivityId?: string | null;
   deviceLinkSource?: DeviceLinkSource | null;
+  /** Whether this session counts toward training analytics (see the column
+   *  note on `workout_logs.counts_as_training`). Optional on the entry type
+   *  because plan-day rows have no log yet; absent reads as true. */
+  countsAsTraining?: boolean;
   /** The provider's own activity name ("Morning Run"), from the link snapshot. */
   deviceActivityName?: string | null;
   // On a standalone device import: the plausible match the sync did not act on,

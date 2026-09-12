@@ -88,8 +88,12 @@ export interface TrainingOverviewFetchers {
 }
 
 const defaultFetchers: TrainingOverviewFetchers = {
-  workoutLogs: (userId, from, to) => storage.analytics.getWorkoutLogsByDateRange(userId, from, to),
-  exerciseSets: (userId, from, to) => storage.analytics.getAllExerciseSetsWithDates(userId, from, to),
+  // Training surfaces only: walks and yoga are real sessions on the timeline
+  // but they are not what "Total Workouts" or the training mix mean.
+  workoutLogs: (userId, from, to) =>
+    storage.analytics.getWorkoutLogsByDateRange(userId, from, to, { onlyTraining: true }),
+  exerciseSets: (userId, from, to) =>
+    storage.analytics.getAllExerciseSetsWithDates(userId, from, to, { onlyTraining: true }),
 };
 
 /**

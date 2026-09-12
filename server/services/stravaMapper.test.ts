@@ -364,3 +364,18 @@ describe("mapStravaActivityToWorkout branch coverage 4", () => {
     expect(result.calories).toBeNull();
   });
 });
+
+describe("counts as training", () => {
+  it("stamps a run as training and a walk as not", () => {
+    expect(mapStravaActivityToWorkout(makeActivity({ sport_type: "Run" }), "user-1").countsAsTraining).toBe(true);
+    expect(
+      mapStravaActivityToWorkout(makeActivity({ sport_type: "Walk", type: "Walk" }), "user-1").countsAsTraining,
+    ).toBe(false);
+  });
+
+  it("falls back to `type` when sport_type is absent, like focus does", () => {
+    expect(
+      mapStravaActivityToWorkout(makeActivity({ sport_type: undefined, type: "Walk" }), "user-1").countsAsTraining,
+    ).toBe(false);
+  });
+});

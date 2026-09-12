@@ -46,21 +46,50 @@ export class AnalyticsStorage {
     return await db.select().from(exerciseLoadTags);
   }
 
-  async getAllExerciseSetsWithDates(userId: string, from?: string, to?: string): Promise<LoggedExerciseSetWithDate[]> {
-    return await queryExerciseSetsWithDates(userId, { from, to });
+  /** `onlyTraining` — see the note on getWorkoutLogsByDateRange; opt-in for the
+   *  same reason (the nutrition load calc reads every session's sets). */
+  async getAllExerciseSetsWithDates(
+    userId: string,
+    from?: string,
+    to?: string,
+    options?: { onlyTraining?: boolean },
+  ): Promise<LoggedExerciseSetWithDate[]> {
+    return await queryExerciseSetsWithDates(userId, { from, to, onlyTraining: options?.onlyTraining });
   }
 
   // Column-slim fetch for the Personal Records endpoint (only the fields
   // calculatePersonalRecords reads), so the all-time PR query doesn't hydrate
   // full set rows (incl. JSON columns) for tens of thousands of sets.
-  async getExerciseSetsForPersonalRecords(userId: string, from?: string, to?: string): Promise<SlimLoggedExerciseSet[]> {
-    return await querySlimExerciseSetsWithDates(userId, { from, to });
+  async getExerciseSetsForPersonalRecords(
+    userId: string,
+    from?: string,
+    to?: string,
+    options?: { onlyTraining?: boolean },
+  ): Promise<SlimLoggedExerciseSet[]> {
+    return await querySlimExerciseSetsWithDates(userId, { from, to, onlyTraining: options?.onlyTraining });
   }
 
-  async getWorkoutLogsByDateRange(userId: string, from?: string, to?: string): Promise<WorkoutLog[]> {
+  /**
+   * `onlyTraining` drops the sessions the athlete does not count as training
+   * (walks, yoga, commutes — see `workout_logs.counts_as_training`).
+   *
+   * OPT-IN, and it has to stay that way: this one method feeds the training
+   * overview, the weekly review, the home card, the AI context AND the
+   * nutrition energy balance, and the last of those must keep seeing every
+   * session. A walk's calories are real expenditure; filtering them here by
+   * default would silently corrupt the day's energy balance
+   * (services/nutrition/energy.ts reads `calories` off this same call).
+   */
+  async getWorkoutLogsByDateRange(
+    userId: string,
+    from?: string,
+    to?: string,
+    options?: { onlyTraining?: boolean },
+  ): Promise<WorkoutLog[]> {
     const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
     if (from) conditions.push(gte(workoutLogs.date, from));
     if (to) conditions.push(lte(workoutLogs.date, to));
+    if (options?.onlyTraining) conditions.push(eq(workoutLogs.countsAsTraining, true));
 
     // Cap the result like its sibling queryExerciseSetsWithDates (W10): the
     // "all time" analytics view passes no date range, so without a limit this
@@ -291,6 +320,9 @@ export class AnalyticsStorage {
       .where(
         and(
           eq(workoutLogs.userId, userId),
+          // The email says "you trained N times this week" — walks and yoga are
+          // not what it means.
+          eq(workoutLogs.countsAsTraining, true),
           sql`${workoutLogs.date} >= ${weekStart}`,
           sql`${workoutLogs.date} <= ${weekEnd}`
         )

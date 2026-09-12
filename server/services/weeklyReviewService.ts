@@ -259,11 +259,11 @@ export async function buildWeeklyReview(
   const prior = getWeekRangeForDate(addDaysLocal(week.weekStart, -7));
 
   const [logs, planDays, priorLogs, priorPlanDays, prSets, annotations, intents] = await Promise.all([
-    storage.analytics.getWorkoutLogsByDateRange(userId, week.weekStart, week.weekEnd),
+    storage.analytics.getWorkoutLogsByDateRange(userId, week.weekStart, week.weekEnd, { onlyTraining: true }),
     storage.analytics.getPlanDaysByDateRange(userId, week.weekStart, week.weekEnd),
-    storage.analytics.getWorkoutLogsByDateRange(userId, prior.weekStart, prior.weekEnd),
+    storage.analytics.getWorkoutLogsByDateRange(userId, prior.weekStart, prior.weekEnd, { onlyTraining: true }),
     storage.analytics.getPlanDaysByDateRange(userId, prior.weekStart, prior.weekEnd),
-    storage.analytics.getExerciseSetsForPersonalRecords(userId),
+    storage.analytics.getExerciseSetsForPersonalRecords(userId, undefined, undefined, { onlyTraining: true }),
     storage.timelineAnnotations.list(userId),
     // Both weeks in one round trip — this week's intent to edit, last week's
     // to show back.

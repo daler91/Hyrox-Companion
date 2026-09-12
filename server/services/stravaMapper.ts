@@ -1,3 +1,4 @@
+import { countsAsTraining } from "@shared/deviceSportTypes";
 import type { StravaActivitySummary } from "@shared/schema";
 import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
 
@@ -110,6 +111,9 @@ export function mapStravaActivityToWorkout(activity: StravaActivity, userId: str
     planDayId: null,
     source: "strava" as const,
     stravaActivityId: String(activity.id),
+    // Stamped once, here, from the sport type; only the athlete changes it
+    // afterwards (see the column note in tables.ts).
+    countsAsTraining: countsAsTraining(activity.sport_type || activity.type),
     calories: getCalories(activity),
     distanceMeters: activity.distance || null,
     elevationGain: activity.total_elevation_gain || null,
