@@ -460,6 +460,26 @@ export const workoutLogs = pgTable(
     // pre_workout/post_workout meal-type tags on the calendar day for the
     // fuelling-around-session views (FR-3.1/3.2). No manual entry UI this phase.
     startedAt: timestamp("started_at", { withTimezone: true }),
+    // Does this session count as TRAINING — i.e. as a session the athlete did?
+    //
+    // Not "did the body do work": a dog walk burns real calories and puts real
+    // (small) load on the legs, and both of those still count. What it must not
+    // do is inflate "Total Workouts", drag "Avg Duration" down, or keep a
+    // training streak alive. Every Strava/Garmin activity becomes a row here —
+    // commutes, walks, yoga — so without this the headline analytics count them
+    // all as training.
+    //
+    // Derived from the provider's sport type ONCE at import (see
+    // `countsAsTraining` in shared/deviceSportTypes.ts) and never re-derived:
+    // after that only the athlete changes it, the same rule the device-link
+    // columns below follow. Changing the defaults later therefore does not
+    // rewrite anyone's history. Manual and plan-linked logs default true — the
+    // athlete typed it, they meant it.
+    //
+    // NOT NULL on purpose. A nullable "undecided" reads nicely but makes every
+    // consumer decide what NULL means, which is how two surfaces end up
+    // disagreeing about the same session.
+    countsAsTraining: boolean("counts_as_training").notNull().default(true),
     // ── Device activity link ────────────────────────────────────────────────
     // A Strava (later Garmin) recording is a MEASUREMENT of a session the
     // athlete planned or logged, not a workout of its own. When the sync

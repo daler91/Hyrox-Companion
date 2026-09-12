@@ -204,6 +204,9 @@
             "nullable": true,
             "format": "date-time"
           },
+          "countsAsTraining": {
+            "type": "boolean"
+          },
           "deviceLinkSource": {
             "type": "string",
             "nullable": true
@@ -295,6 +298,7 @@
           "avgWatts",
           "sufferScore",
           "startedAt",
+          "countsAsTraining",
           "deviceLinkSource",
           "deviceLinkConfidence",
           "deviceActivity",
@@ -488,6 +492,9 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "countsAsTraining": {
+            "type": "boolean"
           },
           "deviceLinkSource": {
             "type": "string",
@@ -760,6 +767,7 @@
           "avgWatts",
           "sufferScore",
           "startedAt",
+          "countsAsTraining",
           "deviceLinkSource",
           "deviceLinkConfidence",
           "deviceActivity",
@@ -953,6 +961,9 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "countsAsTraining": {
+            "type": "boolean"
           },
           "deviceLinkSource": {
             "type": "string",
@@ -1192,6 +1203,7 @@
           "avgWatts",
           "sufferScore",
           "startedAt",
+          "countsAsTraining",
           "deviceLinkSource",
           "deviceLinkConfidence",
           "deviceActivity",
@@ -1548,6 +1560,9 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "countsAsTraining": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2454,6 +2469,9 @@
                 "type": "string",
                 "nullable": true,
                 "format": "date-time"
+              },
+              "countsAsTraining": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -2905,6 +2923,9 @@
                 "type": "string",
                 "nullable": true,
                 "format": "date-time"
+              },
+              "countsAsTraining": {
+                "type": "boolean"
               },
               "prescribedMainWorkout": {
                 "type": "string",

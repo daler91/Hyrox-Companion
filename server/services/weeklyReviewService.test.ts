@@ -312,8 +312,12 @@ describe("buildWeeklyReview", () => {
 
     await buildWeeklyReview(storage, "u1", { now: WEDNESDAY });
 
-    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("u1", "2026-06-08", "2026-06-14");
-    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("u1", "2026-06-01", "2026-06-07");
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("u1", "2026-06-08", "2026-06-14", {
+      onlyTraining: true,
+    });
+    expect(storage.analytics.getWorkoutLogsByDateRange).toHaveBeenCalledWith("u1", "2026-06-01", "2026-06-07", {
+      onlyTraining: true,
+    });
     expect(storage.analytics.getPlanDaysByDateRange).toHaveBeenCalledWith("u1", "2026-06-08", "2026-06-14");
     expect(storage.analytics.getPlanDaysByDateRange).toHaveBeenCalledWith("u1", "2026-06-01", "2026-06-07");
   });

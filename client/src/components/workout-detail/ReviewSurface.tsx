@@ -18,6 +18,7 @@ import { WorkoutStravaStats } from "@/components/timeline/timeline-workout-card/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { StructureBlocksEditor } from "@/components/workout-structure";
 import { useMafCeiling } from "@/hooks/useMafCeiling";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
@@ -203,6 +204,14 @@ export function ReviewSurface({
     detail.updateNote.mutate(next);
   };
 
+  // Defaults to true so a session still loading, or a timeline entry with no
+  // log yet, reads as training — the same default the column carries.
+  const countsAsTraining = workout?.countsAsTraining ?? entry.countsAsTraining ?? true;
+  const handleCountsAsTrainingChange = (next: boolean) => {
+    if (!workoutLogId) return;
+    detail.updateCountsAsTraining.mutate(next);
+  };
+
   const handleDeleteConfirm = () => {
     onDelete?.(entry);
     setDeleteConfirmOpen(false);
@@ -257,9 +266,11 @@ export function ReviewSurface({
         deleteConfirmOpen={deleteConfirmOpen}
         currentCoachSeedText={currentCoachSeedText}
         timeOfDayMin={workout?.timeOfDayMin ?? null}
+        countsAsTraining={countsAsTraining}
         onRpeChange={handleRpeChange}
         onSaveNote={handleSaveNote}
         onTimeOfDayChange={canSetTimeOfDay ? handleTimeOfDayChange : undefined}
+        onCountsAsTrainingChange={canEditActuals ? handleCountsAsTrainingChange : undefined}
         onAskCoach={onAskCoach}
         onMarkPlanned={onMarkPlanned}
         onDelete={onDelete}
@@ -319,9 +330,11 @@ interface ReviewDetailsColumnProps {
   readonly deleteConfirmOpen: boolean;
   readonly currentCoachSeedText: string;
   readonly timeOfDayMin: number | null;
+  readonly countsAsTraining: boolean;
   readonly onRpeChange: (next: number | null) => void;
   readonly onSaveNote: (next: string | null) => void;
   readonly onTimeOfDayChange?: (next: number | null) => void;
+  readonly onCountsAsTrainingChange?: (next: boolean) => void;
   readonly onAskCoach?: (entry: TimelineEntry, seedText: string) => void;
   readonly onMarkPlanned?: (entry: TimelineEntry) => void;
   readonly onDelete?: (entry: TimelineEntry) => void;
@@ -345,6 +358,8 @@ function ReviewDetailsColumn({
   distanceUnit,
   showPlannedDiffs,
   reviewFlag,
+  countsAsTraining,
+  onCountsAsTrainingChange,
   deleteConfirmOpen,
   currentCoachSeedText,
   timeOfDayMin,
@@ -396,9 +411,11 @@ function ReviewDetailsColumn({
         rpe={rpe}
         notes={notes}
         timeOfDayMin={timeOfDayMin}
+        countsAsTraining={countsAsTraining}
         onRpeChange={onRpeChange}
         onSaveNote={onSaveNote}
         onTimeOfDayChange={onTimeOfDayChange}
+        onCountsAsTrainingChange={onCountsAsTrainingChange}
       />
       <CoachRationaleSection
         rationale={entry.aiRationale}
@@ -459,9 +476,12 @@ interface ReviewEffortNotesProps {
   readonly rpe: number | null;
   readonly notes: string | null;
   readonly timeOfDayMin: number | null;
+  readonly countsAsTraining: boolean;
   readonly onRpeChange: (next: number | null) => void;
   readonly onSaveNote: (next: string | null) => void;
   readonly onTimeOfDayChange?: (next: number | null) => void;
+  /** Absent when the session has no log to edit. */
+  readonly onCountsAsTrainingChange?: (next: boolean) => void;
 }
 
 /**
@@ -475,9 +495,11 @@ function ReviewEffortNotes({
   rpe,
   notes,
   timeOfDayMin,
+  countsAsTraining,
   onRpeChange,
   onSaveNote,
   onTimeOfDayChange,
+  onCountsAsTrainingChange,
 }: ReviewEffortNotesProps) {
   return (
     <DetailSection title="Effort & notes" icon={Gauge}>
@@ -505,6 +527,26 @@ function ReviewEffortNotes({
             <p className="text-xs text-muted-foreground">
               When you trained — sets the recovery-meal timing for this day.
             </p>
+          </div>
+        )}
+        {onCountsAsTrainingChange && (
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="review-counts-as-training" className="text-sm font-medium">
+                Counts as training
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Off for walks and easy days you don&apos;t want in your session
+                counts, streak or training mix. Calories and training load still
+                count either way.
+              </p>
+            </div>
+            <Switch
+              id="review-counts-as-training"
+              checked={countsAsTraining}
+              onCheckedChange={onCountsAsTrainingChange}
+              data-testid="switch-review-counts-as-training"
+            />
           </div>
         )}
       </div>

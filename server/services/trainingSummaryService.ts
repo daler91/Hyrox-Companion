@@ -40,8 +40,8 @@ export async function assembleTrainingSummary(userId: string): Promise<TrainingS
 
   const [completedDates, workoutLogs, exerciseSets] = await Promise.all([
     storage.timeline.getCompletedWorkoutDates(userId),
-    storage.analytics.getWorkoutLogsByDateRange(userId, windowStart, todayStr),
-    storage.analytics.getExerciseSetsForPersonalRecords(userId, windowStart, todayStr),
+    storage.analytics.getWorkoutLogsByDateRange(userId, windowStart, todayStr, { onlyTraining: true }),
+    storage.analytics.getExerciseSetsForPersonalRecords(userId, windowStart, todayStr, { onlyTraining: true }),
   ]);
 
   const { thisMondayStr } = getMondayWeekBoundaries(now, userTimezone);

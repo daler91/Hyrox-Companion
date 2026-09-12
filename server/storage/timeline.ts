@@ -33,6 +33,9 @@ function mapWorkoutLogToTimelineFields(log: WorkoutLog) {
     // off the activity id, not `source`, so both read the same.
     stravaActivityId: log.stravaActivityId,
     deviceLinkSource: (log.deviceLinkSource as DeviceLinkSource | null) ?? null,
+    // So the card and the review sheet can show (and flip) the training flag
+    // without a second fetch.
+    countsAsTraining: log.countsAsTraining,
     deviceActivityName: log.deviceActivity?.raw?.name ?? null,
     suggestedPlanDayId: log.suggestedPlanDayId,
     suggestedWorkoutLogId: log.suggestedWorkoutLogId,

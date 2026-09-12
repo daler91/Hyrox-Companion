@@ -430,6 +430,25 @@ export function useWorkoutDetail(workoutId: string | null) {
     errorToast: "Couldn't save the session time",
   });
 
+  // Does this session count as training? Device imports arrive with a value
+  // derived from the sport type (a dog walk lands as "no"); this is how the
+  // athlete overrules that for one session. Analytics invalidates too, because
+  // flipping it changes the session counts, the streak and the training mix.
+  const updateCountsAsTraining = useApiMutation({
+    mutationFn: (countsAsTraining: boolean) =>
+      api.workouts.update(workoutId!, { countsAsTraining }),
+    onMutate: (countsAsTraining) => beginFieldPatch({ countsAsTraining }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.trainingOverview }),
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.personalRecords }),
+      ]);
+    },
+    onError: (_err, _vars, ctx) => rollbackFields(ctx),
+    errorToast: "Couldn't change whether this counts as training",
+  });
+
   // Connect/disconnect this workout to a plan day. Optimistically patches the
   // cached workout's planId/planDayId so the picker reflects the choice
   // instantly; invalidates timeline + plans so the workout moves into (or out
@@ -473,6 +492,7 @@ export function useWorkoutDetail(workoutId: string | null) {
     updateFocus,
     updateRpe,
     updateTimeOfDay,
+    updateCountsAsTraining,
     updatePlanDay,
   };
 }

@@ -441,7 +441,7 @@ export async function generateRacePrediction(
 ): Promise<RacePredictionResponse> {
   const [user, sets] = await Promise.all([
     storage.users.getUser(userId),
-    storage.analytics.getAllExerciseSetsWithDates(userId),
+    storage.analytics.getAllExerciseSetsWithDates(userId, undefined, undefined, { onlyTraining: true }),
   ]);
 
   const storedGender = normalizeStoredGender(user?.gender);

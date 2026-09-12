@@ -106,6 +106,10 @@ export async function queryExerciseSetsWithDates(
     exerciseName?: string;
     from?: string;
     to?: string;
+    /** Only sets belonging to sessions the athlete counts as training. Opt-in:
+     *  the nutrition load calc reads every session's sets (see the note on
+     *  AnalyticsStorage.getWorkoutLogsByDateRange). */
+    onlyTraining?: boolean;
   }
 ): Promise<LoggedExerciseSetWithDate[]> {
   // Relational query: fetch the user's workout logs (with optional date range)
@@ -115,6 +119,7 @@ export async function queryExerciseSetsWithDates(
   const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
   if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
   if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
+  if (filters?.onlyTraining) conditions.push(eq(workoutLogs.countsAsTraining, true));
 
   const logs = await db.query.workoutLogs.findMany({
     where: and(...conditions),
@@ -190,11 +195,12 @@ export type SlimLoggedExerciseSet = Pick<
 
 export async function querySlimExerciseSetsWithDates(
   userId: string,
-  filters?: { from?: string; to?: string },
+  filters?: { from?: string; to?: string; onlyTraining?: boolean },
 ): Promise<SlimLoggedExerciseSet[]> {
   const conditions: SQL[] = [eq(workoutLogs.userId, userId)];
   if (filters?.from) conditions.push(gte(workoutLogs.date, filters.from));
   if (filters?.to) conditions.push(lte(workoutLogs.date, filters.to));
+  if (filters?.onlyTraining) conditions.push(eq(workoutLogs.countsAsTraining, true));
 
   const logs = await db.query.workoutLogs.findMany({
     where: and(...conditions),

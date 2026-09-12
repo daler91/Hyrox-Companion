@@ -215,3 +215,14 @@ describe("mapGarminActivityToWorkout", () => {
     expect(result.startedAt).toBeNull();
   });
 });
+
+describe("counts as training", () => {
+  it("reads Garmin's snake_case type keys through the same deny-list", () => {
+    expect(mapGarminActivityToWorkout(makeActivity({ activityType: { typeKey: "running" } }), "user-1").countsAsTraining).toBe(true);
+    expect(mapGarminActivityToWorkout(makeActivity({ activityType: { typeKey: "walking" } }), "user-1").countsAsTraining).toBe(false);
+  });
+
+  it("counts an activity with no type at all", () => {
+    expect(mapGarminActivityToWorkout(makeActivity({ activityType: undefined }), "user-1").countsAsTraining).toBe(true);
+  });
+});

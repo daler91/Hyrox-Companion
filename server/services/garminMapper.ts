@@ -1,3 +1,4 @@
+import { countsAsTraining } from "@shared/deviceSportTypes";
 import { type DistanceUnit, formatElevation } from "@shared/unitConversion";
 
 import {
@@ -157,6 +158,9 @@ export function mapGarminActivityToWorkout(
     planDayId: null,
     source: "garmin" as const,
     garminActivityId: String(activity.activityId),
+    // Same stamp as the Strava path; `countsAsTraining` reads both providers'
+    // spellings of a sport ("Walk" and "walking" alike).
+    countsAsTraining: countsAsTraining(activity.activityType?.typeKey),
     calories: roundOrNull(activity.calories),
     distanceMeters: distance > 0 ? distance : null,
     elevationGain: activity.elevationGain ?? null,
