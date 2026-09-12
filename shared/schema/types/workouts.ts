@@ -189,6 +189,16 @@ export type TimelineEntry = {
   countsAsTraining?: boolean;
   /** The provider's own activity name ("Morning Run"), from the link snapshot. */
   deviceActivityName?: string | null;
+  /**
+   * Seconds the recording's clock ran while the athlete was still, derived
+   * from the link snapshot (`stoppedSecondsFor`).
+   *
+   * Carried as its own number rather than by shipping the snapshot: the entry
+   * needs one figure, and the raw provider row is large and full of fields no
+   * surface reads. Null when the recording cannot say — no snapshot, or a
+   * non-GPS sport where the provider reports a single clock. Frequently 0.
+   */
+  stoppedSeconds?: number | null;
   // On a standalone device import: the plausible match the sync did not act on,
   // for the timeline to offer as a one-tap link.
   suggestedPlanDayId?: string | null;

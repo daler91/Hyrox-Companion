@@ -56,3 +56,32 @@ export interface DeviceActivitySnapshot {
   /** ISO instant the snapshot was taken. */
   linkedAt: string;
 }
+
+/**
+ * Seconds the recording's clock ran while the athlete was not moving, or null
+ * when the recording cannot say.
+ *
+ * `workout_logs.duration` is MOVING time (see the column note in tables.ts),
+ * which is the right measure for load and pace but makes a stop invisible: a
+ * 16 km run with half an hour standing still reads exactly like one run
+ * straight through. This is the difference the duration deliberately drops, so
+ * a surface can show it rather than silently swallow it.
+ *
+ * Null when there is no snapshot to read, or when the provider reports one
+ * clock for both (every non-GPS sport type does — Strava has no way to tell
+ * moving from still without GPS, so it sets the two equal). Small positive
+ * gaps are returned as they are; whether a gap is worth showing is the
+ * display's judgement, not this function's.
+ */
+export function stoppedSecondsFor(
+  snapshot: DeviceActivitySnapshot | null | undefined,
+): number | null {
+  const raw = snapshot?.raw;
+  if (!raw) return null;
+  const { moving_time: moving, elapsed_time: elapsed } = raw;
+  if (!Number.isFinite(moving) || !Number.isFinite(elapsed)) return null;
+  // Never negative: a provider that reports a moving time above its elapsed
+  // time is describing something this cannot interpret, so report no stop
+  // rather than a negative one.
+  return Math.max(0, Math.round(elapsed - moving));
+}
