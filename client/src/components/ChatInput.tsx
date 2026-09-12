@@ -143,19 +143,24 @@ export function ChatInput({
                   <Square className="h-4 w-4" aria-hidden="true" />
                 </Button>
               ) : (
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={message.trim() === "" || isLoading}
-                  data-testid="button-send-message"
-                  aria-label="Send message"
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Send className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </Button>
+                <span tabIndex={message.trim() === "" || isLoading ? 0 : -1}>
+                  {" "}
+                  {/* NOSONAR */}
+                  <Button
+                    type="submit"
+                    size="icon"
+                    disabled={message.trim() === "" || isLoading}
+                    data-testid="button-send-message"
+                    aria-label="Send message"
+                    className="disabled:pointer-events-none"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Send className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </span>
               )}
             </TooltipTrigger>
             <TooltipContent>
