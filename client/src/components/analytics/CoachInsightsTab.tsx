@@ -129,7 +129,7 @@ export function CoachInsightsTab() {
           goal.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent aria-live="polite" aria-atomic="false">
         {(() => {
           if (showInitialSpinner) {
             return (

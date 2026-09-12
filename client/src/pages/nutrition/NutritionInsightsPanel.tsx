@@ -138,7 +138,9 @@ export function NutritionInsightsPanel() {
           AI analysis of your recent fuelling against your training load and targets.
         </CardDescription>
       </CardHeader>
-      <CardContent>{body()}</CardContent>
+      <CardContent aria-live="polite" aria-atomic="false">
+        {body()}
+      </CardContent>
     </Card>
   );
 }
