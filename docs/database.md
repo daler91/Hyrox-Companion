@@ -253,6 +253,7 @@ Logged workouts, entered manually or synced from Strava/Garmin. A synced Strava 
 | `suffer_score` | `integer` | nullable |
 | `started_at` | `timestamptz` | nullable — true session start instant from Strava/Garmin |
 | `time_of_day_min` | `integer` | nullable — manual log's local start, minutes from midnight (0–1439) |
+| `counts_as_training` | `boolean` | NOT NULL, default `true` — does this count as a session the athlete *did*? Derived once at import from the provider's sport type (`countsAsTraining` in `shared/deviceSportTypes.ts`, a deny-list: walks, e-bikes, yoga, pilates, golf) and never re-derived; only the athlete changes it afterwards. Filtering is opt-in per caller (`{ onlyTraining: true }`): the training overview, weekly review, home summary card and set-derived panels pass it; nutrition energy balance, the coach's load governor and data export deliberately do not |
 | `device_link_source` | `text` | nullable — `'auto'` (matcher) or `'manual'` (athlete); NULL when no device activity is linked, including a standalone import |
 | `device_link_confidence` | `real` | nullable — matcher score in [0, 1] for auto links |
 | `device_activity` | `jsonb` | nullable — `DeviceActivitySnapshot`: the raw provider row plus the metric columns the link filled, so an unlink can NULL exactly those |
