@@ -12,9 +12,15 @@ This document describes the testing infrastructure for the fitai.coach applicati
 4. [Component Tests](#component-tests)
 5. [Route and Integration Tests](#route-and-integration-tests)
 6. [Cypress E2E Tests](#cypress-e2e-tests)
-7. [CI/CD Test Workflows](#cicd-test-workflows)
-8. [Running Tests](#running-tests)
-9. [Test File Organization](#test-file-organization)
+7. [Production Smoke Tests](#production-smoke-tests)
+8. [Documentation Sync Tests](#documentation-sync-tests)
+9. [CI/CD Test Workflows](#cicd-test-workflows)
+10. [SonarCloud Quality Gate](#sonarcloud-quality-gate)
+11. [Code Review Skill Profiles](#code-review-skill-profiles)
+12. [Running Tests](#running-tests)
+13. [Debugging Failed Tests](#debugging-failed-tests)
+14. [Coverage Enforcement](#coverage-enforcement)
+15. [Test File Organization](#test-file-organization)
 
 ---
 
@@ -481,6 +487,26 @@ pnpm exec vitest run --config vitest.smoke.config.ts
 
 ---
 
+## Documentation Sync Tests
+
+**File:** `test/docs/docsSync.test.ts`
+
+Three doc catalogues are enumerations of things the server registers — pg-boss queues, cron advisory-lock keys, and environment variables — and each has silently drifted from the code at least once, because nothing fails when someone adds a queue and stops there. These tests are that failure: add a queue, a cron job or an env var and the matching test goes red until the canonical doc lists it.
+
+| Assertion | Canonical doc | Source of truth |
+|---|---|---|
+| Every registered pg-boss queue is listed | `docs/integrations.md` § Job Types | `queue.createQueue(...)` / `queue.work(...)` across `server/` |
+| Every cron advisory-lock key is listed | `docs/integrations.md` § Registered Cron Jobs | `CRON_LOCK_KEYS` in `server/cron.ts` |
+| Every env var is documented | `docs/env-reference.md` | the Zod schema in `server/env.ts` |
+
+They parse the source text rather than importing the modules: `server/env.ts` validates the environment and writes to stderr at import, and `server/queue.ts` pulls in pg-boss. Each test also asserts its extractor found a non-zero number of entries, so a regex that stops matching fails loudly instead of passing vacuously.
+
+**When one fails,** add the missing entry to the doc named in the failure message. Do not add a second copy elsewhere — `docs/server.md` used to carry duplicate cron and queue tables and drifted from both; they are now links to the canonical lists.
+
+This is the same idea as `shared/schema/checkConstraints.test.ts`, which pins a rendered CHECK constraint to the TypeScript constant it derives from so the matching migration can't be forgotten.
+
+---
+
 ## CI/CD Test Workflows
 
 All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners. Node-based workflows use Node.js 20 via pnpm.
@@ -815,6 +841,11 @@ project-root/
       commands.ts                    # Custom Cypress commands (getBySel)
       e2e.ts                         # Global hooks and Clerk intercepts
       authIntercepts.ts              # API stub helper for authenticated tests
+test/
+  audit/
+    criticals.audit.test.ts          # Characterisation tests for the calculation audit
+  docs/
+    docsSync.test.ts                 # Pins doc catalogues to the code they enumerate
 ```
 
 ### Conventions
