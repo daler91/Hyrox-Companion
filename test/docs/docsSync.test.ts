@@ -1,17 +1,19 @@
 /**
  * Pins the canonical doc catalogues to the code they describe.
  *
- * Three lists in the docs are enumerations of things the server registers:
- * pg-boss queues, cron advisory-lock keys, and environment variables. Each one
- * has silently drifted from the code at least once — the cron table was five
- * jobs short, the queue table four, and `nutritionEmbeddingBackfill` existed in
- * no document at all — because nothing fails when someone adds a queue and
- * stops there.
+ * Several lists in the docs are enumerations of things the repo registers:
+ * pg-boss queues, cron advisory-lock keys, environment variables, storage
+ * domains, schema tables, and CI workflows. Every one of them has silently
+ * drifted from the code at least once — the cron table was five jobs short,
+ * the queue table four, `nutritionEmbeddingBackfill` existed in no document at
+ * all, `exercise_load_tags` was the only table with no section in
+ * `docs/database.md`, and `docs/testing.md` listed eight of the nine workflows
+ * — because nothing fails when someone adds one and stops there.
  *
- * These tests are that failure. Add a queue, a cron job or an env var and the
- * matching test goes red until the canonical doc lists it. Same idea as
- * `shared/schema/checkConstraints.test.ts`, which pins a rendered CHECK to the
- * constant it comes from so the migration can't be forgotten.
+ * These tests are that failure. Add a queue, a cron job, an env var, a table or
+ * a workflow and the matching test goes red until the canonical doc lists it.
+ * Same idea as `shared/schema/checkConstraints.test.ts`, which pins a rendered
+ * CHECK to the constant it comes from so the migration can't be forgotten.
  *
  * WHY PARSE SOURCE TEXT rather than import the modules: `server/env.ts`
  * validates the environment and writes to stderr at import time, and
@@ -89,6 +91,34 @@ function storageDomains(): string[] {
   const body = /export const storage: IStorage = \{([\s\S]*?)\n\};/.exec(read("server/storage/index.ts"));
   if (!body) throw new Error("storage facade object not found in server/storage/index.ts");
   return [...body[1].matchAll(/^\s+([a-zA-Z]+)[,:]/gm)].map((m) => m[1]);
+}
+
+/**
+ * Every table name declared with `pgTable(...)` anywhere in shared/schema/.
+ * Scans the directory rather than just `tables.ts` so a table added to a new
+ * schema module is still pinned.
+ */
+function schemaTableNames(): string[] {
+  const dir = path.join(ROOT, "shared/schema");
+  const names = new Set<string>();
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".ts") || entry.name.includes(".test.")) continue;
+    const src = fs.readFileSync(path.join(dir, entry.name), "utf8");
+    // `\s*` spans the newline in the multi-line `pgTable(\n  "name",` form.
+    for (const m of src.matchAll(/export const \w+ = pgTable\(\s*"([a-z][a-z0-9_]*)"/g)) {
+      names.add(m[1]);
+    }
+  }
+  return [...names].sort();
+}
+
+/** Every workflow file GitHub Actions will run. */
+function workflowFiles(): string[] {
+  const dir = path.join(ROOT, ".github/workflows");
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))
+    .sort();
 }
 
 /** Every markdown file in the repo, excluding dependencies. */
@@ -171,6 +201,38 @@ describe("docs stay in sync with the code they enumerate", () => {
 
     const undocumented = domains.filter((d) => !documented.has(d));
     expect(undocumented, `Add these storage domains to the facade block in docs/database.md: ${undocumented.join(", ")}`).toEqual([]);
+  });
+
+  it("database.md documents every table in the schema", () => {
+    const doc = read("docs/database.md");
+    const tables = schemaTableNames();
+    expect(tables.length).toBeGreaterThan(0);
+
+    // database.md documents a table one of two ways, and both count: most get
+    // their own `### <table>` section, while the nutrition tables are listed
+    // inline under § Nutrition tables and covered column-by-column in
+    // nutrition.md. A bare mention inside a fenced block does NOT count —
+    // `exercise_load_tags` went undocumented for exactly that reason, appearing
+    // only inside a migration *filename* in a code block.
+    const undocumented = tables.filter(
+      (t) => !doc.includes(`\`${t}\``) && !new RegExp(`^#{3}\\s+${t}\\s*$`, "m").test(doc),
+    );
+    expect(
+      undocumented,
+      `Add a "### <table>" section to docs/database.md § Schema Tables for: ${undocumented.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("testing.md lists every CI workflow", () => {
+    const doc = read("docs/testing.md");
+    const workflows = workflowFiles();
+    expect(workflows.length).toBeGreaterThan(0);
+
+    const undocumented = workflows.filter((w) => !doc.includes(`\`${w}\``));
+    expect(
+      undocumented,
+      `Add these workflows to docs/testing.md § CI/CD Test Workflows: ${undocumented.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("every internal documentation link and heading anchor resolves", () => {

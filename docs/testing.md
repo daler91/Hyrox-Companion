@@ -38,10 +38,10 @@ Every number below is stale the moment a test lands, so **derive it, don't trust
 it**. The commands are the source of truth; the figures are only a sanity check,
 measured on `main` at the date given.
 
-| Layer                      | Count (2026-09-06) | How to count it                                                     |
+| Layer                      | Count (2026-09-13) | How to count it                                                     |
 | -------------------------- | ------------------- | -------------------------------------------------------------------- |
-| All Vitest test files      | 442                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
-| Unit/component/route tests | 434                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
+| All Vitest test files      | 468                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
+| Unit/component/route tests | 460                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
 | Integration tests          | 7                   | `rg --files -g '*.integration.test.ts'`                              |
 | Smoke test                 | 1                   | `rg --files -g 'smoke.test.ts'`                                      |
 | Cypress E2E specs          | 12                  | `ls cypress/e2e/*.cy.ts`                                             |
@@ -491,7 +491,7 @@ pnpm exec vitest run --config vitest.smoke.config.ts
 
 **File:** `test/docs/docsSync.test.ts`
 
-Several doc catalogues are enumerations of things the code registers — pg-boss queues, cron advisory-lock keys, environment variables, storage domains — and each has silently drifted at least once, because nothing fails when someone adds a queue and stops there. Anchors rot the same way: renumbering `architecture.md`'s headings broke four inbound links from other documents. These tests are that failure: add a queue, a cron job, an env var or a storage domain, or point a link at a heading that no longer exists, and the matching test goes red.
+Several doc catalogues are enumerations of things the repo registers — pg-boss queues, cron advisory-lock keys, environment variables, storage domains, schema tables, CI workflows — and each has silently drifted at least once, because nothing fails when someone adds a queue and stops there. Anchors rot the same way: renumbering `architecture.md`'s headings broke four inbound links from other documents. These tests are that failure: add a queue, a cron job, an env var, a storage domain, a table or a workflow, or point a link at a heading that no longer exists, and the matching test goes red.
 
 | Assertion | Canonical doc | Source of truth |
 |---|---|---|
@@ -499,9 +499,11 @@ Several doc catalogues are enumerations of things the code registers — pg-boss
 | Every cron advisory-lock key is listed | `docs/integrations.md` § Registered Cron Jobs | `CRON_LOCK_KEYS` in `server/cron.ts` |
 | Every env var is documented | `docs/env-reference.md` | the Zod schema in `server/env.ts` |
 | Every storage domain is in the documented facade | `docs/database.md` § Composed Facade | the `storage` object in `server/storage/index.ts` |
+| Every schema table is documented | `docs/database.md` § Schema Tables | every `pgTable(...)` under `shared/schema/` |
+| Every CI workflow is listed | `docs/testing.md` § CI/CD Test Workflows | the files in `.github/workflows/` |
 | Every internal doc link and anchor resolves | all `*.md` in the repo | the headings they point at |
 
-The facade assertion compares the two objects property for property, because `database.md` reproduces that exact code block and had drifted from it. The link check uses GitHub's slug rule — lowercase, punctuation dropped, **each** space becoming its own hyphen, so `## Core & Security` is `#core--security` — and covers both relative file paths and `#fragment` anchors.
+The facade assertion compares the two objects property for property, because `database.md` reproduces that exact code block and had drifted from it. The table assertion accepts either of the two ways `database.md` documents a table — its own `### <table>` section, or an inline `` `backticked` `` mention for the nutrition tables covered column-by-column in `nutrition.md` — but deliberately does **not** accept a bare name inside a fenced code block: `exercise_load_tags` went undocumented for exactly that reason, appearing only inside a migration *filename*. The link check uses GitHub's slug rule — lowercase, punctuation dropped, **each** space becoming its own hyphen, so `## Core & Security` is `#core--security` — and covers both relative file paths and `#fragment` anchors.
 
 They parse the source text rather than importing the modules: `server/env.ts` validates the environment and writes to stderr at import, and `server/queue.ts` pulls in pg-boss. Each test also asserts its extractor found a non-zero number of entries, so a regex that stops matching fails loudly instead of passing vacuously.
 
@@ -555,10 +557,18 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Build
 - **Triggers:** Push to `main`, pull request
-- **Purpose:** ESLint, TypeScript, and OpenAPI snapshot drift checks. SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
+- **Job:** `lint-and-typecheck`, which runs five gates in order:
+  1. **ESLint** -- `pnpm eslint .`
+  2. **TypeScript** -- `pnpm check`, the repo-wide typecheck (TS 7 native compiler)
+  3. **TypeScript (`noUncheckedIndexedAccess` ratchet)** -- `pnpm check:strict`, which applies `tsconfig.strict.json` to a deliberately narrow subset (currently `shared/**`). The subset is expanded directory by directory as each is cleaned up; see [CONTRIBUTING.md](../CONTRIBUTING.md).
+  4. **TypeScript (test suite)** -- `pnpm check:test`. The main `tsconfig.json` excludes `**/*.test.ts`, so without this gate no job would typecheck the test files at all. `tsconfig.test.json` carries a shrinking exclude list of pre-existing offenders; every newly added test is checked.
+  5. **OpenAPI snapshot is up-to-date** -- regenerates the spec and fails on `git diff` against the committed [`docs/openapi.json`](openapi.json).
+- **Install:** `pnpm install --frozen-lockfile --ignore-scripts`, which also skips this repo's own `postinstall` (it only patches deps vendored inside the Cypress binary, which this job never touches).
+- **Note:** SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
 
 ### 6. Other workflows
 
+- **Secret Scan** (`gitleaks.yml`) -- Gitleaks secret scanning on push to `main` and on pull request. Scans **incrementally** -- only the commits the push or PR introduces -- so it blocks new secrets without re-flagging already-revoked ones buried in old history. Added after a former `.replit` config leaked an `ENCRYPTION_KEY`; that key has since been rotated through the keyring.
 - **DevSkim** (`devskim.yml`) -- Static security analysis
 - **Bearer** (`bearer.yml`) -- Static security and privacy analysis
 - **Dependency Review** (`dependency-review.yml`) -- Reviews dependency changes in PRs

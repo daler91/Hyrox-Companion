@@ -1,7 +1,12 @@
 # Technical Debt Registry
 
 > Living document cataloging known technical debt in the Hyrox-Companion codebase.
-> Last audited: 2026-05-29 (marked #22 CSRF resolved — the `csrf-csrf` double-submit middleware was implemented and the entry had gone stale; see docs/archived/CODEBASE_REVIEW_2026-05-29.md L1)
+> Resolved items are struck through rather than deleted, and each carries the date and
+> evidence of its own resolution, so the register doubles as a record of what was fixed
+> and when. Read those per-entry dates rather than looking for a single "last audited"
+> stamp at the top — this file carried one for months after it stopped being true, while
+> the entries beneath it were being updated. `git log -- TECHNICAL_DEBT.md` is the
+> authority on when the file last changed.
 
 ---
 

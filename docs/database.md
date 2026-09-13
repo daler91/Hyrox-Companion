@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~1,600 lines, 37 tables plus their Drizzle relations); the seven nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~1,970 lines, 39 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -335,6 +335,33 @@ Individual exercise sets. Each row is either **prescribed** (owned by a `plan_da
 - `idx_exercise_sets_exercise_name` on (`exercise_name`)
 - `idx_exercise_sets_workout_sort` on (`workout_log_id`, `sort_order`) -- composite
 - `idx_exercise_sets_workout_exercise` on (`workout_log_id`, `exercise_name`) -- composite
+
+---
+
+### exercise_load_tags
+
+A global lookup table — the only one here that is **not** user-scoped. It maps a canonical exercise name to the biomechanical coefficients `calculateTrainingLoad` multiplies through, and is keyed on `exercise_name`, which joins to `exercise_sets.exercise_name`. Added in migration `0049`.
+
+**Seeded by migration only — and it fails quietly when it isn't.** `server/storage/analytics.ts` is the sole code path touching this table and it only ever `SELECT`s (`fetchExerciseLoadTags`, memoized per process behind `loadTagsCache`). The 39 seed rows ship as an `INSERT` inside `migrations/0049_exercise_load_tags.sql`; nothing in the application ever writes one. Because `calculateTrainingLoad` defaults its `loadTags` parameter to `[]` (`server/services/trainingLoadService.ts`), an unseeded table produces no error and no log — every exercise silently falls back to neutral multipliers across AI coach context (`server/services/ai/index.ts`), nutrition daily load, race prediction, training overview, and plan generation. If training-load numbers look uniformly flat in an environment, check `SELECT count(*) FROM exercise_load_tags` first; see [Pending manual production steps](operations/pending-manual-steps.md) for the verification query and the reseed procedure.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `exercise_name` | `varchar(255)` | PK |
+| `posterior_chain` | `real` | NOT NULL, default `0` |
+| `anterior_chain` | `real` | NOT NULL, default `0` |
+| `unilateral_stability` | `real` | NOT NULL, default `0` |
+| `elastic_tendon` | `real` | NOT NULL, default `0` |
+| `axial_load_modifier` | `real` | NOT NULL, default `1` |
+| `tendon_load_modifier` | `real` | NOT NULL, default `1` |
+| `eccentric_risk_modifier` | `real` | NOT NULL, default `1` |
+| `high_intensity_running_risk` | `real` | NOT NULL, default `0` |
+| `updated_at` | `timestamptz` | NOT NULL, default `now()` |
+
+The five coefficient columns (`posterior_chain`, `anterior_chain`, `unilateral_stability`, `elastic_tendon`, `high_intensity_running_risk`) are additive contributions and default to `0` — no contribution. The three `*_modifier` columns are multiplicative and default to `1` — no effect. That split is why the defaults differ, and why an unseeded table degrades to "neutral" rather than "zero load".
+
+**Check constraints:** eight non-negativity guards, one per numeric column — `exercise_load_tags_posterior_non_negative_check`, `..._anterior_non_negative_check`, `..._unilateral_non_negative_check`, `..._elastic_non_negative_check`, `..._axial_modifier_positive_check`, `..._tendon_modifier_positive_check`, `..._eccentric_modifier_positive_check`, and `..._running_risk_non_negative_check`. Each asserts `>= 0`; note that the three named `_positive_` guards also permit `0`.
+
+**Indexes:** none beyond the primary key — the table is read in full (39 rows) and cached per process.
 
 ---
 
