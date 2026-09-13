@@ -555,10 +555,18 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 
 - **Name:** Build
 - **Triggers:** Push to `main`, pull request
-- **Purpose:** ESLint, TypeScript, and OpenAPI snapshot drift checks. SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
+- **Job:** `lint-and-typecheck`, which runs five gates in order:
+  1. **ESLint** -- `pnpm eslint .`
+  2. **TypeScript** -- `pnpm check`, the repo-wide typecheck (TS 7 native compiler)
+  3. **TypeScript (`noUncheckedIndexedAccess` ratchet)** -- `pnpm check:strict`, which applies `tsconfig.strict.json` to a deliberately narrow subset (currently `shared/**`). The subset is expanded directory by directory as each is cleaned up; see [CONTRIBUTING.md](../CONTRIBUTING.md).
+  4. **TypeScript (test suite)** -- `pnpm check:test`. The main `tsconfig.json` excludes `**/*.test.ts`, so without this gate no job would typecheck the test files at all. `tsconfig.test.json` carries a shrinking exclude list of pre-existing offenders; every newly added test is checked.
+  5. **OpenAPI snapshot is up-to-date** -- regenerates the spec and fails on `git diff` against the committed [`docs/openapi.json`](openapi.json).
+- **Install:** `pnpm install --frozen-lockfile --ignore-scripts`, which also skips this repo's own `postinstall` (it only patches deps vendored inside the Cypress binary, which this job never touches).
+- **Note:** SonarQube Cloud automatic analysis is configured outside these manual workflow steps.
 
 ### 6. Other workflows
 
+- **Secret Scan** (`gitleaks.yml`) -- Gitleaks secret scanning on push to `main` and on pull request. Scans **incrementally** -- only the commits the push or PR introduces -- so it blocks new secrets without re-flagging already-revoked ones buried in old history. Added after a former `.replit` config leaked an `ENCRYPTION_KEY`; that key has since been rotated through the keyring.
 - **DevSkim** (`devskim.yml`) -- Static security analysis
 - **Bearer** (`bearer.yml`) -- Static security and privacy analysis
 - **Dependency Review** (`dependency-review.yml`) -- Reviews dependency changes in PRs

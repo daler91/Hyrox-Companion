@@ -356,27 +356,36 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 
 ## Available Scripts
 
-| Script                      | Description                                           |
-| --------------------------- | ----------------------------------------------------- |
-| `pnpm dev`                  | Start the development server with `.env` loaded       |
-| `pnpm build`                | Build the client and server for production            |
-| `pnpm start`                | Run the production build from `dist/`                 |
-| `pnpm check`                | Run TypeScript type checking (TS 7 native compiler)   |
-| `pnpm test`                 | Run the Vitest unit test suite                        |
-| `pnpm test:watch`           | Run Vitest in watch mode                              |
-| `pnpm test:smoke`           | Run the fast smoke suite via `vitest.smoke.config.ts` |
-| `pnpm lint`                 | Run ESLint                                            |
-| `pnpm lint:fix`             | Auto-fix ESLint issues                                |
-| `pnpm format`               | Format the repo with Prettier                         |
-| `pnpm format:check`         | Check formatting without writing files                |
-| `pnpm db:generate`          | Generate a new Drizzle migration after schema changes |
-| `pnpm db:migrate`           | Run pending Drizzle migrations                        |
-| `pnpm db:check`             | Validate migration/schema consistency                 |
-| `pnpm db:decode-entities`   | Decode stored HTML entities in workout text           |
-| `pnpm coach:influence`      | Run the AI coach influence harness                    |
-| `pnpm docs:openapi`         | Regenerate `docs/openapi.json`                        |
-| `pnpm bench:timeline`       | Run the timeline benchmark                            |
-| `pnpm bench:timeline:check` | Run the timeline benchmark guard                      |
+| Script                               | Description                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| `pnpm dev`                           | Start the development server with `.env` loaded                                   |
+| `pnpm build`                         | Build the client and server for production                                        |
+| `pnpm start`                         | Run the production build from `dist/`                                             |
+| `pnpm check`                         | Run TypeScript type checking (TS 7 native compiler)                               |
+| `pnpm check:strict`                  | Typecheck the `noUncheckedIndexedAccess` subset (`tsconfig.strict.json`)          |
+| `pnpm check:test`                    | Typecheck the test suite, which `pnpm check` excludes                             |
+| `pnpm check:bundle`                  | Verify client-bundle invariants against `dist/`                                   |
+| `pnpm test`                          | Run the Vitest unit test suite                                                    |
+| `pnpm test:watch`                    | Run Vitest in watch mode                                                          |
+| `pnpm test:smoke`                    | Run the fast smoke suite via `vitest.smoke.config.ts`                             |
+| `pnpm test:coverage`                 | Run the unit suite with coverage reporting                                        |
+| `pnpm lint`                          | Run ESLint                                                                        |
+| `pnpm lint:fix`                      | Auto-fix ESLint issues                                                            |
+| `pnpm format`                        | Format the repo with Prettier                                                     |
+| `pnpm format:check`                  | Check formatting without writing files                                            |
+| `pnpm db:generate`                   | Generate a new Drizzle migration after schema changes                             |
+| `pnpm db:migrate`                    | Run pending Drizzle migrations                                                    |
+| `pnpm db:check`                      | Validate migration/schema consistency                                             |
+| `pnpm db:decode-entities`            | Decode stored HTML entities in workout text                                       |
+| `pnpm coach:influence`               | Run the AI coach influence harness                                                |
+| `pnpm docs:openapi`                  | Regenerate `docs/openapi.json`                                                    |
+| `pnpm bench:timeline`                | Run the timeline benchmark                                                        |
+| `pnpm bench:timeline:check`          | Run the timeline benchmark guard                                                  |
+| `pnpm data:race-benchmarks`          | Rebuild the race-benchmark artifacts from the results CSV                         |
+| `pnpm data:race-benchmarks:backtest` | Score old seeds against new data (accuracy report)                                |
+| `pnpm ops:restore-drill`             | Verify a restored backup (the mechanical half of the monthly drill)               |
+| `pnpm ops:reembed`                   | Rebuild the vector DB from the primary DB                                         |
+| `pnpm strava:webhook`                | Operator tool for the Strava push subscription (`status` / `register` / `delete`) |
 
 `postinstall` runs `script/patch-cypress-deps.js` to patch Cypress transitive dependencies.
 
@@ -403,17 +412,17 @@ The suite is around 440 Vitest test files plus 12 Cypress E2E specs (2026-09-06)
 
 GitHub Actions workflows live in [`.github/workflows/`](.github/workflows/):
 
-| Workflow                        | Trigger                                       | Purpose                                                                 |
-| ------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
-| **Build**                       | Push to `main`, pull request                  | ESLint, TypeScript, OpenAPI snapshot drift check                        |
-| **Unit Tests**                  | Push to `main`, pull request                  | Vitest unit suite                                                       |
-| **Cypress Tests**               | Push                                          | Build, integration tests, smoke tests, Cypress with PostgreSQL/pgvector |
-| **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency                                           |
-| **Post-Migration Verification** | Manual                                        | Apply migrations and verify a real Neon database                        |
-| **Dependency Review**           | Pull request                                  | Audit dependency changes                                                |
-| **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                |
-| **Bearer**                      | Push to `main`, pull request, weekly schedule | Security and privacy scanning                                           |
-| **Secret Scan**                 | Push to `main`, pull request                  | Gitleaks secret scanning                                                |
+| Workflow                        | Trigger                                       | Purpose                                                                                  |
+| ------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Build**                       | Push to `main`, pull request                  | ESLint, TypeScript (`check`, `check:strict`, `check:test`), OpenAPI snapshot drift check |
+| **Unit Tests**                  | Push to `main`, pull request                  | Vitest unit suite                                                                        |
+| **Cypress Tests**               | Push                                          | Build, integration tests, smoke tests, Cypress with PostgreSQL/pgvector                  |
+| **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency                                                            |
+| **Post-Migration Verification** | Manual                                        | Apply migrations and verify a real Neon database                                         |
+| **Dependency Review**           | Pull request                                  | Audit dependency changes                                                                 |
+| **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                                 |
+| **Bearer**                      | Push to `main`, pull request, weekly schedule | Security and privacy scanning                                                            |
+| **Secret Scan**                 | Push to `main`, pull request                  | Gitleaks secret scanning                                                                 |
 
 SonarQube Cloud automatic analysis is configured outside the manual workflow steps.
 
