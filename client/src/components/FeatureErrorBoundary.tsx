@@ -9,11 +9,16 @@ export interface FeatureErrorBoundaryProps {
   readonly featureName?: string;
 }
 
-export function FeatureErrorBoundary({ error, resetError, featureName = "This section" }: Readonly<FeatureErrorBoundaryProps>) {
+export function FeatureErrorBoundary({
+  error,
+  resetError,
+  featureName = "This section",
+}: Readonly<FeatureErrorBoundaryProps>) {
   const errorMessage = error instanceof Error ? error.toString() : String(error);
 
   return (
     <div
+      role="alert"
       className="w-full flex items-center justify-center p-4"
       data-testid={`feature-error-${featureName.toLowerCase().replaceAll(/\s/g, "-")}`}
     >
@@ -31,7 +36,12 @@ export function FeatureErrorBoundary({ error, resetError, featureName = "This se
           <p className="text-sm text-muted-foreground mb-4">
             Tap Try again to reload this section.
           </p>
-          <Button onClick={resetError} variant="outline" size="sm" data-testid="button-feature-retry">
+          <Button
+            onClick={resetError}
+            variant="outline"
+            size="sm"
+            data-testid="button-feature-retry"
+          >
             <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
             Try again
           </Button>

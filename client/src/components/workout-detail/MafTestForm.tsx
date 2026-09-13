@@ -71,8 +71,12 @@ export function MafTestForm({
   // display unit and duration into mm:ss. The parent remounts this dialog (via a
   // changing `key`) each time it opens, so these initializers re-read the latest
   // `initial` rather than needing a setState-in-effect resync.
-  const [avgHr, setAvgHr] = useState(initial.avgHeartRate == null ? "" : String(initial.avgHeartRate));
-  const [maxHr, setMaxHr] = useState(initial.maxHeartRate == null ? "" : String(initial.maxHeartRate));
+  const [avgHr, setAvgHr] = useState(
+    initial.avgHeartRate == null ? "" : String(initial.avgHeartRate),
+  );
+  const [maxHr, setMaxHr] = useState(
+    initial.maxHeartRate == null ? "" : String(initial.maxHeartRate),
+  );
   const [duration, setDuration] = useState(
     initial.durationSeconds == null ? "" : formatSecondsToMmSs(initial.durationSeconds),
   );
@@ -120,6 +124,8 @@ export function MafTestForm({
                 value={avgHr}
                 onChange={(e) => setAvgHr(e.target.value)}
                 placeholder={`${MIN_HEART_RATE}–${MAX_HEART_RATE}`}
+                aria-invalid={!!error}
+                aria-describedby={error ? `${testId}-error-msg` : undefined}
                 data-testid={`${testId}-avg-hr`}
               />
             </div>
@@ -131,6 +137,8 @@ export function MafTestForm({
                 value={maxHr}
                 onChange={(e) => setMaxHr(e.target.value)}
                 placeholder="optional"
+                aria-invalid={!!error}
+                aria-describedby={error ? `${testId}-error-msg` : undefined}
                 data-testid={`${testId}-max-hr`}
               />
             </div>
@@ -141,6 +149,8 @@ export function MafTestForm({
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 placeholder="28:30"
+                aria-invalid={!!error}
+                aria-describedby={error ? `${testId}-error-msg` : undefined}
                 data-testid={`${testId}-duration`}
               />
             </div>
@@ -152,12 +162,19 @@ export function MafTestForm({
                 value={distance}
                 onChange={(e) => setDistance(e.target.value)}
                 placeholder="optional"
+                aria-invalid={!!error}
+                aria-describedby={error ? `${testId}-error-msg` : undefined}
                 data-testid={`${testId}-distance`}
               />
             </div>
           </div>
           {error && (
-            <p role="alert" className="text-sm text-destructive" data-testid={`${testId}-error`}>
+            <p
+              id={`${testId}-error-msg`}
+              role="alert"
+              className="text-sm text-destructive"
+              data-testid={`${testId}-error`}
+            >
               {error}
             </p>
           )}
