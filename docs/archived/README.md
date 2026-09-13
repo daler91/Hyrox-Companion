@@ -1,4 +1,4 @@
-[Back to README](../../README.md) · [Back to docs](../)
+[Back to README](../../README.md) · [Back to docs index](../README.md)
 
 # Archived reviews
 
@@ -9,9 +9,9 @@ record of the codebase. Findings in them may since have been resolved,
 superseded, or reworked.
 
 For the current state of the system, use the source code and the maintained core
-docs in [`../`](../) (architecture, server, client, database, api-reference,
-ai-and-rag, nutrition, integrations, testing) and the living
-[`TECHNICAL_DEBT.md`](../../TECHNICAL_DEBT.md) at the repo root.
+docs indexed in [`../README.md`](../README.md) (architecture, server, client,
+database, api-reference, ai-and-rag, nutrition, integrations, testing) and the
+living [`TECHNICAL_DEBT.md`](../../TECHNICAL_DEBT.md) at the repo root.
 
 ## Contents (newest first)
 

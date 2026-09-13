@@ -260,7 +260,9 @@ Hyrox-Companion/
 
 ## Documentation
 
-Detailed documentation lives in [`docs/`](docs/):
+Detailed documentation lives in [`docs/`](docs/). The core reference set is below;
+[**`docs/README.md`**](docs/README.md) indexes everything else — runbooks, ADRs, feature specs,
+the brand kit, in-flight plans, and the dated review snapshots.
 
 | Document                                               | Description                                                                                |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------ |

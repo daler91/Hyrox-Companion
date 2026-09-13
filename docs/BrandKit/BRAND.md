@@ -1,6 +1,10 @@
 # fitai.coach — Brand Kit (Nexus)
 
-> Drop this file into your repo (e.g. `docs/BrandKit/BRAND.md`) and reference it when asking Claude Code to build UI. Everything here is tokenized so it pastes cleanly into Tailwind, CSS variables, or a design-system package.
+> The source of truth for the visual system. Everything here is tokenized, so it maps directly onto
+> the CSS variables in `client/src/index.css` and the `theme.extend` block in `tailwind.config.ts` —
+> change a token here and there, not in component styles. The logo files and the designed PDF sit
+> beside this file in [`docs/BrandKit/`](.); the higher-level UI approach (layout patterns,
+> screen composition) is in [`design_guidelines.md`](../../design_guidelines.md).
 
 ---
 
