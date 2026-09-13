@@ -14,27 +14,33 @@ vi.mock("../../clerkAuth", async () => (await import("./testUtils")).mockClerkAu
 
 vi.mock("../../types", async () => (await import("./testUtils")).mockTypesModule());
 
-// Mock the storage functions
+// Mock the storage functions.
+// Every default is passed as vi.fn(impl) — not .mockResolvedValue() — so the
+// vi.resetAllMocks() in beforeEach restores it instead of wiping it. A test's
+// own mockResolvedValue/mockRejectedValue override therefore cannot leak into
+// whichever test happens to run next (vitest shuffles order with
+// --sequence.shuffle), and a route that reaches a method this test never
+// stubbed still gets an empty, non-throwing result rather than `undefined`.
 vi.mock("../../storage", () => ({
   storage: {
     analytics: {
-      getExerciseLoadTags: vi.fn(),
-      getAllExerciseSetsWithDates: vi.fn(),
-      getExerciseSetsForPersonalRecords: vi.fn(),
-      getWorkoutLogsByDateRange: vi.fn(),
-      getPlanDaysByDateRange: vi.fn(),
+      getExerciseLoadTags: vi.fn(async () => []),
+      getAllExerciseSetsWithDates: vi.fn(async () => []),
+      getExerciseSetsForPersonalRecords: vi.fn(async () => []),
+      getWorkoutLogsByDateRange: vi.fn(async () => []),
+      getPlanDaysByDateRange: vi.fn(async () => []),
       // Denominator for "Avg Adherence" (audit H10). Defaults to 0 so the
       // existing cases, which have no plan, keep exercising the no-plan path.
-      getDueSessionCount: vi.fn().mockResolvedValue(0),
+      getDueSessionCount: vi.fn(async () => 0),
     },
     users: {
       getUser: vi.fn(),
     },
     timelineAnnotations: {
-      list: vi.fn(),
+      list: vi.fn(async () => []),
     },
     weeklyReviews: {
-      getIntents: vi.fn(),
+      getIntents: vi.fn(async () => new Map()),
       setIntent: vi.fn(),
     },
   },
@@ -62,7 +68,13 @@ describe("Analytics Routes", () => {
 
   beforeEach(async () => {
     await resetRouteTestState();
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks): clearAllMocks only drops call history,
+    // leaving a mockResolvedValue/mockRejectedValue set by an earlier test
+    // attached to the shared module mock. Under a shuffled test order that
+    // leaked implementation (e.g. the "500 when storage throws" cases'
+    // mockRejectedValue on getExerciseSetsForPersonalRecords) surfaced in a
+    // later test that never stubs that method itself.
+    vi.resetAllMocks();
     env.INTERNAL_ANALYTICS_SECRET = "internal-secret";
     _cacheForTesting.clear();
     _prCacheForTesting.clear();

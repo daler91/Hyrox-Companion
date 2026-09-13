@@ -8,8 +8,18 @@
 process.env.TZ = "UTC";
 
 import "@testing-library/jest-dom/vitest";
+import { configure } from "@testing-library/react";
 import { toHaveNoViolations } from "jest-axe";
 import { expect } from "vitest";
+
+// Testing Library's default 1000ms budget for findBy*/waitFor is the real
+// ceiling most component tests run against, and it is tight when the suite's
+// worker processes contend for CPU: a query that resolves instantly on an idle
+// machine has been seen to miss 1s under full parallel load, failing as
+// "unable to find an element" rather than for any real reason (issue #1710).
+// This only lengthens how long a poll waits before giving up — an element that
+// never appears still fails the test.
+configure({ asyncUtilTimeout: 3000 });
 
 // Register the jest-axe matcher so component tests can call
 // `expect(container).toHaveNoViolations()` for automated a11y checks.

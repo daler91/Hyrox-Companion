@@ -23,6 +23,15 @@ export default defineConfig({
     // (vitest exposes test.env on both process.env and import.meta.env.)
     env: { NUTRITION_ENABLED: 'true', VITE_NUTRITION_ENABLED: 'true' },
     exclude: ['**/*.integration.test.ts', '**/smoke.test.ts', '**/node_modules/**', '**/dist/**', '**/cypress/**'],
+    // 15s, not vitest's 5s default. Nothing here is meant to take seconds: the
+    // component tests that come closest (the LogFoodDialog portion flows, which
+    // drive a Radix select plus character-by-character userEvent typing) run in
+    // ~0.5s on an idle machine. But the suite runs across many worker processes
+    // in parallel, and under that CPU contention those same tests have been
+    // measured at 6s — timing out with vitest's opaque `STACK_TRACE_ERROR`
+    // rather than any real failure (issue #1710). The headroom buys contention
+    // tolerance only; a genuinely hung test still fails, just 10s later.
+    testTimeout: 15000,
     globals: true,
     coverage: {
       // provider defaults to 'v8' (@vitest/coverage-v8 is installed)
