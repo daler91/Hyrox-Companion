@@ -1,4 +1,4 @@
-import { pooledRatio, roundOrNull, weightedMean } from "@shared/ratio";
+import { pooledRatio, roundOrNull } from "@shared/ratio";
 import type {
   ExerciseLoadTag,
   HeatMapMuscle,
@@ -679,18 +679,33 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
     };
   }
   // ⚡ Bolt Performance Optimization:
-  // Consolidated two separate loops over weeklySummaries into a single pass
-  // to compute totalWorkouts and totalDuration simultaneously, reducing
-  // time complexity from O(2N) to O(N).
+  // Consolidated separate loops/chains over weeklySummaries into one pass to
+  // compute totalWorkouts, totalDuration, and the RPE weighted-sum
+  // simultaneously. The RPE average used to be its own `.filter().map().map()`
+  // chain (3 extra full traversals of weeklySummaries plus 3 intermediate
+  // array allocations, on top of the loop right above it doing the same
+  // shape of work) — folding it into this loop drops the whole function to a
+  // single O(N) pass with no extra allocations. `weeklySummaries` spans the
+  // athlete's full "all time" week count for this call, and this function
+  // runs for both the current AND previous period on every Analytics
+  // Overview load, so N isn't bounded to one page's worth of rows.
   let totalWorkouts = 0;
   let totalDuration = 0;
   let workoutsWithDuration = 0;
   let totalRunningMeters = 0;
+  let rpeWeightedSum = 0;
+  let rpeWeightTotal = 0;
   for (const w of weeklySummaries) {
     totalWorkouts += w.workoutCount;
     totalDuration += w.totalDuration;
     workoutsWithDuration += w.workoutsWithDuration;
     totalRunningMeters += w.runningMeters;
+    // Weeks with no rated session contribute no weight, preserving the
+    // original intent that an unrated week must not drag the average down.
+    if (w.avgRpe !== null && w.rpeCount > 0) {
+      rpeWeightedSum += w.avgRpe * w.rpeCount;
+      rpeWeightTotal += w.rpeCount;
+    }
   }
   // `weeklySummaries` is now zero-filled across the period, so rest weeks are
   // in the denominator and this can fall below 1.0 (audit H7).
@@ -703,13 +718,9 @@ export function computeOverviewStats(weeklySummaries: WeeklySummary[]): Overview
   // treating every week as one observation. The unweighted form let a single
   // hard session in a quiet week count as much as six sessions in a heavy one:
   // one RPE-10 workout plus six RPE-4 workouts reported 7.0 instead of 4.9
-  // (audit H9). Weeks with no rated session contribute no weight, preserving
-  // the original intent that an unrated week must not drag the average down.
-  const ratedWeeks = weeklySummaries.filter((w) => w.avgRpe !== null && w.rpeCount > 0);
-  const avgRpe = roundOrNull(
-    weightedMean(ratedWeeks.map((w) => w.avgRpe as number), ratedWeeks.map((w) => w.rpeCount)),
-    1,
-  );
+  // (audit H9). Same formula `weightedMean` used (weighted sum over weight
+  // sum), just accumulated in the loop above instead of a second pass.
+  const avgRpe = roundOrNull(pooledRatio(rpeWeightedSum, rpeWeightTotal), 1);
 
   return { totalWorkouts, avgPerWeek, totalDuration, avgDuration, avgRpe, totalRunningMeters, avgCompliancePct: null };
 }
