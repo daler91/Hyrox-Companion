@@ -373,7 +373,7 @@ Both pools log unexpected errors on idle clients.
 
 ### Job Queue
 
-pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Four queues are registered:
+pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Eight queues are registered — six in `server/queue.ts` and `strava-sync` in `server/services/stravaAutoSync.ts`:
 
 | Queue | Worker | Description |
 |-------|--------|-------------|
@@ -381,6 +381,10 @@ pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection st
 | `embed-coaching-material` | `embedCoachingMaterial(material)` | Generates and stores vector embeddings for coaching documents |
 | `send-weekly-summary` | `processWeeklySummary(...)` | Sends one user's weekly training summary email |
 | `send-missed-reminder` | `processMissedWorkoutReminder(...)` | Sends one user's missed-workout reminder email |
+| `send-maf-test-reminder` | `processMafTestReminder(...)` | Sends one user's MAF retest reminder email |
+| `plan-generation` | `executePlanGeneration(planId, input, userId, signal)` | Generates a training plan off the request path; progress is polled via `GET /api/v1/plans/:id/generation-status` |
+| `recompute-analytics` | refreshes the stored `analytics_results` row | Enqueued by the `analyticsRecompute` cron at each user's local midnight. Rejects a `feature` outside `ANALYTICS_FEATURES` *before* claiming the once-per-day slot, so a bad payload cannot burn that day's recompute |
+| `strava-sync` | `runStravaSyncJob({ userId, trigger })` | Imports a user's Strava activities. Registered by `registerStravaAutoSyncWorker()`; enqueued by the webhook and by the polling scan, with `trigger` defaulting to `"poll"` |
 
 Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); the email send jobs use `NO_RETRY_JOB_OPTIONS`, because the "sent" marker is persisted after delivery and a retry would duplicate the email. Each job runs under a 50-minute wall-clock timeout, and in-batch parallelism is bounded to 2. Failed jobs are re-thrown to let pg-boss handle retries.
 

@@ -1152,6 +1152,7 @@ data: {"error":"Stream error"}
 Retrieve saved chat messages for the current user, cursor-paginated.
 
 - **Auth:** Required
+- **Rate limit:** `chatHistory` category, 60/min
 - **Query:** `limit?` (1-200), `before?` (ISO datetime), `beforeId?` (string) — `before` and `beforeId` must be supplied together
 - **Response:** `ChatMessage[]` (plain array for backward compatibility). When more rows exist, the cursor for the next page is returned in the `X-Next-Cursor` (timestamp) and `X-Next-Cursor-Id` (row id) response headers, both of which must be echoed back on the next request.
 
@@ -1232,6 +1233,7 @@ Apply a generated timeline AI suggestion to a plan day's field.
 Inspect the AI suggestion trace and metadata for a plan day. Debugging aid.
 
 - **Auth:** Required
+- **Rate limit:** `aiSuggestionsDebug` category, 30/min
 - **Response:** `{ workoutId, focus, aiSource, aiRationale, aiNoteUpdatedAt, trace, debugSummary }` (or 404)
 
 ---
@@ -1395,6 +1397,7 @@ External cron trigger endpoint for batch email processing across all users.
 
 - **Auth:** `x-cron-secret` header (timing-safe comparison with `CRON_SECRET` env var)
 - **No Clerk auth required**
+- **Rate limit:** `cronEmails` category, 10/min
 - **Response:** Cron job result summary
 
 ---
