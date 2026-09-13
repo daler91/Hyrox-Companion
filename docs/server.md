@@ -397,6 +397,11 @@ Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); 
 | Stale auto-coach recovery | Every 10 minutes | `staleAutoCoaching` |
 | pg-boss queue-depth telemetry | Every 5 minutes | `queueDepthTelemetry` |
 | Structured exercise health rollup | Daily at 02:10 UTC | `structuredExerciseRollup` |
+| RAG chunk prune | Daily at 03:50 UTC | `ragChunkPrune` |
+| Analytics recompute | Hourly at :05 (fires per user at their local midnight) | `analyticsRecompute` |
+| Account erasure sweep | Hourly at :35 | `accountErasureSweep` |
+| Nutrition push reminders | Hourly at :25 (per-user refuel window + 20:00 local nudge) | `nutritionReminders` |
+| Food embedding backfill | Every 30 minutes (semantic food search only) | `nutritionEmbeddingBackfill` |
 | Strava auto-sync polling scan | Every 15 minutes | `stravaAutoSync` |
 | Strava webhook subscription check | Every 6 hours, plus 30 seconds after boot | `stravaWebhookEnsure` |
 | Startup email catch-up | 30 seconds after late startup | `startupEmailCatchUp` |

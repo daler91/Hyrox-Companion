@@ -4,7 +4,7 @@
 
 ## Overview
 
-fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints (except the health check and cron trigger) require Clerk JWT authentication. Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
+fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints except the two [health probes](#health-routes) and the cron trigger require Clerk JWT authentication. Request bodies are validated with Zod schemas, and rate limiting is applied per-user per-category.
 
 **Base URL:** `/api/v1`
 **Content-Type:** `application/json` (requests and responses)
@@ -21,15 +21,19 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints (ex
 - [CSRF Protection](#csrf-protection)
 - [Idempotency](#idempotency)
 - [Request Validation](#request-validation)
+- [Health Routes](#health-routes)
 - [Auth Routes](#auth-routes)
 - [Account Routes](#account-routes)
 - [Workout Routes](#workout-routes)
 - [Custom Exercise Routes](#custom-exercise-routes)
+- [MAF Test Routes](#maf-test-routes)
 - [Training Plan Routes](#training-plan-routes)
 - [Timeline Annotation Routes](#timeline-annotation-routes)
 - [Analytics Routes](#analytics-routes)
 - [AI and Chat Routes](#ai-and-chat-routes)
 - [Coaching Material Routes](#coaching-material-routes)
+- [Plan Proposal Routes](#plan-proposal-routes)
+- [Consent Routes](#consent-routes)
 - [Preferences Routes](#preferences-routes)
 - [Email Routes](#email-routes)
 - [Push Notification Routes](#push-notification-routes)
@@ -182,6 +186,28 @@ Validation errors return:
   }
 }
 ```
+
+---
+
+## Health Routes
+
+The only unauthenticated routes in the API. Both are public probes with no credentials attached, so their responses deliberately carry no secrets — a failed boot reports the fixed startup *phase*, never the raw error message (that goes to `logger.fatal` server-side). Defined in `server/bootstrap/health.ts`.
+
+### GET /api/v1/health/live
+
+**Liveness** probe: is the process up? Wire this one to a restart policy.
+
+- **Auth:** None
+- **Response:** `200` `{ status: "alive", uptimeMs, timestamp }`
+- **Errors:** `503` `{ status: "startup_failed", phase, timestamp }` when boot failed
+
+### GET /api/v1/health
+
+**Readiness** probe: gates on startup state plus a cached DB / vector-DB probe. A `503` here means "don't route traffic to me right now" and should **not** be wired to a restart policy.
+
+- **Auth:** None
+- **Response:** `200` `{ status: "ok", vectorSchema, uptimeMs, timestamp }`
+- **Errors:** `503` with `status` of `"starting"` (still booting, plus `phase`), `"degraded"` (`db` / `vectorDb` booleans), or `"error"`
 
 ---
 
@@ -392,6 +418,16 @@ Seed a workout log's exercise sets from its linked plan day.
 - **Rate limit:** `workoutSet` category, 20/min
 - **Response:** `{ seededCount: number }`
 
+### PATCH /api/v1/workouts/:id/plan-day
+
+Attach workout log `:id` to a plan day, move it to a different one, or detach it entirely by sending `null`.
+
+- **Auth:** Required
+- **Rate limit:** `workout` category, 40/min
+- **Body:** `{ planDayId: string | null }` — `null` detaches
+- **Response:** the updated `WorkoutLog`
+- **Errors:** `400` (validation), `404` (workout not found)
+
 ### POST /api/v1/workouts/:id/device-link
 
 Merge a standalone Strava import (`:id`) into the plan day or the manually logged workout it was a recording of. The recording's metrics fill only the target's NULL columns and the standalone row is removed. A manual link is never revisited by the sync. See [Integrations → Activity Sync](integrations.md#activity-sync) for how the sync links automatically.
@@ -531,6 +567,49 @@ Create or upsert a custom exercise.
 - **Body:** `{ name: string, category?: string }` (`category` defaults to `"conditioning"`)
 - **Validation:** `createCustomExerciseSchema` (`insertCustomExerciseSchema` without `userId`)
 - **Response:** `CustomExercise`
+
+---
+
+## MAF Test Routes
+
+Tagging a logged run as a MAF (Maximum Aerobic Function) test records a `maf_test_results` row and, when the run carries heart-rate data, a `maf_workout_analysis` compliance row scored against the athlete's current aerobic ceiling. **Files:** `server/routes/workouts/workoutsMaf.routes.ts`, `server/services/mafTestService.ts`.
+
+### POST /api/v1/workouts/:id/maf-test
+
+Tag an already-logged run as a MAF test.
+
+- **Auth:** Required
+- **Rate limit:** `mafTest` category, 20/min
+- **Body:** `{ protocolType?: string (≤120), notes?: string (≤2000), metrics?: { avgHeartRate?, maxHeartRate?, durationSeconds?, distanceMeters? } }` — every metric is nullable and optional; an omitted field keeps the auto-pulled value, an explicit `null` clears it. `maxHeartRate` may not be below `avgHeartRate`.
+- **Response:** `201` with the test record on first tag; `200` with the same record when an already-tagged workout is returned idempotently
+- **Errors:** `400` (validation), `404` (workout not found)
+
+### PATCH /api/v1/workouts/:id/maf-test
+
+Apply manual HR / duration / distance corrections to a tagged test and recompute its compliance analysis against the athlete's current ceiling.
+
+- **Auth:** Required
+- **Rate limit:** `mafTest` category, 20/min
+- **Body:** same shape as the `POST`
+- **Response:** `{ testResult, analysis }`
+- **Errors:** `400` (validation), `404` (workout not tagged)
+
+### DELETE /api/v1/workouts/:id/maf-test
+
+Untag a workout, removing its MAF test and compliance analysis, so an accidental tag can be undone from the review surface.
+
+- **Auth:** Required
+- **Rate limit:** `mafTest` category, 20/min
+- **Response:** `{ success: true }`
+- **Errors:** `404` (workout not tagged)
+
+### GET /api/v1/maf-tests
+
+MAF test history and compliance trend, for the trend charts and the coach.
+
+- **Auth:** Required
+- **Rate limit:** `mafTest` category, 60/min
+- **Response:** `{ tests, analysis }` — up to 200 rows each
 
 ---
 
@@ -891,6 +970,25 @@ Calculate weekly training summaries, category totals, station coverage, and week
 - **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
 - The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the six stat cards.
 
+### GET /api/v1/weekly-review
+
+The athlete's own Monday→Sunday week: completion against plan, prior-week comparison, PRs, annotations, and the intent they set for this week and last. Not persisted and not AI-gated — four bounded queries over data the weekly summary email already reads. See [weekly-review-spec.md](weekly-review-spec.md).
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 20/min
+- **Query:** `week` (optional) — any date inside the wanted week; defaults to the last completed week. The week is resolved in the athlete's `userTimezone` (falling back to UTC) and the payload reports the zone it was actually resolved in.
+- **Errors:** `400` (`Invalid 'week' date format`)
+
+### POST /api/v1/weekly-review/intent
+
+Write or clear the athlete's intent for a week. `POST` rather than `PUT` despite being an idempotent upsert: the repo has no `PUT` routes, and the protected-route builder only knows `post` / `patch` / `delete`.
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 20/min
+- **Body:** `{ week: string, intent?: string | null }` — the date is anchored server-side to its Monday, since the unique index is on `(user_id, week_start)`. A blank or `null` intent clears the week's line.
+- **Response:** `{ weekStart, intent }`
+- **Errors:** `400` (validation)
+
 ### GET /api/v1/race-prediction
 
 Predict the athlete's HYROX finish time from their logged history. **Stored-first**: returns the last persisted prediction instantly (no AI spend) so the tab paints on open without a spinner; `?refresh=1` (the manual refresh button) — or the absence of any stored row — regenerates and persists a fresh prediction. The stored row is also kept warm by the midnight [analytics recompute job](integrations.md#job-types).
@@ -1093,6 +1191,22 @@ Regenerate the single-shot AI analysis of the athlete's progress against their s
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** `{ ...CoachInsightsResult, stale: false }` — freshly generated against the current latest workout, so never stale (`CoachInsightsResult` includes `insights` and `ragInfo`).
 
+### GET /api/v1/overview-analysis
+
+The last stored "what this means for you" reading for each Overview-tab chart, keyed so every chart card renders its own explanation inline. Same stored-first shape as Coach Insights: this GET paints the stored result instantly with no AI spend.
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 60/min
+- **Response:** the stored `OverviewAnalysisResult` plus `generatedAt` and a `stale` flag; `{ sections: null }` when nothing has been generated yet
+
+### POST /api/v1/overview-analysis
+
+Regenerate the Overview chart analysis and persist it. One AI call produces every chart's reading.
+
+- **Auth:** Required
+- **Rate limit:** `suggestions` category, 3/min — plus AI consent and budget checks
+- **Response:** the fresh `OverviewAnalysisResult` with `stale: false` (it is generated against the current latest workout)
+
 ### POST /api/v1/timeline/ai-suggestions
 
 Generate AI coaching suggestions for upcoming planned workouts.
@@ -1180,6 +1294,59 @@ Re-embed all coaching materials for the current user.
 - **Rate limit:** `coaching` category, 5/min
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Response:** Re-embed result summary
+
+---
+
+## Plan Proposal Routes
+
+An auto-coach run that wants to change the athlete's upcoming plan raises a proposal rather than rewriting the plan silently; these routes are how the athlete accepts or declines it. **File:** `server/routes/planProposals.ts`.
+
+### GET /api/v1/plan-proposals/pending
+
+The athlete's currently pending proposal, if any.
+
+- **Auth:** Required
+- **Rate limit:** `analytics` category, 60/min
+- **Response:** `{ proposal: { id, planId, status, summaryMessage, changes, createdAt } | null }`
+
+### POST /api/v1/plan-proposals/:id/apply
+
+Apply the proposed changes to the plan.
+
+- **Auth:** Required
+- **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately *not* checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
+- **Errors:** `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it)
+
+### POST /api/v1/plan-proposals/:id/dismiss
+
+Decline the proposal and leave the plan untouched.
+
+- **Auth:** Required
+- **Rate limit:** `suggestionApply` category, 10/min
+- **Errors:** `404` (proposal not found)
+
+---
+
+## Consent Routes
+
+An auditable server-side record of consent decisions (W4). The privacy banner and the Sentry opt-in still write `localStorage` for the fast client-side gate, but authenticated users also get a durable record, so consent is demonstrable (GDPR Art. 7) and an opt-out is on file (CCPA). **File:** `server/routes/consent.ts`.
+
+### POST /api/v1/consents
+
+Record a consent decision.
+
+- **Auth:** Required
+- **Rate limit:** `consent` category, 20/min
+- **Body:** `{ consentType, granted }` (`recordConsentSchema`); stored as `{ userId, consentType, granted, consentedAt }`
+- **Response:** `{ success: true }`
+
+### GET /api/v1/consents
+
+The user's recorded consent decisions — the read behind a DSAR.
+
+- **Auth:** Required
+- **Rate limit:** `consent` category, 30/min
+- **Response:** `{ consents }`
 
 ---
 
@@ -1529,13 +1696,18 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | POST | `/logs/repeat` | Repeat a day / meal | `nutritionLog` (20) |
 | POST | `/logs/batch` | Confirm reviewed parsed items | `nutritionLog` (60) |
 | GET | `/summary` | Daily totals + per-meal breakdown, incl. `mealTargets` | `nutritionRead` (60) |
+| GET | `/summary-range` | Batched daily totals for a date window (one read, no per-day fan-out) | `nutritionRead` (60) |
 | GET | `/session-fuelling/:workoutId` | Pre/post-session fuelling windows | `nutritionRead` (60) |
+| GET | `/planned-session-estimate/:planDayId` | Fuelling estimate for a session that hasn't happened yet | `nutritionRead` (60) |
 | GET | `/block` | Daily intake macros vs. training UTSS | `nutritionRead` (60) |
 | GET | `/targets` | Current target + history | `nutritionRead` (60) |
 | POST | `/targets` | Set / replace the target version | `nutritionWrite` (30) |
 | GET | `/micros` | The day's micronutrients vs. RDI | `nutritionRead` (60) |
+| POST | `/meal-targets` | Set / replace a per-meal target | `nutritionWrite` (30) |
+| DELETE | `/meal-targets/:mealType` | Clear a per-meal target | `nutritionWrite` (30) |
 | POST | `/parse/text` | Natural-language meal → items **(AI)** | `parse` (5) + consent + budget |
 | POST | `/parse/photo` | Photo → items **(AI)** | `parse` (5) + consent + budget |
+| POST | `/parse/label` | Nutrition-label photo → a single food, transcribed rather than estimated; `label: null` when unreadable **(AI)** | `parse` (5) + consent + budget |
 | GET | `/insights` | Last stored AI nutrition analysis | `nutritionRead` (60) |
 | POST | `/insights` | Regenerate the analysis **(AI)** | `suggestions` (3) + consent + budget |
 | GET | `/recipes` | List recipes | `nutritionRead` (60) |

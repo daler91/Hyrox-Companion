@@ -443,9 +443,9 @@ it("shows the workout form", () => {
 
 ## Production Smoke Tests
 
-**File:** `server/routes/__tests__/routeRegistration.smoke.test.ts`
+**File:** `server/routes/tests/smoke.test.ts`
 
-A fast route-registration smoke test that imports `registerRoutes`, mounts it on a bare Express app, and asserts the route tree wires up correctly (for example, that the workouts router is mounted exactly once). All sub-routers, auth setup, and CSRF middleware are mocked, so the test runs quickly without a real server, database, or build step.
+An end-to-end check that the **built** server actually boots and serves. It spawns `dist/index.js` as a child process on port 5111 with `ALLOW_DEV_AUTH_BYPASS=true`, polls `/api/v1/health` until the server reports ready (60 s budget), then drives the running server over HTTP with a small cookie jar, and shuts it down with `SIGTERM` afterwards. Nothing is mocked, so this needs a **real build and a real database** — it is the test that catches a break no unit test can see, like a bundle that compiles but crashes on boot.
 
 ### Configuration
 
@@ -455,12 +455,21 @@ The smoke test uses a **separate Vitest config** (`vitest.smoke.config.ts`):
 - Uses `node` environment (no jsdom)
 - Shares the integration setup file (`vitest.integration.setup.ts`)
 - Runs with `fileParallelism: false`
-- Runs as its own step in the Cypress workflow (`cypress.yml`)
+- Runs with a 90-second suite timeout, since it builds up a real server process
+- Runs as its own step in the Cypress workflow (`cypress.yml`), on container 1 only, after the build and `drizzle-kit push` steps
 
 ### What's Tested
 
-- `registerRoutes()` mounts each sub-router on the Express app
-- The workouts router is mounted exactly once (no duplicate registration)
+- **Health & startup**: `/api/v1/health` returns `ok` with a numeric timestamp
+- **Frontend serving**: `/` returns the SPA shell; hashed `/assets/*.js` and `*.css` are served, with `max-age` on the JS bundle
+- **Security headers**: `X-Powered-By` absent, `Content-Security-Policy` present with `default-src`, `X-Content-Type-Options: nosniff`
+- **CSRF**: the token endpoint issues a token; a `POST` without one is rejected with `403`; the same `POST` with a valid token is not a `403`
+- **Authentication**: `GET /api/v1/auth/user` returns the dev user
+- **Workout CRUD lifecycle**: create → list → fetch by id → update → delete → `404`
+- **Plans & analytics**: `/plans`, `/personal-records`, `/exercise-analytics`, `/training-overview` (asserting its four top-level keys) and `/timeline`
+- **Export**: `?format=json` and `?format=csv`
+- **Error handling**: an unknown `/api/v1/*` path falls through to the SPA; an invalid workout payload returns `400`
+- **Strava**: `/api/v1/strava/status` reports `connected: false`
 
 ### Running Smoke Tests
 
@@ -717,7 +726,8 @@ project-root/
         plans.test.ts
         preferences.test.ts
         workouts.test.ts
-        routeRegistration.smoke.test.ts  # Route-registration smoke test
+      tests/
+        smoke.test.ts                # Production smoke test (spawns the built server)
       tests/                         # Integration tests (real database)
         helpers.ts                   # Integration test setup helper
         api.integration.test.ts

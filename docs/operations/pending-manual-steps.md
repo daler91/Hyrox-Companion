@@ -142,3 +142,60 @@ rolled back and must be run again.
     GROUP BY user_id HAVING count(*) > 1
   ) d; -- expect 0
   ```
+
+## [ ] 0093 — backfill exercise sets for standalone device imports
+
+- **Script:** `script/backfill-device-activity-sets.ts`
+- **Shipped:** 2026-09-12 (alongside migration `0093_device_activity_links.sql`)
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** it is a script, not a migration — nothing runs it on deploy.
+  The sync now writes the set at import time
+  (`server/services/deviceActivitySets.ts`); only the history imported before
+  that needs a hand.
+- **What it does:** gives standalone device imports the `exercise_sets` row they
+  never got. Without it the set-derived half of Analytics — training-distribution
+  pie, movement-pattern coverage, muscle heat map, personal records, progression
+  charts — ignores every pre-existing device import while the overview cards
+  count them all.
+- **Safe to re-run:** yes. It only touches standalone imports
+  (`device_link_source IS NULL`) with no sets at all, so the anti-join makes a
+  second run a no-op; linked and plan-day logs are never touched, and sports the
+  recording doesn't describe as a set (`WeightTraining`, `Workout`) are skipped
+  rather than invented. Each athlete's rows are stamped with that athlete's own
+  units.
+- **How:**
+  ```bash
+  pnpm tsx script/backfill-device-activity-sets.ts            # dry run (default)
+  pnpm tsx script/backfill-device-activity-sets.ts --apply    # write
+  ```
+  `--user-id <id>` restricts to one athlete; `--quiet` prints the summary only.
+
+## [ ] 0094 — backfill `counts_as_training` for non-training device imports
+
+- **Script:** `script/backfill-counts-as-training.ts`
+- **Shipped:** 2026-09-12 (alongside migration `0094_counts_as_training.sql`)
+- **Run on production:** _not yet — date / operator:_
+- **Why manual:** the migration added the column with `DEFAULT true`, so it is
+  the column default — not a DML statement — that left the history wrong. Push
+  applies the default; nothing reclassifies the existing rows.
+- **What it does:** applies the sport-type rule new imports are stamped with
+  (`shared/deviceSportTypes.ts`) to the history, so every dog walk, commute and
+  yoga class a watch ever synced stops counting toward Total Workouts,
+  Avg / Week, the streak and the training mix.
+- **Expect the numbers to move.** Total Workouts and Avg / Week fall, Avg
+  Duration rises. That is the point, but it reads as a regression if nobody is
+  expecting it — say so before running.
+- **Safe to re-run:** yes. It only touches rows with a provider sport to read
+  and only those still at the migration's default, so a second run finds
+  nothing. A manual log is never touched, and nothing is ever flipped back
+  **on** — an athlete who already turned a walk into training keeps that.
+- **How:**
+  ```bash
+  pnpm tsx script/backfill-counts-as-training.ts            # dry run (default)
+  pnpm tsx script/backfill-counts-as-training.ts --apply    # write
+  ```
+- **Verify afterwards:**
+  ```sql
+  SELECT counts_as_training, count(*) FROM workout_logs GROUP BY 1;
+  -- expect a non-zero `false` bucket once walks/commutes/yoga are reclassified
+  ```
