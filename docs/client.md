@@ -58,18 +58,22 @@ When auth is bypassed (dev mode or Cypress tests), ClerkProvider is omitted and 
 
 ## Routing
 
-Routing uses **wouter** (`Switch` and `Route` components). There are four authenticated routes plus a catch-all 404:
+Routing uses **wouter** (`Switch` and `Route` components). `AuthenticatedRouter` mounts six authenticated routes, the signed-out-accessible privacy page, and a catch-all 404:
 
 | Path | Component | Feature Name | Loading |
 |------|-----------|-------------|---------|
-| `/` | `Timeline` | Timeline | Eagerly loaded |
+| `/` | `Timeline` | Timeline | Lazy (`React.lazy`) |
 | `/log` | `LogWorkout` | Log Workout | Lazy (`React.lazy`) |
 | `/analytics` | `Analytics` | Analytics | Lazy (`React.lazy`) |
+| `/review` | `Review` | Weekly Review | Lazy (`React.lazy`) |
+| `/nutrition` | `Nutrition` | Nutrition | Lazy (`React.lazy`) — only mounted when `featureFlags.nutritionEnabled` |
 | `/settings` | `Settings` | Settings | Lazy (`React.lazy`) |
-| `/privacy` | `Privacy` | Privacy | Lazy (`React.lazy`) — accessible signed-out |
+| `/privacy` | `Privacy` | -- | Lazy (`React.lazy`) — accessible signed-out |
 | `*` | `NotFound` | -- | Eagerly loaded |
 
-All routes except the 404 are wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. Lazy-loaded routes are wrapped in a shared `Suspense` boundary that renders a `Loader2` spinner as the fallback.
+`/nutrition` is gated at build time: `featureFlags.nutritionEnabled` (`client/src/lib/featureFlags.ts`) defaults to `true` and is turned off with `VITE_NUTRITION_ENABLED=false`. When it is off the `Route` is never mounted, so the path falls through to the 404.
+
+Every route except `/privacy` and the 404 is wrapped in `FeatureErrorBoundaryWrapper` with a descriptive `featureName` prop. The whole `Switch` sits inside one shared `Suspense` boundary whose fallback is a centred `LoadingSpinner`.
 
 The `Landing` page is also lazy-loaded and rendered outside the authenticated layout when the user is not signed in.
 

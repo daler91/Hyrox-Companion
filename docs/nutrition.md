@@ -82,7 +82,7 @@ before changing anything in this module.
 
 ## 3. Data model
 
-Seven tables, all defined in `shared/schema/tables.ts`. Nutrition values are
+Eight tables, all defined in `shared/schema/tables.ts`. Nutrition values are
 `real` columns on a **per-100g** basis; micronutrients live in a JSONB map.
 
 ```
@@ -98,10 +98,11 @@ nutrition_targets        (versioned calorie/macro goals, by effective_from)
 
 | Table | Purpose | Notable columns / rules |
 |-------|---------|-------------------------|
-| `foods` | Shared reference cache + private custom foods. | `source` ∈ {`usda`,`off`,`custom`}; `*_per_100g` macros; `micros` JSONB; `serving_size_g`; partial-unique on `(source, source_id)`; `createdByUserId` NULL = shared. |
+| `foods` | Shared reference cache + private custom foods. | `source` ∈ {`usda`,`off`,`edamam`,`custom`} in practice (the CHECK also still allows the retired `fatsecret` / `spoonacular`, rendered from `FOOD_SOURCES`); `*_per_100g` macros; `micros` JSONB; `serving_size_g`; partial-unique on `(source, source_id)`; `createdByUserId` NULL = shared. |
 | `food_servings` | Named portions for a food. | `label`, `grams`; lazily filled from USDA portions on first food-detail view. |
 | `food_log_entries` | A single logged food. | `loggedAt` (instant), `logDate` (local day), `quantityG`, `mealType`, `entryMethod` ∈ {`manual`,`barcode`,`nl`,`photo`}; `rawInput` + `parseConfidence` + `pendingReview` for AI provenance. |
 | `nutrition_targets` | Versioned macro/calorie goals. | `calories`, `proteinG`, `carbG`, `fatG`, `effectiveFrom`; insert-only history (one row per `(user, effectiveFrom)`). **No fibre target column.** |
+| `meal_targets` | Versioned **per-meal** macro/calorie goals. | `mealType` ∈ `MEAL_TYPES` (CHECK rendered from the constant), `calories`, `proteinG`, `carbG`, `fatG`, `effectiveFrom`; unique on `(user, mealType, effectiveFrom)` to match `upsertMealTarget`'s delete-then-insert. Surfaced as `DailySummaryResponse.mealTargets` on `GET /summary`. |
 | `food_favorites` | Per-user favourites over the cache. | Unique `(userId, foodId)`. |
 | `recipes` | A custom food + an ingredient breakdown. | `foodId` is the backing `source='custom'` food; macros computed from ingredients so a recipe logs like any food. |
 | `recipe_ingredients` | One ingredient line. | `foodId` (`restrict`), `quantityG`, `position`. |

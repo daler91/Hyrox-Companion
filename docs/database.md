@@ -717,13 +717,13 @@ Current use cases:
 
 ### analytics_results
 
-Durable "last computed result" for the expensive analytics surfaces (Coach Insights and the Race Predictor). Unlike `server_runtime_cache` this is **not** expiry-based -- the row persists until the next recompute so the client can paint the previous result instantly on open (no spinner/blank), and the midnight recompute cron can tell whether a newer workout has landed since it was generated. One row per `(user_id, feature)`, upserted on the unique index. The canonical feature list lives in `ANALYTICS_FEATURES` in `shared/schema/tables.ts`, kept in sync with the check constraint below.
+Durable "last computed result" for the expensive analytics surfaces (Coach Insights, the Race Predictor, Nutrition Insights and the Overview chart analysis). Unlike `server_runtime_cache` this is **not** expiry-based -- the row persists until the next recompute so the client can paint the previous result instantly on open (no spinner/blank), and the midnight recompute cron can tell whether a newer workout has landed since it was generated. One row per `(user_id, feature)`, upserted on the unique index. The canonical feature list lives in `ANALYTICS_FEATURES` in `shared/schema/tables.ts`, kept in sync with the check constraint below.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
 | `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
-| `feature` | text | Not null, CHECK `feature IN ('coach_insights', 'race_prediction')` |
+| `feature` | text | Not null, CHECK `feature IN ('coach_insights', 'race_prediction', 'nutrition_insights', 'overview_analysis')` -- rendered from `ANALYTICS_FEATURES`, pinned by `checkConstraints.test.ts` |
 | `payload` | jsonb | Not null -- the serialized feature result |
 | `generated_at` | timestamp with time zone | Not null, default `now()` |
 | `last_workout_date_at_generation` | date | Nullable -- the athlete's latest logged workout date (YYYY-MM-DD) when this result was generated; the staleness anchor the cron compares against |
@@ -740,9 +740,70 @@ Durable "last computed result" for the expensive analytics surfaces (Coach Insig
 
 Written and read through `AnalyticsResultsStorage` (`server/storage/analyticsResults.ts`); refreshed by the `recompute-analytics` queue job. This durable store is distinct from the in-memory coalesced analytics cache described under [Performance Considerations](#performance-considerations).
 
+### plan_adjustment_proposals
+
+A proposed rewrite of the athlete's upcoming plan, raised by the AI coach rather than applied silently. The `payload` snapshots each change with its baseline so the apply step can detect staleness. `plan_id` is the plan of the *first* change and exists for cascade cleanup, not as an integrity constraint on every change — a proposal may span two plans in a boundary week.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `plan_id` | varchar(255) | Not null, FK → `training_plans.id` ON DELETE CASCADE |
+| `status` | text | Not null, default `'pending'`, CHECK `status IN ('pending','applied','dismissed','superseded','invalidated')` |
+| `summary_message` | text | Not null -- the one-line description shown to the athlete |
+| `user_request` | text | Not null -- the triggering chat message, kept so AI plan writes stay auditable |
+| `payload` | jsonb | Not null -- `PlanAdjustmentProposalPayload`; the changes plus their baselines |
+| `ai_source` | text | Nullable |
+| `created_at` | timestamp with time zone | Not null, default `now()` |
+| `resolved_at` | timestamp with time zone | Nullable -- set when applied or dismissed |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_plan_proposals_user_status` on (`user_id`, `status`) -- serves the pending-proposal lookup
+
+Served by [`GET /api/v1/plan-proposals/pending`](api-reference.md#plan-proposal-routes) and the apply/dismiss routes.
+
+### user_consents
+
+Auditable consent records (GDPR Art. 7(1)/5(2), CCPA). Privacy-notice acknowledgement and the Sentry opt-in previously lived only in the browser's `localStorage` with no server-side trail (review W4). One row per `(user_id, consent_type)` holds the latest decision; `granted` distinguishes accept from reject, so an **opt-out is auditable too**.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `consent_type` | varchar(64) | Not null |
+| `granted` | boolean | Not null -- `false` records a refusal or withdrawal |
+| `consented_at` | timestamp with time zone | Not null, default `now()` |
+| `updated_at` | timestamp with time zone | Not null, default `now()` |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_user_consents_user_type` -- unique on (`user_id`, `consent_type`) -- the upsert target, one latest decision per type
+
+Served by [`GET` / `POST /api/v1/consents`](api-reference.md#consent-routes).
+
+### weekly_reviews
+
+The athlete's stated intent for a week. One row per `(user, week)`, keyed on the local Monday the weekly review is keyed on, so the upsert has a natural conflict target and a week can never hold two competing intents. Deliberately **not** scored against what actually happened: the value is the recall, and grading an athlete against their own aspiration is how a ritual becomes a chore.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `week_start` | date | Not null -- Monday of the week, in the athlete's local calendar |
+| `intent` | text | Nullable -- `NULL` clears the week's line |
+| `created_at` | timestamp with time zone | Not null, default `now()` |
+| `updated_at` | timestamp with time zone | Not null, default `now()` |
+
+**Indexes:**
+- Primary key on `id`
+- `uq_weekly_reviews_user_week` -- unique on (`user_id`, `week_start`) -- the only index needed: it enforces one intent per week *and* serves every read, since the upsert and both review lookups (this week, the week before) query exactly this prefix
+
+Served by [`GET /api/v1/weekly-review` and `POST /api/v1/weekly-review/intent`](api-reference.md#analytics-routes); see [weekly-review-spec.md](weekly-review-spec.md).
+
 ### Nutrition tables
 
-The nutrition module's seven tables — `foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `food_favorites`, `recipes`, and `recipe_ingredients` — are defined in the same `shared/schema/tables.ts` and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model) (including the per-100g storage invariant and the shared-cache visibility rules). Two schema details worth surfacing here:
+The nutrition module's eight tables — `foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `meal_targets`, `food_favorites`, `recipes`, and `recipe_ingredients` — are defined in the same `shared/schema/tables.ts` and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model) (including the per-100g storage invariant and the shared-cache visibility rules). Two schema details worth surfacing here:
 
 - **`foods.source`** is a `varchar(16)` with a CHECK constraint allowing `'usda'`, `'off'`, `'fatsecret'`, `'spoonacular'`, `'edamam'`, and `'custom'`. `(source, source_id)` is partial-unique where `source_id IS NOT NULL`, so custom foods (which have no `source_id`) are exempt. Edamam is the active branded source; `fatsecret` / `spoonacular` remain valid in the constraint but their clients have been deleted, so nothing writes either value (see [env-reference § Nutrition](env-reference.md#nutrition--food-sources)). They stay in the CHECK because narrowing one is a migration that gains nothing.
 - **`food_embeddings`** backs semantic food search and lives on the vector database, created at startup rather than by a Drizzle migration — see [pgvector → Schema Bootstrapping](#schema-bootstrapping).
@@ -1031,8 +1092,12 @@ Each domain class owns a cohesive slice of functionality:
 | `AiUsageStorage` | `server/storage/aiUsage.ts` | AI token usage logging and daily-spend totals |
 | `PushStorage` | `server/storage/push.ts` | Web Push subscription storage |
 | `MafTestStorage` | `server/storage/mafTests.ts` | MAF test results and per-workout MAF analyses (create/update, lookup and delete by workout) |
+| `ConsentStorage` | `server/storage/consent.ts` | Auditable consent decisions (record, read back for a DSAR) |
+| `NutritionStorage` | `server/storage/nutrition.ts` | The nutrition module, delegating to `nutritionFoods.ts`, `nutritionLogs.ts`, `nutritionTargets.ts`, `nutritionFavorites.ts`, `nutritionRecipes.ts` and `nutritionShared.ts` |
+| `PlanProposalStorage` | `server/storage/planProposals.ts` | AI plan-adjustment proposals (pending lookup, apply/dismiss transitions) |
+| `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
 
-Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, and `timelineWindow.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
+Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts` and `raceDayView.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
 
 ### Composed Facade (`server/storage/index.ts`)
 
@@ -1045,6 +1110,7 @@ export const storage: IStorage = {
   users: new UserStorage(),
   workouts,
   plans: new PlanStorage(),
+  planProposals: new PlanProposalStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
   analytics: new AnalyticsStorage(),
@@ -1054,6 +1120,9 @@ export const storage: IStorage = {
   aiUsage: new AiUsageStorage(),
   push: new PushStorage(),
   mafTests: new MafTestStorage(),
+  consent: new ConsentStorage(),
+  nutrition: new NutritionStorage(),
+  weeklyReviews: new WeeklyReviewsStorage(),
 };
 ```
 
@@ -1241,14 +1310,15 @@ for (const ex of exercises) {
 
 ### Summary by Table
 
-**plan_days** (5 indexes -- most heavily indexed):
+**plan_days** (6 indexes):
 - Single-column: `plan_id`, `scheduled_date`, `status`
-- Composite: `(plan_id, week_number)` for week-based queries, `(plan_id, status)` for filtering by plan and completion state
+- Composite: `(plan_id, week_number)` for week-based queries, `(plan_id, status)` for filtering by plan and completion state, `(plan_id, scheduled_date)` for the date-ordered plan read
 
-**workout_logs** (9 indexes):
+**workout_logs** (13 indexes -- most heavily indexed):
 - Single-column: `user_id`, `date`, `plan_day_id`, `plan_id`, `strava_activity_id`, `garmin_activity_id`, `source`
-- Composite: `(user_id, date)` for the most common query pattern (user's workouts by date)
+- Composite: `(user_id, date)` for the most common query pattern (user's workouts by date), `(user_id, started_at)`
 - Partial unique: `(user_id, strava_activity_id)` and `(user_id, garmin_activity_id)` for per-user import dedupe
+- Device-link suggestions (migration 0093): `suggested_plan_day_id`, `suggested_workout_log_id`
 
 **exercise_sets** (6 indexes):
 - Single-column: `workout_log_id`, `plan_day_id`, `exercise_name`
@@ -1262,8 +1332,12 @@ for (const ex of exercises) {
 - Single-column: `material_id`, `user_id`
 - `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding::halfvec(3072) halfvec_cosine_ops` for fast approximate cosine similarity search. Built on the `halfvec` (half-precision) cast because 3072-dim embeddings exceed pgvector's 2000-dim HNSW limit for native `vector`. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
 
-**training_plans**, **coaching_materials**, **custom_exercises** (1 index each):
-- All indexed on `user_id`
+**coaching_materials**, **custom_exercises** (1 index each):
+- Both indexed on `user_id`
+
+**training_plans** (2 indexes):
+- Single-column: `user_id`
+- `uq_training_plans_user_in_flight` -- **partial** unique on (`user_id`) `WHERE generation_status IN ('pending', 'generating')` (migration 0091). One in-flight generation per athlete, so a double-submit cannot start a second AI run. Partial, so finished plans (`ready` / `failed` -- every historical row) are unaffected; the startup stuck-generation sweep keeps a crashed worker from wedging the athlete behind it.
 
 **custom_exercises** also has:
 - Unique composite: `(user_id, name)` to prevent duplicate exercise names per user
@@ -1363,4 +1437,4 @@ The canonical exercise list is defined in `shared/schema/exercises.ts` as `EXERC
 
 ---
 
-See also: [Server -- Storage Layer Usage](server.md), [AI and RAG -- documentChunks](ai-and-rag.md#rag-pipeline), [Architecture -- Schema Pipeline](architecture.md#schema-pipeline)
+See also: [Server -- Storage Layer Usage](server.md), [AI and RAG -- documentChunks](ai-and-rag.md#rag-pipeline), [Architecture -- Schema Pipeline](architecture.md#5-schema-pipeline)

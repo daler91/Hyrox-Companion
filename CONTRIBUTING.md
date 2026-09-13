@@ -23,7 +23,7 @@ See [`docs/env-reference.md`](docs/env-reference.md) for the full environment-va
 1. Fork the project and create a feature branch.
 2. Make the smallest focused change that solves the problem. Match the style, naming, and
    structure of the surrounding code.
-3. Add or update tests for the behavior you change (see [Testing](#testing)).
+3. Add or update tests for the behavior you change (see [Required checks](#required-checks)).
 4. Update documentation when behavior changes (see [Documentation](#documentation)).
 5. Run the checks below and make sure they pass.
 6. Open a pull request describing the behavior change, how you verified it, and any
@@ -42,7 +42,7 @@ Run these locally before pushing; they also run in CI:
 
 Useful additional suites when relevant to your change:
 
-- `pnpm test:smoke` — fast route-registration smoke test for quick pre-push feedback.
+- `pnpm test:smoke` — end-to-end smoke test against the **built** server. It spawns `dist/index.js` and drives it over HTTP, so it needs `pnpm build` and a reachable database first; it is not a quick pre-push check.
 - `pnpm exec vitest run --config vitest.integration.config.ts` — integration tests (require PostgreSQL).
 - `pnpm exec cypress run` — end-to-end tests.
 

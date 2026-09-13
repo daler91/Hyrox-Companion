@@ -342,6 +342,8 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `LOG_LEVEL` | No | Pino log level (default: `"info"`) |
 | `RAG_CHUNK_SIZE` | No | Character count per RAG chunk (default: `600`) |
 | `RAG_CHUNK_OVERLAP` | No | Overlap characters between RAG chunks (default: `100`) |
+| `ENCRYPTION_KEY_V2` | No | Rotation key for `ENCRYPTION_KEY`. When set, new ciphertext is tagged `v2`; the v1 key stays available to decrypt existing rows. Must differ from `ENCRYPTION_KEY` and `CSRF_SECRET`. |
+| `ENCRYPTION_REENCRYPT_ON_BOOT` | No | `"true"` (with `ENCRYPTION_KEY_V2` set) re-encrypts stored Strava/Garmin credentials to the active key version on boot. Default `"false"`. |
 | `CSRF_SECRET` | Yes (production) | Minimum 32 characters, used for CSRF token HMAC. In production it is **required** and **must differ** from `ENCRYPTION_KEY`. Auto-generated per process in dev/test if unset. |
 
 This table covers the variables most relevant to the server runtime. It is not exhaustive -- see [Environment Variables](env-reference.md) for the complete reference, including AI model overrides and feature flags.
@@ -373,40 +375,19 @@ Both pools log unexpected errors on idle clients.
 
 ### Job Queue
 
-pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Four queues are registered:
+pg-boss (`server/queue.ts`) is initialized with the `DATABASE_URL` connection string. Workers are registered for every queue at boot — six in `server/queue.ts`, plus `strava-sync` in `server/services/stravaAutoSync.ts`.
 
-| Queue | Worker | Description |
-|-------|--------|-------------|
-| `auto-coach` | `triggerAutoCoach(userId)` | Runs AI-driven coaching adjustments for a user. Enqueue only through `server/services/autoCoachQueue.ts`, which owns the per-user singleton key that keeps concurrent triggers to one pass. See [AI Coach Auto-Regulation Flow](./ai-coach-auto-regulation-flow.md) for the full trigger list |
-| `embed-coaching-material` | `embedCoachingMaterial(material)` | Generates and stores vector embeddings for coaching documents |
-| `send-weekly-summary` | `processWeeklySummary(...)` | Sends one user's weekly training summary email |
-| `send-missed-reminder` | `processMissedWorkoutReminder(...)` | Sends one user's missed-workout reminder email |
+**The queue catalogue lives in [Integrations → Job Types](integrations.md#job-types)** — name, worker and payload for each. It is not repeated here: this section previously carried a second copy of that table and drifted from it.
 
 Idempotent jobs use `DEFAULT_JOB_OPTIONS` (retry 3× with exponential backoff); the email send jobs use `NO_RETRY_JOB_OPTIONS`, because the "sent" marker is persisted after delivery and a retry would duplicate the email. Each job runs under a 50-minute wall-clock timeout, and in-batch parallelism is bounded to 2. Failed jobs are re-thrown to let pg-boss handle retries.
 
 ### Cron Scheduling
 
-`server/cron.ts` uses `node-cron` for in-process scheduled tasks. Each cron body is wrapped in a PostgreSQL advisory lock so duplicate schedulers skip work instead of running the same maintenance job twice.
+`server/cron.ts` uses `node-cron` for in-process scheduled tasks. Each cron body is wrapped in a PostgreSQL advisory lock (`runCronJobWithLock()`, keyed via `CRON_LOCK_KEYS`) so duplicate schedulers skip work instead of running the same maintenance job twice.
 
-| Job | Schedule | Lock |
-|---|---|---|
-| Email check | Daily at 09:00 UTC | `dailyEmail` |
-| Idempotency cleanup | Daily at 03:30 UTC | `idempotencyCleanup` |
-| AI usage cleanup | Daily at 04:00 UTC | `aiUsageCleanup` |
-| Shared runtime state cleanup | Daily at 04:15 UTC | `sharedRuntimeCleanup` |
-| Stale auto-coach recovery | Every 10 minutes | `staleAutoCoaching` |
-| pg-boss queue-depth telemetry | Every 5 minutes | `queueDepthTelemetry` |
-| Structured exercise health rollup | Daily at 02:10 UTC | `structuredExerciseRollup` |
-| RAG chunk prune | Daily at 03:50 UTC | `ragChunkPrune` |
-| Analytics recompute | Hourly at :05 (fires per user at their local midnight) | `analyticsRecompute` |
-| Account erasure sweep | Hourly at :35 | `accountErasureSweep` |
-| Nutrition push reminders | Hourly at :25 (per-user refuel window + 20:00 local nudge) | `nutritionReminders` |
-| Food embedding backfill | Every 30 minutes (semantic food search only) | `nutritionEmbeddingBackfill` |
-| Strava auto-sync polling scan | Every 15 minutes | `stravaAutoSync` |
-| Strava webhook subscription check | Every 6 hours, plus 30 seconds after boot | `stravaWebhookEnsure` |
-| Startup email catch-up | 30 seconds after late startup | `startupEmailCatchUp` |
+**The schedule catalogue lives in [Integrations → Registered Cron Jobs](integrations.md#registered-cron-jobs)** — expression, timezone and advisory lock for each job. As with the queue table above, the copy that used to sit here drifted from it.
 
-Cron jobs run in-process on each app replica, but each job body is wrapped in a PostgreSQL advisory lock so only one replica performs the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.
+Cron jobs run in-process on **each** app replica; the advisory lock above is what keeps only one of them doing the work. Rate limits use `rate_limit_buckets`, while the Clerk seen-cache and AI/RAG hot caches use `server_runtime_cache`, so `APP_INSTANCE_COUNT > 1` no longer weakens abuse prevention or provider-spend cache behavior.
 
 ### Shared Runtime State
 
@@ -439,4 +420,4 @@ In production (`server/static.ts`):
 
 ---
 
-See also: [Authentication](authentication.md), [Database -- Storage Layer](database.md#storage-layer), [Architecture -- Request Lifecycle](architecture.md#request-lifecycle)
+See also: [Authentication](authentication.md), [Database -- Storage Layer](database.md#storage-layer), [Architecture -- Request Lifecycle](architecture.md#2-request-lifecycle)
