@@ -263,23 +263,31 @@ See [Server -- CSRF Protection](server.md#csrf-protection) for full implementati
 
 ## Account Deletion
 
-**Key file:** `server/routes/account.ts`
+**Key files:** `server/routes/account.ts` (the route) and `server/services/accountErasureService.ts` (the steps). They are separate because the erasure has to be resumable — see the [runbook](operations/account-erasure.md).
 
-The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point. It deliberately sequences Clerk identity removal, Strava deauthorization, DB cascade delete, and auth-cache eviction so that no ordering can leave the user's data partially alive.
+The `DELETE /api/v1/account` endpoint is the GDPR "right to erasure" entry point. It deliberately sequences the erasure marker, the vector-DB purge, Clerk identity removal, Strava deauthorization, DB cascade delete, and auth-cache eviction so that no ordering can leave the user's data partially alive.
 
 ### Order of Operations
 
-1. **Delete the Clerk identity first.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). By deleting Clerk first, subsequent requests are rejected at the auth middleware.
+1. **Stamp `users.erasure_requested_at`.** Written before anything irreversible. Deleting the Clerk identity (step 3) is a point of no return — past it the athlete can no longer authenticate to retry — so a run that dies afterwards leaves this marker for the sweep below to finish.
 
-2. **Clerk 404 is treated as success.** If `clerkClient.users.deleteUser(userId)` throws with `status === 404`, the handler logs `"Clerk user already deleted, continuing with DB cleanup"` and proceeds. This makes the endpoint idempotent for retries where a previous attempt succeeded at Clerk but failed at a later step. Any other Clerk error aborts the request so the DB row is left intact.
+2. **Purge the vector DB.** The user's RAG chunks and their private foods' embeddings live on a separate `vectorPool` database that the main-DB cascade cannot reach, so they are deleted explicitly, fail-loud, before any irreversible step.
 
-3. **Best-effort Strava deauthorization.** `POST https://www.strava.com/oauth/deauthorize` is called with the stored Strava access token. Failures are logged at `warn` and swallowed — the user's data is still deleted. (Garmin requires no equivalent call: `@flow-js/garmin-connect` has no server-side revocation; discarding the tokens is sufficient.)
+3. **Delete the Clerk identity.** If the DB row were deleted before the Clerk identity, the user's next authenticated request would hit `ensureUserExists` and silently re-provision a fresh DB row ("undeleting" the account). By deleting Clerk before the DB row, subsequent requests are rejected at the auth middleware.
 
-4. **Delete the DB user row.** FK `ON DELETE CASCADE` removes every child row: workouts, sets, plans, plan days, chat messages, coaching materials and their embeddings, Strava and Garmin connections, custom exercises, push subscriptions, AI usage logs, idempotency keys, and timeline annotations.
+4. **Clerk 404 is treated as success.** If `clerkClient.users.deleteUser(userId)` throws with `status === 404`, the handler logs `"Clerk user already deleted, continuing with DB cleanup"` and proceeds. This makes the endpoint idempotent for retries where a previous attempt succeeded at Clerk but failed at a later step. Any other Clerk error aborts the request so the DB row is left intact.
 
-5. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
+5. **Best-effort Strava deauthorization.** `POST https://www.strava.com/oauth/deauthorize` is called with the stored Strava access token. Failures are logged at `warn` and swallowed — the user's data is still deleted. (Garmin requires no equivalent call: `@flow-js/garmin-connect` has no server-side revocation; discarding the tokens is sufficient.)
+
+6. **Delete the DB user row and the user's private custom foods, in one transaction.** FK `ON DELETE CASCADE` removes every child row: workouts, sets, plans, plan days, chat messages, coaching materials, Strava and Garmin connections, custom exercises, push subscriptions, AI usage logs, idempotency keys, and timeline annotations. (The coaching-material embeddings are not among them — they were purged in step 2.) Public custom foods survive by explicit opt-in.
+
+7. **Best-effort purges.** The user's rate-limit buckets and any queued pg-boss jobs are removed; neither is FK-linked to `users`, so the cascade leaves them behind.
+
+8. **Evict the auth seen-cache.** `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
 
 Rate-limited to 3 per minute under the `accountDelete` category — enough to retry a transient failure, not enough to mass-delete.
+
+**Stranded runs.** `runStrandedErasureSweep` (hourly cron, advisory lock `accountErasureSweep`) re-runs the same steps for any row still carrying `erasure_requested_at` past a 15-minute threshold. Every step is idempotent, so replaying a partially-completed erasure is safe.
 
 ---
 

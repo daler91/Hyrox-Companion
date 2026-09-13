@@ -160,9 +160,9 @@ The engine is `syncStravaForUser()` in `server/strava.ts`, shared by the manual 
    - **link → workout log** (score ≥ 0.75): the athlete already logged it. The recording is attached to that row, filling only the metric columns that are NULL — nothing the athlete typed is overwritten — and the raw activity plus the list of filled columns is snapshotted into `device_activity` so the link can be undone exactly.
    - **link → plan day** (score ≥ 0.75): not logged yet. The activity becomes the day's log, built the way a manual confirm builds one (`createWorkoutInTx`: prescription text, copied sets and structure, adherence snapshot, day marked completed) with the recording's metrics on top. RPE stays NULL — a watch cannot say how it felt. The plan day's row is locked first, so a confirm racing the sync attaches to the athlete's log instead of creating a second one.
    - **suggest** (0.45 ≤ score < 0.75): imported standalone, with the candidate recorded in `suggested_plan_day_id` / `suggested_workout_log_id` / `suggested_link_confidence` for the timeline to offer as a one-tap link.
-   - **none**: imported standalone, exactly as before.
+   - **none**: imported standalone, with no suggestion attached.
 
-   Standalone rows are batch-inserted via `storage.workouts.createWorkoutLogs()` (`onConflictDoNothing` on the per-user Strava unique index, so a concurrent sync shows up as `skipped` rather than as a duplicate). The thresholds are the one constant `DEFAULT_MATCH_THRESHOLDS`.
+   Standalone rows are batch-inserted via `storage.workouts.createWorkoutLogs()` (`onConflictDoNothing` on the per-user Strava unique index, so a concurrent sync shows up as `skipped` rather than as a duplicate), and each one then gets the single cardio exercise set its recording describes via `storage.workouts.createDeviceActivitySets()` (`server/services/deviceActivitySets.ts`) — roughly half the Analytics tab aggregates sets rather than logs, so without it a Strava-only athlete saw no Running slice and an empty PR list. The thresholds are the one constant `DEFAULT_MATCH_THRESHOLDS`.
 8. The `lastSyncedAt` cursor is updated: to *now* after a complete sync, or — when the page cap was hit — to the newest fetched activity's `start_date`, so the next sync resumes exactly where this one stopped and nothing is ever silently skipped
 
 The response reports `imported` (activities now on the timeline, wherever they landed) broken down into `enriched` (attached to workouts the athlete had logged), `completedPlanDays`, `suggested` and `standalone`, plus `skipped` (already imported, or claimed by a concurrent sync), `total`, and `hasMore` (true when a capped sync left older activities to fetch — the client hints to run Sync again).
@@ -447,7 +447,7 @@ Errors on the queue emit to a global error handler that logs via the application
 #### `auto-coach`
 
 - **Purpose**: Triggers the AI auto-coaching pipeline for a user
-- **Payload**: `{ userId: string }`
+- **Payload**: `{ userId: string, trigger: AutoCoachTrigger }` — enqueued through `server/services/autoCoachQueue.ts`. The `trigger` records why the pass was queued (see [What Triggers A Pass](ai-coach-auto-regulation-flow.md#what-triggers-a-pass)) and is log-only; the worker reads just `userId`.
 - **Worker**: Calls `triggerAutoCoach(userId)` from `server/services/coachService.ts`
 - **On failure**: The error is re-thrown so pg-boss handles retries automatically
 

@@ -105,7 +105,7 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 | Email | `server/routes/email.ts` |
 | AI | `server/routes/ai.ts` |
 | Analytics | `server/routes/analytics.ts` |
-| Workouts | `server/routes/workouts/` (composite router in `index.ts` over the CRUD, AI, export, migration, and timeline sub-route modules) |
+| Workouts | `server/routes/workouts/` (composite router in `index.ts` over the CRUD, AI, device-link, timeline, export, MAF, and migration sub-route modules) |
 | Plans | `server/routes/plans.ts` |
 | Coaching | `server/routes/coaching.ts` |
 | Push | `server/routes/push.ts` |

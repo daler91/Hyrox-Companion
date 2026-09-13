@@ -125,7 +125,7 @@ Implementation: `server/routeUtils.ts` — `rateLimiter(category, maxRequests, w
 
 ## CSRF Protection
 
-All mutating endpoints (POST/PUT/PATCH/DELETE) require a valid CSRF token. The token is obtained via:
+All mutating endpoints (POST/PUT/PATCH/DELETE) require a valid CSRF token, with one exception: [`POST /api/v1/strava/webhook`](#post-apiv1stravawebhook) mounts ahead of the guard because Strava's deliveries carry neither a session cookie nor a token. The token is obtained via:
 
 ### GET /api/v1/csrf-token
 
@@ -225,7 +225,7 @@ Permanently delete the authenticated user's account and all associated data (GDP
 
 ## Workout Routes
 
-**Files:** `server/routes/workouts/` — a composite router (`index.ts`) that mounts `workoutsCrud.routes.ts`, `workoutsAi.routes.ts`, `workoutsTimeline.routes.ts`, `workoutsExport.routes.ts`, and `workoutsMigration.routes.ts`.
+**Files:** `server/routes/workouts/` — a composite router (`index.ts`) that mounts `workoutsCrud.routes.ts`, `workoutsAi.routes.ts`, `workoutsDeviceLink.routes.ts`, `workoutsTimeline.routes.ts`, `workoutsExport.routes.ts`, `workoutsMaf.routes.ts`, and `workoutsMigration.routes.ts`.
 
 ### GET /api/v1/workouts
 
@@ -889,7 +889,7 @@ Calculate weekly training summaries, category totals, station coverage, and week
   ```
 
 - **Previous-window derivation (`computePreviousWindow`):** The previous period is the equal-length, non-overlapping range ending the day before `from`. If `to` is omitted, the current window's upper bound is pinned to midnight UTC of today (not wall-clock `now`) so the previous window doesn't drift across the day. Returns `null` when `from` is absent, and the route responds without `previousStats`.
-- The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the four stat cards.
+- The client's `DeltaIndicator` component renders the percentage change between `currentStats` and `previousStats` for each of the six stat cards.
 
 ### GET /api/v1/race-prediction
 
