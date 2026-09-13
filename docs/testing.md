@@ -491,7 +491,7 @@ pnpm exec vitest run --config vitest.smoke.config.ts
 
 **File:** `test/docs/docsSync.test.ts`
 
-Several doc catalogues are enumerations of things the code registers — pg-boss queues, cron advisory-lock keys, environment variables, storage domains — and each has silently drifted at least once, because nothing fails when someone adds a queue and stops there. Anchors rot the same way: renumbering `architecture.md`'s headings broke four inbound links from other documents. These tests are that failure: add a queue, a cron job, an env var or a storage domain, or point a link at a heading that no longer exists, and the matching test goes red.
+Several doc catalogues are enumerations of things the repo registers — pg-boss queues, cron advisory-lock keys, environment variables, storage domains, schema tables, CI workflows — and each has silently drifted at least once, because nothing fails when someone adds a queue and stops there. Anchors rot the same way: renumbering `architecture.md`'s headings broke four inbound links from other documents. These tests are that failure: add a queue, a cron job, an env var, a storage domain, a table or a workflow, or point a link at a heading that no longer exists, and the matching test goes red.
 
 | Assertion | Canonical doc | Source of truth |
 |---|---|---|
@@ -499,9 +499,11 @@ Several doc catalogues are enumerations of things the code registers — pg-boss
 | Every cron advisory-lock key is listed | `docs/integrations.md` § Registered Cron Jobs | `CRON_LOCK_KEYS` in `server/cron.ts` |
 | Every env var is documented | `docs/env-reference.md` | the Zod schema in `server/env.ts` |
 | Every storage domain is in the documented facade | `docs/database.md` § Composed Facade | the `storage` object in `server/storage/index.ts` |
+| Every schema table is documented | `docs/database.md` § Schema Tables | every `pgTable(...)` under `shared/schema/` |
+| Every CI workflow is listed | `docs/testing.md` § CI/CD Test Workflows | the files in `.github/workflows/` |
 | Every internal doc link and anchor resolves | all `*.md` in the repo | the headings they point at |
 
-The facade assertion compares the two objects property for property, because `database.md` reproduces that exact code block and had drifted from it. The link check uses GitHub's slug rule — lowercase, punctuation dropped, **each** space becoming its own hyphen, so `## Core & Security` is `#core--security` — and covers both relative file paths and `#fragment` anchors.
+The facade assertion compares the two objects property for property, because `database.md` reproduces that exact code block and had drifted from it. The table assertion accepts either of the two ways `database.md` documents a table — its own `### <table>` section, or an inline `` `backticked` `` mention for the nutrition tables covered column-by-column in `nutrition.md` — but deliberately does **not** accept a bare name inside a fenced code block: `exercise_load_tags` went undocumented for exactly that reason, appearing only inside a migration *filename*. The link check uses GitHub's slug rule — lowercase, punctuation dropped, **each** space becoming its own hyphen, so `## Core & Security` is `#core--security` — and covers both relative file paths and `#fragment` anchors.
 
 They parse the source text rather than importing the modules: `server/env.ts` validates the environment and writes to stderr at import, and `server/queue.ts` pulls in pg-boss. Each test also asserts its extractor found a non-zero number of entries, so a regex that stops matching fails loudly instead of passing vacuously.
 
