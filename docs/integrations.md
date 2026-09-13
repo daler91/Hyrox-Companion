@@ -666,4 +666,4 @@ Historical schema-patching steps (defensive `ALTER TABLE` adds for `ai_coach_ena
 
 ---
 
-See also: [Database -- stravaConnections Table](database.md#schema-tables), [Authentication](authentication.md), [Architecture -- Service Dependencies](architecture.md#service-dependencies)
+See also: [Database -- stravaConnections Table](database.md#schema-tables), [Authentication](authentication.md), [Architecture -- Service Dependencies](architecture.md#6-service-dependencies)

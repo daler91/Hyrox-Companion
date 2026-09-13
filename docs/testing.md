@@ -491,13 +491,17 @@ pnpm exec vitest run --config vitest.smoke.config.ts
 
 **File:** `test/docs/docsSync.test.ts`
 
-Three doc catalogues are enumerations of things the server registers — pg-boss queues, cron advisory-lock keys, and environment variables — and each has silently drifted from the code at least once, because nothing fails when someone adds a queue and stops there. These tests are that failure: add a queue, a cron job or an env var and the matching test goes red until the canonical doc lists it.
+Several doc catalogues are enumerations of things the code registers — pg-boss queues, cron advisory-lock keys, environment variables, storage domains — and each has silently drifted at least once, because nothing fails when someone adds a queue and stops there. Anchors rot the same way: renumbering `architecture.md`'s headings broke four inbound links from other documents. These tests are that failure: add a queue, a cron job, an env var or a storage domain, or point a link at a heading that no longer exists, and the matching test goes red.
 
 | Assertion | Canonical doc | Source of truth |
 |---|---|---|
 | Every registered pg-boss queue is listed | `docs/integrations.md` § Job Types | `queue.createQueue(...)` / `queue.work(...)` across `server/` |
 | Every cron advisory-lock key is listed | `docs/integrations.md` § Registered Cron Jobs | `CRON_LOCK_KEYS` in `server/cron.ts` |
 | Every env var is documented | `docs/env-reference.md` | the Zod schema in `server/env.ts` |
+| Every storage domain is in the documented facade | `docs/database.md` § Composed Facade | the `storage` object in `server/storage/index.ts` |
+| Every internal doc link and anchor resolves | all `*.md` in the repo | the headings they point at |
+
+The facade assertion compares the two objects property for property, because `database.md` reproduces that exact code block and had drifted from it. The link check uses GitHub's slug rule — lowercase, punctuation dropped, **each** space becoming its own hyphen, so `## Core & Security` is `#core--security` — and covers both relative file paths and `#fragment` anchors.
 
 They parse the source text rather than importing the modules: `server/env.ts` validates the environment and writes to stderr at import, and `server/queue.ts` pulls in pg-boss. Each test also asserts its extractor found a non-zero number of entries, so a regex that stops matching fails loudly instead of passing vacuously.
 

@@ -450,4 +450,4 @@ The 5-minute stale time prevents redundant API calls when navigating between pag
 
 ---
 
-See also: [Client -- Component Architecture](client.md#component-architecture), [API Reference](api-reference.md), [Architecture -- Request Lifecycle](architecture.md#request-lifecycle)
+See also: [Client -- Component Architecture](client.md#component-architecture), [API Reference](api-reference.md), [Architecture -- Request Lifecycle](architecture.md#2-request-lifecycle)

@@ -1092,8 +1092,12 @@ Each domain class owns a cohesive slice of functionality:
 | `AiUsageStorage` | `server/storage/aiUsage.ts` | AI token usage logging and daily-spend totals |
 | `PushStorage` | `server/storage/push.ts` | Web Push subscription storage |
 | `MafTestStorage` | `server/storage/mafTests.ts` | MAF test results and per-workout MAF analyses (create/update, lookup and delete by workout) |
+| `ConsentStorage` | `server/storage/consent.ts` | Auditable consent decisions (record, read back for a DSAR) |
+| `NutritionStorage` | `server/storage/nutrition.ts` | The nutrition module, delegating to `nutritionFoods.ts`, `nutritionLogs.ts`, `nutritionTargets.ts`, `nutritionFavorites.ts`, `nutritionRecipes.ts` and `nutritionShared.ts` |
+| `PlanProposalStorage` | `server/storage/planProposals.ts` | AI plan-adjustment proposals (pending lookup, apply/dismiss transitions) |
+| `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
 
-Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, and `timelineWindow.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
+Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts` and `raceDayView.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
 
 ### Composed Facade (`server/storage/index.ts`)
 
@@ -1106,6 +1110,7 @@ export const storage: IStorage = {
   users: new UserStorage(),
   workouts,
   plans: new PlanStorage(),
+  planProposals: new PlanProposalStorage(),
   timeline: new TimelineStorage(workouts),
   timelineAnnotations: new TimelineAnnotationsStorage(),
   analytics: new AnalyticsStorage(),
@@ -1115,6 +1120,9 @@ export const storage: IStorage = {
   aiUsage: new AiUsageStorage(),
   push: new PushStorage(),
   mafTests: new MafTestStorage(),
+  consent: new ConsentStorage(),
+  nutrition: new NutritionStorage(),
+  weeklyReviews: new WeeklyReviewsStorage(),
 };
 ```
 
@@ -1302,14 +1310,15 @@ for (const ex of exercises) {
 
 ### Summary by Table
 
-**plan_days** (5 indexes -- most heavily indexed):
+**plan_days** (6 indexes):
 - Single-column: `plan_id`, `scheduled_date`, `status`
-- Composite: `(plan_id, week_number)` for week-based queries, `(plan_id, status)` for filtering by plan and completion state
+- Composite: `(plan_id, week_number)` for week-based queries, `(plan_id, status)` for filtering by plan and completion state, `(plan_id, scheduled_date)` for the date-ordered plan read
 
-**workout_logs** (9 indexes):
+**workout_logs** (13 indexes -- most heavily indexed):
 - Single-column: `user_id`, `date`, `plan_day_id`, `plan_id`, `strava_activity_id`, `garmin_activity_id`, `source`
-- Composite: `(user_id, date)` for the most common query pattern (user's workouts by date)
+- Composite: `(user_id, date)` for the most common query pattern (user's workouts by date), `(user_id, started_at)`
 - Partial unique: `(user_id, strava_activity_id)` and `(user_id, garmin_activity_id)` for per-user import dedupe
+- Device-link suggestions (migration 0093): `suggested_plan_day_id`, `suggested_workout_log_id`
 
 **exercise_sets** (6 indexes):
 - Single-column: `workout_log_id`, `plan_day_id`, `exercise_name`
@@ -1323,8 +1332,12 @@ for (const ex of exercises) {
 - Single-column: `material_id`, `user_id`
 - `idx_document_chunks_embedding_hnsw` — HNSW index on `embedding::halfvec(3072) halfvec_cosine_ops` for fast approximate cosine similarity search. Built on the `halfvec` (half-precision) cast because 3072-dim embeddings exceed pgvector's 2000-dim HNSW limit for native `vector`. Created on boot by `server/maintenance.ts` after the `vector` extension is confirmed, so the index lives on the vector database regardless of migration history.
 
-**training_plans**, **coaching_materials**, **custom_exercises** (1 index each):
-- All indexed on `user_id`
+**coaching_materials**, **custom_exercises** (1 index each):
+- Both indexed on `user_id`
+
+**training_plans** (2 indexes):
+- Single-column: `user_id`
+- `uq_training_plans_user_in_flight` -- **partial** unique on (`user_id`) `WHERE generation_status IN ('pending', 'generating')` (migration 0091). One in-flight generation per athlete, so a double-submit cannot start a second AI run. Partial, so finished plans (`ready` / `failed` -- every historical row) are unaffected; the startup stuck-generation sweep keeps a crashed worker from wedging the athlete behind it.
 
 **custom_exercises** also has:
 - Unique composite: `(user_id, name)` to prevent duplicate exercise names per user
@@ -1424,4 +1437,4 @@ The canonical exercise list is defined in `shared/schema/exercises.ts` as `EXERC
 
 ---
 
-See also: [Server -- Storage Layer Usage](server.md), [AI and RAG -- documentChunks](ai-and-rag.md#rag-pipeline), [Architecture -- Schema Pipeline](architecture.md#schema-pipeline)
+See also: [Server -- Storage Layer Usage](server.md), [AI and RAG -- documentChunks](ai-and-rag.md#rag-pipeline), [Architecture -- Schema Pipeline](architecture.md#5-schema-pipeline)

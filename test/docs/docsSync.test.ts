@@ -84,6 +84,47 @@ function envSchemaKeys(): string[] {
   return [...new Set([...read("server/env.ts").matchAll(/^ {4}([A-Z][A-Z0-9_]+):/gm)].map((m) => m[1]))];
 }
 
+/** Domain names registered on the composed storage facade. */
+function storageDomains(): string[] {
+  const body = /export const storage: IStorage = \{([\s\S]*?)\n\};/.exec(read("server/storage/index.ts"));
+  if (!body) throw new Error("storage facade object not found in server/storage/index.ts");
+  return [...body[1].matchAll(/^\s+([a-zA-Z]+)[,:]/gm)].map((m) => m[1]);
+}
+
+/** Every markdown file in the repo, excluding dependencies. */
+function markdownFiles(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".md")) out.push(full);
+    }
+  };
+  walk(ROOT);
+  return out;
+}
+
+/**
+ * GitHub's heading-anchor slug: lowercase, drop punctuation,each space becomes one
+ * hyphen. Spaces are NOT collapsed — "Core & Security" is `core--security`.
+ */
+function headingAnchors(md: string): Set<string> {
+  const set = new Set<string>();
+  for (const m of md.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)) {
+    const slug = m[1]
+      .toLowerCase()
+      .replace(/`/g, "")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/[^\w\s-]/g, "")
+      .trim()
+      .replace(/ /g, "-");
+    set.add(slug);
+  }
+  return set;
+}
+
 describe("docs stay in sync with the code they enumerate", () => {
   it("integrations.md lists every registered pg-boss queue", () => {
     const doc = read("docs/integrations.md");
@@ -113,5 +154,62 @@ describe("docs stay in sync with the code they enumerate", () => {
 
     const undocumented = keys.filter((k) => !doc.includes(`\`${k}\``));
     expect(undocumented, `Add these variables to docs/env-reference.md: ${undocumented.join(", ")}`).toEqual([]);
+  });
+
+  it("database.md documents every domain on the storage facade", () => {
+    const doc = read("docs/database.md");
+    const domains = storageDomains();
+    expect(domains.length).toBeGreaterThan(0);
+
+    // Compare against the facade block database.md reproduces, property for
+    // property — it is a copy of this exact object and drifted from it before.
+    const documentedBlock = /export const storage: IStorage = \{([\s\S]*?)\n\};/.exec(doc);
+    expect(documentedBlock, "docs/database.md no longer contains the storage facade code block").not.toBeNull();
+    const documented = new Set(
+      [...documentedBlock![1].matchAll(/^\s+([a-zA-Z]+)[,:]/gm)].map((m) => m[1]),
+    );
+
+    const undocumented = domains.filter((d) => !documented.has(d));
+    expect(undocumented, `Add these storage domains to the facade block in docs/database.md: ${undocumented.join(", ")}`).toEqual([]);
+  });
+
+  it("every internal documentation link and heading anchor resolves", () => {
+    const files = markdownFiles();
+    expect(files.length).toBeGreaterThan(0);
+
+    const anchorCache = new Map<string, Set<string> | null>();
+    const anchorsFor = (file: string): Set<string> | null => {
+      if (!anchorCache.has(file)) {
+        anchorCache.set(file, fs.existsSync(file) ? headingAnchors(fs.readFileSync(file, "utf8")) : null);
+      }
+      return anchorCache.get(file) ?? null;
+    };
+
+    const broken: string[] = [];
+    for (const file of files) {
+      const md = fs.readFileSync(file, "utf8");
+      for (const m of md.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+        const target = m[1].trim();
+        if (/^(https?:|mailto:|#!)/.test(target)) continue;
+        const [rel, frag] = target.split("#");
+        const here = path.relative(ROOT, file);
+
+        if (!rel) {
+          const anchors = anchorsFor(file);
+          if (frag && anchors && !anchors.has(frag)) broken.push(`${here} -> #${frag}`);
+          continue;
+        }
+        const abs = path.resolve(path.dirname(file), rel);
+        if (!fs.existsSync(abs)) {
+          broken.push(`${here} -> ${rel} (no such file)`);
+          continue;
+        }
+        if (frag && abs.endsWith(".md")) {
+          const anchors = anchorsFor(abs);
+          if (anchors && !anchors.has(frag)) broken.push(`${here} -> ${rel}#${frag}`);
+        }
+      }
+    }
+    expect(broken, `Broken documentation links:\n  ${broken.join("\n  ")}`).toEqual([]);
   });
 });

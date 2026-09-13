@@ -107,9 +107,14 @@ RateLimit-Reset: 1710500045
 |--------|------|---------|
 | 400 | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV` | Invalid input |
 | 401 | `UNAUTHORIZED` | Missing or invalid auth |
+| 403 | `FORBIDDEN`, `AI_COACH_DISABLED` | Rejected rather than unauthenticated — every CSRF failure lands here |
 | 404 | `NOT_FOUND` | Resource not found |
-| 429 | `RATE_LIMITED` | Rate limit exceeded (includes `Retry-After` header) |
+| 409 | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS` | Conflicts with current state |
+| 412 | `PRECONDITION_FAILED` | A precondition on the request was not met |
+| 413 | `PAYLOAD_TOO_LARGE` | Body exceeded the route's size limit |
+| 429 | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED` | Rate limit exceeded (includes `Retry-After` header), or the AI spend budget is spent |
 | 500 | `INTERNAL_SERVER_ERROR` | Server error |
+| 503 | `AI_FEATURES_DISABLED` | AI is switched off for this deployment (`AI_FEATURES_ENABLED=false`) |
 
 ---
 

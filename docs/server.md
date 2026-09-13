@@ -420,4 +420,4 @@ In production (`server/static.ts`):
 
 ---
 
-See also: [Authentication](authentication.md), [Database -- Storage Layer](database.md#storage-layer), [Architecture -- Request Lifecycle](architecture.md#request-lifecycle)
+See also: [Authentication](authentication.md), [Database -- Storage Layer](database.md#storage-layer), [Architecture -- Request Lifecycle](architecture.md#2-request-lifecycle)
