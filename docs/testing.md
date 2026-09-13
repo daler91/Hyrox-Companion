@@ -174,7 +174,50 @@ Utility functions in `client/src/lib/` and `server/utils/` are tested with strai
 - **`vi.mock()`** -- Used at the module level to replace imports (storage, services, auth middleware).
 - **`vi.fn()`** -- Creates mock functions for individual spies.
 - **`vi.mocked()`** -- Provides typed access to mocked functions for assertions.
-- **`vi.clearAllMocks()`** -- Called in `beforeEach` to reset mock state between tests.
+- **`vi.resetAllMocks()`** -- Called in `beforeEach` to reset mock state between tests.
+
+#### Reset, don't clear, a shared module mock
+
+`vi.clearAllMocks()` only drops call/result history: a `mockResolvedValue()`,
+`mockRejectedValue()` or `mockImplementation()` that one test set on a
+module-level `vi.mock()` stays attached for every test that runs after it. That
+makes the file order-dependent -- it passes in declaration order only because
+the test that sets the value happens to run first, and fails the moment the
+order changes (`vitest run --sequence.shuffle`, a `.only`, a new test inserted
+above). Issue #1710 tracked a long tail of these.
+
+Use `vi.resetAllMocks()` instead, and give each mock its default as
+`vi.fn(impl)` in the `vi.mock()` factory rather than `vi.fn().mockResolvedValue(...)`:
+`mockReset` restores the implementation passed to `vi.fn()`, so the defaults
+survive the reset while per-test overrides do not.
+
+```ts
+vi.mock("../../storage", () => ({
+  storage: {
+    // Restored by resetAllMocks; a test's own override cannot leak onwards.
+    analytics: { getWorkoutLogsByDateRange: vi.fn(async () => []) },
+  },
+}));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+```
+
+The same rule applies to any module-level singleton a test can dirty. Export a
+test-only reset (`__resetHealthCacheForTests()` in `server/bootstrap/health.ts`,
+`__resetToastStateForTests()` in `client/src/hooks/use-toast.ts`) and call it in
+`beforeEach` rather than relying on which test runs first.
+
+### Timeouts
+
+`vitest.config.ts` sets `testTimeout: 15000` and `vitest.setup.ts` sets
+Testing Library's `asyncUtilTimeout` to 3000ms -- both well above what any test
+needs on an idle machine. The headroom is for CPU contention across the suite's
+parallel workers, which has pushed otherwise-instant `findBy*` queries and long
+`userEvent` chains past the 1s/5s defaults. Neither hides a real failure: an
+element that never appears, or a test that genuinely hangs, still fails. Don't
+add per-test retries.
 
 ---
 
