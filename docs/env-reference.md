@@ -41,6 +41,8 @@ Production also requires `CSRF_SECRET`; it must differ from `ENCRYPTION_KEY`. In
 | `DATABASE_URL` | **Required** | — | Server (`server/db.ts`), pg-boss queue. |
 | `VECTOR_DATABASE_URL` | Optional | falls back to `DATABASE_URL` | RAG ingest + retrieval and semantic food search embeddings (`server/vectorDb.ts`; tables created on boot by `server/maintenance.ts`). |
 | `ENCRYPTION_KEY` | **Required** | — | AES-256-GCM for Strava + Garmin tokens at rest (`server/crypto.ts`). |
+| `ENCRYPTION_KEY_V2` | Optional | — | Rotation key for `ENCRYPTION_KEY` (W6). When set, new ciphertext is tagged `v2` and encrypted with this key while `ENCRYPTION_KEY` keeps decrypting existing `v1` data (`server/crypto.ts`). |
+| `ENCRYPTION_REENCRYPT_ON_BOOT` | Optional | `"false"` | `"true"` (and `ENCRYPTION_KEY_V2` set) re-encrypts every stored Strava/Garmin credential to the active key version on boot (`server/services/keyRotation.ts`, invoked from `server/maintenance.ts`). |
 | `CSRF_SECRET` | Required in `production` | per-process random secret in dev/test | `csrf-csrf` middleware (`server/middleware/csrf.ts`). |
 | `TRUST_PROXY` | Optional | `"1"` | Express `app.set("trust proxy", …)` in `server/bootstrap/appConfig.ts`. |
 | `ALLOWED_ORIGINS` | Optional | — | CORS allow-list (`server/index.ts`). Localhost is always allowed. |
@@ -48,10 +50,21 @@ Production also requires `CSRF_SECRET`; it must differ from `ENCRYPTION_KEY`. In
 ### Safety invariants (enforced at startup in `server/env.ts`)
 
 - **Key separation**: `CSRF_SECRET` must differ from `ENCRYPTION_KEY` in every environment. If they match, the server refuses to boot.
-- **Weak-key rejection**: A small set of obvious placeholder keys (all-zeros, `changeme_...`, the CI test key, etc.) is explicitly rejected in production via the `WEAK_ENCRYPTION_KEYS` list in `server/env.ts:11-17`.
+- **Weak-key rejection**: A small set of obvious placeholder keys (all-zeros, `changeme_...`, the CI test key, etc.) is explicitly rejected in production via the `WEAK_ENCRYPTION_KEYS` list in `server/env.ts:15-21`. The same check applies to `ENCRYPTION_KEY_V2`.
+- **Rotation-key separation**: when `ENCRYPTION_KEY_V2` is set it must differ from both `ENCRYPTION_KEY` (an identical rotation key is a no-op that tags ciphertext `v2` with no new material) and `CSRF_SECRET`. If it matches either, the server refuses to boot.
 - **Dev bypass lockout**: `ALLOW_DEV_AUTH_BYPASS=true` combined with `NODE_ENV=production` is a hard fatal — the server refuses to boot.
 - **Live-key / env mismatch**: a `CLERK_PUBLISHABLE_KEY` starting with `pk_live_` while `NODE_ENV` is not `production` is a hard fatal — it catches a deploy that provisioned live Clerk keys but forgot to set `NODE_ENV=production`.
 - **TRUST_PROXY is a three-valued enum**: `"0"` (off — use when Express is exposed directly, rare), `"1"` (trust exactly one hop, correct for Railway and most PaaS), or `"loopback"` (only local reverse proxies). Hardcoding `1` into other deployments where the number of trusted hops changes would let attacker-controlled `X-Forwarded-For` headers drive `req.ip`.
+
+---
+
+### Rotating `ENCRYPTION_KEY` without downtime
+
+1. Generate a fresh key and set it as `ENCRYPTION_KEY_V2`, leaving `ENCRYPTION_KEY` in place. New writes are tagged `v2`; existing `v1` ciphertext still decrypts with the old key.
+2. Set `ENCRYPTION_REENCRYPT_ON_BOOT=true` and redeploy once. The boot sweep re-encrypts stored credentials forward to the active key version.
+3. Set `ENCRYPTION_REENCRYPT_ON_BOOT` back to `"false"`. **Keep both keys configured**: every ciphertext carries the version that produced it (`v1:iv:authTag:ciphertext`), so `v2` rows can only be decrypted while `ENCRYPTION_KEY_V2` is still set. The v1 key may be retired only once the migration is verified complete and nothing references `v1` — and retiring it means removing `ENCRYPTION_KEY`'s old value, never moving the new key into it.
+
+Leave `ENCRYPTION_REENCRYPT_ON_BOOT` at its `"false"` default the rest of the time so a normal deploy never rewrites the credential tables. See the rotation comment in `server/crypto.ts` for the keyring mechanics.
 
 ---
 

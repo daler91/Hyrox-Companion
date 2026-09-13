@@ -1,7 +1,7 @@
 # Technical Debt Registry
 
 > Living document cataloging known technical debt in the Hyrox-Companion codebase.
-> Last audited: 2026-05-29 (marked #22 CSRF resolved — the `csrf-csrf` double-submit middleware was implemented and the entry had gone stale; see docs/CODEBASE_REVIEW_2026-05-29.md L1)
+> Last audited: 2026-05-29 (marked #22 CSRF resolved — the `csrf-csrf` double-submit middleware was implemented and the entry had gone stale; see docs/archived/CODEBASE_REVIEW_2026-05-29.md L1)
 
 ---
 

@@ -196,12 +196,17 @@ land there by accident.
 schedule facts bind hardest at plan generation: cutting it means the generator programs sled
 pushes for a gym with no sled — the exact failure the feature exists to prevent.
 
-**The drift guard is a deliverable.** `mafHr` and `mafTrend` are `TrainingContext` fields
-rendered by _neither_ prompt renderer — a grep across `server/prompts.ts` and `server/prompts/`
-returns nothing. Adding a field to the type is not the same as it reaching the model. Ship a
-co-located `server/prompts/athleteCard.test.ts` asserting the marker and the fact text appear in
-the output of **both** `buildSystemPrompt` (including its zero-workout branch) and
-`buildPromptDataSections`.
+**The drift guard is a deliverable.** `mafHr` and `mafTrend` _were_ `TrainingContext` fields
+rendered by neither prompt renderer — a grep across `server/prompts.ts` and `server/prompts/`
+returned nothing, and `summarizeMafTrend` was costing MAF athletes two DB reads per coach turn to
+feed nothing. **That gap is now closed**: `formatMafContext` (`server/prompts/mafContext.ts`) is a
+shared renderer called by both `buildSystemPrompt` (`server/prompts.ts`, including its
+zero-workout branch) and `buildPromptDataSections` (`server/gemini/suggestionService.ts`), with
+`server/prompts/mafContext.test.ts` co-located beside it.
+
+Follow the same shape for the athlete card, and keep the lesson: adding a field to the type is not
+the same as it reaching the model. Ship a co-located test asserting the marker and the fact text
+appear in the output of **both** assemblers, so the two paths cannot drift apart again.
 
 ---
 
