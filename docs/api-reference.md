@@ -211,11 +211,15 @@ Permanently delete the authenticated user's account and all associated data (GDP
 - **Rate limit:** `accountDelete` category, 3/min
 - **Body:** none
 - **Response:** `{ "success": true }` (or `404 { "error": "User not found", "code": "NOT_FOUND" }`)
-- **Side effects, in order:**
-  1. **Clerk identity is deleted first.** If Clerk returns HTTP 404, the identity is treated as already-deleted (idempotent retry); any other error aborts the request so the DB row is not orphaned. Without this ordering, `ensureUserExists` on the next authenticated request would silently re-provision the account.
-  2. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
-  3. **DB user row is deleted.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `document_chunks`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`.
-  4. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
+- **Side effects, in order** (via `eraseAccount()` in `server/services/accountErasureService.ts`, resumable past its Clerk-delete point of no return — see the [runbook](operations/account-erasure.md)):
+  1. **`users.erasure_requested_at` is stamped** before anything irreversible, then the user's private custom-food ids are captured.
+  2. **RAG chunks and private-food embeddings are purged from the vector DB** (`document_chunks`, `food_embeddings` — neither is reachable by a main-DB FK cascade).
+  3. **Clerk identity is deleted.** If Clerk returns HTTP 404, the identity is treated as already-deleted (idempotent retry); any other error aborts the request so the DB row is not orphaned. Without this ordering, `ensureUserExists` on the next authenticated request would silently re-provision the account.
+  4. **Best-effort Strava deauthorization** — `POST https://www.strava.com/oauth/deauthorize` is called with the stored access token. Failures are logged and ignored (non-fatal).
+  5. **DB user row and private custom foods are deleted in one transaction.** FK `ON DELETE CASCADE` cleans up: `workout_logs`, `exercise_sets`, `training_plans`, `plan_days`, `chat_messages`, `coaching_materials`, `strava_connections`, `garmin_connections`, `custom_exercises`, `push_subscriptions`, `ai_usage_logs`, `idempotency_keys`, and `timeline_annotations`. Public custom foods survive by explicit opt-in.
+  6. **Best-effort purge** of the user's rate-limit buckets, then their queued pg-boss jobs.
+  7. **Auth seen-cache eviction** — `evictUserFromSeenCache(userId)` clears the local and shared 5-minute `ensureUserExists` cache so a stale Clerk session held by another tab or replica cannot re-provision the user within the TTL window.
+- **Stranded runs:** if a run dies after step 3, `runStrandedErasureSweep` (hourly cron) finds the still-stamped row and finishes it — the athlete can no longer authenticate to retry themselves.
 
 ---
 

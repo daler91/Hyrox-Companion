@@ -58,6 +58,7 @@ User accounts and preferences.
 | `push_logging_reminder` | `boolean` | default `false` — opt-in 20:00-local push nudge when nothing has been logged |
 | `last_refuel_reminder_at` | `timestamp` | nullable |
 | `last_logging_reminder_at` | `timestamp` | nullable |
+| `erasure_requested_at` | `timestamp with time zone` | nullable — stamped when [account erasure](operations/account-erasure.md) starts; cleared only by the row itself being deleted |
 | `created_at` | `timestamp` | default `now()` |
 | `updated_at` | `timestamp` | default `now()` |
 

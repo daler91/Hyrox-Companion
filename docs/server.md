@@ -202,7 +202,7 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 
 ### Error Sanitization
 
-The global error handler returns generic `"Internal Server Error"` messages for 500-status errors. Error details (`err.details`) are only included in the response for non-500 errors. All errors are reported to Sentry.
+The global error handler returns generic `"Internal Server Error"` messages for 500-status errors. Error details (`err.details`) are only included in the response for non-500 errors. Only 5xx errors and 429s are reported to Sentry (`shouldReportToSentry()`); every other status is still logged and returned but not sent upstream.
 
 ### Error Handling Flow
 
@@ -216,7 +216,9 @@ sequenceDiagram
     Client->>Express: API Request
     Express->>Handler: After middleware
     Handler-->>Express: throw Error(status, message)
-    Express->>Sentry: captureException(err)
+    alt status >= 500 or status == 429
+        Express->>Sentry: captureException(err)
+    end
     alt status < 500
         Express->>Client: { error: err.message, code, details }
     else status >= 500
