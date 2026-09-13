@@ -13,6 +13,7 @@ export function FallbackErrorBoundary({ error, resetError }: Readonly<FallbackEr
 
   return (
     <div
+      role="alert"
       className="min-h-screen w-full flex items-center justify-center bg-background p-4"
       data-testid="error-boundary-fallback"
     >

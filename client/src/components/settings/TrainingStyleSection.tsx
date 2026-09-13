@@ -287,6 +287,9 @@ export function TrainingStyleSection({
                 placeholder="Age (required)"
                 value={draftMafAgeInput}
                 onChange={(event) => setDraftMafAgeInput(event.target.value)}
+                aria-required="true"
+                aria-invalid={!!mafSetupError}
+                aria-describedby={mafSetupError ? "maf-setup-error-msg" : undefined}
                 data-testid="maf-age-input"
               />
             </div>
@@ -300,7 +303,13 @@ export function TrainingStyleSection({
                 value={draftMafCategoryInput}
                 onValueChange={(value: MafCategoryInput) => setDraftMafCategoryInput(value)}
               >
-                <SelectTrigger id="maf-category-select" data-testid="select-maf-category">
+                <SelectTrigger
+                  id="maf-category-select"
+                  aria-required="true"
+                  aria-invalid={!!mafSetupError}
+                  aria-describedby={mafSetupError ? "maf-setup-error-msg" : undefined}
+                  data-testid="select-maf-category"
+                >
                   <SelectValue placeholder="Which best describes you? (required)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -338,7 +347,7 @@ export function TrainingStyleSection({
               </Select>
             </div>
             {mafSetupError && (
-              <p className="text-sm text-destructive" role="alert">
+              <p id="maf-setup-error-msg" className="text-sm text-destructive" role="alert">
                 {mafSetupError}
               </p>
             )}
