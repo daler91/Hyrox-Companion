@@ -38,10 +38,10 @@ Every number below is stale the moment a test lands, so **derive it, don't trust
 it**. The commands are the source of truth; the figures are only a sanity check,
 measured on `main` at the date given.
 
-| Layer                      | Count (2026-09-06) | How to count it                                                     |
+| Layer                      | Count (2026-09-13) | How to count it                                                     |
 | -------------------------- | ------------------- | -------------------------------------------------------------------- |
-| All Vitest test files      | 442                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
-| Unit/component/route tests | 434                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
+| All Vitest test files      | 468                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
+| Unit/component/route tests | 460                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
 | Integration tests          | 7                   | `rg --files -g '*.integration.test.ts'`                              |
 | Smoke test                 | 1                   | `rg --files -g 'smoke.test.ts'`                                      |
 | Cypress E2E specs          | 12                  | `ls cypress/e2e/*.cy.ts`                                             |

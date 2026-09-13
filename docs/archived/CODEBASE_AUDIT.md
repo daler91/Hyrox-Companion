@@ -1,4 +1,23 @@
+[Back to archive index](README.md) · [Back to docs index](../README.md)
+
 # Hyrox Companion — Deep Codebase Audit (Updated Multi‑Pass Findings)
+
+> **Archived snapshot, ~2026-05-29.** This document carries no date of its own. The date is
+> inferred from its contents: every finding is marked resolved, the latest resolution it records is
+> `RESOLVED (2026-05-29)`, and the newest change it cites is PR #1291. Treat it as a
+> post-remediation summary from around that point, not a current description of the codebase.
+>
+> It sat undated at the repo root, unlinked from anywhere, alongside the dated analyses in
+> [`../`](../README.md) and the reviews in this folder — with nothing to say whether it was
+> current. It was moved here for that reason.
+>
+> **It is cited from code.** 24 inline comments across 21 source files reference it by bare
+> filename and section — `(CODEBASE_AUDIT.md §2)` in `server/middleware/csrf.ts`,
+> `(CODEBASE_AUDIT.md §5)` in `server/ai/circuitBreaker.ts`, and so on. Those citations name the
+> file, not a path, so moving it does not break them; this folder is where you land when you go
+> looking. The numbered sections below (§1 Architecture, §2 Security, §3 Performance,
+> §4 Maintainability, §5 External Integrations) are what they point at. Same arrangement as
+> [`CODEBASE_REVIEW_2026-04-12.md`](CODEBASE_REVIEW_2026-04-12.md), which is cited the same way.
 
 ## Review method
 

@@ -102,9 +102,9 @@ above and the source.
 | [Calculation Correctness Audit](CALCULATION_AUDIT_2026-08-20.md)      | 2026-08-20 — pinned by characterisation tests in [`test/audit/`](../test/audit/README.md) |
 | [Codebase Analysis](CODEBASE_ANALYSIS_2026-07-19.md)                  | 2026-07-19                                                                                |
 | [Codebase Analysis](CODEBASE_ANALYSIS_2026-07-01.md)                  | 2026-07-01                                                                                |
-| [Deep Codebase Audit](../CODEBASE_AUDIT.md)                           | undated; content places it around late May 2026                                           |
 
-Older reviews are in [`archived/`](archived/README.md), which carries its own dated index.
+Anything older lives in [`archived/`](archived/README.md), which carries its own dated index —
+including the undated _Deep Codebase Audit_ that sat unlinked at the repo root until 2026-09-13.
 
 ## Elsewhere in the repo
 
