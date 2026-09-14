@@ -62,7 +62,7 @@ describe("EditableWorkoutTitle", () => {
     await user.click(screen.getByTestId("title-edit"));
     await user.clear(screen.getByTestId("title-input"));
 
-    expect(screen.getByTestId("title-save")).toBeDisabled();
+    expect(screen.getByTestId("title-save")).toHaveAttribute("aria-disabled", "true");
   });
 
   it("ignores unchanged titles", async () => {
@@ -80,7 +80,7 @@ describe("EditableWorkoutTitle", () => {
     const user = userEvent.setup();
     renderTitle({ isSaving: true });
 
-    expect(screen.getByTestId("title-edit")).toBeDisabled();
+    expect(screen.getByTestId("title-edit")).toHaveAttribute("aria-disabled", "true");
     await user.click(screen.getByTestId("title-edit"));
 
     expect(screen.queryByTestId("title-input")).not.toBeInTheDocument();
