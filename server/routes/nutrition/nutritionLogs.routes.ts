@@ -33,14 +33,22 @@ export function registerNutritionLogRoutes(router: Router): void {
     async (req: Request, res: Response) => {
       const userId = getUserId(req);
       const body = req.body as CreateFoodLogInput;
-      const food = await storage.nutrition.getVisibleFoodById(userId, body.foodId);
+      // The food-visibility check and the timezone lookup read unrelated tables
+      // (foods vs. users) with no data dependency between them — the guard below
+      // just skips the createLogEntry write on a 404, it doesn't need tz first.
+      // Fire both in parallel instead of paying two sequential round trips on
+      // every food log (this is the highest-traffic nutrition write route).
+      const [food, tz] = await Promise.all([
+        storage.nutrition.getVisibleFoodById(userId, body.foodId),
+        getUserTimezone(userId),
+      ]);
       if (!food) {
         sendNotFound(res, FOOD_NOT_FOUND);
         return;
       }
 
       const loggedAt = new Date(body.loggedAt);
-      const logDate = getLocalDateStr(loggedAt, await getUserTimezone(userId));
+      const logDate = getLocalDateStr(loggedAt, tz);
       const entry = await storage.nutrition.createLogEntry(userId, {
         foodId: body.foodId,
         quantityG: body.quantityG,
@@ -132,15 +140,19 @@ export function registerNutritionLogRoutes(router: Router): void {
       const userId = getUserId(req);
       const body = req.body as CreateFoodLogBatchInput;
       // Every food must be visible to the user (no cross-user / unknown foods).
+      // Same independent-reads shape as POST /logs above — parallelize.
       const ids = body.items.map((i) => i.foodId);
-      const visible = await storage.nutrition.getVisibleFoodsByIds(userId, ids);
+      const [visible, tz] = await Promise.all([
+        storage.nutrition.getVisibleFoodsByIds(userId, ids),
+        getUserTimezone(userId),
+      ]);
       if (ids.some((id) => !visible.has(id))) {
         sendNotFound(res, FOOD_NOT_FOUND);
         return;
       }
 
       const loggedAt = new Date(body.loggedAt);
-      const logDate = getLocalDateStr(loggedAt, await getUserTimezone(userId));
+      const logDate = getLocalDateStr(loggedAt, tz);
       const created = await storage.nutrition.createLogEntriesBatch(userId, {
         entryMethod: body.entryMethod,
         rawInput: body.rawInput ?? null,
