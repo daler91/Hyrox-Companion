@@ -1,3 +1,4 @@
+import { MessageSquare } from "lucide-react";
 import { forwardRef, type UIEventHandler } from "react";
 
 import { ChatMessage } from "@/components/ChatMessage";
@@ -47,7 +48,7 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
       onApplyProposal,
       onDismissProposal,
     },
-    ref
+    ref,
   ) => {
     return (
       <>
@@ -62,54 +63,72 @@ export const CoachPanelChatArea = forwardRef<HTMLDivElement, CoachPanelChatAreaP
           viewportRef={ref}
           viewportProps={{ onScroll: onViewportScroll }}
         >
-        <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              role={message.role}
-              content={message.content}
-              timestamp={message.timestamp}
-              ragInfo={message.ragInfo}
-            />
-          ))}
-          <SuggestionsList
-            suggestions={pendingSuggestions}
-            applyingId={applyingId}
-            ragInfo={suggestionsRagInfo}
-            onApply={onApplySuggestion}
-            onDismiss={onDismissSuggestion}
-          />
-          {planProposal && onApplyProposal && onDismissProposal && (
-            <PlanProposalCard
-              proposal={planProposal}
-              isApplying={isApplyingProposal}
-              onApply={onApplyProposal}
-              onDismiss={onDismissProposal}
-            />
-          )}
-          {isProcessing && (
-            <div className="flex items-center gap-2 text-muted-foreground" aria-live="polite">
-              <div className="flex gap-1" aria-hidden="true">
-                <span
-                  className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <span
-                  className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <span
-                  className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
-                  style={{ animationDelay: "300ms" }}
-                />
+          <div className="space-y-3" role="log" aria-live="polite" aria-label="Coach conversation">
+            {messages.length === 0 && !isProcessing && (
+              <div
+                className="flex flex-col items-center justify-center gap-3 py-12 text-center text-muted-foreground"
+                data-testid="coach-empty-state"
+              >
+                <div className="rounded-full bg-primary/10 p-3">
+                  <MessageSquare className="h-6 w-6 text-primary" aria-hidden="true" />
+                </div>
+                <div className="space-y-1 px-4">
+                  <p className="text-sm font-medium text-foreground">
+                    Ask anything about your training
+                  </p>
+                  <p className="text-xs">
+                    Use the quick prompts below or type your own question to get started.
+                  </p>
+                </div>
               </div>
-              <span className="text-xs">{processingLabel ?? "Thinking..."}</span>
-            </div>
-          )}
-        </div>
+            )}
+            {messages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                role={message.role}
+                content={message.content}
+                timestamp={message.timestamp}
+                ragInfo={message.ragInfo}
+              />
+            ))}
+            <SuggestionsList
+              suggestions={pendingSuggestions}
+              applyingId={applyingId}
+              ragInfo={suggestionsRagInfo}
+              onApply={onApplySuggestion}
+              onDismiss={onDismissSuggestion}
+            />
+            {planProposal && onApplyProposal && onDismissProposal && (
+              <PlanProposalCard
+                proposal={planProposal}
+                isApplying={isApplyingProposal}
+                onApply={onApplyProposal}
+                onDismiss={onDismissProposal}
+              />
+            )}
+            {isProcessing && (
+              <div className="flex items-center gap-2 text-muted-foreground" aria-live="polite">
+                <div className="flex gap-1" aria-hidden="true">
+                  <span
+                    className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <span
+                    className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <span
+                    className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  />
+                </div>
+                <span className="text-xs">{processingLabel ?? "Thinking..."}</span>
+              </div>
+            )}
+          </div>
         </ScrollArea>
       </>
     );
-  }
+  },
 );
 CoachPanelChatArea.displayName = "CoachPanelChatArea";
