@@ -37,16 +37,19 @@ export function EditableWorkoutTitle({
   }, [isEditing]);
 
   const startEditing = () => {
+    if (isSaving) return;
     setDraft(displayTitle);
     setIsEditing(true);
   };
 
   const cancelEditing = () => {
+    if (isSaving) return;
     setDraft(displayTitle);
     setIsEditing(false);
   };
 
   const saveDraft = () => {
+    if (isSaving || draft.trim().length === 0) return;
     const nextTitle = draft.trim();
     if (!nextTitle) return;
     if (nextTitle !== displayTitle) {
@@ -94,9 +97,9 @@ export function EditableWorkoutTitle({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0"
+                className="h-8 w-8 shrink-0 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                 onClick={saveDraft}
-                disabled={isSaving || draft.trim().length === 0}
+                aria-disabled={isSaving || draft.trim().length === 0}
                 aria-label="Save workout title"
                 data-testid={`${testIdPrefix}-save`}
               >
@@ -115,9 +118,9 @@ export function EditableWorkoutTitle({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0"
+                className="h-8 w-8 shrink-0 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
                 onClick={cancelEditing}
-                disabled={isSaving}
+                aria-disabled={isSaving}
                 aria-label="Cancel title edit"
                 data-testid={`${testIdPrefix}-cancel`}
               >
@@ -145,9 +148,9 @@ export function EditableWorkoutTitle({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0"
+              className="h-7 w-7 shrink-0 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
               onClick={startEditing}
-              disabled={isSaving}
+              aria-disabled={isSaving}
               aria-label="Edit workout title"
               data-testid={`${testIdPrefix}-edit`}
             >
