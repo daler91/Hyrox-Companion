@@ -81,3 +81,6 @@
 ## 2026-09-12 - Wrapping disabled tooltips to retain accessibility
 **Learning:** In Radix UI tooltips, wrapping a `disabled` trigger element (like a `<Button>`) within `<TooltipTrigger asChild>` completely breaks the tooltip's accessibility and hover functionality. The underlying library sets `pointer-events: none` on disabled elements, meaning they don't capture mouse or focus events to display the tooltip content.
 **Action:** Always wrap disabled button triggers in an accessible `<span>` element configured with `tabIndex={isDisabled ? 0 : -1}`. Additionally, append ` {/* NOSONAR */}` to the span to suppress static analysis warnings related to non-interactive elements containing `tabIndex`.
+## 2026-09-13 - Conditional tabIndex for disabled tooltips
+**Learning:** When wrapping disabled tooltips in an accessible span to fix Radix UI's pointer-events issue, hardcoding `tabIndex={0}` creates a frustrating 'double-tabbing' experience for keyboard users when the button is active.
+**Action:** Use conditional logic (e.g. `tabIndex={isDisconnecting ? 0 : -1}`) on the wrapper span to guarantee keyboard users only focus the span when the internal button is actually disabled.
