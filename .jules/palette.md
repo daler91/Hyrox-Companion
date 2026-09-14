@@ -81,3 +81,7 @@
 ## 2026-09-12 - Wrapping disabled tooltips to retain accessibility
 **Learning:** In Radix UI tooltips, wrapping a `disabled` trigger element (like a `<Button>`) within `<TooltipTrigger asChild>` completely breaks the tooltip's accessibility and hover functionality. The underlying library sets `pointer-events: none` on disabled elements, meaning they don't capture mouse or focus events to display the tooltip content.
 **Action:** Always wrap disabled button triggers in an accessible `<span>` element configured with `tabIndex={isDisabled ? 0 : -1}`. Additionally, append ` {/* NOSONAR */}` to the span to suppress static analysis warnings related to non-interactive elements containing `tabIndex`.
+
+## 2026-09-14 - lucide-react 1.43+ already sets aria-hidden on all icons
+**Learning:** While auditing text+icon buttons for missing `aria-hidden` on decorative icons (19 apparent instances across LogSheet, ReviewSurface, BulkDeleteToolbar, etc.), confirmed that lucide-react ≥1.43 renders every icon SVG with `aria-hidden="true"` by default. The explicit `aria-hidden` attributes throughout the codebase are redundant but harmless — omitting them is equally correct. This means an `aria-hidden` audit of lucide icons is a false trail in this codebase.
+**Action:** When auditing `aria-hidden` on icons, check the icon library version first. lucide-react 1.43+ handles it automatically; only custom SVGs or icons from other libraries need manual `aria-hidden`.
