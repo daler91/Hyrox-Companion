@@ -95,12 +95,12 @@ export function GeneratePlanScheduleStep({
       </div>
 
       {daysPerWeek < 7 && (
-        <div className="space-y-2">
-          <Label>
+        <fieldset className="space-y-2 border-0 m-0 p-0">
+          <legend className="text-sm font-medium leading-none">
             Rest Days{" "}
             <span className="text-muted-foreground font-normal">(select {requiredRestDays})</span>
-          </Label>
-          <div className="flex flex-wrap gap-1.5">
+          </legend>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rest day selection">
             {DAY_NAMES.map((day) => (
               <Button
                 key={day}
@@ -116,16 +116,16 @@ export function GeneratePlanScheduleStep({
               </Button>
             ))}
           </div>
-        </div>
+        </fieldset>
       )}
 
       <div className="space-y-2">
-        <Label>Experience Level</Label>
+        <Label htmlFor="experience-level">Experience Level</Label>
         <Select
           value={experienceLevel}
           onValueChange={(value) => onExperienceLevelChange(value as ExperienceLevel)}
         >
-          <SelectTrigger aria-label="Select experience level">
+          <SelectTrigger id="experience-level" aria-label="Select experience level">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
