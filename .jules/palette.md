@@ -1,3 +1,6 @@
 ## 2024-03-24 - Accessibility issue with disabled tooltips
 **Learning:** While wrapping disabled buttons with a <span> and a tabIndex fixes visual tooltips on hover, it creates accessibility flaws because the <span> receives focus but lacks semantic meaning or disabled state, confusing screen readers. Additionally, Radix UI's TooltipTrigger merges ARIA attributes onto the immediate child, so breaking the DOM hierarchy with a span breaks ARIA associations for the inner button.
 **Action:** When making tooltips accessible for disabled buttons, use aria-disabled instead of the native disabled attribute on the button itself. This allows the button to remain focusable and keeps the DOM structure correct for Radix UI, while screen readers correctly announce it as disabled.
+## 2024-05-24 - Accessibility fix for native disabled buttons triggering tooltips
+**Learning:** React Testing Library's `.toBeDisabled()` assertion only checks for the native `disabled` HTML attribute. When converting UI buttons to use `aria-disabled="true"` for better tooltip support and screen reader accessibility, tests that rely on `.toBeDisabled()` will fail.
+**Action:** When updating a component to use `aria-disabled`, you must also update the corresponding tests to check for the attribute using `.toHaveAttribute('aria-disabled', 'true')` instead of `.toBeDisabled()`.
