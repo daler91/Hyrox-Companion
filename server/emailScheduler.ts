@@ -264,14 +264,22 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
   const details: string[] = [];
 
   try {
-    const markedMissed = await storage.plans.markMissedPlanDays();
+    const now = new Date();
+    // ⚡ Bolt Optimization: these three used to await sequentially, but they
+    // touch disjoint data (a plan_days write vs. two differently-filtered
+    // full scans of the users table) with no ordering dependency between
+    // them — the enqueue loop below only runs once all three have settled.
+    // Running them concurrently turns 3 sequential round trips into 1 on
+    // this once-daily cron, which currently scans every user in the app
+    // twice, back to back.
+    const [markedMissed, usersToCheck, dueMafUsers] = await Promise.all([
+      storage.plans.markMissedPlanDays(),
+      storage.users.getUsersWithEmailNotifications(),
+      storage.users.getUsersWithDueMafBaselineTest(now),
+    ]);
     if (markedMissed > 0) {
       logger.info({ context: "email" }, `Marked ${markedMissed} past planned day(s) as missed`);
     }
-
-    const now = new Date();
-    const usersToCheck = await storage.users.getUsersWithEmailNotifications();
-    const dueMafUsers = await storage.users.getUsersWithDueMafBaselineTest(now);
     if (usersToCheck.length === 0 && dueMafUsers.length === 0) {
       return { usersChecked: 0, emailsSent: 0, details: ["No users with email notifications or due MAF tests"] };
     }
