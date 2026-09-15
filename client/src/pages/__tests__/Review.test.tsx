@@ -240,7 +240,7 @@ describe("Review page", () => {
     await waitFor(() => expect(screen.getByTestId("weekly-review-in-progress")).toBeInTheDocument());
     expect(screen.getByTestId("weekly-review-sessions")).toHaveTextContent("Sessions so far");
     // Nothing to review in a week that has not started.
-    expect(screen.getByTestId("weekly-review-next")).toBeDisabled();
+    expect(screen.getByTestId("weekly-review-next")).toHaveAttribute("aria-disabled", "true");
   });
 
   it("pages back a week from the week the server resolved", async () => {
