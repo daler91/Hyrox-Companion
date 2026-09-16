@@ -2,6 +2,7 @@ import type { EnergyBalanceSummary } from "@shared/schema";
 import { Scale } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { ExplanationTooltip } from "@/components/ui/explanation-tooltip";
 
 /**
  * Phase 4 — the day's energy in vs out on the Nutrition day view. "Out" uses
@@ -18,12 +19,22 @@ export function EnergyBalanceCard({ energy }: { readonly energy?: EnergyBalanceS
   const balanceText = `${surplus ? "+" : ""}${energy.balanceKcal}`;
 
   return (
-    <Card data-testid="energy-balance-card" title={energy.explanation}>
+    <Card data-testid="energy-balance-card">
       <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-2">
           <Scale className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <div>
-            <p className="text-sm font-semibold">Energy balance</p>
+            <p className="text-sm font-semibold">
+              Energy balance
+              {energy.explanation && (
+                <ExplanationTooltip
+                  subject="Energy balance"
+                  explanation={energy.explanation}
+                  className="ml-1 align-middle"
+                  testId="energy-explanation"
+                />
+              )}
+            </p>
             <p className="text-xs text-muted-foreground" data-testid="energy-basis">
               {energy.basis === "measured"
                 ? "Training burn from your logged workouts"
