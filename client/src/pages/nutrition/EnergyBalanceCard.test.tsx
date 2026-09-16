@@ -30,6 +30,17 @@ describe("EnergyBalanceCard", () => {
     );
   });
 
+  it("surfaces the explanation via an accessible tooltip, not a title attribute", () => {
+    const energy = makeEnergy();
+    render(<EnergyBalanceCard energy={energy} />);
+
+    const card = screen.getByTestId("energy-balance-card");
+    expect(card).not.toHaveAttribute("title");
+
+    const trigger = screen.getByTestId("energy-explanation");
+    expect(trigger).toHaveAttribute("aria-label", `Energy balance: ${energy.explanation}`);
+  });
+
   it("labels the static fallback as estimated and signs a surplus", () => {
     render(
       <EnergyBalanceCard
