@@ -62,11 +62,23 @@ export function MultiSetTable({ exerciseName, fields, fieldConfig, sets, weightU
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={sets.length <= 1 ? 0 : -1}> {/* NOSONAR */}
-                  <Button size="icon" variant="ghost" onClick={() => onRemoveSet(idx)} disabled={sets.length <= 1} data-testid={`button-remove-set-${idx}`} aria-label={`Remove set ${idx + 1}`}>
-                    <Minus className="h-3 w-3" />
-                  </Button>
-                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={(e) => {
+                    if (sets.length <= 1) {
+                      e.preventDefault();
+                    } else {
+                      onRemoveSet(idx);
+                    }
+                  }}
+                  aria-disabled={sets.length <= 1}
+                  className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                  data-testid={`button-remove-set-${idx}`}
+                  aria-label={`Remove set ${idx + 1}`}
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Remove set</p>

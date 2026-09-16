@@ -1,0 +1,3 @@
+## 2024-05-15 - Improve MultiSetTable button disabled state accessibility
+**Learning:** Found an accessibility issue in `MultiSetTable` where the "Remove set" button is wrapped in a focusable `<span>` when it is disabled to allow Tooltips to trigger. This breaks semantic meaning and ARIA associations because the `<button>` is natively `disabled`.
+**Action:** Changed the `<button>` native `disabled` to `aria-disabled` combined with Tailwind classes (`aria-disabled:opacity-50 aria-disabled:cursor-not-allowed`) to manage visual states while allowing the button to remain focusable and maintain tooltips without wrappers.
