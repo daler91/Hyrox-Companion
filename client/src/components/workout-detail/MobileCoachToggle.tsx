@@ -19,7 +19,7 @@ export function MobileCoachToggle({ onClick, testId, visible }: MobileCoachToggl
       onClick={onClick}
       data-testid={testId}
     >
-      <MessageSquare className="mr-2 h-4 w-4" />
+      <MessageSquare className="mr-2 h-4 w-4" aria-hidden="true" />
       Return to coach chat
     </Button>
   );
