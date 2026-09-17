@@ -1,7 +1,25 @@
 import type { StravaActivitySummary } from "@shared/schema";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { deviceActivitySetRow, deviceActivitySetRows, exerciseNameForSportType } from "./deviceActivitySets";
+vi.mock("../db", () => ({ db: { select: vi.fn() } }));
+vi.mock("../storage", () => ({
+  storage: {
+    workouts: {
+      getStandaloneDeviceLogsWithoutSets: vi.fn(),
+      createDeviceActivitySets: vi.fn(),
+    },
+  },
+}));
+
+import { db } from "../db";
+import { storage } from "../storage";
+import {
+  backfillDeviceActivitySets,
+  deviceActivitySetRow,
+  deviceActivitySetRows,
+  exerciseNameForSportType,
+  listBackfillAthletes,
+} from "./deviceActivitySets";
 import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
 
 const KM: { weightUnit: string; distanceUnit: string } = { weightUnit: "kg", distanceUnit: "km" };
@@ -162,5 +180,81 @@ describe("deviceActivitySetRows", () => {
       ["a", "run"],
       ["c", "swimming"],
     ]);
+  });
+});
+
+// Stubs the users query chain used by listBackfillAthletes: `db.select(...).from(users)`
+// is itself awaitable (all athletes), and gains a `.where(...)` branch when a
+// single athlete is requested.
+function mockUsersQuery(rows: { id: string; weightUnit: string; distanceUnit: string }[]) {
+  const where = vi.fn().mockResolvedValue(rows);
+  const chain = Object.assign(Promise.resolve(rows), { where });
+  const from = () => chain;
+  vi.mocked(db.select).mockReturnValue({ from } as unknown as ReturnType<typeof db.select>);
+  return { where };
+}
+
+describe("listBackfillAthletes", () => {
+  it("returns every athlete's id and unit preferences when no user is given", async () => {
+    mockUsersQuery([
+      { id: "u1", weightUnit: "kg", distanceUnit: "km" },
+      { id: "u2", weightUnit: "lbs", distanceUnit: "miles" },
+    ]);
+
+    const athletes = await listBackfillAthletes();
+
+    expect(athletes).toEqual([
+      { id: "u1", preferences: { weightUnit: "kg", distanceUnit: "km" } },
+      { id: "u2", preferences: { weightUnit: "lbs", distanceUnit: "miles" } },
+    ]);
+  });
+
+  it("filters to a single athlete when a userId is given", async () => {
+    const { where } = mockUsersQuery([{ id: "u1", weightUnit: "kg", distanceUnit: "km" }]);
+
+    const athletes = await listBackfillAthletes("u1");
+
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(athletes).toEqual([{ id: "u1", preferences: { weightUnit: "kg", distanceUnit: "km" } }]);
+  });
+});
+
+describe("backfillDeviceActivitySets", () => {
+  const athlete = { id: "u1", preferences: KM };
+
+  it("reports candidates without writing when apply is false (dry run)", async () => {
+    vi.mocked(storage.workouts.getStandaloneDeviceLogsWithoutSets).mockResolvedValue([
+      importedLog(raw({ id: 1 }), { id: "a" }),
+      importedLog(raw({ id: 2, sport_type: "Workout", type: "Workout" }), { id: "b" }),
+    ]);
+
+    const result = await backfillDeviceActivitySets(athlete, false);
+
+    // Only the describable sport ("Run") makes a set row — "Workout" is a
+    // candidate log but not a writable one.
+    expect(result).toEqual({ candidates: 2, written: 1 });
+    expect(storage.workouts.createDeviceActivitySets).not.toHaveBeenCalled();
+  });
+
+  it("writes the rows and returns the written count when apply is true", async () => {
+    vi.mocked(storage.workouts.getStandaloneDeviceLogsWithoutSets).mockResolvedValue([
+      importedLog(raw({ id: 1 }), { id: "a" }),
+    ]);
+    vi.mocked(storage.workouts.createDeviceActivitySets).mockResolvedValue(1);
+
+    const result = await backfillDeviceActivitySets(athlete, true);
+
+    expect(storage.workouts.createDeviceActivitySets).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ candidates: 1, written: 1 });
+  });
+
+  it("reports zero candidates and skips the write call when there is nothing to backfill", async () => {
+    vi.mocked(storage.workouts.getStandaloneDeviceLogsWithoutSets).mockResolvedValue([]);
+    vi.mocked(storage.workouts.createDeviceActivitySets).mockResolvedValue(0);
+
+    const result = await backfillDeviceActivitySets(athlete, true);
+
+    expect(result).toEqual({ candidates: 0, written: 0 });
+    expect(storage.workouts.createDeviceActivitySets).toHaveBeenCalledWith([]);
   });
 });
