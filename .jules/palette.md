@@ -4,3 +4,6 @@
 ## 2024-05-24 - Accessibility fix for native disabled buttons triggering tooltips
 **Learning:** React Testing Library's `.toBeDisabled()` assertion only checks for the native `disabled` HTML attribute. When converting UI buttons to use `aria-disabled="true"` for better tooltip support and screen reader accessibility, tests that rely on `.toBeDisabled()` will fail.
 **Action:** When updating a component to use `aria-disabled`, you must also update the corresponding tests to check for the attribute using `.toHaveAttribute('aria-disabled', 'true')` instead of `.toBeDisabled()`.
+## 2024-05-15 - Improve MultiSetTable button disabled state accessibility
+**Learning:** Found an accessibility issue in `MultiSetTable` where the "Remove set" button is wrapped in a focusable `<span>` when it is disabled to allow Tooltips to trigger. This breaks semantic meaning and ARIA associations because the `<button>` is natively `disabled`.
+**Action:** Changed the `<button>` native `disabled` to `aria-disabled` combined with Tailwind classes (`aria-disabled:opacity-50 aria-disabled:cursor-not-allowed`) to manage visual states while allowing the button to remain focusable and maintain tooltips without wrappers.
