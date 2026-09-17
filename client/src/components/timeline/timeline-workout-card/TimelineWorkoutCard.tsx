@@ -768,7 +768,7 @@ function MoveEntryMenu({
               {...dragListeners}
               {...dragAttributes}
             >
-              <Move className="h-3.5 w-3.5" />
+              <Move className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </TooltipTrigger>
           <TooltipContent>
@@ -790,7 +790,7 @@ function MoveEntryMenu({
                   onClick={stop}
                   onMouseDown={stop}
                 >
-                  <CalendarClock className="h-3.5 w-3.5" />
+                  <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
             </TooltipTrigger>

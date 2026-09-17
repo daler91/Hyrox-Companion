@@ -151,6 +151,7 @@ export function BarcodeScanner({
                 className="aspect-video w-full object-cover"
                 muted
                 playsInline
+                aria-label="Barcode scanner camera view"
               />
             </div>
           )}

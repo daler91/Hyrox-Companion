@@ -56,9 +56,9 @@ export function CoachPanelHeader({
                   data-testid="button-clear-chat"
                 >
                   {isClearingHistory ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -77,7 +77,7 @@ export function CoachPanelHeader({
                 aria-label="Close coach panel"
                 data-testid="button-close-coach"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
