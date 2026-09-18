@@ -40,7 +40,7 @@ export function ExerciseHeader({ displayLabel, blockLabel, setCount, exerciseNam
         <Tooltip>
           <TooltipTrigger asChild>
             <Button size="icon" variant="ghost" onClick={onRemove} data-testid={`button-remove-${exerciseName}`} aria-label={`Remove ${displayLabel}`}>
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

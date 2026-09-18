@@ -209,7 +209,7 @@ function RecipeBuilderForm({
                       aria-label={`Remove ${ing.name}`}
                       onClick={() => removeIngredient(i)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>

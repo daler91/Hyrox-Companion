@@ -100,7 +100,7 @@ function ReviewRowCard({
                 onClick={onRemove}
                 data-testid={`meal-review-remove-${index}`}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
