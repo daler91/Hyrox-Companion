@@ -1,4 +1,5 @@
 import type { LoadGovernorAcwrZone, TrainingLoadOverview, TrainingMonotonyZone } from "@shared/schema";
+import { memo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -122,7 +123,10 @@ function AcwrTooltip({
   );
 }
 
-export function AcwrTrendChart({
+// ⚡ React.memo prevents expensive Recharts re-renders (chartData filter, yMax
+// scan, LineChart) when the parent re-renders (e.g. useOverviewAnalysis polling)
+// but trainingLoad/explanation are unchanged.
+export const AcwrTrendChart = memo(function AcwrTrendChart({
   trainingLoad,
   explanation,
 }: Readonly<{ trainingLoad: TrainingLoadOverview; explanation?: string }>) {
@@ -245,4 +249,4 @@ export function AcwrTrendChart({
       <ChartExplanation explanation={explanation} />
     </div>
   );
-}
+});
