@@ -58,7 +58,7 @@ export function MyFoodsSection({
                           onClick={() => onEditRecipe(r.id)}
                           data-testid={`button-edit-recipe-${r.id}`}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -78,7 +78,7 @@ export function MyFoodsSection({
                             setPendingDelete({ kind: "recipe", id: r.id, name: r.name })
                           }
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -112,7 +112,7 @@ export function MyFoodsSection({
                           onClick={() => onEditFood(f)}
                           data-testid={`button-edit-food-${f.id}`}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -130,7 +130,7 @@ export function MyFoodsSection({
                           disabled={isDeleting}
                           onClick={() => setPendingDelete({ kind: "food", id: f.id, name: f.name })}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>

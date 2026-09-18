@@ -120,7 +120,7 @@ export function MealSection({
                       onClick={() => onSaveAsRecipe(mealType)}
                       data-testid={`button-save-recipe-${mealType}`}
                     >
-                      <ChefHat className="h-3.5 w-3.5" />
+                      <ChefHat className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -141,7 +141,7 @@ export function MealSection({
                       onClick={() => onEditTarget(mealType)}
                       data-testid={`button-edit-meal-target-${mealType}`}
                     >
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -217,7 +217,7 @@ export function MealSection({
                           {logAgainPending ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <RotateCw className="h-4 w-4" />
+                            <RotateCw className="h-4 w-4" aria-hidden="true" />
                           )}
                         </Button>
                       </TooltipTrigger>
@@ -236,7 +236,7 @@ export function MealSection({
                         onClick={() => onEdit(e)}
                         data-testid={`button-edit-${e.id}`}
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -254,7 +254,7 @@ export function MealSection({
                         disabled={deletingId === e.id}
                         data-testid={`button-delete-${e.id}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>

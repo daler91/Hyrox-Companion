@@ -36,7 +36,7 @@ export function PlanGoalRow({ plan, onEditClick }: Readonly<PlanGoalRowProps>) {
               aria-label="Edit plan goal"
               data-testid="button-edit-goal"
             >
-              <Pencil className="h-3 w-3" />
+              <Pencil className="h-3 w-3" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Edit plan goal</TooltipContent>
