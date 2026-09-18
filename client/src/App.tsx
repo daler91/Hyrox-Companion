@@ -109,7 +109,7 @@ function AuthenticatedLayout() {
   useEmailCheck(isAuthenticated, isAppUserLoaded);
   useDetectTimezone(isAuthenticated, isAppUserLoaded, user?.userTimezone);
   useOfflineDropNotifier();
-  useOfflineQueueFlush();
+  useOfflineQueueFlush(user?.id);
   useFocusMainOnRouteChange();
 
   // Lock html/body/#root so only #main-content scrolls. `overflow: clip`

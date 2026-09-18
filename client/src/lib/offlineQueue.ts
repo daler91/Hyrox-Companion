@@ -21,7 +21,7 @@ export interface DroppedMutationInfo {
   method: string;
   url: string;
   retryCount: number;
-  reason: "max_retries" | "max_age" | "queue_overflow" | "storage_full";
+  reason: "max_retries" | "max_age" | "queue_overflow" | "storage_full" | "wrong_account";
   ageMs: number;
 }
 
@@ -96,6 +96,10 @@ const pendingMutationSchema: z.ZodType<PendingMutation> = z.object({
 const pendingMutationArraySchema = z.array(pendingMutationSchema);
 
 const STORAGE_KEY = "fitai-offline-queue";
+// Tracks which signed-in user last owned the queue, so a shared/kiosk device
+// can't replay one athlete's queued writes into a different athlete's account
+// (the queue itself carries no per-mutation owner — see reconcileQueueOwner).
+const OWNER_KEY = "fitai-offline-queue-owner";
 const MAX_RETRIES = 5;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_QUEUE_SIZE = 100;
@@ -137,8 +141,8 @@ function saveQueue(queue: PendingMutation[]) {
   notifyQueueChanged();
 }
 
-/** Announce every entry in `evicted` as permanently dropped for storage. */
-function notifyDroppedAll(evicted: PendingMutation[]) {
+/** Announce every entry in `evicted` as permanently dropped, for the given reason. */
+function notifyDroppedAll(evicted: PendingMutation[], reason: DroppedMutationInfo["reason"] = "storage_full") {
   const now = Date.now();
   for (const mutation of evicted) {
     notifyDropped({
@@ -146,7 +150,7 @@ function notifyDroppedAll(evicted: PendingMutation[]) {
       method: mutation.method,
       url: mutation.url,
       retryCount: mutation.retryCount ?? 0,
-      reason: "storage_full",
+      reason,
       ageMs: now - mutation.timestamp,
     });
   }
@@ -211,10 +215,38 @@ export function getPendingMutations(): readonly PendingMutation[] {
 export function clearOfflineQueue(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(OWNER_KEY);
   } catch {
     // ignore
   }
   notifyQueueChanged();
+}
+
+/**
+ * Reconcile the queue's stamped owner against the currently signed-in user
+ * before ever flushing. `localStorage` is per-browser, not per-session: if a
+ * device is shared and a prior athlete's session ended without an explicit
+ * sign-out (closed tab, expired session), their queued mutations would
+ * otherwise sit in `fitai-offline-queue` and get silently replayed —
+ * authenticated as whoever signs in next — the moment the app mounts. Any
+ * mismatch drops the stale queue instead of risking a cross-account write.
+ */
+export function reconcileQueueOwner(currentUserId: string | null | undefined): void {
+  if (currentUserId == null) return;
+  try {
+    const storedOwner = localStorage.getItem(OWNER_KEY);
+    if (storedOwner && storedOwner !== currentUserId) {
+      const queue = getQueue();
+      if (queue.length > 0) {
+        notifyDroppedAll(queue, "wrong_account");
+        localStorage.removeItem(STORAGE_KEY);
+        notifyQueueChanged();
+      }
+    }
+    localStorage.setItem(OWNER_KEY, currentUserId);
+  } catch {
+    // Storage unavailable — best-effort only.
+  }
 }
 
 let flushInFlight: Promise<{ synced: number; failed: number; dropped: number }> | null = null;
