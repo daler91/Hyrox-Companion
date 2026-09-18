@@ -10,6 +10,7 @@ const REASON_LABELS: Record<DroppedMutationInfo["reason"], string> = {
   max_age: "it expired after 7 days",
   queue_overflow: "the offline queue was full",
   storage_full: "this device ran out of offline storage",
+  wrong_account: "it was queued by a different account on this device",
 };
 
 /**

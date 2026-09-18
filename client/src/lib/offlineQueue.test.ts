@@ -7,6 +7,7 @@ vi.mock("./queryClient", () => ({
 }));
 
 import {
+  clearOfflineQueue,
   createOfflineMutationId,
   enqueueMutation,
   flushQueue,
@@ -15,6 +16,7 @@ import {
   OFFLINE_QUEUE_CHANGE_EVENT,
   OFFLINE_SYNC_COMPLETE_EVENT,
   onMutationDropped,
+  reconcileQueueOwner,
 } from "./offlineQueue";
 
 const STORAGE_KEY = "fitai-offline-queue";
@@ -279,5 +281,61 @@ describe("offlineQueue", () => {
 
     setItemSpy.mockRestore();
     unsubscribe();
+  });
+
+  describe("reconcileQueueOwner", () => {
+    it("drops a queue left by a different signed-in user instead of letting it replay", () => {
+      const dropped = vi.fn();
+      const unsubscribe = onMutationDropped(dropped);
+
+      enqueueMutation("POST", "/api/v1/workouts", { n: "1" }, { id: "1" });
+      reconcileQueueOwner("user-a");
+      // Simulate the tab closing without an explicit sign-out: the queue and
+      // owner stamp are still on disk when "user-b" next signs in.
+      enqueueMutation("POST", "/api/v1/workouts", { n: "2" }, { id: "2" });
+
+      expect(getPendingCount()).toBe(2);
+
+      reconcileQueueOwner("user-b");
+
+      expect(getPendingCount()).toBe(0);
+      expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "1", reason: "wrong_account" }));
+      expect(dropped).toHaveBeenCalledWith(expect.objectContaining({ id: "2", reason: "wrong_account" }));
+
+      unsubscribe();
+    });
+
+    it("leaves the queue untouched when the same user reconciles again", () => {
+      enqueueMutation("POST", "/api/v1/workouts", { n: "1" }, { id: "1" });
+      reconcileQueueOwner("user-a");
+
+      reconcileQueueOwner("user-a");
+
+      expect(getPendingCount()).toBe(1);
+    });
+
+    it("does nothing for an unknown (not-yet-loaded) user", () => {
+      enqueueMutation("POST", "/api/v1/workouts", { n: "1" }, { id: "1" });
+      reconcileQueueOwner("user-a");
+
+      reconcileQueueOwner(undefined);
+
+      expect(getPendingCount()).toBe(1);
+    });
+
+    it("clearing the queue also forgets its owner, so the next sign-in starts fresh", () => {
+      enqueueMutation("POST", "/api/v1/workouts", { n: "1" }, { id: "1" });
+      reconcileQueueOwner("user-a");
+      clearOfflineQueue();
+
+      const dropped = vi.fn();
+      const unsubscribe = onMutationDropped(dropped);
+      enqueueMutation("POST", "/api/v1/workouts", { n: "2" }, { id: "2" });
+      reconcileQueueOwner("user-b");
+
+      expect(getPendingCount()).toBe(1);
+      expect(dropped).not.toHaveBeenCalled();
+      unsubscribe();
+    });
   });
 });
