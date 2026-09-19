@@ -1039,10 +1039,12 @@ export async function executePlanGeneration(
     const clientSafeMessage = isAppError
       ? error.message
       : "Plan generation failed unexpectedly. Please try again.";
-    logger.error(
-      { err: error, userId, planId },
-      "[planGen] AI plan generation failed",
-    );
+    // planId alone is enough to triage — it resolves to the owning athlete with
+    // one query — so the raw userId is deliberately NOT logged here, keeping the
+    // identifier out of log sinks (the S2 rule the access log already follows).
+    // What remains is the error itself and an opaque plan id.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err: error, planId }, "[planGen] AI plan generation failed");
     await storage.plans.updateGenerationStatus(planId, "failed", clientSafeMessage);
     throw error;
   }

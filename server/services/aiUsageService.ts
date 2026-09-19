@@ -177,6 +177,10 @@ export async function checkAiBudget(userId: string): Promise<BudgetCheck> {
     try {
       const globalCostCents = await getGlobalDailyTotalCents();
       if (globalCostCents >= globalLimitCents) {
+        // Both values are deployment-wide aggregates in cents — a sum across all
+        // users and a configured constant. Neither is attributable to an athlete
+        // and neither is a secret.
+        // bearer:disable javascript_lang_logger_leak
         logger.error(
           { context: "ai-budget", globalCostCents, globalLimitCents },
           "Application-wide AI spend cap reached — denying AI requests for all users",
@@ -193,6 +197,10 @@ export async function checkAiBudget(userId: string): Promise<BudgetCheck> {
       // Fail open on the GLOBAL check only: a transient aggregate-query failure
       // must not take AI down for everyone. The per-user cap below still
       // applies, and the middleware fails closed if that throws.
+      // The only dynamic value is the aggregate query's own error. That query
+      // selects a sum over a time window and binds no athlete data, so a driver
+      // error can name the table but never a user's information.
+      // bearer:disable javascript_lang_logger_leak
       logger.error({ err, context: "ai-budget" }, "Global AI spend check failed; falling back to the per-user cap");
     }
   }
