@@ -58,6 +58,14 @@ if (env.NODE_ENV === "production") {
   if (!env.INTERNAL_ANALYTICS_SECRET) {
     logger.warn({ context: "startup-config" }, "INTERNAL_ANALYTICS_SECRET not set — internal analytics endpoints will reject every request");
   }
+  // Without a global ceiling, total AI spend is bounded only by the per-user
+  // cap times the number of accounts — i.e. it scales with sign-ups.
+  if (env.AI_GLOBAL_DAILY_LIMIT_CENTS === undefined && env.AI_FEATURES_ENABLED !== "false") {
+    logger.warn(
+      { context: "startup-config" },
+      "AI_GLOBAL_DAILY_LIMIT_CENTS not set — AI spend is capped per user ($2/day) but has no application-wide ceiling",
+    );
+  }
 }
 
 const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;
