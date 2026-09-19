@@ -70,10 +70,10 @@ describe("checkSafeOutboundUrl (W2)", () => {
   // (DS137138) is suppressed per case rather than the URLs being rewritten.
   describe("bypass spellings are rejected", () => {
     it.each<[string, string]>([
-      ["http://[::]/", "unspecified IPv6 reaches localhost"], // DevSkim: ignore DS137138
-      ["http://localhost./", "trailing-dot FQDN form"], // DevSkim: ignore DS137138
-      ["http://foo.localhost/", "RFC 6761 reserves the whole .localhost tree"], // DevSkim: ignore DS137138
-      ["http://anything.LOCALHOST/", "subdomain match is case-insensitive"], // DevSkim: ignore DS137138
+      ["http://[::]/", "unspecified IPv6 reaches localhost"], // DevSkim: ignore DS137138,DS162092
+      ["http://localhost./", "trailing-dot FQDN form"], // DevSkim: ignore DS137138,DS162092
+      ["http://foo.localhost/", "RFC 6761 reserves the whole .localhost tree"], // DevSkim: ignore DS137138,DS162092
+      ["http://anything.LOCALHOST/", "subdomain match is case-insensitive"], // DevSkim: ignore DS137138,DS162092
       ["http://100.64.0.1/", "CGNAT 100.64.0.0/10"], // DevSkim: ignore DS137138
       ["http://100.100.100.200/", "Alibaba Cloud instance metadata"], // DevSkim: ignore DS137138
       ["http://100.127.255.255/", "end of CGNAT range"], // DevSkim: ignore DS137138
@@ -94,8 +94,8 @@ describe("checkSafeOutboundUrl (W2)", () => {
       "http://100.128.0.1/", // just above CGNAT — DevSkim: ignore DS137138
       "http://223.255.255.255/", // just below multicast — DevSkim: ignore DS137138
       "http://192.0.2.1/", // TEST-NET-1: unroutable, but not internal — DevSkim: ignore DS137138
-      "https://mylocalhost.example.com/", // not a .localhost subdomain
-      "https://localhost.example.com/", // ditto — the label is a prefix, not the suffix
+      "https://mylocalhost.example.com/", // not a .localhost subdomain — DevSkim: ignore DS162092
+      "https://localhost.example.com/", // ditto — the label is a prefix, not the suffix — DevSkim: ignore DS162092
     ])("%s", (url) => {
       expect(checkSafeOutboundUrl(url).ok).toBe(true);
     });

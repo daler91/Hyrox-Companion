@@ -28,9 +28,10 @@ const REJECTED_HOSTNAMES = new Set<string>(["localhost"]);
  */
 function isLoopbackHostname(hostname: string): boolean {
   const withoutTrailingDot = hostname.endsWith(".") ? hostname.slice(0, -1) : hostname;
-  return (
-    REJECTED_HOSTNAMES.has(withoutTrailingDot) || withoutTrailingDot.endsWith(".localhost")
-  );
+  if (REJECTED_HOSTNAMES.has(withoutTrailingDot)) return true;
+  // Naming localhost here is the whole point of the guard — this is the code
+  // that REJECTS it, not code that reaches for it.
+  return withoutTrailingDot.endsWith(".localhost"); // DevSkim: ignore DS162092
 }
 
 /**
