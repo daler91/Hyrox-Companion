@@ -25,6 +25,7 @@ import { env } from "../../env";
 import { logger } from "../../logger";
 import { getRuntimeCache, runtimeCacheKey, setRuntimeCache } from "../../sharedRuntimeState";
 import { storage } from "../../storage";
+import { sanitizeUserInput } from "../../utils/sanitize";
 import { checkAiBudget } from "../aiUsageService";
 import { getRunPaceRatio } from "./runPace";
 
@@ -90,7 +91,7 @@ function buildPrompt(
 ): string {
   const distLabel = distanceUnit === "miles" ? "ft" : "m";
   const exercises = exerciseSets.slice(0, 30).map((s) => {
-    const parts = [s.exerciseName ?? "exercise"];
+    const parts = [sanitizeUserInput(s.exerciseName ?? "exercise")];
     const dist = s.plannedDistance ?? s.distance;
     const time = s.plannedTime ?? s.time;
     const reps = s.plannedReps ?? s.reps;
@@ -99,11 +100,16 @@ function buildPrompt(
     if (reps) parts.push(`${reps} reps`);
     return `- ${parts.join(" ")}`;
   });
+  // `focus` and the exercise names are athlete-authored free text, so they are
+  // escaped and fenced in <user_input> like every other prompt builder — the
+  // model must not be able to read them as instructions.
   return [
-    `Focus: ${day.focus}`,
-    `Deterministic estimate: ${base.durationMin} min, RPE ${base.rpe ?? "unknown"}`,
+    "<user_input>",
+    `Focus: ${sanitizeUserInput(day.focus)}`,
     "Exercises:",
     ...(exercises.length > 0 ? exercises : ["- (none listed)"]),
+    "</user_input>",
+    `Deterministic estimate: ${base.durationMin} min, RPE ${base.rpe ?? "unknown"}`,
   ].join("\n");
 }
 
@@ -120,6 +126,7 @@ async function refineWithAi(
   exerciseSets: readonly ExerciseSet[],
   distanceUnit: string,
   userId: string,
+  aiCoachEnabled: boolean,
 ): Promise<Refined> {
   const fallback: Refined = {
     durationMin: base.durationMin,
@@ -129,6 +136,14 @@ async function refineWithAi(
   };
 
   if (env.AI_FEATURES_ENABLED === "false") return fallback;
+  // AI processing is opt-in (`users.aiCoachEnabled` defaults to false and is
+  // enforced by server/middleware/aiConsent.ts on every AI route). This
+  // endpoint is intentionally NOT an AI route — the deterministic +
+  // pace-personalized layers must keep working for everyone — so consent is
+  // checked inline here, the same way nutrition semantic search does it.
+  // Without this the "always-on AI nudge" sent plan-day focus text and
+  // exercise rows to the provider for athletes who never opted in.
+  if (!aiCoachEnabled) return fallback;
   try {
     const budget = await checkAiBudget(userId);
     if (!budget.allowed) return fallback;
@@ -207,7 +222,13 @@ export async function getPlannedSessionEstimate(
   }
 
   const signature = buildSignature(day.focus, exerciseSets, structureBlocks, runPaceRatio);
-  const cacheKey = runtimeCacheKey(CACHE_SCOPE, `${planDayId}:${signature}`);
+  // The consent flag is part of the key: a cached AI-refined value must not keep
+  // being served after the athlete turns the AI coach off.
+  const aiCoachEnabled = user?.aiCoachEnabled === true;
+  const cacheKey = runtimeCacheKey(
+    CACHE_SCOPE,
+    `${planDayId}:${aiCoachEnabled ? "ai" : "noai"}:${signature}`,
+  );
   const cached = await getRuntimeCache<PlannedSessionEstimateResponse>(cacheKey).catch(() => undefined);
   if (cached) return cached;
 
@@ -217,6 +238,7 @@ export async function getPlannedSessionEstimate(
     exerciseSets,
     distanceUnit,
     userId,
+    aiCoachEnabled,
   );
   const result: PlannedSessionEstimateResponse = {
     planDayId,

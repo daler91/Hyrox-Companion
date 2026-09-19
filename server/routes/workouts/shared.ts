@@ -28,7 +28,26 @@ function enforceHeartRateConsistency(
 export const createWorkoutRouteSchema = insertWorkoutLogSchema
   .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
+/**
+ * Plan linkage is NOT patchable through the generic workout update.
+ *
+ * `PATCH /api/v1/workouts/:id` scopes the row it updates by userId, but it
+ * never validated the `planDayId` / `planId` *values* in the body — so a
+ * caller could point their own workout at another athlete's plan day. Any
+ * later set edit then ran the adherence recompute
+ * (`recomputeAdherenceIfPlanLinked` → `persistAdherenceSnapshot`), which reads
+ * the prescribed sets for that planDayId with no owner check and writes the
+ * counts back onto the caller's row — a read oracle for someone else's
+ * prescription, plus a cross-tenant FK.
+ *
+ * Linking has a dedicated, ownership-checked route
+ * (`PATCH /api/v1/workouts/:id/plan-day` → `assignWorkoutPlanDay`, which
+ * validates via `getPlanDay(planDayId, userId)`), and that is the only path
+ * the client uses. Omitting the fields here means a stray value is stripped by
+ * Zod rather than persisted.
+ */
 export const updateWorkoutRouteSchema = updateWorkoutLogSchema
+  .omit({ planDayId: true, planId: true })
   .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
 export const assignWorkoutPlanDaySchema = z.object({ planDayId: z.string().min(1).nullable() });

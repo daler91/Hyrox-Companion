@@ -44,8 +44,18 @@ export default defineConfig({
             // navigations to /api/* (destination === "document") must bypass
             // the service worker entirely so the browser can process
             // Content-Disposition downloads natively.
+            //
+            // Cached API bodies are personal data held in Cache Storage keyed by
+            // URL only — there is no per-user partition — so `clearUserLocalData`
+            // (client/src/lib/userLocalData.ts) deletes the whole `api-cache` on
+            // sign-out and on account deletion. Identity and bulk-export
+            // endpoints are excluded outright: they are worthless offline and are
+            // the two that most directly identify the athlete.
             urlPattern: ({ url, request }: { url: URL; request: Request }) =>
-              url.pathname.startsWith("/api/") && request.destination !== "document",
+              url.pathname.startsWith("/api/") &&
+              !url.pathname.startsWith("/api/v1/auth/") &&
+              !url.pathname.startsWith("/api/v1/export") &&
+              request.destination !== "document",
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",

@@ -135,6 +135,21 @@ describe("Workouts Routes", () => {
     expect(clearRes.status).toBe(200);
   });
 
+  it("strips plan linkage from the generic workout PATCH so it cannot point at another athlete's plan day", async () => {
+    const { updateWorkoutUseCase } = await import("../../services/workoutUseCases");
+    vi.mocked(updateWorkoutUseCase).mockClear();
+
+    const res = await request(app)
+      .patch("/api/v1/workouts/workout-1")
+      .send({ notes: "edited", planDayId: "victim-day", planId: "victim-plan" });
+
+    expect(res.status).toBe(200);
+    const payload = vi.mocked(updateWorkoutUseCase).mock.calls[0][0].payload as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("planDayId");
+    expect(payload).not.toHaveProperty("planId");
+    expect(payload).toMatchObject({ notes: "edited" });
+  });
+
   it("rejects a plan-day assignment with a missing/invalid body and 404s when the workout is gone", async () => {
     const { assignWorkoutPlanDayUseCase } = await import("../../services/workoutUseCases");
 
