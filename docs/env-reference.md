@@ -15,7 +15,7 @@ You only need two variables to start the server locally:
 | `DATABASE_URL` | Any reachable Postgres connection string (with `pgvector` installed). |
 | `ENCRYPTION_KEY` | 32+ char hex string. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
-Production also requires `CSRF_SECRET`; it must differ from `ENCRYPTION_KEY`. In development/test, omitting it makes the CSRF middleware generate a random per-process fallback. Everything else is optional and gates a specific feature (Clerk auth, AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
+Production also requires `CSRF_SECRET` (which must differ from `ENCRYPTION_KEY`) and, when Strava is configured, `STRAVA_STATE_SECRET`. In development/test, omitting it makes the CSRF middleware generate a random per-process fallback. Everything else is optional and gates a specific feature (Clerk auth, AI providers, Strava sync, Resend email, Web Push, Sentry, etc.).
 
 ---
 
@@ -124,7 +124,7 @@ Create an app at [Strava Developers](https://www.strava.com/settings/api).
 |---|---|---|---|
 | `STRAVA_CLIENT_ID` | Optional | — | OAuth client id. Required for the integration. |
 | `STRAVA_CLIENT_SECRET` | Optional | — | OAuth client secret. |
-| `STRAVA_STATE_SECRET` | Optional | auto-generated at boot | 32+ char secret used to sign OAuth `state`. Setting it keeps signatures stable across restarts. |
+| `STRAVA_STATE_SECRET` | **Required in `production`** when `STRAVA_CLIENT_ID` is set | auto-generated per process in dev/test | 32+ char secret used to sign OAuth `state`. The per-process fallback is fine for a single dev process but breaks in production: each replica signs with a different key, so a callback routed to another instance fails verification. The server refuses to boot without it rather than leaving an intermittent, load-balancer-dependent OAuth failure. |
 | `APP_URL` | Optional | `http://localhost:5000` | Base URL for the OAuth redirect (`${APP_URL}/api/v1/strava/callback`) and the webhook callback (`${APP_URL}/api/v1/strava/webhook`). The push subscription is only registered when this is a public `https://` origin. |
 | `STRAVA_AUTO_SYNC_ENABLED` | Optional | `true` | Master switch for automatic sync (webhook push, polling fallback, post-connect import). `false` leaves only the manual Sync button. |
 | `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | Optional | `60` | Polling fallback: how stale a connection's cursor may get before it is re-synced (minimum 5). Each connected athlete costs about `1440 / interval` Strava reads a day out of the app's 1,000/day budget; raise it as the athlete base grows. |

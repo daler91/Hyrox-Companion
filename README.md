@@ -84,13 +84,14 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 - **AI consent gate** - AI coach features are opt-in through `aiCoachEnabled`; new users default to disabled.
 - **Runtime AI kill switch** - Operators can disable AI provider traffic with `AI_FEATURES_ENABLED=false`.
-- **Account deletion** - `DELETE /api/v1/account` removes Clerk identity data where possible and cascade-deletes user-owned app records.
+- **Account deletion** - `DELETE /api/v1/account` removes Clerk identity data where possible and cascade-deletes user-owned app records, including the separate vector database and this device's cached API responses and local snapshots.
 - **Privacy page** - A first-party privacy page lists third-party processors and the data each receives.
+- **Error telemetry scrubbing** - Sentry is gated on the privacy notice plus a per-user opt-out, and both the server and client strip request bodies, query strings and identifying fields before anything is sent.
 
 ### PWA & Offline
 
-- **Installable app** - Vite PWA and Workbox provide installability and offline-aware behavior.
-- **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured.
+- **Installable app** - Vite PWA and Workbox provide installability and offline-aware behavior. Cached API responses are purged on sign-out, so a shared device does not leak one athlete's data to the next.
+- **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured, capped at 10 devices per athlete.
 - **Offline feedback** - The client surfaces offline/drop notifications so failed interactions are visible.
 
 ---
@@ -127,14 +128,18 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Security and Reliability
 
-- Helmet security headers and production CSP support
+- Helmet security headers with a nonce-based production CSP
 - CORS allowlist with credentials
 - CSRF protection through a double-submit cookie flow
 - Server-side idempotency for mutating API requests with `X-Idempotency-Key`
-- AES-256-GCM encryption for Strava and Garmin credentials/tokens
-- Rate limiting on sensitive and high-cost endpoints
-- HTML sanitization for AI-generated content
-- Startup env validation for production-only invariants such as `CSRF_SECRET`, weak key rejection, and auth bypass lockout
+- AES-256-GCM encryption for Strava and Garmin credentials/tokens, with a versioned keyring for zero-downtime key rotation
+- Rate limiting on every authenticated endpoint, backed by Postgres so limits hold across replicas
+- Per-user and application-wide AI spend caps, on top of the consent gate and kill switch
+- SSRF guards on every outbound URL the app does not hard-code, checked again at send time
+- HTML sanitization for AI-generated content, and prompt-injection escaping for user text in both user turns and system instructions
+- Startup env validation for production-only invariants such as `CSRF_SECRET`, `STRAVA_STATE_SECRET`, weak key rejection, and auth bypass lockout
+
+The most recent review is [`docs/SECURITY_AUDIT_2026-09-19.md`](docs/SECURITY_AUDIT_2026-09-19.md), which records what was found, what was fixed, and the handful of items deliberately left alone with reasons.
 
 ### Shared
 

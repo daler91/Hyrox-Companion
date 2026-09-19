@@ -113,9 +113,14 @@ RateLimit-Reset: 1710500045
 | 409 | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state |
 | 412 | `PRECONDITION_FAILED` | A precondition on the request was not met |
 | 413 | `PAYLOAD_TOO_LARGE` | Body exceeded the route's size limit |
-| 429 | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED` | Rate limit exceeded (includes `Retry-After` header), or the AI spend budget is spent |
+| 429 | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED` | Rate limit exceeded (includes `Retry-After` header), or this user's AI spend budget is spent |
 | 500 | `INTERNAL_SERVER_ERROR` | Server error |
-| 503 | `AI_FEATURES_DISABLED` | AI is switched off for this deployment (`AI_FEATURES_ENABLED=false`) |
+| 503 | `AI_FEATURES_DISABLED`, `AI_GLOBAL_BUDGET_EXCEEDED`, `AI_BUDGET_UNAVAILABLE` | AI is switched off for this deployment (`AI_FEATURES_ENABLED=false`), the application-wide AI spend ceiling is reached, or the budget check itself is unavailable |
+
+`AI_GLOBAL_BUDGET_EXCEEDED` is deliberately a 503 rather than the 429 used for a
+personal quota: it is a deployment-wide capacity condition that the caller did
+not cause and cannot clear by waiting out their own allowance. See
+[AI budget enforcement](./ai-and-rag.md#cost-controls).
 
 ---
 
@@ -128,6 +133,10 @@ Rate limits are applied per-user (keyed by Clerk userId) and namespaced by categ
 - **Response on limit:** `429` with `Retry-After` header and `RATE_LIMITED` code
 - **Headers:** Standard `RateLimit-*` headers (RFC 6585)
 - **Storage:** PostgreSQL-backed `rate_limit_buckets`, shared across app replicas outside tests
+- **Coverage:** every authenticated `/api/v1` route carries a limiter. Reads fail
+  **open** if the Postgres store errors (a store blip must not 500 the read
+  surface); everything else — every mutation, and so every auth, AI-spend and
+  write route — fails **closed**.
 
 Implementation: `server/routeUtils.ts` — `rateLimiter(category, maxRequests, windowMs)`
 
@@ -294,6 +303,7 @@ Create a new workout log, optionally with parsed exercises and/or structure bloc
 - **Rate limit:** `workout` category, 40/min
 - **Body:** `InsertWorkoutLog` fields + optional `exercises: ParsedExercise[]` + `structureBlocks`
 - **Validation:** `createWorkoutRouteSchema` (`insertWorkoutLogSchema` extended with `exercisesPayloadSchema` + `structureBlocksPayloadSchema`)
+- **Server-owned fields:** `source`, `stravaActivityId`, `garminActivityId` and `startedAt` are stripped from the body. They mark a workout as a device import and are written only by the activity sync and the device-link routes, so accepting them from a client would let a manual log present itself as a Strava or Garmin recording. `planId` is likewise always derived: the server resolves plan linkage from `planDayId` (ownership-checked) or from the plan covering the workout's date, and a client-supplied `planId` is discarded.
 - **Side effects:** If user has AI coach enabled, sets `isAutoCoaching` flag and queues an `auto-coach` job. A text-only write guard (`rejectTextOnlyWriteIfNeeded`) may reject the request when structured exercise data is required.
 - **Response:** Created `WorkoutLog` with expanded `exerciseSets`
 
@@ -382,6 +392,15 @@ Update an existing workout log.
 - **Validation:** `updateWorkoutRouteSchema`
 - **Response:** Updated `WorkoutLog`
 
+`planDayId` and `planId` are **not** accepted here; use
+[`PATCH /api/v1/workouts/:id/plan-day`](#patch-apiv1workoutsidplan-day), which
+checks that the target day belongs to the caller. This route scopes the row it
+writes by `userId` but never validated the linkage *values*, so a caller could
+point their own workout at another athlete's plan day — and the adherence
+recompute that follows a set edit reads the prescribed sets for that day with no
+owner check, writing the counts back onto the caller's row. The device-provenance
+fields listed under `POST /api/v1/workouts` are stripped here too.
+
 ### DELETE /api/v1/workouts/:id
 
 Delete a workout log and its exercise sets. The record graph is snapshotted into the [recycle bin](#recycle-bin-routes) first, so the delete can be undone for 90 days.
@@ -433,6 +452,11 @@ Attach workout log `:id` to a plan day, move it to a different one, or detach it
 - **Body:** `{ planDayId: string | null }` — `null` detaches
 - **Response:** the updated `WorkoutLog`
 - **Errors:** `400` (validation), `404` (workout not found)
+
+This is the **only** way to change a workout's plan linkage. The target day is
+resolved with `getPlanDay(planDayId, userId)`, so a day belonging to another
+athlete reads as not found; `planId` is then derived from the day rather than
+taken from the request.
 
 ### POST /api/v1/workouts/:id/device-link
 
@@ -628,6 +652,7 @@ MAF test history and compliance trend, for the trend charts and the coach.
 List all training plans for the current user.
 
 - **Auth:** Required
+- **Rate limit:** `planRead` category, 60/min
 - **Response:** `TrainingPlan[]`
 
 ### GET /api/v1/plans/:id
@@ -635,6 +660,7 @@ List all training plans for the current user.
 Get a training plan with all its days.
 
 - **Auth:** Required
+- **Rate limit:** `planRead` category, 60/min
 - **Response:** `TrainingPlanWithDays`
 
 ### POST /api/v1/plans/import
@@ -675,6 +701,12 @@ Poll the status of an asynchronous plan generation.
 - **Auth:** Required
 - **Rate limit:** `planStatus` category, 60/min
 - **Response:** `{ planId: string, generationStatus: "pending" | "generating" | "ready" | "failed", error?: string }` (404 when the plan is not found)
+- **`error` is a client-safe message, never a raw exception.** Only messages from
+  the app's own `AppError` (already written for users) are surfaced; anything
+  else — provider, database driver or HTTP-layer text, which can name internal
+  hosts, models or query fragments — is replaced with a generic
+  "Plan generation failed unexpectedly. Please try again." The full error still
+  goes to the logs and Sentry, which is where triage happens.
 
 ### PATCH /api/v1/plans/:id
 
@@ -717,9 +749,17 @@ Update a plan day scoped to its parent plan.
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
-- **Body:** Partial `UpdatePlanDay` (focus, mainWorkout, accessory, notes, status, scheduledDate)
-- **Validation:** `updatePlanDaySchema`
+- **Body:** Partial plan day (focus, mainWorkout, accessory, notes, scheduledDate, expectedDurationMin, expectedRpe, plannedTimeOfDayMin)
+- **Validation:** `updatePlanDayRouteSchema`
 - **Response:** Updated `PlanDay`
+
+`status` and `skipReason` are **not** accepted here — use
+[`PATCH /api/v1/plans/days/:dayId/status`](#patch-apiv1plansdaysdayidstatus),
+which enforces the legal status transitions. The AI-provenance columns
+(`aiSource`, `aiRationale`, `aiInputsUsed`, `aiNoteUpdatedAt`) are server-managed
+and are likewise rejected; writing `aiNoteUpdatedAt` directly would have let a
+client bypass the coach-note regeneration cooldown. `updatePlanDaySchema`
+remains the internal write surface used by the coach and suggestion services.
 
 ### PATCH /api/v1/plans/days/:dayId
 
@@ -727,7 +767,7 @@ Update a plan day with cleanup (unlinks workout logs when changing status away f
 
 - **Auth:** Required
 - **Rate limit:** `planDayUpdate` category, 20/min
-- **Body:** Partial `UpdatePlanDay`
+- **Body:** Same client-writable fields as the scoped route above (`updatePlanDayRouteSchema`)
 - **Response:** Updated `PlanDay`
 
 ### PATCH /api/v1/plans/days/:dayId/status
@@ -1132,7 +1172,13 @@ Parse a photo of a workout plan (whiteboard, printout, screenshot) into structur
 - **Rate limit:** `parse` category, 5/min (shared budget with text parsing)
 - **AI gates:** `aiConsentCheck`, `aiBudgetCheck`
 - **Body:** `{ imageBase64: string, mimeType: "image/jpeg" | "image/png" | "image/webp" }`
+- **Validation:** `parseExercisesFromImageRequestSchema` — enforces the mime-type enum, a 10MB cap on the base64 string, **and that the decoded leading bytes actually match the declared type** (JPEG `FF D8 FF`, PNG `89 50 4E 47 0D 0A 1A 0A`, WebP `RIFF....WEBP`). Without the byte check a mislabelled or non-image payload was billed for and forwarded to the vision model before anything noticed. A payload that is not valid base64 is rejected the same way. The client re-encodes every upload to JPEG through a canvas and strips the data-URL prefix, so real uploads are unaffected.
 - **Response:** Same `ParsedExercise[]` shape as `/api/v1/parse-exercises`.
+
+The same schema — and therefore the same byte check — guards every image route:
+`/parse-workout-structure-from-image`, `/workouts/:id/reparse-from-image`,
+`/plans/days/:dayId/reparse-from-image`, and the nutrition photo and label
+parsers.
 
 ### POST /api/v1/parse-workout-structure-from-image
 
@@ -1225,8 +1271,8 @@ Save a chat message to history.
 
 - **Auth:** Required
 - **Rate limit:** `chatMessage` category, 20/min
-- **Body:** `{ userId: string, role: "user" | "assistant", content: string (1-50000 chars) }`
-- **Validation:** `insertChatMessageSchema`
+- **Body:** `{ role: "user" | "assistant", content: string (1-50000 chars) }`
+- **Validation:** `insertChatMessageSchema` — `role` is an enum and `content` is length-bounded. The underlying column is a bare `varchar(20)`, so before these constraints any short string was accepted and later replayed into the model's context; the client legitimately persists both its own turn and the assistant reply it streamed, and nothing else. A `userId` in the body is ignored: the server always takes it from the session.
 - **Response:** Saved `ChatMessage`
 
 ### DELETE /api/v1/chat/history
@@ -1424,6 +1470,7 @@ The user's recorded consent decisions — the read behind a DSAR.
 Get the current user's preferences.
 
 - **Auth:** Required
+- **Rate limit:** `preferencesRead` category, 60/min
 - **Response:** Serialized preferences — `{ weightUnit, distanceUnit, weeklyGoal, emailNotifications, emailWeeklySummary, emailMissedReminder, showAdherenceInsights, aiCoachEnabled, trainingStyleId, trainingStylePreviousId, trainingStyleChangedAt, trainingStyleRecomputeNow, onboardingCompleted, mafAge, mafInjuryIllnessMedication, mafConsistency, mafTrend, mafHrDataAvailable, mafHr, mafBaselineTestScheduledAt }` plus two derived fields: `planWeeklyDensity` (the active plan's per-week density — a real number to 2 dp, e.g. `2.5` for a 10-day plan over 4 weeks — or `null`) and `weeklyGoalExceedsPlan` (boolean hint when the user's `weeklyGoal` exceeds that density).
 
 ### PATCH /api/v1/preferences
@@ -1490,12 +1537,17 @@ Return the server's VAPID public key so the client can call `PushManager.subscri
 
 ### POST /api/v1/push/subscribe
 
-Persist a `PushSubscription` for the authenticated user. Multiple endpoints per user are allowed (one per device).
+Persist a `PushSubscription` for the authenticated user. Multiple endpoints per user are allowed (one per device), capped at **10**; past that the oldest rows are evicted rather than the new registration refused, so replacing devices never locks an athlete out of notifications.
 
 - **Auth:** Required
 - **Rate limit:** `push` category, 10/min
-- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }`
+- **Body:** `{ endpoint: string, keys: { p256dh: string, auth: string } }` — `endpoint` must be HTTPS and must pass the [SSRF guard](../server/ssrfGuard.ts), since the server later POSTs to it
 - **Response:** `{ success: true }`
+
+The cap matters because each row is an arbitrary URL the server will send requests
+to: an unbounded list would turn `POST /api/v1/push/test` into a way to fan out
+requests to many third-party hosts. See `MAX_PUSH_SUBSCRIPTIONS_PER_USER` in
+`server/storage/push.ts`.
 
 ### DELETE /api/v1/push/unsubscribe
 
@@ -1525,6 +1577,7 @@ Dispatch a test notification to every registered subscription for the authentica
 Check if the current user has a Strava connection.
 
 - **Auth:** Required
+- **Rate limit:** `stravaStatus` category, 60 per 15 minutes
 - **Response:** `{ connected: boolean, athleteId?: string, lastSyncedAt?: string, requiresReauth?: boolean, autoSync: { enabled: boolean, webhook: boolean, intervalMinutes: number } }` — `requiresReauth: true` means Strava rejected our stored credentials (the user revoked the app on strava.com); the client should offer a Reconnect flow. `autoSync` describes how the deployment keeps Strava current without the Sync button (see [Integrations → Automatic Sync](integrations.md#automatic-sync)): `webhook` is true once the push subscription is verified, otherwise the polling fallback runs every `intervalMinutes`.
 
 ### GET /api/v1/strava/auth
@@ -1561,6 +1614,7 @@ Incrementally sync Strava activities into workout logs (since `lastSyncedAt` wit
 Disconnect the Strava integration. Performs a best-effort upstream `POST /oauth/deauthorize` (non-fatal on failure) before deleting the local connection.
 
 - **Auth:** Required
+- **Rate limit:** `stravaDisconnect` category, 10 per 15 minutes
 - **Response:** `{ success: true }`
 
 ---
@@ -1596,6 +1650,7 @@ All mutating routes apply `protectedMutationGuards` (auth + CSRF + idempotency).
 Returns the Garmin connection state for the authenticated user.
 
 - **Auth:** Required
+- **Rate limit:** `garmin-status` category, 60 per 15 minutes
 - **Response:** `{ connected: false }` or `{ connected: true, garminDisplayName: string | null, lastSyncedAt: string | null, lastError: string | null }`
 
 ### POST /api/v1/garmin/connect
@@ -1618,6 +1673,7 @@ Authenticate with Garmin using email + password and persist the encrypted creden
 Removes the `garmin_connections` row for the user (credentials, tokens, display name).
 
 - **Auth:** Required
+- **Rate limit:** `garmin-disconnect` category, 10 per 15 minutes
 - **Response:** `{ success: true }`
 
 ### POST /api/v1/garmin/sync
@@ -1781,6 +1837,14 @@ The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag —
 | GET | `/recipes/:id` | Recipe + ingredients + per-serving macros | `nutritionRead` (60) |
 | PATCH | `/recipes/:id` | Edit a recipe | `nutritionWrite` (30) |
 | DELETE | `/recipes/:id` | Delete a recipe | `nutritionWrite` (30) |
+
+`/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its
+deterministic and pace-personalized layers must work for every athlete, so it
+carries no `aiConsentCheck` middleware. The optional AI refinement on top is
+gated inline instead — it is skipped unless `users.aiCoachEnabled` is true, and
+the consent flag is part of the result's cache key so opting out immediately
+stops a previously refined value being replayed. The same inline pattern is used
+by nutrition semantic search.
 
 See [Nutrition & Fuelling](nutrition.md) for request/response shapes, the per-100g scaling model, and AI safety details.
 

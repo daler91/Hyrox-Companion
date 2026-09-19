@@ -106,6 +106,59 @@ export const updateWorkoutLogSchema = insertWorkoutLogSchema.partial().extend({
   prescribedNotes: z.string().max(MAX_WORKOUT_TEXT_LEN).optional().nullable(),
 });
 
+/**
+ * Device provenance is server-owned.
+ *
+ * `source`, `stravaActivityId`, `garminActivityId` and `startedAt` are written by
+ * the Strava/Garmin sync and by the device-link routes. Accepting them from a
+ * client let a manually-logged workout present itself as a device import, which
+ * is enough to satisfy the checks in `linkStandaloneDeviceLog`. Dedupe queries
+ * are per-user so this was an integrity problem rather than a cross-tenant one,
+ * but no legitimate client sets them.
+ */
+const DEVICE_PROVENANCE_FIELDS = {
+  source: true,
+  stravaActivityId: true,
+  garminActivityId: true,
+  startedAt: true,
+} as const;
+
+/**
+ * What a client may send when CREATING a workout.
+ *
+ * `planDayId` is allowed and is ownership-checked server-side by
+ * `resolveActivePlanLinks`. `planId` is not: it is always derived from the
+ * resolved day, or from the plan covering the workout's date, and
+ * `applyResolvedPlanLinks` overwrites whatever arrived in the body. Omitting it
+ * keeps the published contract honest about that.
+ */
+export const insertWorkoutLogRouteSchema = insertWorkoutLogSchema.omit({
+  planId: true,
+  ...DEVICE_PROVENANCE_FIELDS,
+});
+
+/**
+ * What a client may send when UPDATING a workout.
+ *
+ * Plan linkage is additionally omitted: this route scopes the row it writes by
+ * userId but never validated the linkage *values*, so a caller could point their
+ * own workout at another athlete's plan day — and the adherence recompute that
+ * follows a set edit reads that day's prescribed sets with no owner check,
+ * writing the counts back onto the caller's row. Linking has a dedicated,
+ * ownership-checked route (`PATCH /api/v1/workouts/:id/plan-day`), which is the
+ * only path the client uses.
+ *
+ * These two are the single source of truth for the client-facing write surface:
+ * the route validators in `server/routes/workouts/shared.ts` and the published
+ * OpenAPI contract in `shared/openapi.ts` both build on them, so the documented
+ * contract cannot drift from what the server actually accepts.
+ */
+export const updateWorkoutLogRouteSchema = updateWorkoutLogSchema.omit({
+  planDayId: true,
+  planId: true,
+  ...DEVICE_PROVENANCE_FIELDS,
+});
+
 export type InsertWorkoutLog = z.infer<typeof insertWorkoutLogSchema>;
 export type UpdateWorkoutLog = z.infer<typeof updateWorkoutLogSchema>;
 export type WorkoutLog = typeof workoutLogs.$inferSelect;
