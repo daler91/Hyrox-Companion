@@ -14,13 +14,21 @@ Use this checklist whenever adding a new training methodology so implementation 
 
 ## 2) Implement as a strategy module
 
-- Implement the shared style interface:
+- Implement the shared `TrainingStyleStrategy` interface
+  (`server/services/training_styles/types.ts`):
+  - `id`
   - `computeProfile()`
-  - `assignPhase()`
   - `analyzeWorkout()`
   - `prescribeNext()`
-  - `safetyGuardrails()`
-- Register the module in one central style registry.
+  - `phaseLogic()`
+  - `safetyRules()`
+  - `buildPromptContext()`
+- Register the strategy in the one central `strategies` map in
+  `server/services/training_styles/registry.ts`, next to `defaultStrategy`
+  (`balanced_default`) and `mafMethodStrategy` (`maf_method`). `resolveTrainingStyle()`
+  falls back to `DEFAULT_TRAINING_STYLE_ID` and logs a
+  `training_style_resolution_failed` health alert for an unknown id, so an unregistered
+  style degrades quietly rather than throwing — register it or it will never run.
 - Avoid scattered `if/else` conditionals in coach services.
 
 ## 3) Keep shared core separate from style logic
@@ -38,11 +46,14 @@ Use this checklist whenever adding a new training methodology so implementation 
 - Add style selection in onboarding.
 - Ask only the follow-up questions required for the selected style.
 - Support style switching in settings with a confirmation message.
-- Persist:
-  - `active_style_id`,
-  - `previous_style_id`,
-  - `style_changed_at`,
-  - `style_context_version`.
+- Persist on `users` (see [Database § users](database.md#users)):
+  - `training_style_id` — the active style, default `'balanced_default'`,
+  - `training_style_previous_id`,
+  - `training_style_changed_at`,
+  - `training_style_recompute_now` — the flag that forces a fresh style-aware recompute
+    after a switch.
+- Append a row to the `user_training_style` history table (`style`, `effective_date`,
+  `source`) so the selection timeline survives later switches.
 
 ## 5) Data model and migration readiness
 
@@ -51,7 +62,7 @@ Use this checklist whenever adding a new training methodology so implementation 
   - style-specific profile,
   - style-specific benchmark/test data,
   - style-specific workout analyses.
-- Version records used in reasoning (`rules_version`, `prompt_version`, etc.).
+- Version records used in reasoning. The MAF tables are the shipped precedent: `maf_profile`, `maf_test_results` and `maf_workout_analysis` each carry an integer `version` column.
 - Define null/default behavior for users without explicit selection.
 - Include idempotent backfill for legacy users.
 

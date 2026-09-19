@@ -97,6 +97,8 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 4. **Strava + Garmin OAuth routes** -- `registerStravaRoutes(app)` from `server/strava.ts` and `registerGarminRoutes(app)` from `server/garmin.ts`.
 5. **API route modules** -- Each mounted via `app.use(router)`:
 
+Listed in mount order:
+
 | Module | File |
 |--------|------|
 | Account | `server/routes/account.ts` |
@@ -107,9 +109,12 @@ Same-origin requests (no `Origin` header) are always allowed. Credentials are en
 | Analytics | `server/routes/analytics.ts` |
 | Workouts | `server/routes/workouts/` (composite router in `index.ts` over the CRUD, AI, device-link, timeline, export, MAF, and migration sub-route modules) |
 | Plans | `server/routes/plans.ts` |
+| Plan proposals | `server/routes/planProposals.ts` |
 | Coaching | `server/routes/coaching.ts` |
+| Consent | `server/routes/consent.ts` |
 | Push | `server/routes/push.ts` |
 | Timeline annotations | `server/routes/timelineAnnotations.ts` |
+| Recycle bin | `server/routes/recycleBin.ts` |
 | Nutrition | `server/routes/nutrition/` (composite router: `index.ts` mounts the `NUTRITION_ENABLED` 404 gate, then `nutrition.routes.ts` registers the foods, favorites, logs, summary, parse, targets, insights, and recipes sub-route modules) |
 
 All API routes are prefixed with `/api/v1/` by convention within each router file.

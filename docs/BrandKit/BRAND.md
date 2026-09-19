@@ -203,12 +203,18 @@ Three families. No more.
 | **Geist** | UI, body, buttons | 400, 500, 600 |
 | **Geist Mono** | Numbers, data, timestamps, code | 400, 500, 700 |
 
-Load:
+Load (generic, for surfaces outside this repo — a marketing page, a deck, a prototype):
 ```html
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 ```
+
+**The app does not load fonts this way.** `client/src/main.tsx` imports self-hosted
+`@fontsource/*` packages per weight, so the bundle carries the faces and no request leaves
+the origin. Add a Google Fonts `<link>` only if you have a reason to; the CSP permits it
+(`fonts.googleapis.com` in `style-src`, `fonts.gstatic.com` in `font-src` — see
+`server/middleware/csp.ts`), but it trades a self-hosted face for a third-party round trip.
 
 ### Scale
 

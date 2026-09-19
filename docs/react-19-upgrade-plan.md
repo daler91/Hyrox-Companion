@@ -1,9 +1,20 @@
-# React 19 Upgrade Plan — `react@18.3.1` → `react@19.2.8`
+# React 19 Upgrade Plan — `react@18.3.1` → `react@19.x`
 
-Status: **Phases 0–1 implemented** (see the upgrade PR); Phase 2 verification in
-progress. Codebase and dependency audit completed 2026-08-01 against `main`; all
+Status: **Done — Phases 0–3 complete.** The upgrade shipped and soaked; `main` is
+now on `react`/`react-dom`/`@types/react`/`@types/react-dom` **19.3.0**, past the
+19.2.8 this plan was written against. The §3 code changes are all in place: the
+three `RefObject` annotations carry `| null`, and `client/src/main.tsx` passes
+`onUncaughtError` / `onCaughtError` / `onRecoverableError` to `createRoot`.
+
+The plan is kept for the §6 follow-up menu, none of which has been taken up yet
+(verified 2026-09-19): no `<StrictMode>` at the root, `onNeedRefresh` in
+`main.tsx` is still an empty callback, `ElementRef`/`MutableRefObject` renames
+are outstanding (15 files each), and `babel-plugin-react-compiler` is not
+installed. Everything below §5 is therefore still a live menu; §§1–5 are history.
+
+Codebase and dependency audit completed 2026-08-01 against `main`; all
 version/peer-range facts below were verified live against the npm registry on
-that date.
+that date and describe the state at that time.
 
 ## Purpose
 
@@ -139,18 +150,18 @@ createRoot(document.getElementById("root")!, {
 }).render(/* unchanged */);
 ```
 
-`Sentry.reactErrorHandler` exists since @sentry/react 8.6 (installed: 10.69.0)
+`Sentry.reactErrorHandler` exists since @sentry/react 8.6 (installed at the time: 10.69.0; now 10.74.x)
 and no-ops until `Sentry.init` runs, so the S11 deferred-consent init in
 `setupErrorReporting()` is unaffected. `Sentry.ErrorBoundary` itself keeps
 working (it captures via `componentDidCatch`).
 
-### 3.3 Documentation updates (same PR)
+### 3.3 Documentation updates (same PR) — **all landed**
 
-- `README.md:20` — shields.io badge `React-18` → `React-19`
-- `README.md:103` — "Framework: React 18, Vite 8, TypeScript 7"
-- `README.md:150` — mermaid node "Vite + React 18"
-- `docs/client.md:7` — "React 18 (via react-dom/client createRoot)" (also fix
-  the stale "Vite 6" on line 8 while there — package.json has vite ^8)
+- `README.md` — shields.io badge `React-18` → `React-19` ✅
+- `README.md` — "Framework: React 19, Vite 8, TypeScript 7" ✅
+- `README.md` — mermaid node "Vite + React 19" ✅
+- `docs/client.md` — "React 19 (via `react-dom/client` `createRoot`)", and the
+  stale "Vite 6" corrected to Vite 8 ✅
 
 ## 4. Expected-clean but verified items
 

@@ -16,7 +16,7 @@ Key technology choices:
 
 ## Schema Tables
 
-All table definitions live in `shared/schema/tables.ts` (~1,970 lines, 39 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of nine modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `plans.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
+All table definitions live in `shared/schema/tables.ts` (~2,035 lines, 40 tables plus their Drizzle relations); the eight nutrition tables are summarized under [Nutrition tables](#nutrition-tables) below and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model). It is one file in the modular `shared/schema/` directory, which also contains `enums.ts`, `exercises.ts` (the 200+ `EXERCISE_DEFINITIONS`), `structureLint.ts`, `zod.ts` (a patched `zod` instance plus the `drizzle-zod` schema factory), `index.ts` (barrel re-export), and `types.ts`. `types.ts` was split into a `types/` subdirectory of eleven modules — `ai.ts`, `analytics.ts`, `annotations.ts`, `coaching.ts`, `connections.ts`, `planProposals.ts`, `plans.ts`, `recycleBin.ts`, `requests.ts`, `users.ts`, `workouts.ts` — and `types.ts` is now just a barrel that re-exports them.
 
 Most tables use `varchar(255)` primary keys with `gen_random_uuid()` defaults; a few (`rate_limit_buckets`, `server_runtime_cache`) use a `text` key, and `idempotency_keys` / `structured_exercise_health_counters` use composite primary keys.
 
@@ -33,21 +33,37 @@ User accounts and preferences.
 | `profile_image_url` | `varchar(255)` | nullable |
 | `weight_unit` | `varchar(255)` | default `'kg'` |
 | `distance_unit` | `varchar(255)` | default `'km'` |
+| `user_timezone` | `varchar(64)` | NOT NULL, default `'UTC'` — IANA name, auto-detected client-side; drives the per-user local-time crons |
 | `weekly_goal` | `integer` | default `5` |
+| `meal_schedule` | `integer` | default `4` — how many eating meals/day the per-meal fuel targets split across (3, 4 or 5) |
 | `email_notifications` | `boolean` | default `false` — **master** email toggle (GDPR opt-in) |
 | `email_weekly_summary` | `boolean` | default `false` — per-type toggle for the weekly training summary |
 | `email_missed_reminder` | `boolean` | default `false` — per-type toggle for the missed-workout reminder |
 | `show_adherence_insights` | `boolean` | default `true` — UI toggle for displaying plan-adherence insights |
 | `ai_coach_enabled` | `boolean` | default `false` — **AI consent gate**; no workout data is sent to an AI provider while this is `false` |
+| `coach_auto_apply_plan_changes` | `boolean` | default `false` — apply conversational plan proposals immediately instead of waiting for an explicit Apply |
 | `training_style_id` | `text` | default `'balanced_default'` |
 | `training_style_previous_id` | `text` | nullable |
 | `training_style_changed_at` | `timestamp with time zone` | nullable |
 | `training_style_recompute_now` | `boolean` | default `false` |
 | `onboarding_completed` | `boolean` | NOT NULL, default `false` |
+| `division` | `varchar(16)` | default `'open'` — HYROX division; drives station load standards and Race Predictor benchmarks |
+| `gender` | `varchar(16)` | nullable — null ≡ not answered, treated as `prefer_not_to_say` by the predictor |
+| `age` | `integer` | nullable — general athlete age for the Race Predictor cohort; distinct from `maf_age` |
+| `bodyweight_kg` | `real` | nullable — canonical kg (formula input, not a display unit; see [ADR: Units](adr-units.md)) |
+| `height_cm` | `real` | nullable — canonical cm |
+| `resting_hr` | `integer` | nullable — bpm; training-load baseline |
+| `max_hr` | `integer` | nullable — bpm; falls back to age-estimated (Tanaka) when unset |
+| `ftp` | `integer` | nullable — watts; power TSS is skipped when unset |
+| `activity_level` | `varchar(24)` | nullable — Mifflin–St Jeor multiplier bucket (`sedentary`/`light`/`moderate`/`active`/`very_active`) |
+| `weight_goal_direction` | `varchar(16)` | nullable — `lose`/`maintain`/`gain`; null ⇒ no calorie adjustment |
+| `weight_goal_rate_kg_per_week` | `real` | nullable — magnitude only; the sign comes from `weight_goal_direction` |
+| `training_constraints` | `text` | nullable — durable injuries, equipment and scheduling limits in the athlete's own words; cleared to null when emptied |
 | `maf_age` | `integer` | nullable |
 | `maf_injury_illness_medication` | `boolean` | nullable |
 | `maf_consistency` | `text` | nullable |
 | `maf_trend` | `text` | nullable |
+| `maf_category` | `text` | nullable — Maffetone's 180-Formula category answered directly; null ⇒ only the legacy proxy questions above were answered |
 | `maf_hr_data_available` | `boolean` | nullable |
 | `maf_hr` | `integer` | nullable |
 | `maf_baseline_test_scheduled_at` | `timestamp with time zone` | nullable |
@@ -624,6 +640,7 @@ OAuth credentials for Strava integration. Tokens are encrypted at rest via `encr
 | `expires_at` | `timestamp` | NOT NULL |
 | `scope` | `text` | nullable |
 | `last_synced_at` | `timestamp` | nullable |
+| `requires_reauth` | `boolean` | NOT NULL, default `false` — set when Strava rejects the stored refresh token; cleared on a successful reconnect (upsert) or token refresh |
 | `created_at` | `timestamp` | default `now()` |
 
 The `user_id` column has a UNIQUE constraint, enforcing one Strava connection per user. Upserts use `onConflictDoUpdate` targeting this unique constraint.
@@ -1233,7 +1250,7 @@ Three npm scripts manage migrations:
 
 ### Migration Files
 
-Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **75 migrations**, `0000` through `0074`:
+Migrations are stored in the `migrations/` directory as numbered `.sql` files. There are currently **96 migrations**, `0000` through `0095`:
 
 ```
 migrations/
@@ -1265,11 +1282,16 @@ migrations/
   0057_broken_mordo.sql              # exercise_sets.version
   0058_eminent_shaman.sql            # training_plans.generation_started_at (in-flight guard)
   0059_natural_nomad.sql             # analytics_results table
+  ...
+  0091_lyrical_human_fly.sql         # dedupe versioned targets + in-flight plan generations
+  0093_device_activity_links.sql     # device_activity_links table
+  0094_counts_as_training.sql        # workout_logs.counts_as_training
+  0095_recycle_bin_items.sql         # recycle_bin_items table (90-day soft delete)
   meta/
     _journal.json
     0000_snapshot.json
     ...
-    0074_snapshot.json
+    0095_snapshot.json
 ```
 
 - **SQL files**: Each migration contains the raw SQL statements.
@@ -1297,6 +1319,17 @@ Notable recent migrations:
 - `0062`–`0063`: Create the nutrition module tables (`foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `food_favorites`, `recipes`, `recipe_ingredients`).
 - `0069`–`0071`: Add `foods.last_fetched_at` (cache-freshness re-fetch) and expand the `foods.source` CHECK constraint to cover the branded providers (`edamam`, `fatsecret`, `spoonacular`).
 - `0074`: Enables the `pg_trgm` extension and adds trigram GIN indexes on `lower(foods.name)` / `lower(foods.brand)` for typo-tolerant ("did you mean") food search, gated at query time by `NUTRITION_FUZZY_ENABLED`.
+- `0083`: Adds `plan_days.skip_reason` (with a CHECK constraint) so a skipped session records *why*.
+- `0084`: Adds the nutrition push-reminder toggles and their send-claim ledgers to `users`.
+- `0085`: Creates the `weekly_reviews` table plus the `(user, week)` unique index behind the in-app weekly review.
+- `0086`: Adds `users.training_constraints` — the athlete's durable injuries/equipment/scheduling limits, previously discarded after plan generation.
+- `0088`: Adds `exercise_sets.weight_unit` / `distance_unit`.
+- `0089`: Adds `training_plans.retired_on`.
+- `0091`: Dedupes `meal_targets` / `nutrition_targets` and adds the unique indexes that stop a second versioned row per effective date.
+- `0092`: Adds `users.erasure_requested_at`, the point-of-no-return stamp for [account erasure](operations/account-erasure.md).
+- `0093`: Adds the device-link columns on `workout_logs` (`device_link_source`, `device_link_confidence`, `device_activity`, and the two suggestion FKs) that let a synced activity enrich or complete an existing session.
+- `0094`: Adds `workout_logs.counts_as_training`, so a non-training device import is excluded from load and adherence.
+- `0095`: Creates `recycle_bin_items` — the 90-day soft-delete store for workouts, plan days and training plans.
 
 ### Startup Migration
 

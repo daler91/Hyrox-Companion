@@ -354,11 +354,13 @@ foods & recipes) → `NutritionInsightsPanel`.
 **Cross-feature surfaces:** `FuellingAroundSessionPanel` (workout detail sheet)
 and `FuellingTab` (Analytics) consume `useSessionFuelling` and `useBlockView`.
 
-**Hooks** — 13 query hooks (`useNutritionDay`, `useSearchFoods`, `useRecentFoods`,
+**Hooks** — 14 query hooks (`useNutritionDay`, `useSearchFoods`, `useRecentFoods`,
 `useFavorites`, `useFoodWithServings`, `useCustomFoods`, `useRecipes`, `useRecipe`,
 `useNutritionTargets`, `useMicros`, `useNutritionInsights`, `useSessionFuelling`,
-`useBlockView`) and ~17 mutation hooks covering log/edit/delete, favourites,
-repeat-day, barcode, custom foods, recipes, parse text/photo, batch log, targets,
+`useBlockView`, `useFuellingRange`), two derived selectors over those caches
+(`useFavoriteIds`, `usePortionMemory`), and ~22 mutation hooks covering
+log/edit/delete, favourites, repeat-day, barcode, custom foods and servings,
+recipes, parse text/photo/label, batch log, targets and per-meal overrides,
 and insights regeneration — each invalidating the relevant query keys. Entry
 deletes use pending UI. The favourite toggle shows its flip locally in
 `FavoriteStarButton` rather than writing the favourites cache: a star can be
@@ -699,7 +701,8 @@ server/prompts.ts               PARSE_MEAL_PROMPT, MEAL_IMAGE_PREAMBLE,
                                 NUTRITION_INSIGHTS_PROMPT
 
 client/src/pages/Nutrition.tsx  the page
-client/src/pages/nutrition/*    15 components (see UI map)
+client/src/pages/nutrition/*    27 components + useQuickLog / useAiConsentGate
+                                (the UI map below names the top-level surfaces)
 client/src/hooks/useNutrition.ts  query + mutation hooks
 client/src/lib/api/nutrition.ts   typed API client
 client/src/components/workout-detail/FuellingAroundSessionPanel.tsx

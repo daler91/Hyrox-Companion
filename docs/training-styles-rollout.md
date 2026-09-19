@@ -1,5 +1,21 @@
 # `training_styles_v1` Phased Rollout Plan
 
+**Status (verified 2026-09-19): rollout complete; the kill switch is gone.** Training
+styles are generally available and ungated — `users.training_style_id` defaults to
+`balanced_default`, `server/services/training_styles/registry.ts` resolves a style for
+every request with the same default as its fallback, and Settings → Training exposes the
+Balanced/MAF selector unconditionally. The `training_styles_v1` flag named throughout this
+document **exists nowhere in the codebase**, which is Phase 4's own exit condition
+("optionally make style-aware path default and repurpose/remove flag"). The backfill it
+describes shipped as `0035_maf_artifacts` (`source='migration_default'`); whether that
+migration ran in production is tracked in
+[Pending Manual Steps](operations/pending-manual-steps.md), not here.
+
+Read the rest as the record of how the rollout was planned, not as live operational
+guidance — the flag contract and rollback sections below describe a switch you no longer
+have. For adding a _new_ style today, use the
+[New Training Style Checklist](new-training-style-checklist.md).
+
 ## Goals
 
 - Introduce selectable training styles behind a kill switch (`training_styles_v1`) with zero downtime.

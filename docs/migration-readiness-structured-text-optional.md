@@ -1,5 +1,14 @@
 # Structured Text Optional: Migration-Readiness Spec & Telemetry Plan
 
+**Status (verified 2026-09-19): not started.** This is a pre-implementation spec, and
+nothing in it has been built. The `structured_text_optional_enabled` flag it gates
+everything on **exists nowhere in the codebase**, and none of the Gate A–E telemetry is
+instrumented. The related flags that *do* exist are `STRUCTURED_BLOCKS_ENABLED` and
+`STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY` (see
+[Environment Variables](env-reference.md#feature-flags)), which govern the structured-block
+editor itself — not making free text optional. Treat every gate and threshold below as a
+proposal awaiting a decision to start.
+
 ## Purpose
 Define objective rollout gates, feature flags, telemetry instrumentation, and rollback controls required **before** enabling an experience where free-text workout prescription becomes optional.
 

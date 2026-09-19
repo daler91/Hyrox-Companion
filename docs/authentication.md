@@ -113,18 +113,25 @@ The `getUserId(req)` function extracts the authenticated user's ID from a reques
 export function getUserId(req: Request): string {
   try {
     const auth = getAuth(req);
-    if (auth?.userId) return auth.userId;
+    if (auth?.userId) {
+      return auth.userId;
+    }
   } catch {
-    // fall through to dev user
+    // intentionally empty - fall through to dev user
   }
 
-  if (isDev && env.ALLOW_DEV_AUTH_BYPASS === "true") {
-    return DEV_USER_ID; // "dev-user"
+  if ((env.NODE_ENV === "development" || env.NODE_ENV === "test") && env.ALLOW_DEV_AUTH_BYPASS === "true") {
+    return DEV_USER_ID;
   }
 
   throw new Error("User not authenticated");
 }
 ```
+
+Note the environment check is `development` **or** `test` — the Cypress job boots the
+built server with `NODE_ENV=test` and `ALLOW_DEV_AUTH_BYPASS=true`, so the bypass has to
+hold there too. Production is excluded twice over: this check, and the startup guard that
+exits the process outright (see [Production Safety Guards](#production-safety-guards)).
 
 Route handlers use this to obtain the current user's ID after the `isAuthenticated` middleware has already verified authentication.
 
@@ -173,7 +180,7 @@ Three independent layers prevent the bypass from being used in production:
 
 1. **Zod schema refinement** (`server/env.ts`) -- The environment variable schema includes a `.refine()` rule that rejects the combination of `NODE_ENV=production` and `ALLOW_DEV_AUTH_BYPASS=true`. The server will not start if this validation fails.
 
-2. **Startup guard** (`server/index.ts`, lines 26-33) -- An explicit check at the top of the server entrypoint. If `ALLOW_DEV_AUTH_BYPASS=true` and `NODE_ENV=production`, the server logs a fatal message and calls `process.exit(1)`.
+2. **Startup guard** (`server/index.ts`, the block marked `// 🛡️ Sentinel: Dev Auth Bypass double-guard`) -- An explicit check near the top of the server entrypoint. If `ALLOW_DEV_AUTH_BYPASS=true` and `NODE_ENV=production`, the server logs a fatal message and calls `process.exit(1)`; in any other environment it logs a warning instead.
 
 3. **Runtime guard** (`server/clerkAuth.ts`) -- The `isDevBypassEnabled()` function returns `false` unconditionally when `NODE_ENV` is `"production"`, regardless of the `ALLOW_DEV_AUTH_BYPASS` value.
 
