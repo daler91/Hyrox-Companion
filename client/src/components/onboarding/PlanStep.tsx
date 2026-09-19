@@ -45,7 +45,7 @@ export function PlanStep({
       >
         <div className="flex items-center gap-3 w-full">
           {isPending ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           ) : (
             <Sparkles className="h-5 w-5" />
           )}

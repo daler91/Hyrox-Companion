@@ -215,7 +215,7 @@ export function MealSection({
                           data-testid={`button-log-again-${e.id}`}
                         >
                           {logAgainPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                           ) : (
                             <RotateCw className="h-4 w-4" aria-hidden="true" />
                           )}
