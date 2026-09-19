@@ -1029,8 +1029,21 @@ export async function executePlanGeneration(
       "[planGen] AI plan generated successfully",
     );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    await storage.plans.updateGenerationStatus(planId, "failed", errorMessage);
+    // `generationError` is returned verbatim to the client by
+    // GET /api/v1/plans/:id/generation-status, so it must not carry a raw
+    // Error.message: those come from the AI provider, the DB driver and the
+    // HTTP layer, and can name internal hosts, models or query fragments.
+    // Store a stable, user-facing reason; the full error keeps going to the
+    // logs and to Sentry, which is where triage happens.
+    const isAppError = error instanceof AppError;
+    const clientSafeMessage = isAppError
+      ? error.message
+      : "Plan generation failed unexpectedly. Please try again.";
+    logger.error(
+      { err: error, userId, planId },
+      "[planGen] AI plan generation failed",
+    );
+    await storage.plans.updateGenerationStatus(planId, "failed", clientSafeMessage);
     throw error;
   }
 }

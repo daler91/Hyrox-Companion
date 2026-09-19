@@ -120,7 +120,7 @@ function serializePreferences(user: {
   };
 }
 
-router.get('/api/v1/preferences', isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get('/api/v1/preferences', isAuthenticated, rateLimiter("preferencesRead", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     // ⚡ Bolt Performance Optimization: fetched active plan concurrently with user preferences
     const [user, activePlan] = await Promise.all([

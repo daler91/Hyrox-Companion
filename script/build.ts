@@ -1,4 +1,4 @@
-import { rm, stat } from "node:fs/promises";
+import { glob, rm, stat } from "node:fs/promises";
 
 import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 import { build as esbuild } from "esbuild";
@@ -25,6 +25,34 @@ async function assertBuildArtifacts(): Promise<void> {
       );
     }
   }
+}
+
+/**
+ * Delete any .map files left in the deployed output.
+ *
+ * Both Sentry plugins remove their own sourcemaps via
+ * `filesToDeleteAfterUpload`, but only when an upload actually happens —
+ * `disable: !sentryAuthToken` means a build without SENTRY_AUTH_TOKEN (any
+ * contributor build, and any deploy where the token was not configured) leaves
+ * `dist/public/assets/*.map` behind, where `express.static` then serves them at
+ * /assets/*.map with a one-year immutable cache. `build.sourcemap: "hidden"`
+ * omits the `//# sourceMappingURL` comment but still writes the files.
+ *
+ * Sweeping unconditionally after the build makes the outcome independent of
+ * whether the upload ran. Anything uploaded to Sentry has already been sent by
+ * this point, so this never costs us a symbolicated stack trace.
+ */
+async function deleteStraySourcemaps(): Promise<void> {
+  const stray: string[] = [];
+  for await (const file of glob("dist/**/*.map")) {
+    stray.push(file);
+  }
+  await Promise.all(stray.map((file) => rm(file, { force: true })));
+  console.log(
+    stray.length > 0
+      ? `removed ${stray.length} sourcemap(s) from dist/ so they are not served to clients`
+      : "no sourcemaps left in dist/",
+  );
 }
 
 try {
@@ -65,6 +93,8 @@ try {
 
   await assertBuildArtifacts();
   console.log("build artifacts verified");
+
+  await deleteStraySourcemaps();
 
   // Structural bundle invariants (charts off the critical path, no drizzle in
   // the browser). Run in-process (no PATH-resolved subprocess) and non-fatally
