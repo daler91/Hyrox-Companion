@@ -1,5 +1,5 @@
 import type { StravaActivitySummary } from "@shared/schema";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ db: { select: vi.fn() } }));
 vi.mock("../storage", () => ({
@@ -21,6 +21,13 @@ import {
   listBackfillAthletes,
 } from "./deviceActivitySets";
 import { makeWorkoutLog } from "./trainingLoadService.testHelpers";
+
+// The storage mocks are created once at module scope, so their call history
+// would otherwise accumulate across tests and make the `backfillDeviceActivitySets`
+// assertions depend on declaration order (see issue #1996).
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const KM: { weightUnit: string; distanceUnit: string } = { weightUnit: "kg", distanceUnit: "km" };
 const MILES: { weightUnit: string; distanceUnit: string } = { weightUnit: "lbs", distanceUnit: "miles" };
