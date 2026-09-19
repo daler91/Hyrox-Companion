@@ -94,6 +94,7 @@ Text AI defaults to Gemini for backwards compatibility. Operators can route chat
 | Variable | Req? | Default | Used by |
 |---|---|---|---|
 | `AI_FEATURES_ENABLED` | Optional | `true` | Runtime kill switch for **all** AI routes (chat, parsing, plan generation, RAG, coach suggestions). Set to `false` to disable AI provider traffic without redeploying or rotating keys. Enforced in `server/middleware/aibudget.ts`. |
+| `AI_GLOBAL_DAILY_LIMIT_CENTS` | Optional | — | Application-wide AI spend ceiling in cents over a rolling 24h window, across all users. The per-user cap ($2/day, `DAILY_LIMIT_CENTS`) bounds one athlete but not the bill — total spend otherwise scales linearly with sign-ups. When the ceiling is reached every AI route returns `503 AI_GLOBAL_BUDGET_EXCEEDED` until spend ages out of the window. Unset disables the check (per-user cap only) and logs a startup warning in production. Size it from (active athletes x realistic daily spend), not from the per-user cap x user count. |
 | `AI_TEXT_PROVIDER` | Optional | `gemini` | Text provider: `gemini`, `anthropic`, or `openai-compatible`. |
 | `AI_TEXT_MODEL` | Optional | - | Generic text model override for non-Gemini providers. |
 | `AI_TEXT_FAST_MODEL` | Optional | provider default | Fast parser model override. Gemini fallback: `GEMINI_MODEL`. |

@@ -19,7 +19,7 @@
     <img src="https://img.shields.io/badge/TypeScript-7.0-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 7">
     <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19">
     <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8">
-    <img src="https://img.shields.io/badge/Node.js-%3E%3D20-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=20">
+    <img src="https://img.shields.io/badge/Node.js-%3E%3D22-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=22">
     <img src="https://img.shields.io/badge/PostgreSQL-pgvector-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
     <img src="https://img.shields.io/badge/pnpm-9.12-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 9.12">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="MIT License">
@@ -112,7 +112,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Backend
 
-- **Runtime**: Node.js >=20, Express 5, TypeScript 7
+- **Runtime**: Node.js >=22, Express 5, TypeScript 7
 - **Database**: PostgreSQL with Drizzle ORM, with `pg_trgm` trigram indexes for fuzzy food search
 - **Vector search**: pgvector, optionally on a separate `VECTOR_DATABASE_URL`, backing both RAG retrieval and semantic food search
 - **Authentication**: Clerk JWT middleware with local dev bypass support
@@ -302,7 +302,7 @@ The Build workflow fails if the committed snapshot drifts from the generated spe
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20 or newer
+- [Node.js](https://nodejs.org/) 22 or newer
 - [pnpm](https://pnpm.io/) 9.12.x through Corepack (`corepack enable`)
 - PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension
 - Optional: [Clerk](https://clerk.com/) keys for real authentication

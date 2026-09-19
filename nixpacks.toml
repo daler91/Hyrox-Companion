@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "pnpm-9_x", "openssl"]
+nixPkgs = ["nodejs_22", "pnpm-9_x", "openssl"]
 
 # Disable the Caddy reverse proxy phase — our Express server handles HTTP directly
 [phases.caddy]

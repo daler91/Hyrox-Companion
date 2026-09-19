@@ -119,6 +119,15 @@ const envSchema = z
     // without redeploying or rotating provider keys. Defaults to "true" so
     // existing deployments behave the same.
     AI_FEATURES_ENABLED: z.enum(["true", "false"]).default("true"),
+    // Application-wide AI spend ceiling, in cents, over a rolling 24h window.
+    // The per-user cap (DAILY_LIMIT_CENTS, $2) bounds one athlete but not the
+    // bill: total spend scales linearly with sign-ups, so a burst of new
+    // accounts is unbounded cost. Optional and OFF when unset — only the
+    // operator knows the right ceiling for their user count and margin — but
+    // the server warns loudly at startup in production when it is missing.
+    // Size it above (active athletes x realistic daily spend), not above the
+    // per-user cap x users, which every athlete hitting $2 would never reach.
+    AI_GLOBAL_DAILY_LIMIT_CENTS: z.coerce.number().int().positive().optional(),
     STRUCTURED_BLOCKS_ENABLED: z.enum(["true", "false"]).default("true"),
     STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY: z.enum(["true", "false"]).default("false"),
     EMOM_BUILDER_ENABLED: z.enum(["true", "false"]).default("false"),
