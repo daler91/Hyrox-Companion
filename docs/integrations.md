@@ -81,7 +81,7 @@ sequenceDiagram
 |---|---|---|
 | `STRAVA_CLIENT_ID` | Yes | Strava API application client ID |
 | `STRAVA_CLIENT_SECRET` | Yes | Strava API application client secret |
-| `STRAVA_STATE_SECRET` | Recommended | HMAC secret for signing OAuth state tokens. If not set, a random secret is generated at boot (not safe across multiple server instances). |
+| `STRAVA_STATE_SECRET` | **Required in production** | HMAC secret for signing OAuth state tokens. Unset, a random secret is generated per process, which is not safe across multiple instances — so `server/env.ts` now refuses to boot a production deploy that has `STRAVA_CLIENT_ID` but no state secret. |
 | `APP_URL` | Recommended | Base URL of the application (e.g. `https://fitai.coach`). Used to construct the OAuth redirect URI and the webhook callback URL. Defaults to `http://localhost:5000`; the push subscription is only registered when this is a public `https://` origin. |
 | `STRAVA_AUTO_SYNC_ENABLED` | Optional (default `true`) | Master switch for [automatic sync](#automatic-sync): webhook push, polling fallback and the post-connect import. `false` leaves only the manual Sync button. |
 | `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | Optional (default `60`) | Polling fallback: how stale a connection's `last_synced_at` may get before it is re-synced (minimum 5). Each connected athlete costs about `1440 / interval` Strava reads a day. |
@@ -177,6 +177,11 @@ The response reports `imported` (activities now on the timeline, wherever they l
 
 - Auth and callback endpoints: 20 requests per 15 minutes per IP
 - Sync endpoint: 5 requests per 15 minutes per IP
+- Status endpoint: 60 requests per 15 minutes
+- Disconnect endpoint: 10 requests per 15 minutes
+
+The Garmin equivalents mirror these: connect and sync at 5 per 15 minutes,
+status at 60, disconnect at 10.
 
 ### Registered Routes
 
@@ -320,6 +325,23 @@ The `garmin_connections` row stores four encrypted fields. All four are encrypte
 | `encrypted_oauth2_token` | `JSON.stringify(IOauth2Token)` returned by `client.exportToken()` after login. |
 | `token_expires_at` | UNIX-seconds-to-Date of `oauth2.expires_at`. When `now + 5 min >= token_expires_at`, the next request performs a fresh login. |
 | `last_error` | Plaintext (non-secret) error message. Surfaced to the UI as a "reconnect needed" banner. Cleared on successful sync. |
+
+**Why the password is retained (and the risk that carries).** Garmin has no
+public OAuth flow for this, so the integration drives an unofficial login client.
+The stored OAuth tokens expire and there is no refresh grant, so the email and
+password are kept in order to re-login automatically. That makes this the one
+place in the app where a credential is stored **reversibly** — AES-256-GCM is
+encryption, not hashing, so anything holding the ciphertext and `ENCRYPTION_KEY`
+recovers the athlete's real Garmin password, not a scoped token.
+
+The 2026-09-19 security audit flagged this as an accepted design risk rather than
+a defect. Mitigations in place: credentials are wiped on authentication failure,
+the connect route is limited to 5 attempts per 15 minutes, a per-user mutex and a
+global 429 breaker bound retry pressure, the request body is Zod-validated, and
+no credential field is ever returned to the client (status responses carry only
+booleans and a display name). Removing the password would mean asking the athlete
+to reconnect whenever tokens expire — a product decision about the integration's
+behaviour, not a code change, and so left to the repo owner.
 
 A partial unique index on `workout_logs(user_id, garmin_activity_id) WHERE garmin_activity_id IS NOT NULL` guarantees dedupe at the DB layer even under concurrent imports. `createGarminWorkoutLogs()` uses `onConflictDoNothing`, and the route reports the true insert count (`imported`) plus anything swallowed by the partial index as `skipped`.
 
@@ -632,7 +654,17 @@ Both bundles emit hidden sourcemaps (`build.sourcemap: "hidden"` in `vite.config
 - `@sentry/vite-plugin` is the last plugin in `vite.config.ts` and handles the client bundle.
 - `@sentry/esbuild-plugin` is the only plugin in the esbuild call in `script/build.ts` and handles the server bundle.
 
-When `SENTRY_AUTH_TOKEN` is unset, both plugins are explicitly disabled (`disable: !sentryAuthToken`) and the build proceeds identically to today — sourcemaps are emitted locally but not uploaded. When the auth token is present alongside `SENTRY_ORG` and the appropriate `SENTRY_PROJECT_*` slugs, the plugins upload the sourcemaps to Sentry, create a release identified by the current git SHA, and delete the local `.map` files (`filesToDeleteAfterUpload`) so they are not shipped to the runtime artifact.
+When `SENTRY_AUTH_TOKEN` is unset, both plugins are explicitly disabled (`disable: !sentryAuthToken`) and the build proceeds identically to today — sourcemaps are emitted locally but not uploaded. When the auth token is present alongside `SENTRY_ORG` and the appropriate `SENTRY_PROJECT_*` slugs, the plugins upload the sourcemaps to Sentry and create a release identified by the current git SHA.
+
+**Sourcemaps never reach the deployed artifact, with or without a token.** The
+plugins' own `filesToDeleteAfterUpload` only runs when an upload happens, so a
+build without the token used to leave `dist/public/assets/*.map` in place — where
+`express.static` served them at `/assets/*.map` with a one-year immutable cache,
+since `sourcemap: "hidden"` omits the `//# sourceMappingURL` comment but still
+writes the files. `script/build.ts` now sweeps `dist/**/*.map` unconditionally
+after the Sentry step, so the outcome no longer depends on whether the upload
+ran. Anything destined for Sentry has already been uploaded by that point, so no
+symbolicated stack trace is lost. The build prints how many files it removed.
 
 Both Sentry inits also pass an explicit `release` field:
 

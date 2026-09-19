@@ -555,14 +555,63 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 ## Security
 
 - **Consent gate:** `aiConsentCheck` (`server/middleware/aiConsent.ts`) returns 403 `AI_COACH_DISABLED` unless `user.aiCoachEnabled === true` before any AI provider call runs on the user's behalf. See [Overview](#overview).
-- **Budget enforcement:** `aiBudgetCheck` (`server/middleware/aibudget.ts`) runs an operator kill switch (`AI_FEATURES_ENABLED=false` -> 503 `AI_FEATURES_DISABLED`) and a per-user rolling 24h cost cap. Spend over `DAILY_LIMIT_CENTS` (200 = $2.00/day) returns 429 `AI_BUDGET_EXCEEDED`; spend over `WARNING_THRESHOLD_CENTS` (150 = $1.50) allows the request but sets `X-AI-Budget-Warning` / `X-AI-Budget-Remaining-Cents` headers.
-- **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to the selected text provider.
+  - Two endpoints are deliberately **not** AI routes, because their non-AI layers must serve every athlete: the [planned-session estimate](api-reference.md#nutrition-routes) and nutrition semantic search. Both check `aiCoachEnabled` **inline** instead, immediately before the provider call, so consent still governs whether any data leaves the server. Anything that calls a provider must pass through one of these two gates — middleware or inline — with no third option.
+- **Budget enforcement:** `aiBudgetCheck` (`server/middleware/aibudget.ts`) runs an operator kill switch (`AI_FEATURES_ENABLED=false` -> 503 `AI_FEATURES_DISABLED`), an application-wide spend ceiling, and a per-user rolling 24h cost cap. See [Cost controls](#cost-controls).
+- **Outbound requests:** both provider adapters set `redirect: "error"` on their `fetch` calls. `fetch` follows redirects by default, which would re-POST the request body — athlete prompt data — to whatever `Location` the endpoint returned, with no second [SSRF-guard](server.md#ssrf-guard) check. A chat-completions endpoint has no legitimate reason to redirect.
+- **Input sanitization:** `sanitizeUserInput()` wraps all user text in XML tags and strips potential injection patterns before sending to the selected text provider. This applies to text placed in **system instructions** as well as user turns — a model weights the system instruction more heavily, so it is the last place raw input should appear. Athlete-authored custom exercise names (workout parser) and the client-supplied focused-day id (plan adjustment) are escaped and fenced like any other input.
 - **Output validation:** `validateAiOutput()` checks AI text responses for safety.
 - **HTML sanitization:** `sanitizeHtml()` strips HTML from all AI-generated content before database storage.
-- **Content length limits:** Chat messages max 1,000 chars (request) / 50,000 chars (storage). Coaching materials max 1,500,000 chars.
+- **Content length limits:** Chat messages max 1,000 chars (request) / 50,000 chars (storage), and `role` is constrained to `user | assistant` so a client cannot seed a `system` turn into the history that is later replayed into the model's context. Coaching materials max 1,500,000 chars. Model *output* written back to the database is bounded too: the auto-coach recommendation is capped at 10,000 chars and its rationale at 2,000, matching the manual apply route so both paths agree.
+- **Image inputs:** the shared image-parse schema checks the decoded leading bytes against the declared mime type (JPEG/PNG/WebP magic bytes), so a mislabelled or non-image payload is rejected before it is billed for and forwarded to the vision model.
 - **RAG injection prevention:** Retrieved chunks are wrapped in `<coaching_data>` tags with instructions to treat content as data only.
 - **Prompt protection:** System prompts include instructions refusing to reveal their own content.
 - **Streaming transport:** The `compression` middleware is configured to skip `text/event-stream` responses so the streaming-chat output is delivered without being held in a gzip buffer (see [Server → Middleware Ordering Rationale](server.md#middleware-ordering-rationale)).
+
+---
+
+## Cost controls
+
+Every provider call passes through `checkAiBudget(userId)`
+(`server/services/aiUsageService.ts`), whether it came from an HTTP route, a
+cron job, or a queue worker. There are two ceilings, checked in this order:
+
+| Ceiling | Setting | Reached → | Rationale |
+|---------|---------|-----------|-----------|
+| Application-wide, rolling 24h across all users | `AI_GLOBAL_DAILY_LIMIT_CENTS` (unset = off) | `503 AI_GLOBAL_BUDGET_EXCEEDED` | The per-user cap bounds one athlete but not the bill — without a global ceiling, total spend scales linearly with sign-ups |
+| Per user, rolling 24h | `DAILY_LIMIT_CENTS` (200 = $2.00) | `429 AI_BUDGET_EXCEEDED` | One athlete cannot exhaust the shared budget |
+
+Spend over `WARNING_THRESHOLD_CENTS` (150 = $1.50) still allows the request but
+sets the `X-AI-Budget-Warning` and `X-AI-Budget-Remaining-Cents` headers.
+
+The global ceiling is checked first: when the deployment as a whole is over
+budget, an athlete who has spent nothing must still be turned away. It returns
+503 rather than 429 because it is a capacity condition the caller did not cause
+and cannot clear by waiting out their own allowance.
+
+**Why it is opt-in.** Only the operator knows the right number for their user
+count and margin, and a ceiling sized too low takes AI down for everyone. Unset,
+the check is skipped entirely (the previous per-user-only behaviour) and the
+server logs a startup warning in production. Size it from *(active athletes ×
+realistic daily spend)*, not from *(per-user cap × user count)* — the latter
+assumes every athlete maxes out their $2, which none will.
+
+**Operational notes.**
+
+- The global total is an aggregate over the last 24h of `ai_usage_logs`, so it is
+  cached in-process for 30 seconds and concurrent misses collapse into one
+  query. Each replica keeps its own cache; a slightly stale total is fine.
+- The global check **fails open** to the per-user cap: a transient aggregate
+  query failure must not take AI down for every user. The per-user check fails
+  closed, as before (`503 AI_BUDGET_UNAVAILABLE`).
+- Both checks are **check-then-act** — usage is recorded after the provider call
+  returns — so concurrent requests inside one rate-limit window can each pass a
+  check that the sum of them exceeds. The per-route rate limits bound that
+  overshoot. Closing it entirely needs a reservation written before the call and
+  reconciled after, which is a change to the provider layer.
+- Spend is under-counted in two known cases: a streamed response aborted before
+  the provider emitted a usage chunk, and a server-side timeout after the
+  provider has already billed. Embeddings are billed at a flat 150-token
+  estimate.
 
 ---
 
@@ -571,6 +620,7 @@ Calculated from the earliest plan entry date to today: `max(1, ceil((daysSinceSt
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AI_FEATURES_ENABLED` | `true` | Operator kill switch. `false` returns 503 `AI_FEATURES_DISABLED` for all AI routes |
+| `AI_GLOBAL_DAILY_LIMIT_CENTS` | unset | Application-wide 24h AI spend ceiling in cents. Unset means no global ceiling (per-user cap only) and a startup warning in production. See [Cost controls](#cost-controls) |
 | `AI_TEXT_PROVIDER` | `gemini` | Text provider for chat, text parsing, suggestions, notes, insights, and plan generation (`gemini`, `anthropic`, `openai-compatible`) |
 | `AI_TEXT_MODEL` | provider-specific | Generic text model override (applies to both roles for non-Gemini providers) |
 | `AI_TEXT_FAST_MODEL` | Gemini: `GEMINI_MODEL` | Fast parser model override |

@@ -76,7 +76,7 @@ before changing anything in this module.
 | **Custom foods are private**; visibility is checked on every food resolution. | No cross-user leakage of a user's own foods/recipes. | `NutritionStorage.getVisibleFoodById` etc. |
 | **Logged history is immutable-by-reference.** A food referenced by a log entry can't be deleted (`onDelete: restrict`). | Historical entries must never lose their nutrition source. | FK constraints on `food_log_entries.foodId`, `recipe_ingredients.foodId` |
 | **External APIs degrade gracefully.** If USDA is down or unkeyed, search returns cached-only results with `apiDegraded: true`. | The app stays usable offline of third parties. | `foodSearch.ts`; surfaced in `FoodSearch.tsx` |
-| **AI endpoints are gated** by consent + per-user 24h budget. | Cost control and the GDPR opt-in consent model. | `aiConsentCheck` + `aiBudgetCheck` middleware |
+| **AI endpoints are gated** by consent + per-user 24h budget + the app-wide spend ceiling. | Cost control and the GDPR opt-in consent model. | `aiConsentCheck` + `aiBudgetCheck` middleware; soft-gated routes check consent inline |
 
 ---
 
@@ -405,8 +405,11 @@ Safety properties:
 
 - **Consent + budget gating.** `aiConsentCheck` blocks unless the user has the AI
   coach enabled (403); `aiBudgetCheck` blocks at a rolling 24h spend of **$2.00**
-  (429) and warns past **$1.50** via an `X-AI-Budget-Warning` header. An
-  `AI_FEATURES_ENABLED=false` kill switch 503s all AI routes.
+  per user (429) and warns past **$1.50** via an `X-AI-Budget-Warning` header, and
+  also enforces the application-wide ceiling (`AI_GLOBAL_DAILY_LIMIT_CENTS`, 503
+  `AI_GLOBAL_BUDGET_EXCEEDED`) when one is configured. An
+  `AI_FEATURES_ENABLED=false` kill switch 503s all AI routes. See
+  [AI → Cost controls](ai-and-rag.md#cost-controls).
 - **Semantic search is soft-gated, not a hard AI route.** `/foods/search` keeps
   keyword/fuzzy search working for everyone (no `aiConsentCheck`/`aiBudgetCheck`
   middleware — those would 403/429 plain search). The embedding step
@@ -415,6 +418,14 @@ Safety properties:
   path; any failure (no key/consent/budget, vector error) degrades silently to the
   keyword results. Query embeddings are LRU-cached, and foods are embedded by a
   bounded background cron, so repeated searches don't re-bill.
+- **The planned-session estimate is soft-gated the same way.**
+  `/planned-session-estimate/:planDayId` must serve every athlete, because its
+  deterministic and pace-personalized layers are not AI, so it carries no consent
+  middleware. The optional AI refinement on top checks `aiCoachEnabled` inline
+  before any data leaves the server, and the consent flag is part of the result's
+  cache key so opting out immediately stops a previously refined value being
+  replayed. Plan-day focus text and exercise names are escaped and fenced in
+  `<user_input>` like every other prompt input.
 - **Numbers are never AI-sourced.** The parser returns a name + grams; nutrition
   is resolved from real `foods` rows. Insights are instructed to use *only* the
   supplied aggregates and not to invent foods or numbers.

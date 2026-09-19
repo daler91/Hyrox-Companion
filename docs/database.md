@@ -530,6 +530,14 @@ Per-call Gemini token-consumption records, used to cap daily AI spend and flag a
 **Indexes:**
 - `idx_ai_usage_logs_user_created` on (`user_id`, `created_at`) -- composite
 
+Two reads use this table, both over a rolling 24h window: the per-user spend sum,
+which the composite index serves directly, and the application-wide sum across
+all users, which has no matching index and therefore scans. The scan is bounded
+because the cron trims this table to 7 days, and `checkAiBudget` caches the global
+total in-process for 30 seconds (collapsing concurrent misses into one query), so
+it runs roughly twice a minute per replica rather than once per AI request. See
+[AI → Cost controls](ai-and-rag.md#cost-controls).
+
 ---
 
 ### push_subscriptions
@@ -548,6 +556,12 @@ Web Push API subscription objects so the server can deliver push notifications t
 **Indexes:**
 - `idx_push_subscriptions_user_id` on (`user_id`)
 - `idx_push_subscriptions_user_endpoint` -- UNIQUE on (`user_id`, `endpoint`)
+
+Rows per user are capped at `MAX_PUSH_SUBSCRIPTIONS_PER_USER` (10) in
+`server/storage/push.ts`; a save past the cap evicts the oldest rows by
+`created_at` rather than refusing the new registration. Each row is an arbitrary
+HTTPS URL the server later POSTs to, so an unbounded list would let one account
+make the server fan out requests to many third-party hosts.
 
 ---
 

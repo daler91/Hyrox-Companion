@@ -153,7 +153,8 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 - Returns `429` with `Retry-After` header and `RATE_LIMITED` error code
 - Limiter instances are cached per `(category, maxRequests, windowMs)` tuple
 - Uses PostgreSQL-backed `rate_limit_buckets` outside tests so limits are shared across app replicas
-- **Fail-closed on store error** (`passOnStoreError: false` in `server/routeUtils.ts`): if the Postgres rate-limit store is unavailable (e.g. a database outage), rate-limited requests are rejected rather than allowed through unthrottled. A DB outage therefore surfaces as request errors on these routes — not a silent bypass of abuse limits — so an attacker can't defeat the limiter by inducing store errors.
+- **Store-error behaviour is split by method** (`passOnStoreError` is chosen per request in `server/routeUtils.ts`): safe methods (`GET`, `HEAD`, `OPTIONS`) fail **open**, so a Postgres blip cannot 500 the entire read surface; everything else — every mutation, and therefore every auth, AI-spend and write route — fails **closed**, where allowing unthrottled requests during a store outage is the bigger risk. An attacker cannot defeat the limiter on a mutating route by inducing store errors. Counts stay unified per category because both limiter instances share the same Postgres key.
+- Every authenticated `/api/v1` route carries a limiter, including plain reads such as `GET /api/v1/plans`, `GET /api/v1/plans/:id`, `GET /api/v1/preferences` and the Strava/Garmin status and disconnect routes.
 - The SPA fallback route in `server/static.ts` has its own rate limiter (100 requests per 15 minutes)
 
 ### Body Size Limits
@@ -163,7 +164,7 @@ A strict origin whitelist is enforced. Requests from unlisted origins receive a 
 
 ### Request ID Validation
 
-Client-supplied `X-Request-ID` headers are validated against the pattern `^[\w.:-]+$` with a 64-character maximum length to prevent log injection. Invalid or missing IDs are replaced with a `randomUUID()`.
+Client-supplied `X-Request-ID` headers are validated against `^[A-Za-z0-9._-]{1,36}$` to prevent log injection. The colon was deliberately dropped — it is adjacent to log-parser delimiters — and 36 characters fits a UUID or ULID with no room for padding. Invalid or missing IDs are replaced with a `randomUUID()`.
 
 ### CSRF Protection
 
@@ -208,6 +209,39 @@ Server-side enforcement for the `X-Idempotency-Key` header sent by the client's 
 ### Error Sanitization
 
 The global error handler returns generic `"Internal Server Error"` messages for 500-status errors. Error details (`err.details`) are only included in the response for non-500 errors. Only 5xx errors and 429s are reported to Sentry (`shouldReportToSentry()`); every other status is still logged and returned but not sent upstream.
+
+The same rule applies to errors that are **stored** and read back later, not just
+those returned inline. `training_plans.generation_error` is surfaced verbatim by
+`GET /api/v1/plans/:id/generation-status`, so plan generation records only an
+`AppError` message (already written for users); any other thrown error — provider,
+database driver, HTTP layer, all of which can name internal hosts, models or query
+fragments — is stored as a generic message while the full error goes to the logs
+and Sentry.
+
+### SSRF Guard
+
+**File:** `server/ssrfGuard.ts`
+
+Two layers protect outbound requests to any URL the app did not hard-code:
+
+1. `checkSafeOutboundUrl(url)` — synchronous, rejects literal loopback, private,
+   link-local, carrier-grade-NAT (`100.64.0.0/10`, which carries Alibaba's
+   instance metadata at `100.100.100.200`), multicast and reserved addresses;
+   `localhost` in all its spellings, including a trailing dot and any
+   `*.localhost` subdomain, since RFC 6761 reserves that whole tree; the
+   unspecified addresses `0.0.0.0` and `::`; IPv4-mapped IPv6; and NAT64
+   (`64:ff9b::/96`) embedding a private IPv4. Documentation ranges such as
+   TEST-NET are deliberately **allowed** — they are unroutable rather than
+   internal, so blocking them buys nothing.
+2. `assertResolvedHostIsPublic(url)` — resolves a non-literal hostname's A/AAAA
+   records and refuses if any resolved address is private. Run at startup for
+   `AI_TEXT_BASE_URL`; DNS errors are non-fatal so a resolver hiccup does not
+   block an otherwise-healthy boot.
+
+Callers: `AI_TEXT_BASE_URL` at env-parse time and again at startup, and every
+web-push endpoint at both subscribe and send time. Both AI provider adapters also
+set `redirect: "error"` on their `fetch` calls, because following a redirect
+would re-POST the request body to a host that never passed the guard.
 
 ### Error Handling Flow
 
@@ -320,6 +354,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `VAPID_PRIVATE_KEY` | No | Web Push VAPID private key |
 | `VAPID_EMAIL` | No | Bare contact email address for Web Push; the server prepends `mailto:` when registering VAPID details |
 | `AI_FEATURES_ENABLED` | No | Runtime kill switch for AI provider traffic (default `true`; `false` disables all AI features) |
+| `AI_GLOBAL_DAILY_LIMIT_CENTS` | No | Application-wide rolling-24h AI spend ceiling in cents. Unset means no global ceiling (per-user cap only) and a startup warning in production |
 | `AI_TEXT_PROVIDER` | No | Text AI provider (`gemini`, `anthropic`, or `openai-compatible`; default `gemini`) |
 | `AI_TEXT_MODEL` | No | Default text model override for the configured provider |
 | `AI_TEXT_FAST_MODEL` | No | Fast text model override for parsing-style calls |
@@ -334,7 +369,7 @@ All environment variables are validated at startup by a Zod schema in `server/en
 | `APP_INSTANCE_COUNT` | No | Declared app replica count (default `1`). Values above `1` are supported after migrations because rate limits/cache state are shared through Postgres. |
 | `STRAVA_CLIENT_ID` | No | Strava OAuth client ID |
 | `STRAVA_CLIENT_SECRET` | No | Strava OAuth client secret |
-| `STRAVA_STATE_SECRET` | No | Secret for signing Strava OAuth state tokens |
+| `STRAVA_STATE_SECRET` | Yes (production, when Strava is configured) | 32+ char secret for signing Strava OAuth state tokens. Unset, each replica signs with its own per-process random secret, so a callback landing on a different instance than the one that issued the state fails verification |
 | `STRAVA_AUTO_SYNC_ENABLED` | No | Master switch for automatic Strava sync (default `true`) |
 | `STRAVA_AUTO_SYNC_INTERVAL_MINUTES` | No | Polling-fallback staleness threshold (default `60`) |
 | `STRAVA_WEBHOOKS_ENABLED` | No | Register and act on the Strava push subscription (default `true`) |

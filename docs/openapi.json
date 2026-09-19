@@ -2385,26 +2385,6 @@
                 "nullable": true,
                 "maxLength": 255
               },
-              "planId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "source": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "stravaActivityId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "garminActivityId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
               "calories": {
                 "type": "integer",
                 "nullable": true,
@@ -2464,11 +2444,6 @@
                 "nullable": true,
                 "minimum": -2147483648,
                 "maximum": 2147483647
-              },
-              "startedAt": {
-                "type": "string",
-                "nullable": true,
-                "format": "date-time"
               },
               "countsAsTraining": {
                 "type": "boolean"
@@ -2788,7 +2763,7 @@
           }
         ],
         "title": "CreateWorkoutRequest",
-        "description": "Payload for creating a new workout log along with optional exercise sets"
+        "description": "Payload for creating a new workout log along with optional exercise sets. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage."
       },
       "UpdateWorkoutRequest": {
         "allOf": [
@@ -2833,31 +2808,6 @@
                 "nullable": true,
                 "minimum": 0,
                 "maximum": 1439
-              },
-              "planDayId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "planId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "source": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "stravaActivityId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
-              },
-              "garminActivityId": {
-                "type": "string",
-                "nullable": true,
-                "maxLength": 255
               },
               "calories": {
                 "type": "integer",
@@ -2918,11 +2868,6 @@
                 "nullable": true,
                 "minimum": -2147483648,
                 "maximum": 2147483647
-              },
-              "startedAt": {
-                "type": "string",
-                "nullable": true,
-                "format": "date-time"
               },
               "countsAsTraining": {
                 "type": "boolean"
@@ -3252,7 +3197,7 @@
           }
         ],
         "title": "UpdateWorkoutRequest",
-        "description": "Payload for updating a workout log along with optional exercise sets"
+        "description": "Payload for updating a workout log along with optional exercise sets. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned."
       },
       "WorkoutId": {
         "type": "string",
