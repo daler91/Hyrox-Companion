@@ -29,6 +29,7 @@ export type { ApplyPlanProposalResponse, PlanProposalView } from "./planProposal
 export { planProposals } from "./planProposals";
 export type { PlanDayReparseTextPayload } from "./plans";
 export { plans } from "./plans";
+export { recycleBin } from "./recycleBin";
 export { timelineAnnotations } from "./timelineAnnotations";
 export type {
   GarminStatus,
@@ -44,6 +45,7 @@ export type {
   BatchReparseResponse,
   BulkDeleteWorkoutsPayload,
   BulkDeleteWorkoutsResponse,
+  DeleteToRecycleBinResponse,
   ReparseWorkoutTextPayload,
   WorkoutHistoryStats,
   WorkoutReferenceTextPayload,
@@ -60,6 +62,7 @@ import { mafTests } from "./mafTests";
 import { nutrition } from "./nutrition";
 import { planProposals } from "./planProposals";
 import { plans } from "./plans";
+import { recycleBin } from "./recycleBin";
 import { timelineAnnotations } from "./timelineAnnotations";
 import { auth, email, garmin, preferences, strava } from "./user";
 import { workouts } from "./workouts";
@@ -81,6 +84,7 @@ export const api = {
   mafTests,
   nutrition,
   planProposals,
+  recycleBin,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -93,6 +97,7 @@ export const QUERY_KEYS = {
   plan: (id: string) => ["/api/v1/plans", id] as const,
   timeline: ["/api/v1/timeline"] as const,
   timelineAnnotations: ["/api/v1/timeline-annotations"] as const,
+  recycleBin: ["/api/v1/recycle-bin"] as const,
   workouts: ["/api/v1/workouts"] as const,
   workout: (id: string) => ["/api/v1/workouts", id] as const,
   workoutHistory: (id: string) => ["/api/v1/workouts", id, "history"] as const,

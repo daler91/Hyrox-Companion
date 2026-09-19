@@ -9,6 +9,7 @@ import type { NutritionStorage } from "./nutrition";
 import type { PlanProposalStorage } from "./planProposals";
 import type { PlanStorage } from "./plans";
 import type { PushStorage } from "./push";
+import type { RecycleBinStorage } from "./recycleBin";
 import type { TimelineStorage } from "./timeline";
 import type { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import type { UserStorage } from "./users";
@@ -26,6 +27,7 @@ import type { WorkoutStorage } from "./workouts";
  *   storage.coaching.listCoachingMaterials(...)
  *   storage.aiUsage.getDailyTotalCents(...)
  *   storage.push.saveSubscription(...)
+ *   storage.recycleBin.restore(...)
  */
 export interface IStorage {
   users: UserStorage;
@@ -44,4 +46,5 @@ export interface IStorage {
   consent: ConsentStorage;
   nutrition: NutritionStorage;
   weeklyReviews: WeeklyReviewsStorage;
+  recycleBin: RecycleBinStorage;
 }

@@ -18,6 +18,7 @@ import {
   mafWorkoutAnalysis,
   planDays,
   pushSubscriptions,
+  recycleBinItems,
   stravaConnections,
   timelineAnnotations,
   trainingPlans,
@@ -61,6 +62,9 @@ describe("user-owned tables cascade on DELETE", () => {
     // The athlete's own words about their training week — user-authored content
     // that must leave with them.
     weeklyReviews,
+    // Snapshots of the athlete's deleted records — the same data as the tables
+    // above, just waiting to be restored, so it must leave with them too.
+    recycleBinItems,
   } as const;
 
   // Tables that are user-scoped transitively through a parent table rather

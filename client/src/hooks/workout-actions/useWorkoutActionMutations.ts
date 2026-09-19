@@ -8,6 +8,7 @@ import { queryClient } from "@/lib/queryClient";
 import { mapTimelineCache, type TimelineCache } from "@/lib/timelineCache";
 
 import { useApiMutation } from "../useApiMutation";
+import { useUndoDeleteToast } from "../useRecycleBin";
 import { buildBulkDeleteWorkoutTargets } from "./bulkDelete";
 import { buildOptimisticTimelineHandlers } from "./optimisticTimeline";
 import type {
@@ -85,6 +86,9 @@ function patchTimelineEntriesForLoggedWorkout(
 
 export function useWorkoutActionMutations(selectedPlanId: string | null) {
   const { toast } = useToast();
+  // Every delete below lands in the recycle bin; the success toast carries an
+  // Undo that restores it (one item, or the whole bulk-delete batch).
+  const showUndoDelete = useUndoDeleteToast();
   const updateStatusHandlers = buildOptimisticTimelineHandlers<UpdateStatusVariables>(
     selectedPlanId,
     (old, { dayId, status }) =>
@@ -184,9 +188,11 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.exerciseAnalytics,
       QUERY_KEYS.trainingOverview,
     ],
-    successToast: "Workout deleted",
     errorToast: "Failed to delete workout",
     ...deleteWorkoutHandlers,
+    onSuccess: (data) => {
+      showUndoDelete({ title: "Workout deleted", target: { itemId: data.recycleBinItemId } });
+    },
   });
 
   const deletePlanDayHandlers = buildOptimisticTimelineHandlers<string>(
@@ -196,9 +202,11 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
   const deletePlanDayMutation = useApiMutation({
     mutationFn: (dayId: string) => api.plans.deleteDay(dayId),
     invalidateQueries: [QUERY_KEYS.timeline, QUERY_KEYS.plans],
-    successToast: "Workout removed from plan",
     errorToast: "Failed to delete workout",
     ...deletePlanDayHandlers,
+    onSuccess: (data) => {
+      showUndoDelete({ title: "Workout removed from plan", target: { itemId: data.recycleBinItemId } });
+    },
   });
 
   const bulkDeleteWorkoutHandlers = buildOptimisticTimelineHandlers<TimelineEntry[]>(
@@ -227,11 +235,14 @@ export function useWorkoutActionMutations(selectedPlanId: string | null) {
       QUERY_KEYS.exerciseAnalytics,
       QUERY_KEYS.trainingOverview,
     ],
-    successToast: (data) => ({
-      title: data.deletedCount === 1 ? "Workout removed" : `${data.deletedCount} workouts removed`,
-    }),
     errorToast: "Failed to delete workouts",
     ...bulkDeleteWorkoutHandlers,
+    onSuccess: (data) => {
+      showUndoDelete({
+        title: data.deletedCount === 1 ? "Workout removed" : `${data.deletedCount} workouts removed`,
+        target: { batchId: data.batchId },
+      });
+    },
   });
 
   return {

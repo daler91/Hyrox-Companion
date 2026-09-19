@@ -1,9 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import { planDays, trainingPlans, workoutLogs } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "../db";
 import { AppError, ErrorCode } from "../errors";
 import { syncPlanDayStatusesFromWorkouts } from "../storage/planDayStatus";
+import { capturePlanDays, captureWorkoutLogs } from "../storage/recycleBinCapture";
 
 export const BULK_DELETE_WORKOUTS_NOT_FOUND = "One or more workouts were not found";
 
@@ -18,6 +21,9 @@ export interface BulkDeleteWorkoutsResult {
   readonly deletedWorkoutLogIds: string[];
   readonly deletedPlanDayIds: string[];
   readonly deletedCount: number;
+  /** Shared by every recycle-bin item this delete produced; restoring the batch undoes the whole delete. */
+  readonly batchId: string;
+  readonly recycleBinItemIds: string[];
 }
 
 function assertAllTargetsMatched(actualCount: number, expectedCount: number): void {
@@ -57,6 +63,14 @@ export async function bulkDeleteWorkouts({
       : [];
     assertAllTargetsMatched(ownedPlanDays.length, planDayIds.length);
 
+    // Snapshot everything into the recycle bin under one batch id before any
+    // row goes, so a single Undo brings the whole selection back.
+    const batchId = randomUUID();
+    const captured = [
+      ...(await captureWorkoutLogs(tx, userId, workoutLogIds, { batchId })).values(),
+      ...(await capturePlanDays(tx, userId, planDayIds, { batchId })).values(),
+    ];
+
     if (workoutLogIds.length) {
       const deleted = await tx
         .delete(workoutLogs)
@@ -95,6 +109,8 @@ export async function bulkDeleteWorkouts({
       deletedWorkoutLogIds: workoutLogIds,
       deletedPlanDayIds: planDayIds,
       deletedCount: workoutLogIds.length + planDayIds.length,
+      batchId,
+      recycleBinItemIds: captured,
     };
   });
 }

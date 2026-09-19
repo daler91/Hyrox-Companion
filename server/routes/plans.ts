@@ -18,6 +18,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { getUserId } from "../types";
 import { createUpdatePlanDayUseCase } from "../usecases/plans/updatePlanDay.usecase";
 import { createMutateExerciseSetUseCase } from "../usecases/workouts/mutateExerciseSet.usecase";
+import { sendPlanOverlap } from "./_helpers/planOverlap";
 import { protectedDelete, protectedPatch, protectedPost } from "./_helpers/protectedRouteBuilder";
 
 const router = Router();
@@ -129,7 +130,6 @@ const planDaySetUseCase = createMutateExerciseSetUseCase({
 
 const handleGetOrDeletePlan = (
   actionFn: (id: string, userId: string) => Promise<Record<string, unknown> | null | undefined>,
-  successMsg?: string,
 ) => asyncHandler(async (
   req: ExpressRequest<{ id: string }>,
   res: Response
@@ -139,7 +139,7 @@ const handleGetOrDeletePlan = (
   if (!result) {
     return sendNotFound(res, "Training plan not found");
   }
-  res.json(successMsg ? { success: true } : result);
+  res.json(result);
 })
 
 router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
@@ -285,10 +285,7 @@ protectedPatch(router, "/api/v1/plans/:id/retirement", { limiter: rateLimiter("p
           plan.id,
         );
         if (overlapping.length > 0) {
-          return res.status(409).json({
-            error: `"${overlapping[0].name}" already covers these dates. Archive it first to restore this plan.`,
-            code: "PLAN_OVERLAP",
-          });
+          return sendPlanOverlap(res, overlapping[0]);
         }
       }
       const restored = await storage.plans.setPlanRetirement(plan.id, null, userId);
@@ -307,7 +304,7 @@ protectedPatch(router, "/api/v1/plans/:id/retirement", { limiter: rateLimiter("p
     res.json(updated);
   });
 
-protectedDelete(router, "/api/v1/plans/:id", { limiter: rateLimiter("planDelete", 10) }, handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true } : null; }, "true"));
+protectedDelete(router, "/api/v1/plans/:id", { limiter: rateLimiter("planDelete", 10) }, handleGetOrDeletePlan(async (id, userId) => { const deleted = await storage.plans.deleteTrainingPlan(id, userId); return deleted ? { success: true, recycleBinItemId: deleted.recycleBinItemId } : null; }));
 
 protectedPost(router, "/api/v1/plans/:planId/schedule", { limiter: rateLimiter("planSchedule", 10), middleware: [validateBody(schedulePlanRequestSchema)] }, async (req: ExpressRequest<{ planId: string }, unknown, z.infer<typeof schedulePlanRequestSchema>>, res: Response) => {
     const { startDate } = req.body;
@@ -350,7 +347,7 @@ protectedDelete(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("pla
     if (!deleted) {
       return sendNotFound(res, "Plan day not found");
     }
-    res.json({ success: true });
+    res.json({ success: true, recycleBinItemId: deleted.recycleBinItemId });
   });
 
 // -----------------------------------------------------------------------------

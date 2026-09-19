@@ -447,7 +447,7 @@ registry.registerPath({
   path: "/api/v1/workouts/{id}",
   tags: ["Workouts"],
   summary: "Delete a specific workout log",
-  description: "Deletes an existing workout log by its ID for the authenticated user.",
+  description: "Deletes an existing workout log by its ID for the authenticated user. The log is kept in the recycle bin for 90 days and can be restored.",
   security,
   request: {
     params: z.object({
@@ -461,6 +461,11 @@ registry.registerPath({
         "application/json": {
           schema: z.object({
             success: z.boolean().openapi({ example: true }),
+            recycleBinItemId: z.string().openapi({
+              description:
+                "Recycle-bin item holding the deleted workout; POST /api/v1/recycle-bin/{id}/restore undoes the delete for 90 days",
+              example: "8f3c2a1e-5b7d-4c9e-a1f2-3d4e5f6a7b8c",
+            }),
           }),
         },
       },

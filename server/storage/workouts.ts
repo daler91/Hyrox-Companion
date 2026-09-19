@@ -4,6 +4,7 @@ import {
   type InsertExerciseSet,
   type InsertWorkoutLog,
   planDays,
+  recycleBinItems,
   type StructureBlockInput,
   trainingPlans,
   type UpdateWorkoutLog,
@@ -15,7 +16,7 @@ import {
 } from "@shared/schema";
 import { normalizeExerciseName } from "@shared/schema/exercises";
 import { restampSetPatch, type UnitPreferences } from "@shared/unitConversion";
-import { and, asc, desc, eq, gte, inArray,isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray,isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import { db, type DbExecutor } from "../db";
 import { AppError, ErrorCode } from "../errors";
@@ -26,6 +27,7 @@ import {
   type NormalizedSetCreateInput,
 } from "./exerciseSetOwners";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
+import { captureWorkoutLogs } from "./recycleBinCapture";
 import {
   prescribedSetToLogRow,
   queryExerciseSetsWithDates,
@@ -140,6 +142,16 @@ type NormalizedSetUpdateInput = Partial<Omit<InsertExerciseSet, "id" | "workoutL
   readonly unitPreferences?: UnitPreferences;
 };
 
+
+function uniqueActivityIds(...rowSets: Array<Array<{ activityId: string | null }>>): string[] {
+  const ids = new Set<string>();
+  for (const rows of rowSets) {
+    for (const row of rows) {
+      if (row.activityId) ids.add(row.activityId);
+    }
+  }
+  return [...ids];
+}
 
 export class WorkoutStorage {
   private async loadStepsForBlocks(blockIds: string[]): Promise<Map<string, WorkoutStructureStepRow[]>> {
@@ -382,25 +394,34 @@ export class WorkoutStorage {
   // the remaining workout count. Prior to this fix (S6), the plan_day kept a
   // stale "completed" status after its only workout was deleted, which broke
   // analytics and the "Log workout" CTA on the Timeline.
-  async deleteWorkoutLog(logId: string, userId: string): Promise<boolean> {
+  //
+  // The log (with its sets, structure and MAF analysis links) is snapshotted
+  // into the recycle bin first, in the same transaction, so the delete can be
+  // undone for RECYCLE_BIN_RETENTION_DAYS. Returns the bin item id, or null
+  // when the log is not the user's.
+  async deleteWorkoutLog(logId: string, userId: string): Promise<{ recycleBinItemId: string } | null> {
     return await db.transaction(async (tx) => {
       const [log] = await tx
         .select({ planDayId: workoutLogs.planDayId })
         .from(workoutLogs)
         .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)))
         .limit(1);
-      if (!log) return false;
+      if (!log) return null;
+
+      const captured = await captureWorkoutLogs(tx, userId, [logId]);
+      const recycleBinItemId = captured.get(logId);
+      if (!recycleBinItemId) return null;
 
       const result = await tx
         .delete(workoutLogs)
         .where(and(eq(workoutLogs.id, logId), eq(workoutLogs.userId, userId)));
       const deleted = result.rowCount !== null && result.rowCount > 0;
-      if (!deleted) return false;
+      if (!deleted) return null;
 
       if (log.planDayId) {
         await syncPlanDayStatusFromWorkouts(log.planDayId, userId, tx);
       }
-      return true;
+      return { recycleBinItemId };
     });
   }
 
@@ -456,10 +477,19 @@ export class WorkoutStorage {
       .orderBy(asc(workoutLogs.date), asc(workoutLogs.id));
   }
 
+  /**
+   * Activity ids among `stravaActivityIds` the athlete already has — on a live
+   * workout log OR on a workout sitting in the recycle bin. The bin half is
+   * what keeps a deleted device workout deleted: Strava re-scans a 7-day
+   * overlap on every sync and Garmin re-lists the latest N, so without it the
+   * next sync would silently re-create the workout the athlete just removed
+   * (and restore would then collide with the copy). Expired bin rows no
+   * longer count, matching what the bin itself shows.
+   */
   async getExistingStravaActivityIds(userId: string, stravaActivityIds: string[]): Promise<string[]> {
     if (stravaActivityIds.length === 0) return [];
-    const rows = await db
-      .select({ stravaActivityId: workoutLogs.stravaActivityId })
+    const live = await db
+      .select({ activityId: workoutLogs.stravaActivityId })
       .from(workoutLogs)
       .where(
         and(
@@ -468,7 +498,17 @@ export class WorkoutStorage {
           isNotNull(workoutLogs.stravaActivityId)
         )
       );
-    return rows.map((r) => r.stravaActivityId as string);
+    const binned = await db
+      .select({ activityId: recycleBinItems.stravaActivityId })
+      .from(recycleBinItems)
+      .where(
+        and(
+          eq(recycleBinItems.userId, userId),
+          inArray(recycleBinItems.stravaActivityId, stravaActivityIds),
+          gt(recycleBinItems.expiresAt, new Date())
+        )
+      );
+    return uniqueActivityIds(live, binned);
   }
 
   /**
@@ -492,10 +532,11 @@ export class WorkoutStorage {
     return createdLogs;
   }
 
+  /** Garmin twin of {@link getExistingStravaActivityIds}, bin-aware for the same reason. */
   async getExistingGarminActivityIds(userId: string, garminActivityIds: string[]): Promise<string[]> {
     if (garminActivityIds.length === 0) return [];
-    const rows = await db
-      .select({ garminActivityId: workoutLogs.garminActivityId })
+    const live = await db
+      .select({ activityId: workoutLogs.garminActivityId })
       .from(workoutLogs)
       .where(
         and(
@@ -504,7 +545,17 @@ export class WorkoutStorage {
           isNotNull(workoutLogs.garminActivityId)
         )
       );
-    return rows.map((r) => r.garminActivityId as string);
+    const binned = await db
+      .select({ activityId: recycleBinItems.garminActivityId })
+      .from(recycleBinItems)
+      .where(
+        and(
+          eq(recycleBinItems.userId, userId),
+          inArray(recycleBinItems.garminActivityId, garminActivityIds),
+          gt(recycleBinItems.expiresAt, new Date())
+        )
+      );
+    return uniqueActivityIds(live, binned);
   }
 
   async createExerciseSets(sets: InsertExerciseSet[]): Promise<ExerciseSet[]> {

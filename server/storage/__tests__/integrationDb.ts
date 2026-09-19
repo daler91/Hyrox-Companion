@@ -9,6 +9,7 @@ import {
   planDays,
   recipeIngredients,
   recipes,
+  recycleBinItems,
   trainingPlans,
   users,
   workoutLogs,
@@ -35,6 +36,7 @@ export async function resetIntegrationDb(): Promise<void> {
   await db.delete(foodServings);
   await db.delete(mealTargets);
   await db.delete(nutritionTargets);
+  await db.delete(recycleBinItems);
   await db.delete(exerciseSets);
   await db.delete(workoutLogs);
   await db.delete(planDays);

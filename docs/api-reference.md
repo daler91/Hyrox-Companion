@@ -29,6 +29,7 @@ fitai.coach exposes a RESTful API under the `/api/v1/` prefix. All endpoints exc
 - [MAF Test Routes](#maf-test-routes)
 - [Training Plan Routes](#training-plan-routes)
 - [Timeline Annotation Routes](#timeline-annotation-routes)
+- [Recycle Bin Routes](#recycle-bin-routes)
 - [Analytics Routes](#analytics-routes)
 - [AI and Chat Routes](#ai-and-chat-routes)
 - [Coaching Material Routes](#coaching-material-routes)
@@ -109,7 +110,7 @@ RateLimit-Reset: 1710500045
 | 401 | `UNAUTHORIZED` | Missing or invalid auth |
 | 403 | `FORBIDDEN`, `AI_COACH_DISABLED` | Rejected rather than unauthenticated — every CSRF failure lands here |
 | 404 | `NOT_FOUND` | Resource not found |
-| 409 | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS` | Conflicts with current state |
+| 409 | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state |
 | 412 | `PRECONDITION_FAILED` | A precondition on the request was not met |
 | 413 | `PAYLOAD_TOO_LARGE` | Body exceeded the route's size limit |
 | 429 | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED` | Rate limit exceeded (includes `Retry-After` header), or the AI spend budget is spent |
@@ -383,11 +384,11 @@ Update an existing workout log.
 
 ### DELETE /api/v1/workouts/:id
 
-Delete a workout log and its exercise sets.
+Delete a workout log and its exercise sets. The record graph is snapshotted into the [recycle bin](#recycle-bin-routes) first, so the delete can be undone for 90 days.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 40/min
-- **Response:** `{ success: true }`
+- **Response:** `{ success: true, recycleBinItemId: string }` — pass the id to `POST /api/v1/recycle-bin/:id/restore` to undo
 
 ### POST /api/v1/workouts/:id/sets
 
@@ -485,11 +486,11 @@ Delete multiple workout logs and/or plan days in a single request.
 - **Auth:** Required
 - **Rate limit:** `workoutBulkDelete` category, 20/min
 - **Body:** `{ workoutLogIds: string[], planDayIds: string[] }` — each capped at 100 entries, at least one id required
-- **Response:** Bulk delete result (or 404 when a target is not found)
+- **Response:** `{ success: true, deletedWorkoutLogIds, deletedPlanDayIds, deletedCount, batchId: string, recycleBinItemIds: string[] }` (or 404 when a target is not found). Every deleted record lands in the [recycle bin](#recycle-bin-routes) under the one `batchId`, so `POST /api/v1/recycle-bin/batches/:batchId/restore` undoes the whole bulk delete.
 
 ### POST /api/v1/workouts/combine
 
-Combine multiple workout logs into a single new workout, deleting the sources.
+Combine multiple workout logs into a single new workout, deleting the sources. The sources' exercise sets are moved onto the merged workout before the delete, so the sources do **not** go to the recycle bin — combine is permanent.
 
 - **Auth:** Required
 - **Rate limit:** `workout` category, 10/min
@@ -744,19 +745,19 @@ Update only the status, scheduled date and/or skip reason of a plan day.
 
 ### DELETE /api/v1/plans/:id
 
-Delete a training plan and all its days (cascade).
+Delete a training plan and all its days (cascade). The plan, its days and their prescribed sets are snapshotted into the [recycle bin](#recycle-bin-routes) first; workout logs that pointed at the plan stay on the timeline as unplanned sessions and are re-linked on restore.
 
 - **Auth:** Required
 - **Rate limit:** `planDelete` category, 10/min
-- **Response:** `{ success: true }`
+- **Response:** `{ success: true, recycleBinItemId: string }`
 
 ### DELETE /api/v1/plans/days/:dayId
 
-Delete a single plan day.
+Delete a single plan day. Snapshotted into the [recycle bin](#recycle-bin-routes) first; a workout logged against the day keeps its log (unlinked) and is re-linked on restore.
 
 - **Auth:** Required
 - **Rate limit:** `planDayDelete` category, 10/min
-- **Response:** `{ success: true }`
+- **Response:** `{ success: true, recycleBinItemId: string }`
 
 ### POST /api/v1/plans/:planId/schedule
 
@@ -884,6 +885,63 @@ Delete an annotation.
 - **Auth:** Required
 - **Rate limit:** `annotations` category, 20/min
 - **Response:** `{ success: true }` (or 404 when the id doesn't belong to the user)
+
+---
+
+## Recycle Bin Routes
+
+**File:** `server/routes/recycleBin.ts`
+
+Deleted workout logs, plan days and training plans are snapshotted into the `recycle_bin_items` table (see [database.md](database.md#recycle_bin_items)) at delete time and can be restored for **90 days**; the `recycleBinPurge` cron removes expired items nightly. Restore re-inserts the record with its original id and re-attaches whatever the delete detached (a workout's plan-day link and MAF analysis, a plan day's logged workouts). Items are scoped to the authenticated user at the storage layer — another user's id, an expired item, or an unknown id all return 404.
+
+The client uses these in two places: an **Undo** action on the delete toast (single item or bulk-delete batch) and the **Recycle bin** card under Settings → Data & Privacy.
+
+While a device-imported workout sits in the bin, the Strava and Garmin syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After *Delete forever* or expiry the activity can be imported again if it is still inside the provider's fetch window.
+
+### GET /api/v1/recycle-bin
+
+List the user's restorable items, newest first (capped at 500), without payloads.
+
+- **Auth:** Required
+- **Rate limit:** `recycleBin` category, 60/min
+- **Response:** `{ items: RecycleBinListItem[], counts: { total, workout_log, plan_day, training_plan } }` where each item is `{ id, entityType, entityId, batchId, label, summary, entityDate, childCount, deletedAt, expiresAt }`
+
+### POST /api/v1/recycle-bin/:id/restore
+
+Restore one item and remove it from the bin.
+
+- **Auth:** Required
+- **Rate limit:** `recycleBinMutation` category, 20/min
+- **Response:** `{ ok: true, entityType, entityId, batchId, warnings: string[] }` — `warnings` lists anything that could not be put back exactly (e.g. the plan day a workout belonged to no longer exists, so it was restored unplanned)
+- **Errors:**
+  - `404` — unknown, expired, or another user's item; or, for a plan day, the parent plan has been deleted (restore the plan first)
+  - `409 PLAN_OVERLAP` — restoring a live training plan whose dates overlap another live plan (archive that plan first, same rule as [`PATCH /api/v1/plans/:id/retirement`](#patch-apiv1plansidretirement))
+  - `409 RECYCLE_BIN_CONFLICT` — a record with the same id or the same Strava/Garmin activity id already exists (a race with a concurrent sync)
+
+### POST /api/v1/recycle-bin/batches/:batchId/restore
+
+Restore every item a single bulk delete produced, all-or-nothing: if any item cannot be restored the whole batch is rolled back and the failure reported.
+
+- **Auth:** Required
+- **Rate limit:** `recycleBinMutation` category, 20/min
+- **Response:** `{ ok: true, batchId, restored: Array<{ entityType, entityId }>, warnings: string[] }`
+- **Errors:** as for single restore; `404` when the batch has no restorable items
+
+### DELETE /api/v1/recycle-bin/:id
+
+Permanently delete one item ("Delete forever").
+
+- **Auth:** Required
+- **Rate limit:** `recycleBinMutation` category, 20/min
+- **Response:** `{ success: true }` (or 404)
+
+### DELETE /api/v1/recycle-bin
+
+Empty the bin.
+
+- **Auth:** Required
+- **Rate limit:** `recycleBinEmpty` category, 5/min
+- **Response:** `{ success: true, purgedCount: number }`
 
 ---
 
@@ -1673,7 +1731,7 @@ Export all training data as CSV or JSON.
 - **Auth:** Required
 - **Rate limit:** `export` category, 5/min
 - **Query:** `format` — `"csv"` (default) or `"json"`
-- **Response:** File download with appropriate Content-Type and Content-Disposition headers
+- **Response:** File download with appropriate Content-Type and Content-Disposition headers. Records sitting in the [recycle bin](#recycle-bin-routes) are not included.
 
 ---
 

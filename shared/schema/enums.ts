@@ -55,3 +55,13 @@ export type MealType = (typeof MEAL_TYPES)[number];
  */
 export const deviceLinkSourceEnum = ["auto", "manual"] as const;
 export type DeviceLinkSource = (typeof deviceLinkSourceEnum)[number];
+
+/**
+ * What a recycle-bin item holds. Each kind is a whole record graph (the row
+ * plus every child row the delete cascade would take with it), captured at
+ * delete time so an accidental delete can be undone with the original ids.
+ * Lives here, not tables.ts, for the same reason as MEAL_TYPES: the client
+ * renders the bin without evaluating the drizzle table graph.
+ */
+export const recycleBinEntityTypeEnum = ["workout_log", "plan_day", "training_plan"] as const;
+export type RecycleBinEntityType = (typeof recycleBinEntityTypeEnum)[number];

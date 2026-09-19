@@ -828,6 +828,47 @@ The athlete's stated intent for a week. One row per `(user, week)`, keyed on the
 
 Served by [`GET /api/v1/weekly-review` and `POST /api/v1/weekly-review/intent`](api-reference.md#analytics-routes); see [weekly-review-spec.md](weekly-review-spec.md).
 
+### recycle_bin_items
+
+Snapshots of records the athlete deleted, kept so an accidental delete can be undone. A delete is still a hard `DELETE` — every read path, FK cascade and partial unique index keeps behaving exactly as before — but inside the same transaction the deleted record graph is first serialised into this table. Restore (`POST /api/v1/recycle-bin/:id/restore`) re-inserts the payload **with the original ids** so anything that still points at the record resolves again, then removes the row. Items are restorable for **90 days** (`RECYCLE_BIN_RETENTION_DAYS`, `shared/schema/types/recycleBin.ts`); the `recycleBinPurge` cron removes whatever has expired.
+
+Chosen over `deleted_at` columns deliberately: `workout_logs`, `plan_days` and `training_plans` are read by roughly forty server modules (timeline, analytics, AI coach context, export, plan-day status sync, device matching), and a soft-delete flag is only as good as the last query someone remembered to add it to. A snapshot leaves every reader untouched and puts the whole restore problem in one module (`server/storage/recycleBin.ts`).
+
+What a payload holds (`RecycleBinPayload`, discriminated on `kind`):
+
+- `workout_log` — the `workout_logs` row, its `exercise_sets`, its `workout_structure_blocks` with their `workout_structure_steps`, and the ids of `maf_workout_analysis` rows whose `workout_log_id` the delete SET NULL (restore re-links them).
+- `plan_day` — the `plan_days` row, its sets/blocks/steps, and the ids of `workout_logs` whose `plan_day_id` the delete SET NULL (restore re-links the ones that still exist and re-derives the day's status).
+- `training_plan` — the `training_plans` row, every plan day (each as above), and the `workout_logs` that pointed at the plan or one of its days.
+
+Not captured: `plan_adjustment_proposals` (cascade with the plan and are not restored), and workouts removed by `POST /api/v1/workouts/combine` (their sets are moved to the merged log before the delete, so there is nothing left to snapshot — combine is permanent). `payload.version` (currently `1`) lets a later shape change migrate or refuse old items instead of mis-inserting them.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | varchar(255) | Primary key, default `gen_random_uuid()` |
+| `user_id` | varchar(255) | Not null, FK → `users.id` ON DELETE CASCADE |
+| `entity_type` | text | Not null, CHECK IN (`workout_log`, `plan_day`, `training_plan`) — rendered from `recycleBinEntityTypeEnum` |
+| `entity_id` | varchar(255) | Not null -- the deleted record's own id, which restore reuses |
+| `batch_id` | varchar(255) | Nullable -- shared by every item one bulk delete produced, so a single Undo restores them together |
+| `label` | text | Not null -- display title (workout focus, `Week N · day · focus`, plan name) |
+| `summary` | text | Nullable -- one-line detail for the listing |
+| `entity_date` | date | Nullable -- the record's own date (workout date, scheduled date, plan start) |
+| `child_count` | integer | Not null, default 0 -- exercise sets for a workout/day, days for a plan |
+| `strava_activity_id` | varchar(255) | Nullable -- copied off a device-imported workout so the Strava sync's dedupe treats it as already imported while binned |
+| `garmin_activity_id` | varchar(255) | Nullable -- same, for Garmin |
+| `payload` | jsonb | Not null -- the `RecycleBinPayload` snapshot |
+| `deleted_at` | timestamp with time zone | Not null, default `now()` |
+| `expires_at` | timestamp with time zone | Not null -- `deleted_at` + 90 days; listing, restore and the device dedupe all ignore expired rows |
+
+**Indexes:**
+- Primary key on `id`
+- `idx_recycle_bin_items_user_deleted` -- (`user_id`, `deleted_at`) -- the bin listing, newest first
+- `idx_recycle_bin_items_expires_at` -- (`expires_at`) -- the purge cron
+- `idx_recycle_bin_items_batch_id` -- (`batch_id`) -- batch restore
+- `idx_recycle_bin_items_user_strava` / `idx_recycle_bin_items_user_garmin` -- partial on (`user_id`, activity id) WHERE the id IS NOT NULL -- the device sync's bin-aware dedupe
+- `uq_recycle_bin_items_entity` -- unique on (`entity_type`, `entity_id`) -- a record sits in the bin at most once; restore deletes the row, so a later re-delete inserts a fresh item
+
+Served by the [Recycle Bin routes](api-reference.md#recycle-bin-routes).
+
 ### Nutrition tables
 
 The nutrition module's eight tables — `foods`, `food_servings`, `food_log_entries`, `nutrition_targets`, `meal_targets`, `food_favorites`, `recipes`, and `recipe_ingredients` — are defined in the same `shared/schema/tables.ts` and documented column-by-column in [Nutrition & Fuelling § Data model](nutrition.md#3-data-model) (including the per-100g storage invariant and the shared-cache visibility rules). Two schema details worth surfacing here:
@@ -1123,8 +1164,9 @@ Each domain class owns a cohesive slice of functionality:
 | `NutritionStorage` | `server/storage/nutrition.ts` | The nutrition module, delegating to `nutritionFoods.ts`, `nutritionLogs.ts`, `nutritionTargets.ts`, `nutritionFavorites.ts`, `nutritionRecipes.ts` and `nutritionShared.ts` |
 | `PlanProposalStorage` | `server/storage/planProposals.ts` | AI plan-adjustment proposals (pending lookup, apply/dismiss transitions) |
 | `WeeklyReviewsStorage` | `server/storage/weeklyReviews.ts` | Per-week athlete intents behind the weekly review |
+| `RecycleBinStorage` | `server/storage/recycleBin.ts` | Recycle bin: list, restore (single or bulk-delete batch), purge; the delete-time snapshots themselves are written by `recycleBinCapture.ts` |
 
-Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts` and `raceDayView.ts`. `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
+Shared query logic is extracted into helper modules: `server/storage/shared.ts` (e.g. joining exercise sets with workout dates), `planDayStatus.ts`, `timelineWindow.ts`, `absenceGuard.ts`, `exerciseSetOwners.ts`, `planRetirement.ts`, `raceDayView.ts` and `recycleBinCapture.ts` (the delete-time snapshot writers that `workouts.ts`, `plans.ts` and `bulkDeleteWorkouts.ts` call inside their own transactions). `WorkoutStorage` additionally delegates to a `server/storage/workouts/` subdirectory (`crud.ts`, `customExercises.ts`, `timeline.ts`).
 
 ### Composed Facade (`server/storage/index.ts`)
 
@@ -1150,6 +1192,7 @@ export const storage: IStorage = {
   consent: new ConsentStorage(),
   nutrition: new NutritionStorage(),
   weeklyReviews: new WeeklyReviewsStorage(),
+  recycleBin: new RecycleBinStorage(),
 };
 ```
 

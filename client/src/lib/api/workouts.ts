@@ -31,6 +31,15 @@ export interface BulkDeleteWorkoutsResponse {
   deletedWorkoutLogIds: string[];
   deletedPlanDayIds: string[];
   deletedCount: number;
+  /** Every deleted record went to the recycle bin under this id; restoring the batch undoes the whole delete. */
+  batchId: string;
+  recycleBinItemIds: string[];
+}
+
+/** A single delete's response: the recycle-bin item that can undo it. */
+export interface DeleteToRecycleBinResponse {
+  success: boolean;
+  recycleBinItemId: string;
 }
 
 /**
@@ -142,7 +151,7 @@ export const workouts = {
       { score },
     ),
 
-  delete: (id: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/workouts/${id}`),
+  delete: (id: string) => typedRequest<DeleteToRecycleBinResponse>("DELETE", `/api/v1/workouts/${id}`),
 
   bulkDelete: (data: BulkDeleteWorkoutsPayload) =>
     typedRequest<BulkDeleteWorkoutsResponse>("POST", "/api/v1/workouts/bulk-delete", data),

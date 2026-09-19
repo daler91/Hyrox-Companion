@@ -18,8 +18,14 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type { DeviceActivitySnapshot } from "./deviceActivity";
-import { deviceLinkSourceEnum, MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
-import type { CoachNoteInputs, PlanAdjustmentProposalPayload } from "./types";
+import {
+  deviceLinkSourceEnum,
+  MEAL_TYPES,
+  planDaySkipReasonEnum,
+  recycleBinEntityTypeEnum,
+  workoutStatusEnum,
+} from "./enums";
+import type { CoachNoteInputs, PlanAdjustmentProposalPayload, RecycleBinPayload } from "./types";
 
 /**
  * Render a TS value list as the quoted literal list inside a CHECK constraint's
@@ -1070,6 +1076,67 @@ export const weeklyReviews = pgTable(
 );
 
 export type WeeklyReviewRow = typeof weeklyReviews.$inferSelect;
+
+// Recycle bin. A delete is still a hard DELETE — every read path, FK cascade
+// and partial unique index keeps behaving exactly as before — but the deleted
+// record graph is serialised here first, inside the same transaction, so the
+// athlete can undo it for RECYCLE_BIN_RETENTION_DAYS. Restore re-inserts the
+// payload with the original ids and removes the row; the purge cron removes
+// whatever has expired. Chosen over `deleted_at` columns because the three
+// captured tables are read by ~40 server modules, and a soft-delete flag is
+// only as good as the last query someone remembered to add it to.
+//
+// `label` / `summary` / `entity_date` / `child_count` are denormalised so the
+// bin lists without parsing `payload`; `strava_activity_id` /
+// `garmin_activity_id` are copied off a workout so the device sync's dedupe
+// can treat a binned activity as already imported (otherwise the next sync
+// would re-create the workout the athlete just deleted).
+export const recycleBinItems = pgTable(
+  "recycle_bin_items",
+  {
+    id: varchar("id", { length: 255 })
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    entityType: text("entity_type").notNull(),
+    entityId: varchar("entity_id", { length: 255 }).notNull(),
+    // Set on every item a single bulk delete produced, so one Undo restores
+    // them together. NULL for a single delete.
+    batchId: varchar("batch_id", { length: 255 }),
+    label: text("label").notNull(),
+    summary: text("summary"),
+    entityDate: date("entity_date"),
+    childCount: integer("child_count").notNull().default(0),
+    stravaActivityId: varchar("strava_activity_id", { length: 255 }),
+    garminActivityId: varchar("garmin_activity_id", { length: 255 }),
+    payload: jsonb("payload").$type<RecycleBinPayload>().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    check(
+      "recycle_bin_items_entity_type_check",
+      sql`entity_type IN (${inValues(recycleBinEntityTypeEnum)})`,
+    ),
+    index("idx_recycle_bin_items_user_deleted").on(table.userId, table.deletedAt),
+    index("idx_recycle_bin_items_expires_at").on(table.expiresAt),
+    index("idx_recycle_bin_items_batch_id").on(table.batchId),
+    index("idx_recycle_bin_items_user_strava")
+      .on(table.userId, table.stravaActivityId)
+      .where(sql`${table.stravaActivityId} IS NOT NULL`),
+    index("idx_recycle_bin_items_user_garmin")
+      .on(table.userId, table.garminActivityId)
+      .where(sql`${table.garminActivityId} IS NOT NULL`),
+    // A record can sit in the bin at most once. Restore deletes the row, so a
+    // later re-delete of the same record inserts a fresh item.
+    uniqueIndex("uq_recycle_bin_items_entity").on(table.entityType, table.entityId),
+  ],
+);
+
+export type RecycleBinItem = typeof recycleBinItems.$inferSelect;
+export type InsertRecycleBinItem = typeof recycleBinItems.$inferInsert;
 
 // Custom exercises saved by users for AI recognition
 export const customExercises = pgTable(

@@ -19,6 +19,7 @@ import { getLocalDateStrSafe } from "../timezone";
 import { noAbsenceDeclaredForPlanDay } from "./absenceGuard";
 import { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
 import { missedSweepRetirementGuard, planDayWithinPlanLifetime, planLiveForDate } from "./planRetirement";
+import { capturePlanDays, captureTrainingPlan } from "./recycleBinCapture";
 
 // Re-export for callers that already reach for it via PlanStorage's neighbours.
 export { syncPlanDayStatusFromWorkouts } from "./planDayStatus";
@@ -219,18 +220,21 @@ export class PlanStorage {
       );
   }
 
-  async deleteTrainingPlan(planId: string, userId: string): Promise<boolean> {
-    const [plan] = await db
-      .select()
-      .from(trainingPlans)
-      .where(and(eq(trainingPlans.id, planId), eq(trainingPlans.userId, userId)));
-
-    if (!plan) return false;
-
+  /**
+   * Deletes a plan and every day on it. The whole graph (plan, days, their
+   * prescribed sets and structure, and which workout logs pointed at them) is
+   * snapshotted into the recycle bin first, in the same transaction, so the
+   * delete can be undone. Returns the bin item id, or null when the plan is
+   * not the user's.
+   */
+  async deleteTrainingPlan(planId: string, userId: string): Promise<{ recycleBinItemId: string } | null> {
     return await db.transaction(async (tx) => {
+      const recycleBinItemId = await captureTrainingPlan(tx, userId, planId);
+      if (!recycleBinItemId) return null;
+
       await tx.delete(planDays).where(eq(planDays.planId, planId));
       const result = await tx.delete(trainingPlans).where(eq(trainingPlans.id, planId));
-      return result.rowCount !== null && result.rowCount > 0;
+      return result.rowCount !== null && result.rowCount > 0 ? { recycleBinItemId } : null;
     });
   }
 
@@ -341,12 +345,21 @@ export class PlanStorage {
     return rows.map((r) => r.day);
   }
 
-  async deletePlanDay(dayId: string, userId: string): Promise<boolean> {
-    const existingDay = await this.getPlanDay(dayId, userId);
-    if (!existingDay) return false;
+  /**
+   * Deletes one plan day, snapshotting it (with its prescribed sets and the
+   * logs that pointed at it) into the recycle bin first. The capture doubles
+   * as the ownership check: it only finds days on the user's own plans.
+   * Returns the bin item id, or null when the day is not theirs.
+   */
+  async deletePlanDay(dayId: string, userId: string): Promise<{ recycleBinItemId: string } | null> {
+    return await db.transaction(async (tx) => {
+      const captured = await capturePlanDays(tx, userId, [dayId]);
+      const recycleBinItemId = captured.get(dayId);
+      if (!recycleBinItemId) return null;
 
-    const result = await db.delete(planDays).where(eq(planDays.id, dayId));
-    return result.rowCount !== null && result.rowCount > 0;
+      const result = await tx.delete(planDays).where(eq(planDays.id, dayId));
+      return result.rowCount !== null && result.rowCount > 0 ? { recycleBinItemId } : null;
+    });
   }
 
   async schedulePlan(planId: string, startDate: string, userId: string): Promise<boolean> {

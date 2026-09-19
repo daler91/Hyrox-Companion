@@ -25,6 +25,8 @@ export enum ErrorCode {
   MAF_SETUP_REQUIRED = "MAF_SETUP_REQUIRED",
   PUSH_NOT_CONFIGURED = "PUSH_NOT_CONFIGURED",
   PLAN_OVERLAP = "PLAN_OVERLAP",
+  // Recycle-bin restore refused: the record (or its device activity) already exists again.
+  RECYCLE_BIN_CONFLICT = "RECYCLE_BIN_CONFLICT",
   PLAN_GENERATION_IN_PROGRESS = "PLAN_GENERATION_IN_PROGRESS",
   AI_TIMEOUT = "AI_TIMEOUT",
   AI_ERROR = "AI_ERROR",

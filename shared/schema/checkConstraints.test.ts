@@ -2,8 +2,23 @@ import { sql } from "drizzle-orm";
 import { getTableConfig,PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { deviceLinkSourceEnum, MEAL_TYPES, planDaySkipReasonEnum, workoutStatusEnum } from "./enums";
-import { FOOD_SOURCES, foodLogEntries, foods, inValues, mealTargets, planDays, workoutLogs } from "./tables";
+import {
+  deviceLinkSourceEnum,
+  MEAL_TYPES,
+  planDaySkipReasonEnum,
+  recycleBinEntityTypeEnum,
+  workoutStatusEnum,
+} from "./enums";
+import {
+  FOOD_SOURCES,
+  foodLogEntries,
+  foods,
+  inValues,
+  mealTargets,
+  planDays,
+  recycleBinItems,
+  workoutLogs,
+} from "./tables";
 
 /**
  * Six CHECK constraints enumerate values that also exist as TypeScript
@@ -50,6 +65,13 @@ describe("enum-backed CHECK constraints", () => {
       "device_link_source IS NULL OR device_link_source IN ('auto', 'manual')",
     );
     expect(deviceLinkSourceEnum).toEqual(["auto", "manual"]);
+  });
+
+  it("renders recycle_bin_items.entity_type from recycleBinEntityTypeEnum", () => {
+    expect(checkSql(recycleBinItems, "recycle_bin_items_entity_type_check")).toBe(
+      "entity_type IN ('workout_log', 'plan_day', 'training_plan')",
+    );
+    expect(recycleBinEntityTypeEnum).toEqual(["workout_log", "plan_day", "training_plan"]);
   });
 
   it("renders foods.source from FOOD_SOURCES", () => {

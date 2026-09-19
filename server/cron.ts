@@ -30,6 +30,7 @@ let ragChunkPruneTask: ReturnType<typeof cron.schedule> | null = null;
 let accountErasureSweepTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaAutoSyncTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
+let recycleBinPurgeTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
@@ -41,7 +42,7 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // Advisory-lock key registry for the 42_010_0xx range. RESERVED OUTSIDE THIS
 // MAP: 42_010_009 (KEY_ROTATION_LOCK_KEY, server/services/keyRotation.ts) and
 // 42_010_010 (MIGRATION_ADVISORY_LOCK_KEY, server/maintenance.ts). Next free
-// key: 42_010_018. A collision is SILENT — pg_try_advisory_lock makes the
+// key: 42_010_019. A collision is SILENT — pg_try_advisory_lock makes the
 // second caller skip its protected work entirely (analyticsRecompute and
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
@@ -61,6 +62,7 @@ export const CRON_LOCK_KEYS = {
   accountErasureSweep: 42_010_015n,
   stravaAutoSync: 42_010_016n,
   stravaWebhookEnsure: 42_010_017n,
+  recycleBinPurge: 42_010_018n,
 } as const;
 
 export async function runCronJobWithLock<T>(
@@ -460,6 +462,20 @@ export function startCron(storage: IStorage): void {
   // A pending boot-time check must never hold the process open on shutdown.
   stravaWebhookStartupTimer.unref();
 
+  // Recycle bin purge: drop snapshots past their 90-day expiry. Listing,
+  // restore and the device-sync dedupe already ignore expired rows, so this
+  // only reclaims space and honours the retention promise; nightly is plenty.
+  recycleBinPurgeTask = scheduleLockedCronJob("recycleBinPurge", "45 3 * * *", async () => {
+    const purged = await storage.recycleBin.purgeExpired();
+    if (purged === 0) return;
+    // A count and a static context only, no PII.
+    // bearer:disable javascript_lang_logger_leak
+    logger.info({ context: "cron", purged }, `Recycle bin purge: removed ${purged} expired item(s)`);
+  });
+  // Static message and static context only.
+  // bearer:disable javascript_lang_logger_leak
+  logger.info({ context: "cron" }, "Recycle bin purge scheduled: daily at 03:45 UTC");
+
   // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
   // The idempotency guards in emailScheduler prevent duplicate sends.
   const currentHour = new Date().getUTCHours();
@@ -549,5 +565,9 @@ export async function stopCron(): Promise<void> {
   if (stravaWebhookStartupTimer) {
     clearTimeout(stravaWebhookStartupTimer);
     stravaWebhookStartupTimer = null;
+  }
+  if (recycleBinPurgeTask) {
+    await recycleBinPurgeTask.stop();
+    recycleBinPurgeTask = null;
   }
 }
