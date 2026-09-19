@@ -6,9 +6,13 @@ import { checkAiBudget, DAILY_LIMIT_CENTS } from "../services/aiUsageService";
 import { getUserId } from "../types";
 
 /**
- * Express middleware that checks a user's rolling 24h AI spend.
- * - If over $2.00: returns 429 with AI_BUDGET_EXCEEDED code.
- * - If over $1.50: allows the request but sets X-AI-Budget-Warning header.
+ * Express middleware that checks the rolling 24h AI spend before a request is
+ * allowed to reach a provider.
+ * - If the app-wide cap (AI_GLOBAL_DAILY_LIMIT_CENTS, when set) is reached:
+ *   returns 503 with AI_GLOBAL_BUDGET_EXCEEDED.
+ * - If this user is over $2.00: returns 429 with AI_BUDGET_EXCEEDED code.
+ * - If this user is over $1.50: allows the request but sets the
+ *   X-AI-Budget-Warning header.
  */
 export function aiBudgetCheck(
   req: Request,
@@ -32,6 +36,16 @@ export function aiBudgetCheck(
       const budget = await checkAiBudget(userId);
 
       if (!budget.allowed) {
+        // The application-wide ceiling is a capacity/operator condition, not
+        // something this athlete caused or can wait out on their own clock, so
+        // it gets 503 + its own code rather than the personal-quota 429.
+        if (budget.deniedBy === "global") {
+          res.status(503).json({
+            error: "AI features are temporarily unavailable due to high demand. Please try again later.",
+            code: "AI_GLOBAL_BUDGET_EXCEEDED",
+          });
+          return;
+        }
         res.status(429).json({
           error: "Daily AI usage limit reached. Your limit resets on a rolling 24-hour basis.",
           code: "AI_BUDGET_EXCEEDED",

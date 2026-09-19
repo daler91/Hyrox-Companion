@@ -1,3 +1,4 @@
+import { env } from "../env";
 import { logger } from "../logger";
 import { storage } from "../storage";
 
@@ -111,17 +112,106 @@ export interface BudgetCheck {
   currentCostCents: number;
   limitCents: number;
   warning: boolean;
+  /**
+   * Which ceiling denied the request. "user" is the per-athlete daily cap;
+   * "global" is the application-wide cap, which is an operator/capacity
+   * problem rather than anything the athlete can fix by waiting out their own
+   * allowance. Undefined when allowed.
+   */
+  deniedBy?: "user" | "global";
+}
+
+// The global total is an aggregate over every row in the last 24h, so it is
+// cached in-process rather than recomputed per AI request. 30s is short enough
+// that a runaway is caught promptly and long enough to keep the query rate at
+// roughly 2/min per replica. Deliberately per-process (not the shared runtime
+// cache): each replica reading a slightly stale total is fine, and a DB round
+// trip to avoid a DB round trip would defeat the point.
+const GLOBAL_TOTAL_CACHE_MS = 30_000;
+
+let cachedGlobalTotal: { at: number; cents: number } | null = null;
+let inFlightGlobalTotal: Promise<number> | null = null;
+
+/** Exposed for tests, which need each case to start from a cold cache. */
+export function __resetGlobalBudgetCacheForTests(): void {
+  cachedGlobalTotal = null;
+  inFlightGlobalTotal = null;
+}
+
+async function getGlobalDailyTotalCents(): Promise<number> {
+  const now = Date.now();
+  if (cachedGlobalTotal && now - cachedGlobalTotal.at < GLOBAL_TOTAL_CACHE_MS) {
+    return cachedGlobalTotal.cents;
+  }
+  // Collapse concurrent misses into one query.
+  inFlightGlobalTotal ??= storage.aiUsage
+    .getGlobalDailyTotalCents()
+    .then((cents) => {
+      cachedGlobalTotal = { at: Date.now(), cents };
+      return cents;
+    })
+    .finally(() => {
+      inFlightGlobalTotal = null;
+    });
+  return await inFlightGlobalTotal;
 }
 
 /**
- * Check whether a user is within their daily AI budget.
+ * Check whether a request is within both the per-user daily AI budget and the
+ * application-wide ceiling.
+ *
+ * The global cap is checked first: when the app as a whole is over budget, an
+ * athlete who has spent nothing must still be turned away. It is skipped
+ * entirely when AI_GLOBAL_DAILY_LIMIT_CENTS is unset, which preserves the
+ * previous per-user-only behaviour for deployments that have not sized one yet.
+ *
+ * Note this remains a check-then-act test — usage is recorded after the
+ * provider call returns — so concurrent requests inside one rate-limit window
+ * can each pass a check that the sum of them exceeds. The per-route rate limits
+ * bound that overshoot; closing it entirely needs a reservation written before
+ * the call, which is a larger change to the provider layer.
  */
 export async function checkAiBudget(userId: string): Promise<BudgetCheck> {
+  const globalLimitCents = env.AI_GLOBAL_DAILY_LIMIT_CENTS;
+  if (globalLimitCents !== undefined) {
+    try {
+      const globalCostCents = await getGlobalDailyTotalCents();
+      if (globalCostCents >= globalLimitCents) {
+        // Both values are deployment-wide aggregates in cents — a sum across all
+        // users and a configured constant. Neither is attributable to an athlete
+        // and neither is a secret.
+        // bearer:disable javascript_lang_logger_leak
+        logger.error(
+          { context: "ai-budget", globalCostCents, globalLimitCents },
+          "Application-wide AI spend cap reached — denying AI requests for all users",
+        );
+        return {
+          allowed: false,
+          currentCostCents: globalCostCents,
+          limitCents: globalLimitCents,
+          warning: true,
+          deniedBy: "global",
+        };
+      }
+    } catch (err) {
+      // Fail open on the GLOBAL check only: a transient aggregate-query failure
+      // must not take AI down for everyone. The per-user cap below still
+      // applies, and the middleware fails closed if that throws.
+      // The only dynamic value is the aggregate query's own error. That query
+      // selects a sum over a time window and binds no athlete data, so a driver
+      // error can name the table but never a user's information.
+      // bearer:disable javascript_lang_logger_leak
+      logger.error({ err, context: "ai-budget" }, "Global AI spend check failed; falling back to the per-user cap");
+    }
+  }
+
   const currentCostCents = await storage.aiUsage.getDailyTotalCents(userId);
+  const allowed = currentCostCents < DAILY_LIMIT_CENTS;
   return {
-    allowed: currentCostCents < DAILY_LIMIT_CENTS,
+    allowed,
     currentCostCents,
     limitCents: DAILY_LIMIT_CENTS,
     warning: currentCostCents >= WARNING_THRESHOLD_CENTS,
+    ...(allowed ? {} : { deniedBy: "user" as const }),
   };
 }

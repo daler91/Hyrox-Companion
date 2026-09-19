@@ -6,6 +6,50 @@ Scope: full codebase (Express 5 server, React/Vite client, shared schema, script
 
 ---
 
+## Remediation status (updated 2026-09-19)
+
+All 7 Medium and 13 of the 15 Low findings are fixed on `claude/app-security-audit-sskexj`.
+The full suite (5134 tests) and `npx eslint .` pass, `pnpm audit` reports 0 vulnerabilities,
+and a production build was run to verify the service-worker and sourcemap changes.
+
+**Fixed:** every Medium finding; sourcemaps, device-provenance and plan-day write surfaces,
+chat role, generation-error leak, the six unlimited routes, SSRF ranges and provider
+redirects, prompt escaping, the unbounded auto-coach output, image magic-byte validation,
+the push subscription cap and worker URL handling, the duplicate service-worker
+registration, the localStorage snapshot sweep, and the config nits (untracked
+`.claude/settings.local.json`, dead `SESSION_SECRET`, `STRAVA_STATE_SECRET` now required in
+production when Strava is configured).
+
+**Deliberately not changed, with reasons:**
+
+- **Garmin reversible password storage.** Dropping the password once tokens are obtained
+  changes what happens when they expire — the athlete must reconnect instead of the server
+  re-logging in silently. That is a product decision about the integration's behaviour, not
+  a code fix, so it is left for the owner to choose. The existing mitigations (AES-256-GCM
+  at rest, credential wipe on failure, strict limiter, per-user mutex) remain.
+- **AI budget check-then-act race and streaming/timeout under-counting.** The global cap
+  closes the unbounded-scale gap. Making the check atomic needs a reservation written
+  before the provider call and reconciled after, which is a restructure of the provider
+  layer; the per-route rate limits bound the overshoot meanwhile. Documented in
+  `checkAiBudget`'s doc comment.
+- **Cypress auth bypass in the production bundle.** The audit suggested also gating it on
+  `import.meta.env.DEV`. That cannot be done: CI runs Cypress against a production build
+  (`pnpm run build`, then `node dist/index.js`), where `DEV` is false, so the guard would
+  disable the entire E2E suite. The bypass only affects client rendering — the server
+  enforces auth on every request and has no Cypress path — so it stays.
+- **CI holding a live database credential** (`post-migration.yml`) and the **Cypress
+  postinstall patch script** are infrastructure trade-offs for the repo owner, not code
+  defects.
+- **`@modelcontextprotocol/sdk`** is removed as a direct dependency (it was declared and
+  never imported). It still resolves as `@google/genai`'s *optional* peer, which pnpm
+  auto-installs, so `hono` remains in the tree and the existing overrides are still
+  load-bearing. Their comments were updated to say so.
+- **Unbounded `z.record` JSON on structure steps** is bounded by the 100 kb body limit and
+  is own-data only; narrowing it needs the real shape of `intensity`/`tempo`/`groupMeta`,
+  which is a schema design question rather than a security fix.
+
+---
+
 ## MEDIUM
 
 ### [MEDIUM] — PATCH /api/v1/workouts/:id accepts an unowned `planDayId` / `planId`

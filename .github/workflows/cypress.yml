@@ -76,7 +76,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Cache Cypress binary
@@ -145,13 +145,11 @@ jobs:
           ALLOW_DEV_AUTH_BYPASS: "true"
           NODE_ENV: test
           ENCRYPTION_KEY: "01234567890123456789012345678901"
-          SESSION_SECRET: "dummy_session_secret_for_ci"
 
       - name: Start server
         run: NODE_ENV=test node dist/index.js &
         env:
           # Fork PRs have no secrets; the suite must still boot the server.
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'dummy_session_secret_for_ci' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}

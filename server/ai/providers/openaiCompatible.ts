@@ -101,6 +101,13 @@ async function postJson(
     },
     body: JSON.stringify(requestBody(request, options, stream)),
     signal: request.signal,
+    // Never follow a redirect. AI_TEXT_BASE_URL is checked against the SSRF
+    // guard when it is parsed, and its host is re-resolved at startup, but
+    // fetch's default `redirect: "follow"` would re-POST this body — which
+    // carries athlete prompt data — to whatever Location the endpoint returns,
+    // with no second guard check. A chat-completions endpoint has no legitimate
+    // reason to redirect, so fail loudly instead.
+    redirect: "error",
   });
   await assertOk(response, options.profile);
   return response;

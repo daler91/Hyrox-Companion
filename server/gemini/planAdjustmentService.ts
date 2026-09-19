@@ -61,8 +61,10 @@ export function buildPlanAdjustmentUserPrompt(input: PlanAdjustmentGenerationInp
   if (historySection) sections.push(historySection);
 
   if (input.focusPlanDayId) {
+    // Client-supplied (up to 255 chars), so it is escaped like any other user
+    // input rather than interpolated raw into the prompt.
     sections.push(
-      `FOCUSED DAY: the athlete sent this message while viewing the workout with ID ${input.focusPlanDayId}. Requests like "this workout" or "this day" refer to it.`,
+      `FOCUSED DAY: the athlete sent this message while viewing the workout with ID ${sanitizeUserInput(input.focusPlanDayId)}. Requests like "this workout" or "this day" refer to it.`,
     );
   }
 

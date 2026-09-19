@@ -725,7 +725,20 @@ describe("executePlanGeneration", () => {
     await expect(executePlanGeneration("plan-1", baseInput, "user-1")).rejects.toThrow("timed out");
 
     expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith("plan-1", "failed", expect.stringContaining("timed out"));
+    // The stored reason is surfaced verbatim by GET /plans/:id/generation-status,
+    // so an unrecognized error records a generic message rather than the raw
+    // provider/driver text (which can name internal hosts, models or queries).
+    // The thrown error still carries the detail for the logs and Sentry.
+    expect(mocks.plans.updateGenerationStatus).toHaveBeenCalledWith(
+      "plan-1",
+      "failed",
+      "Plan generation failed unexpectedly. Please try again.",
+    );
+    expect(mocks.plans.updateGenerationStatus).not.toHaveBeenCalledWith(
+      "plan-1",
+      "failed",
+      expect.stringContaining("90000ms"),
+    );
   });
 
   it("schedules the generated plan from the provided start date", async () => {

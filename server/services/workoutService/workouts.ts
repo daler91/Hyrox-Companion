@@ -85,6 +85,28 @@ async function resolveActivePlanLinks(
   return { planId };
 }
 
+/**
+ * Overwrite the client-supplied plan linkage with what `resolveActivePlanLinks`
+ * actually resolved and verified.
+ *
+ * Previously these were spread conditionally, so when the resolver returned
+ * `{}` (no plan covers the workout's date) a `planId` sent in the request body
+ * survived verbatim onto the row — an unvalidated cross-tenant FK and an
+ * existence oracle via the FK error. `planDayId` was already rejected on a
+ * failed ownership check; assigning both unconditionally makes the resolver the
+ * single source of truth for linkage.
+ */
+function applyResolvedPlanLinks(
+  workoutData: InsertWorkoutLog,
+  planLinks: { planId?: string | null; planDayId?: string | null },
+): InsertWorkoutLog {
+  return {
+    ...workoutData,
+    planId: planLinks.planId ?? null,
+    planDayId: planLinks.planDayId ?? null,
+  };
+}
+
 // Insert a workout (+ optional exercise sets + plan-day completion + custom exercises)
 // inside a caller-provided transaction. All writes are atomic with the caller's tx.
 async function markPlanDayCompleted(
@@ -198,11 +220,7 @@ export async function createWorkout(
 ): Promise<CreateWorkoutResult> {
   // Resolve plan linkage before creating the workout
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
-  const enrichedData = {
-    ...workoutData,
-    ...(planLinks.planId !== undefined && { planId: planLinks.planId }),
-    ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
-  };
+  const enrichedData = applyResolvedPlanLinks(workoutData, planLinks);
 
   return await db.transaction((tx) => createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId));
 }
@@ -227,11 +245,7 @@ export async function createWorkoutAndScheduleCoaching(
   structureBlocks?: StructureBlockInput[],
 ): Promise<CreateWorkoutResult> {
   const planLinks = await resolveActivePlanLinks(workoutData, userId);
-  const enrichedData = {
-    ...workoutData,
-    ...(planLinks.planId !== undefined && { planId: planLinks.planId }),
-    ...(planLinks.planDayId !== undefined && { planDayId: planLinks.planDayId }),
-  };
+  const enrichedData = applyResolvedPlanLinks(workoutData, planLinks);
 
   const { workout, shouldCoach } = await db.transaction(async (tx) => {
     const created = await createWorkoutInTx(tx, enrichedData, exercises, structureBlocks, userId);

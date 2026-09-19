@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/react";
 
 import { isErrorReportingEnabled } from "./errorReportingConsent";
+import { scrubClientBreadcrumb, scrubClientSentryEvent } from "./errorReportingScrub";
 import { hasAcknowledgedPrivacyNotice, onPrivacyConsentChange } from "./privacyConsent";
 
 // S11 — client error reporting (Sentry) is gated two ways before it sends
@@ -31,6 +32,12 @@ function start(): void {
       (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) ??
       (import.meta.env.SENTRY_RELEASE as string | undefined),
     sendDefaultPii: false,
+    // sendDefaultPii only stops the SDK attaching identity; it does not stop
+    // OUR payloads reaching Sentry. apiRequest puts the raw 4xx response body
+    // in the exception message, and navigation/fetch breadcrumbs carry query
+    // strings — both are scrubbed here, mirroring the server's beforeSend.
+    beforeSend: scrubClientSentryEvent,
+    beforeBreadcrumb: scrubClientBreadcrumb,
   });
   started = true;
 }

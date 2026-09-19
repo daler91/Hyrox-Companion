@@ -19,7 +19,7 @@
     <img src="https://img.shields.io/badge/TypeScript-7.0-007ACC?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 7">
     <img src="https://img.shields.io/badge/React-19-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React 19">
     <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8">
-    <img src="https://img.shields.io/badge/Node.js-%3E%3D20-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=20">
+    <img src="https://img.shields.io/badge/Node.js-%3E%3D22-43853D?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >=22">
     <img src="https://img.shields.io/badge/PostgreSQL-pgvector-316192?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL and pgvector">
     <img src="https://img.shields.io/badge/pnpm-9.12-F69220?style=flat-square&logo=pnpm&logoColor=white" alt="pnpm 9.12">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="MIT License">
@@ -84,13 +84,14 @@ fitai.coach helps athletes plan structured training, log complex workouts, fuel 
 
 - **AI consent gate** - AI coach features are opt-in through `aiCoachEnabled`; new users default to disabled.
 - **Runtime AI kill switch** - Operators can disable AI provider traffic with `AI_FEATURES_ENABLED=false`.
-- **Account deletion** - `DELETE /api/v1/account` removes Clerk identity data where possible and cascade-deletes user-owned app records.
+- **Account deletion** - `DELETE /api/v1/account` removes Clerk identity data where possible and cascade-deletes user-owned app records, including the separate vector database and this device's cached API responses and local snapshots.
 - **Privacy page** - A first-party privacy page lists third-party processors and the data each receives.
+- **Error telemetry scrubbing** - Sentry is gated on the privacy notice plus a per-user opt-out, and both the server and client strip request bodies, query strings and identifying fields before anything is sent.
 
 ### PWA & Offline
 
-- **Installable app** - Vite PWA and Workbox provide installability and offline-aware behavior.
-- **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured.
+- **Installable app** - Vite PWA and Workbox provide installability and offline-aware behavior. Cached API responses are purged on sign-out, so a shared device does not leak one athlete's data to the next.
+- **Browser push** - Web Push subscriptions can deliver training reminders to opted-in devices when VAPID credentials are configured, capped at 10 devices per athlete.
 - **Offline feedback** - The client surfaces offline/drop notifications so failed interactions are visible.
 
 ---
@@ -112,7 +113,7 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Backend
 
-- **Runtime**: Node.js >=20, Express 5, TypeScript 7
+- **Runtime**: Node.js >=22, Express 5, TypeScript 7
 - **Database**: PostgreSQL with Drizzle ORM, with `pg_trgm` trigram indexes for fuzzy food search
 - **Vector search**: pgvector, optionally on a separate `VECTOR_DATABASE_URL`, backing both RAG retrieval and semantic food search
 - **Authentication**: Clerk JWT middleware with local dev bypass support
@@ -127,14 +128,18 @@ This is a full-stack TypeScript monorepo with a React SPA, an Express API, share
 
 ### Security and Reliability
 
-- Helmet security headers and production CSP support
+- Helmet security headers with a nonce-based production CSP
 - CORS allowlist with credentials
 - CSRF protection through a double-submit cookie flow
 - Server-side idempotency for mutating API requests with `X-Idempotency-Key`
-- AES-256-GCM encryption for Strava and Garmin credentials/tokens
-- Rate limiting on sensitive and high-cost endpoints
-- HTML sanitization for AI-generated content
-- Startup env validation for production-only invariants such as `CSRF_SECRET`, weak key rejection, and auth bypass lockout
+- AES-256-GCM encryption for Strava and Garmin credentials/tokens, with a versioned keyring for zero-downtime key rotation
+- Rate limiting on every authenticated endpoint, backed by Postgres so limits hold across replicas
+- Per-user and application-wide AI spend caps, on top of the consent gate and kill switch
+- SSRF guards on every outbound URL the app does not hard-code, checked again at send time
+- HTML sanitization for AI-generated content, and prompt-injection escaping for user text in both user turns and system instructions
+- Startup env validation for production-only invariants such as `CSRF_SECRET`, `STRAVA_STATE_SECRET`, weak key rejection, and auth bypass lockout
+
+The most recent review is [`docs/SECURITY_AUDIT_2026-09-19.md`](docs/SECURITY_AUDIT_2026-09-19.md), which records what was found, what was fixed, and the handful of items deliberately left alone with reasons.
 
 ### Shared
 
@@ -302,7 +307,7 @@ The Build workflow fails if the committed snapshot drifts from the generated spe
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20 or newer
+- [Node.js](https://nodejs.org/) 22 or newer
 - [pnpm](https://pnpm.io/) 9.12.x through Corepack (`corepack enable`)
 - PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension
 - Optional: [Clerk](https://clerk.com/) keys for real authentication

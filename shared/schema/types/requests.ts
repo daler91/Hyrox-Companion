@@ -2,10 +2,24 @@
 import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
-export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
-  id: true,
-  timestamp: true,
-});
+/**
+ * The `role` column is a bare varchar(20), so the generated schema accepted any
+ * short string — a client could seed "system" turns (or anything else) into its
+ * own stored history, which `chatService` then replays into the model context.
+ * The conversation only has two sides, and the client legitimately persists
+ * both: its own turn and the assistant reply it streamed. Constrain to exactly
+ * those, and bound the content so a single message can't be used to park a
+ * large blob in the chat table.
+ */
+export const insertChatMessageSchema = createInsertSchema(chatMessages)
+  .omit({
+    id: true,
+    timestamp: true,
+  })
+  .extend({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().min(1).max(50_000),
+  });
 
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
@@ -73,13 +87,74 @@ export const parseExercisesRequestSchema = z.object({
  */
 export const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export type AllowedImageMimeType = (typeof ALLOWED_IMAGE_MIME_TYPES)[number];
-export const parseExercisesFromImageRequestSchema = z.object({
-  mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
-  imageBase64: z
-    .string()
-    .min(1, "Image is required")
-    .max(10 * 1024 * 1024, "Image must be 10MB or less"),
-});
+
+/**
+ * Leading bytes each accepted format must start with, as base64-decoded bytes.
+ * WebP is RIFF....WEBP — bytes 0-3 and 8-11 — so it is checked in two pieces.
+ */
+const IMAGE_MAGIC_BYTES: Record<AllowedImageMimeType, { offset: number; bytes: number[] }[]> = {
+  "image/jpeg": [{ offset: 0, bytes: [0xff, 0xd8, 0xff] }],
+  "image/png": [{ offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }],
+  "image/webp": [
+    { offset: 0, bytes: [0x52, 0x49, 0x46, 0x46] }, // "RIFF"
+    { offset: 8, bytes: [0x57, 0x45, 0x42, 0x50] }, // "WEBP"
+  ],
+};
+
+/** Decode just the first `byteCount` bytes of a base64 string. */
+function decodeBase64Prefix(base64: string, byteCount: number): Uint8Array | null {
+  // 4 base64 chars encode 3 bytes; take enough chars to cover byteCount.
+  const charCount = Math.ceil(byteCount / 3) * 4;
+  const prefix = base64.slice(0, charCount);
+  try {
+    const binary = atob(prefix);
+    const out = new Uint8Array(Math.min(binary.length, byteCount));
+    for (let i = 0; i < out.length; i++) out[i] = binary.charCodeAt(i);
+    return out;
+  } catch {
+    return null; // not valid base64
+  }
+}
+
+/**
+ * Check the payload actually is the format it claims to be.
+ *
+ * The enum only constrained the mimeType STRING — the bytes were forwarded to
+ * the vision model untouched, so a mislabelled or non-image payload was billed
+ * for and sent upstream before anything noticed. This is a cheap sanity check
+ * on the first few bytes, not a full decode: it makes the declared type and the
+ * content agree, which is what the downstream inlineData contract assumes.
+ */
+function imageBytesMatchDeclaredType(
+  mimeType: AllowedImageMimeType,
+  imageBase64: string,
+): boolean {
+  const signatures = IMAGE_MAGIC_BYTES[mimeType];
+  const needed = Math.max(...signatures.map((s) => s.offset + s.bytes.length));
+  const decoded = decodeBase64Prefix(imageBase64, needed);
+  if (!decoded || decoded.length < needed) return false;
+  return signatures.every((sig) =>
+    sig.bytes.every((byte, i) => decoded[sig.offset + i] === byte),
+  );
+}
+
+export const parseExercisesFromImageRequestSchema = z
+  .object({
+    mimeType: z.enum(ALLOWED_IMAGE_MIME_TYPES),
+    imageBase64: z
+      .string()
+      .min(1, "Image is required")
+      .max(10 * 1024 * 1024, "Image must be 10MB or less"),
+  })
+  .superRefine((value, ctx) => {
+    if (!imageBytesMatchDeclaredType(value.mimeType, value.imageBase64)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["imageBase64"],
+        message: `Image data is not a valid ${value.mimeType} file`,
+      });
+    }
+  });
 export type ParseExercisesFromImageRequest = z.infer<typeof parseExercisesFromImageRequestSchema>;
 
 export const importPlanRequestSchema = z.object({

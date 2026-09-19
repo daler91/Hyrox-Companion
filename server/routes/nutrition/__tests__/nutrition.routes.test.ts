@@ -926,10 +926,10 @@ describe("nutrition routes", () => {
       expect((await request(gatedApp).get("/api/v1/nutrition/block?from=2026-06-01")).status).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/parse/text").send({ text: "eggs" })).status).toBe(404);
       expect(
-        (await request(gatedApp).post("/api/v1/nutrition/parse/photo").send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" })).status,
+        (await request(gatedApp).post("/api/v1/nutrition/parse/photo").send({ imageBase64: "/9j/4AAAAAAAAAAA", mimeType: "image/jpeg" })).status,
       ).toBe(404);
       expect(
-        (await request(gatedApp).post("/api/v1/nutrition/parse/label").send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" })).status,
+        (await request(gatedApp).post("/api/v1/nutrition/parse/label").send({ imageBase64: "/9j/4AAAAAAAAAAA", mimeType: "image/jpeg" })).status,
       ).toBe(404);
       expect((await request(gatedApp).post("/api/v1/nutrition/logs/batch").send({})).status).toBe(404);
       expect((await request(gatedApp).get("/api/v1/nutrition/targets")).status).toBe(404);
@@ -972,14 +972,14 @@ describe("nutrition photo meal parsing (FR-4.1)", () => {
 
     const res = await request(app)
       .post("/api/v1/nutrition/parse/photo")
-      .send({ imageBase64: "ZmFrZS1pbWFnZQ==", mimeType: "image/jpeg" });
+      .send({ imageBase64: "/9j/4AAAAAAAAAAA", mimeType: "image/jpeg" });
 
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].foodId).toBe("f1");
     // No source text for a photo — rawInput is a short marker.
     expect(res.body.rawInput).toBe("[photo]");
-    expect(parseMealFromPhoto).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg", "test_user");
+    expect(parseMealFromPhoto).toHaveBeenCalledWith("/9j/4AAAAAAAAAAA", "image/jpeg", "test_user");
   });
 
   it("400s a photo parse with an unsupported mimeType", async () => {
@@ -1012,19 +1012,19 @@ describe("nutrition label parsing (label scan)", () => {
 
     const res = await request(app)
       .post("/api/v1/nutrition/parse/label")
-      .send({ imageBase64: "ZmFrZS1pbWFnZQ==", mimeType: "image/jpeg" });
+      .send({ imageBase64: "/9j/4AAAAAAAAAAA", mimeType: "image/jpeg" });
 
     expect(res.status).toBe(200);
     expect(res.body.label.productName).toBe("Oat Bar");
     expect(res.body.suggestion.caloriesPer100g).toBe(400);
-    expect(parseNutritionLabel).toHaveBeenCalledWith("ZmFrZS1pbWFnZQ==", "image/jpeg", "test_user");
+    expect(parseNutritionLabel).toHaveBeenCalledWith("/9j/4AAAAAAAAAAA", "image/jpeg", "test_user");
   });
 
   it("passes through the no-readable-label outcome as 200", async () => {
     vi.mocked(parseNutritionLabel).mockResolvedValue({ label: null, suggestion: null, warnings: [] });
     const res = await request(app)
       .post("/api/v1/nutrition/parse/label")
-      .send({ imageBase64: "ZmFrZQ==", mimeType: "image/jpeg" });
+      .send({ imageBase64: "/9j/4AAAAAAAAAAA", mimeType: "image/jpeg" });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ label: null, suggestion: null, warnings: [] });
   });

@@ -515,13 +515,13 @@ This is the same idea as `shared/schema/checkConstraints.test.ts`, which pins a 
 
 ## CI/CD Test Workflows
 
-All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners. Node-based workflows use Node.js 20 via pnpm.
+All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu runners. Node-based workflows use Node.js 22 via pnpm.
 
 ### 1. Unit Tests (`test.yml`)
 
 - **Name:** Unit Tests
 - **Triggers:** Push to `main`, pull request (opened/synchronize/reopened)
-- **Steps:** Checkout, install pnpm + Node.js 20, `pnpm install`, `pnpm test`
+- **Steps:** Checkout, install pnpm + Node.js 22, `pnpm install`, `pnpm test`
 - **Environment:** Dummy values for `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL`, `ENCRYPTION_KEY`
 
 ### 2. Cypress Tests (`cypress.yml`)

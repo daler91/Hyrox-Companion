@@ -125,6 +125,10 @@ const garminConnectBodySchema = z.object({
 // each other.
 const garminConnectLimiter = rateLimiter("garmin-connect", 5, RATE_LIMIT_WINDOW_15M_MS);
 const garminSyncLimiter = rateLimiter("garmin-sync", 5, RATE_LIMIT_WINDOW_15M_MS);
+// Status reads and disconnects were the only Garmin routes with no limiter;
+// disconnect also clears stored credentials, so it is worth bounding.
+const garminStatusLimiter = rateLimiter("garmin-status", 60, RATE_LIMIT_WINDOW_15M_MS);
+const garminDisconnectLimiter = rateLimiter("garmin-disconnect", 10, RATE_LIMIT_WINDOW_15M_MS);
 
 // =============================================================================
 // Layer 5 — Global 429 circuit breaker
@@ -752,7 +756,7 @@ async function handleGarminSync(req: Request, res: Response) {
 }
 
 export function registerGarminRoutes(router: Router): void {
-  router.get("/api/v1/garmin/status", isAuthenticated, asyncHandler(handleGarminStatus));
+  router.get("/api/v1/garmin/status", isAuthenticated, garminStatusLimiter, asyncHandler(handleGarminStatus));
   router.post(
     "/api/v1/garmin/connect",
     ...protectedMutationGuards,
@@ -760,7 +764,7 @@ export function registerGarminRoutes(router: Router): void {
     validateBody(garminConnectBodySchema),
     asyncHandler(handleGarminConnect),
   );
-  router.delete("/api/v1/garmin/disconnect", ...protectedMutationGuards, asyncHandler(handleGarminDisconnect));
+  router.delete("/api/v1/garmin/disconnect", ...protectedMutationGuards, garminDisconnectLimiter, asyncHandler(handleGarminDisconnect));
   router.post("/api/v1/garmin/sync", ...protectedMutationGuards, garminSyncLimiter, asyncHandler(handleGarminSync));
 }
 

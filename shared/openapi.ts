@@ -6,9 +6,10 @@ import {
   exercisesPayloadSchema,
   insertExerciseSetSchema,
   insertPlanDaySchema,
+  insertWorkoutLogRouteSchema,
   insertWorkoutLogSchema,
   updateUserPreferencesSchema,
-  updateWorkoutLogSchema,
+  updateWorkoutLogRouteSchema,
   users,
   workoutLogs,
 } from "./schema";
@@ -263,13 +264,16 @@ export const InsertPlanDaySchema = registry.register(
 export const CreateWorkoutRequestSchema = registry.register(
   "CreateWorkoutRequest",
   z.intersection(
-    insertWorkoutLogSchema,
+    // The ROUTE schema, not the raw insert schema: device-provenance columns are
+    // server-owned and stripped from the request, so advertising them here would
+    // document a write surface the server does not accept.
+    insertWorkoutLogRouteSchema,
     z.object({
       exercises: exercisesPayloadSchema.optional(),
     })
   ).openapi({
     title: "CreateWorkoutRequest",
-    description: "Payload for creating a new workout log along with optional exercise sets",
+    description: "Payload for creating a new workout log along with optional exercise sets. Device-provenance fields (source, stravaActivityId, garminActivityId, startedAt) are server-owned and rejected here; planId is always derived from the resolved plan linkage.",
   })
 );
 
@@ -277,13 +281,13 @@ export const CreateWorkoutRequestSchema = registry.register(
 export const UpdateWorkoutRequestSchema = registry.register(
   "UpdateWorkoutRequest",
   z.intersection(
-    updateWorkoutLogSchema,
+    updateWorkoutLogRouteSchema,
     z.object({
       exercises: exercisesPayloadSchema.optional(),
     })
   ).openapi({
     title: "UpdateWorkoutRequest",
-    description: "Payload for updating a workout log along with optional exercise sets",
+    description: "Payload for updating a workout log along with optional exercise sets. Plan linkage (planDayId, planId) is not patchable here — use PATCH /api/v1/workouts/{id}/plan-day, which checks that the target day belongs to the caller. Device-provenance fields are likewise server-owned.",
   })
 );
 

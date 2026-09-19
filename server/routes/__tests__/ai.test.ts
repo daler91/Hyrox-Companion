@@ -135,13 +135,13 @@ const aiConsentGuardCases = [
   {
     name: "image exercise parsing",
     path: "/api/v1/parse-exercises-from-image",
-    body: { imageBase64: "Zm9v", mimeType: "image/png" },
+    body: { imageBase64: "iVBORw0KGgoAAAAA", mimeType: "image/png" },
     blockedCall: parseExercisesFromImage,
   },
   {
     name: "image workout-structure parsing",
     path: "/api/v1/parse-workout-structure-from-image",
-    body: { imageBase64: "Zm9v", mimeType: "image/png" },
+    body: { imageBase64: "iVBORw0KGgoAAAAA", mimeType: "image/png" },
     blockedCall: parseWorkoutStructureFromImage,
   },
   {
@@ -473,7 +473,9 @@ describe("POST /api/v1/parse-exercises-from-image", () => {
   let app: express.Express;
 
   const validPayload = {
-    imageBase64: "ZmFrZS1pbWFnZQ==",
+    // Real JPEG magic bytes (FF D8 FF) — the schema now checks that the bytes
+    // match the declared mimeType, so a placeholder string is rejected.
+    imageBase64: "/9j/4AAAAAAAAAAA",
     mimeType: "image/jpeg",
   };
 

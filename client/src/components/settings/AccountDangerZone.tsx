@@ -34,7 +34,10 @@ export function AccountDangerZone() {
   const handleDelete = useCallback(() => {
     deleteMutation.mutate(undefined, {
       onSuccess: () => {
-        clearUserLocalData();
+        // Fire-and-forget: the 1.5s toast delay before the reload below leaves
+        // ample time for the cache purge, and a storage failure must not block
+        // the confirmation the athlete is waiting on.
+        void clearUserLocalData();
         toast({ title: "Account deleted", description: "Your account and all data have been permanently removed." });
         // Force a full page reload to clear all client state and trigger
         // Clerk sign-out (the session cookie is now invalid).

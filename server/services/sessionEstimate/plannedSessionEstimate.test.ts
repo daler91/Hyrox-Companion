@@ -40,7 +40,9 @@ beforeEach(() => {
   // A distance-only 9000 m recovery run → deterministic base ≈ 54 min, RPE 2.
   getSetsMock.mockResolvedValue([{ exerciseName: "recovery_run", plannedDistance: 9000 }] as never);
   getStructureMock.mockResolvedValue([] as never);
-  getUserMock.mockResolvedValue({ distanceUnit: "km" } as never);
+  // AI refinement is opt-in; the default fixture athlete has consented so the
+  // existing refinement cases exercise the AI path.
+  getUserMock.mockResolvedValue({ distanceUnit: "km", aiCoachEnabled: true } as never);
   paceMock.mockResolvedValue(1);
   cacheGetMock.mockResolvedValue(undefined);
   budgetMock.mockResolvedValue({ allowed: true } as never);
@@ -53,6 +55,28 @@ describe("getPlannedSessionEstimate", () => {
   it("returns null when the plan day is missing or unowned", async () => {
     getPlanDayMock.mockResolvedValue(undefined);
     expect(await getPlannedSessionEstimate("pd-x", "u1")).toBeNull();
+  });
+
+  it("does not send session data to the provider when the athlete has not enabled the AI coach", async () => {
+    getUserMock.mockResolvedValue({ distanceUnit: "km", aiCoachEnabled: false } as never);
+
+    const r = await getPlannedSessionEstimate("pd-1", "u1");
+
+    expect(genMock).not.toHaveBeenCalled();
+    expect(r?.refined).toBe(false);
+    expect(r?.rationale).toBeNull();
+  });
+
+  it("keys the cache on consent so an AI-refined value is not replayed after opting out", async () => {
+    await getPlannedSessionEstimate("pd-1", "u1");
+    const consentedKey = vi.mocked(setRuntimeCache).mock.calls[0][0];
+
+    vi.mocked(setRuntimeCache).mockClear();
+    getUserMock.mockResolvedValue({ distanceUnit: "km", aiCoachEnabled: false } as never);
+    await getPlannedSessionEstimate("pd-1", "u1");
+    const optedOutKey = vi.mocked(setRuntimeCache).mock.calls[0][0];
+
+    expect(optedOutKey).not.toBe(consentedKey);
   });
 
   it("returns the deterministic estimate when AI is disabled", async () => {

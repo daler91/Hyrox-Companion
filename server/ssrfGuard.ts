@@ -21,6 +21,20 @@ import { promises as dnsPromises } from "node:dns";
 const REJECTED_HOSTNAMES = new Set<string>(["localhost"]);
 
 /**
+ * True for `localhost`, a trailing-dot FQDN form of it (`localhost.`), and any
+ * subdomain of it (`foo.localhost`). RFC 6761 reserves the whole `.localhost`
+ * tree for loopback, and resolvers honour it, so matching only the bare literal
+ * left three trivial spellings of the same target.
+ */
+function isLoopbackHostname(hostname: string): boolean {
+  const withoutTrailingDot = hostname.endsWith(".") ? hostname.slice(0, -1) : hostname;
+  if (REJECTED_HOSTNAMES.has(withoutTrailingDot)) return true;
+  // Naming localhost here is the whole point of the guard — this is the code
+  // that REJECTS it, not code that reaches for it.
+  return withoutTrailingDot.endsWith(".localhost"); // DevSkim: ignore DS162092
+}
+
+/**
  * Parse a hostname into its IPv4 octets if it's an IPv4 literal; otherwise
  * null. URL parsing leaves the hostname unbracketed for v4 and bracketed for
  * v6, so we use a simple regex.
@@ -41,6 +55,18 @@ function isPrivateIpv4(octets: readonly number[]): boolean {
   if (a === 192 && b === 168) return true;       // 192.168.0.0/16 private
   if (a === 169 && b === 254) return true;       // 169.254.0.0/16 link-local (incl. cloud metadata 169.254.169.254)
   if (a === 0) return true;                      // 0.0.0.0/8     "this network"
+  // 100.64.0.0/10 carrier-grade NAT. Reachable inside many cloud networks and
+  // home/ISP LANs, and Alibaba Cloud serves instance metadata on
+  // 100.100.100.200 — the same class of target as 169.254.169.254.
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  // 192.0.0.0/24 IETF protocol assignments (DS-Lite, NAT64 well-known prefix).
+  // Note this is a /24, not a /16: 192.0.2.0/24 (TEST-NET-1) is deliberately
+  // left alone, as are the other documentation ranges — they are unroutable
+  // rather than internal, so blocking them buys nothing and the suite
+  // intentionally treats them as public.
+  if (a === 192 && b === 0 && octets[2] === 0) return true;
+  // 224.0.0.0/4 multicast and 240.0.0.0/4 reserved (includes 255.255.255.255).
+  if (a >= 224) return true;
   return false;
 }
 
@@ -52,6 +78,9 @@ function isPrivateIpv4(octets: readonly number[]): boolean {
 function isPrivateIpv6(hostname: string): boolean {
   // Loopback ::1 — any all-zeros prefix ending in :1
   if (hostname === "::1" || hostname === "0:0:0:0:0:0:0:1") return true;
+  // The unspecified address `::`. Connecting to it reaches localhost on Linux,
+  // exactly like 0.0.0.0, which is already rejected on the v4 side.
+  if (hostname === "::" || hostname === "0:0:0:0:0:0:0:0") return true;
   // Unique local addresses fc00::/7 — first byte 0xfc or 0xfd
   if (/^fc[0-9a-f]{2}:/i.test(hostname)) return true;
   if (/^fd[0-9a-f]{2}:/i.test(hostname)) return true;
@@ -68,10 +97,28 @@ function isPrivateIpv6(hostname: string): boolean {
   if (v4MappedHex) {
     const high = Number.parseInt(v4MappedHex[1], 16);
     const low = Number.parseInt(v4MappedHex[2], 16);
-    const v4 = [(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff];
-    if (isPrivateIpv4(v4)) return true;
+    if (isPrivateIpv4(ipv4FromHexPair(high, low))) return true;
+  }
+  // NAT64 (RFC 6052) — 64:ff9b::/96 and the local prefix 64:ff9b:1::/48 embed an
+  // IPv4 address in the low 32 bits, so a NAT64 resolver turns
+  // `64:ff9b::7f00:1` into a connection to 127.0.0.1.
+  const nat64 = /^64:ff9b(?::1)?::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(hostname);
+  if (nat64) {
+    const high = Number.parseInt(nat64[1], 16);
+    const low = Number.parseInt(nat64[2], 16);
+    if (isPrivateIpv4(ipv4FromHexPair(high, low))) return true;
+  }
+  const nat64Dotted = /^64:ff9b(?::1)?::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(hostname);
+  if (nat64Dotted) {
+    const v4 = parseIpv4(nat64Dotted[1]);
+    if (v4 && isPrivateIpv4(v4)) return true;
   }
   return false;
+}
+
+/** Split two 16-bit halves of an embedded IPv4 address into four octets. */
+function ipv4FromHexPair(high: number, low: number): number[] {
+  return [(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff];
 }
 
 export interface SsrfCheckResult {
@@ -98,7 +145,7 @@ export function checkSafeOutboundUrl(url: string): SsrfCheckResult {
   const hostname = rawHostname.startsWith("[") && rawHostname.endsWith("]")
     ? rawHostname.slice(1, -1)
     : rawHostname;
-  if (REJECTED_HOSTNAMES.has(hostname)) {
+  if (isLoopbackHostname(hostname)) {
     return { ok: false, reason: `hostname "${hostname}" is a loopback alias` };
   }
   const v4 = parseIpv4(hostname);
@@ -165,7 +212,7 @@ export async function assertResolvedHostIsPublic(
   const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   // Literal IPv4/IPv6 and localhost are already covered synchronously at env
   // time; only a non-literal hostname needs a DNS round-trip here.
-  if (host === "localhost" || parseIpv4(host) !== null || host.includes(":")) {
+  if (isLoopbackHostname(host) || parseIpv4(host) !== null || host.includes(":")) {
     return;
   }
 

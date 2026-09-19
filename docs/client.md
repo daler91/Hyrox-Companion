@@ -481,8 +481,48 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
 - **Workbox configuration**:
   - Caches `js`, `css`, `html`, `ico`, `png`, `svg`, `woff`, `woff2` files.
   - `cleanupOutdatedCaches: true` removes stale cache entries on update.
-- **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks.
+  - `importScripts: ["sw-push.js"]` pulls the push handlers into this same worker — see [Push notifications](#push-notifications-and-the-service-worker) below.
+  - Runtime caching for `/api/` responses — see [Cached API data](#cached-api-data-and-sign-out).
+- **Service worker registration**: Called in `main.tsx` after render, with `onNeedRefresh` and `onOfflineReady` callbacks. There is exactly **one** registration.
 - **Offline indicator and replay state**: The `OfflineIndicator` component (`client/src/components/ui/OfflineIndicator.tsx`) displays offline status, pending queued workout-create saves, and sync/drop feedback after replay attempts.
+
+### Push notifications and the service worker
+
+The push and `notificationclick` handlers live in `client/public/sw-push.js` but
+are **not registered separately**. The Workbox config imports them into the
+generated worker via `importScripts`.
+
+This matters: both had previously been registered at the default scope `/`, and
+a scope admits only one worker, so the second registration replaced the first.
+Depending on which won, the app silently lost either offline caching or push
+delivery. It also decided what `navigator.serviceWorker.ready` resolved to,
+which is the registration `usePushNotifications` subscribes through. One worker
+owning both removes the race.
+
+The worker resolves the push payload's `url` against its own origin and falls
+back to `/` if it points elsewhere, so a notification tap can only navigate
+within the app.
+
+### Cached API data and sign-out
+
+Workbox applies `NetworkFirst` to programmatic `/api/` requests (50 entries,
+5-minute TTL, 10-second network timeout). Two things follow from Cache Storage
+being keyed by URL with **no per-user partition**:
+
+- Identity and bulk-export endpoints (`/api/v1/auth/`, `/api/v1/export`) are
+  excluded outright. They are worthless offline and are the two that most
+  directly identify the athlete.
+- `clearUserLocalData()` (`client/src/lib/userLocalData.ts`) deletes the whole
+  `api-cache` on sign-out and on account deletion, alongside the localStorage and
+  sessionStorage sweep. It returns a promise; the sign-out path awaits it so the
+  purge completes before the session ends. Without this, on a shared device the
+  next athlete to sign in could be served the previous one's cached responses
+  while the network was slow or offline.
+
+The same sweep clears the per-user analytics snapshots (coach insights, race
+prediction, overview analysis, MAF heart-rate tests) and the weekly-review
+dismissal keys, which hold AI-written narratives and health data and previously
+survived both sign-out and account deletion.
 
 ---
 
@@ -490,8 +530,14 @@ PWA is enabled via `vite-plugin-pwa` in `vite.config.ts`:
 
 ### Sentry Integration
 
-- **Initialization**: `@sentry/react` is initialized in `main.tsx` when `VITE_SENTRY_DSN` is set.
+- **Initialization**: `@sentry/react` is initialized in `client/src/lib/errorReporting.ts` when `VITE_SENTRY_DSN` is set. Init is deferred until the first-load privacy notice is acknowledged, and is additionally subject to the per-user opt-out in Settings.
 - **Global boundary**: The entire `<App />` is wrapped in `Sentry.ErrorBoundary` with `FallbackErrorBoundary` as the fallback. This catches any unhandled React errors at the top level.
+- **Scrubbing**: `sendDefaultPii: false` only stops the SDK attaching identity — it does not stop the app's own payloads. `client/src/lib/errorReportingScrub.ts` is wired in as both `beforeSend` and `beforeBreadcrumb` (the browser counterpart to `scrubSentryEvent` on the server) and covers three channels:
+  - `apiRequest` throws ``new Error(`${status}: ${body}`)``, so a raw 4xx response body became the exception message — and Zod validation errors echo the values the athlete submitted. The body half is replaced with `[redacted]`, keeping the status code.
+  - Navigation breadcrumbs record `pathname?search` (`/nutrition?date=…&meal=…`), and the SDK's own fetch/xhr breadcrumbs record request URLs. Query strings are stripped everywhere they appear.
+  - The fetch/xhr integrations attach request and response bodies to breadcrumb `data`; those keys are dropped.
+
+  Scrubbing runs at `beforeBreadcrumb` as well as `beforeSend` so a payload never sits in the in-memory breadcrumb buffer waiting for an error that may never come.
 
 ### FallbackErrorBoundary (`client/src/components/FallbackErrorBoundary.tsx`)
 

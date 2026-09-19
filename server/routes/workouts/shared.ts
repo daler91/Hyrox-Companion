@@ -1,4 +1,4 @@
-import { exercisesPayloadSchema, insertCustomExerciseSchema, insertWorkoutLogSchema, MAX_WORKOUT_TEXT_LEN, structureBlocksPayloadSchema, updateWorkoutLogSchema } from "@shared/schema";
+import { exercisesPayloadSchema, insertCustomExerciseSchema, insertWorkoutLogRouteSchema, MAX_WORKOUT_TEXT_LEN, structureBlocksPayloadSchema, updateWorkoutLogRouteSchema } from "@shared/schema";
 import { z } from "zod";
 
 /**
@@ -25,10 +25,13 @@ function enforceHeartRateConsistency(
   }
 }
 
-export const createWorkoutRouteSchema = insertWorkoutLogSchema
+// The client-facing write surface lives in shared/schema/types/workouts.ts so the
+// route validator and the published OpenAPI contract cannot drift apart; these
+// only add the payload extensions and the cross-field HR check.
+export const createWorkoutRouteSchema = insertWorkoutLogRouteSchema
   .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
-export const updateWorkoutRouteSchema = updateWorkoutLogSchema
+export const updateWorkoutRouteSchema = updateWorkoutLogRouteSchema
   .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
 export const assignWorkoutPlanDaySchema = z.object({ planDayId: z.string().min(1).nullable() });

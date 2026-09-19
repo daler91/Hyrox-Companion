@@ -31,6 +31,14 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         cleanupOutdatedCaches: true,
+        // Pull the push handlers into the generated Workbox service worker
+        // instead of registering sw-push.js as a second worker. Both used the
+        // default scope "/", so the second registration replaced the first and
+        // the app silently lost either offline caching or push delivery
+        // depending on registration order. importScripts gives one worker that
+        // owns both, which is also what navigator.serviceWorker.ready (used by
+        // the push subscribe flow) expects to resolve to.
+        importScripts: ["sw-push.js"],
         // Exclude API paths from the SPA navigation fallback so top-level
         // navigations to endpoints like /api/v1/export?format=csv (which
         // return Content-Disposition: attachment) are handled by the browser
@@ -44,8 +52,18 @@ export default defineConfig({
             // navigations to /api/* (destination === "document") must bypass
             // the service worker entirely so the browser can process
             // Content-Disposition downloads natively.
+            //
+            // Cached API bodies are personal data held in Cache Storage keyed by
+            // URL only — there is no per-user partition — so `clearUserLocalData`
+            // (client/src/lib/userLocalData.ts) deletes the whole `api-cache` on
+            // sign-out and on account deletion. Identity and bulk-export
+            // endpoints are excluded outright: they are worthless offline and are
+            // the two that most directly identify the athlete.
             urlPattern: ({ url, request }: { url: URL; request: Request }) =>
-              url.pathname.startsWith("/api/") && request.destination !== "document",
+              url.pathname.startsWith("/api/") &&
+              !url.pathname.startsWith("/api/v1/auth/") &&
+              !url.pathname.startsWith("/api/v1/export") &&
+              request.destination !== "document",
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",

@@ -46,8 +46,12 @@ export const workoutSuggestionSchema = z.object({
   workoutFocus: z.string(),
   targetField: z.enum(["mainWorkout", "accessory", "notes"]),
   action: z.enum(["replace", "append"]),
-  recommendation: z.string(),
-  rationale: z.string(),
+  // Bounded to match the manual apply route (applyTimelineSuggestionSchema in
+  // server/routes/ai.ts). Without a max, the queue path wrote unbounded model
+  // output straight into plan_days while the manual path capped it — the same
+  // content reaching the same column under two different rules.
+  recommendation: z.string().max(10_000),
+  rationale: z.string().max(2_000),
   priority: z.enum(["high", "medium", "low"]),
 });
 

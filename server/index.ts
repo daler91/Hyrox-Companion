@@ -58,6 +58,23 @@ if (env.NODE_ENV === "production") {
   if (!env.INTERNAL_ANALYTICS_SECRET) {
     logger.warn({ context: "startup-config" }, "INTERNAL_ANALYTICS_SECRET not set — internal analytics endpoints will reject every request");
   }
+  // Without a global ceiling, total AI spend is bounded only by the per-user
+  // cap times the number of accounts — i.e. it scales with sign-ups.
+  if (env.AI_GLOBAL_DAILY_LIMIT_CENTS === undefined && env.AI_FEATURES_ENABLED !== "false") {
+    // Static operational message; the only structured value is a constant
+    // `context` tag. No PII, no secrets.
+    //
+    // The directive line below carries the rule id and NOTHING else: Bearer
+    // takes everything after `bearer:disable` as the rule-id list, so a
+    // trailing "— justification" makes it match no rule and the suppression
+    // silently no-ops. See server/__tests__/bearerDisableSuppressions.test.ts,
+    // which ratchets this repo's count of that mistake downward.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn(
+      { context: "startup-config" },
+      "AI_GLOBAL_DAILY_LIMIT_CENTS not set — AI spend is capped per user ($2/day) but has no application-wide ceiling",
+    );
+  }
 }
 
 const clientEmomFlagRaw = process.env.VITE_EMOM_BUILDER_ENABLED;

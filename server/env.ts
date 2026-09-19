@@ -119,6 +119,15 @@ const envSchema = z
     // without redeploying or rotating provider keys. Defaults to "true" so
     // existing deployments behave the same.
     AI_FEATURES_ENABLED: z.enum(["true", "false"]).default("true"),
+    // Application-wide AI spend ceiling, in cents, over a rolling 24h window.
+    // The per-user cap (DAILY_LIMIT_CENTS, $2) bounds one athlete but not the
+    // bill: total spend scales linearly with sign-ups, so a burst of new
+    // accounts is unbounded cost. Optional and OFF when unset — only the
+    // operator knows the right ceiling for their user count and margin — but
+    // the server warns loudly at startup in production when it is missing.
+    // Size it above (active athletes x realistic daily spend), not above the
+    // per-user cap x users, which every athlete hitting $2 would never reach.
+    AI_GLOBAL_DAILY_LIMIT_CENTS: z.coerce.number().int().positive().optional(),
     STRUCTURED_BLOCKS_ENABLED: z.enum(["true", "false"]).default("true"),
     STRUCTURED_BLOCKS_FALLBACK_FORCE_LEGACY: z.enum(["true", "false"]).default("false"),
     EMOM_BUILDER_ENABLED: z.enum(["true", "false"]).default("false"),
@@ -157,6 +166,21 @@ const envSchema = z
     message: "❌ FATAL: CSRF_SECRET is required in production",
     path: ["CSRF_SECRET"],
   })
+  .refine(
+    // When unset, server/strava.ts falls back to a per-process random secret.
+    // That is fine for a single dev process but breaks in production: each
+    // replica signs OAuth state with a different key, so a callback that lands
+    // on a different instance than the one that issued the state fails
+    // verification. Requiring it in production turns an intermittent,
+    // load-balancer-dependent OAuth failure into a startup error.
+    (data) =>
+      data.NODE_ENV !== "production" || !data.STRAVA_CLIENT_ID || !!data.STRAVA_STATE_SECRET,
+    {
+      message:
+        "❌ FATAL: STRAVA_STATE_SECRET is required in production when Strava is configured — without it OAuth state cannot be verified across replicas",
+      path: ["STRAVA_STATE_SECRET"],
+    },
+  )
   .refine((data) => !data.CSRF_SECRET || data.CSRF_SECRET !== data.ENCRYPTION_KEY, {
     // 🛡️ Sentinel: key separation must hold in all environments, not just
     // production (CODEBASE_REVIEW_2026-04-12.md #42). Dev/test defaults that
