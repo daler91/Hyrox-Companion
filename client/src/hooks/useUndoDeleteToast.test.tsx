@@ -9,26 +9,9 @@ import { renderWithClient } from "@/test/support/renderWithClient";
 
 import { useUndoDeleteToast } from "./useRecycleBin";
 
-vi.mock("@/lib/api", () => ({
-  api: {
-    recycleBin: {
-      list: vi.fn(),
-      restore: vi.fn(),
-      restoreBatch: vi.fn(),
-      purge: vi.fn(),
-      empty: vi.fn(),
-    },
-  },
-  QUERY_KEYS: {
-    recycleBin: ["/api/v1/recycle-bin"],
-    timeline: ["/api/v1/timeline"],
-    workouts: ["/api/v1/workouts"],
-    plans: ["/api/v1/plans"],
-    personalRecords: ["/api/v1/personal-records"],
-    exerciseAnalytics: ["/api/v1/exercise-analytics"],
-    trainingOverview: ["/api/v1/training-overview"],
-  },
-}));
+vi.mock("@/lib/api", async () =>
+  (await import("@/test/support/recycleBinApiMock")).mockRecycleBinApiModule(),
+);
 
 function UndoHarness({ target }: Readonly<{ target: { itemId: string } | { batchId: string } }>) {
   const showUndo = useUndoDeleteToast();

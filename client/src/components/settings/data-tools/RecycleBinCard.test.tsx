@@ -14,26 +14,9 @@ const mocks = vi.hoisted(() => ({ toast: vi.fn() }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
 
-vi.mock("@/lib/api", () => ({
-  api: {
-    recycleBin: {
-      list: vi.fn(),
-      restore: vi.fn(),
-      restoreBatch: vi.fn(),
-      purge: vi.fn(),
-      empty: vi.fn(),
-    },
-  },
-  QUERY_KEYS: {
-    recycleBin: ["/api/v1/recycle-bin"],
-    timeline: ["/api/v1/timeline"],
-    workouts: ["/api/v1/workouts"],
-    plans: ["/api/v1/plans"],
-    personalRecords: ["/api/v1/personal-records"],
-    exerciseAnalytics: ["/api/v1/exercise-analytics"],
-    trainingOverview: ["/api/v1/training-overview"],
-  },
-}));
+vi.mock("@/lib/api", async () =>
+  (await import("@/test/support/recycleBinApiMock")).mockRecycleBinApiModule(),
+);
 
 function item(overrides: Partial<RecycleBinListItem> = {}): RecycleBinListItem {
   return {
