@@ -61,12 +61,19 @@ if (env.NODE_ENV === "production") {
   // Without a global ceiling, total AI spend is bounded only by the per-user
   // cap times the number of accounts — i.e. it scales with sign-ups.
   if (env.AI_GLOBAL_DAILY_LIMIT_CENTS === undefined && env.AI_FEATURES_ENABLED !== "false") {
-    // bearer:disable javascript_lang_logger_leak — static operational message;
-    // only a constant `context` tag is logged, no PII or secrets. Kept on ONE
-    // line deliberately: Bearer anchors this finding at the call's arguments, so
-    // a multi-line call puts the directive out of range and the suppression is
-    // silently ignored (matches the single-line ratelimit log below).
-    logger.warn({ context: "startup-config" }, "AI_GLOBAL_DAILY_LIMIT_CENTS not set — AI spend is capped per user ($2/day) but has no application-wide ceiling");
+    // Static operational message; the only structured value is a constant
+    // `context` tag. No PII, no secrets.
+    //
+    // The directive line below carries the rule id and NOTHING else: Bearer
+    // takes everything after `bearer:disable` as the rule-id list, so a
+    // trailing "— justification" makes it match no rule and the suppression
+    // silently no-ops. See server/__tests__/bearerDisableSuppressions.test.ts,
+    // which ratchets this repo's count of that mistake downward.
+    // bearer:disable javascript_lang_logger_leak
+    logger.warn(
+      { context: "startup-config" },
+      "AI_GLOBAL_DAILY_LIMIT_CENTS not set — AI spend is capped per user ($2/day) but has no application-wide ceiling",
+    );
   }
 }
 

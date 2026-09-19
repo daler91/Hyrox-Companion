@@ -62,8 +62,16 @@ describe("bearer:disable suppression directives", () => {
   // way as of 2026-08-14 — fixing all of them is a repo-wide sweep out of
   // scope for one change. This caps the damage and blocks it from growing:
   // lower BASELINE as offenders get cleaned up, never raise it.
+  //
+  // Lowered 38 -> 36 on 2026-09-19. The slack was not free: a new broken
+  // directive added during the security-audit remediation sat at 37 and CI
+  // stayed green while the suppression was silently dead, so Bearer kept
+  // failing with no hint that the directive was being skipped rather than
+  // overruled. Holding the baseline at the actual count means the next
+  // occurrence fails HERE, naming the offending line, instead of surfacing as
+  // an unexplained Bearer alert.
   it("does not grow the count of broken (unmatchable) suppression directives", () => {
-    const BASELINE = 38;
+    const BASELINE = 36;
     const broken = findBrokenDirectives();
     expect(broken.length).toBeLessThanOrEqual(BASELINE);
   });
