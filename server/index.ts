@@ -62,11 +62,11 @@ if (env.NODE_ENV === "production") {
   // cap times the number of accounts — i.e. it scales with sign-ups.
   if (env.AI_GLOBAL_DAILY_LIMIT_CENTS === undefined && env.AI_FEATURES_ENABLED !== "false") {
     // bearer:disable javascript_lang_logger_leak — static operational message;
-    // only a constant `context` tag is logged, no PII or secrets.
-    logger.warn(
-      { context: "startup-config" },
-      "AI_GLOBAL_DAILY_LIMIT_CENTS not set — AI spend is capped per user ($2/day) but has no application-wide ceiling",
-    );
+    // only a constant `context` tag is logged, no PII or secrets. Kept on ONE
+    // line deliberately: Bearer anchors this finding at the call's arguments, so
+    // a multi-line call puts the directive out of range and the suppression is
+    // silently ignored (matches the single-line ratelimit log below).
+    logger.warn({ context: "startup-config" }, "AI_GLOBAL_DAILY_LIMIT_CENTS not set — AI spend is capped per user ($2/day) but has no application-wide ceiling");
   }
 }
 
