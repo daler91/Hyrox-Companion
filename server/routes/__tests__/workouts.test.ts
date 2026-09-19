@@ -377,7 +377,7 @@ describe("Workouts Routes", () => {
     expect(textRes.body.saved).toBe(true);
     expect(textRes.body.setCount).toBeGreaterThan(0);
 
-    const photoRes = await request(app).post("/api/v1/workouts/workout-1/reparse-from-image").send({ imageBase64: "Zm9v", mimeType: "image/png" });
+    const photoRes = await request(app).post("/api/v1/workouts/workout-1/reparse-from-image").send({ imageBase64: "iVBORw0KGgoAAAAA", mimeType: "image/png" });
     expect(photoRes.status).toBe(200);
     expect(photoRes.body.saved).toBe(true);
     expect(photoRes.body.setCount).toBeGreaterThan(0);

@@ -62,6 +62,41 @@ describe("checkSafeOutboundUrl (W2)", () => {
     });
   });
 
+  // Bypass forms that the literal-matching guard originally let through.
+  // Each is a different spelling of "reach something on this host or LAN".
+  describe("bypass spellings are rejected", () => {
+    it.each<[string, string]>([
+      ["http://[::]/", "unspecified IPv6 reaches localhost"],
+      ["http://localhost./", "trailing-dot FQDN form"],
+      ["http://foo.localhost/", "RFC 6761 reserves the whole .localhost tree"],
+      ["http://anything.LOCALHOST/", "subdomain match is case-insensitive"],
+      ["http://100.64.0.1/", "CGNAT 100.64.0.0/10"],
+      ["http://100.100.100.200/", "Alibaba Cloud instance metadata"],
+      ["http://100.127.255.255/", "end of CGNAT range"],
+      ["http://[64:ff9b::7f00:1]/", "NAT64 embedding 127.0.0.1"],
+      ["http://[64:ff9b::a9fe:a9fe]/", "NAT64 embedding 169.254.169.254"],
+      ["http://224.0.0.1/", "multicast"],
+      ["http://240.0.0.1/", "reserved"],
+      ["http://255.255.255.255/", "broadcast"],
+      ["http://192.0.0.1/", "IETF protocol assignments /24"],
+    ])("%s (%s)", (url) => {
+      expect(checkSafeOutboundUrl(url).ok).toBe(false);
+    });
+  });
+
+  describe("neighbouring public addresses still pass", () => {
+    it.each([
+      "http://100.63.255.255/", // just below CGNAT
+      "http://100.128.0.1/",    // just above CGNAT
+      "http://223.255.255.255/", // just below multicast
+      "http://192.0.2.1/",      // TEST-NET-1: unroutable, but not internal
+      "https://mylocalhost.example.com/", // not a .localhost subdomain
+      "https://localhost.example.com/",   // ditto — the label is a prefix, not the suffix
+    ])("%s", (url) => {
+      expect(checkSafeOutboundUrl(url).ok).toBe(true);
+    });
+  });
+
   describe("malformed input", () => {
     it.each(["not a url", "://broken", "", "ftp://"])("%s → rejected", (url) => {
       const result = checkSafeOutboundUrl(url);

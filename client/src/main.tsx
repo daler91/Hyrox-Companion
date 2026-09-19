@@ -67,7 +67,8 @@ if (shouldRegisterServiceWorkers) {
   });
 }
 
-// Register push notification service worker (separate scope from Workbox SW)
-if (shouldRegisterServiceWorkers) {
-  void globalThis.navigator.serviceWorker.register("/sw-push.js");
-}
+// Push notifications are handled by the SAME service worker: the Workbox config
+// importScripts("sw-push.js") in vite.config.ts pulls the push/notificationclick
+// listeners into the generated worker. Registering sw-push.js separately here
+// used the default scope "/" as well, so it replaced the Workbox registration
+// (or was replaced by it) and one of the two features silently stopped working.

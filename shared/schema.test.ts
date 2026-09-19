@@ -55,12 +55,43 @@ describe("importPlanRequestSchema validation", () => {
 });
 
 describe("parseExercisesFromImageRequestSchema validation", () => {
+  // Minimal payloads carrying each format's real magic bytes.
+  const JPEG_BASE64 = "/9j/4AAAAAAAAAAA"; // FF D8 FF E0 ...
+  const PNG_BASE64 = "iVBORw0KGgoAAAAA"; // 89 50 4E 47 0D 0A 1A 0A ...
+
   it("accepts a small jpeg base64 payload", () => {
     const result = parseExercisesFromImageRequestSchema.safeParse({
       mimeType: "image/jpeg",
-      imageBase64: "abc123",
+      imageBase64: JPEG_BASE64,
     });
     expect(result.success).toBe(true);
+  });
+
+  it("rejects bytes that do not match the declared mime type", () => {
+    const result = parseExercisesFromImageRequestSchema.safeParse({
+      mimeType: "image/jpeg",
+      imageBase64: PNG_BASE64,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("Image data is not a valid image/jpeg file");
+    }
+  });
+
+  it("rejects a payload that is not an image at all", () => {
+    const result = parseExercisesFromImageRequestSchema.safeParse({
+      mimeType: "image/png",
+      imageBase64: Buffer.from("not an image at all").toString("base64"),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a payload that is not valid base64", () => {
+    const result = parseExercisesFromImageRequestSchema.safeParse({
+      mimeType: "image/png",
+      imageBase64: "!!!!not base64!!!!",
+    });
+    expect(result.success).toBe(false);
   });
 
   it("rejects an unsupported mime type (gif)", () => {

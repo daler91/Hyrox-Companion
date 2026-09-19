@@ -138,6 +138,10 @@ async function postAnthropic(
     },
     body: JSON.stringify(requestBody(request, stream)),
     signal: request.signal,
+    // See the note in openaiCompatible.ts: a redirect would re-POST the prompt
+    // body to an unvalidated host. The URL here is a constant, so this is
+    // belt-and-braces, but the two adapters should behave identically.
+    redirect: "error",
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
