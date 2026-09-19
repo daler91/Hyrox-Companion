@@ -166,6 +166,21 @@ const envSchema = z
     message: "❌ FATAL: CSRF_SECRET is required in production",
     path: ["CSRF_SECRET"],
   })
+  .refine(
+    // When unset, server/strava.ts falls back to a per-process random secret.
+    // That is fine for a single dev process but breaks in production: each
+    // replica signs OAuth state with a different key, so a callback that lands
+    // on a different instance than the one that issued the state fails
+    // verification. Requiring it in production turns an intermittent,
+    // load-balancer-dependent OAuth failure into a startup error.
+    (data) =>
+      data.NODE_ENV !== "production" || !data.STRAVA_CLIENT_ID || !!data.STRAVA_STATE_SECRET,
+    {
+      message:
+        "❌ FATAL: STRAVA_STATE_SECRET is required in production when Strava is configured — without it OAuth state cannot be verified across replicas",
+      path: ["STRAVA_STATE_SECRET"],
+    },
+  )
   .refine((data) => !data.CSRF_SECRET || data.CSRF_SECRET !== data.ENCRYPTION_KEY, {
     // 🛡️ Sentinel: key separation must hold in all environments, not just
     // production (CODEBASE_REVIEW_2026-04-12.md #42). Dev/test defaults that

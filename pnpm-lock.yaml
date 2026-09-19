@@ -71,9 +71,6 @@ importers:
       '@google/genai':
         specifier: ^2.22.0
         version: 2.22.0(@modelcontextprotocol/sdk@1.30.0(zod@4.6.5))(bufferutil@4.1.0)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(zod@4.6.5)
       '@radix-ui/react-accordion':
         specifier: ^1.2.20
         version: 1.2.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -7756,6 +7753,7 @@ snapshots:
   '@hono/node-server@2.0.12(hono@4.13.7)':
     dependencies:
       hono: 4.13.7
+    optional: true
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -7861,6 +7859,7 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@napi-rs/canvas-android-arm64@1.0.2':
     optional: true
@@ -9465,6 +9464,7 @@ snapshots:
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
       ajv: 8.20.0
+    optional: true
 
   ajv@6.14.0:
     dependencies:
@@ -10399,11 +10399,13 @@ snapshots:
 
   eventemitter3@5.0.4: {}
 
-  eventsource-parser@3.0.6: {}
+  eventsource-parser@3.0.6:
+    optional: true
 
   eventsource@3.0.7:
     dependencies:
       eventsource-parser: 3.0.6
+    optional: true
 
   execa@4.1.0:
     dependencies:
@@ -10779,7 +10781,8 @@ snapshots:
     dependencies:
       hermes-estree: 0.25.1
 
-  hono@4.13.7: {}
+  hono@4.13.7:
+    optional: true
 
   hookified@1.15.1: {}
 
@@ -11140,7 +11143,8 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  jose@6.2.2: {}
+  jose@6.2.2:
+    optional: true
 
   joycon@3.1.1: {}
 
@@ -11188,7 +11192,8 @@ snapshots:
 
   json-schema-traverse@1.0.0: {}
 
-  json-schema-typed@8.0.2: {}
+  json-schema-typed@8.0.2:
+    optional: true
 
   json-schema@0.4.0: {}
 
@@ -11972,7 +11977,8 @@ snapshots:
       sonic-boom: 4.2.1
       thread-stream: 4.0.0
 
-  pkce-challenge@5.0.1: {}
+  pkce-challenge@5.0.1:
+    optional: true
 
   possible-typed-array-names@1.1.0: {}
 
@@ -13381,6 +13387,7 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
       zod: 4.6.5
+    optional: true
 
   zod-validation-error@4.0.2(zod@4.6.5):
     dependencies:
