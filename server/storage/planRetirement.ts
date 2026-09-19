@@ -83,10 +83,14 @@ export function planDayWithinPlanLifetime(plan: typeof trainingPlans = trainingP
 export function planDaysWithinLifetimes(
   plans: readonly { id: string; retiredOn: string | null }[],
 ): SQL | undefined {
-  const liveIds = plans.filter((p) => p.retiredOn == null).map((p) => p.id);
-  const retired = plans.filter(
-    (p): p is { id: string; retiredOn: string } => p.retiredOn != null,
-  );
+  // ⚡ Bolt: Replaced chained .filter().map() with a single loop to avoid intermediate
+  // array allocations and redundant O(N) scans.
+  const liveIds: string[] = [];
+  const retired: { id: string; retiredOn: string }[] = [];
+  for (const p of plans) {
+    if (p.retiredOn == null) liveIds.push(p.id);
+    else retired.push({ id: p.id, retiredOn: p.retiredOn });
+  }
 
   const clauses: SQL[] = [];
   if (liveIds.length > 0) clauses.push(inArray(planDays.planId, liveIds));
