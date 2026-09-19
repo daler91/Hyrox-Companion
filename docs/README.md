@@ -73,11 +73,11 @@ Scoped to one feature. Accurate for what they cover, but not a description of th
 
 In-flight or completed work. Check the referenced code before trusting a status.
 
-| Document                                                                    | Covers                                         |
-| --------------------------------------------------------------------------- | ---------------------------------------------- |
-| [React 19 Upgrade Plan](react-19-upgrade-plan.md)                           | `react@18.3.1` → `react@19.2.8` migration plan |
-| [Structured Text Optional](migration-readiness-structured-text-optional.md) | Migration-readiness spec and telemetry plan    |
-| [`training_styles_v1` Rollout](training-styles-rollout.md)                  | Phased rollout plan for training styles        |
+| Document                                                                    | Covers                                                                      |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [React 19 Upgrade Plan](react-19-upgrade-plan.md)                           | `react@18.3.1` → `react@19.x` — **shipped**; kept for its §6 follow-up menu |
+| [Structured Text Optional](migration-readiness-structured-text-optional.md) | Migration-readiness spec and telemetry plan                                 |
+| [`training_styles_v1` Rollout](training-styles-rollout.md)                  | Phased rollout plan for training styles                                     |
 
 ## Registers
 

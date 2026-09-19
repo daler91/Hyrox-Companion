@@ -407,7 +407,7 @@ The app serves the React frontend and Express API on port `5000`. Visit `http://
 | Linting                | ESLint                 | `pnpm lint`                                                  |
 | Formatting             | Prettier               | `pnpm format:check`                                          |
 
-The suite is around 468 Vitest test files plus 12 Cypress E2E specs (2026-09-13). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
+The suite is around 479 Vitest test files plus 12 Cypress E2E specs (2026-09-19). The count moves with every branch that lands, so [Testing](docs/testing.md) carries the commands to derive it, alongside setup, local database requirements, Cypress conventions, and CI details.
 
 ---
 
@@ -415,17 +415,17 @@ The suite is around 468 Vitest test files plus 12 Cypress E2E specs (2026-09-13)
 
 GitHub Actions workflows live in [`.github/workflows/`](.github/workflows/):
 
-| Workflow                        | Trigger                                       | Purpose                                                                                  |
-| ------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Build**                       | Push to `main`, pull request                  | ESLint, TypeScript (`check`, `check:strict`, `check:test`), OpenAPI snapshot drift check |
-| **Unit Tests**                  | Push to `main`, pull request                  | Vitest unit suite                                                                        |
-| **Cypress Tests**               | Push                                          | Build, integration tests, smoke tests, Cypress with PostgreSQL/pgvector                  |
-| **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency                                                            |
-| **Post-Migration Verification** | Manual                                        | Apply migrations and verify a real Neon database                                         |
-| **Dependency Review**           | Pull request                                  | Audit dependency changes                                                                 |
-| **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                                 |
-| **Bearer**                      | Push to `main`, pull request, weekly schedule | Security and privacy scanning                                                            |
-| **Secret Scan**                 | Push to `main`, pull request                  | Gitleaks secret scanning                                                                 |
+| Workflow                        | Trigger                                       | Purpose                                                                                         |
+| ------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Build**                       | Push to `main`, pull request                  | ESLint, TypeScript (`check`, `check:strict`, `check:test`), OpenAPI snapshot drift check        |
+| **Unit Tests**                  | Push to `main`, pull request                  | Vitest unit suite                                                                               |
+| **Cypress Tests**               | Push, pull request                            | Build, bundle-invariant check, integration tests, smoke tests, Cypress with PostgreSQL/pgvector |
+| **Check Migrations**            | Push to `main`, pull request                  | Drizzle migration consistency                                                                   |
+| **Post-Migration Verification** | Manual                                        | Apply migrations and verify a real Neon database                                                |
+| **Dependency Review**           | Pull request                                  | Audit dependency changes                                                                        |
+| **DevSkim**                     | Push to `main`, pull request, weekly schedule | Static security scanning                                                                        |
+| **Bearer**                      | Push to `main`, pull request, weekly schedule | Security and privacy scanning                                                                   |
+| **Secret Scan**                 | Push to `main`, pull request                  | Gitleaks secret scanning                                                                        |
 
 SonarQube Cloud automatic analysis is configured outside the manual workflow steps.
 

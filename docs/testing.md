@@ -38,11 +38,11 @@ Every number below is stale the moment a test lands, so **derive it, don't trust
 it**. The commands are the source of truth; the figures are only a sanity check,
 measured on `main` at the date given.
 
-| Layer                      | Count (2026-09-13) | How to count it                                                     |
+| Layer                      | Count (2026-09-19) | How to count it                                                     |
 | -------------------------- | ------------------- | -------------------------------------------------------------------- |
-| All Vitest test files      | 468                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
-| Unit/component/route tests | 460                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
-| Integration tests          | 7                   | `rg --files -g '*.integration.test.ts'`                              |
+| All Vitest test files      | 479                 | `rg --files -g '*.test.ts' -g '*.test.tsx'`                          |
+| Unit/component/route tests | 470                 | add `-g '!*.integration.test.ts' -g '!smoke.test.ts'` to the above   |
+| Integration tests          | 8                   | `rg --files -g '*.integration.test.ts'`                              |
 | Smoke test                 | 1                   | `rg --files -g 'smoke.test.ts'`                                      |
 | Cypress E2E specs          | 12                  | `ls cypress/e2e/*.cy.ts`                                             |
 
@@ -527,19 +527,20 @@ All workflows are in `.github/workflows/` and run on GitHub Actions with Ubuntu 
 ### 2. Cypress Tests (`cypress.yml`)
 
 - **Name:** Cypress Tests
-- **Triggers:** Every push
+- **Triggers:** Every push **and** every pull request, so a fork/PR branch gets the same end-to-end gate as a push to a branch in this repository. Secrets are unavailable on fork PRs, so every secret-backed value has an inert fallback the suite can run against.
 - **Services:** PostgreSQL (pgvector/pgvector:pg16) on port 5432
-- **Parallelism:** Matrix strategy with 2 containers for parallel Cypress runs
+- **Parallelism:** Decided once by a `plan` job: with a `CYPRESS_RECORD_KEY`, two containers split the specs; without it, a single container runs everything (two unrecorded containers would each run the full suite).
 - **Steps:**
-  1. Install dependencies and Cypress binary (cached)
+  1. Install dependencies and Cypress binary (cached), then patch the Cypress bundled dependencies
   2. Build the application (`pnpm run build`)
-  3. Enable pgvector extension
-  4. Run integration tests: `pnpm exec vitest run --config vitest.integration.config.ts`
-  5. Push database schema with `drizzle-kit push`
-  6. Run the smoke test: `pnpm exec vitest run --config vitest.smoke.config.ts`
-  7. Start the built server in test mode (`NODE_ENV=test`, `ALLOW_DEV_AUTH_BYPASS=true`)
-  8. Wait for server health check at `/api/v1/health`
-  9. Run Cypress, recording to Cypress Cloud only when `CYPRESS_RECORD_KEY` is set
+  3. Verify client-bundle invariants (`pnpm check:bundle`)
+  4. Enable pgvector extension
+  5. Push database schema with `drizzle-kit push` — this comes **before** the suites below, which need the schema to exist
+  6. Run integration tests: `pnpm exec vitest run --config vitest.integration.config.ts`
+  7. Run the smoke test: `pnpm exec vitest run --config vitest.smoke.config.ts`
+  8. Start the built server in test mode (`NODE_ENV=test`, `ALLOW_DEV_AUTH_BYPASS=true`)
+  9. Wait for server health check at `/api/v1/health`
+  10. Run Cypress, recording to Cypress Cloud only when `CYPRESS_RECORD_KEY` is set
 
 ### 3. Check Migrations (`migrations.yml`)
 

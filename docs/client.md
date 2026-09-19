@@ -118,6 +118,14 @@ Displays training data analysis across five tabs (a sixth, **MAF Trend**, appear
 
 A date range selector filters data across all tabs (30 days, 90 days, 6 months, 1 year, all time).
 
+### Weekly Review (`client/src/pages/Review.tsx`)
+
+A per-week retrospective at `/review`, deep-linkable through `?week=<any date in the week>` (`useUrlQueryState`). The server anchors the requested date to its Monday and returns `weekStart` plus `isCurrentWeek`, and the page pages from **the server's** anchor rather than the requested string — they differ by a day when the athlete's stored timezone is not the browser's, and stepping from the local value would skip or repeat a week. Composed of `WeeklyReviewSummary`, `WeeklyReviewSessions`, `WeeklyReviewHighlights`, and `WeeklyReviewIntent` (the one thing to carry into next week), over `useWeeklyReview`. An empty week renders a neutral `EmptyWeek` card rather than a 0%-adherence report card. See [Weekly Review spec](weekly-review-spec.md).
+
+### Nutrition (`client/src/pages/Nutrition.tsx`)
+
+Food logging and fuelling at `/nutrition`, mounted only when `featureFlags.nutritionEnabled` is on. A date navigator drives one day at a time: `DailyTotalsHeader` → `FoodSearch` + `QuickAddBar` → a single `LogFoodActions` sheet (describe / snap / scan label / barcode, plus custom food, recipe and targets entry points) → one `MealSection` per meal → `MicronutrientPanel` → `MyFoodsSection` → `NutritionInsightsPanel`. Data access is centralised in `client/src/hooks/useNutrition.ts`. The component-by-component map, the AI parse flows, and the per-meal fuel targets live in [Nutrition & Fuelling § Client UI map](nutrition.md#6-client-ui-map).
+
 ### Settings (`client/src/pages/Settings.tsx`)
 
 User preferences and account management. Organized into five deep-linkable tabs (`?tab=account|training|integrations|notifications|data`, default `account`) driven by `useUrlQueryState` and mirroring the Analytics tab pattern. The sticky "Save Settings" bar and the unsaved-changes guard live **outside** the tabs, so preference edits made on any tab are tracked together, saved by one button, and persist across tab switches.
@@ -320,7 +328,7 @@ Editing surfaces for structured workout formats (EMOM, AMRAP, rounds, intervals)
 A user flow introduced in April 2026 that lets athletes snap a photo of a whiteboard / coach printout / phone screenshot and have Gemini extract exercises and sets.
 
 - **Entry points**: `ImageCaptureButton` mounted inside `WorkoutTextMode` (Log Workout) and inside `CoachPrescriptionCollapsible` (workout detail surfaces, for re-parsing an existing workout against a new photo).
-- **Client-side compression**: `compressImage()` in `client/src/lib/image.ts` resizes the captured image to a max edge of 1600px and re-encodes as JPEG at quality 0.8 before base64 upload, keeping payloads OCR-ready while staying inside the Gemini request limit. Centralized `getImageMimeType()` ensures the same mime-type handling on both call sites.
+- **Client-side compression**: `compressImage()` in `client/src/lib/image.ts` resizes the captured image to a max edge of 1600px and re-encodes as JPEG at quality 0.8 before base64 upload, keeping payloads OCR-ready while staying inside the Gemini request limit. Because it always re-encodes, the `CompressedImage` it returns carries a literal `mimeType: "image/jpeg"` — every call site reads the mime type off that result rather than deriving it from the source `File`, so both paths agree by construction.
 - **Orchestration surface**: `shared/PrescriptionEditor` manages the text/photo parse controls for workout detail surfaces, including preview URL lifecycle, Retake/Parse confirmation, and clearing transient preview state after dispatch.
 - **Server endpoints**: `POST /api/v1/parse-exercises-from-image` (new workout) and `POST /api/v1/workouts/:id/reparse-from-image` (existing workout). Both accept `{ imageBase64, mimeType }` and are rate-limited under the AI category. See [API Reference](api-reference.md).
 
