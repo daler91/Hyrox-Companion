@@ -14,7 +14,14 @@ interface VoiceButtonProps {
   "data-testid"?: string;
 }
 
-export function VoiceButton({ isListening, isSupported, onClick, size = "icon", className, "data-testid": dataTestId }: Readonly<VoiceButtonProps>) {
+export function VoiceButton({
+  isListening,
+  isSupported,
+  onClick,
+  size = "icon",
+  className,
+  "data-testid": dataTestId,
+}: Readonly<VoiceButtonProps>) {
   // Derive the live-region announcement from an actual transition (not
   // just the current state) so SRs don't hear "Recording stopped." every
   // time VoiceButton mounts with isListening=false.
@@ -40,19 +47,21 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span tabIndex={0}> {/* NOSONAR */}
-              <Button
-                type="button"
-                variant="outline"
-                size={size}
-                disabled
-                className={cn("relative opacity-50", className)}
-                data-testid={dataTestId || "button-voice-input"}
-                aria-label="Voice input not supported in this browser"
-              >
-                <MicOff className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size={size}
+              aria-disabled="true"
+              className={cn(
+                "relative aria-disabled:opacity-50 aria-disabled:cursor-not-allowed",
+                className,
+              )}
+              onClick={(e) => e.preventDefault()}
+              data-testid={dataTestId || "button-voice-input"}
+              aria-label="Voice input not supported in this browser"
+            >
+              <MicOff className="h-4 w-4" aria-hidden="true" />
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
             <p>Voice input isn&apos;t supported in this browser. Try Chrome or Edge.</p>
@@ -71,11 +80,7 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
             variant={isListening ? "destructive" : "outline"}
             size={size}
             onClick={onClick}
-            className={cn(
-              "relative",
-              isListening && "animate-pulse",
-              className,
-            )}
+            className={cn("relative", isListening && "animate-pulse", className)}
             data-testid={dataTestId || "button-voice-input"}
             aria-label={isListening ? "Stop voice input" : "Start voice input"}
             aria-pressed={isListening}
@@ -88,7 +93,11 @@ export function VoiceButton({ isListening, isSupported, onClick, size = "icon", 
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{isListening ? "Stop recording" : "Use voice input — your browser will ask for mic permission"}</p>
+          <p>
+            {isListening
+              ? "Stop recording"
+              : "Use voice input — your browser will ask for mic permission"}
+          </p>
         </TooltipContent>
       </Tooltip>
       {/* SR-only live region — announces state transitions so users who

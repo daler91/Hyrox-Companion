@@ -91,7 +91,7 @@ function WelcomeEmptyState({
           data-testid="button-use-sample-plan"
         >
           {samplePlanMutation.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
           ) : (
             <Sparkles className="h-4 w-4 mr-2" />
           )}
@@ -108,7 +108,7 @@ function WelcomeEmptyState({
             >
               <span>
                 {importMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
                 ) : (
                   <FileText className="h-4 w-4 mr-2" />
                 )}
