@@ -2,10 +2,24 @@
 import { chatMessages } from "../tables";
 import { createInsertSchema, z } from "../zod";
 // Chat message types and schemas
-export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
-  id: true,
-  timestamp: true,
-});
+/**
+ * The `role` column is a bare varchar(20), so the generated schema accepted any
+ * short string — a client could seed "system" turns (or anything else) into its
+ * own stored history, which `chatService` then replays into the model context.
+ * The conversation only has two sides, and the client legitimately persists
+ * both: its own turn and the assistant reply it streamed. Constrain to exactly
+ * those, and bound the content so a single message can't be used to park a
+ * large blob in the chat table.
+ */
+export const insertChatMessageSchema = createInsertSchema(chatMessages)
+  .omit({
+    id: true,
+    timestamp: true,
+  })
+  .extend({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().min(1).max(50_000),
+  });
 
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;

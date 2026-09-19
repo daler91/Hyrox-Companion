@@ -25,7 +25,25 @@ function enforceHeartRateConsistency(
   }
 }
 
+/**
+ * Device provenance is server-owned.
+ *
+ * `source`, `stravaActivityId`, `garminActivityId` and `startedAt` are written
+ * by the Strava/Garmin sync and by the device-link routes. Accepting them from
+ * a client let a manually-logged workout present itself as a device import —
+ * enough to satisfy the checks in `linkStandaloneDeviceLog`. Dedupe queries are
+ * per-user so this was an integrity problem rather than a cross-tenant one, but
+ * there is no legitimate client that sets them.
+ */
+const DEVICE_PROVENANCE_FIELDS = {
+  source: true,
+  stravaActivityId: true,
+  garminActivityId: true,
+  startedAt: true,
+} as const;
+
 export const createWorkoutRouteSchema = insertWorkoutLogSchema
+  .omit(DEVICE_PROVENANCE_FIELDS)
   .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
 /**
@@ -47,7 +65,7 @@ export const createWorkoutRouteSchema = insertWorkoutLogSchema
  * Zod rather than persisted.
  */
 export const updateWorkoutRouteSchema = updateWorkoutLogSchema
-  .omit({ planDayId: true, planId: true })
+  .omit({ planDayId: true, planId: true, ...DEVICE_PROVENANCE_FIELDS })
   .extend({ exercises: exercisesPayloadSchema.optional(), structureBlocks: structureBlocksPayloadSchema })
   .superRefine(enforceHeartRateConsistency);
 export const assignWorkoutPlanDaySchema = z.object({ planDayId: z.string().min(1).nullable() });

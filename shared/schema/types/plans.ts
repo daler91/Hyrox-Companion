@@ -46,8 +46,29 @@ export const updatePlanDaySchema = insertPlanDaySchema.partial().omit({
   planId: true,
 });
 
+/**
+ * What a CLIENT may PATCH on a plan day.
+ *
+ * `updatePlanDaySchema` above is the internal write surface — coachService and
+ * aiSuggestionService legitimately set the AI-provenance columns and status
+ * through it — but those columns are server-managed and were reachable from
+ * `PATCH /api/v1/plans/:planId/days/:dayId`. Writing them directly bypassed the
+ * status-transition rules in `updatePlanDayStatus` (which is why the dedicated
+ * `/status` route exists) and the coach-note regeneration cooldown keyed on
+ * `aiNoteUpdatedAt`, letting a client re-trigger AI note generation at will.
+ */
+export const updatePlanDayRouteSchema = updatePlanDaySchema.omit({
+  status: true,
+  skipReason: true,
+  aiSource: true,
+  aiRationale: true,
+  aiInputsUsed: true,
+  aiNoteUpdatedAt: true,
+});
+
 export type InsertPlanDay = z.infer<typeof insertPlanDaySchema>;
 export type UpdatePlanDay = z.infer<typeof updatePlanDaySchema>;
+export type UpdatePlanDayRouteBody = z.infer<typeof updatePlanDayRouteSchema>;
 export type PlanDay = typeof planDays.$inferSelect;
 
 export const coachModificationKindSchema = z.enum([

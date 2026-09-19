@@ -1,4 +1,4 @@
-import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDay, updatePlanDaySchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
+import { type AddExerciseSetBody, addExerciseSetBodySchema, dateStringSchema, type GeneratePlanInput,generatePlanInputSchema, importPlanRequestSchema, parseExercisesFromImageRequestSchema, type PatchExerciseSetBody,patchExerciseSetBodySchema, planDaySkipReasonEnum, schedulePlanRequestSchema, structureBlocksPayloadSchema, type UpdatePlanDayRouteBody, updatePlanDayRouteSchema, type UpdateTrainingPlanGoal, updateTrainingPlanGoalSchema, type UpdateTrainingPlanRetirement, updateTrainingPlanRetirementSchema, workoutStatusEnum } from "@shared/schema";
 import { type Request as ExpressRequest,type Response, Router } from "express";
 import { z } from "zod";
 
@@ -142,13 +142,15 @@ const handleGetOrDeletePlan = (
   res.json(result);
 })
 
-router.get("/api/v1/plans", isAuthenticated, asyncHandler(async (req: ExpressRequest, res: Response) => {
+router.get("/api/v1/plans", isAuthenticated, rateLimiter("planRead", 60), asyncHandler(async (req: ExpressRequest, res: Response) => {
     const userId = getUserId(req);
     const plans = await storage.plans.listTrainingPlans(userId);
     res.json(plans);
   }));
 
-router.get("/api/v1/plans/:id", isAuthenticated, handleGetOrDeletePlan(storage.plans.getTrainingPlan.bind(storage)));
+// Returns the full plan with every day, so it is the heaviest read in this
+// router; it was previously the only one without a limiter.
+router.get("/api/v1/plans/:id", isAuthenticated, rateLimiter("planRead", 60), handleGetOrDeletePlan(storage.plans.getTrainingPlan.bind(storage)));
 
 protectedPost(router, "/api/v1/plans/import", { limiter: rateLimiter("planImport", 5), middleware: [validateBody(importPlanRequestSchema)] }, async (req: ExpressRequest<Record<string, never>, unknown, z.infer<typeof importPlanRequestSchema>>, res: Response) => {
     const { csvContent, fileName, planName } = req.body;
@@ -222,14 +224,14 @@ router.get("/api/v1/plans/:id/generation-status", isAuthenticated, rateLimiter("
   });
 }));
 
-protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
+protectedPatch(router, "/api/v1/plans/:planId/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDayRouteSchema)] }, async (req: ExpressRequest<{ planId: string; dayId: string }, unknown, UpdatePlanDayRouteBody>, res: Response) => {
   const userId = getUserId(req);
   const updatedDay = await updateStoredPlanDay({ dayId: req.params.dayId, data: req.body, userId });
   if (!updatedDay) return sendNotFound(res, "Day not found");
   res.json(updatedDay);
 });
 
-protectedPatch(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDaySchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, UpdatePlanDay>, res: Response) => {
+protectedPatch(router, "/api/v1/plans/days/:dayId", { limiter: rateLimiter("planDayUpdate", 20), middleware: [validateBody(updatePlanDayRouteSchema)] }, async (req: ExpressRequest<{ dayId: string }, unknown, UpdatePlanDayRouteBody>, res: Response) => {
   const userId = getUserId(req);
   const updatedDay = await updatePlanDayWithCleanup(req.params.dayId, req.body, userId);
   if (!updatedDay) return sendNotFound(res, "Day not found");

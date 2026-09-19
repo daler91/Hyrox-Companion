@@ -57,6 +57,10 @@ if (!env.STRAVA_STATE_SECRET) {
 // IP on the unauthenticated OAuth callback.
 const stravaAuthLimiter = rateLimiter("stravaAuth", 20, RATE_LIMIT_WINDOW_15M_MS);
 const stravaSyncLimiter = rateLimiter("stravaSync", 5, RATE_LIMIT_WINDOW_15M_MS);
+// Status reads and disconnects were the only Strava routes with no limiter.
+// Both hit the DB and disconnect also calls out to Strava to deauthorize.
+const stravaStatusLimiter = rateLimiter("stravaStatus", 60, RATE_LIMIT_WINDOW_15M_MS);
+const stravaDisconnectLimiter = rateLimiter("stravaDisconnect", 10, RATE_LIMIT_WINDOW_15M_MS);
 const STATE_MAX_AGE_MS = STRAVA_STATE_MAX_AGE_MS;
 
 
@@ -866,9 +870,9 @@ async function handleStravaSync(req: Request, res: Response) {
 }
 
 export function registerStravaRoutes(router: Router): void {
-  router.get("/api/v1/strava/status", isAuthenticated, asyncHandler(handleStravaStatus));
+  router.get("/api/v1/strava/status", isAuthenticated, stravaStatusLimiter, asyncHandler(handleStravaStatus));
   router.get("/api/v1/strava/auth", isAuthenticated, stravaAuthLimiter, asyncHandler(handleStravaAuth));
   router.get("/api/v1/strava/callback", stravaAuthLimiter, asyncHandler(handleStravaCallback));
-  router.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, asyncHandler(handleStravaDisconnect));
+  router.delete("/api/v1/strava/disconnect", ...protectedMutationGuards, stravaDisconnectLimiter, asyncHandler(handleStravaDisconnect));
   router.post("/api/v1/strava/sync", ...protectedMutationGuards, stravaSyncLimiter, asyncHandler(handleStravaSync));
 }
