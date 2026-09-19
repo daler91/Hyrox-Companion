@@ -221,7 +221,7 @@ export function registerWorkoutCrudRoutes(router: Router): void {
     if (!deleted) {
       return sendNotFound(res, WORKOUT_NOT_FOUND);
     }
-    res.json({ success: true });
+    res.json({ success: true, recycleBinItemId: deleted.recycleBinItemId });
   });
 
   protectedPost(router, "/api/v1/workouts/bulk-delete", { limiter: rateLimiter("workoutBulkDelete", 20), middleware: [validateBody(bulkDeleteWorkoutsSchema)] }, async (req: Request, res: Response) => {

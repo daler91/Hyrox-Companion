@@ -242,17 +242,18 @@ describe("DELETE /api/v1/plans/:id", () => {
   });
 
   it("should return 200 with success when plan exists", async () => {
-    vi.mocked(storage.plans.deleteTrainingPlan).mockResolvedValue(true);
+    vi.mocked(storage.plans.deleteTrainingPlan).mockResolvedValue({ recycleBinItemId: "rb-1" });
 
     const response = await request(app).delete("/api/v1/plans/plan-123");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true });
+    // The bin item id is what the client's Undo toast posts back to restore.
+    expect(response.body).toEqual({ success: true, recycleBinItemId: "rb-1" });
     expect(storage.plans.deleteTrainingPlan).toHaveBeenCalledWith("plan-123", "test_user_id");
   });
 
   it("should return 404 when plan does not exist", async () => {
-    vi.mocked(storage.plans.deleteTrainingPlan).mockResolvedValue(false);
+    vi.mocked(storage.plans.deleteTrainingPlan).mockResolvedValue(null);
 
     const response = await request(app).delete("/api/v1/plans/nonexistent");
 

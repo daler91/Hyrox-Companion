@@ -4,6 +4,7 @@ import { rawRequest,typedRequest } from "./client";
 import { IMAGE_REPARSE_REQUEST_OPTIONS, type ReparseResponse } from "./constants";
 import type { ParseFromImagePayload } from "./exercises";
 import { type AddExerciseSetPayload, createExerciseSetMutationApi, type PatchExerciseSetPayload } from "./exerciseSetMutations";
+import type { DeleteToRecycleBinResponse } from "./workouts";
 
 export interface PlanDayReparseTextPayload {
   mainWorkout?: string | null;
@@ -36,9 +37,9 @@ export const plans = {
   updateDayWithoutPlan: (dayId: string, updates: Record<string, unknown>) =>
     typedRequest<PlanDay>("PATCH", `/api/v1/plans/days/${dayId}`, updates),
 
-  deletePlan: (planId: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/${planId}`),
+  deletePlan: (planId: string) => typedRequest<DeleteToRecycleBinResponse>("DELETE", `/api/v1/plans/${planId}`),
 
-  deleteDay: (dayId: string) => typedRequest<{ success: boolean }>("DELETE", `/api/v1/plans/days/${dayId}`),
+  deleteDay: (dayId: string) => typedRequest<DeleteToRecycleBinResponse>("DELETE", `/api/v1/plans/days/${dayId}`),
 
   schedule: (planId: string, startDate: string) =>
     rawRequest("POST", `/api/v1/plans/${planId}/schedule`, { startDate }).then(() => undefined),

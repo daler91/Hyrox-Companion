@@ -195,6 +195,64 @@ describe("nutrition reminders cron job", () => {
   });
 });
 
+describe("recycle bin purge cron job", () => {
+  let purgeCallback: () => Promise<void>;
+  const storage = { recycleBin: { purgeExpired: vi.fn() } };
+
+  beforeAll(() => {
+    mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
+    // The mocked scheduler returns undefined, so startCron's "already
+    // running" guard never trips and each describe's call re-registers every
+    // job. Take the LAST registration: its closure holds this storage stub.
+    startCron(storage as never);
+
+    const call = mocks.cronSchedule.mock.calls.findLast(([expression]) => expression === "45 3 * * *");
+    if (!call) throw new Error("recycle bin purge was not scheduled");
+    purgeCallback = call[1];
+  });
+
+  beforeEach(() => {
+    storage.recycleBin.purgeExpired.mockReset();
+    mocks.withPgAdvisoryLock.mockClear();
+    vi.mocked(logger.info).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it("holds its own advisory lock key", () => {
+    expect(CRON_LOCK_KEYS.recycleBinPurge).toBe(42_010_018n);
+  });
+
+  it("runs the purge under the recycleBinPurge lock and logs the count when rows were removed", async () => {
+    storage.recycleBin.purgeExpired.mockResolvedValueOnce(3);
+
+    await purgeCallback();
+
+    expect(mocks.withPgAdvisoryLock).toHaveBeenCalledWith(
+      mocks.pool,
+      { key: CRON_LOCK_KEYS.recycleBinPurge, name: "recycleBinPurge" },
+      expect.any(Function),
+    );
+    expect(logger.info).toHaveBeenCalledWith({ context: "cron", purged: 3 }, "Recycle bin purge: removed 3 expired item(s)");
+  });
+
+  it("stays quiet when nothing had expired", async () => {
+    storage.recycleBin.purgeExpired.mockResolvedValueOnce(0);
+
+    await purgeCallback();
+
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it("logs and swallows a purge failure instead of throwing into the scheduler", async () => {
+    const error = new Error("db unavailable");
+    storage.recycleBin.purgeExpired.mockRejectedValueOnce(error);
+
+    await expect(purgeCallback()).resolves.toBeUndefined();
+
+    expect(logger.error).toHaveBeenCalledWith({ context: "cron", err: error, job: "recycleBinPurge" }, "Cron job failed");
+  });
+});
+
 describe("strava auto-sync cron jobs", () => {
   let scanCallback: () => Promise<void>;
   let ensureCallback: () => Promise<void>;

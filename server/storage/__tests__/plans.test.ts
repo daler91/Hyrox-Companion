@@ -20,6 +20,15 @@ vi.mock("../../db", () => ({
 
 vi.mock("../../storage", () => ({ storage: {} }));
 
+// The delete paths snapshot into the recycle bin inside their transaction;
+// the capture SQL has its own tests, so here it is just an ownership oracle.
+vi.mock("../recycleBinCapture", () => ({
+  captureTrainingPlan: vi.fn(),
+  capturePlanDays: vi.fn(),
+}));
+
+import { capturePlanDays, captureTrainingPlan } from "../recycleBinCapture";
+
 // -- Helpers ------------------------------------------------------------------
 
 // `where` resolves directly AND carries orderBy/limit, because the queries under
@@ -148,20 +157,27 @@ describe("PlanStorage", () => {
   });
 
   describe("deleteTrainingPlan", () => {
-    it("should return false when plan not found", async () => {
-      mockSelectChain([]);
-      expect(await storage.deleteTrainingPlan("nonexistent", "u1")).toBe(false);
+    function mockTransaction(rowCount: number) {
+      const mockTx = { delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount }) }) };
+      vi.mocked(db.transaction).mockImplementation(async (callback) => callback(mockTx as never));
+      return mockTx;
+    }
+
+    it("should return null, deleting nothing, when the plan is not the user's (capture finds nothing)", async () => {
+      vi.mocked(captureTrainingPlan).mockResolvedValue(undefined);
+      const mockTx = mockTransaction(0);
+      expect(await storage.deleteTrainingPlan("nonexistent", "u1")).toBeNull();
+      expect(mockTx.delete).not.toHaveBeenCalled();
     });
 
-    it("should delete plan and its days in a transaction", async () => {
-      mockSelectChain([{ id: "plan-1" }]);
-      vi.mocked(db.transaction).mockImplementation(async (callback) => {
-        const mockTx = { delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) }) };
-        return await callback(mockTx);
-      });
+    it("should snapshot the plan, then delete it and its days, in one transaction", async () => {
+      vi.mocked(captureTrainingPlan).mockResolvedValue("rb-1");
+      const mockTx = mockTransaction(1);
 
-      expect(await storage.deleteTrainingPlan("plan-1", "u1")).toBe(true);
+      expect(await storage.deleteTrainingPlan("plan-1", "u1")).toEqual({ recycleBinItemId: "rb-1" });
       expect(db.transaction).toHaveBeenCalledTimes(1);
+      expect(captureTrainingPlan).toHaveBeenCalledWith(mockTx, "u1", "plan-1");
+      expect(mockTx.delete).toHaveBeenCalledTimes(2); // plan_days, then training_plans
     });
   });
 
@@ -202,16 +218,26 @@ describe("PlanStorage", () => {
   });
 
   describe("deletePlanDay", () => {
-    it("should return false when day not found", async () => {
-      mockFindPlanDayFirst(undefined);
-      expect(await storage.deletePlanDay("nonexistent", "u1")).toBe(false);
+    function mockTransaction(rowCount: number) {
+      const mockTx = { delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount }) }) };
+      vi.mocked(db.transaction).mockImplementation(async (callback) => callback(mockTx as never));
+      return mockTx;
+    }
+
+    it("should return null, deleting nothing, when the day is not on one of the user's plans", async () => {
+      vi.mocked(capturePlanDays).mockResolvedValue(new Map());
+      const mockTx = mockTransaction(0);
+      expect(await storage.deletePlanDay("nonexistent", "u1")).toBeNull();
+      expect(mockTx.delete).not.toHaveBeenCalled();
     });
 
-    it("should delete the day and return true when found", async () => {
-      mockFindPlanDayFirst({ id: "d1", plan: { userId: "u1" } });
-      vi.mocked(db.delete).mockReturnValue({ where: vi.fn().mockResolvedValue({ rowCount: 1 }) });
+    it("should snapshot then delete the day, returning the bin item id", async () => {
+      vi.mocked(capturePlanDays).mockResolvedValue(new Map([["d1", "rb-2"]]));
+      const mockTx = mockTransaction(1);
 
-      expect(await storage.deletePlanDay("d1", "u1")).toBe(true);
+      expect(await storage.deletePlanDay("d1", "u1")).toEqual({ recycleBinItemId: "rb-2" });
+      expect(capturePlanDays).toHaveBeenCalledWith(mockTx, "u1", ["d1"]);
+      expect(mockTx.delete).toHaveBeenCalledTimes(1);
     });
   });
 

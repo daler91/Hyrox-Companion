@@ -30,6 +30,7 @@ import type { UnitPreferences } from "@shared/unitConversion";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../db";
+import { isUniqueViolation } from "../dbErrors";
 import type { logger } from "../logger";
 import { storage } from "../storage";
 import {
@@ -147,16 +148,6 @@ export async function loadMatchCandidates(
     logs: new Map(logs.map((l) => [l.id, l])),
     planDays: new Map(days.map((d) => [d.id, d])),
   };
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  let current: unknown = err;
-  for (let depth = 0; current && typeof current === "object" && depth < 5; depth++) {
-    const rec = current as { code?: unknown; cause?: unknown };
-    if (rec.code === "23505") return true;
-    current = rec.cause;
-  }
-  return false;
 }
 
 /**

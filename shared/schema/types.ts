@@ -5,6 +5,7 @@ export * from "./types/coaching";
 export * from "./types/connections";
 export * from "./types/planProposals";
 export * from "./types/plans";
+export * from "./types/recycleBin";
 export * from "./types/requests";
 export * from "./types/users";
 export * from "./types/workouts";

@@ -219,7 +219,8 @@ describe("usePlanImport", () => {
               queryKey: k,
             }),
           );
-          expect(mockToast).toHaveBeenCalledWith({ title: sToast });
+          // Delete's toast also carries an Undo action; the title is the contract here.
+          expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: sToast }));
         });
         await postAssert(result, mockCb);
       },

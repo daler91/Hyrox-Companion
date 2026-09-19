@@ -64,7 +64,7 @@ type ContractCase = {
 const endpointFixtureCases: ContractCase[] = [
   { name: "workouts list", method: "get", path: "/api/v1/workouts", expectedStatus: 200, expectedFields: ["0.id"] },
     { name: "workout update", method: "patch", path: "/api/v1/workouts/workout-1", body: { notes: "updated" }, expectedStatus: 200, expectedFields: ["id", "notes"] },
-  { name: "workout delete", method: "delete", path: "/api/v1/workouts/workout-1", expectedStatus: 200, expectedFields: ["success"] },
+  { name: "workout delete", method: "delete", path: "/api/v1/workouts/workout-1", expectedStatus: 200, expectedFields: ["success", "recycleBinItemId"] },
   { name: "workout reparse", method: "post", path: "/api/v1/workouts/workout-1/reparse", body: {}, expectedStatus: 200, expectedFields: ["saved", "setCount", "exercises"] },
   { name: "timeline list", method: "get", path: "/api/v1/timeline", expectedStatus: 200, expectedFields: ["0.id", "0.type"] },
   { name: "export json", method: "get", path: "/api/v1/export?format=json", expectedStatus: 200, expectedFields: ["exportedAt", "workouts"] },
@@ -89,10 +89,10 @@ describe("Workouts Routes", () => {
     vi.mocked(storage.workouts.getWorkoutLog).mockResolvedValue({ id: "workout-1", userId: "test_user_id", mainWorkout: "Engine" });
     vi.mocked(storage.workouts.getExerciseSetsByWorkoutLog).mockResolvedValue([]);
     vi.mocked(storage.workouts.getWorkoutStructureByWorkoutLog).mockResolvedValue([]);
-    vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue(true);
+    vi.mocked(storage.workouts.deleteWorkoutLog).mockResolvedValue({ recycleBinItemId: "rb-1" });
     vi.mocked(storage.workouts.updateWorkoutLog).mockResolvedValue({ id: "workout-1", notes: "updated" });
     vi.mocked(storage.plans.getPlanDay).mockResolvedValue({ id: "day-1", planId: "plan-1", focus: "Engine" });
-    vi.mocked(storage.plans.deletePlanDay).mockResolvedValue(true);
+    vi.mocked(storage.plans.deletePlanDay).mockResolvedValue({ recycleBinItemId: "rb-2" });
     vi.mocked(storage.timeline.getTimeline).mockResolvedValue([{ id: "timeline-1", type: "workout", date: "2026-01-02" }]);
     vi.mocked(storage.timeline.getTimelinePage).mockResolvedValue({
       entries: [{ id: "timeline-1", type: "workout", date: "2026-01-02" }],
@@ -113,6 +113,8 @@ describe("Workouts Routes", () => {
       deletedWorkoutLogIds: ["workout-1"],
       deletedPlanDayIds: [],
       deletedCount: 1,
+      batchId: "batch-1",
+      recycleBinItemIds: ["rb-1"],
     });
 
     vi.mocked(generateCSV).mockResolvedValue("id,date\nworkout-1,2026-01-02");
@@ -169,6 +171,8 @@ describe("Workouts Routes", () => {
       deletedWorkoutLogIds: ["workout-1", "workout-2"],
       deletedPlanDayIds: ["day-1"],
       deletedCount: 3,
+      batchId: "batch-1",
+      recycleBinItemIds: ["rb-1", "rb-2", "rb-3"],
     });
 
     const response = await request(app)
@@ -181,6 +185,8 @@ describe("Workouts Routes", () => {
       deletedWorkoutLogIds: ["workout-1", "workout-2"],
       deletedPlanDayIds: ["day-1"],
       deletedCount: 3,
+      batchId: "batch-1",
+      recycleBinItemIds: ["rb-1", "rb-2", "rb-3"],
     });
     expect(bulkDeleteWorkouts).toHaveBeenCalledWith({
       userId: "test_user_id",

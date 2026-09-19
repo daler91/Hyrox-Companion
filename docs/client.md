@@ -126,7 +126,7 @@ User preferences and account management. Organized into five deep-linkable tabs 
 - **Training** (`?tab=training`) -- **AthleteProfileCard** (division/gender/age), **BodyCompositionCard** (bodyweight, height, activity level, weight goal), **TrainingGoalsCard** (weekly workout goal), **TrainingStyleSection** (Balanced vs. MAF Method selection, MAF setup gating, style-transition messaging, and a local audit trail of style changes), **WorkoutReviewCard** (adherence insights), **AiCoachCard** (the **consent gate** for AI provider calls -- defaults off for new users; AI features stay hidden/disabled until enabled), and **CoachingSection** (AI coaching configuration and materials management).
 - **Integrations** (`?tab=integrations`) -- **StravaSection** (connect/disconnect, sync status; handles the `?strava=connected`/`?strava=error` OAuth callback and lands the user on this tab) and **GarminSection** (Garmin Connect credential form, status/last-sync badge, manual "Sync now"; surfaces the `lastError` banner and disables sync when the global 429 circuit breaker is tripped).
 - **Notifications** (`?tab=notifications`) -- **EmailNotificationsCard** (master `emailNotifications` switch plus nested per-type toggles for the weekly summary and missed-workout reminder, disabled/grayed when the master is off) and **PushNotificationSection** (Web Push opt-in, unsubscribe, denied-permission messaging, and a test notification when the browser + server VAPID config support push).
-- **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `ExportDataCard`, and the error-reporting consent card).
+- **Data & Privacy** (`?tab=data`) -- **DataToolsSection** (`StructureOldWorkoutsCard`, `RecycleBinCard` — deleted workouts, plan days and training plans, restorable for 90 days, with per-item *Delete forever* and *Empty bin* behind confirm dialogs — `ExportDataCard`, and the error-reporting consent card).
 
 ### Privacy (`client/src/pages/Privacy.tsx`)
 
@@ -210,13 +210,13 @@ Foundational UI building blocks generated via shadcn/ui CLI. Includes: `accordio
 - `AccountDangerZone` -- Account deletion (hold-to-confirm → `DELETE /api/v1/account`, then hard-redirect to the landing page after Clerk sign-out).
 - `TrainingStyleSection` -- Balanced/MAF style selector, MAF setup dialog, style transition notice, and local settings audit.
 - `PushNotificationSection` -- Web Push subscribe/unsubscribe and test-notification controls.
-- `DataToolsSection` -- Structure old workouts, data export, and error-reporting consent.
+- `DataToolsSection` -- Structure old workouts, the recycle bin, data export, and error-reporting consent.
 - `CoachingSection` -- AI coaching configuration.
 - `coaching/CoachingMaterialList` -- Uploaded coaching materials list.
 - `coaching/CoachingUploadDialog` -- Upload dialog for coaching materials.
 - `coaching/RagStatusCard` -- RAG processing status indicator.
 - `coaching/useCoachingUpload.ts` -- Upload logic hook.
-- `data-tools/` -- `ExportDataCard`, `StructureOldWorkoutsCard`, and the `useWorkoutReparseTools` hook backing `DataToolsSection`.
+- `data-tools/` -- `ExportDataCard`, `RecycleBinCard` (backed by the `useRecycleBin` hooks: list, restore, purge, empty), `StructureOldWorkoutsCard`, and the `useWorkoutReparseTools` hook backing `DataToolsSection`.
 - `garmin/` -- `GarminConnectForm`, `GarminErrorBanner`, `GarminStatusRow`, and the `useGarminConnectionController` hook backing `GarminSection`.
 - `preferences/` -- `UnitsPreferencesCard`, `AthleteProfileCard`, `BodyCompositionCard`, `TrainingGoalsCard`, `EmailNotificationsCard`, `WorkoutReviewCard`, `AiCoachCard`, and the shared `PreferenceRows`. These cards are composed directly into the Settings tabs.
 

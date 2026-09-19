@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { api, QUERY_KEYS } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
+import { useUndoDeleteToast } from "./useRecycleBin";
+
 // S10: client-side ceiling for plan CSV uploads. The server caps the stored
 // content well below this; the edge guard just stops a multi-MB file from being
 // read into memory (file.text()) and freezing the tab.
@@ -24,6 +26,7 @@ export function usePlanImport({
   onPlanScheduled,
 }: UsePlanImportOptions = {}) {
   const { toast } = useToast();
+  const showUndoDelete = useUndoDeleteToast();
   const [csvPreview, setCsvPreview] = useState<CsvPreviewData | null>(null);
   const [schedulingPlanId, setSchedulingPlanId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string>(
@@ -110,10 +113,12 @@ export function usePlanImport({
 
   const deletePlanMutation = useMutation({
     mutationFn: (planId: string) => api.plans.deletePlan(planId),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.plans }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.timeline }).catch(() => {});
-      toast({ title: "Plan deleted" });
+      // The plan sits in the recycle bin for 90 days; the toast's Undo brings
+      // it straight back, days and all.
+      showUndoDelete({ title: "Plan deleted", target: { itemId: data.recycleBinItemId } });
     },
     onError: () => {
       toast({ title: "Failed to delete plan", variant: "destructive" });

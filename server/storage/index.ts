@@ -10,6 +10,7 @@ import { NutritionStorage } from "./nutrition";
 import { PlanProposalStorage } from "./planProposals";
 import { PlanStorage } from "./plans";
 import { PushStorage } from "./push";
+import { RecycleBinStorage } from "./recycleBin";
 import { TimelineStorage } from "./timeline";
 import { TimelineAnnotationsStorage } from "./timelineAnnotations";
 import { UserStorage } from "./users";
@@ -37,4 +38,5 @@ export const storage: IStorage = {
   consent: new ConsentStorage(),
   nutrition: new NutritionStorage(),
   weeklyReviews: new WeeklyReviewsStorage(),
+  recycleBin: new RecycleBinStorage(),
 };

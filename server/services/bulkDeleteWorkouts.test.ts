@@ -22,6 +22,22 @@ vi.mock("../storage/planDayStatus", () => ({
   syncPlanDayStatusesFromWorkouts: vi.fn(),
 }));
 
+// The recycle-bin snapshot runs on the same transaction between the
+// ownership asserts and the deletes. Its SQL has its own tests; mocking it
+// keeps the program-order `where` mocks below aligned with the deletes.
+vi.mock("../storage/recycleBinCapture", () => ({
+  captureWorkoutLogs: vi.fn(
+    async (_tx: unknown, _userId: string, ids: string[], opts?: { batchId?: string }) =>
+      new Map(ids.map((id) => [id, `rb-${id}-${opts?.batchId ?? "none"}`])),
+  ),
+  capturePlanDays: vi.fn(
+    async (_tx: unknown, _userId: string, ids: string[], opts?: { batchId?: string }) =>
+      new Map(ids.map((id) => [id, `rb-${id}-${opts?.batchId ?? "none"}`])),
+  ),
+}));
+
+import { capturePlanDays, captureWorkoutLogs } from "../storage/recycleBinCapture";
+
 describe("bulkDeleteWorkouts", () => {
   let mockTx: any;
 
@@ -69,6 +85,8 @@ describe("bulkDeleteWorkouts", () => {
         deletedWorkoutLogIds: [],
         deletedPlanDayIds: [],
         deletedCount: 0,
+        batchId: expect.any(String),
+        recycleBinItemIds: [],
       });
 
       expect(mockTx.select).not.toHaveBeenCalled();
@@ -92,7 +110,16 @@ describe("bulkDeleteWorkouts", () => {
         deletedWorkoutLogIds: ["w1", "w2"],
         deletedPlanDayIds: [],
         deletedCount: 2,
+        batchId: expect.any(String),
+        recycleBinItemIds: [`rb-w1-${result.batchId}`, `rb-w2-${result.batchId}`],
       });
+      // Snapshotted on the transaction, under the batch id, before the delete.
+      expect(captureWorkoutLogs).toHaveBeenCalledWith(mockTx, userId, ["w1", "w2"], {
+        batchId: result.batchId,
+      });
+      expect(vi.mocked(captureWorkoutLogs).mock.invocationCallOrder[0]).toBeLessThan(
+        mockTx.delete.mock.invocationCallOrder[0],
+      );
 
       expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledTimes(1);
       expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledWith(
@@ -166,6 +193,11 @@ describe("bulkDeleteWorkouts", () => {
         deletedWorkoutLogIds: [],
         deletedPlanDayIds: ["pd1", "pd2"],
         deletedCount: 2,
+        batchId: expect.any(String),
+        recycleBinItemIds: [`rb-pd1-${result.batchId}`, `rb-pd2-${result.batchId}`],
+      });
+      expect(capturePlanDays).toHaveBeenCalledWith(mockTx, userId, ["pd1", "pd2"], {
+        batchId: result.batchId,
       });
     });
 
@@ -219,6 +251,8 @@ describe("bulkDeleteWorkouts", () => {
         deletedWorkoutLogIds: ["w1"],
         deletedPlanDayIds: ["pd2"],
         deletedCount: 2,
+        batchId: expect.any(String),
+        recycleBinItemIds: [`rb-w1-${result.batchId}`, `rb-pd2-${result.batchId}`],
       });
       expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledTimes(1);
       expect(syncPlanDayStatusesFromWorkouts).toHaveBeenCalledWith(["pd1"], userId, mockTx);
