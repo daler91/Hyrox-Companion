@@ -469,19 +469,20 @@ const MovementRow = memo(function MovementRow({
           <div className="ml-auto flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={isFirst ? 0 : -1}> {/* NOSONAR */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => onMove(index, -1)}
-                    disabled={isFirst}
-                    aria-label={`Move ${positionLabel} earlier`}
-                  >
-                    <ArrowUp className="size-3.5" aria-hidden />
-                  </Button>
-                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    if (isFirst) e.preventDefault();
+                    else onMove(index, -1);
+                  }}
+                  aria-disabled={isFirst}
+                  aria-label={`Move ${positionLabel} earlier`}
+                >
+                  <ArrowUp className="size-3.5" aria-hidden />
+                </Button>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Move earlier</p>
@@ -489,19 +490,20 @@ const MovementRow = memo(function MovementRow({
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span tabIndex={isLast ? 0 : -1}> {/* NOSONAR */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => onMove(index, 1)}
-                    disabled={isLast}
-                    aria-label={`Move ${positionLabel} later`}
-                  >
-                    <ArrowDown className="size-3.5" aria-hidden />
-                  </Button>
-                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    if (isLast) e.preventDefault();
+                    else onMove(index, 1);
+                  }}
+                  aria-disabled={isLast}
+                  aria-label={`Move ${positionLabel} later`}
+                >
+                  <ArrowDown className="size-3.5" aria-hidden />
+                </Button>
               </TooltipTrigger>
               <TooltipContent>
                 <p>Move later</p>
