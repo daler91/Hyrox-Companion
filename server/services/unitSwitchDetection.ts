@@ -127,27 +127,82 @@ function straddlesFactor(values: readonly number[], factor: number): boolean {
   return low > 0 && high / low >= factor * (1 - RATIO_TOLERANCE);
 }
 
+/** One exercise's daily medians, sorted ascending by date, plus how far a
+ *  boundary sweep has already classified into it. `beforeValues` only ever
+ *  grows and `pointer` only ever advances — see `refreshSplit`. */
+interface ExerciseSplit {
+  readonly exercise: string;
+  readonly sorted: readonly (readonly [date: string, value: number])[];
+  pointer: number;
+  readonly beforeValues: number[];
+  /** Cached result of the last `refreshSplit` call; `undefined` = never computed. */
+  cachedEntry: SwitchEvidence | null | undefined;
+  straddles: boolean;
+}
+
+function buildExerciseSplits(perExercise: Map<string, Map<string, number>>): ExerciseSplit[] {
+  const splits: ExerciseSplit[] = [];
+  for (const [exercise, byDate] of perExercise) {
+    const sorted = [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    splits.push({ exercise, sorted, pointer: 0, beforeValues: [], cachedEntry: undefined, straddles: false });
+  }
+  return splits;
+}
+
+// ⚡ Bolt Performance Optimization:
+// `detectUnitSwitch` walks every boundary date and, for each one, used to rescan
+// EVERY day of EVERY exercise to split it into before/after (O(boundaries * days)
+// - quadratic-ish, and the dominant cost for `script/audit-legacy-unit-rows.ts`
+// /`backfill-legacy-unit-rows.ts`, which run this once per athlete with legacy
+// rows across the whole user base). Boundaries are walked ascending, so a given
+// day only ever needs to move from the "after" side to the "before" side once
+// across the whole sweep. `refreshSplit` advances a per-exercise pointer instead
+// of rescanning, and only recomputes the (still O(days)) median/straddle check
+// when that exercise's own split actually moved since the last boundary -
+// bounding the total recompute work by each exercise's own day count rather
+// than by boundaries * days.
+function refreshSplit(split: ExerciseSplit, boundary: string, factor: number): void {
+  let moved = false;
+  while (split.pointer < split.sorted.length && split.sorted[split.pointer][0] < boundary) {
+    split.beforeValues.push(split.sorted[split.pointer][1]);
+    split.pointer++;
+    moved = true;
+  }
+  if (!moved && split.cachedEntry !== undefined) return;
+
+  const afterValues = split.sorted.slice(split.pointer).map(([, value]) => value);
+  if (split.beforeValues.length === 0 || afterValues.length === 0) {
+    split.cachedEntry = null;
+    split.straddles = false;
+    return;
+  }
+  if (straddlesFactor(split.beforeValues, factor) || straddlesFactor(afterValues, factor)) {
+    split.cachedEntry = null;
+    split.straddles = true;
+    return;
+  }
+
+  const medianBefore = median(split.beforeValues);
+  if (medianBefore <= 0) {
+    split.cachedEntry = null;
+    split.straddles = false;
+    return;
+  }
+  const medianAfter = median(afterValues);
+  split.cachedEntry = { exercise: split.exercise, medianBefore, medianAfter, ratio: medianAfter / medianBefore };
+  split.straddles = false;
+}
+
 /** Per-exercise medians either side of `boundary`, for exercises logged on both
  *  sides — comparing an exercise against itself is what removes "they started
  *  deadlifting" from the signal. Returns null when either side of any exercise
  *  straddles the factor, i.e. the boundary is in the wrong place. */
-function evidenceAt(
-  perExercise: Map<string, Map<string, number>>,
-  boundary: string,
-  factor: number,
-): SwitchEvidence[] | null {
+function evidenceAt(splits: readonly ExerciseSplit[], boundary: string, factor: number): SwitchEvidence[] | null {
   const evidence: SwitchEvidence[] = [];
-  for (const [exercise, byDate] of perExercise) {
-    const beforeValues: number[] = [];
-    const afterValues: number[] = [];
-    for (const [date, value] of byDate) (date < boundary ? beforeValues : afterValues).push(value);
-    if (beforeValues.length === 0 || afterValues.length === 0) continue;
-    if (straddlesFactor(beforeValues, factor) || straddlesFactor(afterValues, factor)) return null;
-
-    const medianBefore = median(beforeValues);
-    if (medianBefore <= 0) continue;
-    const medianAfter = median(afterValues);
-    evidence.push({ exercise, medianBefore, medianAfter, ratio: medianAfter / medianBefore });
+  for (const split of splits) {
+    refreshSplit(split, boundary, factor);
+    if (split.straddles) return null;
+    if (split.cachedEntry) evidence.push(split.cachedEntry);
   }
   return evidence;
 }
@@ -166,11 +221,11 @@ export function detectUnitSwitch(
   rows: readonly LoggedMeasurement[],
   factor: number,
 ): DetectedSwitch | null {
-  const perExercise = dailyMedians(rows);
+  const splits = buildExerciseSplits(dailyMedians(rows));
   const boundaries = [...new Set(rows.map((r) => r.date))].sort((a, b) => a.localeCompare(b));
 
   for (const boundary of boundaries) {
-    const evidence = evidenceAt(perExercise, boundary, factor);
+    const evidence = evidenceAt(splits, boundary, factor);
     if (evidence === null || evidence.length < MIN_AGREEING_EXERCISES) continue;
 
     for (const [direction, expected] of [
