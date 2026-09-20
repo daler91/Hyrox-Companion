@@ -133,7 +133,7 @@ export function NutritionShowcase() {
             {HIGHLIGHTS.map((item) => (
               <div key={item.title} className="fade-up flex gap-4">
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-primary/15">
-                  <item.icon className="h-5 w-5 text-primary" />
+                  <item.icon className="h-5 w-5 text-primary" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-heading font-semibold mb-1">{item.title}</h3>
