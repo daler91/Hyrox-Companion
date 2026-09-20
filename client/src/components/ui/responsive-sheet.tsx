@@ -47,6 +47,14 @@ export function ResponsiveSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="bottom"
+          // Focus the sheet container rather than its first control: Radix
+          // otherwise lands on the title's edit button, whose tooltip opens on
+          // focus and sits over the header on touch screens (no hover to
+          // dismiss it). Focus stays inside the dialog for the trap.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            (event.currentTarget as HTMLElement | null)?.focus();
+          }}
           className={cn(
             mobileFullHeight
               ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden rounded-none p-0"

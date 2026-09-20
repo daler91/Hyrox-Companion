@@ -76,7 +76,10 @@ export const InlineSetEditor = memo(function InlineSetEditor({
   // Memoised so sibling `SetRow` components (wrapped in React.memo) skip
   // re-render when an unrelated field keystroke flushes through.
   const colTemplate = useMemo(
-    () => `28px ${fields.map(() => "minmax(80px, 1fr)").join(" ")} 28px 28px`,
+    // 3.25rem floor (was 80px): three metric columns plus the two icon
+    // columns must fit a 360px phone inside the sheet's padding, or the note
+    // and remove buttons get pushed past the edge and can't be tapped.
+    () => `28px ${fields.map(() => "minmax(3.25rem, 1fr)").join(" ")} 28px 28px`,
     [fields],
   );
   const canDelete = orderedSets.length > 1;

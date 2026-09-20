@@ -214,7 +214,10 @@ export function StravaLinkBadge({ entry, dayEntries }: Readonly<DeviceLinkContro
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={`inline-flex items-center whitespace-nowrap rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold transition-colors hover:bg-[#FC4C02]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${STRAVA_BADGE_CLASS}`}
+          // after:-inset-2: an invisible ~38px hit area around the 22px badge on
+          // touch widths (the sidebar rail uses the same trick); desktop keeps
+          // the visual box as the target.
+          className={`relative inline-flex items-center whitespace-nowrap rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-[#FC4C02]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:after:hidden ${STRAVA_BADGE_CLASS}`}
           aria-label={
             isLinked ? "Strava activity options" : "Link this Strava activity to a workout"
           }

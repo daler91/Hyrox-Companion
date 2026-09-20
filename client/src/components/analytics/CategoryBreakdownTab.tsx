@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@/lib/api";
 import { CATEGORY_COLORS } from "@/lib/categoryColors";
 import { categoryLabels } from "@/lib/exerciseUtils";
@@ -196,7 +197,16 @@ function MovementPatternCoverageCard({
   );
 }
 
+/** "26%" for the legend entry named `name`, from the same data the ring draws. */
+function legendPercent(data: ReadonlyArray<{ name: string; value: number }>, name: string): string {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  const item = data.find((d) => d.name === name);
+  if (!item || total <= 0) return "";
+  return `${Math.round((item.value / total) * 100)}%`;
+}
+
 export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) {
+  const isMobile = useIsMobile();
   const { data: overview, isLoading } = useQuery<TrainingOverview>({
     queryKey: ["/api/v1/training-overview", dateParams],
     queryFn: () => api.analytics.getTrainingOverview(dateParams),
@@ -282,17 +292,24 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
             >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  {/* Phones: percentage radii keep the ring inside the 220px
+                      box, and the outside labels are dropped (they collided
+                      with the legend and clipped at the card edge); the legend
+                      carries the percentages instead. Desktop is unchanged. */}
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius={isMobile ? "40%" : 60}
+                    outerRadius={isMobile ? "66%" : 100}
                     paddingAngle={2}
                     dataKey="value"
                     nameKey="name"
-                    label={({ name, percent }: { name?: string; percent?: number }) =>
-                      `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
+                    label={
+                      isMobile
+                        ? false
+                        : ({ name, percent }: { name?: string; percent?: number }) =>
+                            `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
                     }
                     labelLine={false}
                   >
@@ -301,7 +318,11 @@ export function CategoryBreakdownTab({ dateParams }: CategoryBreakdownTabProps) 
                     ))}
                   </Pie>
                   <Tooltip content={<CategoryTooltip />} />
-                  <Legend />
+                  <Legend
+                    formatter={(value: string) =>
+                      isMobile ? `${value} ${legendPercent(pieData, value)}` : value
+                    }
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>

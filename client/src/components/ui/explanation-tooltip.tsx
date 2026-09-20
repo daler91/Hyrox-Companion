@@ -47,7 +47,8 @@ export function ExplanationTooltip({
           type="button"
           aria-label={subject ? `${subject}: ${explanation}` : explanation}
           className={cn(
-            "inline-flex shrink-0 items-center rounded text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            // -m-2 p-2: a 30px touch target around the 14px glyph with no layout shift.
+            "-m-2 inline-flex shrink-0 items-center rounded p-2 text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             className,
           )}
           data-testid={testId}
