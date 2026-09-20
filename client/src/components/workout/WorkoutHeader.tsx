@@ -19,7 +19,9 @@ interface WorkoutHeaderProps {
 
 export function WorkoutHeader({ onDuplicateLast, isDuplicating }: Readonly<WorkoutHeaderProps> = {}) {
   return (
-    <div className="flex items-center gap-4 mb-6">
+    // flex-wrap + a 10rem title basis: on a narrow phone the "Duplicate last"
+    // button drops to its own line instead of squeezing the h1 onto two.
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-6">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -32,8 +34,8 @@ export function WorkoutHeader({ onDuplicateLast, isDuplicating }: Readonly<Worko
           <TooltipContent>Back to timeline</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <div className="flex-1">
-        <h1 className="text-3xl font-bold tracking-tight">Log Workout</h1>
+      <div className="min-w-0 flex-1 basis-40">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Log Workout</h1>
         <p className="text-muted-foreground mt-1">
           Record your training session
         </p>

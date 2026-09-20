@@ -546,7 +546,9 @@ function TimelineCardHeader({
   dayEntries,
 }: Readonly<TimelineCardHeaderProps>) {
   return (
-    <div className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-16")}>
+    <div
+      className={cn("flex items-center gap-2 mb-2 flex-wrap", canMove && "pr-[4.5rem] md:pr-16")}
+    >
       {getStatusBadge(entry.status, entry.focus, entry.excused)}
       {isPending && (
         <Badge
@@ -567,14 +569,20 @@ function TimelineCardHeader({
       {(entry.source === "strava" || Boolean(entry.stravaActivityId)) && (
         <StravaLinkBadge entry={entry} dayEntries={dayEntries} />
       )}
+      {/* Plan names are free text (an AI plan carries the athlete's whole
+          goal sentence), and Badge never wraps, so without a width cap the
+          chip ran straight past the card edge on phones. Cap it to the row
+          and let the name ellipsize; the full name is in the title tooltip
+          and in the plan selector above the timeline. */}
       {entry.planName && (
         <Badge
           variant="outline"
-          className="text-muted-foreground"
+          className="min-w-0 max-w-full text-muted-foreground"
+          title={entry.planName}
           data-testid={`badge-plan-${entry.id}`}
         >
-          <BookOpen className="h-3 w-3 mr-1" aria-hidden="true" />
-          {entry.planName}
+          <BookOpen className="h-3 w-3 mr-1 shrink-0" aria-hidden="true" />
+          <span className="truncate">{entry.planName}</span>
         </Badge>
       )}
       {entry.dayName && <Badge variant="secondary">{entry.dayName}</Badge>}
@@ -747,7 +755,7 @@ function MoveEntryMenu({
 
   return (
     <div
-      className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-60 hover:opacity-100 focus-within:opacity-100 transition-opacity"
+      className="absolute right-2 top-2 z-10 flex items-center gap-0.5 transition-opacity md:opacity-60 md:hover:opacity-100 md:focus-within:opacity-100"
       data-testid={`move-entry-controls-${entry.id}`}
     >
       <TooltipProvider>
@@ -756,7 +764,7 @@ function MoveEntryMenu({
             <button
               type="button"
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground touch-none",
+                "inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground touch-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 isDragging && "cursor-grabbing text-primary",
                 !isDragging && "cursor-grab",
@@ -783,7 +791,7 @@ function MoveEntryMenu({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-9 w-9 md:h-7 md:w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={`Move ${entry.focus || "workout"} to another day`}
                   data-testid={`move-menu-${entry.id}`}
                   disabled={isMoving}

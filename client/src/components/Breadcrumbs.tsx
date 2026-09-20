@@ -104,7 +104,9 @@ export function Breadcrumbs() {
         <li>
           <Link
             href="/"
-            className="rounded hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            // py-2 on the inline link grows the tap area to ~32px without
+            // changing the bar's height.
+            className="rounded py-2 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             data-testid="breadcrumb-home"
           >
             Training
