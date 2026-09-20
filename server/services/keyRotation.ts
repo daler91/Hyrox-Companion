@@ -63,8 +63,9 @@ async function reencryptStrava(): Promise<TableSweepResult> {
       // the rest of the sweep (it used to — everything after the poison row,
       // including the whole garmin table, was silently skipped every run).
       failed += 1;
-      // bearer:disable javascript_lang_logger_leak — only the table name, row
+      // only the table name, row
       // id and the operational error are logged; no token material.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         { context: "crypto", table: "strava_connections", id: row.id, err: error },
         "Skipping credential row that failed re-encryption",
@@ -106,8 +107,9 @@ async function reencryptGarmin(): Promise<TableSweepResult> {
       updated += 1;
     } catch (error) {
       failed += 1;
-      // bearer:disable javascript_lang_logger_leak — only the table name, row
+      // only the table name, row
       // id and the operational error are logged; no token material.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         { context: "crypto", table: "garmin_connections", id: row.id, err: error },
         "Skipping credential row that failed re-encryption",
@@ -162,17 +164,19 @@ export async function maybeReencryptOnBoot(): Promise<void> {
       // Escalate to warn when rows were skipped so a poisoned credential row
       // is visible in logs instead of hiding inside an info line.
       const log = summary.failed > 0 ? logger.warn.bind(logger) : logger.info.bind(logger);
-      // bearer:disable javascript_lang_logger_leak — only the key version and
+      // only the key version and
       // row counts (stravaUpdated/garminUpdated/failed) are logged; no token
       // plaintext ever reaches the logger (reencryptToken keeps it in scope).
+      // bearer:disable javascript_lang_logger_leak
       log(
         { context: "crypto", version: currentKeyVersion(), ...summary },
         "Re-encrypted stored credentials to current key version",
       );
     }
   } catch (error) {
-    // bearer:disable javascript_lang_logger_leak — the caught error is a DB /
+    // the caught error is a DB /
     // operational failure of the sweep, not credential material.
+    // bearer:disable javascript_lang_logger_leak
     logger.error({ context: "crypto", err: error }, "Credential re-encrypt sweep failed");
   }
 }

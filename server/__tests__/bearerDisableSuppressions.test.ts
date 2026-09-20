@@ -58,21 +58,24 @@ describe("bearer:disable suppression directives", () => {
     expect(total).toBeGreaterThan(0);
   });
 
-  // Ratchet, not an aspiration: 38 pre-existing directives were broken this
-  // way as of 2026-08-14 — fixing all of them is a repo-wide sweep out of
-  // scope for one change. This caps the damage and blocks it from growing:
-  // lower BASELINE as offenders get cleaned up, never raise it.
+  // Was a ratchet (38 broken as of 2026-08-14, lowered to 36 on 2026-09-19);
+  // the repo-wide sweep landed on 2026-09-20 and the count is now ZERO, so
+  // this is a plain invariant rather than a budget.
   //
-  // Lowered 38 -> 36 on 2026-09-19. The slack was not free: a new broken
-  // directive added during the security-audit remediation sat at 37 and CI
-  // stayed green while the suppression was silently dead, so Bearer kept
-  // failing with no hint that the directive was being skipped rather than
-  // overruled. Holding the baseline at the actual count means the next
-  // occurrence fails HERE, naming the offending line, instead of surfacing as
-  // an unexplained Bearer alert.
-  it("does not grow the count of broken (unmatchable) suppression directives", () => {
-    const BASELINE = 36;
+  // Keep it at zero. The slack was never free: a broken directive added during
+  // the security-audit remediation sat at 37 against a baseline of 38, so this
+  // test stayed green while the suppression was silently dead — and Bearer
+  // failed with no hint that the directive had been skipped rather than
+  // overruled. Every allowed offender is a suppression someone believes is
+  // working and is not.
+  //
+  // If this fails: the directive line must contain ONLY `bearer:disable
+  // <rule_id>`. Bearer splits everything after `bearer:disable` into its
+  // rule-id list, so a trailing "— justification" becomes part of the rule id
+  // and matches nothing. Put the justification on its own comment line ABOVE
+  // the bare directive. See .jules/sentinel.md (2026-08-12).
+  it("has no broken (unmatchable) suppression directives", () => {
     const broken = findBrokenDirectives();
-    expect(broken.length).toBeLessThanOrEqual(BASELINE);
+    expect(broken, `Unmatchable bearer:disable directive(s):\n  ${broken.join("\n  ")}`).toEqual([]);
   });
 });

@@ -187,8 +187,9 @@ export async function runNutritionReminderCron(
       if (await processRefuelReminder(storage, user, now)) remindersSent++;
       if (await processLoggingReminder(storage, user, now)) remindersSent++;
     } catch (err) {
-      // bearer:disable javascript_lang_logger_leak — logs an internal user id
+      // logs an internal user id
       // and a push/DB error for operability; no message content or PII.
+      // bearer:disable javascript_lang_logger_leak
       logger.error(
         { context: "cron", err, userId: stale.id },
         "Nutrition reminder processing failed for user",

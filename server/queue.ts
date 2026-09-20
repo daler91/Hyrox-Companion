@@ -223,8 +223,9 @@ export async function runBatch<T>(
 async function requireUserFromJob(job: Job, queueName: string) {
   const userId = getUserIdFromJob(job);
   if (!userId) {
-    // bearer:disable javascript_lang_logger_leak — jobId is a pg-boss UUID and
+    // jobId is a pg-boss UUID and
     // dataKeys are payload field NAMES (not values); no PII or secrets.
+    // bearer:disable javascript_lang_logger_leak
     logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, `[pg-boss] Missing userId on ${queueName} job, skipping`);
     return null;
   }
@@ -296,14 +297,16 @@ export async function startQueue() {
 
   await queue.work("auto-coach", async (jobs: Job[]) => {
     await runBatch("auto-coach", jobs, async (job) => {
-      // bearer:disable javascript_lang_logger_leak — only the pg-boss jobId
+      // only the pg-boss jobId
       // (a UUID) is logged; no payload, PII, or secrets.
+      // bearer:disable javascript_lang_logger_leak
       logger.info({ jobId: job.id }, "[pg-boss] Processing auto-coach job");
       try {
         const userId = getUserIdFromJob(job);
         if (!userId) {
-          // bearer:disable javascript_lang_logger_leak — jobId is a UUID and
+          // jobId is a UUID and
           // dataKeys are field names (not values); no PII or secrets.
+          // bearer:disable javascript_lang_logger_leak
           logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing userId on auto-coach job, skipping");
           return;
         }
@@ -322,8 +325,9 @@ export async function startQueue() {
     await runBatch("embed-coaching-material", jobs, async (job) => {
       const identifiers = getEmbedJobIdentifiers(job);
       if (!identifiers) {
-        // bearer:disable javascript_lang_logger_leak — jobId is a UUID and
+        // jobId is a UUID and
         // dataKeys are field names (not values); no PII or secrets.
+        // bearer:disable javascript_lang_logger_leak
         logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing embed-coaching-material identifiers, skipping");
         return;
       }
@@ -387,15 +391,17 @@ export async function startQueue() {
     await runBatch(RECOMPUTE_ANALYTICS_QUEUE, jobs, async (job) => {
       const { userId, feature, localDate } = job.data as RecomputeAnalyticsJobData;
       if (!userId || !feature || !localDate) {
-        // bearer:disable javascript_lang_logger_leak — jobId is a UUID and
+        // jobId is a UUID and
         // dataKeys are field names (not values); no PII or secrets.
+        // bearer:disable javascript_lang_logger_leak
         logger.warn({ jobId: job.id, dataKeys: jobDataKeys(job) }, "[pg-boss] Missing recompute-analytics fields, skipping");
         return;
       }
       // Job data is a cast, not validated: reject unknown features BEFORE the
       // once-per-day claim below so a bad payload can't burn today's recompute.
       if (!ANALYTICS_FEATURES.includes(feature)) {
-        // bearer:disable javascript_lang_logger_leak — jobId is a UUID, no PII
+        // jobId is a UUID, no PII
+        // bearer:disable javascript_lang_logger_leak
         logger.warn({ jobId: job.id }, "[pg-boss] Unknown recompute-analytics feature, skipping");
         return;
       }
@@ -417,7 +423,8 @@ export async function startQueue() {
         // Per-feature routing lives in dispatchRecomputeAnalytics (exhaustive
         // switch, unit-tested) — nutrition_insights used to fall through to the
         // coach-insights branch here, running the wrong AI analysis nightly.
-        // bearer:disable javascript_lang_logger_leak — jobId is a UUID bound as log context, no PII
+        // jobId is a UUID bound as log context, no PII
+        // bearer:disable javascript_lang_logger_leak
         await runWithTimeout(RECOMPUTE_ANALYTICS_QUEUE, () =>
           dispatchRecomputeAnalytics(feature, userId, localDate, logger.child({ jobId: job.id })),
         );
