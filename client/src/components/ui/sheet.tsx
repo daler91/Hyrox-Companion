@@ -67,7 +67,9 @@ const SheetContent = React.forwardRef<
     >
       <BlockingModalLayerRegistration />
       {children}
-      <SheetPrimitive.Close type="button" aria-label="Close" className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+      {/* 36px hit area (right-2/top-2 + h-9 w-9) around the 16px glyph, so the
+          close target is tappable on touch; the glyph sits where it always did. */}
+      <SheetPrimitive.Close type="button" aria-label="Close" className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
         <X className="h-4 w-4" aria-hidden="true" />
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>

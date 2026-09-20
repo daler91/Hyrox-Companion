@@ -113,7 +113,9 @@ export function DeltaIndicator({
         <TooltipTrigger
           type="button"
           className={cn(
-            "inline-flex items-center gap-0.5 text-[10px] font-medium rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            // -my-1.5 py-1.5: a ~27px touch target for the tooltip without
+            // shifting the number it sits beside.
+            "-mx-1 -my-1.5 inline-flex items-center gap-0.5 rounded-sm px-1 py-1.5 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
             isImprovement
               ? "text-emerald-600 dark:text-emerald-400"
               : "text-red-600 dark:text-red-400",

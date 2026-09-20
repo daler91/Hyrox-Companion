@@ -6,6 +6,7 @@ import { HeartPulse, Plane, Stethoscope, Trophy, Umbrella } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useUnitPreferences } from "@/hooks/useUnitPreferences";
+import { getExerciseLabel } from "@/lib/exerciseUtils";
 
 const METRIC_LABELS: Record<PersonalRecordMetric, string> = {
   maxWeight: "Heaviest",
@@ -103,7 +104,8 @@ export function WeeklyReviewHighlights({ review }: { readonly review: WeeklyRevi
                   data-testid={`weekly-review-pr-${record.metric}`}
                 >
                   <span className="min-w-0 truncate font-medium">
-                    {record.customLabel ?? record.exerciseName}
+                    {/* Display label, not the storage key ("Farmers Carry", not "farmers_carry"). */}
+                    {getExerciseLabel(record.exerciseName, record.customLabel)}
                   </span>
                   <span className="flex items-center gap-2 whitespace-nowrap">
                     <Badge variant="outline">{METRIC_LABELS[record.metric]}</Badge>

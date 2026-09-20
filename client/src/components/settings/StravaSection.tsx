@@ -95,9 +95,11 @@ export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSe
         <CardDescription>Connect external services to sync your workouts</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-md bg-[#FC4C02]/10">
+        {/* flex-wrap: on a phone the Sync / disconnect cluster drops under the
+            status text instead of pushing past the card edge. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 shrink-0 rounded-md bg-[#FC4C02]/10">
               <StravaIcon className="h-5 w-5 text-[#FC4C02]" aria-hidden="true" />
             </div>
             <div className="space-y-1">
@@ -118,7 +120,7 @@ export function StravaSection({ stravaStatus, stravaLoading }: Readonly<StravaSe
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <StravaActions
               connected={Boolean(stravaStatus?.connected)}
               requiresReauth={requiresReauth}

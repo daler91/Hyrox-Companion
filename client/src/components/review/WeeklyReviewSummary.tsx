@@ -52,7 +52,7 @@ export function WeeklyReviewSummary({ review }: { readonly review: WeeklyReview 
   const { current, previous, weeklyGoal, hasPlan, isCurrentWeek } = review;
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Stat
         testId="weekly-review-sessions"
         label={isCurrentWeek ? "Sessions so far" : "Sessions"}

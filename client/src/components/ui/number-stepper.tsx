@@ -124,7 +124,8 @@ export function NumberStepper({
         <button
           type="button"
           onClick={cycleStep}
-          className="text-[10px] text-muted-foreground hover:text-foreground tabular-nums px-2 py-0.5 rounded-full bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          // min-h-7 / px-2.5: the "± 5" pill was a 19px-tall target on phones.
+          className="min-h-7 rounded-full bg-muted/50 px-2.5 py-0.5 text-[10px] tabular-nums text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Step: ${step}. Tap to change.`}
           data-testid={testId ? `${testId}-step` : undefined}
         >
