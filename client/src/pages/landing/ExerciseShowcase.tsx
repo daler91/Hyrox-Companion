@@ -18,10 +18,12 @@ function CategoryGrid() {
           className="hover-elevate flex flex-col items-center gap-2 p-4 rounded-xl border border-border/50 bg-card/50 hover:border-primary/30 transition-colors"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-primary/15">
-            <cat.icon className="h-5 w-5 text-primary" />
+            <cat.icon className="h-5 w-5 text-primary" aria-hidden="true" />
           </div>
           <span className="font-heading text-sm font-semibold">{cat.name}</span>
-          <span className="text-xs text-muted-foreground text-center leading-tight">{cat.examples}</span>
+          <span className="text-xs text-muted-foreground text-center leading-tight">
+            {cat.examples}
+          </span>
         </div>
       ))}
     </div>
@@ -43,18 +45,19 @@ export function ExerciseShowcase() {
         <div className="mt-12 grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
           <div className="fade-up flex gap-4">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-primary/15">
-              <Target className="h-5 w-5 text-primary" />
+              <Target className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h3 className="font-heading font-semibold mb-1">Gap Analysis</h3>
               <p className="text-muted-foreground text-sm">
-                Your AI coach identifies which exercises you're neglecting and adjusts your plan to address weaknesses.
+                Your AI coach identifies which exercises you're neglecting and adjusts your plan to
+                address weaknesses.
               </p>
             </div>
           </div>
           <div className="fade-up flex gap-4">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-primary/15">
-              <Timer className="h-5 w-5 text-primary" />
+              <Timer className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h3 className="font-heading font-semibold mb-1">Pacing Strategy</h3>
@@ -65,23 +68,25 @@ export function ExerciseShowcase() {
           </div>
           <div className="fade-up flex gap-4">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-primary/15">
-              <TrendingUp className="h-5 w-5 text-primary" />
+              <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h3 className="font-heading font-semibold mb-1">Personal Records</h3>
               <p className="text-muted-foreground text-sm">
-                Automatically track PRs across every exercise. See gold indicators when you beat your best.
+                Automatically track PRs across every exercise. See gold indicators when you beat
+                your best.
               </p>
             </div>
           </div>
           <div className="fade-up flex gap-4">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 ring-1 ring-primary/15">
-              <MessageSquare className="h-5 w-5 text-primary" />
+              <MessageSquare className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h3 className="font-heading font-semibold mb-1">Chat with Your Coach</h3>
               <p className="text-muted-foreground text-sm">
-                Ask questions about your training, get exercise tips, or discuss strategy with an AI that knows your history and the coaching materials you upload.
+                Ask questions about your training, get exercise tips, or discuss strategy with an AI
+                that knows your history and the coaching materials you upload.
               </p>
             </div>
           </div>
