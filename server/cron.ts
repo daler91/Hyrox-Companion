@@ -316,7 +316,8 @@ export function startCron(storage: IStorage): void {
         try {
           await pruneDanglingFoodEmbeddings();
         } catch (err) {
-          // bearer:disable javascript_lang_logger_leak — err is a DB/vector error, no PII
+          // err is a DB/vector error, no PII
+          // bearer:disable javascript_lang_logger_leak
           logger.error({ context: "cron", err }, "Dangling food-embedding prune failed");
         }
         try {
@@ -398,22 +399,25 @@ export function startCron(storage: IStorage): void {
         try {
           const result = await runNutritionReminderCron(storage);
           if (result.remindersSent > 0) {
-            // bearer:disable javascript_lang_logger_leak — logs only send/check
+            // logs only send/check
             // counts (integers) and a static context tag; no PII.
+            // bearer:disable javascript_lang_logger_leak
             logger.info(
               { context: "cron", ...result },
               `Nutrition reminders: sent ${result.remindersSent} for ${result.usersChecked} opted-in user(s)`,
             );
           }
         } catch (err) {
-          // bearer:disable javascript_lang_logger_leak — err is a scheduler/DB error, no PII
+          // err is a scheduler/DB error, no PII
+          // bearer:disable javascript_lang_logger_leak
           logger.error({ context: "cron", err }, "Nutrition reminder cron failed");
         }
       });
     },
     { timezone: "Etc/UTC" },
   );
-  // bearer:disable javascript_lang_logger_leak — static schedule copy only
+  // static schedule copy only
+  // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Nutrition reminders scheduled: hourly (refuel window + 20:00 local logging nudge)");
 
   // Strava automatic sync — the polling fallback behind the webhook push

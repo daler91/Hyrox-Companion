@@ -125,8 +125,9 @@ function startProbeDeadline(): void {
     probeDeadlineTimer = null;
     if (probeInFlight) {
       probeInFlight = false;
-      // bearer:disable javascript_lang_logger_leak — `timeoutMs` is a
+      // `timeoutMs` is a
       // module-level constant; no PII flows through this log line.
+      // bearer:disable javascript_lang_logger_leak
       logger.warn(
         { timeoutMs: PROBE_TIMEOUT_MS },
         "[ai] circuit breaker probe deadline reached without success/failure — clearing probeInFlight",

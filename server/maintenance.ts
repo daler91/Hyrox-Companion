@@ -71,8 +71,9 @@ async function runDrizzleMigrations() {
     if (isBenignIdempotencyError(error)) {
       logger.info({ context: "db" }, "Drizzle migrations skipped — schema already up to date (drizzle-kit push was used)");
     } else {
-      // bearer:disable javascript_lang_logger_leak — `err` is a DB/migration
+      // `err` is a DB/migration
       // error describing schema state, not user data; no PII or secrets logged.
+      // bearer:disable javascript_lang_logger_leak
       logger.error(
         { context: "db", err: error },
         "Drizzle migration failed — schema may be inconsistent; aborting startup",

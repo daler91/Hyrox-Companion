@@ -44,7 +44,8 @@ export async function dispatchRecomputeAnalytics(
       if (outcome.ok) {
         await persistOverviewAnalysis(userId, outcome.result, localDate, anchor);
       } else {
-        // bearer:disable javascript_lang_logger_leak — reason is a fixed enum, no PII
+        // reason is a fixed enum, no PII
+        // bearer:disable javascript_lang_logger_leak
         log.info({ reason: outcome.reason }, "[pg-boss] Overview analysis recompute skipped (gated)");
       }
       return;
@@ -55,7 +56,8 @@ export async function dispatchRecomputeAnalytics(
       if (outcome.ok) {
         await persistCoachInsights(userId, outcome.result, localDate, anchor);
       } else {
-        // bearer:disable javascript_lang_logger_leak — reason is a fixed enum, no PII
+        // reason is a fixed enum, no PII
+        // bearer:disable javascript_lang_logger_leak
         log.info({ reason: outcome.reason }, "[pg-boss] Coach insights recompute skipped (gated)");
       }
       return;
@@ -66,14 +68,16 @@ export async function dispatchRecomputeAnalytics(
       if (outcome.ok) {
         await persistNutritionInsights(userId, outcome.result, localDate, anchor);
       } else {
-        // bearer:disable javascript_lang_logger_leak — reason is a fixed enum, no PII
+        // reason is a fixed enum, no PII
+        // bearer:disable javascript_lang_logger_leak
         log.info({ reason: outcome.reason }, "[pg-boss] Nutrition insights recompute skipped (gated)");
       }
       return;
     }
     default: {
       const exhaustive: never = feature;
-      // bearer:disable javascript_lang_logger_leak — feature is an enum name, no PII
+      // feature is an enum name, no PII
+      // bearer:disable javascript_lang_logger_leak
       log.error({ feature: exhaustive }, "[pg-boss] Unknown recompute-analytics feature");
     }
   }
