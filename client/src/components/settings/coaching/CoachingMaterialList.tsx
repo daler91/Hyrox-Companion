@@ -53,17 +53,22 @@ export function CoachingMaterialList({
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span tabIndex={deleteMutation.isPending ? 0 : -1}> {/* NOSONAR */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setPendingDeleteId(material.id)}
-                        disabled={deleteMutation.isPending}
-                        aria-label={`Delete ${material.title}`}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        if (deleteMutation.isPending) {
+                          e.preventDefault();
+                        } else {
+                          setPendingDeleteId(material.id);
+                        }
+                      }}
+                      aria-disabled={deleteMutation.isPending}
+                      className="aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+                      aria-label={`Delete ${material.title}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Delete material</p>
