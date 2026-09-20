@@ -45,6 +45,13 @@ export default defineConfig({
       exclude: [
         ...coverageConfigDefaults.exclude,
         'server/index.ts', // process bootstrap — only exercised by a real boot
+        // Browser bootstrap — mounts the root and registers the service worker,
+        // only exercised by a real page load. It was already missing from the
+        // totals by accident: its virtual:pwa-register import has no resolver
+        // under this config, so the coverage remapper fell back to the raw TSX,
+        // could not parse it, and logged "Failed to parse … main.tsx. Excluding
+        // it from coverage" on every coverage run. Exclude it on purpose.
+        'client/src/main.tsx',
         '**/*.generated.ts', // committed data artifacts
       ],
       // Ratcheted to measured reality, NOT aspirational: measured 2026-07-19

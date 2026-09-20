@@ -77,6 +77,31 @@ import { CRON_LOCK_KEYS, runCronJobWithLock, startCron } from "./cron";
 import { env } from "./env";
 import { logger } from "./logger";
 
+// node-cron is mocked with a bare vi.fn(), so `cron.schedule` returns
+// undefined, startCron's "already running" guard never trips, and every call
+// re-registers every job. Each describe below starts the scheduler with its
+// own storage stub, so the schedule mock is cleared FIRST: the lookup then only
+// sees this call's registrations, and the handler it returns closes over this
+// describe's storage whichever order the describes run in. (A first-match
+// `.find` over the accumulated history handed the strava tests a handler built
+// over the recycle-bin stub whenever --sequence.shuffle ran that describe
+// first; see #2011.) Cron expressions are unique per job, so exactly one
+// registration must match.
+function startCronWith(storage: object): (expression: string) => () => Promise<void> {
+  mocks.cronSchedule.mockClear();
+  startCron(storage as never);
+  const registered = [...mocks.cronSchedule.mock.calls];
+
+  return (expression) => {
+    const matches = registered.filter(([scheduled]) => scheduled === expression);
+    const [match] = matches;
+    if (matches.length !== 1 || !match) {
+      throw new Error(`expected exactly one job scheduled for "${expression}", found ${matches.length}`);
+    }
+    return match[1] as () => Promise<void>;
+  };
+}
+
 describe("cron advisory lock wiring", () => {
   it("uses distinct stable advisory lock keys for every scheduled job", () => {
     const lockKeys = Object.values(CRON_LOCK_KEYS);
@@ -134,13 +159,9 @@ describe("nutrition reminders cron job", () => {
     // these tests exercise the callback's own gate/success/error handling.
     mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
 
-    startCron({} as never);
-
-    // "25 * * * *" is the nutrition-reminders schedule and is unique among
-    // startCron's registered jobs — grab its handler by that expression.
-    const call = mocks.cronSchedule.mock.calls.find(([expression]) => expression === "25 * * * *");
-    if (!call) throw new Error("nutrition reminders job was not scheduled");
-    nutritionRemindersCallback = call[1];
+    // "25 * * * *" is the nutrition-reminders schedule.
+    const scheduled = startCronWith({});
+    nutritionRemindersCallback = scheduled("25 * * * *");
   });
 
   beforeEach(() => {
@@ -201,14 +222,9 @@ describe("recycle bin purge cron job", () => {
 
   beforeAll(() => {
     mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
-    // The mocked scheduler returns undefined, so startCron's "already
-    // running" guard never trips and each describe's call re-registers every
-    // job. Take the LAST registration: its closure holds this storage stub.
-    startCron(storage as never);
 
-    const call = mocks.cronSchedule.mock.calls.findLast(([expression]) => expression === "45 3 * * *");
-    if (!call) throw new Error("recycle bin purge was not scheduled");
-    purgeCallback = call[1];
+    const scheduled = startCronWith(storage);
+    purgeCallback = scheduled("45 3 * * *");
   });
 
   beforeEach(() => {
@@ -260,21 +276,9 @@ describe("strava auto-sync cron jobs", () => {
   beforeAll(() => {
     mocks.withPgAdvisoryLock.mockImplementation((_pool, _opts, run) => run());
 
-    // No-op when an earlier describe already started the scheduler; the
-    // registered callbacks are still on the schedule mock either way.
-    startCron({} as never);
-
-    const scanCall = mocks.cronSchedule.mock.calls.find(
-      ([expression]) => expression === "7,22,37,52 * * * *",
-    );
-    if (!scanCall) throw new Error("strava auto-sync scan was not scheduled");
-    scanCallback = scanCall[1];
-
-    const ensureCall = mocks.cronSchedule.mock.calls.find(
-      ([expression]) => expression === "20 */6 * * *",
-    );
-    if (!ensureCall) throw new Error("strava webhook ensure was not scheduled");
-    ensureCallback = ensureCall[1];
+    const scheduled = startCronWith({});
+    scanCallback = scheduled("7,22,37,52 * * * *");
+    ensureCallback = scheduled("20 */6 * * *");
   });
 
   beforeEach(() => {
