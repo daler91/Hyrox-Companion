@@ -111,7 +111,7 @@ function TimelineSummarySkeleton() {
         <Skeleton className="h-5 w-28" />
         <Skeleton className="h-4 w-52" />
       </CardHeader>
-      <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <CardContent className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {["today", "week", "streak", "race"].map((item) => (
           <div key={item} className="space-y-2">
             <Skeleton className="h-4 w-20" />
@@ -128,14 +128,16 @@ function SummaryItem({
   label,
   value,
   detail,
+  className,
 }: {
   readonly icon: LucideIcon;
   readonly label: string;
   readonly value: string;
   readonly detail?: string;
+  readonly className?: string;
 }) {
   return (
-    <div className="min-w-0 space-y-1.5">
+    <div className={cn("min-w-0 space-y-1.5", className)}>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span>{label}</span>
@@ -201,9 +203,12 @@ export function TimelineSummaryCard({
       <CardHeader className="pb-4">
         <CardTitle className="text-lg">This Week</CardTitle>
       </CardHeader>
+      {/* Phones: two columns, with the text-heavy Today / goal / race tiles
+          spanning both, so the card no longer pushes the first workout below
+          the fold. Desktop keeps the single-row template. */}
       <CardContent
         className={cn(
-          "grid gap-5",
+          "grid grid-cols-2 gap-5",
           phase
             ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1fr)]"
             : "lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)]",
@@ -214,9 +219,10 @@ export function TimelineSummaryCard({
           label="Today"
           value={todayValue}
           detail={todayDetail ?? undefined}
+          className="col-span-2 lg:col-span-1"
         />
 
-        <div className="min-w-0 space-y-2">
+        <div className="col-span-2 min-w-0 space-y-2 lg:col-span-1">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Target className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>Weekly goal</span>
@@ -259,6 +265,7 @@ export function TimelineSummaryCard({
           label="Race"
           value={formatRaceCountdown(raceDate)}
           detail={formatRaceDate(raceDate) ?? selectedPlan?.name}
+          className="col-span-2 lg:col-span-1"
         />
       </CardContent>
       {/* Full-width below the tile grid, so the column template above is

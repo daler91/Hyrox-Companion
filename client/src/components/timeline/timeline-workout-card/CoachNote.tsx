@@ -150,7 +150,9 @@ export function CoachNote({
           setExpanded(v => !v);
         }}
         onKeyDown={(e) => e.stopPropagation()}
-        className="flex w-full items-center gap-1.5 text-left text-xs font-medium text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded"
+        // py-1 -my-1: a 24px hit area (WCAG 2.5.8) without changing the
+        // note's visual height.
+        className="-my-1 flex w-full items-center gap-1.5 rounded py-1 text-left text-xs font-medium text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         aria-label={expanded ? "Collapse coach's note" : "Expand coach's note"}
         aria-expanded={expanded}
         aria-controls={`coach-note-body-${entryId}`}

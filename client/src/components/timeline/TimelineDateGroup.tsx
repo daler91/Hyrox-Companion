@@ -145,10 +145,12 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
           <div
             className={`h-3 w-3 rounded-full ${getDotColor(isTodayDate, isPast)}`}
           />
-          <span className={isTodayDate ? "" : "text-muted-foreground"}>
+          <span className={cn("whitespace-nowrap", !isTodayDate && "text-muted-foreground")}>
             {getDateLabel(dateObj)}
           </span>
-          <div className="ml-auto flex items-center gap-1">
+          {/* Wraps internally on narrow screens so the date label keeps one
+              line and the fuelling chip / week / note controls stack instead. */}
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
             {fuelling ? <FuellingDayChip date={date} fuelling={fuelling} /> : null}
             {entries[0]?.weekNumber && (
               <Badge variant="outline">Week {entries[0].weekNumber}</Badge>
@@ -157,7 +159,7 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
               <Button
                 variant="ghost"
                 size="sm"
-                className={`h-7 px-2 text-xs text-muted-foreground hover:text-foreground ${addNoteClassName}`}
+                className={`h-8 px-2 text-xs text-muted-foreground hover:text-foreground md:h-7 ${addNoteClassName}`}
                 onClick={() => onAddAnnotation(date)}
                 aria-label={`Log a note for ${getDateLabel(dateObj)}`}
                 data-testid={`button-add-annotation-${date}`}

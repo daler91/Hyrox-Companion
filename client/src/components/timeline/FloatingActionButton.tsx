@@ -18,10 +18,13 @@ export default function FloatingActionButton({
     ? "!right-6 md:!right-[calc(20rem+1.5rem)] lg:!right-[calc(24rem+1.5rem)] max-md:hidden"
     : "!right-6";
 
+  // z-40 on purpose: below the mobile nav drawer, dialogs and detail sheets
+  // (z-50) and the privacy notice (z-60). At 9999 the two pills floated over
+  // the open drawer's overlay and sat on top of the consent banner's buttons
+  // on first run. The bottom offset clears the iOS home indicator.
   return createPortal(
     <div
-      className={`!fixed !bottom-6 flex flex-col gap-3 items-end transition-all duration-300 ${rightPosition}`}
-      style={{ zIndex: 9999 }}
+      className={`!fixed !bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 flex flex-col gap-3 items-end transition-all duration-300 ${rightPosition}`}
     >
       <Button
         className="rounded-full shadow-lg gap-2"

@@ -143,7 +143,7 @@ export function DeviceLinkSuggestion({ entry, dayEntries }: Readonly<DeviceLinkC
           type="button"
           size="sm"
           variant="outline"
-          className="h-6 px-2 text-xs"
+          className="h-8 px-2 text-xs md:h-6"
           disabled={busy}
           onKeyDown={stop}
           onClick={(e) => {
@@ -162,7 +162,7 @@ export function DeviceLinkSuggestion({ entry, dayEntries }: Readonly<DeviceLinkC
           type="button"
           size="sm"
           variant="ghost"
-          className="h-6 px-2 text-xs text-muted-foreground"
+          className="h-8 px-2 text-xs text-muted-foreground md:h-6"
           disabled={busy}
           onKeyDown={stop}
           onClick={(e) => {

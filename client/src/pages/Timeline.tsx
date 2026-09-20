@@ -381,7 +381,9 @@ export default function Timeline() {
       />
       <div className="flex h-full">
         <div ref={scrollRef} className="flex-1 overflow-auto relative">
-          <PageContainer size="default" className="space-y-6">
+          {/* Bottom padding keeps the last card and the "show more" button
+              reachable above the stacked floating action pills on phones. */}
+          <PageContainer size="default" className="space-y-6 pb-32 md:pb-8">
             <TimelineHeader />
 
             <CoachReviewingIndicator isActive={isAutoCoaching} />

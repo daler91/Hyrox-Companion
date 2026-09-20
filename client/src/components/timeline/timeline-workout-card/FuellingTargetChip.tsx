@@ -57,12 +57,12 @@ export function FuellingTargetChip({ entry }: { readonly entry: TimelineEntry })
       <Tooltip>
         <TooltipTrigger
           type="button"
-          className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-md border bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="mt-2 inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-md border bg-card px-2 py-0.5 text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           aria-label={target.explanation}
           data-testid={`fuelling-target-chip-${entry.id}`}
         >
-          <UtensilsCrossed className="h-3 w-3" aria-hidden="true" />
-          <span className="tabular-nums">
+          <UtensilsCrossed className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 tabular-nums">
             Fuel{" "}
             {hasPre ? (
               <>

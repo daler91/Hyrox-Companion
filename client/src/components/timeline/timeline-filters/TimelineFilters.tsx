@@ -141,8 +141,10 @@ export default function TimelineFilters({
                   className="w-full"
                   data-testid="select-filter"
                 >
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Filter className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <SelectValue />
+                  </div>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
