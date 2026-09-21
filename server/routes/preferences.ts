@@ -1,3 +1,4 @@
+import { DEFAULT_NOTIFY_HOUR } from "@shared/notifyHours";
 import { type UpdateUserPreferences,updateUserPreferencesSchema } from "@shared/schema";
 import { type Request as ExpressRequest, type Response,Router } from "express";
 
@@ -54,6 +55,11 @@ function serializePreferences(user: {
   emailTodaySession: boolean | null;
   emailAnalysisDigest: boolean | null;
   notifyHour: number | null;
+  notifyHourWeeklySummary: number | null;
+  notifyHourMissedReminder: number | null;
+  notifyHourWeeklyReviewReminder: number | null;
+  notifyHourTodaySession: number | null;
+  notifyHourAnalysisDigest: number | null;
   showAdherenceInsights: boolean | null;
   aiCoachEnabled: boolean | null;
   coachAutoApplyPlanChanges: boolean | null;
@@ -94,7 +100,15 @@ function serializePreferences(user: {
     emailWeeklyReviewReminder: user.emailWeeklyReviewReminder ?? false,
     emailTodaySession: user.emailTodaySession ?? false,
     emailAnalysisDigest: user.emailAnalysisDigest ?? false,
-    notifyHour: user.notifyHour ?? 7,
+    notifyHour: user.notifyHour ?? DEFAULT_NOTIFY_HOUR,
+    // Overrides stay null on the wire rather than being coalesced: null is the
+    // meaningful "follow the default send time" state the client renders, and
+    // resolving it here would freeze today's default into the athlete's row.
+    notifyHourWeeklySummary: user.notifyHourWeeklySummary ?? null,
+    notifyHourMissedReminder: user.notifyHourMissedReminder ?? null,
+    notifyHourWeeklyReviewReminder: user.notifyHourWeeklyReviewReminder ?? null,
+    notifyHourTodaySession: user.notifyHourTodaySession ?? null,
+    notifyHourAnalysisDigest: user.notifyHourAnalysisDigest ?? null,
     // Display toggle, not an AI/email consent flag: defaults ON to match the
     // `show_adherence_insights` column default (shared/schema/tables.ts). The
     // consent/notification flags above intentionally default false (opt-in).

@@ -73,7 +73,12 @@ User accounts and preferences.
 | `email_weekly_review_reminder` | `boolean` | default `false` — per-type toggle for the Sunday-evening weekly review reminder |
 | `email_today_session` | `boolean` | default `false` — per-type toggle for the session brief |
 | `email_analysis_digest` | `boolean` | default `false` — per-type toggle for the stored-analysis digest |
-| `notify_hour` | `integer` | default `7`, CHECK `0..23` — local hour the scheduled emails go out (`users_notify_hour_check`) |
+| `notify_hour` | `integer` | default `7`, CHECK `0..23` — the athlete's default send hour, local (`users_notify_hour_check`) |
+| `notify_hour_weekly_summary` | `integer` | nullable, CHECK `0..23` — send hour for this email alone; null follows `notify_hour` |
+| `notify_hour_missed_reminder` | `integer` | nullable, CHECK `0..23` — as above |
+| `notify_hour_weekly_review_reminder` | `integer` | nullable, CHECK `0..23` — as above, but null follows the Sunday-evening hour (17) rather than `notify_hour` |
+| `notify_hour_today_session` | `integer` | nullable, CHECK `0..23` — as above; from 12 on, the brief covers tomorrow's session |
+| `notify_hour_analysis_digest` | `integer` | nullable, CHECK `0..23` — as above |
 | `last_weekly_review_reminder_at` | `timestamp` | nullable — claim ledger |
 | `last_today_session_at` | `timestamp` | nullable — claim ledger |
 | `last_analysis_digest_at` | `timestamp` | nullable — claim ledger; also the "newer than" anchor for the digest |
@@ -85,11 +90,13 @@ User accounts and preferences.
 | `created_at` | `timestamp` | default `now()` |
 | `updated_at` | `timestamp` | default `now()` |
 
-No additional indexes (queries are by PK). One CHECK constraint, `users_notify_hour_check`.
+No additional indexes (queries are by PK). Six CHECK constraints, one per send-hour column:
+`users_notify_hour_check` plus `users_notify_hour_<kind>_check` for each override above.
 
 **Consent columns.** The email and AI boolean columns above default to `false` at the DB layer so new accounts are opted-out of every third-party data flow by default. The application reads them as follows:
 
 - No email is ever sent unless `email_notifications = true` **and** the per-type toggle for the category is `true`. The scheduler in `server/emailScheduler.ts` enforces both checks.
+- Each category's send hour is resolved by `resolveNotifyHour()` in `shared/notifyHours.ts` — the one place the override → `notify_hour` → `07:00` fallback chain lives, shared by the scheduler and the Settings form.
 - No AI provider call is issued unless `ai_coach_enabled = true`. The auto-coach service short-circuits (`server/services/coachService.ts`) and the chat / parsing routes check the flag before composing a prompt.
 
 ---

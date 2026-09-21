@@ -1,8 +1,8 @@
 import { formatSecondsToClock } from "@shared/formatClock";
+import { BRIEF_TOMORROW_FROM_HOUR, type EmailNotifyKind, resolveNotifyHour } from "@shared/notifyHours";
 import { isRestLikePlanDay } from "@shared/planDayKind";
 import { pooledPercentage, roundOrNull } from "@shared/ratio";
 import type { AnalyticsResult, RacePredictionResponse, User } from "@shared/schema";
-import { WEEKLY_REVIEW_SUNDAY_EVENING_HOUR } from "@shared/weeklyReview";
 
 import {
   type AnalysisDigestData,
@@ -46,15 +46,6 @@ const WEEKLY_REVIEW_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 const TODAY_SESSION_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
 const ANALYSIS_DIGEST_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 
-/** Local hour the scheduled emails go out when the athlete has not picked one. */
-export const DEFAULT_NOTIFY_HOUR = 7;
-
-/**
- * A notify hour from midday on means the athlete reads email in the afternoon
- * or evening, when "today's session" is behind them — brief tomorrow instead.
- */
-const BRIEF_TOMORROW_FROM_HOUR = 12;
-
 export type EmailJobName =
   | "send-weekly-summary"
   | "send-missed-reminder"
@@ -62,7 +53,8 @@ export type EmailJobName =
   | "send-today-session"
   | "send-analysis-digest";
 
-type EmailKind = "weeklySummary" | "missedReminder" | "weeklyReviewReminder" | "todaySession" | "analysisDigest";
+/** Alias kept local so the many `wantsEmail(user, kind)` call sites read unchanged. */
+type EmailKind = EmailNotifyKind;
 
 /** The per-type opt-in column behind each email kind (all default off). */
 const EMAIL_TOGGLE_COLUMN: Record<EmailKind, keyof User> = {
@@ -298,9 +290,13 @@ function wantsEmail(user: User, kind: EmailKind): boolean {
  * Which email jobs this hourly tick should enqueue for one athlete.
  *
  * The cron fires every hour in UTC; this is where each email's own moment is
- * resolved against the athlete's wall clock. The scheduled emails go out at
- * `notifyHour` local (default 07:00), the weekly summary only on their local
- * Monday. Pure, so the gating table is unit-testable without the queue.
+ * resolved against the athlete's wall clock. Every email carries its own send
+ * hour, falling back to the athlete's default send time (`notifyHour`, default
+ * 07:00) when they have not given that one a time of its own — the review
+ * reminder falls back to Sunday evening instead (shared/notifyHours.ts). The
+ * weekday gates are unchanged: the summary only on their local Monday, the
+ * review reminder only on their local Sunday. Pure, so the gating table is
+ * unit-testable without the queue.
  *
  * Throws on an unusable `userTimezone` (Intl rejects the name); the scan
  * catches that per user so one stale zone cannot silence everyone else.
@@ -309,28 +305,25 @@ export function planEmailJobsForUser(user: User, now: Date): EmailJobName[] {
   const tz = user.userTimezone;
   const localHour = getLocalHour(now, tz);
   const localDayOfWeek = getLocalDayOfWeek(now, tz);
-  const atNotifyHour = localHour === (user.notifyHour ?? DEFAULT_NOTIFY_HOUR);
+  const atHourFor = (kind: EmailKind) => localHour === resolveNotifyHour(user, kind);
 
   const jobs: EmailJobName[] = [];
-  if (atNotifyHour && localDayOfWeek === 1 && wantsEmail(user, "weeklySummary")) {
+  if (localDayOfWeek === 1 && wantsEmail(user, "weeklySummary") && atHourFor("weeklySummary")) {
     jobs.push("send-weekly-summary");
   }
-  if (atNotifyHour && wantsEmail(user, "missedReminder")) {
+  if (wantsEmail(user, "missedReminder") && atHourFor("missedReminder")) {
     jobs.push("send-missed-reminder");
   }
-  if (atNotifyHour && wantsEmail(user, "todaySession")) {
+  if (wantsEmail(user, "todaySession") && atHourFor("todaySession")) {
     jobs.push("send-today-session");
   }
-  if (atNotifyHour && wantsEmail(user, "analysisDigest")) {
+  if (wantsEmail(user, "analysisDigest") && atHourFor("analysisDigest")) {
     jobs.push("send-analysis-digest");
   }
-  // The review reminder has its own moment — Sunday evening, when the week is
-  // closing — rather than the notify hour, which for most athletes is morning.
-  if (
-    localDayOfWeek === 0 &&
-    localHour === WEEKLY_REVIEW_SUNDAY_EVENING_HOUR &&
-    wantsEmail(user, "weeklyReviewReminder")
-  ) {
+  // The review reminder keeps its own day — Sunday, when the week is closing —
+  // and defaults to the evening hour the Timeline prompt shares, unless the
+  // athlete has picked a time for it.
+  if (localDayOfWeek === 0 && wantsEmail(user, "weeklyReviewReminder") && atHourFor("weeklyReviewReminder")) {
     jobs.push("send-weekly-review-reminder");
   }
   return jobs;
@@ -397,9 +390,21 @@ export async function processWeeklyReviewReminder(storage: IStorage, user: User,
 }
 
 /**
- * The day's planned session (tomorrow's, for an afternoon/evening notify
- * hour). Rest-like days, excused days and empty days send nothing and burn no
- * claim, so the ledger only ever records a brief that went out.
+ * Which local date the brief covers, decided by the brief's OWN send hour
+ * rather than the athlete's default one: a brief that lands in the afternoon
+ * or evening is read when today's session is already behind them, so it
+ * covers tomorrow instead.
+ */
+export function planBriefDate(user: User, now: Date): { targetDate: string; isTomorrow: boolean } {
+  const today = getLocalDateStr(now, user.userTimezone);
+  const isTomorrow = resolveNotifyHour(user, "todaySession") >= BRIEF_TOMORROW_FROM_HOUR;
+  return { targetDate: isTomorrow ? addDaysLocal(today, 1) : today, isTomorrow };
+}
+
+/**
+ * The day's planned session (tomorrow's, when the brief's own send hour is
+ * afternoon/evening). Rest-like days, excused days and empty days send nothing
+ * and burn no claim, so the ledger only ever records a brief that went out.
  */
 export async function processTodaySessionBrief(storage: IStorage, user: User, now: Date): Promise<boolean> {
   // See W4 — re-check preferences at send time.
@@ -407,10 +412,7 @@ export async function processTodaySessionBrief(storage: IStorage, user: User, no
   if (!fresh?.email || !wantsEmail(fresh, "todaySession")) return false;
   user = fresh;
 
-  const tz = user.userTimezone;
-  const today = getLocalDateStr(now, tz);
-  const isTomorrow = (user.notifyHour ?? DEFAULT_NOTIFY_HOUR) >= BRIEF_TOMORROW_FROM_HOUR;
-  const targetDate = isTomorrow ? addDaysLocal(today, 1) : today;
+  const { targetDate, isTomorrow } = planBriefDate(user, now);
 
   const sessions = (await storage.analytics.getPlannedSessionsForDate(user.id, targetDate)).filter(
     (session) => !isRestLikePlanDay(session.focus, session.mainWorkout),

@@ -1,3 +1,5 @@
+import { DEFAULT_NOTIFY_HOUR } from "@shared/notifyHours";
+
 import type {
   MafCategoryInput,
   MafHrDataAvailableInput,
@@ -113,6 +115,12 @@ export interface PreferencesDraft {
   emailTodaySession: boolean;
   emailAnalysisDigest: boolean;
   notifyHour: number;
+  /** Per-email send hours; null follows `notifyHour` (see shared/notifyHours.ts). */
+  notifyHourWeeklySummary: number | null;
+  notifyHourMissedReminder: number | null;
+  notifyHourWeeklyReviewReminder: number | null;
+  notifyHourTodaySession: number | null;
+  notifyHourAnalysisDigest: number | null;
   showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;
   coachAutoApplyPlanChanges: boolean;
@@ -169,7 +177,12 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   emailWeeklyReviewReminder: false,
   emailTodaySession: false,
   emailAnalysisDigest: false,
-  notifyHour: 7,
+  notifyHour: DEFAULT_NOTIFY_HOUR,
+  notifyHourWeeklySummary: null,
+  notifyHourMissedReminder: null,
+  notifyHourWeeklyReviewReminder: null,
+  notifyHourTodaySession: null,
+  notifyHourAnalysisDigest: null,
   showAdherenceInsights: true,
   aiCoachEnabled: false,
   coachAutoApplyPlanChanges: false,
@@ -204,6 +217,11 @@ export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
     emailTodaySession: draft.emailTodaySession,
     emailAnalysisDigest: draft.emailAnalysisDigest,
     notifyHour: draft.notifyHour,
+    notifyHourWeeklySummary: draft.notifyHourWeeklySummary,
+    notifyHourMissedReminder: draft.notifyHourMissedReminder,
+    notifyHourWeeklyReviewReminder: draft.notifyHourWeeklyReviewReminder,
+    notifyHourTodaySession: draft.notifyHourTodaySession,
+    notifyHourAnalysisDigest: draft.notifyHourAnalysisDigest,
     showAdherenceInsights: draft.showAdherenceInsights,
     aiCoachEnabled: draft.aiCoachEnabled,
     coachAutoApplyPlanChanges: draft.coachAutoApplyPlanChanges,
@@ -248,6 +266,11 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
     emailTodaySession: snapshot.emailTodaySession,
     emailAnalysisDigest: snapshot.emailAnalysisDigest,
     notifyHour: snapshot.notifyHour,
+    notifyHourWeeklySummary: snapshot.notifyHourWeeklySummary,
+    notifyHourMissedReminder: snapshot.notifyHourMissedReminder,
+    notifyHourWeeklyReviewReminder: snapshot.notifyHourWeeklyReviewReminder,
+    notifyHourTodaySession: snapshot.notifyHourTodaySession,
+    notifyHourAnalysisDigest: snapshot.notifyHourAnalysisDigest,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
@@ -287,7 +310,12 @@ export function preferencesToSnapshot(
     emailWeeklyReviewReminder: preferences.emailWeeklyReviewReminder ?? false,
     emailTodaySession: preferences.emailTodaySession ?? false,
     emailAnalysisDigest: preferences.emailAnalysisDigest ?? false,
-    notifyHour: preferences.notifyHour ?? 7,
+    notifyHour: preferences.notifyHour ?? DEFAULT_NOTIFY_HOUR,
+    notifyHourWeeklySummary: preferences.notifyHourWeeklySummary ?? null,
+    notifyHourMissedReminder: preferences.notifyHourMissedReminder ?? null,
+    notifyHourWeeklyReviewReminder: preferences.notifyHourWeeklyReviewReminder ?? null,
+    notifyHourTodaySession: preferences.notifyHourTodaySession ?? null,
+    notifyHourAnalysisDigest: preferences.notifyHourAnalysisDigest ?? null,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
     coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
@@ -331,6 +359,11 @@ export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayloa
     emailTodaySession: snapshot.emailTodaySession,
     emailAnalysisDigest: snapshot.emailAnalysisDigest,
     notifyHour: snapshot.notifyHour,
+    notifyHourWeeklySummary: snapshot.notifyHourWeeklySummary,
+    notifyHourMissedReminder: snapshot.notifyHourMissedReminder,
+    notifyHourWeeklyReviewReminder: snapshot.notifyHourWeeklyReviewReminder,
+    notifyHourTodaySession: snapshot.notifyHourTodaySession,
+    notifyHourAnalysisDigest: snapshot.notifyHourAnalysisDigest,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,

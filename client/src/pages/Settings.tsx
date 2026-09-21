@@ -280,6 +280,11 @@ export default function Settings() {
             emailTodaySession={draft.emailTodaySession}
             emailAnalysisDigest={draft.emailAnalysisDigest}
             notifyHour={draft.notifyHour}
+            notifyHourWeeklySummary={draft.notifyHourWeeklySummary}
+            notifyHourMissedReminder={draft.notifyHourMissedReminder}
+            notifyHourWeeklyReviewReminder={draft.notifyHourWeeklyReviewReminder}
+            notifyHourTodaySession={draft.notifyHourTodaySession}
+            notifyHourAnalysisDigest={draft.notifyHourAnalysisDigest}
             onEmailNotificationsChange={(v) => {
               updateField("emailNotifications", v);
             }}
@@ -300,6 +305,21 @@ export default function Settings() {
             }}
             onNotifyHourChange={(v) => {
               updateField("notifyHour", v);
+            }}
+            onNotifyHourWeeklySummaryChange={(v) => {
+              updateField("notifyHourWeeklySummary", v);
+            }}
+            onNotifyHourMissedReminderChange={(v) => {
+              updateField("notifyHourMissedReminder", v);
+            }}
+            onNotifyHourWeeklyReviewReminderChange={(v) => {
+              updateField("notifyHourWeeklyReviewReminder", v);
+            }}
+            onNotifyHourTodaySessionChange={(v) => {
+              updateField("notifyHourTodaySession", v);
+            }}
+            onNotifyHourAnalysisDigestChange={(v) => {
+              updateField("notifyHourAnalysisDigest", v);
             }}
           />
           <PushNotificationSection />

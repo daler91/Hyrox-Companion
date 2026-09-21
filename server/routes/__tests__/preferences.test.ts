@@ -79,6 +79,13 @@ describe("GET /api/preferences", () => {
       emailTodaySession: false,
       emailAnalysisDigest: false,
       notifyHour: 7,
+      // A stored null stays null on the wire: it is the "follow the default
+      // send time" state, not an hour.
+      notifyHourWeeklySummary: null,
+      notifyHourMissedReminder: null,
+      notifyHourWeeklyReviewReminder: null,
+      notifyHourTodaySession: null,
+      notifyHourAnalysisDigest: null,
       aiCoachEnabled: false,
       onboardingCompleted: false,
     });
@@ -215,6 +222,27 @@ describe("PATCH /api/v1/preferences", () => {
       notifyHour: 18,
       emailTodaySession: true,
       emailAnalysisDigest: true,
+    });
+  });
+
+  it("rejects a per-email send hour outside 0-23", async () => {
+    const response = await request(app)
+      .patch("/api/v1/preferences")
+      .send({ notifyHourWeeklySummary: 24 });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("persists per-email send hours, and a null that puts one back on the default", async () => {
+    const response = await request(app)
+      .patch("/api/v1/preferences")
+      .send({ notifyHourWeeklySummary: 9, notifyHourTodaySession: 19, notifyHourAnalysisDigest: null });
+
+    expect(response.status).toBe(200);
+    expect(storage.users.updateUserPreferences).toHaveBeenCalledWith("test_user_id", {
+      notifyHourWeeklySummary: 9,
+      notifyHourTodaySession: 19,
+      notifyHourAnalysisDigest: null,
     });
   });
 

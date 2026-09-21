@@ -1506,7 +1506,7 @@ External cron trigger endpoint for batch email processing across all users.
 - **No Clerk auth required**
 - **Rate limit:** `cronEmails` category, 10/min
 - **Response:** Cron job result summary
-- **Note:** The scan gates per athlete on their local notify hour, so an external scheduler should call this hourly.
+- **Note:** The scan gates per athlete on each email's own local send hour (its override, else their default `notifyHour`), so an external scheduler should call this hourly.
 
 ### GET /api/v1/emails/unsubscribe
 

@@ -182,6 +182,16 @@ export const users = pgTable("users", {
   // Local hour (0–23) the hourly email tick fires for this athlete. Nullable
   // with a default like weeklyGoal/mealSchedule; readers coalesce to 7.
   notifyHour: integer("notify_hour").default(7),
+  // Per-email send-hour overrides. Null — the default for every athlete,
+  // including everyone who predates these columns — means "use notifyHour",
+  // except the review reminder, whose unset moment stays the Sunday evening
+  // hour it has always gone out at. Resolved by resolveNotifyHour()
+  // (shared/notifyHours.ts), the one place the fallback rule lives.
+  notifyHourWeeklySummary: integer("notify_hour_weekly_summary"),
+  notifyHourMissedReminder: integer("notify_hour_missed_reminder"),
+  notifyHourWeeklyReviewReminder: integer("notify_hour_weekly_review_reminder"),
+  notifyHourTodaySession: integer("notify_hour_today_session"),
+  notifyHourAnalysisDigest: integer("notify_hour_analysis_digest"),
   lastWeeklyReviewReminderAt: timestamp("last_weekly_review_reminder_at"),
   lastTodaySessionAt: timestamp("last_today_session_at"),
   lastAnalysisDigestAt: timestamp("last_analysis_digest_at"),
@@ -203,6 +213,26 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, () => [
   check("users_notify_hour_check", sql`notify_hour IS NULL OR (notify_hour BETWEEN 0 AND 23)`),
+  check(
+    "users_notify_hour_weekly_summary_check",
+    sql`notify_hour_weekly_summary IS NULL OR (notify_hour_weekly_summary BETWEEN 0 AND 23)`,
+  ),
+  check(
+    "users_notify_hour_missed_reminder_check",
+    sql`notify_hour_missed_reminder IS NULL OR (notify_hour_missed_reminder BETWEEN 0 AND 23)`,
+  ),
+  check(
+    "users_notify_hour_weekly_review_reminder_check",
+    sql`notify_hour_weekly_review_reminder IS NULL OR (notify_hour_weekly_review_reminder BETWEEN 0 AND 23)`,
+  ),
+  check(
+    "users_notify_hour_today_session_check",
+    sql`notify_hour_today_session IS NULL OR (notify_hour_today_session BETWEEN 0 AND 23)`,
+  ),
+  check(
+    "users_notify_hour_analysis_digest_check",
+    sql`notify_hour_analysis_digest IS NULL OR (notify_hour_analysis_digest BETWEEN 0 AND 23)`,
+  ),
 ]);
 
 export const rateLimitBuckets = pgTable(

@@ -687,6 +687,13 @@
       "when": 1790015352830,
       "tag": "0097_email_digests_notify_hour",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1790025093458,
+      "tag": "0098_per_email_notify_hours",
+      "breakpoints": true
     }
   ]
 }
