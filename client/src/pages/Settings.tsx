@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Database, Dumbbell, Link2, Loader2, RotateCw, User } from "lucide-react";
-import { useEffect } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Bell, Database, Dumbbell, Link2, RotateCw, Trash2, User } from "lucide-react";
+import { useCallback } from "react";
 
 import { AccountDangerZone } from "@/components/settings/AccountDangerZone";
 import { CoachingSection } from "@/components/settings/CoachingSection";
+import { RecycleBinCard } from "@/components/settings/data-tools/RecycleBinCard";
 import { DataToolsSection } from "@/components/settings/DataToolsSection";
 import { GarminSection } from "@/components/settings/GarminSection";
 import { AiCoachCard } from "@/components/settings/preferences/AiCoachCard";
@@ -37,27 +37,33 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageContainer } from "@/components/ui/PageContainer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { clearLocalOnboardingComplete } from "@/hooks/onboardingStorage";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useUnsavedChangesPrompt } from "@/hooks/useUnsavedChangesPrompt";
 import { useUrlQueryState } from "@/hooks/useUrlQueryState";
 import { type GarminStatus, QUERY_KEYS, type StravaStatus } from "@/lib/api";
 import { getUserDisplayName } from "@/lib/authUtils";
 
+import { SaveSettingsBar } from "./settings/SaveSettingsBar";
+import { SettingsLoadError } from "./settings/SettingsLoadError";
 import { usePreferencesForm } from "./settings/usePreferencesForm";
+import { useSettingsUnsavedChangesGuard } from "./settings/useSettingsUnsavedChangesGuard";
+import { useStravaCallbackToast } from "./settings/useStravaCallbackToast";
 
 // Tab ids double as the `?tab=` deep-link value. `account` is the default
 // landing tab (omitted from the URL by useUrlQueryState).
-const SETTINGS_TABS = ["account", "training", "integrations", "notifications", "data"] as const;
+const SETTINGS_TABS = [
+  "account",
+  "training",
+  "integrations",
+  "notifications",
+  "data",
+  "recycle-bin",
+] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export default function Settings() {
   useDocumentTitle("Settings");
-  const { toast } = useToast();
   const { user } = useAuth();
-  const [location, setLocation] = useLocation();
-  const search = useSearch();
   const [activeTab, setActiveTab] = useUrlQueryState<SettingsTab>("tab", "account", SETTINGS_TABS);
   const {
     draft,
@@ -74,39 +80,9 @@ export default function Settings() {
     error,
     refetch,
   } = usePreferencesForm();
-  const settingsSearchPath = search ? `?${search}` : "";
-  const currentSettingsPath = `${location}${settingsSearchPath}`;
-  const unsavedChangesPrompt = useUnsavedChangesPrompt({
-    enabled: hasChanges,
-    currentPath: currentSettingsPath,
-    navigate: setLocation,
-  });
-
-  useEffect(() => {
-    const params = new URLSearchParams(search);
-    const stravaResult = params.get("strava");
-    if (stravaResult !== "connected" && stravaResult !== "error") {
-      return;
-    }
-    if (stravaResult === "connected") {
-      toast({
-        title: "Strava Connected",
-        description:
-          "Your recent activities are importing now, and new ones will sync automatically.",
-      });
-    } else {
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect to Strava. Please try again.",
-        variant: "destructive",
-      });
-    }
-    // Land the user on the Integrations tab and clear the `strava` callback
-    // param. setActiveTab syncs the hook/Tabs state; setLocation strips the
-    // param from the URL (the tab is preserved via the query string).
-    setActiveTab("integrations");
-    setLocation("/settings?tab=integrations", { replace: true });
-  }, [search, toast, setLocation, setActiveTab]);
+  const unsavedChangesPrompt = useSettingsUnsavedChangesGuard(hasChanges);
+  const landOnIntegrations = useCallback(() => setActiveTab("integrations"), [setActiveTab]);
+  useStravaCallbackToast(landOnIntegrations);
 
   const { data: stravaStatus, isLoading: stravaLoading } = useQuery<StravaStatus>({
     queryKey: QUERY_KEYS.stravaStatus,
@@ -127,39 +103,7 @@ export default function Settings() {
   }
 
   if (isError && !preferences) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-
-    return (
-      <PageContainer size="narrow">
-        <Card className="border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-destructive">Couldn't load settings</CardTitle>
-            <CardDescription>
-              We couldn't load your preferences right now. Please try again.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Raw error text is dev-only — the CardDescription above carries the
-                user-facing message. Surfacing `error.message` (e.g. "500: …") in
-                production is confusing and can leak internals (matches
-                FallbackErrorBoundary's NODE_ENV gate). */}
-            {import.meta.env.DEV && <p className="text-sm text-muted-foreground">{errorMessage}</p>}
-            <Button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              data-testid="button-retry-load-settings"
-            >
-              {isFetching ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-              ) : (
-                <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
-              )}
-              {isFetching ? "Retrying…" : "Retry"}
-            </Button>
-          </CardContent>
-        </Card>
-      </PageContainer>
-    );
+    return <SettingsLoadError error={error} isFetching={isFetching} onRetry={() => refetch()} />;
   }
 
   return (
@@ -176,7 +120,7 @@ export default function Settings() {
         }}
         className="w-full"
       >
-        <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5 sm:gap-0">
+        <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3">
           <TabsTrigger value="account" data-testid="tab-account">
             <User className="h-4 w-4 mr-2" aria-hidden="true" />
             Account
@@ -193,9 +137,13 @@ export default function Settings() {
             <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger value="data" data-testid="tab-data" className="col-span-2 sm:col-span-1">
+          <TabsTrigger value="data" data-testid="tab-data">
             <Database className="h-4 w-4 mr-2" aria-hidden="true" />
             Data &amp; Privacy
+          </TabsTrigger>
+          <TabsTrigger value="recycle-bin" data-testid="tab-recycle-bin">
+            <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+            Recycle bin
           </TabsTrigger>
         </TabsList>
 
@@ -290,7 +238,7 @@ export default function Settings() {
             trainingStyleId={draft.trainingStyleId}
             onTrainingStyleIdChange={(v) => updateField("trainingStyleId", v)}
             hasRequiredMafInputs={hasRequiredMafInputs}
-            mafHr={user?.mafHr ?? null}
+            mafHr={user?.mafHr}
             mafAgeInput={draft.mafAgeInput}
             mafCategoryInput={draft.mafCategoryInput}
             mafHrDataAvailableInput={draft.mafHrDataAvailableInput}
@@ -344,32 +292,13 @@ export default function Settings() {
         <TabsContent value="data" className="space-y-6">
           <DataToolsSection />
         </TabsContent>
+
+        <TabsContent value="recycle-bin" className="space-y-6">
+          <RecycleBinCard />
+        </TabsContent>
       </Tabs>
 
-      {hasChanges && (
-        <div
-          className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="sr-only">You have unsaved changes.</span>
-          <Button
-            onClick={handleSave}
-            className="w-full"
-            data-testid="button-save-settings"
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
-                Saving...
-              </>
-            ) : (
-              "Save Settings"
-            )}
-          </Button>
-        </div>
-      )}
+      <SaveSettingsBar hasChanges={hasChanges} isSaving={isSaving} onSave={handleSave} />
 
       <AlertDialog
         open={unsavedChangesPrompt.isPromptOpen}

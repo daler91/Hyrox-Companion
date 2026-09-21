@@ -99,7 +99,7 @@ function RecycleBinRow({
 }
 
 /**
- * Settings → Data & Privacy → Recycle bin. The durable way back for a deleted
+ * Settings → Recycle bin (its own tab, `?tab=recycle-bin`). The durable way back for a deleted
  * workout, plan day or training plan (the delete toast's Undo is the quick
  * one). Restore puts the record back exactly, with the same id; "Delete
  * forever" and "Empty bin" are the only irreversible actions on the page, so

@@ -70,7 +70,10 @@ All errors follow a standard format:
     "issues": [
       { "path": "date", "message": "Must be a valid date in YYYY-MM-DD format" },
       { "path": "rpe", "message": "Number must be less than or equal to 10" },
-      { "path": "exercises[0].exerciseName", "message": "String must contain at least 1 character(s)" }
+      {
+        "path": "exercises[0].exerciseName",
+        "message": "String must contain at least 1 character(s)"
+      }
     ]
   }
 }
@@ -104,18 +107,18 @@ RateLimit-Reset: 1710500045
 
 **Common HTTP status codes:**
 
-| Status | Code | Meaning |
-|--------|------|---------|
-| 400 | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV` | Invalid input |
-| 401 | `UNAUTHORIZED` | Missing or invalid auth |
-| 403 | `FORBIDDEN`, `AI_COACH_DISABLED` | Rejected rather than unauthenticated — every CSRF failure lands here |
-| 404 | `NOT_FOUND` | Resource not found |
-| 409 | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state |
-| 412 | `PRECONDITION_FAILED` | A precondition on the request was not met |
-| 413 | `PAYLOAD_TOO_LARGE` | Body exceeded the route's size limit |
-| 429 | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED` | Rate limit exceeded (includes `Retry-After` header), or this user's AI spend budget is spent |
-| 500 | `INTERNAL_SERVER_ERROR` | Server error |
-| 503 | `AI_FEATURES_DISABLED`, `AI_GLOBAL_BUDGET_EXCEEDED`, `AI_BUDGET_UNAVAILABLE` | AI is switched off for this deployment (`AI_FEATURES_ENABLED=false`), the application-wide AI spend ceiling is reached, or the budget check itself is unavailable |
+| Status | Code                                                                                                    | Meaning                                                                                                                                                           |
+| ------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | `BAD_REQUEST`, `VALIDATION_ERROR`, `INVALID_CSV`                                                        | Invalid input                                                                                                                                                     |
+| 401    | `UNAUTHORIZED`                                                                                          | Missing or invalid auth                                                                                                                                           |
+| 403    | `FORBIDDEN`, `AI_COACH_DISABLED`                                                                        | Rejected rather than unauthenticated — every CSRF failure lands here                                                                                              |
+| 404    | `NOT_FOUND`                                                                                             | Resource not found                                                                                                                                                |
+| 409    | `PLAN_OVERLAP`, `PLAN_GENERATION_IN_PROGRESS`, `IDEMPOTENT_REQUEST_IN_PROGRESS`, `RECYCLE_BIN_CONFLICT` | Conflicts with current state                                                                                                                                      |
+| 412    | `PRECONDITION_FAILED`                                                                                   | A precondition on the request was not met                                                                                                                         |
+| 413    | `PAYLOAD_TOO_LARGE`                                                                                     | Body exceeded the route's size limit                                                                                                                              |
+| 429    | `RATE_LIMITED`, `AI_BUDGET_EXCEEDED`                                                                    | Rate limit exceeded (includes `Retry-After` header), or this user's AI spend budget is spent                                                                      |
+| 500    | `INTERNAL_SERVER_ERROR`                                                                                 | Server error                                                                                                                                                      |
+| 503    | `AI_FEATURES_DISABLED`, `AI_GLOBAL_BUDGET_EXCEEDED`, `AI_BUDGET_UNAVAILABLE`                            | AI is switched off for this deployment (`AI_FEATURES_ENABLED=false`), the application-wide AI spend ceiling is reached, or the budget check itself is unavailable |
 
 `AI_GLOBAL_BUDGET_EXCEEDED` is deliberately a 503 rather than the 429 used for a
 personal quota: it is a deployment-wide capacity condition that the caller did
@@ -195,9 +198,7 @@ Validation errors return:
   "error": "First validation error message",
   "code": "VALIDATION_ERROR",
   "details": {
-    "issues": [
-      { "path": "field.nested", "message": "Must be at least 1" }
-    ]
+    "issues": [{ "path": "field.nested", "message": "Must be at least 1" }]
   }
 }
 ```
@@ -206,7 +207,7 @@ Validation errors return:
 
 ## Health Routes
 
-The only unauthenticated routes in the API. Both are public probes with no credentials attached, so their responses deliberately carry no secrets — a failed boot reports the fixed startup *phase*, never the raw error message (that goes to `logger.fatal` server-side). Defined in `server/bootstrap/health.ts`.
+The only unauthenticated routes in the API. Both are public probes with no credentials attached, so their responses deliberately carry no secrets — a failed boot reports the fixed startup _phase_, never the raw error message (that goes to `logger.fatal` server-side). Defined in `server/bootstrap/health.ts`.
 
 ### GET /api/v1/health/live
 
@@ -333,9 +334,7 @@ Create a new workout log, optionally with parsed exercises and/or structure bloc
       "exerciseName": "easy_run",
       "category": "running",
       "confidence": 90,
-      "sets": [
-        { "setNumber": 1, "distance": 5000, "time": 28 }
-      ]
+      "sets": [{ "setNumber": 1, "distance": 5000, "time": 28 }]
     }
   ]
 }
@@ -395,7 +394,7 @@ Update an existing workout log.
 `planDayId` and `planId` are **not** accepted here; use
 [`PATCH /api/v1/workouts/:id/plan-day`](#patch-apiv1workoutsidplan-day), which
 checks that the target day belongs to the caller. This route scopes the row it
-writes by `userId` but never validated the linkage *values*, so a caller could
+writes by `userId` but never validated the linkage _values_, so a caller could
 point their own workout at another athlete's plan day — and the adherence
 recompute that follows a set edit reads the prescribed sets for that day with no
 owner check, writing the counts back onto the caller's row. The device-provenance
@@ -683,7 +682,7 @@ Create the built-in sample Hyrox training plan.
 
 ### POST /api/v1/plans/generate
 
-Kick off an **asynchronous** AI training-plan generation. The request creates a *pending* plan immediately, enqueues a background `plan-generation` job (see [Integrations — Job Queue](integrations.md#job-types)), and returns the stub so the client can poll for completion.
+Kick off an **asynchronous** AI training-plan generation. The request creates a _pending_ plan immediately, enqueues a background `plan-generation` job (see [Integrations — Job Queue](integrations.md#job-types)), and returns the stub so the client can poll for completion.
 
 - **Auth:** Required
 - **Rate limit:** `planGenerate` category, 3/min
@@ -934,9 +933,9 @@ Delete an annotation.
 
 Deleted workout logs, plan days and training plans are snapshotted into the `recycle_bin_items` table (see [database.md](database.md#recycle_bin_items)) at delete time and can be restored for **90 days**; the `recycleBinPurge` cron removes expired items nightly. Restore re-inserts the record with its original id and re-attaches whatever the delete detached (a workout's plan-day link and MAF analysis, a plan day's logged workouts). Items are scoped to the authenticated user at the storage layer — another user's id, an expired item, or an unknown id all return 404.
 
-The client uses these in two places: an **Undo** action on the delete toast (single item or bulk-delete batch) and the **Recycle bin** card under Settings → Data & Privacy.
+The client uses these in two places: an **Undo** action on the delete toast (single item or bulk-delete batch) and the **Recycle bin** tab under Settings (`?tab=recycle-bin`).
 
-While a device-imported workout sits in the bin, the Strava and Garmin syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After *Delete forever* or expiry the activity can be imported again if it is still inside the provider's fetch window.
+While a device-imported workout sits in the bin, the Strava and Garmin syncs treat its activity id as already imported, so the next sync does not re-create the workout the athlete just deleted. After _Delete forever_ or expiry the activity can be imported again if it is still inside the provider's fetch window.
 
 ### GET /api/v1/recycle-bin
 
@@ -991,14 +990,14 @@ Empty the bin.
 
 All analytics endpoints support optional date filtering via query parameters: `?from=YYYY-MM-DD&to=YYYY-MM-DD`.
 
-**Coalesced request cache.** Exercise sets and workout logs used by these routes pass through two in-memory promise caches (`getExerciseSetsCoalesced` and `getWorkoutLogsCoalesced`) keyed by `userId + from + to`. The cache holds the *pending* promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
+**Coalesced request cache.** Exercise sets and workout logs used by these routes pass through two in-memory promise caches (`getExerciseSetsCoalesced` and `getWorkoutLogsCoalesced`) keyed by `userId + from + to`. The cache holds the _pending_ promise, so three concurrent requests for the same user/window trigger a single database query. Parameters:
 
-| Knob | Value | Source |
-|---|---|---|
-| TTL | 5 minutes (`ANALYTICS_CACHE_TTL_MS`) | `server/constants.ts` |
-| Max entries per cache | 500 (`MAX_CACHE_SIZE`) | `server/routes/analytics.ts` |
-| Eviction | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()` |
-| Failure behavior | The rejected promise is evicted so the next caller retries immediately | `.catch` in `getExerciseSetsCoalesced` / `getWorkoutLogsCoalesced` |
+| Knob                  | Value                                                                  | Source                                                             |
+| --------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| TTL                   | 5 minutes (`ANALYTICS_CACHE_TTL_MS`)                                   | `server/constants.ts`                                              |
+| Max entries per cache | 500 (`MAX_CACHE_SIZE`)                                                 | `server/routes/analytics.ts`                                       |
+| Eviction              | Expired entries first, then oldest-by-timestamp once over the size cap | `evictStale()`                                                     |
+| Failure behavior      | The rejected promise is evicted so the next caller retries immediately | `.catch` in `getExerciseSetsCoalesced` / `getWorkoutLogsCoalesced` |
 
 ### GET /api/v1/personal-records
 
@@ -1146,9 +1145,7 @@ Parse free-text or voice input into structured exercise data using the configure
     "category": "running",
     "confidence": 80,
     "missingFields": [],
-    "sets": [
-      { "setNumber": 1, "distance": 4828, "time": 24 }
-    ]
+    "sets": [{ "setNumber": 1, "distance": 4828, "time": 24 }]
   }
 ]
 ```
@@ -1425,7 +1422,7 @@ The athlete's currently pending proposal, if any.
 Apply the proposed changes to the plan.
 
 - **Auth:** Required
-- **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately *not* checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
+- **Rate limit:** `suggestionApply` category, 10/min — requires AI consent. The AI budget is deliberately _not_ checked up front: it is checked internally only if a structured re-parse actually turns out to be needed.
 - **Errors:** `404` (proposal not found), `409` (`not_pending` or `stale` — the plan moved on underneath it)
 
 ### POST /api/v1/plan-proposals/:id/dismiss
@@ -1660,7 +1657,7 @@ Authenticate with Garmin using email + password and persist the encrypted creden
 - **Auth:** Required
 - **Rate limit:** `garmin-connect` category, 5 per 15-minute window per user
 - **Body:** `{ email: string (valid email, max 254), password: string (1-256) }`
-- **Behavior:** Logs into Garmin *before* writing any DB row — nothing is stored on failure. Fetches `getUserProfile()` to capture the display name (optional; non-fatal if it fails).
+- **Behavior:** Logs into Garmin _before_ writing any DB row — nothing is stored on failure. Fetches `getUserProfile()` to capture the display name (optional; non-fatal if it fails).
 - **Responses:**
   - `200 { success: true, garminDisplayName: string | null }`
   - `400 { code: "BAD_REQUEST" }` — invalid email / empty password
@@ -1797,46 +1794,46 @@ Export all training data as CSV or JSON.
 
 The entire nutrition surface is gated by the `NUTRITION_ENABLED` server flag — when it is not `"true"`, every route below returns `404`. The AI-backed routes (`/parse/*`, `POST /insights`) additionally require AI consent and budget. These routes are **not yet registered with the OpenAPI registry**, so they are absent from [`docs/openapi.json`](openapi.json) and Swagger UI; this catalog and [Nutrition & Fuelling § API surface](nutrition.md#5-api-surface) are the reference until they are migrated.
 
-| Method | Path | Purpose | Rate limit (per min) |
-|---|---|---|---|
-| GET | `/foods/search` | Search local cache + Edamam + USDA + Open Food Facts (fuzzy / synonym / optional semantic) | `nutritionSearch` (30) |
-| GET | `/foods/recent` | Recently logged foods (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60) |
-| GET | `/foods/custom` | The user's custom foods | `nutritionRead` (60) |
-| POST | `/foods/barcode` | Barcode → food (Open Food Facts) | `nutritionBarcode` (30) |
-| POST | `/foods` | Create a custom food (+ servings) | `nutritionWrite` (30) |
-| GET | `/foods/:id` | Food + named servings | `nutritionRead` (60) |
-| PATCH | `/foods/:id` | Edit a custom food | `nutritionWrite` (30) |
-| DELETE | `/foods/:id` | Delete a custom food (`409` if referenced by a log) | `nutritionWrite` (30) |
-| POST | `/foods/:id/servings` | Add a named serving | `nutritionWrite` (30) |
-| DELETE | `/foods/:id/servings/:servingId` | Delete a serving | `nutritionWrite` (30) |
-| GET | `/favorites` | List favourites (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`) | `nutritionRead` (60) |
-| POST | `/favorites` | Add a favourite | `nutritionFav` (30) |
-| DELETE | `/favorites/:foodId` | Remove a favourite | `nutritionFav` (30) |
-| POST | `/logs` | Log a food | `nutritionLog` (60) |
-| PATCH | `/logs/:id` | Edit a log entry | `nutritionLog` (60) |
-| DELETE | `/logs/:id` | Delete a log entry | `nutritionLog` (60) |
-| POST | `/logs/repeat` | Repeat a day / meal | `nutritionLog` (20) |
-| POST | `/logs/batch` | Confirm reviewed parsed items | `nutritionLog` (60) |
-| GET | `/summary` | Daily totals + per-meal breakdown, incl. `mealTargets` | `nutritionRead` (60) |
-| GET | `/summary-range` | Batched daily totals for a date window (one read, no per-day fan-out) | `nutritionRead` (60) |
-| GET | `/session-fuelling/:workoutId` | Pre/post-session fuelling windows | `nutritionRead` (60) |
-| GET | `/planned-session-estimate/:planDayId` | Fuelling estimate for a session that hasn't happened yet | `nutritionRead` (60) |
-| GET | `/block` | Daily intake macros vs. training UTSS | `nutritionRead` (60) |
-| GET | `/targets` | Current target + history | `nutritionRead` (60) |
-| POST | `/targets` | Set / replace the target version | `nutritionWrite` (30) |
-| GET | `/micros` | The day's micronutrients vs. RDI | `nutritionRead` (60) |
-| POST | `/meal-targets` | Set / replace a per-meal target | `nutritionWrite` (30) |
-| DELETE | `/meal-targets/:mealType` | Clear a per-meal target | `nutritionWrite` (30) |
-| POST | `/parse/text` | Natural-language meal → items **(AI)** | `parse` (5) + consent + budget |
-| POST | `/parse/photo` | Photo → items **(AI)** | `parse` (5) + consent + budget |
-| POST | `/parse/label` | Nutrition-label photo → a single food, transcribed rather than estimated; `label: null` when unreadable **(AI)** | `parse` (5) + consent + budget |
-| GET | `/insights` | Last stored AI nutrition analysis | `nutritionRead` (60) |
-| POST | `/insights` | Regenerate the analysis **(AI)** | `suggestions` (3) + consent + budget |
-| GET | `/recipes` | List recipes | `nutritionRead` (60) |
-| POST | `/recipes` | Create a recipe | `nutritionWrite` (30) |
-| GET | `/recipes/:id` | Recipe + ingredients + per-serving macros | `nutritionRead` (60) |
-| PATCH | `/recipes/:id` | Edit a recipe | `nutritionWrite` (30) |
-| DELETE | `/recipes/:id` | Delete a recipe | `nutritionWrite` (30) |
+| Method | Path                                   | Purpose                                                                                                          | Rate limit (per min)                 |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| GET    | `/foods/search`                        | Search local cache + Edamam + USDA + Open Food Facts (fuzzy / synonym / optional semantic)                       | `nutritionSearch` (30)               |
+| GET    | `/foods/recent`                        | Recently logged foods (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`)          | `nutritionRead` (60)                 |
+| GET    | `/foods/custom`                        | The user's custom foods                                                                                          | `nutritionRead` (60)                 |
+| POST   | `/foods/barcode`                       | Barcode → food (Open Food Facts)                                                                                 | `nutritionBarcode` (30)              |
+| POST   | `/foods`                               | Create a custom food (+ servings)                                                                                | `nutritionWrite` (30)                |
+| GET    | `/foods/:id`                           | Food + named servings                                                                                            | `nutritionRead` (60)                 |
+| PATCH  | `/foods/:id`                           | Edit a custom food                                                                                               | `nutritionWrite` (30)                |
+| DELETE | `/foods/:id`                           | Delete a custom food (`409` if referenced by a log)                                                              | `nutritionWrite` (30)                |
+| POST   | `/foods/:id/servings`                  | Add a named serving                                                                                              | `nutritionWrite` (30)                |
+| DELETE | `/foods/:id/servings/:servingId`       | Delete a serving                                                                                                 | `nutritionWrite` (30)                |
+| GET    | `/favorites`                           | List favourites (`FoodWithPortionMemory[]` — each food plus its `lastQuantityG` / `lastMealType`)                | `nutritionRead` (60)                 |
+| POST   | `/favorites`                           | Add a favourite                                                                                                  | `nutritionFav` (30)                  |
+| DELETE | `/favorites/:foodId`                   | Remove a favourite                                                                                               | `nutritionFav` (30)                  |
+| POST   | `/logs`                                | Log a food                                                                                                       | `nutritionLog` (60)                  |
+| PATCH  | `/logs/:id`                            | Edit a log entry                                                                                                 | `nutritionLog` (60)                  |
+| DELETE | `/logs/:id`                            | Delete a log entry                                                                                               | `nutritionLog` (60)                  |
+| POST   | `/logs/repeat`                         | Repeat a day / meal                                                                                              | `nutritionLog` (20)                  |
+| POST   | `/logs/batch`                          | Confirm reviewed parsed items                                                                                    | `nutritionLog` (60)                  |
+| GET    | `/summary`                             | Daily totals + per-meal breakdown, incl. `mealTargets`                                                           | `nutritionRead` (60)                 |
+| GET    | `/summary-range`                       | Batched daily totals for a date window (one read, no per-day fan-out)                                            | `nutritionRead` (60)                 |
+| GET    | `/session-fuelling/:workoutId`         | Pre/post-session fuelling windows                                                                                | `nutritionRead` (60)                 |
+| GET    | `/planned-session-estimate/:planDayId` | Fuelling estimate for a session that hasn't happened yet                                                         | `nutritionRead` (60)                 |
+| GET    | `/block`                               | Daily intake macros vs. training UTSS                                                                            | `nutritionRead` (60)                 |
+| GET    | `/targets`                             | Current target + history                                                                                         | `nutritionRead` (60)                 |
+| POST   | `/targets`                             | Set / replace the target version                                                                                 | `nutritionWrite` (30)                |
+| GET    | `/micros`                              | The day's micronutrients vs. RDI                                                                                 | `nutritionRead` (60)                 |
+| POST   | `/meal-targets`                        | Set / replace a per-meal target                                                                                  | `nutritionWrite` (30)                |
+| DELETE | `/meal-targets/:mealType`              | Clear a per-meal target                                                                                          | `nutritionWrite` (30)                |
+| POST   | `/parse/text`                          | Natural-language meal → items **(AI)**                                                                           | `parse` (5) + consent + budget       |
+| POST   | `/parse/photo`                         | Photo → items **(AI)**                                                                                           | `parse` (5) + consent + budget       |
+| POST   | `/parse/label`                         | Nutrition-label photo → a single food, transcribed rather than estimated; `label: null` when unreadable **(AI)** | `parse` (5) + consent + budget       |
+| GET    | `/insights`                            | Last stored AI nutrition analysis                                                                                | `nutritionRead` (60)                 |
+| POST   | `/insights`                            | Regenerate the analysis **(AI)**                                                                                 | `suggestions` (3) + consent + budget |
+| GET    | `/recipes`                             | List recipes                                                                                                     | `nutritionRead` (60)                 |
+| POST   | `/recipes`                             | Create a recipe                                                                                                  | `nutritionWrite` (30)                |
+| GET    | `/recipes/:id`                         | Recipe + ingredients + per-serving macros                                                                        | `nutritionRead` (60)                 |
+| PATCH  | `/recipes/:id`                         | Edit a recipe                                                                                                    | `nutritionWrite` (30)                |
+| DELETE | `/recipes/:id`                         | Delete a recipe                                                                                                  | `nutritionWrite` (30)                |
 
 `/planned-session-estimate/:planDayId` is intentionally **not** an AI route: its
 deterministic and pace-personalized layers must work for every athlete, so it
