@@ -2,10 +2,16 @@ import type { User } from "@shared/schema";
 import { Resend } from "resend";
 
 import {
+  type AnalysisDigestData,
+  buildAnalysisDigestEmail,
   buildMafTestReminderEmail,
   buildMissedWorkoutEmail,
+  buildTodaySessionEmail,
+  buildWeeklyReviewReminderEmail,
   buildWeeklySummaryEmail,
   type MissedWorkoutData,
+  type TodaySessionData,
+  type WeeklyReviewReminderData,
   type WeeklySummaryData,
 } from "./emailTemplates";
 import { buildListUnsubscribeHeaders } from "./emailUnsubscribeToken";
@@ -92,5 +98,33 @@ export async function sendMissedWorkoutReminder(
 export async function sendMafTestReminder(user: User): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildMafTestReminderEmail(user);
+  return sendEmailToUser(user, subject, html);
+}
+
+export async function sendWeeklyReviewReminder(
+  user: User,
+  data: WeeklyReviewReminderData,
+): Promise<boolean> {
+  if (!user.email) return false;
+  const { subject, html } = buildWeeklyReviewReminderEmail(user, data);
+  return sendEmailToUser(user, subject, html);
+}
+
+export async function sendTodaySessionBrief(
+  user: User,
+  data: TodaySessionData,
+): Promise<boolean> {
+  if (!user.email || data.sessions.length === 0) return false;
+  const { subject, html } = buildTodaySessionEmail(user, data);
+  return sendEmailToUser(user, subject, html);
+}
+
+export async function sendAnalysisDigest(
+  user: User,
+  data: AnalysisDigestData,
+): Promise<boolean> {
+  if (!user.email) return false;
+  if (!data.racePrediction && !data.coachInsightsMarkdown) return false;
+  const { subject, html } = buildAnalysisDigestEmail(user, data);
   return sendEmailToUser(user, subject, html);
 }

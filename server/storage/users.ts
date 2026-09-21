@@ -795,6 +795,51 @@ export class UserStorage {
     return claimed.length > 0;
   }
 
+  /** Sunday-evening weekly-review-reminder counterpart of {@link claimWeeklySummary}. */
+  async claimWeeklyReviewReminder(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastWeeklyReviewReminderAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastWeeklyReviewReminderAt), lt(users.lastWeeklyReviewReminderAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Session-brief counterpart of {@link claimWeeklySummary}. */
+  async claimTodaySession(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastTodaySessionAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastTodaySessionAt), lt(users.lastTodaySessionAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
+  /** Analysis-digest counterpart of {@link claimWeeklySummary}. */
+  async claimAnalysisDigest(userId: string, notBefore: Date, now = new Date()): Promise<boolean> {
+    const claimed = await db
+      .update(users)
+      .set({ lastAnalysisDigestAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          or(isNull(users.lastAnalysisDigestAt), lt(users.lastAnalysisDigestAt, notBefore)),
+        ),
+      )
+      .returning({ id: users.id });
+    return claimed.length > 0;
+  }
+
   /** Users who opted into at least one nutrition push reminder. */
   async getUsersWithNutritionPushReminders(): Promise<User[]> {
     return await db

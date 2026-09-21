@@ -1,3 +1,5 @@
+import { WEEKLY_REVIEW_SUNDAY_EVENING_HOUR } from "@shared/weeklyReview";
+
 import { toISODateString } from "./dateUtils";
 import { addDays, mondayOf } from "./weekDates";
 
@@ -14,8 +16,6 @@ import { addDays, mondayOf } from "./weekDates";
  * dismiss on Sunday and it stays dismissed through Tuesday, then returns for
  * the next week without any extra bookkeeping.
  */
-
-const SUNDAY_EVENING_HOUR = 17;
 
 export interface WeeklyReviewPromptState {
   /** Monday of the week the prompt points at. */
@@ -34,7 +34,7 @@ export function getWeeklyReviewPrompt(now: Date = new Date()): WeeklyReviewPromp
   const today = toISODateString(now);
 
   if (dayOfWeek === 0) {
-    if (now.getHours() < SUNDAY_EVENING_HOUR) return null;
+    if (now.getHours() < WEEKLY_REVIEW_SUNDAY_EVENING_HOUR) return null;
     // The week closing tonight — its Monday is this week's Monday.
     return { weekStart: mondayOf(today), isWrappingUp: true };
   }

@@ -2,11 +2,17 @@ import { afterEach,describe, expect, it } from "vitest";
 
 import { createMockMissedWorkout, createMockUser, createMockWeeklySummary } from "../test/factories";
 import {
+  type AnalysisDigestData,
+  buildAnalysisDigestEmail,
   buildMafTestReminderEmail,
   buildMissedWorkoutEmail,
+  buildTodaySessionEmail,
+  buildWeeklyReviewReminderEmail,
   buildWeeklySummaryEmail,
   getAppUrl,
   MissedWorkoutData,
+  type TodaySessionData,
+  type WeeklyReviewReminderData,
   WeeklySummaryData,
 } from "./emailTemplates";
 import { env } from "./env";
@@ -208,12 +214,197 @@ describe("email generation", () => {
     });
   });
 
+  describe("buildWeeklyReviewReminderEmail", () => {
+    const reviewData: WeeklyReviewReminderData = {
+      weekStart: "2026-07-13",
+      weekEnd: "2026-07-19",
+      weeklyGoal: 4,
+      sessionsLogged: 3,
+      sessionsPlanned: 4,
+      plannedCompleted: 3,
+      missed: 1,
+      totalDurationMin: 150,
+      avgRpe: 6.5,
+      personalRecords: [{ exerciseName: "Back squat", metric: "maxWeight" }],
+      previousIntent: "get three runs in",
+    };
+
+    it("generates HTML snapshot correctly", () => {
+      expect(buildWeeklyReviewReminderEmail(baseUser, reviewData).html).toMatchSnapshot();
+    });
+
+    it("counts the sessions so far in the subject", () => {
+      expect(buildWeeklyReviewReminderEmail(baseUser, reviewData).subject).toBe(
+        "Your week is wrapping up — 3 sessions so far",
+      );
+      expect(buildWeeklyReviewReminderEmail(baseUser, { ...reviewData, sessionsLogged: 1 }).subject).toBe(
+        "Your week is wrapping up — 1 session so far",
+      );
+    });
+
+    it("links into the review for the week that is closing", () => {
+      expect(buildWeeklyReviewReminderEmail(baseUser, reviewData).html).toContain(
+        `${getAppUrl()}/review?week=2026-07-13`,
+      );
+    });
+
+    it("shows last week's intent back, escaped, and names the PRs", () => {
+      const { html } = buildWeeklyReviewReminderEmail(baseUser, {
+        ...reviewData,
+        previousIntent: "<b>three</b> runs",
+      });
+      expect(html).toContain("Last week you said");
+      expect(html).toContain("&lt;b&gt;three&lt;/b&gt; runs");
+      expect(html).not.toContain("<b>three</b>");
+      expect(html).toContain("Back squat — heaviest lift");
+    });
+
+    it("drops the plan tiles and the missed note for a planless athlete", () => {
+      const { html } = buildWeeklyReviewReminderEmail(baseUser, {
+        ...reviewData,
+        sessionsPlanned: 0,
+        plannedCompleted: 0,
+        missed: 0,
+        previousIntent: null,
+        personalRecords: [],
+        avgRpe: null,
+      });
+      expect(html).not.toContain("Plan days done");
+      expect(html).not.toContain("didn't happen");
+      expect(html).not.toContain("Last week you said");
+      expect(html).not.toContain("Avg RPE");
+      expect(html).toContain("Take two minutes");
+    });
+  });
+
+  describe("buildTodaySessionEmail", () => {
+    const session = {
+      planDayId: "pd-1",
+      focus: "Threshold intervals",
+      mainWorkout: "6x800m at 5k pace with 2 min jog recovery",
+      expectedDurationMin: 55,
+      expectedRpe: 7,
+      plannedTimeOfDayMin: 390,
+      planName: "12-week build",
+    };
+    const todayData: TodaySessionData = { date: "2026-07-21", isTomorrow: false, sessions: [session] };
+
+    it("generates HTML snapshot correctly", () => {
+      expect(buildTodaySessionEmail(baseUser, todayData).html).toMatchSnapshot();
+    });
+
+    it("names the session in the subject and deep-links to it", () => {
+      const { subject, html } = buildTodaySessionEmail(baseUser, todayData);
+      expect(subject).toBe("Today: Threshold intervals");
+      expect(html).toContain(`${getAppUrl()}/?workout=pd-1`);
+      expect(html).toContain("~55 min · RPE 7 · 06:30 · 12-week build");
+    });
+
+    it("switches to tomorrow wording for an evening brief", () => {
+      const { subject, html } = buildTodaySessionEmail(baseUser, { ...todayData, isTomorrow: true });
+      expect(subject).toBe("Tomorrow: Threshold intervals");
+      expect(html).toContain("on the plan for tomorrow");
+    });
+
+    it("counts several sessions and lands on the timeline root", () => {
+      const { subject, html } = buildTodaySessionEmail(baseUser, {
+        ...todayData,
+        sessions: [session, { ...session, planDayId: "pd-2", focus: "Mobility" }],
+      });
+      expect(subject).toBe("Today: 2 sessions");
+      expect(html).toContain(`href="${getAppUrl()}/"`);
+      expect(html).not.toContain("?workout=");
+    });
+
+    it("omits absent metadata and escapes free text", () => {
+      const { html } = buildTodaySessionEmail(baseUser, {
+        ...todayData,
+        sessions: [{ ...session, focus: "Run <fast>", expectedDurationMin: null, expectedRpe: null, plannedTimeOfDayMin: null, planName: null }],
+      });
+      expect(html).toContain("Run &lt;fast&gt;");
+      expect(html).not.toContain('class="workout-meta"');
+      expect(html).not.toContain("RPE");
+    });
+
+    it("truncates a long prescription", () => {
+      const long = "a".repeat(260);
+      const { html } = buildTodaySessionEmail(baseUser, { ...todayData, sessions: [{ ...session, mainWorkout: long }] });
+      expect(html).toContain(`${"a".repeat(200)}…`);
+      expect(html).not.toContain("a".repeat(201));
+    });
+  });
+
+  describe("buildAnalysisDigestEmail", () => {
+    const digestData: AnalysisDigestData = {
+      racePrediction: {
+        totalFinishSeconds: 5400,
+        overallConfidence: "medium",
+        percentile: { fasterThanPct: 62, cohortLabel: "Open Men 35-39", cohortSize: 1200 },
+        raceReadiness: { status: "fresh", guidance: "Hold the taper; one sharpener mid-week." },
+        generatedAt: "2026-07-19T00:05:00.000Z",
+      },
+      coachInsightsMarkdown: [
+        "1. **Goal Progress** — Six weeks out, 82% completion.",
+        "2. **Watch Outs** — Sled push untouched for 24 days.",
+      ].join("\n"),
+      coachInsightsGeneratedAt: "2026-07-20T00:05:00.000Z",
+    };
+
+    it("generates HTML snapshot correctly", () => {
+      expect(buildAnalysisDigestEmail(baseUser, digestData).html).toMatchSnapshot();
+    });
+
+    it("quotes the predicted finish in the subject and headline", () => {
+      const { subject, html } = buildAnalysisDigestEmail(baseUser, digestData);
+      expect(subject).toBe("Your training analysis: predicted finish 1:30:00");
+      expect(html).toContain("1:30:00");
+      expect(html).toContain("Medium confidence");
+      expect(html).toContain("Faster than <strong>62%</strong> of Open Men 35-39 · 1,200 results");
+      expect(html).toContain("Readiness: Fresh");
+      expect(html).toContain("Prediction updated 2026-07-19");
+      expect(html).toContain("Insights updated 2026-07-20");
+      expect(html).toContain(`${getAppUrl()}/analytics`);
+    });
+
+    it("renders the coach markdown as HTML with the model output escaped", () => {
+      const { html } = buildAnalysisDigestEmail(baseUser, {
+        ...digestData,
+        coachInsightsMarkdown: "1. **Goal Progress** — <script>x</script>",
+      });
+      expect(html).toContain("<ol>");
+      expect(html).toContain("<strong>Goal Progress</strong>");
+      expect(html).toContain("&lt;script&gt;x&lt;/script&gt;");
+      expect(html).not.toContain("<script>");
+    });
+
+    it("falls back to an insights-only subject without a prediction", () => {
+      const { subject, html } = buildAnalysisDigestEmail(baseUser, { ...digestData, racePrediction: null });
+      expect(subject).toBe("Your coach insights are ready");
+      expect(html).not.toContain('<div class="section-title">Race prediction</div>');
+      expect(html).toContain('<div class="section-title">Coach insights</div>');
+    });
+
+    it("omits the percentile and readiness rows when they are missing", () => {
+      const { html } = buildAnalysisDigestEmail(baseUser, {
+        ...digestData,
+        coachInsightsMarkdown: null,
+        coachInsightsGeneratedAt: null,
+        racePrediction: { ...digestData.racePrediction!, percentile: null, raceReadiness: null, generatedAt: "not a date" },
+      });
+      expect(html).not.toContain("Faster than");
+      expect(html).not.toContain("Readiness:");
+      expect(html).not.toContain("Prediction updated");
+      expect(html).not.toContain('<div class="section-title">Coach insights</div>');
+    });
+  });
+
   describe("footer", () => {
     it("links every template to preferences and to the login-free unsubscribe endpoint", () => {
       const htmls = [
         buildWeeklySummaryEmail(baseUser, baseData).html,
         buildMissedWorkoutEmail(baseUser, [createMockMissedWorkout()]).html,
         buildMafTestReminderEmail(baseUser).html,
+        buildAnalysisDigestEmail(baseUser, { racePrediction: null, coachInsightsMarkdown: "hi", coachInsightsGeneratedAt: null }).html,
       ];
       for (const html of htmls) {
         expect(html).toContain(`${getAppUrl()}/settings`);

@@ -1,13 +1,31 @@
+import { formatSecondsToClock } from "@shared/formatClock";
+import { isRestLikePlanDay } from "@shared/planDayKind";
 import { pooledPercentage, roundOrNull } from "@shared/ratio";
-import type { User } from "@shared/schema";
+import type { AnalyticsResult, RacePredictionResponse, User } from "@shared/schema";
+import { WEEKLY_REVIEW_SUNDAY_EVENING_HOUR } from "@shared/weeklyReview";
 
-import { type MissedWorkoutData, sendMafTestReminder,sendMissedWorkoutReminder, sendWeeklySummary, type WeeklySummaryData } from "./email";
+import {
+  type AnalysisDigestData,
+  type AnalysisDigestRacePrediction,
+  type MissedWorkoutData,
+  sendAnalysisDigest,
+  sendMafTestReminder,
+  sendMissedWorkoutReminder,
+  sendTodaySessionBrief,
+  sendWeeklyReviewReminder,
+  sendWeeklySummary,
+  type TodaySessionData,
+  todaySessionDeepLink,
+  type WeeklyReviewReminderData,
+  type WeeklySummaryData,
+} from "./email";
 import { logger } from "./logger";
 import { type PushPayload,sendPushToUser } from "./pushNotifications";
 import { sendJobNoRetry } from "./queue";
 import { calculateStreak } from "./routeUtils";
 import { calculatePersonalRecords, countPersonalRecordsInRange } from "./services/analyticsService";
 import { getLocalMondayWeekBoundaries } from "./services/weeklyProgress";
+import { buildWeeklyReview } from "./services/weeklyReviewService";
 import type { IStorage } from "./storage";
 import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, getLocalHour } from "./timezone";
 
@@ -21,18 +39,38 @@ import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, getLocalHour } from "
 // local day.
 const WEEKLY_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 const MISSED_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
+// Same reasoning for the newer emails: the Sunday gate makes the review
+// reminder weekly and the notify-hour gate makes the brief daily; the digest's
+// 6-day window is also what caps it at about one email a week.
+const WEEKLY_REVIEW_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
+const TODAY_SESSION_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
+const ANALYSIS_DIGEST_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 
 /** Local hour the scheduled emails go out when the athlete has not picked one. */
 export const DEFAULT_NOTIFY_HOUR = 7;
 
-export type EmailJobName = "send-weekly-summary" | "send-missed-reminder";
+/**
+ * A notify hour from midday on means the athlete reads email in the afternoon
+ * or evening, when "today's session" is behind them — brief tomorrow instead.
+ */
+const BRIEF_TOMORROW_FROM_HOUR = 12;
 
-type EmailKind = "weeklySummary" | "missedReminder";
+export type EmailJobName =
+  | "send-weekly-summary"
+  | "send-missed-reminder"
+  | "send-weekly-review-reminder"
+  | "send-today-session"
+  | "send-analysis-digest";
+
+type EmailKind = "weeklySummary" | "missedReminder" | "weeklyReviewReminder" | "todaySession" | "analysisDigest";
 
 /** The per-type opt-in column behind each email kind (all default off). */
 const EMAIL_TOGGLE_COLUMN: Record<EmailKind, keyof User> = {
   weeklySummary: "emailWeeklySummary",
   missedReminder: "emailMissedReminder",
+  weeklyReviewReminder: "emailWeeklyReviewReminder",
+  todaySession: "emailTodaySession",
+  analysisDigest: "emailAnalysisDigest",
 };
 
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
@@ -280,7 +318,233 @@ export function planEmailJobsForUser(user: User, now: Date): EmailJobName[] {
   if (atNotifyHour && wantsEmail(user, "missedReminder")) {
     jobs.push("send-missed-reminder");
   }
+  if (atNotifyHour && wantsEmail(user, "todaySession")) {
+    jobs.push("send-today-session");
+  }
+  if (atNotifyHour && wantsEmail(user, "analysisDigest")) {
+    jobs.push("send-analysis-digest");
+  }
+  // The review reminder has its own moment — Sunday evening, when the week is
+  // closing — rather than the notify hour, which for most athletes is morning.
+  if (
+    localDayOfWeek === 0 &&
+    localHour === WEEKLY_REVIEW_SUNDAY_EVENING_HOUR &&
+    wantsEmail(user, "weeklyReviewReminder")
+  ) {
+    jobs.push("send-weekly-review-reminder");
+  }
   return jobs;
+}
+
+/**
+ * Sunday-evening nudge to write the weekly review, with the week so far.
+ *
+ * Skipped without burning the week's claim when the athlete already has a
+ * `weekly_reviews` row for this week — that row is written by the review page,
+ * so its existence is the closest thing to "already reviewed" the app records.
+ */
+export async function processWeeklyReviewReminder(storage: IStorage, user: User, now: Date): Promise<boolean> {
+  // See W4 — re-check preferences at send time.
+  const fresh = await storage.users.getUser(user.id);
+  if (!fresh?.email || !wantsEmail(fresh, "weeklyReviewReminder")) return false;
+  user = fresh;
+
+  const tz = user.userTimezone;
+  if (getLocalDayOfWeek(now, tz) !== 0) return false;
+
+  // Sunday evening: the week closing tonight is the CURRENT local week.
+  const { current } = getLocalMondayWeekBoundaries(now, tz);
+  const weekStart = current.weekStart;
+  const intents = await storage.weeklyReviews.getIntents(user.id, [weekStart]);
+  if (intents.has(weekStart)) return false;
+
+  const claimed = await storage.users.claimWeeklyReviewReminder(
+    user.id,
+    new Date(now.getTime() - WEEKLY_REVIEW_CLAIM_WINDOW_MS),
+    now,
+  );
+  if (!claimed) return false;
+
+  // Any date inside the week anchors it; today (local) is inside this week.
+  const review = await buildWeeklyReview(storage, user.id, { now, week: getLocalDateStr(now, tz) });
+  const data: WeeklyReviewReminderData = {
+    weekStart: review.weekStart,
+    weekEnd: review.weekEnd,
+    weeklyGoal: review.weeklyGoal,
+    sessionsLogged: review.current.sessionsLogged,
+    sessionsPlanned: review.current.sessionsPlanned,
+    plannedCompleted: review.current.plannedCompleted,
+    missed: review.current.missed,
+    totalDurationMin: review.current.totalDurationMin,
+    avgRpe: review.current.avgRpe,
+    personalRecords: review.personalRecords.map((pr) => ({ exerciseName: pr.exerciseName, metric: pr.metric })),
+    previousIntent: review.previousIntent,
+  };
+  const sent = await sendWeeklyReviewReminder(user, data);
+
+  // Push rides along fire-and-forget (.catch is load-bearing — see processWeeklySummary).
+  void sendPushToUser(user.id, {
+    title: "Your week is wrapping up",
+    body: `${data.sessionsLogged} session${data.sessionsLogged === 1 ? "" : "s"} so far — take two minutes to review it.`,
+    url: `/review?week=${encodeURIComponent(review.weekStart)}`,
+  }).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err, userId: user.id }, "weekly review reminder push send failed");
+  });
+
+  return sent;
+}
+
+/**
+ * The day's planned session (tomorrow's, for an afternoon/evening notify
+ * hour). Rest-like days, excused days and empty days send nothing and burn no
+ * claim, so the ledger only ever records a brief that went out.
+ */
+export async function processTodaySessionBrief(storage: IStorage, user: User, now: Date): Promise<boolean> {
+  // See W4 — re-check preferences at send time.
+  const fresh = await storage.users.getUser(user.id);
+  if (!fresh?.email || !wantsEmail(fresh, "todaySession")) return false;
+  user = fresh;
+
+  const tz = user.userTimezone;
+  const today = getLocalDateStr(now, tz);
+  const isTomorrow = (user.notifyHour ?? DEFAULT_NOTIFY_HOUR) >= BRIEF_TOMORROW_FROM_HOUR;
+  const targetDate = isTomorrow ? addDaysLocal(today, 1) : today;
+
+  const sessions = (await storage.analytics.getPlannedSessionsForDate(user.id, targetDate)).filter(
+    (session) => !isRestLikePlanDay(session.focus, session.mainWorkout),
+  );
+  if (sessions.length === 0) return false;
+
+  const claimed = await storage.users.claimTodaySession(
+    user.id,
+    new Date(now.getTime() - TODAY_SESSION_CLAIM_WINDOW_MS),
+    now,
+  );
+  if (!claimed) return false;
+
+  const data: TodaySessionData = { date: targetDate, isTomorrow, sessions };
+  const sent = await sendTodaySessionBrief(user, data);
+
+  void sendPushToUser(user.id, buildTodaySessionPush(data)).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err, userId: user.id }, "session brief push send failed");
+  });
+
+  return sent;
+}
+
+/** The session-brief push: names the session and deep-links to it, like the missed-workout push. */
+export function buildTodaySessionPush(data: TodaySessionData): PushPayload {
+  const dayWord = data.isTomorrow ? "Tomorrow" : "Today";
+  const [first] = data.sessions;
+  if (data.sessions.length === 1 && first) {
+    const parts: string[] = [];
+    if (first.expectedDurationMin != null) parts.push(`~${first.expectedDurationMin} min`);
+    if (first.expectedRpe != null) parts.push(`RPE ${first.expectedRpe}`);
+    return {
+      title: `${dayWord}: ${first.focus}`,
+      body: parts.length > 0 ? parts.join(" · ") : first.mainWorkout.substring(0, 120),
+      url: todaySessionDeepLink(data.sessions),
+    };
+  }
+  return {
+    title: `${dayWord}: ${data.sessions.length} sessions`,
+    body: data.sessions.map((s) => s.focus).join(", "),
+    url: "/",
+  };
+}
+
+/** The coach's stored Markdown, or null when the row is missing or malformed. */
+function readCoachInsights(row: AnalyticsResult | undefined): string | null {
+  const payload = row?.payload as { insights?: unknown } | null | undefined;
+  return typeof payload?.insights === "string" && payload.insights.trim().length > 0 ? payload.insights : null;
+}
+
+/** The stored race prediction's headline fields, or null when the row is missing or malformed. */
+function readRacePrediction(row: AnalyticsResult | undefined): AnalysisDigestRacePrediction | null {
+  const payload = row?.payload as Partial<RacePredictionResponse> | null | undefined;
+  if (!row || typeof payload?.totalFinishSeconds !== "number" || !Number.isFinite(payload.totalFinishSeconds)) {
+    return null;
+  }
+  const percentile = payload.percentile;
+  const readiness = payload.raceReadiness;
+  return {
+    totalFinishSeconds: payload.totalFinishSeconds,
+    overallConfidence: typeof payload.overallConfidence === "string" ? payload.overallConfidence : "low",
+    percentile:
+      percentile && typeof percentile.fasterThanPct === "number" && typeof percentile.cohortLabel === "string"
+        ? {
+            fasterThanPct: percentile.fasterThanPct,
+            cohortLabel: percentile.cohortLabel,
+            cohortSize: typeof percentile.cohortSize === "number" ? percentile.cohortSize : 0,
+          }
+        : null,
+    raceReadiness:
+      readiness && typeof readiness.status === "string" && typeof readiness.guidance === "string"
+        ? { status: readiness.status, guidance: readiness.guidance }
+        : null,
+    generatedAt: row.generatedAt.toISOString(),
+  };
+}
+
+/**
+ * The stored race prediction and coach insights, by email, when either is
+ * newer than the last digest. Reads `analytics_results` only — nothing here
+ * triggers a recompute or spends AI budget — so an athlete who has never opened
+ * those surfaces has no rows and gets no email.
+ */
+export async function processAnalysisDigest(storage: IStorage, user: User, now: Date): Promise<boolean> {
+  // See W4 — re-check preferences at send time.
+  const fresh = await storage.users.getUser(user.id);
+  if (!fresh?.email || !wantsEmail(fresh, "analysisDigest")) return false;
+  user = fresh;
+
+  const rows = await storage.analyticsResults.getMany([user.id]);
+  const coachRow = rows.find((row) => row.feature === "coach_insights");
+  const raceRow = rows.find((row) => row.feature === "race_prediction");
+  const coachInsightsMarkdown = readCoachInsights(coachRow);
+  const racePrediction = readRacePrediction(raceRow);
+  if (!coachInsightsMarkdown && !racePrediction) return false;
+
+  // Only what actually rendered counts as "new": a malformed row is ignored
+  // rather than allowed to trigger a digest that would then not mention it.
+  const generatedAts = [
+    coachInsightsMarkdown ? coachRow?.generatedAt.getTime() : undefined,
+    racePrediction ? raceRow?.generatedAt.getTime() : undefined,
+  ].filter((t): t is number => typeof t === "number");
+  const newest = Math.max(...generatedAts);
+  if (user.lastAnalysisDigestAt && newest <= user.lastAnalysisDigestAt.getTime()) return false;
+
+  const claimed = await storage.users.claimAnalysisDigest(
+    user.id,
+    new Date(now.getTime() - ANALYSIS_DIGEST_CLAIM_WINDOW_MS),
+    now,
+  );
+  if (!claimed) return false;
+
+  const data: AnalysisDigestData = {
+    racePrediction,
+    coachInsightsMarkdown,
+    coachInsightsGeneratedAt: coachInsightsMarkdown ? (coachRow?.generatedAt.toISOString() ?? null) : null,
+  };
+  const sent = await sendAnalysisDigest(user, data);
+
+  void sendPushToUser(user.id, {
+    title: "Your training analysis is ready",
+    body: racePrediction
+      ? `Predicted finish ${formatSecondsToClock(racePrediction.totalFinishSeconds)}${coachInsightsMarkdown ? " · new coach insights" : ""}`
+      : "New coach insights are waiting for you.",
+    url: "/analytics",
+  }).catch((err: unknown) => {
+    // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
+    // bearer:disable javascript_lang_logger_leak
+    logger.error({ err, userId: user.id }, "analysis digest push send failed");
+  });
+
+  return sent;
 }
 
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {

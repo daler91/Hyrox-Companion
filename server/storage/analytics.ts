@@ -7,13 +7,26 @@ import {
   type WorkoutLog,
   workoutLogs,
 } from "@shared/schema";
-import { and, desc, eq, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, notExists,or,type SQL,sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { logger } from "../logger";
 import { absenceDeclaredForPlanDay, noAbsenceDeclaredForUserDate } from "./absenceGuard";
 import { planDayWithinPlanLifetime } from "./planRetirement";
 import { type LoggedExerciseSetWithDate, MAX_WORKOUT_LOGS_PER_QUERY, queryExerciseSetsWithDates, querySlimExerciseSetsWithDates, type SlimLoggedExerciseSet } from "./shared";
+
+/** A not-yet-logged plan day on a given date, as the session brief email reads it. */
+export interface PlannedSessionForDate {
+  /** The `plan_days` row id — what `?workout=` deep links to. */
+  planDayId: string;
+  focus: string;
+  mainWorkout: string;
+  expectedDurationMin: number | null;
+  expectedRpe: number | null;
+  /** Minutes after local midnight the session is planned for, when set. */
+  plannedTimeOfDayMin: number | null;
+  planName: string | null;
+}
 
 export class AnalyticsStorage {
   // ⚡ Bolt Performance Optimization: exercise_load_tags is static reference
@@ -246,6 +259,51 @@ export class AnalyticsStorage {
       expectedDurationMin: d.expectedDurationMin ?? null,
       expectedRpe: d.expectedRpe ?? null,
       plannedTimeOfDayMin: d.plannedTimeOfDayMin ?? null,
+    }));
+  }
+
+  /**
+   * The sessions still `planned` on `date`, for the session brief email.
+   *
+   * A sibling of getPlannedDaysForDate rather than an extension of it: that
+   * one feeds the per-meal fuel targets and must keep its shape. This one
+   * carries the id (for the deep link), the workout text and the plan name,
+   * and applies two guards the brief needs and the fuel targets do not —
+   * days of a retired plan are not proposed (planDayWithinPlanLifetime), and
+   * nothing is proposed on a date the athlete has declared an absence over,
+   * the same rule getMissedWorkoutsForDate applies to the missed reminder.
+   */
+  async getPlannedSessionsForDate(userId: string, date: string): Promise<PlannedSessionForDate[]> {
+    const days = await db
+      .select({
+        id: planDays.id,
+        focus: planDays.focus,
+        mainWorkout: planDays.mainWorkout,
+        expectedDurationMin: planDays.expectedDurationMin,
+        expectedRpe: planDays.expectedRpe,
+        plannedTimeOfDayMin: planDays.plannedTimeOfDayMin,
+        planName: trainingPlans.name,
+      })
+      .from(planDays)
+      .innerJoin(trainingPlans, eq(planDays.planId, trainingPlans.id))
+      .where(
+        and(
+          eq(trainingPlans.userId, userId),
+          eq(planDays.scheduledDate, date),
+          eq(planDays.status, "planned"),
+          planDayWithinPlanLifetime(),
+          noAbsenceDeclaredForUserDate(db, userId, date),
+        ),
+      )
+      .orderBy(sql`${planDays.plannedTimeOfDayMin} ASC NULLS LAST`, asc(planDays.id));
+    return days.map((d) => ({
+      planDayId: d.id,
+      focus: d.focus,
+      mainWorkout: d.mainWorkout,
+      expectedDurationMin: d.expectedDurationMin ?? null,
+      expectedRpe: d.expectedRpe ?? null,
+      plannedTimeOfDayMin: d.plannedTimeOfDayMin ?? null,
+      planName: d.planName ?? null,
     }));
   }
 
