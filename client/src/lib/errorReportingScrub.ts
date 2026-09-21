@@ -56,23 +56,26 @@ export function redactApiErrorMessage(message: unknown): unknown {
   return `${match[1]}: [redacted]`;
 }
 
+function scrubBreadcrumbData(data: Record<string, unknown>): void {
+  for (const key of BREADCRUMB_PAYLOAD_KEYS) {
+    if (key in data) delete data[key];
+  }
+  for (const key of BREADCRUMB_URL_KEYS) {
+    if (key in data) data[key] = stripUrlQuery(data[key]);
+  }
+}
+
+function scrubBreadcrumb(crumb: Sentry.Breadcrumb): void {
+  // A navigation crumb's message is the URL itself.
+  if (typeof crumb.message === "string") {
+    crumb.message = stripUrlQuery(crumb.message) as string;
+  }
+  if (crumb.data) scrubBreadcrumbData(crumb.data);
+}
+
 function scrubBreadcrumbs(breadcrumbs: NonNullable<Sentry.ErrorEvent["breadcrumbs"]>): void {
   for (const crumb of breadcrumbs) {
-    if (!crumb || typeof crumb !== "object") continue;
-
-    // A navigation crumb's message is the URL itself.
-    if (typeof crumb.message === "string") {
-      crumb.message = stripUrlQuery(crumb.message) as string;
-    }
-
-    if (!crumb.data) continue;
-    const data = crumb.data as Record<string, unknown>;
-    for (const key of BREADCRUMB_PAYLOAD_KEYS) {
-      if (key in data) delete data[key];
-    }
-    for (const key of BREADCRUMB_URL_KEYS) {
-      if (key in data) data[key] = stripUrlQuery(data[key]);
-    }
+    if (crumb && typeof crumb === "object") scrubBreadcrumb(crumb);
   }
 }
 

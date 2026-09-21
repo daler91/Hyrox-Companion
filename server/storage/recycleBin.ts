@@ -154,38 +154,43 @@ async function insertChildren(
   );
 }
 
-async function restoreWorkoutLog(
+type WorkoutLogInsert = typeof workoutLogs.$inferInsert;
+
+/**
+ * Backstop only: while the item is binned the sync's dedupe already treats
+ * the activity as imported, so this can only trip on a genuine race.
+ */
+async function findReimportedDeviceActivity(
   tx: DbExecutor,
   userId: string,
-  payload: Extract<RecycleBinPayload, { kind: "workout_log" }>,
-): Promise<{ ok: true; warnings: string[] } | RestoreFailure> {
-  const { log, exerciseSets: sets, structureBlocks, mafWorkoutAnalysisIds } = payload.workout;
-  const row = reviveRow(workoutLogs, log);
+  row: WorkoutLogInsert,
+): Promise<RestoreFailure | null> {
+  const providers = [
+    { name: "Strava", column: workoutLogs.stravaActivityId, activityId: row.stravaActivityId },
+    { name: "Garmin", column: workoutLogs.garminActivityId, activityId: row.garminActivityId },
+  ] as const;
+  for (const { name, column, activityId } of providers) {
+    if (activityId && (await hasLiveDeviceActivity(tx, userId, column, activityId))) {
+      return fail(
+        "device_activity_reimported",
+        `This ${name} activity has been imported again since the workout was deleted. Delete the newer copy to restore this one.`,
+      );
+    }
+  }
+  return null;
+}
+
+/**
+ * Every FK the delete SET NULL'd on OTHER rows is re-linked by the caller; the
+ * FKs on THIS row point at records that may themselves have gone since, so
+ * drop the ones that no longer resolve. Returns the athlete-facing warnings.
+ */
+async function detachMissingLogReferences(
+  tx: DbExecutor,
+  userId: string,
+  row: WorkoutLogInsert,
+): Promise<string[]> {
   const warnings: string[] = [];
-
-  // Backstop only: while the item is binned the sync's dedupe already treats
-  // the activity as imported, so this can only trip on a genuine race.
-  if (
-    row.stravaActivityId &&
-    (await hasLiveDeviceActivity(tx, userId, workoutLogs.stravaActivityId, row.stravaActivityId))
-  ) {
-    return fail(
-      "device_activity_reimported",
-      "This Strava activity has been imported again since the workout was deleted. Delete the newer copy to restore this one.",
-    );
-  }
-  if (
-    row.garminActivityId &&
-    (await hasLiveDeviceActivity(tx, userId, workoutLogs.garminActivityId, row.garminActivityId))
-  ) {
-    return fail(
-      "device_activity_reimported",
-      "This Garmin activity has been imported again since the workout was deleted. Delete the newer copy to restore this one.",
-    );
-  }
-
-  // Every FK the delete SET NULL'd on OTHER rows is re-linked below; the FKs
-  // on THIS row point at records that may themselves have gone since.
   if (row.planDayId && !(await ownsPlanDay(tx, userId, row.planDayId))) {
     row.planDayId = null;
     warnings.push(
@@ -204,6 +209,21 @@ async function restoreWorkoutLog(
   if (!row.suggestedPlanDayId && !row.suggestedWorkoutLogId) {
     row.suggestedLinkConfidence = null;
   }
+  return warnings;
+}
+
+async function restoreWorkoutLog(
+  tx: DbExecutor,
+  userId: string,
+  payload: Extract<RecycleBinPayload, { kind: "workout_log" }>,
+): Promise<{ ok: true; warnings: string[] } | RestoreFailure> {
+  const { log, exerciseSets: sets, structureBlocks, mafWorkoutAnalysisIds } = payload.workout;
+  const row = reviveRow(workoutLogs, log);
+
+  const reimported = await findReimportedDeviceActivity(tx, userId, row);
+  if (reimported) return reimported;
+
+  const warnings = await detachMissingLogReferences(tx, userId, row);
 
   await tx.insert(workoutLogs).values({ ...row, userId });
   await insertChildren(tx, sets, structureBlocks);
