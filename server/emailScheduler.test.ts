@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  planBriefDate,
   planEmailJobsForUser,
   processAnalysisDigest,
   processMafTestReminder,
@@ -494,6 +495,46 @@ describe('processWeeklyReviewReminder', () => {
 
     expect(results.filter(Boolean)).toHaveLength(1);
     expect(sendWeeklyReviewReminder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('planBriefDate', () => {
+  const brief = (overrides: Partial<SchedulerUserOverrides> = {}) =>
+    makeMockUser({ id: 'u1', email: 'a@example.com', emailTodaySession: true, ...overrides }) as never;
+
+  it("covers today when the brief's own send hour is before midday", () => {
+    // 07:00 Tuesday local in Los Angeles is 14:00 UTC.
+    const user = brief({ userTimezone: 'America/Los_Angeles', notifyHourTodaySession: 7 });
+    expect(planBriefDate(user, new Date('2026-07-21T14:00:00Z'))).toEqual({
+      targetDate: '2026-07-21',
+      isTomorrow: false,
+    });
+  });
+
+  it("covers tomorrow when the brief's own send hour is from midday on", () => {
+    // 18:00 Tuesday local in Los Angeles is 01:00 UTC on Wednesday — still
+    // Tuesday for the athlete, so "tomorrow" is the 22nd.
+    const user = brief({ userTimezone: 'America/Los_Angeles', notifyHourTodaySession: 18 });
+    expect(planBriefDate(user, new Date('2026-07-22T01:00:00Z'))).toEqual({
+      targetDate: '2026-07-22',
+      isTomorrow: true,
+    });
+  });
+
+  it("reads the brief's own hour, not the athlete's default send time", () => {
+    const now = new Date('2026-07-21T14:00:00Z');
+    // An evening default with a morning brief still covers today...
+    const morningBrief = brief({ userTimezone: 'America/Los_Angeles', notifyHour: 19, notifyHourTodaySession: 7 });
+    expect(planBriefDate(morningBrief, now).isTomorrow).toBe(false);
+    // ...and a morning default with an evening brief covers tomorrow.
+    const eveningBrief = brief({ userTimezone: 'America/Los_Angeles', notifyHour: 7, notifyHourTodaySession: 19 });
+    expect(planBriefDate(eveningBrief, now).isTomorrow).toBe(true);
+  });
+
+  it('falls back to the default send time when the brief has no hour of its own', () => {
+    const now = new Date('2026-07-21T14:00:00Z');
+    expect(planBriefDate(brief({ userTimezone: 'America/Los_Angeles', notifyHour: 7 }), now).isTomorrow).toBe(false);
+    expect(planBriefDate(brief({ userTimezone: 'America/Los_Angeles', notifyHour: 19 }), now).isTomorrow).toBe(true);
   });
 });
 

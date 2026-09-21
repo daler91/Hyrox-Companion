@@ -396,6 +396,18 @@ export async function processWeeklyReviewReminder(storage: IStorage, user: User,
 }
 
 /**
+ * Which local date the brief covers, decided by the brief's OWN send hour
+ * rather than the athlete's default one: a brief that lands in the afternoon
+ * or evening is read when today's session is already behind them, so it
+ * covers tomorrow instead.
+ */
+export function planBriefDate(user: User, now: Date): { targetDate: string; isTomorrow: boolean } {
+  const today = getLocalDateStr(now, user.userTimezone);
+  const isTomorrow = resolveNotifyHour(user, "todaySession") >= BRIEF_TOMORROW_FROM_HOUR;
+  return { targetDate: isTomorrow ? addDaysLocal(today, 1) : today, isTomorrow };
+}
+
+/**
  * The day's planned session (tomorrow's, when the brief's own send hour is
  * afternoon/evening). Rest-like days, excused days and empty days send nothing
  * and burn no claim, so the ledger only ever records a brief that went out.
@@ -406,10 +418,7 @@ export async function processTodaySessionBrief(storage: IStorage, user: User, no
   if (!fresh?.email || !wantsEmail(fresh, "todaySession")) return false;
   user = fresh;
 
-  const tz = user.userTimezone;
-  const today = getLocalDateStr(now, tz);
-  const isTomorrow = resolveNotifyHour(user, "todaySession") >= BRIEF_TOMORROW_FROM_HOUR;
-  const targetDate = isTomorrow ? addDaysLocal(today, 1) : today;
+  const { targetDate, isTomorrow } = planBriefDate(user, now);
 
   const sessions = (await storage.analytics.getPlannedSessionsForDate(user.id, targetDate)).filter(
     (session) => !isRestLikePlanDay(session.focus, session.mainWorkout),
