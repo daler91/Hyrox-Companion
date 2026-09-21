@@ -60,6 +60,73 @@ const SETTINGS_TABS = [
 ] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
+function SettingsLoadError({
+  error,
+  isFetching,
+  onRetry,
+}: Readonly<{ error: unknown; isFetching: boolean; onRetry: () => void }>) {
+  const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+
+  return (
+    <PageContainer size="narrow">
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-destructive">Couldn't load settings</CardTitle>
+          <CardDescription>
+            We couldn't load your preferences right now. Please try again.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Raw error text is dev-only — the CardDescription above carries the
+              user-facing message. Surfacing `error.message` (e.g. "500: …") in
+              production is confusing and can leak internals (matches
+              FallbackErrorBoundary's NODE_ENV gate). */}
+          {import.meta.env.DEV && <p className="text-sm text-muted-foreground">{errorMessage}</p>}
+          <Button onClick={onRetry} disabled={isFetching} data-testid="button-retry-load-settings">
+            {isFetching ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
+            ) : (
+              <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            )}
+            {isFetching ? "Retrying…" : "Retry"}
+          </Button>
+        </CardContent>
+      </Card>
+    </PageContainer>
+  );
+}
+
+/** Sticky save bar shown while any tab has unsaved preference edits. */
+function SaveSettingsBar({
+  isSaving,
+  onSave,
+}: Readonly<{ isSaving: boolean; onSave: () => void }>) {
+  return (
+    <div
+      className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="sr-only">You have unsaved changes.</span>
+      <Button
+        onClick={onSave}
+        className="w-full"
+        data-testid="button-save-settings"
+        disabled={isSaving}
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+            Saving...
+          </>
+        ) : (
+          "Save Settings"
+        )}
+      </Button>
+    </div>
+  );
+}
+
 export default function Settings() {
   useDocumentTitle("Settings");
   const { toast } = useToast();
@@ -135,39 +202,7 @@ export default function Settings() {
   }
 
   if (isError && !preferences) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-
-    return (
-      <PageContainer size="narrow">
-        <Card className="border-destructive/40">
-          <CardHeader>
-            <CardTitle className="text-destructive">Couldn't load settings</CardTitle>
-            <CardDescription>
-              We couldn't load your preferences right now. Please try again.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Raw error text is dev-only — the CardDescription above carries the
-                user-facing message. Surfacing `error.message` (e.g. "500: …") in
-                production is confusing and can leak internals (matches
-                FallbackErrorBoundary's NODE_ENV gate). */}
-            {import.meta.env.DEV && <p className="text-sm text-muted-foreground">{errorMessage}</p>}
-            <Button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              data-testid="button-retry-load-settings"
-            >
-              {isFetching ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />
-              ) : (
-                <RotateCw className="h-4 w-4 mr-2" aria-hidden="true" />
-              )}
-              {isFetching ? "Retrying…" : "Retry"}
-            </Button>
-          </CardContent>
-        </Card>
-      </PageContainer>
-    );
+    return <SettingsLoadError error={error} isFetching={isFetching} onRetry={() => refetch()} />;
   }
 
   return (
@@ -362,30 +397,7 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      {hasChanges && (
-        <div
-          className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 border-t bg-background/95 backdrop-blur z-40 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
-          role="status"
-          aria-live="polite"
-        >
-          <span className="sr-only">You have unsaved changes.</span>
-          <Button
-            onClick={handleSave}
-            className="w-full"
-            data-testid="button-save-settings"
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
-                Saving...
-              </>
-            ) : (
-              "Save Settings"
-            )}
-          </Button>
-        </div>
-      )}
+      {hasChanges && <SaveSettingsBar isSaving={isSaving} onSave={handleSave} />}
 
       <AlertDialog
         open={unsavedChangesPrompt.isPromptOpen}
