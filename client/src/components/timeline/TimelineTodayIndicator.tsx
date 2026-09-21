@@ -31,7 +31,8 @@ type Position = "above" | "below" | "visible";
  * today in the virtualized timeline. It shows an arrow pointing back to
  * today and acts as a persistent "return to now" anchor. Rendered in the
  * scrollable container ABOVE the virtualized list so it can stick to the
- * top of the viewport regardless of current scroll depth.
+ * top of the viewport regardless of current scroll depth. On phones it is
+ * fixed bottom-left instead, in thumb reach and opposite the action pills.
  */
 export function TimelineTodayIndicator({
   todayRef,
@@ -119,11 +120,12 @@ export function TimelineTodayIndicator({
       onClick={onScrollToToday}
       data-testid="button-today-indicator"
       aria-label={`${label} — jump to today`}
-      className="sticky top-3 z-30 ml-auto flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="fixed bottom-[calc(1.5rem+var(--mobile-nav-h,0px)+env(safe-area-inset-bottom))] left-4 z-40 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:sticky md:bottom-auto md:left-auto md:top-3 md:z-30 md:ml-auto md:py-2"
     >
       <Arrow className="h-4 w-4" aria-hidden="true" />
       <CalendarCheck className="h-4 w-4" aria-hidden="true" />
-      <span>Jump to today</span>
+      <span className="md:hidden">Today</span>
+      <span className="hidden md:inline">Jump to today</span>
     </button>
   );
 }

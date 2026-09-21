@@ -15,6 +15,12 @@ import {
 const OFFLINE_POLL_INTERVAL_MS = 2000;
 const SYNC_SUCCESS_DISMISS_MS = 3500;
 
+// Phones: a centred pill just under the sticky header, clear of the tab bar,
+// the action pills and the jump-to-today pill that all share the bottom
+// edge. From md up it sits bottom-left, where it always did.
+const PILL_POSITION =
+  "fixed left-1/2 top-[calc(4rem+env(safe-area-inset-top))] z-40 max-w-[calc(100vw-2rem)] -translate-x-1/2 md:bottom-4 md:left-4 md:top-auto md:z-50 md:max-w-none md:translate-x-0";
+
 /**
  * Persistent status pill that surfaces offline / pending-sync state so the
  * user always knows where their in-flight data is. Three display states:
@@ -102,7 +108,7 @@ export function OfflineIndicator() {
   if (isOnline && recentlySynced !== null) {
     return (
       <div
-        className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white shadow-lg"
+        className={`${PILL_POSITION} flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white shadow-lg`}
         role="status"
         aria-live="polite"
         data-testid="indicator-sync-complete"
@@ -118,7 +124,7 @@ export function OfflineIndicator() {
   if (isOnline && pendingCount > 0) {
     return (
       <div
-        className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-white shadow-lg"
+        className={`${PILL_POSITION} flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-white shadow-lg`}
         role="status"
         aria-live="polite"
         data-testid="indicator-sync-pending"
@@ -135,7 +141,7 @@ export function OfflineIndicator() {
 
   return (
     <div
-      className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground shadow-lg"
+      className={`${PILL_POSITION} flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground shadow-lg`}
       // WCAG 4.1.3: status, not alert. Offline is informational — work
       // continues to be queued — so it shouldn't interrupt AT users mid-task.
       role="status"

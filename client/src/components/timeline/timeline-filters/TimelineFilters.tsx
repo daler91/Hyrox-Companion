@@ -126,7 +126,10 @@ export default function TimelineFilters({
       <Card>
         <CardContent className="p-4">
           <TooltipProvider>
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-center">
+            {/* One row at every width. Phones used to stack plan, status and
+                tools as three 44px rows; that was a third of the first screen
+                spent on controls before the first workout card appeared. */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:gap-3">
               <PlanSelector
                 plansLoading={plansLoading}
                 plans={plans}
@@ -138,7 +141,7 @@ export default function TimelineFilters({
               <Select value={filterStatus} onValueChange={(v) => onFilterChange(v as FilterStatus)}>
                 <SelectTrigger
                   aria-label="Filter workouts by status"
-                  className="w-full"
+                  className="w-auto md:w-full"
                   data-testid="select-filter"
                 >
                   <div className="flex min-w-0 items-center gap-2">

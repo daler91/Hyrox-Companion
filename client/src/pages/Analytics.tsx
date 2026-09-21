@@ -138,7 +138,7 @@ export default function Analytics() {
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           {/* A link rather than a tab: the review is scoped to one Monday-Sunday
               week while this page is scoped to the range picker beside it, and a
               fixed-window surface living inside a variable-window page is how you
@@ -152,7 +152,7 @@ export default function Analytics() {
 
           <Select value={dateRange} onValueChange={(value) => setDateRange(value as DateRange)}>
             <SelectTrigger
-              className="w-36"
+              className="order-last col-span-2 w-full sm:order-none sm:col-span-1 sm:w-36"
               data-testid="select-date-range"
               aria-label="Analytics date range"
             >

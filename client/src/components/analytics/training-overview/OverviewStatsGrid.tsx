@@ -27,7 +27,7 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <BarChart3 className="h-5 w-5 text-primary mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2">
               <p className="text-2xl font-bold" data-testid="text-avg-workouts">
                 {stats.avgPerWeek}
               </p>
@@ -47,7 +47,7 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <Zap className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2">
               <p className="text-2xl font-bold" data-testid="text-total-workouts">
                 {stats.totalWorkouts}
               </p>
@@ -67,8 +67,8 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <Footprints className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-bold" data-testid="text-total-running">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <p className="whitespace-nowrap text-2xl font-bold" data-testid="text-total-running">
                 {formatDistanceFromMeters(stats.totalRunningMeters, distanceUnit)}
               </p>
               {previousRunningDisplay !== undefined ? (
@@ -88,7 +88,7 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <Clock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2">
               <p className="text-2xl font-bold" data-testid="text-avg-duration">
                 {stats.avgDuration}
                 <span className="text-sm font-normal text-muted-foreground">min</span>
@@ -110,7 +110,7 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <Flame className="h-5 w-5 text-red-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2">
               <p className="text-2xl font-bold" data-testid="text-avg-rpe">
                 {stats.avgRpe ?? "\u2014"}
               </p>
@@ -131,7 +131,7 @@ export function OverviewStatsGrid({ stats, previousStats }: OverviewStatsGridPro
         <div className="bg-muted/50 p-4 rounded-lg flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" aria-hidden="true" />
           <div className="flex-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2">
               <p className="text-2xl font-bold" data-testid="text-avg-adherence">
                 {stats.avgCompliancePct ?? "\u2014"}
                 {stats.avgCompliancePct != null && (
