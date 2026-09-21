@@ -48,6 +48,24 @@ describe("markdownToEmailHtml", () => {
     expect(markdownToEmailHtml("**not closed and `code`")).toBe("<p>**not closed and `code`</p>");
   });
 
+  // The `\s+(\S.*)` split is what keeps the block patterns backtracking-free:
+  // the marker needs whitespace after it, the whitespace needs content after
+  // it, and the content starts where that run of whitespace ends.
+  const BLOCK_CASES = {
+    "#Heading": "<p>#Heading</p>",
+    "-bullet": "<p>-bullet</p>",
+    "1.numbered": "<p>1.numbered</p>",
+    "#   ": "<p>#</p>",
+    "-": "<p>-</p>",
+    "##  Spaced heading": "<h3>Spaced heading</h3>",
+    "-    Real bullet": "<ul>\n<li>Real bullet</li>\n</ul>",
+    "1)   Numbered": "<ol>\n<li>Numbered</li>\n</ol>",
+  };
+
+  it.each(Object.entries(BLOCK_CASES))("renders %j as %j", (markdown, html) => {
+    expect(markdownToEmailHtml(markdown)).toBe(html);
+  });
+
   it("returns nothing for empty input", () => {
     expect(markdownToEmailHtml("")).toBe("");
     expect(markdownToEmailHtml("\n\n")).toBe("");

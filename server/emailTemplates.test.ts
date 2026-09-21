@@ -396,6 +396,13 @@ describe("email generation", () => {
       expect(html).toContain('<div class="section-title">Coach insights</div>');
     });
 
+    it("keeps the insights section without a date when the timestamp is missing", () => {
+      const undated = { ...digestData, coachInsightsGeneratedAt: null };
+      const { html } = buildAnalysisDigestEmail(baseUser, undated);
+      expect(html).toContain('<div class="section-title">Coach insights</div>');
+      expect(html).not.toContain("Insights updated");
+    });
+
     it("omits the percentile and readiness rows when they are missing", () => {
       const { html } = buildAnalysisDigestEmail(baseUser, {
         ...digestData,

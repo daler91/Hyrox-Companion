@@ -9,6 +9,10 @@ import { sanitizeHtml } from "./sanitize";
  * paragraphs. Links, code, tables and raw HTML stay as literal text. No
  * markdown library is installed server-side and this covers the four-section
  * shape `coachInsightsService` asks for.
+ *
+ * Every line is trimmed before matching, so each block pattern separates its
+ * marker from a capture that starts at a non-space character — the whitespace
+ * run and the content can't overlap, which keeps the matching linear.
  */
 export function markdownToEmailHtml(markdown: string): string {
   const lines = sanitizeHtml(markdown).replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n");
@@ -41,7 +45,7 @@ export function markdownToEmailHtml(markdown: string): string {
       continue;
     }
 
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    const heading = /^(#{1,3})\s+(\S.*)$/u.exec(line);
     if (heading) {
       flushParagraph();
       closeList();
@@ -50,7 +54,7 @@ export function markdownToEmailHtml(markdown: string): string {
       continue;
     }
 
-    const bullet = /^[-*•]\s+(.+)$/.exec(line);
+    const bullet = /^[-*•]\s+(\S.*)$/u.exec(line);
     if (bullet) {
       flushParagraph();
       openList("ul");
@@ -58,7 +62,7 @@ export function markdownToEmailHtml(markdown: string): string {
       continue;
     }
 
-    const numbered = /^\d{1,3}[.)]\s+(.+)$/.exec(line);
+    const numbered = /^\d{1,3}[.)]\s+(\S.*)$/u.exec(line);
     if (numbered) {
       flushParagraph();
       openList("ol");

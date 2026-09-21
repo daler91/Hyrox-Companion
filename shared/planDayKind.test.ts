@@ -23,4 +23,11 @@ describe("isRestLikePlanDay", () => {
   ])("keeps focus %j / workout %j as a session", (focus, mainWorkout) => {
     expect(isRestLikePlanDay(focus, mainWorkout)).toBe(false);
   });
+
+  it("strips a trailing run of stops, and only those", () => {
+    expect(isRestLikePlanDay("Rest!!", "")).toBe(true);
+    expect(isRestLikePlanDay("Complete rest.!.", "")).toBe(true);
+    expect(isRestLikePlanDay("rest!?", "")).toBe(false); // a `?` is not a stop
+    expect(isRestLikePlanDay("...", "")).toBe(false); // stripping cannot invent a match
+  });
 });

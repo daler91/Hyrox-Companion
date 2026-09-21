@@ -224,6 +224,8 @@ export function buildWeeklyReviewReminderEmail(
       ? `<p class="muted">${data.missed} planned session${pluralSuffix(data.missed)} didn't happen — the review is where you decide what to do about that.</p>`
       : "";
 
+  const reviewUrl = `${getAppUrl()}/review?week=${encodeURIComponent(data.weekStart)}`;
+
   const bodyHtml = `    <p class="lead">Hey ${sanitizeHtml(name)}, the training week closes tonight. Here's where it stands:</p>
 
     <div class="stat-grid">
@@ -247,7 +249,7 @@ export function buildWeeklyReviewReminderEmail(
     ${missedNote}
     ${prSection}
     ${intentSection}
-    ${ctaButton(`${getAppUrl()}/review?week=${encodeURIComponent(data.weekStart)}`, "Write this week's review")}`;
+    ${ctaButton(reviewUrl, "Write this week's review")}`;
 
   const html = renderEmailShell({
     title: "Your week is wrapping up",
@@ -324,10 +326,12 @@ export function buildTodaySessionEmail(
     })
     .join("");
 
+  const sessionUrl = `${getAppUrl()}${todaySessionDeepLink(data.sessions)}`;
+
   const bodyHtml = `    <p class="lead">Hey ${sanitizeHtml(name)}, here's what's on the plan for ${data.isTomorrow ? "tomorrow" : "today"}:</p>
 ${items}
     <p class="muted">Open the session to see the full prescription, log it, or move it to another day.</p>
-    ${ctaButton(`${getAppUrl()}${todaySessionDeepLink(data.sessions)}`, data.sessions.length === 1 ? "Open the session" : "See the plan")}`;
+    ${ctaButton(sessionUrl, data.sessions.length === 1 ? "Open the session" : "See the plan")}`;
 
   const html = renderEmailShell({
     title: `${dayWord}'s training`,
@@ -385,6 +389,9 @@ function racePredictionSection(prediction: AnalysisDigestRacePrediction): string
     </div>`
     : "";
   const generatedOn = isoDateOf(prediction.generatedAt);
+  const generatedNote = generatedOn
+    ? `<p class="muted">Prediction updated ${generatedOn}.</p>`
+    : "";
   return `    <div class="section-title">Race prediction</div>
     <div class="stat-grid">
       <div class="stat-card">
@@ -394,7 +401,7 @@ function racePredictionSection(prediction: AnalysisDigestRacePrediction): string
     </div>
     ${percentile}
     ${readiness}
-    ${generatedOn ? `<p class="muted">Prediction updated ${generatedOn}.</p>` : ""}`;
+    ${generatedNote}`;
 }
 
 export function buildAnalysisDigestEmail(
@@ -408,16 +415,21 @@ export function buildAnalysisDigestEmail(
 
   const predictionSection = data.racePrediction ? racePredictionSection(data.racePrediction) : "";
   const insightsGeneratedOn = data.coachInsightsGeneratedAt ? isoDateOf(data.coachInsightsGeneratedAt) : null;
+  const insightsNote = insightsGeneratedOn
+    ? `<p class="muted">Insights updated ${insightsGeneratedOn}.</p>`
+    : "";
   const insightsSection = data.coachInsightsMarkdown
     ? `    <div class="section-title">Coach insights</div>
     <div class="prose">${markdownToEmailHtml(data.coachInsightsMarkdown)}</div>
-    ${insightsGeneratedOn ? `<p class="muted">Insights updated ${insightsGeneratedOn}.</p>` : ""}`
+    ${insightsNote}`
     : "";
+
+  const analyticsUrl = `${getAppUrl()}/analytics`;
 
   const bodyHtml = `    <p class="lead">Hey ${sanitizeHtml(name)}, a fresh read on your training has landed:</p>
 ${predictionSection}
 ${insightsSection}
-    ${ctaButton(`${getAppUrl()}/analytics`, "Open your analytics")}`;
+    ${ctaButton(analyticsUrl, "Open your analytics")}`;
 
   const html = renderEmailShell({
     title: "Your training analysis",

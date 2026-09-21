@@ -532,11 +532,14 @@ export async function processAnalysisDigest(storage: IStorage, user: User, now: 
   };
   const sent = await sendAnalysisDigest(user, data);
 
+  const insightsSuffix = coachInsightsMarkdown ? " · new coach insights" : "";
+  const pushBody = racePrediction
+    ? `Predicted finish ${formatSecondsToClock(racePrediction.totalFinishSeconds)}${insightsSuffix}`
+    : "New coach insights are waiting for you.";
+
   void sendPushToUser(user.id, {
     title: "Your training analysis is ready",
-    body: racePrediction
-      ? `Predicted finish ${formatSecondsToClock(racePrediction.totalFinishSeconds)}${coachInsightsMarkdown ? " · new coach insights" : ""}`
-      : "New coach insights are waiting for you.",
+    body: pushBody,
     url: "/analytics",
   }).catch((err: unknown) => {
     // err is a push/DB delivery error and userId is an opaque Clerk id — no PII content.
