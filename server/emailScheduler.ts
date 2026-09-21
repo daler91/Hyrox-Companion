@@ -9,17 +9,31 @@ import { calculateStreak } from "./routeUtils";
 import { calculatePersonalRecords, countPersonalRecordsInRange } from "./services/analyticsService";
 import { getLocalMondayWeekBoundaries } from "./services/weeklyProgress";
 import type { IStorage } from "./storage";
-import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek } from "./timezone";
+import { addDaysLocal, getLocalDateStr, getLocalDayOfWeek, getLocalHour } from "./timezone";
 
 // Claim windows for the send ledgers. Both are shorter than their nominal
 // cadence on purpose: the stamp now lands when the claim is taken rather than
 // after the send, so a full-cadence window would put each tick a few seconds
 // inside the previous one's and skip it — the mechanism that turned the weekly
 // summary fortnightly. The upstream gates (athlete-local Monday for the
-// summary, one scan per day for the reminder) are what set the real cadence;
-// these only have to stop a second send on the same local day.
+// summary, one enqueue per local day at the notify hour for the reminder) are
+// what set the real cadence; these only have to stop a second send on the same
+// local day.
 const WEEKLY_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 const MISSED_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
+
+/** Local hour the scheduled emails go out when the athlete has not picked one. */
+export const DEFAULT_NOTIFY_HOUR = 7;
+
+export type EmailJobName = "send-weekly-summary" | "send-missed-reminder";
+
+type EmailKind = "weeklySummary" | "missedReminder";
+
+/** The per-type opt-in column behind each email kind (all default off). */
+const EMAIL_TOGGLE_COLUMN: Record<EmailKind, keyof User> = {
+  weeklySummary: "emailWeeklySummary",
+  missedReminder: "emailMissedReminder",
+};
 
 export async function processWeeklySummary(storage: IStorage, user: User, now: Date): Promise<boolean> {
   // Re-fetch the user so an opt-out that happened between enqueue and this
@@ -237,10 +251,36 @@ export async function processMafTestReminder(storage: IStorage, user: User, now:
   return emailSent;
 }
 
-function wantsEmail(user: User, kind: "weeklySummary" | "missedReminder"): boolean {
+function wantsEmail(user: User, kind: EmailKind): boolean {
   if (!user.emailNotifications) return false;
-  if (kind === "weeklySummary") return user.emailWeeklySummary === true;
-  return user.emailMissedReminder === true;
+  return user[EMAIL_TOGGLE_COLUMN[kind]] === true;
+}
+
+/**
+ * Which email jobs this hourly tick should enqueue for one athlete.
+ *
+ * The cron fires every hour in UTC; this is where each email's own moment is
+ * resolved against the athlete's wall clock. The scheduled emails go out at
+ * `notifyHour` local (default 07:00), the weekly summary only on their local
+ * Monday. Pure, so the gating table is unit-testable without the queue.
+ *
+ * Throws on an unusable `userTimezone` (Intl rejects the name); the scan
+ * catches that per user so one stale zone cannot silence everyone else.
+ */
+export function planEmailJobsForUser(user: User, now: Date): EmailJobName[] {
+  const tz = user.userTimezone;
+  const localHour = getLocalHour(now, tz);
+  const localDayOfWeek = getLocalDayOfWeek(now, tz);
+  const atNotifyHour = localHour === (user.notifyHour ?? DEFAULT_NOTIFY_HOUR);
+
+  const jobs: EmailJobName[] = [];
+  if (atNotifyHour && localDayOfWeek === 1 && wantsEmail(user, "weeklySummary")) {
+    jobs.push("send-weekly-summary");
+  }
+  if (atNotifyHour && wantsEmail(user, "missedReminder")) {
+    jobs.push("send-missed-reminder");
+  }
+  return jobs;
 }
 
 export async function checkAndSendEmailsForUser(storage: IStorage, user: User): Promise<string[]> {
@@ -287,7 +327,7 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     // logs only enqueue counts
     // (integers) and a static context tag; no PII or secrets.
     // bearer:disable javascript_lang_logger_leak
-    logger.info({ context: "email" }, `Cron: Enqueuing jobs for ${usersToCheck.length} email user(s) + ${dueMafUsers.length} due MAF test(s)`);
+    logger.info({ context: "email" }, `Cron: Planning jobs for ${usersToCheck.length} email user(s) + ${dueMafUsers.length} due MAF test(s)`);
 
     // Await every enqueue so reported counts reflect what actually made it into
     // the queue (CODEBASE_AUDIT.md §5b). Fire-and-forget would overreport when
@@ -296,20 +336,25 @@ export async function runEmailCronJob(storage: IStorage): Promise<{ usersChecked
     const ops: Promise<unknown>[] = [];
     const meta: EnqueueMeta[] = [];
     // Respect per-type email toggles AND per-user timezone when enqueueing.
-    // The cron fires daily, so a Hawaii user's Monday (which occurs in
-    // UTC-Monday afternoon through UTC-Tuesday morning) is still covered:
-    // when the cron fires on UTC-Tuesday, getLocalDayOfWeek resolves to 1
-    // for Hawaii but 2 for UTC users — only the Hawaii user gets a
-    // weekly-summary job enqueued on that pass (C10).
+    // The cron ticks hourly in UTC and planEmailJobsForUser resolves each
+    // athlete's notify hour and weekday against THEIR timezone, so a Hawaii
+    // user's Monday 07:00 (UTC Monday 17:00) and a Sydney user's Monday 07:00
+    // (UTC Sunday 21:00) each get their weekly-summary job on exactly one
+    // tick (C10).
     for (const user of usersToCheck) {
-      const isUserLocalMonday = getLocalDayOfWeek(now, user.userTimezone) === 1;
-      if (isUserLocalMonday && wantsEmail(user, "weeklySummary")) {
-        ops.push(sendJobNoRetry("send-weekly-summary", { userId: user.id }));
-        meta.push({ userId: user.id, jobName: "send-weekly-summary" });
+      let jobs: EmailJobName[];
+      try {
+        jobs = planEmailJobsForUser(user, now);
+      } catch (err) {
+        // An unrecognised stored timezone. Skip this athlete rather than let
+        // one bad row abort the scan for everyone. userId is an opaque id.
+        // bearer:disable javascript_lang_logger_leak
+        logger.error({ context: "email", userId: user.id, err }, "Could not plan email jobs for user");
+        continue;
       }
-      if (wantsEmail(user, "missedReminder")) {
-        ops.push(sendJobNoRetry("send-missed-reminder", { userId: user.id }));
-        meta.push({ userId: user.id, jobName: "send-missed-reminder" });
+      for (const jobName of jobs) {
+        ops.push(sendJobNoRetry(jobName, { userId: user.id }));
+        meta.push({ userId: user.id, jobName });
       }
     }
 

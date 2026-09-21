@@ -32,6 +32,7 @@ let stravaAutoSyncTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookEnsureTask: ReturnType<typeof cron.schedule> | null = null;
 let recycleBinPurgeTask: ReturnType<typeof cron.schedule> | null = null;
 let stravaWebhookStartupTimer: ReturnType<typeof setTimeout> | null = null;
+let emailCatchUpTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Flags older than this are considered orphaned (worker crashed mid-job).
 // 15min gives a comfortable margin above the longest expected auto-coach
@@ -47,7 +48,9 @@ const STARTUP_CATCH_UP_DELAY_MS = 30_000;
 // nutritionEmbeddingBackfill once collided with those reserved slots, letting
 // a running backfill silently skip boot migrations).
 export const CRON_LOCK_KEYS = {
-  dailyEmail: 42_010_001n,
+  // Renamed from `dailyEmail` when the tick went hourly; the numeric key is
+  // unchanged so old and new replicas contend on the same lock mid-deploy.
+  emailScheduler: 42_010_001n,
   idempotencyCleanup: 42_010_002n,
   aiUsageCleanup: 42_010_003n,
   staleAutoCoaching: 42_010_004n,
@@ -104,18 +107,23 @@ function scheduleLockedCronJob(
   );
 }
 
-/** Start the internal cron scheduler. Runs email checks daily at 09:00 UTC. */
+/**
+ * Start the internal cron scheduler. The email scan ticks hourly; each email
+ * fires per athlete at their own local notify hour (emailScheduler.ts).
+ */
 export function startCron(storage: IStorage): void {
   if (task) {
     logger.warn({ context: "cron" }, "Cron already running — skipping duplicate start");
     return;
   }
 
-  // "0 9 * * *" = every day at 09:00 UTC
+  // "0 * * * *" = every hour on the hour, UTC. The scan itself decides, per
+  // athlete, whether this tick is their notify hour (or Sunday 17:00 local for
+  // the weekly review reminder), so a fixed UTC schedule serves every timezone.
   task = cron.schedule(
-    "0 9 * * *",
+    "0 * * * *",
     async () => {
-      await runCronJobWithLock("dailyEmail", async () => {
+      await runCronJobWithLock("emailScheduler", async () => {
         logger.info({ context: "cron" }, "Running scheduled email cron job");
         try {
           const result = await runEmailCronJob(storage);
@@ -131,7 +139,10 @@ export function startCron(storage: IStorage): void {
     { timezone: "Etc/UTC" },
   );
 
-  logger.info({ context: "cron" }, "Email cron scheduled: daily at 09:00 UTC");
+  logger.info(
+    { context: "cron" },
+    "Email cron scheduled: hourly, firing per athlete at their local notify hour (weekly review reminder Sunday 17:00 local)",
+  );
 
   // Daily idempotency cache cleanup (CODEBASE_AUDIT.md §2). Rows have a 24h
   // TTL on `expiresAt`; this prunes stale entries so the table does not grow
@@ -480,32 +491,34 @@ export function startCron(storage: IStorage): void {
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "cron" }, "Recycle bin purge scheduled: daily at 03:45 UTC");
 
-  // Run a catch-up if the server started after 09:00 UTC (e.g. Railway restart).
-  // The idempotency guards in emailScheduler prevent duplicate sends.
-  const currentHour = new Date().getUTCHours();
-  if (currentHour >= 9) {
-    const runCatchUp = async () => {
-      try {
-        await runCronJobWithLock("startupEmailCatchUp", async () => {
-          logger.info({ context: "cron" }, "Running startup email catch-up (server started after 09:00 UTC)");
-          try {
-            const result = await runEmailCronJob(storage);
-            logger.info(
-              { context: "cron", ...result },
-              `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
-            );
-          } catch (err) {
-            logger.error({ context: "cron", err }, "Startup email catch-up failed");
-          }
-        });
-      } catch (err) {
-        logger.error({ context: "cron", err }, "Startup email catch-up task failed before job execution");
-      }
-    };
-    setTimeout(() => {
-      void runCatchUp();
-    }, STARTUP_CATCH_UP_DELAY_MS);
-  }
+  // Run one catch-up scan shortly after boot (e.g. a Railway restart that
+  // straddled the top of an hour). Always safe: the scan gates every email on
+  // the athlete's local hour and the claim ledgers stop a second send.
+  const runCatchUp = async () => {
+    try {
+      await runCronJobWithLock("startupEmailCatchUp", async () => {
+        logger.info({ context: "cron" }, "Running startup email catch-up scan");
+        try {
+          const result = await runEmailCronJob(storage);
+          logger.info(
+            { context: "cron", ...result },
+            `Startup catch-up complete: ${result.emailsSent} sent, ${result.usersChecked} checked`,
+          );
+        } catch (err) {
+          logger.error({ context: "cron", err }, "Startup email catch-up failed");
+        }
+      });
+    } catch (err) {
+      logger.error({ context: "cron", err }, "Startup email catch-up task failed before job execution");
+    }
+  };
+  // STARTUP_CATCH_UP_DELAY_MS is a compile-time constant, never request data.
+  emailCatchUpTimer = setTimeout(() => { // DevSkim: ignore DS172411
+    emailCatchUpTimer = null;
+    void runCatchUp();
+  }, STARTUP_CATCH_UP_DELAY_MS);
+  // A pending boot-time scan must never hold the process open on shutdown.
+  emailCatchUpTimer.unref();
 }
 
 type ScheduledTask = ReturnType<typeof cron.schedule>;
@@ -538,6 +551,10 @@ export async function stopCron(): Promise<void> {
   if (stravaWebhookStartupTimer) {
     clearTimeout(stravaWebhookStartupTimer);
     stravaWebhookStartupTimer = null;
+  }
+  if (emailCatchUpTimer) {
+    clearTimeout(emailCatchUpTimer);
+    emailCatchUpTimer = null;
   }
   recycleBinPurgeTask = await stopTask(recycleBinPurgeTask);
 }

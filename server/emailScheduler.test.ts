@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  planEmailJobsForUser,
   processMafTestReminder,
   processMissedWorkoutReminder,
   processWeeklySummary,
@@ -38,21 +39,35 @@ type SchedulerUserOverrides = {
   id: string | number;
   email: string;
   userTimezone?: string;
+  notifyHour?: number | null;
   emailNotifications?: boolean;
   emailWeeklySummary?: boolean | null;
   emailMissedReminder?: boolean | null;
+  emailWeeklyReviewReminder?: boolean | null;
+  emailTodaySession?: boolean | null;
+  emailAnalysisDigest?: boolean | null;
   lastWeeklySummaryAt?: Date | null;
   lastMissedReminderAt?: Date | null;
+  lastWeeklyReviewReminderAt?: Date | null;
+  lastTodaySessionAt?: Date | null;
+  lastAnalysisDigestAt?: Date | null;
 };
 
 function makeMockUser(overrides: SchedulerUserOverrides) {
   return {
     userTimezone: 'UTC',
+    notifyHour: 7,
     emailNotifications: true,
     emailWeeklySummary: true,
     emailMissedReminder: true,
+    emailWeeklyReviewReminder: false,
+    emailTodaySession: false,
+    emailAnalysisDigest: false,
     lastWeeklySummaryAt: null,
     lastMissedReminderAt: null,
+    lastWeeklyReviewReminderAt: null,
+    lastTodaySessionAt: null,
+    lastAnalysisDigestAt: null,
     ...overrides,
   };
 }
@@ -62,8 +77,9 @@ describe('runEmailCronJob', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    // Set to a Monday so weekly summary jobs are enqueued
-    vi.setSystemTime(new Date('2023-10-16T12:00:00Z'));
+    // A Monday at 07:00 UTC — the default notify hour for these UTC fixtures —
+    // so both the weekly summary and the missed reminder are due.
+    vi.setSystemTime(new Date('2023-10-16T07:00:00Z'));
 
     mockStorage = {
       plans: { markMissedPlanDays: vi.fn().mockResolvedValue(0) },
@@ -121,8 +137,8 @@ describe('runEmailCronJob', () => {
 
   it('should only enqueue missed-reminder jobs on non-Monday', async () => {
     const { sendJobNoRetry } = await import('./queue');
-    // Set to a Tuesday
-    vi.setSystemTime(new Date('2023-10-17T12:00:00Z'));
+    // Set to a Tuesday (still at the notify hour)
+    vi.setSystemTime(new Date('2023-10-17T07:00:00Z'));
 
     const result = await runEmailCronJob(mockStorage);
 
@@ -199,11 +215,12 @@ describe('runEmailCronJob', () => {
     it('enqueues the weekly summary for a Sydney user when it is Monday in Sydney but still Sunday in UTC', async () => {
       const { sendJobNoRetry } = await import('./queue');
       // 2026-05-31 Sunday 23:00 UTC = 2026-06-01 Monday 09:00 in Australia/Sydney.
+      // Both athletes have 09:00 as their notify hour, so only the weekday differs.
       vi.setSystemTime(new Date('2026-05-31T23:00:00Z'));
 
       mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-        makeMockUser({ id: 'sydney-user', email: 'sydney@example.com', userTimezone: 'Australia/Sydney', emailMissedReminder: false }),
-        makeMockUser({ id: 'utc-user', email: 'utc@example.com', emailMissedReminder: false }),
+        makeMockUser({ id: 'sydney-user', email: 'sydney@example.com', userTimezone: 'Australia/Sydney', notifyHour: 9, emailMissedReminder: false }),
+        makeMockUser({ id: 'utc-user', email: 'utc@example.com', notifyHour: 23, emailMissedReminder: false }),
       ]);
 
       const result = await runEmailCronJob(mockStorage);
@@ -217,11 +234,12 @@ describe('runEmailCronJob', () => {
 
     it('still enqueues the weekly summary for a Hawaii user when it is Monday in Hawaii but already Tuesday in UTC', async () => {
       const { sendJobNoRetry } = await import('./queue');
-      // 2026-06-02 Tuesday 06:00 UTC = 2026-06-01 Monday 20:00 in Pacific/Honolulu (UTC-10).
+      // 2026-06-02 Tuesday 06:00 UTC = 2026-06-01 Monday 20:00 in Pacific/Honolulu (UTC-10),
+      // an evening notify hour.
       vi.setSystemTime(new Date('2026-06-02T06:00:00Z'));
 
       mockStorage.users.getUsersWithEmailNotifications = vi.fn().mockResolvedValue([
-        makeMockUser({ id: 'hawaii-user', email: 'hi@example.com', userTimezone: 'Pacific/Honolulu', emailMissedReminder: false }),
+        makeMockUser({ id: 'hawaii-user', email: 'hi@example.com', userTimezone: 'Pacific/Honolulu', notifyHour: 20, emailMissedReminder: false }),
       ]);
 
       const result = await runEmailCronJob(mockStorage);
@@ -230,6 +248,70 @@ describe('runEmailCronJob', () => {
       expect(result.emailsSent).toBe(1);
       expect(sendJobNoRetry).toHaveBeenCalledWith('send-weekly-summary', { userId: 'hawaii-user' });
     });
+  });
+});
+
+describe('planEmailJobsForUser (notify hour gate)', () => {
+  const user = (overrides: Partial<SchedulerUserOverrides> = {}) =>
+    makeMockUser({ id: 'u1', email: 'u1@example.com', ...overrides }) as never;
+
+  it('plans nothing outside the notify hour and both daily jobs at it', () => {
+    // Monday 06:00 UTC vs 07:00 UTC for a UTC athlete on the default hour.
+    expect(planEmailJobsForUser(user(), new Date('2026-07-20T06:00:00Z'))).toEqual([]);
+    expect(planEmailJobsForUser(user(), new Date('2026-07-20T07:00:00Z'))).toEqual([
+      'send-weekly-summary',
+      'send-missed-reminder',
+    ]);
+  });
+
+  it('honours a chosen notify hour in the athlete\'s own timezone', () => {
+    // Tuesday 18:00 in Los Angeles is 01:00 UTC on Wednesday.
+    const la = user({ userTimezone: 'America/Los_Angeles', notifyHour: 18 });
+    expect(planEmailJobsForUser(la, new Date('2026-07-22T01:00:00Z'))).toEqual(['send-missed-reminder']);
+    expect(planEmailJobsForUser(la, new Date('2026-07-21T14:00:00Z'))).toEqual([]);
+  });
+
+  it('falls back to 07:00 when no notify hour is stored', () => {
+    expect(planEmailJobsForUser(user({ notifyHour: null }), new Date('2026-07-21T07:00:00Z'))).toEqual([
+      'send-missed-reminder',
+    ]);
+  });
+
+  it('only plans the weekly summary on the local Monday', () => {
+    expect(planEmailJobsForUser(user(), new Date('2026-07-21T07:00:00Z'))).toEqual(['send-missed-reminder']);
+  });
+
+  it('throws on an unusable timezone so the scan can skip just that athlete', () => {
+    expect(() => planEmailJobsForUser(user({ userTimezone: 'Not/AZone' }), new Date())).toThrow();
+  });
+});
+
+describe('runEmailCronJob resilience', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('keeps enqueueing for other athletes when one has a broken timezone', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2023-10-17T07:00:00Z'));
+    const { sendJobNoRetry } = await import('./queue');
+    const storage = {
+      plans: { markMissedPlanDays: vi.fn().mockResolvedValue(0) },
+      users: {
+        getUsersWithEmailNotifications: vi.fn().mockResolvedValue([
+          makeMockUser({ id: 'broken', email: 'b@example.com', userTimezone: 'Not/AZone' }),
+          makeMockUser({ id: 'fine', email: 'f@example.com' }),
+        ]),
+        getUsersWithDueMafBaselineTest: vi.fn().mockResolvedValue([]),
+      },
+    } as unknown as IStorage;
+
+    const result = await runEmailCronJob(storage);
+
+    expect(result.emailsSent).toBe(1);
+    expect(sendJobNoRetry).toHaveBeenCalledWith('send-missed-reminder', { userId: 'fine' });
+    expect(sendJobNoRetry).not.toHaveBeenCalledWith(expect.anything(), { userId: 'broken' });
   });
 });
 
