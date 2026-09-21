@@ -30,12 +30,15 @@ const REST_WORKOUT = new Set([
   "complete rest or a light walk",
 ]);
 
+/** Trailing `.`/`!` run, stripped by scanning back so no regex backtracks. */
+function stripTrailingStops(text: string): string {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === "." || text[end - 1] === "!")) end -= 1;
+  return text.slice(0, end);
+}
+
 function normalise(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[.!]+$/, "")
-    .replace(/\s+/g, " ");
+  return stripTrailingStops(text.trim().toLowerCase()).replace(/\s+/g, " ");
 }
 
 export function isRestLikePlanDay(focus: string, mainWorkout: string): boolean {
