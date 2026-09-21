@@ -109,7 +109,8 @@ function decodeBase64Prefix(base64: string, byteCount: number): Uint8Array | nul
   try {
     const binary = atob(prefix);
     const out = new Uint8Array(Math.min(binary.length, byteCount));
-    for (let i = 0; i < out.length; i++) out[i] = binary.charCodeAt(i);
+    // atob yields one code unit per byte (all < 0x100), so codePointAt === charCodeAt here.
+    for (let i = 0; i < out.length; i++) out[i] = binary.codePointAt(i) ?? 0;
     return out;
   } catch {
     return null; // not valid base64

@@ -70,50 +70,50 @@ function isPrivateIpv4(octets: readonly number[]): boolean {
   return false;
 }
 
+/** Loopback `::1` and the unspecified address `::`, in both compressed and expanded form. */
+const IPV6_LOCAL_LITERALS = new Set<string>([
+  // Loopback ::1 — any all-zeros prefix ending in :1
+  "::1",
+  "0:0:0:0:0:0:0:1",
+  // The unspecified address `::`. Connecting to it reaches localhost on Linux,
+  // exactly like 0.0.0.0, which is already rejected on the v4 side.
+  "::",
+  "0:0:0:0:0:0:0:0",
+]);
+
+/**
+ * Prefixes under which an IPv6 hostname embeds an IPv4 address in its low
+ * 32 bits: IPv4-mapped `::ffff:` and NAT64 (RFC 6052) `64:ff9b::/96` plus its
+ * local-use prefix `64:ff9b:1::/48`. A NAT64 resolver turns `64:ff9b::7f00:1`
+ * into a connection to 127.0.0.1, so the embedded address gets the v4 check.
+ * Both the dotted form and the hex-pair form WHATWG URL emits after
+ * normalization (e.g. ::ffff:7f00:1) are accepted.
+ */
+const EMBEDDED_IPV4_DOTTED = /^(?:::ffff:|64:ff9b(?::1)?::)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i;
+const EMBEDDED_IPV4_HEX = /^(?:::ffff:|64:ff9b(?::1)?::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i;
+
+/** The IPv4 address embedded in a mapped / NAT64 IPv6 hostname, if any. */
+function embeddedIpv4(hostname: string): readonly number[] | null {
+  const dotted = EMBEDDED_IPV4_DOTTED.exec(hostname);
+  if (dotted) return parseIpv4(dotted[1]);
+  const hex = EMBEDDED_IPV4_HEX.exec(hostname);
+  if (hex) return ipv4FromHexPair(Number.parseInt(hex[1], 16), Number.parseInt(hex[2], 16));
+  return null;
+}
+
 /**
  * Lower-cased, bracket-stripped hostname check for IPv6 loopback / unique-
  * local-address (ULA) prefixes. URLs use bracketed v6 hostnames; URL.hostname
  * strips the brackets and lower-cases for us.
  */
 function isPrivateIpv6(hostname: string): boolean {
-  // Loopback ::1 — any all-zeros prefix ending in :1
-  if (hostname === "::1" || hostname === "0:0:0:0:0:0:0:1") return true;
-  // The unspecified address `::`. Connecting to it reaches localhost on Linux,
-  // exactly like 0.0.0.0, which is already rejected on the v4 side.
-  if (hostname === "::" || hostname === "0:0:0:0:0:0:0:0") return true;
+  if (IPV6_LOCAL_LITERALS.has(hostname)) return true;
   // Unique local addresses fc00::/7 — first byte 0xfc or 0xfd
-  if (/^fc[0-9a-f]{2}:/i.test(hostname)) return true;
-  if (/^fd[0-9a-f]{2}:/i.test(hostname)) return true;
+  if (/^f[cd][0-9a-f]{2}:/i.test(hostname)) return true;
   // Link-local fe80::/10 — first two bytes 0xfe80–0xfebf
   if (/^fe[89ab][0-9a-f]:/i.test(hostname)) return true;
-  // IPv4-mapped IPv6 ::ffff:127.0.0.1 — accept both the dotted form and the
-  // hex-pair form WHATWG URL emits after normalization (e.g. ::ffff:7f00:1).
-  const v4MappedDotted = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(hostname);
-  if (v4MappedDotted) {
-    const v4 = parseIpv4(v4MappedDotted[1]);
-    if (v4 && isPrivateIpv4(v4)) return true;
-  }
-  const v4MappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(hostname);
-  if (v4MappedHex) {
-    const high = Number.parseInt(v4MappedHex[1], 16);
-    const low = Number.parseInt(v4MappedHex[2], 16);
-    if (isPrivateIpv4(ipv4FromHexPair(high, low))) return true;
-  }
-  // NAT64 (RFC 6052) — 64:ff9b::/96 and the local prefix 64:ff9b:1::/48 embed an
-  // IPv4 address in the low 32 bits, so a NAT64 resolver turns
-  // `64:ff9b::7f00:1` into a connection to 127.0.0.1.
-  const nat64 = /^64:ff9b(?::1)?::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(hostname);
-  if (nat64) {
-    const high = Number.parseInt(nat64[1], 16);
-    const low = Number.parseInt(nat64[2], 16);
-    if (isPrivateIpv4(ipv4FromHexPair(high, low))) return true;
-  }
-  const nat64Dotted = /^64:ff9b(?::1)?::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(hostname);
-  if (nat64Dotted) {
-    const v4 = parseIpv4(nat64Dotted[1]);
-    if (v4 && isPrivateIpv4(v4)) return true;
-  }
-  return false;
+  const embedded = embeddedIpv4(hostname);
+  return embedded !== null && isPrivateIpv4(embedded);
 }
 
 /** Split two 16-bit halves of an embedded IPv4 address into four octets. */

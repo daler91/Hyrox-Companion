@@ -52,6 +52,78 @@ function getDotColor(isTodayDate: boolean, isPast: boolean) {
   return "bg-muted-foreground/50";
 }
 
+function assignForwardedRef<T>(ref: React.ForwardedRef<T>, node: T | null) {
+  if (typeof ref === "function") {
+    ref(node);
+  } else if (ref) {
+    ref.current = node;
+  }
+}
+
+interface TimelineDateHeaderProps {
+  readonly date: string;
+  readonly dateObj: Date;
+  readonly isTodayDate: boolean;
+  readonly isPast: boolean;
+  readonly fuelling?: FuellingDayPoint;
+  readonly weekNumber?: number | null;
+  readonly onAddAnnotation?: (date: string) => void;
+}
+
+function TimelineDateHeader({
+  date,
+  dateObj,
+  isTodayDate,
+  isPast,
+  fuelling,
+  weekNumber,
+  onAddAnnotation,
+}: TimelineDateHeaderProps) {
+  const label = getDateLabel(dateObj);
+  // Hover-revealed on desktop, always-visible below md so touch users see
+  // it without needing a hover event. The today row always shows the
+  // chip, regardless of breakpoint — that's the primary discoverable
+  // entry point for new users who have not yet created any annotations.
+  const addNoteClassName = isTodayDate
+    ? ""
+    : "opacity-100 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity";
+
+  return (
+    <div className={cn("flex items-center gap-3 mb-3 py-2", isTodayDate && "text-primary font-semibold")}>
+      <div className={`h-3 w-3 rounded-full ${getDotColor(isTodayDate, isPast)}`} />
+      <span className={cn("whitespace-nowrap", !isTodayDate && "text-muted-foreground")}>
+        {label}
+      </span>
+      {/* Wraps internally on narrow screens so the date label keeps one
+          line and the fuelling chip / week / note controls stack instead. */}
+      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+        {fuelling ? <FuellingDayChip date={date} fuelling={fuelling} /> : null}
+        {weekNumber ? <Badge variant="outline">Week {weekNumber}</Badge> : null}
+        {onAddAnnotation ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-8 text-xs text-muted-foreground hover:text-foreground md:h-7",
+              // Past/future rows drop the label on phones so the date, the
+              // fuelling chip and the week badge share one line; today
+              // keeps it, being the entry point new users learn from.
+              isTodayDate ? "px-2" : "w-8 px-0 sm:w-auto sm:px-2",
+              addNoteClassName,
+            )}
+            onClick={() => onAddAnnotation(date)}
+            aria-label={`Log a note for ${label}`}
+            data-testid={`button-add-annotation-${date}`}
+          >
+            <StickyNote className={cn("h-3.5 w-3.5", isTodayDate ? "mr-1" : "sm:mr-1")} aria-hidden="true" />
+            <span className={isTodayDate ? undefined : "hidden sm:inline"}>Note</span>
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupProps>(
   (
     {
@@ -104,25 +176,19 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
     // groups for annotation start dates and for today (the rest-day marker
     // the initial scroll and the "Jump to today" pill anchor to), so this is
     // a guard against future regressions.
-    if (entries.length === 0 && !hasAnnotations && !isTodayDate) {
+    const isEmptyDay = entries.length === 0 && !hasAnnotations;
+    if (isEmptyDay && !isTodayDate) {
       return null;
     }
-
-    // Hover-revealed on desktop, always-visible below md so touch users see
-    // it without needing a hover event. The today row always shows the
-    // chip, regardless of breakpoint — that's the primary discoverable
-    // entry point for new users who have not yet created any annotations.
-    const addNoteClassName = isTodayDate
-      ? ""
-      : "opacity-100 md:opacity-0 md:group-hover/date:opacity-100 transition-opacity";
+    const isRestDayToday = isEmptyDay && isTodayDate;
+    const annotationHandlers =
+      hasAnnotations && onEditAnnotation && onDeleteAnnotation
+        ? { onEdit: onEditAnnotation, onDelete: onDeleteAnnotation }
+        : null;
 
     const composedRef = (node: HTMLDivElement | null) => {
       setDropNodeRef(node);
-      if (typeof ref === "function") {
-        ref(node);
-      } else if (ref) {
-        ref.current = node;
-      }
+      assignForwardedRef(ref, node);
     };
 
     return (
@@ -137,60 +203,29 @@ const TimelineDateGroupComponent = forwardRef<HTMLDivElement, TimelineDateGroupP
         {isTodayDate && (
           <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary rounded-full" />
         )}
-        <div
-          className={`flex items-center gap-3 mb-3 py-2 ${
-            isTodayDate ? "text-primary font-semibold" : ""
-          }`}
-        >
-          <div
-            className={`h-3 w-3 rounded-full ${getDotColor(isTodayDate, isPast)}`}
-          />
-          <span className={cn("whitespace-nowrap", !isTodayDate && "text-muted-foreground")}>
-            {getDateLabel(dateObj)}
-          </span>
-          {/* Wraps internally on narrow screens so the date label keeps one
-              line and the fuelling chip / week / note controls stack instead. */}
-          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-            {fuelling ? <FuellingDayChip date={date} fuelling={fuelling} /> : null}
-            {entries[0]?.weekNumber && (
-              <Badge variant="outline">Week {entries[0].weekNumber}</Badge>
-            )}
-            {onAddAnnotation ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  "h-8 text-xs text-muted-foreground hover:text-foreground md:h-7",
-                  // Past/future rows drop the label on phones so the date, the
-                  // fuelling chip and the week badge share one line; today
-                  // keeps it, being the entry point new users learn from.
-                  isTodayDate ? "px-2" : "w-8 px-0 sm:w-auto sm:px-2",
-                  addNoteClassName,
-                )}
-                onClick={() => onAddAnnotation(date)}
-                aria-label={`Log a note for ${getDateLabel(dateObj)}`}
-                data-testid={`button-add-annotation-${date}`}
-              >
-                <StickyNote className={cn("h-3.5 w-3.5", isTodayDate ? "mr-1" : "sm:mr-1")} aria-hidden="true" />
-                <span className={isTodayDate ? undefined : "hidden sm:inline"}>Note</span>
-              </Button>
-            ) : null}
-          </div>
-        </div>
+        <TimelineDateHeader
+          date={date}
+          dateObj={dateObj}
+          isTodayDate={isTodayDate}
+          isPast={isPast}
+          fuelling={fuelling}
+          weekNumber={entries[0]?.weekNumber}
+          onAddAnnotation={onAddAnnotation}
+        />
 
         <div className="space-y-2 ml-6">
-          {isTodayDate && entries.length === 0 && !hasAnnotations ? (
+          {isRestDayToday ? (
             <p className="text-sm text-muted-foreground" data-testid="text-rest-day-today">
               Rest day — nothing scheduled.
             </p>
           ) : null}
-          {hasAnnotations && onEditAnnotation && onDeleteAnnotation
+          {annotationHandlers
             ? annotations?.map((annotation) => (
                 <TimelineAnnotationCard
                   key={annotation.id}
                   annotation={annotation}
-                  onEdit={onEditAnnotation}
-                  onDelete={onDeleteAnnotation}
+                  onEdit={annotationHandlers.onEdit}
+                  onDelete={annotationHandlers.onDelete}
                   isDeleting={isAnnotationDeleting}
                 />
               ))

@@ -100,7 +100,7 @@ export function GeneratePlanScheduleStep({
             Rest Days{" "}
             <span className="text-muted-foreground font-normal">(select {requiredRestDays})</span>
           </legend>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Rest day selection">
+          <div className="flex flex-wrap gap-1.5">
             {DAY_NAMES.map((day) => (
               <Button
                 key={day}

@@ -86,94 +86,104 @@ function useSwipeToDismiss(
   );
 }
 
-export function ResponsiveSheet({
+type SheetChromeProps = Pick<
+  ResponsiveSheetProps,
+  "open" | "onOpenChange" | "title" | "description" | "children" | "contentClassName" | "testId"
+>;
+
+function MobileSheet({
   open,
   onOpenChange,
   title,
   description,
   children,
   contentClassName,
-  mobileFullHeight = false,
-  desktopFullHeight = false,
   testId,
-}: ResponsiveSheetProps) {
-  const isMobile = useIsMobile();
+  fullHeight,
+}: SheetChromeProps & { readonly fullHeight: boolean }) {
   const contentRef = React.useRef<HTMLDivElement>(null);
   const onGrabPointerDown = useSwipeToDismiss(contentRef, onOpenChange);
+  const header = (
+    <SheetHeader className={fullHeight ? "sr-only" : "shrink-0 text-left"}>
+      <SheetTitle>{title}</SheetTitle>
+      {description ? <SheetDescription>{description}</SheetDescription> : null}
+    </SheetHeader>
+  );
 
-  if (isMobile) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          ref={contentRef}
-          side="bottom"
-          // Focus the sheet container rather than its first control: Radix
-          // otherwise lands on the title's edit button, whose tooltip opens on
-          // focus and sits over the header on touch screens (no hover to
-          // dismiss it). Focus stays inside the dialog for the trap.
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            (event.currentTarget as HTMLElement | null)?.focus();
-          }}
-          className={cn(
-            mobileFullHeight
-              ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden rounded-none p-0"
-              // dvh, not vh: with the browser's URL bar showing, 90vh of a
-              // phone is taller than the visible area and the bottom of the
-              // sheet (usually the primary button) was clipped off-screen.
-              : "max-h-[90dvh] overflow-y-auto rounded-t-2xl px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3",
-            contentClassName,
-          )}
-          data-testid={testId}
-        >
-          {mobileFullHeight ? (
-            <SheetHeader className="sr-only">
-              <SheetTitle>{title}</SheetTitle>
-              {description ? <SheetDescription>{description}</SheetDescription> : null}
-            </SheetHeader>
-          ) : (
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        ref={contentRef}
+        side="bottom"
+        // Focus the sheet container rather than its first control: Radix
+        // otherwise lands on the title's edit button, whose tooltip opens on
+        // focus and sits over the header on touch screens (no hover to
+        // dismiss it). Focus stays inside the dialog for the trap.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+        className={cn(
+          fullHeight
+            ? "flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden rounded-none p-0"
+            // dvh, not vh: with the browser's URL bar showing, 90vh of a
+            // phone is taller than the visible area and the bottom of the
+            // sheet (usually the primary button) was clipped off-screen.
+            : "max-h-[90dvh] overflow-y-auto rounded-t-2xl px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3",
+          contentClassName,
+        )}
+        data-testid={testId}
+      >
+        {fullHeight ? (
+          header
+        ) : (
+          <div
+            className="-mx-4 -mt-3 cursor-grab touch-none select-none px-4 pt-3 active:cursor-grabbing"
+            onPointerDown={onGrabPointerDown}
+            data-testid="sheet-grab-zone"
+          >
             <div
-              className="-mx-4 -mt-3 cursor-grab touch-none select-none px-4 pt-3 active:cursor-grabbing"
-              onPointerDown={onGrabPointerDown}
-              data-testid="sheet-grab-zone"
-            >
-              <div
-                className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-muted-foreground/40"
-                aria-hidden="true"
-              />
-              <SheetHeader className="shrink-0 text-left">
-                <SheetTitle>{title}</SheetTitle>
-                {description ? <SheetDescription>{description}</SheetDescription> : null}
-              </SheetHeader>
-            </div>
-          )}
-          <div className={mobileFullHeight ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "mt-4"}>
-            {children}
+              className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-muted-foreground/40"
+              aria-hidden="true"
+            />
+            {header}
           </div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
+        )}
+        <div className={fullHeight ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "mt-4"}>
+          {children}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
+function DesktopDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  contentClassName,
+  testId,
+  fullHeight,
+}: SheetChromeProps & { readonly fullHeight: boolean }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
           "sm:max-w-lg",
-          desktopFullHeight
-            ? "h-[90vh] flex flex-col overflow-hidden"
-            : "max-h-[90vh] overflow-hidden",
+          fullHeight ? "h-[90vh] flex flex-col overflow-hidden" : "max-h-[90vh] overflow-hidden",
           contentClassName,
         )}
         data-testid={testId}
       >
-        <DialogHeader className={desktopFullHeight ? "shrink-0" : undefined}>
+        <DialogHeader className={fullHeight ? "shrink-0" : undefined}>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         <div
           className={
-            desktopFullHeight
+            fullHeight
               ? "min-h-0 flex-1 flex flex-col overflow-hidden"
               : "max-h-[calc(90vh-7rem)] overflow-y-auto pr-1"
           }
@@ -182,5 +192,18 @@ export function ResponsiveSheet({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function ResponsiveSheet({
+  mobileFullHeight = false,
+  desktopFullHeight = false,
+  ...chrome
+}: ResponsiveSheetProps) {
+  const isMobile = useIsMobile();
+  return isMobile ? (
+    <MobileSheet {...chrome} fullHeight={mobileFullHeight} />
+  ) : (
+    <DesktopDialog {...chrome} fullHeight={desktopFullHeight} />
   );
 }

@@ -214,7 +214,7 @@ export function RecycleBinCard() {
         open={confirmEmpty}
         onOpenChange={setConfirmEmpty}
         title="Empty the recycle bin?"
-        description={`${total === 1 ? "1 item" : `${total} items`} will be permanently deleted. This cannot be undone.`}
+        description={`${total === 1 ? "1 item" : total + " items"} will be permanently deleted. This cannot be undone.`}
         confirmText="Empty bin"
         isDestructive
         isPending={empty.isPending}

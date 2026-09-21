@@ -50,6 +50,10 @@
 
 /* LIGHT MODE — fitai.coach (Nexus) brand kit */
 :root {
+  /* Height of the phone tab bar (MobileTabBar). Fixed elements that hug the
+     bottom edge (the FABs, the log-workout wizard footer, the jump-to-today
+     pill) offset by it so they sit above the bar rather than behind it. */
+  --mobile-nav-h: 3.5rem;
   --button-outline: rgba(10,10,10, .10);
   --badge-outline: rgba(10,10,10, .05);
   --opaque-button-border-intensity: -8;
@@ -209,14 +213,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Height of the phone tab bar (MobileTabBar). Fixed elements that hug the
-   bottom edge (the FABs, the log-workout wizard footer, the jump-to-today
-   pill) offset by it so they sit above the bar rather than behind it. Zero
-   from `md` up, where the sidebar takes over and the bar is not rendered. */
-:root {
-  --mobile-nav-h: 3.5rem;
-}
-
+/* Height of the phone tab bar (MobileTabBar): see --mobile-nav-h in the
+   light-mode :root block above. Zero from `md` up, where the sidebar takes
+   over and the bar is not rendered. */
 @media (min-width: 768px) {
   :root {
     --mobile-nav-h: 0px;

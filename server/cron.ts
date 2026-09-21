@@ -508,70 +508,36 @@ export function startCron(storage: IStorage): void {
   }
 }
 
+type ScheduledTask = ReturnType<typeof cron.schedule>;
+
+/** Stop a task if one is scheduled; returns null so the caller can clear its slot. */
+async function stopTask(scheduled: ScheduledTask | null): Promise<null> {
+  if (scheduled) await scheduled.stop();
+  return null;
+}
+
 export async function stopCron(): Promise<void> {
   if (task) {
     await task.stop(); // stop is best-effort during shutdown
     task = null;
     logger.info({ context: "cron" }, "Cron stopped");
   }
-  if (idempotencyCleanupTask) {
-    await idempotencyCleanupTask.stop();
-    idempotencyCleanupTask = null;
-  }
-  if (aiUsageCleanupTask) {
-    await aiUsageCleanupTask.stop();
-    aiUsageCleanupTask = null;
-  }
-  if (staleAutoCoachTask) {
-    await staleAutoCoachTask.stop();
-    staleAutoCoachTask = null;
-  }
-  if (queueDepthTask) {
-    await queueDepthTask.stop();
-    queueDepthTask = null;
-  }
-  if (structuredExerciseRollupTask) {
-    await structuredExerciseRollupTask.stop();
-    structuredExerciseRollupTask = null;
-  }
-  if (sharedRuntimeCleanupTask) {
-    await sharedRuntimeCleanupTask.stop();
-    sharedRuntimeCleanupTask = null;
-  }
-  if (analyticsRecomputeTask) {
-    await analyticsRecomputeTask.stop();
-    analyticsRecomputeTask = null;
-  }
-  if (nutritionEmbeddingTask) {
-    await nutritionEmbeddingTask.stop();
-    nutritionEmbeddingTask = null;
-  }
-  if (nutritionRemindersTask) {
-    await nutritionRemindersTask.stop();
-    nutritionRemindersTask = null;
-  }
-  if (ragChunkPruneTask) {
-    await ragChunkPruneTask.stop();
-    ragChunkPruneTask = null;
-  }
-  if (accountErasureSweepTask) {
-    await accountErasureSweepTask.stop();
-    accountErasureSweepTask = null;
-  }
-  if (stravaAutoSyncTask) {
-    await stravaAutoSyncTask.stop();
-    stravaAutoSyncTask = null;
-  }
-  if (stravaWebhookEnsureTask) {
-    await stravaWebhookEnsureTask.stop();
-    stravaWebhookEnsureTask = null;
-  }
+  idempotencyCleanupTask = await stopTask(idempotencyCleanupTask);
+  aiUsageCleanupTask = await stopTask(aiUsageCleanupTask);
+  staleAutoCoachTask = await stopTask(staleAutoCoachTask);
+  queueDepthTask = await stopTask(queueDepthTask);
+  structuredExerciseRollupTask = await stopTask(structuredExerciseRollupTask);
+  sharedRuntimeCleanupTask = await stopTask(sharedRuntimeCleanupTask);
+  analyticsRecomputeTask = await stopTask(analyticsRecomputeTask);
+  nutritionEmbeddingTask = await stopTask(nutritionEmbeddingTask);
+  nutritionRemindersTask = await stopTask(nutritionRemindersTask);
+  ragChunkPruneTask = await stopTask(ragChunkPruneTask);
+  accountErasureSweepTask = await stopTask(accountErasureSweepTask);
+  stravaAutoSyncTask = await stopTask(stravaAutoSyncTask);
+  stravaWebhookEnsureTask = await stopTask(stravaWebhookEnsureTask);
   if (stravaWebhookStartupTimer) {
     clearTimeout(stravaWebhookStartupTimer);
     stravaWebhookStartupTimer = null;
   }
-  if (recycleBinPurgeTask) {
-    await recycleBinPurgeTask.stop();
-    recycleBinPurgeTask = null;
-  }
+  recycleBinPurgeTask = await stopTask(recycleBinPurgeTask);
 }
