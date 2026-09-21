@@ -596,8 +596,7 @@ Persisted AI coach conversation history.
 | `timestamp` | `timestamp` | default `now()` |
 
 **Indexes:**
-- `idx_chat_messages_user_id` on (`user_id`)
-- `idx_chat_messages_user_time` on (`user_id`, `timestamp`) -- composite
+- `idx_chat_messages_user_time` on (`user_id`, `timestamp`) -- composite; also serves `user_id`-only lookups since it's the leading column
 
 ---
 

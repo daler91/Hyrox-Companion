@@ -1173,7 +1173,12 @@ export const chatMessages = pgTable(
     timestamp: timestamp("timestamp").defaultNow(),
   },
   (table) => [
-    index("idx_chat_messages_user_id").on(table.userId),
+    // idx_chat_messages_user_id (single-column, on user_id) was dropped:
+    // it's a strict prefix of idx_chat_messages_user_time below, so Postgres
+    // can already serve every `WHERE user_id = ...` query from the composite
+    // index. The single-column index added no query capability while still
+    // costing an extra btree maintained on every insert/delete to this
+    // high-write-volume table.
     index("idx_chat_messages_user_time").on(table.userId, table.timestamp),
   ],
 );

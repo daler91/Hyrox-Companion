@@ -673,6 +673,13 @@
       "when": 1789823891197,
       "tag": "0095_recycle_bin_items",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1789999892595,
+      "tag": "0096_drop_redundant_chat_messages_user_id_index",
+      "breakpoints": true
     }
   ]
 }
