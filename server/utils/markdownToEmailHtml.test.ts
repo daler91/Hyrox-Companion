@@ -48,19 +48,22 @@ describe("markdownToEmailHtml", () => {
     expect(markdownToEmailHtml("**not closed and `code`")).toBe("<p>**not closed and `code`</p>");
   });
 
-  it("needs whitespace after a block marker, and content after the whitespace", () => {
-    // The `\s+(\S.*)` split is what keeps these patterns backtracking-free, so
-    // pin both halves of it: no space after the marker is not a block, and a
-    // bare marker with nothing to say stays the literal text the coach typed.
-    const notBlocks = ["#Heading", "-bullet", "1.numbered", "#   ", "-"];
-    const rendered = notBlocks.map(markdownToEmailHtml).join("");
-    expect(rendered).toBe("<p>#Heading</p><p>-bullet</p><p>1.numbered</p><p>#</p><p>-</p>");
-  });
+  // The `\s+(\S.*)` split is what keeps the block patterns backtracking-free:
+  // the marker needs whitespace after it, the whitespace needs content after
+  // it, and the content starts where that run of whitespace ends.
+  const BLOCK_CASES = {
+    "#Heading": "<p>#Heading</p>",
+    "-bullet": "<p>-bullet</p>",
+    "1.numbered": "<p>1.numbered</p>",
+    "#   ": "<p>#</p>",
+    "-": "<p>-</p>",
+    "##  Spaced heading": "<h3>Spaced heading</h3>",
+    "-    Real bullet": "<ul>\n<li>Real bullet</li>\n</ul>",
+    "1)   Numbered": "<ol>\n<li>Numbered</li>\n</ol>",
+  };
 
-  it("takes the content after a run of spaces, not the spaces", () => {
-    expect(markdownToEmailHtml("##  Spaced heading")).toBe("<h3>Spaced heading</h3>");
-    expect(markdownToEmailHtml("-    Real bullet")).toBe("<ul>\n<li>Real bullet</li>\n</ul>");
-    expect(markdownToEmailHtml("1)   Numbered")).toBe("<ol>\n<li>Numbered</li>\n</ol>");
+  it.each(Object.entries(BLOCK_CASES))("renders %j as %j", (markdown, html) => {
+    expect(markdownToEmailHtml(markdown)).toBe(html);
   });
 
   it("returns nothing for empty input", () => {
