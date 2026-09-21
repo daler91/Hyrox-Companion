@@ -52,11 +52,9 @@ describe("markdownToEmailHtml", () => {
     // The `\s+(\S.*)` split is what keeps these patterns backtracking-free, so
     // pin both halves of it: no space after the marker is not a block, and a
     // bare marker with nothing to say stays the literal text the coach typed.
-    expect(markdownToEmailHtml("#Heading")).toBe("<p>#Heading</p>");
-    expect(markdownToEmailHtml("-bullet")).toBe("<p>-bullet</p>");
-    expect(markdownToEmailHtml("1.numbered")).toBe("<p>1.numbered</p>");
-    expect(markdownToEmailHtml("#   ")).toBe("<p>#</p>");
-    expect(markdownToEmailHtml("-")).toBe("<p>-</p>");
+    const notBlocks = ["#Heading", "-bullet", "1.numbered", "#   ", "-"];
+    const rendered = notBlocks.map(markdownToEmailHtml).join("");
+    expect(rendered).toBe("<p>#Heading</p><p>-bullet</p><p>1.numbered</p><p>#</p><p>-</p>");
   });
 
   it("takes the content after a run of spaces, not the spaces", () => {
