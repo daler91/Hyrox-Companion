@@ -45,7 +45,7 @@ export function markdownToEmailHtml(markdown: string): string {
       continue;
     }
 
-    const heading = /^(#{1,3})\s+(\S.*)$/.exec(line);
+    const heading = /^(#{1,3})\s+(\S.*)$/u.exec(line);
     if (heading) {
       flushParagraph();
       closeList();
@@ -54,7 +54,7 @@ export function markdownToEmailHtml(markdown: string): string {
       continue;
     }
 
-    const bullet = /^[-*•]\s+(\S.*)$/.exec(line);
+    const bullet = /^[-*•]\s+(\S.*)$/u.exec(line);
     if (bullet) {
       flushParagraph();
       openList("ul");
@@ -62,7 +62,7 @@ export function markdownToEmailHtml(markdown: string): string {
       continue;
     }
 
-    const numbered = /^\d{1,3}[.)]\s+(\S.*)$/.exec(line);
+    const numbered = /^\d{1,3}[.)]\s+(\S.*)$/u.exec(line);
     if (numbered) {
       flushParagraph();
       openList("ol");

@@ -10,6 +10,8 @@ describe("isRestLikePlanDay", () => {
     ["Off", ""],
     ["Threshold intervals", "Complete rest."],
     ["  RECOVERY  ", "anything"],
+    ["Rest!!", ""],
+    ["Complete rest.!.", ""],
   ])("treats focus %j / workout %j as a rest day", (focus, mainWorkout) => {
     expect(isRestLikePlanDay(focus, mainWorkout)).toBe(true);
   });
@@ -20,6 +22,9 @@ describe("isRestLikePlanDay", () => {
     ["Threshold intervals", "6x800m"],
     ["Long run", "Rest 2 min between reps"],
     ["", ""],
+    // Only trailing `.`/`!` come off, and stripping them can't invent a match.
+    ["rest!?", ""],
+    ["...", ""],
   ])("keeps focus %j / workout %j as a session", (focus, mainWorkout) => {
     expect(isRestLikePlanDay(focus, mainWorkout)).toBe(false);
   });
