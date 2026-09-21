@@ -2,6 +2,7 @@ import { afterEach,describe, expect, it } from "vitest";
 
 import { createMockMissedWorkout, createMockUser, createMockWeeklySummary } from "../test/factories";
 import {
+  buildMafTestReminderEmail,
   buildMissedWorkoutEmail,
   buildWeeklySummaryEmail,
   getAppUrl,
@@ -204,6 +205,20 @@ describe("email generation", () => {
       const { html } = buildWeeklySummaryEmail(baseUser, data);
       expect(html).toContain("Day Streak");
       expect(html).not.toContain("New PRs");
+    });
+  });
+
+  describe("footer", () => {
+    it("links every template to preferences and to the login-free unsubscribe endpoint", () => {
+      const htmls = [
+        buildWeeklySummaryEmail(baseUser, baseData).html,
+        buildMissedWorkoutEmail(baseUser, [createMockMissedWorkout()]).html,
+        buildMafTestReminderEmail(baseUser).html,
+      ];
+      for (const html of htmls) {
+        expect(html).toContain(`${getAppUrl()}/settings`);
+        expect(html).toContain(`${getAppUrl()}/api/v1/emails/unsubscribe?token=`);
+      }
     });
   });
 

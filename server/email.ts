@@ -8,6 +8,7 @@ import {
   type MissedWorkoutData,
   type WeeklySummaryData,
 } from "./emailTemplates";
+import { buildListUnsubscribeHeaders } from "./emailUnsubscribeToken";
 import { env } from "./env";
 import { logger } from "./logger";
 
@@ -26,10 +27,16 @@ function getResendClient() {
   };
 }
 
+export interface SendEmailOptions {
+  /** Extra message headers (List-Unsubscribe and friends). */
+  readonly headers?: Record<string, string>;
+}
+
 export async function sendEmail(
   to: string,
   subject: string,
   html: string,
+  options?: SendEmailOptions,
 ): Promise<boolean> {
   try {
     const { client, fromEmail } = getResendClient();
@@ -38,6 +45,7 @@ export async function sendEmail(
       to: [to],
       subject,
       html,
+      ...(options?.headers ? { headers: options.headers } : {}),
     });
     if (result.error) {
       logger.error({ err: result.error }, "Resend error:");
@@ -50,13 +58,26 @@ export async function sendEmail(
   }
 }
 
+/**
+ * Send to an athlete with the one-click unsubscribe headers every athlete
+ * email must carry. False (no send) when the account has no address.
+ */
+export async function sendEmailToUser(
+  user: User,
+  subject: string,
+  html: string,
+): Promise<boolean> {
+  if (!user.email) return false;
+  return sendEmail(user.email, subject, html, { headers: buildListUnsubscribeHeaders(user.id) });
+}
+
 export async function sendWeeklySummary(
   user: User,
   data: WeeklySummaryData,
 ): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildWeeklySummaryEmail(user, data);
-  return sendEmail(user.email, subject, html);
+  return sendEmailToUser(user, subject, html);
 }
 
 export async function sendMissedWorkoutReminder(
@@ -65,11 +86,11 @@ export async function sendMissedWorkoutReminder(
 ): Promise<boolean> {
   if (!user.email || missed.length === 0) return false;
   const { subject, html } = buildMissedWorkoutEmail(user, missed);
-  return sendEmail(user.email, subject, html);
+  return sendEmailToUser(user, subject, html);
 }
 
 export async function sendMafTestReminder(user: User): Promise<boolean> {
   if (!user.email) return false;
   const { subject, html } = buildMafTestReminderEmail(user);
-  return sendEmail(user.email, subject, html);
+  return sendEmailToUser(user, subject, html);
 }

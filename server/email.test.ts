@@ -19,6 +19,9 @@ vi.mock("./env", () => ({
     RESEND_API_KEY: "test_key",
     RESEND_FROM_EMAIL: undefined,
     APP_URL: undefined,
+    // The unsubscribe token in every footer/header is an HMAC keyed off this.
+    ENCRYPTION_KEY: "0".repeat(32),
+    ENCRYPTION_KEY_V2: undefined,
   },
 }));
 
@@ -69,6 +72,16 @@ describe("email sending", () => {
         subject: "Subject",
         html: "<p>Hello</p>",
       });
+    });
+
+    it("forwards custom headers to Resend when given", async () => {
+      await sendEmail("to@example.com", "Subject", "<p>Hello</p>", {
+        headers: { "List-Unsubscribe": "<https://example.com/u>" },
+      });
+
+      expect(sendMock).toHaveBeenCalledWith(
+        expect.objectContaining({ headers: { "List-Unsubscribe": "<https://example.com/u>" } }),
+      );
     });
 
     it("returns true when Resend resolves with no error", async () => {
@@ -171,6 +184,15 @@ describe("email sending", () => {
       );
       expect(payload.html).toContain("Hey John");
       expect(payload.html).toContain("Weekly Training Summary");
+    });
+
+    it("attaches the one-click unsubscribe headers and footer link", async () => {
+      await sendWeeklySummary(baseUser, weeklyData);
+
+      const payload = sendMock.mock.calls[0][0];
+      expect(payload.headers["List-Unsubscribe"]).toContain("/api/v1/emails/unsubscribe?token=");
+      expect(payload.headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+      expect(payload.html).toContain("/api/v1/emails/unsubscribe?token=");
     });
 
     it("propagates false when Resend responds with an error", async () => {

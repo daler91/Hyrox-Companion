@@ -14,6 +14,7 @@ import authRoutes from "./routes/auth";
 import coachingRoutes from "./routes/coaching";
 import consentRoutes from "./routes/consent";
 import emailRoutes from "./routes/email";
+import { registerEmailUnsubscribeRoutes } from "./routes/emailUnsubscribe";
 import nutritionRoutes from "./routes/nutrition/index";
 import planProposalRoutes from "./routes/planProposals";
 import planRoutes from "./routes/plans";
@@ -43,6 +44,7 @@ vi.mock("./routes/auth", () => ({ default: { name: "authRoutes" } }));
 vi.mock("./routes/coaching", () => ({ default: { name: "coachingRoutes" } }));
 vi.mock("./routes/consent", () => ({ default: { name: "consentRoutes" } }));
 vi.mock("./routes/email", () => ({ default: { name: "emailRoutes" } }));
+vi.mock("./routes/emailUnsubscribe", () => ({ registerEmailUnsubscribeRoutes: vi.fn() }));
 vi.mock("./routes/nutrition/index", () => ({ default: { name: "nutritionRoutes" } }));
 vi.mock("./routes/planProposals", () => ({ default: { name: "planProposalRoutes" } }));
 vi.mock("./routes/plans", () => ({ default: { name: "planRoutes" } }));
@@ -86,6 +88,7 @@ describe("registerRoutes", () => {
     expect(registerStravaRoutes).toHaveBeenCalledWith(app);
     expect(registerGarminRoutes).toHaveBeenCalledWith(app);
     expect(registerStravaWebhookRoutes).toHaveBeenCalledWith(app);
+    expect(registerEmailUnsubscribeRoutes).toHaveBeenCalledWith(app);
   });
 
   it("mounts the Strava webhook receiver before the CSRF guard", async () => {
@@ -101,6 +104,21 @@ describe("registerRoutes", () => {
     );
     expect(csrfIndex).toBeGreaterThanOrEqual(0);
     expect(webhookOrder).toBeLessThan(useMock.mock.invocationCallOrder[csrfIndex]);
+  });
+
+  it("mounts the email unsubscribe endpoint before the CSRF guard", async () => {
+    await registerRoutes(httpServer, app);
+
+    // Mail clients POST the List-Unsubscribe URL with neither cookie nor
+    // token (RFC 8058), so it too must precede `app.use("/api/v1", csrfProtection)`.
+    const unsubscribeOrder = (registerEmailUnsubscribeRoutes as unknown as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const useMock = app.use as unknown as ReturnType<typeof vi.fn>;
+    const csrfIndex = useMock.mock.calls.findIndex(
+      (call: unknown[]) => call[0] === "/api/v1" && call[1] === csrfProtection,
+    );
+    expect(csrfIndex).toBeGreaterThanOrEqual(0);
+    expect(unsubscribeOrder).toBeLessThan(useMock.mock.invocationCallOrder[csrfIndex]);
   });
 
   it("should mount all application routers", async () => {

@@ -1,7 +1,9 @@
 import type { User } from "@shared/schema";
 
-import { env } from "./env";
+import { buildUnsubscribeUrl, getAppUrl } from "./emailUnsubscribeToken";
 import { sanitizeHtml } from "./utils/sanitize";
+
+export { getAppUrl };
 
 export interface WeeklySummaryData {
   /** Workouts LOGGED this week, on-plan or not. Never a rate denominator. */
@@ -73,8 +75,48 @@ export function baseStyles(): string {
   `;
 }
 
-export function getAppUrl(): string {
-  return env.APP_URL || "https://fitai.coach";
+/**
+ * The footer every athlete email ends with: the preferences link and the
+ * login-free unsubscribe link (server/emailUnsubscribeToken.ts). Link text and
+ * URLs only — no address or name is rendered here.
+ */
+export function renderEmailFooter(user: User): string {
+  return `<div class="footer">
+    <p>fitai.coach — Train Smarter with AI</p>
+    <p><a href="${getAppUrl()}/settings">Manage email preferences</a> &middot; <a href="${buildUnsubscribeUrl(user.id)}">Unsubscribe</a></p>
+  </div>`;
+}
+
+/**
+ * Document shell shared by the newer templates: `baseStyles`, the dark header
+ * with title and subtitle, the content card, and the standard footer. The
+ * older templates keep their own markup so their snapshots stay reviewable.
+ */
+export function renderEmailShell({
+  title,
+  subtitle,
+  bodyHtml,
+  user,
+}: {
+  title: string;
+  subtitle: string;
+  bodyHtml: string;
+  user: User;
+}): string {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${baseStyles()}</style></head>
+<body style="background:#f4f4f5;padding:16px;">
+<div class="container">
+  <div class="header">
+    <h1>${sanitizeHtml(title)}</h1>
+    <p>${sanitizeHtml(subtitle)}</p>
+  </div>
+  <div class="content">
+${bodyHtml}
+  </div>
+  ${renderEmailFooter(user)}
+</div>
+</body></html>`;
 }
 
 export function buildWeeklySummaryEmail(
@@ -178,10 +220,7 @@ ${data.currentStreak > 0 ? `
       <a href="${getAppUrl()}/review?week=${encodeURIComponent(data.weekStartDate)}" class="cta">See your week in review</a>
     </div>
   </div>
-  <div class="footer">
-    <p>fitai.coach — Train Smarter with AI</p>
-    <p><a href="${getAppUrl()}/settings">Manage email preferences</a></p>
-  </div>
+  ${renderEmailFooter(user)}
 </div>
 </body></html>`;
 
@@ -227,6 +266,8 @@ export function buildMissedWorkoutEmail(
   .workout-detail { color: #475569; font-size: 14px; margin-bottom: 8px; }
   .workout-date { color: #64748b; font-size: 12px; }
   .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+  .footer p { margin: 4px 0; }
+  .footer a { color: #64748b; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -243,9 +284,7 @@ ${workoutItems}
       <a href="${getAppUrl()}/" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Timeline</a>
     </div>
   </div>
-  <div class="footer">
-    <p>You're receiving this because you enabled email reminders in your fitai.coach preferences.</p>
-  </div>
+  ${renderEmailFooter(user)}
 </body>
 </html>`;
 
@@ -266,6 +305,8 @@ export function buildMafTestReminderEmail(user: User): { subject: string; html: 
   .header p { color: #64748b; margin-top: 0; }
   .content { background: #f8fafc; padding: 24px; border-radius: 8px; }
   .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+  .footer p { margin: 4px 0; }
+  .footer a { color: #64748b; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -280,9 +321,7 @@ export function buildMafTestReminderEmail(user: User): { subject: string; html: 
       <a href="${getAppUrl()}/log" style="display: inline-block; background-color: #0f172a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">Log your run</a>
     </div>
   </div>
-  <div class="footer">
-    <p>You're receiving this because you enabled email reminders in your fitai.coach preferences.</p>
-  </div>
+  ${renderEmailFooter(user)}
 </body>
 </html>`;
 

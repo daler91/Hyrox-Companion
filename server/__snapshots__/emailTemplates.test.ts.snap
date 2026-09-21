@@ -15,6 +15,8 @@ exports[`email generation > buildMissedWorkoutEmail > generates HTML snapshot co
   .workout-detail { color: #475569; font-size: 14px; margin-bottom: 8px; }
   .workout-date { color: #64748b; font-size: 12px; }
   .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #94a3b8; }
+  .footer p { margin: 4px 0; }
+  .footer a { color: #64748b; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -37,7 +39,8 @@ exports[`email generation > buildMissedWorkoutEmail > generates HTML snapshot co
     </div>
   </div>
   <div class="footer">
-    <p>You're receiving this because you enabled email reminders in your fitai.coach preferences.</p>
+    <p>fitai.coach — Train Smarter with AI</p>
+    <p><a href="https://fitai.coach/settings">Manage email preferences</a> &middot; <a href="https://fitai.coach/api/v1/emails/unsubscribe?token=dXNlci0x.176108ed6e0d2b92c8ccabf9dda0531cabff0f1b65715eaa6ccd2ec00e22c6ca">Unsubscribe</a></p>
   </div>
 </body>
 </html>"
@@ -117,7 +120,7 @@ exports[`email generation > buildWeeklySummaryEmail > generates HTML snapshot co
   </div>
   <div class="footer">
     <p>fitai.coach — Train Smarter with AI</p>
-    <p><a href="https://fitai.coach/settings">Manage email preferences</a></p>
+    <p><a href="https://fitai.coach/settings">Manage email preferences</a> &middot; <a href="https://fitai.coach/api/v1/emails/unsubscribe?token=dXNlci0x.176108ed6e0d2b92c8ccabf9dda0531cabff0f1b65715eaa6ccd2ec00e22c6ca">Unsubscribe</a></p>
   </div>
 </div>
 </body></html>"

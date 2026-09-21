@@ -203,6 +203,21 @@ export class UserStorage {
     }
   }
 
+  /**
+   * Turn the master email toggle off for an unsubscribe link (RFC 8058
+   * one-click). Only the master flag moves: the per-type choices survive so
+   * re-enabling from Settings restores exactly what the athlete had. Returns
+   * false when no such user exists.
+   */
+  async disableEmailNotifications(userId: string): Promise<boolean> {
+    const updated = await db
+      .update(users)
+      .set({ emailNotifications: false, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning({ id: users.id });
+    return updated.length > 0;
+  }
+
   async updateUserPreferences(
     userId: string,
     preferences: UpdateUserPreferences,
