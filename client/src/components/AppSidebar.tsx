@@ -1,4 +1,4 @@
-import { Apple, BarChart3, CalendarRange, LogOut, PlusCircle, Settings } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,20 +18,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/useAuth";
 import { useSignOut } from "@/hooks/useSignOut";
 import { getUserDisplayName } from "@/lib/authUtils";
-import { featureFlags } from "@/lib/featureFlags";
+import { navTestId, PRIMARY_NAV_ITEMS } from "@/lib/navItems";
 
 import { Logo } from "./brand/Logo";
 import { ThemeToggle } from "./ThemeToggle";
-
-const menuItems = [
-  { title: "Training", url: "/", icon: CalendarRange },
-  { title: "Log Workout", url: "/log", icon: PlusCircle },
-  ...(featureFlags.nutritionEnabled
-    ? [{ title: "Nutrition", url: "/nutrition", icon: Apple }]
-    : []),
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
-  { title: "Settings", url: "/settings", icon: Settings },
-];
 
 export function AppSidebar() {
   const [location] = useLocation();
@@ -54,14 +44,14 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {menuItems.map((item) => {
+                {PRIMARY_NAV_ITEMS.map((item) => {
                   const isActive = location === item.url;
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
-                        data-testid={`nav-${item.title.toLowerCase().replaceAll(/\s/g, "-")}`}
+                        data-testid={navTestId("nav", item.title)}
                       >
                         <Link
                           href={item.url}
