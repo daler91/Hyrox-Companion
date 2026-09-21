@@ -1,7 +1,7 @@
 import type { FuellingDayPoint, TimelineAnnotation, TimelineEntry } from "@shared/schema";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { format, isToday, parseISO } from "date-fns";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { ChangeEvent } from "react";
 
 import { TimelineDateGroup, TimelineEmptyState, TimelineSkeleton } from "@/components/timeline";
@@ -152,10 +152,15 @@ export function TimelineContent({
           className="w-full"
           onClick={onLoadOlder}
           disabled={isLoadingOlder}
+          aria-busy={isLoadingOlder}
           data-testid="button-load-older"
         >
-          <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
-          {isLoadingOlder ? "Loading older workouts" : "Load older workouts"}
+          {isLoadingOlder ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden />
+          ) : (
+            <ChevronUp className="h-4 w-4 mr-2" aria-hidden />
+          )}
+          {isLoadingOlder ? "Loading older workouts…" : "Load older workouts"}
         </Button>
       )}
 
