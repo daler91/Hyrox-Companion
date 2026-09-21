@@ -1,4 +1,4 @@
-import { afterEach,describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createMockMissedWorkout, createMockUser, createMockWeeklySummary } from "../test/factories";
 import {
@@ -16,6 +16,18 @@ import {
   WeeklySummaryData,
 } from "./emailTemplates";
 import { env } from "./env";
+
+// The real footer link carries a 64-hex HMAC that secret scanners flag in the
+// committed snapshots. Stand in a readable token here; the token module has
+// its own tests and email.test.ts asserts the real headers on the wire.
+vi.mock("./emailUnsubscribeToken", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./emailUnsubscribeToken")>();
+  return {
+    ...actual,
+    buildUnsubscribeUrl: (userId: string) =>
+      `${actual.getAppUrl()}/api/v1/emails/unsubscribe?token=test-unsubscribe-token-${userId}`,
+  };
+});
 
 describe("email generation", () => {
   const baseUser = createMockUser({ email: "test@example.com" });
