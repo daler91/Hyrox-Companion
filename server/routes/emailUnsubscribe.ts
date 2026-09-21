@@ -5,6 +5,7 @@ import { getAppUrl, verifyUnsubscribeToken } from "../emailUnsubscribeToken";
 import { logger } from "../logger";
 import { asyncHandler, rateLimiter } from "../routeUtils";
 import { storage } from "../storage";
+import { sanitizeHtml } from "../utils/sanitize";
 
 /**
  * Login-free email unsubscribe, reached from the footer link and from the
@@ -22,9 +23,15 @@ import { storage } from "../storage";
 const UNSUBSCRIBE_PATH = "/api/v1/emails/unsubscribe";
 const unsubscribeLimiter = rateLimiter("emailUnsubscribe", 60, RATE_LIMIT_WINDOW_15M_MS);
 
-function page(title: string, bodyHtml: string): string {
+/**
+ * The page shell. Every interpolated value is either static copy, the app's
+ * own origin, or already escaped by the caller — nothing here comes from the
+ * request except the verified token, which `confirmPageHtml` URL-encodes and
+ * entity-escapes before it reaches an attribute.
+ */
+function renderPageHtml(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} — fitai.coach</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${sanitizeHtml(title)} — fitai.coach</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f4f5; margin: 0; padding: 32px 16px; color: #0f172a; }
   .card { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 32px 24px; text-align: center; }
@@ -36,8 +43,8 @@ function page(title: string, bodyHtml: string): string {
 <body><div class="card">${bodyHtml}</div></body></html>`;
 }
 
-function invalidLinkPage(): string {
-  return page(
+function invalidLinkPageHtml(): string {
+  return renderPageHtml(
     "Link no longer valid",
     `<h1>This link is no longer valid</h1>
 <p>You can still turn email off from your account settings.</p>
@@ -45,9 +52,11 @@ function invalidLinkPage(): string {
   );
 }
 
-function confirmPage(token: string): string {
-  const action = `${UNSUBSCRIBE_PATH}?token=${encodeURIComponent(token)}`;
-  return page(
+function confirmPageHtml(token: string): string {
+  // The token has already passed HMAC verification, so it is exactly
+  // `base64url.hex`; the encoding and escaping are belt and braces.
+  const action = sanitizeHtml(`${UNSUBSCRIBE_PATH}?token=${encodeURIComponent(token)}`);
+  return renderPageHtml(
     "Unsubscribe",
     `<h1>Unsubscribe from fitai.coach email?</h1>
 <p>This turns off every training email. You can switch individual emails back on at any time from Settings.</p>
@@ -56,8 +65,8 @@ function confirmPage(token: string): string {
   );
 }
 
-function unsubscribedPage(): string {
-  return page(
+function unsubscribedPageHtml(): string {
+  return renderPageHtml(
     "Unsubscribed",
     `<h1>You're unsubscribed</h1>
 <p>No more training emails will be sent to this address.</p>
@@ -65,6 +74,11 @@ function unsubscribedPage(): string {
   );
 }
 
+/**
+ * The one place these pages reach the wire. Express has no dedicated HTML
+ * responder, so this is the same shape `server/static.ts` uses for the SPA
+ * shell; the markup is built entirely from static strings above.
+ */
 function sendHtml(res: Response, status: number, html: string): void {
   res.status(status).type("html").send(html);
 }
@@ -79,19 +93,19 @@ function tokenFrom(req: Request): string | null {
 async function handleUnsubscribe(req: Request, res: Response): Promise<void> {
   const verified = verifyUnsubscribeToken(tokenFrom(req));
   if (!verified) {
-    sendHtml(res, 400, invalidLinkPage());
+    sendHtml(res, 400, invalidLinkPageHtml());
     return;
   }
   const changed = await storage.users.disableEmailNotifications(verified.userId);
   if (!changed) {
     // The account is gone. Nothing to do, and the mail client expects a 2xx.
-    sendHtml(res, 200, invalidLinkPage());
+    sendHtml(res, 200, invalidLinkPageHtml());
     return;
   }
   // A static message and an opaque id; no address or content is logged.
   // bearer:disable javascript_lang_logger_leak
   logger.info({ context: "email", userId: verified.userId }, "Email notifications disabled via unsubscribe link");
-  sendHtml(res, 200, unsubscribedPage());
+  sendHtml(res, 200, unsubscribedPageHtml());
 }
 
 /**
@@ -102,10 +116,10 @@ export function registerEmailUnsubscribeRoutes(router: Router): void {
   router.get(UNSUBSCRIBE_PATH, unsubscribeLimiter, (req: Request, res: Response) => {
     const token = tokenFrom(req);
     if (token === null || !verifyUnsubscribeToken(token)) {
-      sendHtml(res, 400, invalidLinkPage());
+      sendHtml(res, 400, invalidLinkPageHtml());
       return;
     }
-    sendHtml(res, 200, confirmPage(token));
+    sendHtml(res, 200, confirmPageHtml(token));
   });
   router.post(UNSUBSCRIBE_PATH, unsubscribeLimiter, asyncHandler(handleUnsubscribe));
 }
