@@ -109,6 +109,10 @@ export interface PreferencesDraft {
   emailNotifications: boolean;
   emailWeeklySummary: boolean;
   emailMissedReminder: boolean;
+  emailWeeklyReviewReminder: boolean;
+  emailTodaySession: boolean;
+  emailAnalysisDigest: boolean;
+  notifyHour: number;
   showAdherenceInsights: boolean;
   aiCoachEnabled: boolean;
   coachAutoApplyPlanChanges: boolean;
@@ -162,6 +166,10 @@ export const DEFAULT_PREFERENCES_DRAFT: PreferencesDraft = {
   emailNotifications: false,
   emailWeeklySummary: false,
   emailMissedReminder: false,
+  emailWeeklyReviewReminder: false,
+  emailTodaySession: false,
+  emailAnalysisDigest: false,
+  notifyHour: 7,
   showAdherenceInsights: true,
   aiCoachEnabled: false,
   coachAutoApplyPlanChanges: false,
@@ -192,6 +200,10 @@ export function draftToSnapshot(draft: PreferencesDraft): PreferencesSnapshot {
     emailNotifications: draft.emailNotifications,
     emailWeeklySummary: draft.emailWeeklySummary,
     emailMissedReminder: draft.emailMissedReminder,
+    emailWeeklyReviewReminder: draft.emailWeeklyReviewReminder,
+    emailTodaySession: draft.emailTodaySession,
+    emailAnalysisDigest: draft.emailAnalysisDigest,
+    notifyHour: draft.notifyHour,
     showAdherenceInsights: draft.showAdherenceInsights,
     aiCoachEnabled: draft.aiCoachEnabled,
     coachAutoApplyPlanChanges: draft.coachAutoApplyPlanChanges,
@@ -232,6 +244,10 @@ export function snapshotToDraft(snapshot: PreferencesSnapshot): PreferencesDraft
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
     emailMissedReminder: snapshot.emailMissedReminder,
+    emailWeeklyReviewReminder: snapshot.emailWeeklyReviewReminder,
+    emailTodaySession: snapshot.emailTodaySession,
+    emailAnalysisDigest: snapshot.emailAnalysisDigest,
+    notifyHour: snapshot.notifyHour,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,
@@ -268,6 +284,10 @@ export function preferencesToSnapshot(
     emailNotifications: preferences.emailNotifications ?? false,
     emailWeeklySummary: preferences.emailWeeklySummary ?? false,
     emailMissedReminder: preferences.emailMissedReminder ?? false,
+    emailWeeklyReviewReminder: preferences.emailWeeklyReviewReminder ?? false,
+    emailTodaySession: preferences.emailTodaySession ?? false,
+    emailAnalysisDigest: preferences.emailAnalysisDigest ?? false,
+    notifyHour: preferences.notifyHour ?? 7,
     showAdherenceInsights: preferences.showAdherenceInsights ?? true,
     aiCoachEnabled: preferences.aiCoachEnabled ?? false,
     coachAutoApplyPlanChanges: preferences.coachAutoApplyPlanChanges ?? false,
@@ -307,6 +327,10 @@ export function snapshotToSavePayload(snapshot: PreferencesSnapshot): SavePayloa
     emailNotifications: snapshot.emailNotifications,
     emailWeeklySummary: snapshot.emailWeeklySummary,
     emailMissedReminder: snapshot.emailMissedReminder,
+    emailWeeklyReviewReminder: snapshot.emailWeeklyReviewReminder,
+    emailTodaySession: snapshot.emailTodaySession,
+    emailAnalysisDigest: snapshot.emailAnalysisDigest,
+    notifyHour: snapshot.notifyHour,
     showAdherenceInsights: snapshot.showAdherenceInsights,
     aiCoachEnabled: snapshot.aiCoachEnabled,
     coachAutoApplyPlanChanges: snapshot.coachAutoApplyPlanChanges,

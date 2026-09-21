@@ -276,6 +276,10 @@ export default function Settings() {
             emailNotifications={draft.emailNotifications}
             emailWeeklySummary={draft.emailWeeklySummary}
             emailMissedReminder={draft.emailMissedReminder}
+            emailWeeklyReviewReminder={draft.emailWeeklyReviewReminder}
+            emailTodaySession={draft.emailTodaySession}
+            emailAnalysisDigest={draft.emailAnalysisDigest}
+            notifyHour={draft.notifyHour}
             onEmailNotificationsChange={(v) => {
               updateField("emailNotifications", v);
             }}
@@ -284,6 +288,18 @@ export default function Settings() {
             }}
             onEmailMissedReminderChange={(v) => {
               updateField("emailMissedReminder", v);
+            }}
+            onEmailWeeklyReviewReminderChange={(v) => {
+              updateField("emailWeeklyReviewReminder", v);
+            }}
+            onEmailTodaySessionChange={(v) => {
+              updateField("emailTodaySession", v);
+            }}
+            onEmailAnalysisDigestChange={(v) => {
+              updateField("emailAnalysisDigest", v);
+            }}
+            onNotifyHourChange={(v) => {
+              updateField("notifyHour", v);
             }}
           />
           <PushNotificationSection />
