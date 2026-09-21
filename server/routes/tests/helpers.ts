@@ -27,7 +27,7 @@ type TestHttpError = Error & {
 
 interface IntegrationTestContext {
   app: express.Express;
-  server: Server;
+  httpServer: Server;
 }
 
 // Common test user ID matching DEV_USER_ID if ALLOW_DEV_AUTH_BYPASS is true
@@ -84,13 +84,13 @@ export function setupIntegrationTest() {
   beforeAll(async () => {
     const setup = await createTestApp();
     context.app = setup.app;
-    context.server = setup.httpServer;
+    context.httpServer = setup.httpServer;
   });
 
   afterAll(async () => {
     await clearDatabase();
-    if (context.server) {
-      context.server.close();
+    if (context.httpServer) {
+      context.httpServer.close();
     }
   });
 
