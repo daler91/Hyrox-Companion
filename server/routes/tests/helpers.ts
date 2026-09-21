@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 
 import {
   exerciseSets,
@@ -13,6 +13,22 @@ import { afterAll, beforeAll, beforeEach, vi } from "vitest";
 import { db } from "../../db";
 import { queue } from "../../queue";
 import { registerRoutes } from "../../routes";
+
+/**
+ * The error shape route handlers throw in tests: an Error decorated with the
+ * optional status/code/details fields the API error contract carries.
+ */
+type TestHttpError = Error & {
+  status?: number;
+  statusCode?: number;
+  code?: string;
+  details?: unknown;
+};
+
+interface IntegrationTestContext {
+  app: express.Express;
+  httpServer: Server;
+}
 
 // Common test user ID matching DEV_USER_ID if ALLOW_DEV_AUTH_BYPASS is true
 export const testUserId = "dev-user";
@@ -35,10 +51,11 @@ export async function createTestApp() {
   await registerRoutes(httpServer, app);
 
   // Add error handling middleware to capture exact 500 errors in tests
-  app.use((err: any, _req: any, res: any, _next: any) => {
+  const errorHandler: express.ErrorRequestHandler = (err: TestHttpError, _req, res, _next) => {
     console.error("Test App Error Caught:", err);
     res.status(err.status || err.statusCode || 500).json({ error: err.message, code: err.code || "INTERNAL_SERVER_ERROR", details: err.details });
-  });
+  };
+  app.use(errorHandler);
 
   return { app, httpServer };
 }
@@ -59,21 +76,21 @@ export async function clearDatabase() {
  * Returns an object with the express app reference.
  */
 export function setupIntegrationTest() {
-  const context = {
-    app: null as any,
-    server: null as any,
-  };
+  // Populated by the beforeAll hook below before any test body runs, so the
+  // fields are typed as always-present rather than forcing a non-null
+  // assertion at every `context.app` use site.
+  const context = {} as IntegrationTestContext;
 
   beforeAll(async () => {
     const setup = await createTestApp();
     context.app = setup.app;
-    context.server = setup.httpServer;
+    context.httpServer = setup.httpServer;
   });
 
   afterAll(async () => {
     await clearDatabase();
-    if (context.server) {
-      context.server.close();
+    if (context.httpServer) {
+      context.httpServer.close();
     }
   });
 

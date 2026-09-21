@@ -4,6 +4,16 @@ import { type Mock, vi } from "vitest";
 export const TEST_USER_ID = "test_user_id";
 
 /**
+ * The error shape `asyncHandler` forwards via next(err): an Error decorated
+ * with the optional status/code/details fields the API error contract carries.
+ */
+type TestHttpError = Error & {
+  status?: number;
+  code?: string;
+  details?: unknown;
+};
+
+/**
  * Module factories for the vi.mock() preamble every route test repeats.
  * vi.mock() calls are hoisted and must stay in each test file, but their
  * factories can delegate here: `vi.mock("../../clerkAuth", async () =>
@@ -43,11 +53,12 @@ export function mockStorageModule(shape: Record<string, readonly string[]>) {
  * asyncHandler bubbles errors correctly via next(err) without breaking tests.
  */
 export function setupTestErrorHandler(app: express.Express) {
-  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const errorHandler: express.ErrorRequestHandler = (err: TestHttpError, _req, res, _next) => {
     // Intentionally left with only status sending logic to mock error handler behavior
     const status = err.status || 500;
     res.status(status).json({ error: "Internal Server Error", code: err.code || "INTERNAL_SERVER_ERROR", ...(status < 500 && err.details ? { details: err.details } : {}) });
-  });
+  };
+  app.use(errorHandler);
 }
 
 /**

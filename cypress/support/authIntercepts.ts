@@ -1,11 +1,23 @@
+/**
+ * Fixture bodies are forwarded verbatim to `cy.intercept`, which accepts any
+ * serialisable value, so these stay `unknown`-based rather than importing the
+ * real API types: e2e fixtures are deliberately partial, and binding them to
+ * the production shapes would force every caller to spell out fields the
+ * screen under test never reads.
+ *
+ * Note the collection/record split below is load-bearing: `personalRecords`
+ * and `exerciseAnalytics` are keyed by exercise (their defaults are `{}`), not
+ * arrays — the previous `any[]` annotations were simply wrong and only passed
+ * because `any` disabled the check.
+ */
 export function setupAuthIntercepts(overrides?: {
-  timeline?: any[];
-  timelineAnnotations?: any[];
-  plans?: any[];
-  workouts?: any[];
-  personalRecords?: any[];
-  exerciseAnalytics?: any[];
-  trainingOverview?: any;
+  timeline?: unknown[];
+  timelineAnnotations?: unknown[];
+  plans?: unknown[];
+  workouts?: unknown[];
+  personalRecords?: Record<string, unknown>;
+  exerciseAnalytics?: Record<string, unknown>;
+  trainingOverview?: Record<string, unknown>;
   stravaStatus?: {
     connected: boolean;
     athleteId?: string;

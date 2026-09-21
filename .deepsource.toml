@@ -1,0 +1,55 @@
+version = 1
+
+# Files DeepSource should not analyze at all. Mirrors the global `ignores` in
+# eslint.config.js and the exclusions in sonar-project.properties, so the three
+# analyzers agree on what counts as hand-written source.
+exclude_patterns = [
+  "dist/**",
+  "build/**",
+  "node_modules/**",
+  "coverage/**",
+  # Drizzle-generated SQL. Applied migrations must not be edited to appease a
+  # linter, and the SQL analyzers flag them with Oracle-specific rules that
+  # don't apply to PostgreSQL (see the note in .sonarcloud.properties).
+  "migrations/**",
+  "**/*.sql",
+  "attached_assets/**",
+  "client/public/**",
+  # Emitted by script/race-benchmarks — not hand-edited.
+  "**/*.generated.ts",
+  "script/race-benchmarks/output/**",
+]
+
+# Test code. Declaring these lets DeepSource drop the checks that only make
+# sense for production code — most visibly JS-0323 (`no-explicit-any`), which
+# this repo deliberately scopes the same way: eslint.config.js sets
+# "@typescript-eslint/no-explicit-any": "error" for all of **/*.{ts,tsx}, then
+# switches it (and the no-unsafe-* family) off for exactly these paths. Test
+# doubles have to reach past the type system to stub browser globals
+# (`globalThis as any`) and to narrow mocked framework return values, so the
+# carve-out is intentional rather than debt — see TECHNICAL_DEBT.md item 16.
+#
+# Production code carries no `any` and is expected to stay that way: ESLint
+# fails the build on a new one, so nothing here weakens that guarantee.
+test_patterns = [
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/__tests__/**",
+  "**/tests/**",
+  "test/**",
+  "cypress/**",
+  "**/testUtils.ts",
+  "**/helpers.ts",
+  "vitest.setup.ts",
+  "vitest.integration.setup.ts",
+]
+
+[[analyzers]]
+name = "javascript"
+enabled = true
+
+  [analyzers.meta]
+  plugins = ["react"]
+  environment = ["browser", "nodejs"]
+  dialect = "typescript"
+  module_system = "esm"
