@@ -162,4 +162,11 @@ describe("EmailNotificationsCard", () => {
     renderCard({ emailTodaySession: true, notifyHourTodaySession: 6, notifyHour: 18 });
     expect(screen.getByText(/the day's planned session/i)).toBeInTheDocument();
   });
+
+  it("reads the default send time for the brief copy when the brief has no hour of its own", () => {
+    // Resolved through the same shared helper the scheduler uses, so the copy
+    // cannot promise a day the cron would not brief.
+    renderCard({ emailTodaySession: true, notifyHourTodaySession: null, notifyHour: 18 });
+    expect(screen.getByText(/tomorrow's planned session/i)).toBeInTheDocument();
+  });
 });

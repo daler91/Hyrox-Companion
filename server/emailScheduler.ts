@@ -1,5 +1,5 @@
 import { formatSecondsToClock } from "@shared/formatClock";
-import { type EmailNotifyKind, resolveNotifyHour } from "@shared/notifyHours";
+import { BRIEF_TOMORROW_FROM_HOUR, type EmailNotifyKind, resolveNotifyHour } from "@shared/notifyHours";
 import { isRestLikePlanDay } from "@shared/planDayKind";
 import { pooledPercentage, roundOrNull } from "@shared/ratio";
 import type { AnalyticsResult, RacePredictionResponse, User } from "@shared/schema";
@@ -45,12 +45,6 @@ const MISSED_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
 const WEEKLY_REVIEW_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
 const TODAY_SESSION_CLAIM_WINDOW_MS = 20 * 60 * 60 * 1000;
 const ANALYSIS_DIGEST_CLAIM_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
-
-/**
- * A brief hour from midday on means the athlete reads email in the afternoon
- * or evening, when "today's session" is behind them — brief tomorrow instead.
- */
-const BRIEF_TOMORROW_FROM_HOUR = 12;
 
 export type EmailJobName =
   | "send-weekly-summary"

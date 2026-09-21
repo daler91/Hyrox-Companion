@@ -1,7 +1,8 @@
 import {
-  DEFAULT_NOTIFY_HOUR,
+  BRIEF_TOMORROW_FROM_HOUR,
   type EmailNotifyKind,
   fallbackNotifyHour,
+  resolveNotifyHour,
 } from "@shared/notifyHours";
 import { Mail } from "lucide-react";
 
@@ -176,7 +177,11 @@ export function EmailNotificationsCard({
   onNotifyHourTodaySessionChange,
   onNotifyHourAnalysisDigestChange,
 }: EmailNotificationsCardProps) {
-  const briefHour = notifyHourTodaySession ?? notifyHour ?? DEFAULT_NOTIFY_HOUR;
+  // Resolved by the same function the scheduler uses, so this copy cannot
+  // promise a day the cron does not actually brief.
+  const briefsTomorrow =
+    resolveNotifyHour({ notifyHour, notifyHourTodaySession }, "todaySession") >=
+    BRIEF_TOMORROW_FROM_HOUR;
   return (
     <Card>
       <CardHeader>
@@ -263,7 +268,7 @@ export function EmailNotificationsCard({
             kind="todaySession"
             label="Session brief"
             description={
-              briefHour >= 12
+              briefsTomorrow
                 ? "On training days, tomorrow's planned session — its send time is after midday."
                 : "On training days, the day's planned session."
             }

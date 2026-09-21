@@ -17,6 +17,14 @@ import { WEEKLY_REVIEW_SUNDAY_EVENING_HOUR } from "./weeklyReview";
 /** Local hour the scheduled emails go out when the athlete has not picked one. */
 export const DEFAULT_NOTIFY_HOUR = 7;
 
+/**
+ * A session-brief hour from midday on means the athlete reads email in the
+ * afternoon or evening, when "today's session" is behind them — so the brief
+ * covers tomorrow instead. Shared so the Settings copy and the scheduler
+ * cannot disagree about which day the athlete is being promised.
+ */
+export const BRIEF_TOMORROW_FROM_HOUR = 12;
+
 export const EMAIL_NOTIFY_KINDS = [
   "weeklySummary",
   "missedReminder",
