@@ -51,7 +51,6 @@ const EXPECTED_INDEXES = [
   "idx_exercise_sets_exercise_name",
   "idx_exercise_sets_workout_sort",
   "idx_exercise_sets_workout_exercise",
-  "idx_chat_messages_user_id",
   "idx_chat_messages_user_time",
   "idx_custom_exercises_user_id",
   "idx_custom_exercises_user_name",
