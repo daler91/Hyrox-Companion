@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useEmptyRecycleBin,
   usePurgeRecycleBinItem,
@@ -83,16 +84,26 @@ function RecycleBinRow({
           <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
           Restore
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`Delete ${item.label} forever`}
-          onClick={onPurge}
-          disabled={isRestoring || isPurging}
-          data-testid={`button-purge-${item.id}`}
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={isRestoring || isPurging ? 0 : -1}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Delete ${item.label} forever`}
+                  onClick={onPurge}
+                  disabled={isRestoring || isPurging}
+                  data-testid={`button-purge-${item.id}`}
+                  className="disabled:pointer-events-none"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Delete forever</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </li>
   );
